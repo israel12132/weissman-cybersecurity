@@ -12,9 +12,11 @@ import {
   Shield,
   Zap,
 } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import CeoProtectedRoute from '../components/ceo/CeoProtectedRoute'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 
@@ -132,6 +134,106 @@ function SupremeNerveCenterInner() {
       )
     })
   }, [engines, searchQuery, lifecycleFilter])
+
+  const engineColumns = useMemo(() => {
+    const ch = createColumnHelper()
+    return [
+      ch.accessor('engine_id', {
+        id: 'engine',
+        header: t('supremeNerveCenter.colEngine'),
+        cell: ({ getValue }) => <span className="font-mono text-cyan-300/90">{getValue()}</span>,
+      }),
+      ch.accessor('lifecycle', {
+        id: 'lifecycle',
+        header: t('supremeNerveCenter.colLifecycle'),
+        cell: ({ row, getValue }) => (
+          <span>
+            <span style={{ color: lifecycleTone(getValue()) }}>{getValue()}</span>
+            {row.original.stuck_reason ? (
+              <div className="mt-0.5 text-[10px] text-orange-400">{row.original.stuck_reason}</div>
+            ) : null}
+          </span>
+        ),
+      }),
+      ch.accessor((e) => e.phase || '—', {
+        id: 'phase',
+        header: t('supremeNerveCenter.colPhase'),
+        cell: ({ row, getValue }) => (
+          <span className="text-slate-400">
+            {getValue()}
+            {row.original.phase_detail ? (
+              <div className="text-[10px] text-slate-600">{row.original.phase_detail}</div>
+            ) : null}
+          </span>
+        ),
+      }),
+      ch.accessor((e) => e.elapsed_ms || 0, {
+        id: 'elapsed',
+        header: t('supremeNerveCenter.colElapsed'),
+        size: 110,
+        cell: ({ getValue }) => <span className="font-mono tabular-nums">{formatMs(getValue())}</span>,
+      }),
+      ch.accessor((e) => e.target || '—', {
+        id: 'target',
+        header: t('supremeNerveCenter.colTarget'),
+        cell: ({ getValue }) => (
+          <span className="block max-w-[140px] truncate font-mono text-slate-500">{getValue()}</span>
+        ),
+      }),
+      ch.accessor('last_status', {
+        id: 'last_status',
+        header: t('supremeNerveCenter.colLastStatus'),
+        cell: ({ getValue }) => <span>{getValue()}</span>,
+      }),
+      ch.accessor((e) => e.total_runs || 0, {
+        id: 'runs',
+        header: t('supremeNerveCenter.colRuns'),
+        size: 100,
+        cell: ({ row, getValue }) => (
+          <span className="tabular-nums">
+            {getValue()}
+            {row.original.failed_runs > 0 ? (
+              <span className="ml-1 text-red-400">({row.original.failed_runs} fail)</span>
+            ) : null}
+          </span>
+        ),
+      }),
+    ]
+  }, [t])
+
+  const jobColumns = useMemo(() => {
+    const ch = createColumnHelper()
+    return [
+      ch.accessor('id', {
+        id: 'id',
+        header: 'ID',
+        size: 110,
+        cell: ({ getValue }) => <span className="font-mono text-[10px]">{String(getValue() || '').slice(0, 8)}…</span>,
+      }),
+      ch.accessor('kind', { id: 'kind', header: t('supremeNerveCenter.colKind'), cell: ({ getValue }) => getValue() }),
+      ch.accessor('status', { id: 'status', header: t('supremeNerveCenter.colStatus'), cell: ({ getValue }) => getValue() }),
+      ch.accessor((j) => j.engine_id || '—', {
+        id: 'engine',
+        header: t('supremeNerveCenter.colEngine'),
+        cell: ({ getValue }) => <span className="font-mono text-cyan-400/80">{getValue()}</span>,
+      }),
+      ch.accessor((j) => j.heartbeat_stale_secs ?? -1, {
+        id: 'hb',
+        header: 'HB stale',
+        size: 110,
+        cell: ({ row }) => (
+          <span className={`tabular-nums ${(row.original.heartbeat_stale_secs || 0) > 120 ? 'text-orange-400' : ''}`}>
+            {row.original.heartbeat_stale_secs ?? '—'}s
+          </span>
+        ),
+      }),
+      ch.accessor((j) => j.worker_id || '—', {
+        id: 'worker',
+        header: t('supremeNerveCenter.colWorker'),
+        cell: ({ getValue }) => <span className="font-mono text-[10px] text-slate-500">{getValue()}</span>,
+      }),
+    ]
+  }, [t])
 
   const stuckEngines = useMemo(
     () => engines.filter((e) => e.lifecycle === 'stuck'),
@@ -351,57 +453,21 @@ function SupremeNerveCenterInner() {
               </select>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
-              <table className="w-full min-w-[900px] text-left text-xs">
-                <thead className="bg-[var(--row-hover-bg)] text-[10px] uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colEngine')}</th>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colLifecycle')}</th>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colPhase')}</th>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colElapsed')}</th>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colTarget')}</th>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colLastStatus')}</th>
-                    <th className="px-3 py-2">{t('supremeNerveCenter.colRuns')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEngines.map((e) => (
-                    <tr key={e.engine_id} className="border-t border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)]">
-                      <td className="px-3 py-2 font-mono text-cyan-300/90">{e.engine_id}</td>
-                      <td className="px-3 py-2">
-                        <span style={{ color: lifecycleTone(e.lifecycle) }}>{e.lifecycle}</span>
-                        {e.stuck_reason ? (
-                          <div className="mt-0.5 text-[10px] text-orange-400">{e.stuck_reason}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-slate-400">
-                        {e.phase || '—'}
-                        {e.phase_detail ? (
-                          <div className="text-[10px] text-slate-600">{e.phase_detail}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 font-mono tabular-nums">{formatMs(e.elapsed_ms)}</td>
-                      <td className="max-w-[140px] truncate px-3 py-2 font-mono text-slate-500">
-                        {e.target || '—'}
-                      </td>
-                      <td className="px-3 py-2">{e.last_status}</td>
-                      <td className="px-3 py-2 tabular-nums">
-                        {e.total_runs}
-                        {e.failed_runs > 0 ? (
-                          <span className="ml-1 text-red-400">({e.failed_runs} fail)</span>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="border-t border-[var(--border-subtle)] px-3 py-2 text-[10px] text-slate-600">
-                {t('supremeNerveCenter.engineCount', {
-                  shown: filteredEngines.length,
-                  total: engines.length,
-                })}
-              </p>
-            </div>
+            <DataTable
+              columns={engineColumns}
+              data={filteredEngines}
+              loading={loading && !snap}
+              animateRows={false}
+              getRowId={(e) => e.engine_id}
+              tableClassName="min-w-[900px]"
+              emptyState={{ icon: 'inbox', title: t('supremeNerveCenter.filterAll') }}
+            />
+            <p className="px-1 pt-2 text-[10px] text-slate-600">
+              {t('supremeNerveCenter.engineCount', {
+                shown: filteredEngines.length,
+                total: engines.length,
+              })}
+            </p>
           </div>
         )}
 
@@ -468,45 +534,15 @@ function SupremeNerveCenterInner() {
         )}
 
         {section === 'jobs' && (
-          <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
-            <table className="w-full min-w-[800px] text-left text-xs">
-              <thead className="bg-[var(--row-hover-bg)] text-[10px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">{t('supremeNerveCenter.colKind')}</th>
-                  <th className="px-3 py-2">{t('supremeNerveCenter.colStatus')}</th>
-                  <th className="px-3 py-2">{t('supremeNerveCenter.colEngine')}</th>
-                  <th className="px-3 py-2">HB stale</th>
-                  <th className="px-3 py-2">{t('supremeNerveCenter.colWorker')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((j) => (
-                  <tr key={j.id} className="border-t border-[var(--border-subtle)]">
-                    <td className="px-3 py-2 font-mono text-[10px]">{j.id?.slice(0, 8)}…</td>
-                    <td className="px-3 py-2">{j.kind}</td>
-                    <td className="px-3 py-2">{j.status}</td>
-                    <td className="px-3 py-2 font-mono text-cyan-400/80">{j.engine_id || '—'}</td>
-                    <td
-                      className={`px-3 py-2 tabular-nums ${
-                        (j.heartbeat_stale_secs || 0) > 120 ? 'text-orange-400' : ''
-                      }`}
-                    >
-                      {j.heartbeat_stale_secs ?? '—'}s
-                    </td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-slate-500">
-                      {j.worker_id || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!jobs.length ? (
-              <p className="px-4 py-6 text-center text-xs text-slate-600">
-                {t('supremeNerveCenter.noJobs')}
-              </p>
-            ) : null}
-          </div>
+          <DataTable
+            columns={jobColumns}
+            data={jobs}
+            loading={loading && !snap}
+            animateRows={false}
+            getRowId={(j) => j.id}
+            tableClassName="min-w-[800px]"
+            emptyState={{ icon: 'inbox', title: t('supremeNerveCenter.noJobs') }}
+          />
         )}
 
         {section === 'controls' && (
