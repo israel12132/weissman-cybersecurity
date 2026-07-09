@@ -3,7 +3,11 @@ import { render, screen, fireEvent, cleanup, within } from '@testing-library/rea
 
 // --- Mocks: keep the palette isolated from router/auth/i18n/network ---
 const navigateSpy = vi.fn()
-vi.mock('react-router-dom', () => ({ useNavigate: () => navigateSpy }))
+let mockPathname = '/findings'
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateSpy,
+  useLocation: () => ({ pathname: mockPathname }),
+}))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k, opts) => (opts?.query ? `${k}:${opts.query}` : k) }),
 }))
@@ -40,7 +44,11 @@ function open() {
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
 }
 
-beforeEach(() => { navigateSpy.mockClear(); logoutSpy.mockClear(); toggleThemeSpy.mockClear() })
+beforeEach(() => {
+  navigateSpy.mockClear(); logoutSpy.mockClear(); toggleThemeSpy.mockClear()
+  mockPathname = '/findings'
+  try { localStorage.clear() } catch { /* ignore */ }
+})
 afterEach(() => cleanup())
 
 describe('GlobalSearch command palette', () => {
@@ -99,6 +107,18 @@ describe('GlobalSearch command palette', () => {
     open()
     // Idle: only nav suggestions, no Sign out / theme actions.
     expect(screen.queryByText('components.globalSearch.action_signout')).toBeNull()
+  })
+
+  it('surfaces a recently-visited route in the idle list', () => {
+    // Seed a prior visit to /audit, then land on /findings.
+    localStorage.setItem('weissman_palette_recents', JSON.stringify(['/audit', '/findings']))
+    mockPathname = '/findings'
+    render(<GlobalSearch />)
+    open()
+    const options = screen.getAllByRole('option')
+    // The most-recent accessible route that isn't the current page appears first.
+    expect(within(options[0]).getByText('Audit Log')).toBeTruthy()
+    expect(within(options[0]).getByText('components.globalSearch.recent')).toBeTruthy()
   })
 
   it('Escape closes the palette', () => {

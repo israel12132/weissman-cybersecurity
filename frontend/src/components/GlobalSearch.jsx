@@ -1,12 +1,24 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Command, Search, Zap, CornerDownLeft } from 'lucide-react';
+import { Command, Search, Zap, CornerDownLeft, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../lib/apiBase';
 import { PRIMARY_NAV, NAV_GROUPS, canAccessNavItem } from '../lib/appNav';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+
+const RECENTS_KEY = 'weissman_palette_recents';
+const RECENTS_MAX = 6;
+
+function readRecents() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((p) => typeof p === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * GlobalSearch — command palette (Ctrl/Cmd+K).
@@ -21,6 +33,8 @@ export default function GlobalSearch() {
   const navigate = useNavigate();
   const { session, logout } = useAuth();
   const { toggleTheme, isLight } = useTheme();
+  const { pathname } = useLocation();
+  const [recents, setRecents] = useState(readRecents);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -50,13 +64,42 @@ export default function GlobalSearch() {
       }));
   }, [session, t]);
 
+  // Record each visited route (most-recent-first) so the idle palette can offer
+  // "jump back" targets. Only known, accessible routes are surfaced later.
+  useEffect(() => {
+    if (!pathname) return;
+    setRecents((prev) => {
+      const next = [pathname, ...prev.filter((p) => p !== pathname)].slice(0, RECENTS_MAX);
+      try { localStorage.setItem(RECENTS_KEY, JSON.stringify(next)); } catch { /* storage may be unavailable */ }
+      return next;
+    });
+  }, [pathname]);
+
+  const routeByPath = useMemo(() => {
+    const m = new Map();
+    for (const r of navRoutes) m.set(r.to, r);
+    return m;
+  }, [navRoutes]);
+
+  const recentResults = useMemo(() => (
+    recents
+      .filter((p) => p !== pathname && routeByPath.has(p))
+      .map((p) => ({ ...routeByPath.get(p), recent: true }))
+      .slice(0, 5)
+  ), [recents, pathname, routeByPath]);
+
   const localResults = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return navRoutes.slice(0, 7); // quick-nav suggestions when idle
+    if (!q) {
+      // Idle: recents first, then quick-nav suggestions (deduped).
+      const recentPaths = new Set(recentResults.map((r) => r.to));
+      const quick = navRoutes.filter((r) => !recentPaths.has(r.to)).slice(0, 7 - recentResults.length);
+      return [...recentResults, ...quick];
+    }
     return navRoutes
       .filter((r) => r.title.toLowerCase().includes(q) || r.to.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [navRoutes, query]);
+  }, [navRoutes, query, recentResults]);
 
   // Global command actions (shown only when the query matches — keeps idle clean).
   const actions = useMemo(() => [
@@ -250,9 +293,10 @@ export default function GlobalSearch() {
                       <span className="text-2xl">{result.icon || (isNav ? '→' : '🔎')}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-[var(--text-primary)] truncate">{result.title}</div>
-                        <div className="text-xs text-[var(--text-muted)] capitalize">
+                        <div className="text-xs text-[var(--text-muted)] capitalize flex items-center gap-1">
+                          {result.recent && <Clock className="w-3 h-3" aria-hidden="true" />}
                           {isNav
-                            ? t('components.globalSearch.navigate')
+                            ? (result.recent ? t('components.globalSearch.recent') : t('components.globalSearch.navigate'))
                             : result.type === 'action'
                               ? t('components.globalSearch.command')
                               : result.type}
