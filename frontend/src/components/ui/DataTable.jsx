@@ -114,6 +114,14 @@ export default function DataTable({
   // Hide the built-in pagination bar and render every filtered row (the parent
   // owns paging — e.g. server-side limit/offset over a large ledger).
   hidePagination = false,
+  // Opt-in multi-select: prepend a checkbox column; onSelectionChange(rows,ids)
+  // fires with the selected row originals whenever the selection changes.
+  enableSelection = false,
+  onSelectionChange,
+  selectLabel = 'Select row',
+  selectAllLabel = 'Select all rows',
+  // Change this value (e.g. bump a counter after a bulk action) to clear selection.
+  selectionResetSignal,
 }) {
   const defaultPageSize = pageSizes?.[0] ?? 25
   // Remember the user's rows-per-page across sessions (only affects uncontrolled
@@ -170,9 +178,41 @@ export default function DataTable({
   // Expandable sub-rows (opt-in via renderSubRow). Prepend a compact expander
   // column so existing column layouts stay untouched when the feature is off.
   const [expanded, setExpanded] = useState({})
+  const [rowSelection, setRowSelection] = useState({})
   const expandable = typeof renderSubRow === 'function'
   const tableColumns = useMemo(() => {
-    if (!expandable) return columns
+    const prefix = []
+    if (enableSelection) {
+      prefix.push({
+        id: '__select',
+        size: 40,
+        enableSorting: false,
+        header: ({ table: tbl }) => (
+          <input
+            type="checkbox"
+            aria-label={selectAllLabel}
+            className="accent-cyan-500 cursor-pointer"
+            checked={tbl.getIsAllPageRowsSelected()}
+            ref={(el) => { if (el) el.indeterminate = tbl.getIsSomePageRowsSelected() && !tbl.getIsAllPageRowsSelected() }}
+            onChange={tbl.getToggleAllPageRowsSelectedHandler()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            aria-label={selectLabel}
+            className="accent-cyan-500 cursor-pointer"
+            checked={row.getIsSelected()}
+            disabled={!row.getCanSelect()}
+            onChange={row.getToggleSelectedHandler()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ),
+      })
+    }
+    if (!expandable && !prefix.length) return columns
+    if (!expandable) return [...prefix, ...columns]
     const expanderColumn = {
       id: '__expander',
       header: () => null,
@@ -197,8 +237,8 @@ export default function DataTable({
           </button>
         ) : null,
     }
-    return [expanderColumn, ...columns]
-  }, [columns, expandable, collapseLabel, expandLabel])
+    return [...prefix, expanderColumn, ...columns]
+  }, [columns, expandable, collapseLabel, expandLabel, enableSelection, selectLabel, selectAllLabel])
 
   const table = useReactTable({
     data: data ?? [],
@@ -210,12 +250,15 @@ export default function DataTable({
       globalFilter: effectiveGlobalFilter,
       columnVisibility,
       expanded,
+      rowSelection,
     },
     onSortingChange,
     onPaginationChange: effectiveOnPaginationChange,
     onGlobalFilterChange: globalFilterControlled ? undefined : setInternalGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
     onExpandedChange: setExpanded,
+    enableRowSelection: enableSelection,
+    onRowSelectionChange: setRowSelection,
     getRowCanExpand: expandable ? (getRowCanExpand ?? (() => true)) : undefined,
     globalFilterFn: globalFilterFn ?? fuzzyGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
@@ -223,10 +266,33 @@ export default function DataTable({
     getSortedRowModel: getSortedRowModel(),
     ...(hidePagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
     getExpandedRowModel: getExpandedRowModel(),
+    // Stable row identity for selection (survives sort/filter). Scoped to
+    // selection-enabled tables so existing usages keep default index ids.
+    ...(enableSelection
+      ? { getRowId: (row, index) => {
+          const id = getRowId(row)
+          return id != null ? String(id) : String(index)
+        } }
+      : {}),
     initialState: {
       pagination: { pageIndex: 0, pageSize: defaultPageSize },
     },
   })
+
+  // Surface the selected row originals to the parent whenever selection changes.
+  useEffect(() => {
+    if (!enableSelection || typeof onSelectionChange !== 'function') return
+    const selected = table.getSelectedRowModel().rows.map((r) => r.original)
+    const ids = selected.map((o) => getRowId(o))
+    onSelectionChange(selected, ids)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection, enableSelection])
+
+  // Parent-driven selection clear (bump selectionResetSignal after a bulk action).
+  useEffect(() => {
+    if (selectionResetSignal === undefined) return
+    setRowSelection({})
+  }, [selectionResetSignal])
 
   const hasToolbar = searchable || exportable || columnToggle || toolbarTitle
 
