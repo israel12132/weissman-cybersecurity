@@ -1,0 +1,220 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { useClient } from '../context/ClientContext'
+import { apiFetch } from '../lib/apiBase'
+import { SkeletonTable } from '../components/ui/Skeleton'
+import EmptyState from '../components/ui/EmptyState'
+
+/**
+ * FixFirstProgram — the authoritative, backend-computed remediation program.
+ *
+ * Unlike the family board (which derives buckets client-side from /api/findings), this panel
+ * renders `GET /api/remediation/priority/:client_id`: one ranked, root-cause-deduplicated list
+ * where each action already folds in EPSS/KEV effective risk, attack-graph choke points, an
+ * SLA/overdue clock, and a compliance crosswalk. Nothing is recomputed in the browser — we only
+ * present what the engine returned.
+ */
+
+/** Pure: reduce an SLA object to a compact view {tone, key, days}. Exported for tests. */
+export function deriveSlaView(sla) {
+  if (!sla || typeof sla !== 'object') return { tone: 'muted', key: 'unknown', days: null }
+  const state = String(sla.state || 'unknown')
+  const due = Number.isFinite(sla.due_in_days) ? sla.due_in_days : null
+  switch (state) {
+    case 'overdue':
+      return { tone: 'danger', key: 'overdue', days: due == null ? null : Math.abs(due) }
+    case 'due_soon':
+      return { tone: 'warn', key: 'due_soon', days: due }
+    case 'on_track':
+      return { tone: 'ok', key: 'on_track', days: due }
+    default:
+      return { tone: 'muted', key: 'unknown', days: null }
+  }
+}
+
+/** Pure: clamp a 0..100 priority score to a 0..1 bar fraction. Exported for tests. */
+export function scoreFraction(score) {
+  const n = Number(score)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(1, n / 100))
+}
+
+const TONE_CLASS = {
+  danger: 'text-rose-300 bg-rose-500/10 border-rose-500/30',
+  warn: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+  ok: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30',
+  muted: 'text-white/40 bg-white/5 border-white/10',
+}
+
+function SlaBadge({ sla, t }) {
+  const v = deriveSlaView(sla)
+  const Icon = v.key === 'overdue' ? AlertTriangle : v.key === 'on_track' ? CheckCircle2 : Clock
+  const label =
+    v.key === 'overdue'
+      ? t('pages.remediationHub.program_sla_overdue', { days: v.days ?? '?', defaultValue: 'Overdue {{days}}d' })
+      : v.key === 'unknown'
+      ? t('pages.remediationHub.program_sla_unknown', { defaultValue: 'No SLA clock' })
+      : t('pages.remediationHub.program_sla_due', { days: v.days ?? '?', defaultValue: 'Due in {{days}}d' })
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border ${TONE_CLASS[v.tone]}`}>
+      <Icon className="w-3 h-3" />
+      {label}
+    </span>
+  )
+}
+
+function Chip({ color, children, title }) {
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border"
+      style={{ color, borderColor: `${color}55`, background: `${color}14` }}
+    >
+      {children}
+    </span>
+  )
+}
+
+function SummaryStat({ label, value, color }) {
+  return (
+    <div className="bg-black/40 border border-white/10 rounded-lg px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-white/40">{label}</div>
+      <div className="text-lg font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>{value}</div>
+    </div>
+  )
+}
+
+export default function FixFirstProgram() {
+  const { t } = useTranslation()
+  const { selectedClientId, clients } = useClient()
+  const clientId = useMemo(() => {
+    if (selectedClientId != null && selectedClientId !== '') return selectedClientId
+    const first = Array.isArray(clients) && clients.length ? Number(clients[0]?.id) : null
+    return Number.isFinite(first) && first > 0 ? first : null
+  }, [selectedClientId, clients])
+
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const load = useCallback(async (id) => {
+    if (id == null) { setData(null); return }
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await apiFetch(`/api/remediation/priority/${encodeURIComponent(id)}?limit=200`)
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await r.json()
+      setData(d && typeof d === 'object' ? d : null)
+    } catch (e) {
+      setError(e?.message || 'load failed')
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load(clientId) }, [clientId, load])
+
+  const program = Array.isArray(data?.program) ? data.program : []
+  const frameworks = Array.isArray(data?.compliance_frameworks) ? data.compliance_frameworks : []
+
+  return (
+    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <Target className="w-4 h-4 text-cyan-400" />
+          {t('pages.remediationHub.program_heading', { defaultValue: 'Fix-First Program' })}
+        </h3>
+        <span className="text-[10px] text-white/35 font-mono">
+          {t('pages.remediationHub.program_caption', { defaultValue: 'Backend-ranked · root-cause deduplicated · EPSS/KEV + choke points + SLA' })}
+        </span>
+      </div>
+
+      {clientId == null ? (
+        <div className="p-4">
+          <EmptyState compact icon="shield" title={t('pages.remediationHub.program_no_client', { defaultValue: 'Select a client to load its prioritized remediation program.' })} />
+        </div>
+      ) : error ? (
+        <div className="p-4 text-sm text-rose-300 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {t('pages.remediationHub.program_error', { error, defaultValue: "Couldn't load the remediation program: {{error}}." })}
+        </div>
+      ) : loading ? (
+        <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
+      ) : program.length === 0 ? (
+        <div className="p-4">
+          <EmptyState compact icon="shield" title={t('pages.remediationHub.program_empty', { defaultValue: 'No open findings to prioritize for this client.' })} />
+        </div>
+      ) : (
+        <>
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 border-b border-white/5">
+            <SummaryStat label={t('pages.remediationHub.program_stat_actions', { defaultValue: 'Actions' })} value={data.remediation_actions ?? program.length} />
+            <SummaryStat label={t('pages.remediationHub.program_stat_overdue', { defaultValue: 'Overdue' })} value={data.overdue_actions ?? 0} color="#f43f5e" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_due_soon', { defaultValue: 'Due soon' })} value={data.due_soon_actions ?? 0} color="#fbbf24" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_kev', { defaultValue: 'KEV' })} value={data.kev_actions ?? 0} color="#fb923c" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_choke', { defaultValue: 'Choke points' })} value={data.choke_point_actions ?? 0} color="#a78bfa" />
+          </div>
+
+          {frameworks.length > 0 && (
+            <div className="px-4 py-2 border-b border-white/5 flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider text-white/35">{t('pages.remediationHub.program_frameworks', { defaultValue: 'Frameworks' })}</span>
+              {frameworks.map((fw) => <Chip key={fw} color="#22d3ee">{fw}</Chip>)}
+            </div>
+          )}
+
+          <div className="divide-y divide-white/5">
+            {program.map((item) => {
+              const risk = Number(item.max_effective_risk)
+              return (
+                <div key={`${item.rank}-${item.title}-${item.asset}`} className="p-4 hover:bg-white/5 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="text-lg font-bold tabular-nums text-white/30 w-8 shrink-0 text-right">{item.rank}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h4 className="text-sm font-semibold text-white truncate">{item.title || item.cwe || t('pages.remediationHub.program_untitled', { defaultValue: 'Untitled finding' })}</h4>
+                        <SlaBadge sla={item.sla} t={t} />
+                        {item.kev_ransomware ? (
+                          <Chip color="#f43f5e" title="Ransomware-associated KEV"><Flame className="w-3 h-3" />{t('pages.remediationHub.program_ransomware', { defaultValue: 'Ransomware' })}</Chip>
+                        ) : item.kev ? (
+                          <Chip color="#fb923c" title="CISA Known Exploited Vulnerability"><ShieldAlert className="w-3 h-3" />KEV</Chip>
+                        ) : null}
+                        {item.on_choke_point && (
+                          <Chip color="#a78bfa" title="On an attack-path choke point"><GitBranch className="w-3 h-3" />{t('pages.remediationHub.program_choke', { defaultValue: 'Choke point' })}</Chip>
+                        )}
+                      </div>
+                      {item.asset && <div className="text-[11px] font-mono text-white/45 truncate mb-1.5">{item.asset}</div>}
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="h-1.5 w-full max-w-[220px] rounded-full bg-white/5 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-cyan-500 to-rose-500" style={{ width: `${scoreFraction(item.priority_score) * 100}%` }} />
+                        </div>
+                        <span className="text-[10px] font-mono text-white/40 whitespace-nowrap tabular-nums">
+                          {t('pages.remediationHub.program_score', { defaultValue: 'score' })} {Number(item.priority_score).toFixed(1)}
+                          {Number.isFinite(risk) ? ` · ${t('pages.remediationHub.program_risk', { defaultValue: 'risk' })} ${risk.toFixed(1)}` : ''}
+                        </span>
+                      </div>
+                      {item.closes_findings > 1 && (
+                        <div className="text-[11px] text-cyan-300/80 mb-1">
+                          {t('pages.remediationHub.program_closes', { count: item.closes_findings, defaultValue: 'One fix closes {{count}} findings' })}
+                        </div>
+                      )}
+                      {Array.isArray(item.compliance) && item.compliance.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap mt-1">
+                          {item.compliance.map((c) => (
+                            <Chip key={`${c.framework}-${c.control}`} color="#34d399" title={`${c.framework}: ${c.title}`}>{c.control}</Chip>
+                          ))}
+                        </div>
+                      )}
+                      {item.rationale && <div className="text-[11px] text-white/35 mt-1.5 italic">{item.rationale}</div>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
