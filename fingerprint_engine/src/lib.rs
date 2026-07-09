@@ -127,6 +127,7 @@ pub mod pipeline_context;
 pub mod pipeline_engine;
 pub mod pipeline_to_runtime_risk_engine;
 pub mod poc_sandbox;
+pub mod portfolio_posture;
 pub mod posture_score;
 pub mod recon;
 pub mod regex_util;

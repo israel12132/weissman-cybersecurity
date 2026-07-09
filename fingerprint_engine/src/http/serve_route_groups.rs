@@ -90,6 +90,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/remediation/aging/:client_id",
             get(api_finding_aging_for_client),
         )
+        // Portfolio (fleet-wide) posture: every client's grade rolled into one MSSP summary.
+        .route("/api/portfolio/posture", get(api_portfolio_posture))
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
