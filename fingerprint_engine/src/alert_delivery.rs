@@ -391,3 +391,71 @@ pub async fn notify_soar_dispatch_failure(
         );
     }
 }
+
+/// Fire tenant alert channels when an auto-heal run reaches a terminal outcome. Best-effort:
+/// posts to webhook/Slack always, and pages on-call only for failures / `broke_app`.
+#[allow(clippy::too_many_arguments)]
+pub async fn notify_heal_completed(
+    pool: &PgPool,
+    tenant_id: i64,
+    finding_id: &str,
+    verdict: &str,
+    channel: &str,
+    attempts: i32,
+    pr_url: Option<&str>,
+    ok: bool,
+) {
+    let config = load_delivery_config(pool, tenant_id).await;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap_or_else(|_| Client::new());
+
+    let icon = if ok { "✅" } else { "⚠️" };
+    let link = pr_url.map(|u| format!(" — {u}")).unwrap_or_default();
+    let text = format!(
+        "[Weissman][Auto-Heal] {icon} finding {finding_id}: verdict={verdict} via {channel} ({attempts} attempt(s)){link}"
+    );
+    let payload = json!({
+        "event": "heal_completed",
+        "tenant_id": tenant_id,
+        "finding_id": finding_id,
+        "verdict": verdict,
+        "channel": channel,
+        "attempts": attempts,
+        "pr_url": pr_url,
+        "ok": ok,
+        "text": text,
+    });
+
+    let mut delivered = false;
+    if let Some(url) = config.alert_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, &payload).await;
+    }
+    if let Some(url) = config.slack_webhook_url.as_deref() {
+        delivered |= post_json(&client, url, &payload).await;
+    }
+    if (!ok || verdict == "broke_app") {
+        if let Some(key) = resolve_pagerduty_key(&config) {
+            let pd = json!({
+                "routing_key": key,
+                "event_action": "trigger",
+                "payload": {
+                    "summary": format!("Auto-heal {verdict} on finding {finding_id}"),
+                    "severity": if ok { "warning" } else { "error" },
+                    "source": "weissman-auto-heal",
+                    "custom_details": payload,
+                }
+            });
+            delivered |= post_json(&client, "https://events.pagerduty.com/v2/enqueue", &pd).await;
+        }
+    }
+
+    if !delivered {
+        tracing::debug!(
+            target: "alert_delivery",
+            tenant_id,
+            "heal completion alert not delivered (no channels configured)"
+        );
+    }
+}

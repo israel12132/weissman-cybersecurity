@@ -112,7 +112,9 @@ async fn api_heal_verify_status(
     .flatten();
     let hr = sqlx::query(
         r#"SELECT branch_name, pr_url, pr_number, diff_summary, verification_status,
-                  COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel
+                  COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel,
+                  COALESCE(attempts, 1) AS attempts,
+                  (COALESCE(verification_receipt,'') <> '') AS attested
            FROM heal_requests
            WHERE tenant_id = $1 AND verification_job_id = $2
            ORDER BY id DESC LIMIT 1"#,
@@ -142,6 +144,8 @@ async fn api_heal_verify_status(
         out["pr_url"] = json!(r.try_get::<Option<String>, _>("pr_url").ok().flatten());
         out["pr_number"] = json!(r.try_get::<Option<i32>, _>("pr_number").ok().flatten());
         out["diff_summary"] = json!(r.try_get::<Option<String>, _>("diff_summary").ok().flatten());
+        out["attempts"] = json!(r.try_get::<i32, _>("attempts").unwrap_or(1));
+        out["attested"] = json!(r.try_get::<bool, _>("attested").unwrap_or(false));
     }
     (StatusCode::OK, Json(out)).into_response()
 }
@@ -214,6 +218,76 @@ async fn api_heal_verify_patch(
             ),
         ],
         body,
+    )
+        .into_response()
+}
+
+/// `GET /api/heal-verify/:job_id/attestation` — verify the signed heal receipt (HMAC-SHA256)
+/// stored for this job: confirms the receipt is a genuine, untampered Weissman attestation of
+/// the verification digest.
+async fn api_heal_verify_attestation(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    if uuid::Uuid::parse_str(job_id.trim()).is_err() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid job_id"}))).into_response();
+    }
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT COALESCE(verification_receipt,'') AS receipt, COALESCE(verification_digest,'') AS digest,
+                  COALESCE(verdict,'') AS verdict, verification_status
+           FROM heal_requests
+           WHERE tenant_id = $1 AND verification_job_id = $2
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(&job_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "heal not found"}))).into_response();
+    };
+    let receipt: String = r.try_get("receipt").unwrap_or_default();
+    let digest: String = r.try_get("digest").unwrap_or_default();
+    let verdict: String = r.try_get("verdict").unwrap_or_default();
+    let status: String = r.try_get("verification_status").unwrap_or_default();
+
+    if receipt.is_empty() || digest.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "attested": false,
+                "reason": if crate::finding_attestation::is_enabled() {
+                    "no receipt on this heal (not a verified outcome)"
+                } else {
+                    "attestation disabled on this deployment (no WEISSMAN_ATTESTATION_KEY)"
+                },
+                "alg": crate::finding_attestation::ATTEST_ALG,
+                "enabled": crate::finding_attestation::is_enabled(),
+                "verdict": verdict,
+                "verification_status": status,
+            })),
+        )
+            .into_response();
+    }
+    let ok = crate::finding_attestation::verify(&digest, &receipt);
+    (
+        StatusCode::OK,
+        Json(json!({
+            "attested": ok,
+            "digest": digest,
+            "alg": crate::finding_attestation::ATTEST_ALG,
+            "enabled": crate::finding_attestation::is_enabled(),
+            "verdict": verdict,
+            "verification_status": status,
+        })),
     )
         .into_response()
 }

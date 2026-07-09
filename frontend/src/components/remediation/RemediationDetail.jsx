@@ -16,6 +16,7 @@ import { apiFetch, apiUrl } from '../../lib/apiBase'
 const CHANNELS = [
   { id: 'github_pr', labelKey: 'channel_github_pr', icon: GitPullRequest, touchesRepo: true },
   { id: 'github_direct_commit', labelKey: 'channel_github_commit', icon: GitPullRequest, touchesRepo: true },
+  { id: 'gitlab_mr', labelKey: 'channel_gitlab_mr', icon: GitPullRequest, touchesRepo: true },
   { id: 'diff_download', labelKey: 'channel_diff_download', icon: Download, touchesRepo: false },
   { id: 'virtual_patch', labelKey: 'channel_virtual_patch', icon: ShieldCheck, touchesRepo: false },
 ]
@@ -364,12 +365,30 @@ export default function RemediationDetail({ finding, onClose }) {
                   <ShieldCheck className="w-4 h-4 text-cyan-400" />
                   {t('pages.remediationHub.verification_steps', { defaultValue: 'Sandbox verification' })}
                 </h3>
-                {verdictMeta && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium" style={{ color: verdictMeta.color, background: `${verdictMeta.color}18`, border: `1px solid ${verdictMeta.color}44` }}>
-                    <verdictMeta.Icon className="w-3.5 h-3.5" />
-                    {t(`pages.remediationHub.${verdictMeta.key}`, { defaultValue: verdict })}
-                  </span>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {jobStatus?.attempts > 1 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/25">
+                      {t('pages.remediationHub.self_repair_attempts', { defaultValue: 'self-repair ×{{n}}', n: jobStatus.attempts })}
+                    </span>
+                  )}
+                  {jobStatus?.attested && (
+                    <a
+                      href={apiUrl(`/api/heal-verify/${jobId}/attestation`)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={t('pages.remediationHub.verify_attestation', { defaultValue: 'Verify signed receipt' })}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20"
+                    >
+                      🔏 {t('pages.remediationHub.attested', { defaultValue: 'attested' })}
+                    </a>
+                  )}
+                  {verdictMeta && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium" style={{ color: verdictMeta.color, background: `${verdictMeta.color}18`, border: `1px solid ${verdictMeta.color}44` }}>
+                      <verdictMeta.Icon className="w-3.5 h-3.5" />
+                      {t(`pages.remediationHub.${verdictMeta.key}`, { defaultValue: verdict })}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {jobStatus?.pr_url && (

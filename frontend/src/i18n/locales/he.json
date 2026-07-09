@@ -1478,7 +1478,10 @@
       "verdict_still_vulnerable": "עדיין פגיע",
       "verdict_inconclusive": "לא חד-משמעי",
       "view_pr": "צפה ב-Pull Request",
-      "download_patch": "הורד תיקון"
+      "download_patch": "הורד תיקון",
+      "self_repair_attempts": "ריפוי עצמי ×{{n}}",
+      "attested": "מאומת",
+      "verify_attestation": "אמת קבלה חתומה"
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",

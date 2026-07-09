@@ -322,6 +322,29 @@ pub fn spawn_pool_metrics_loop(
                     0.0
                 },
             );
+
+            // Auto-heal outcome distribution + success rate, from heal_requests.
+            if let Ok(rows) = sqlx::query_as::<_, (String, i64)>(
+                "SELECT COALESCE(verdict, 'unknown') AS verdict, count(*)::bigint \
+                 FROM heal_requests GROUP BY 1",
+            )
+            .fetch_all(app_pool.as_ref())
+            .await
+            {
+                let mut total: i64 = 0;
+                let mut fixed: i64 = 0;
+                for (verdict, n) in &rows {
+                    metrics::gauge!("weissman_heal_by_verdict", "verdict" => verdict.clone())
+                        .set(*n as f64);
+                    total += *n;
+                    if verdict == "fixed" {
+                        fixed += *n;
+                    }
+                }
+                metrics::gauge!("weissman_heal_total_requests").set(total as f64);
+                let rate = if total > 0 { fixed as f64 / total as f64 } else { 0.0 };
+                metrics::gauge!("weissman_heal_success_rate").set(rate);
+            }
         }
     });
 }

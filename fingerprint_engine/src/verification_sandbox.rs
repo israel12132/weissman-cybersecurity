@@ -80,6 +80,11 @@ pub struct VerificationResult {
     /// Paths the patch deleted (or binary files) that the blob-tree commit path can't apply;
     /// surfaced in the PR body for honesty rather than silently dropped.
     pub deleted_paths: Vec<String>,
+    /// Regression-test gate (opt-in): whether the repo's own tests ran in-container after the
+    /// patch, whether they passed, and a truncated tail of their output.
+    pub tests_ran: bool,
+    pub tests_passed: bool,
+    pub test_output: String,
     pub error: Option<String>,
     pub steps: Vec<VerificationStep>,
 }
@@ -149,6 +154,21 @@ fn require_baseline_success() -> bool {
     std::env::var("WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(true)
+}
+
+fn env_u64(key: &str, default: u64) -> u64 {
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(default)
+}
+
+fn env_f64(key: &str, default: f64) -> f64 {
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .filter(|n: &f64| *n > 0.0)
+        .unwrap_or(default)
 }
 
 /// When true (default), the post-patch health probe must succeed for a `Fixed` verdict, so a
@@ -306,12 +326,19 @@ async fn git_clone_shallow(
     repo_slug: &str,
     branch: &str,
     token: &str,
+    git_host: &str,
     dest: &Path,
 ) -> Result<(), String> {
-    let url = format!(
-        "https://x-access-token:{}@github.com/{}.git",
-        token, repo_slug
-    );
+    // Provider-aware token clone URL: GitHub uses `x-access-token`, GitLab uses `oauth2`.
+    let host = {
+        let h = git_host.trim();
+        if h.is_empty() { "github.com" } else { h }
+    };
+    let url = if host.contains("gitlab") {
+        format!("https://oauth2:{}@{}/{}.git", token, host, repo_slug)
+    } else {
+        format!("https://x-access-token:{}@{}/{}.git", token, host, repo_slug)
+    };
     let mut cmd = Command::new("git");
     cmd.arg("clone").arg("--depth").arg("1");
     if !branch.trim().is_empty() {
@@ -479,6 +506,102 @@ async fn collect_changed_files(repo_dir: &Path) -> Result<(Vec<(String, String)>
     Ok((files, deleted))
 }
 
+/// Opt-in: run the repo's own test suite in-container as a regression gate.
+fn run_tests_enabled() -> bool {
+    std::env::var("WEISSMAN_VERIFY_RUN_TESTS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+/// Return the last `n` characters of `s` (UTF-8 safe), for log/output tails.
+fn tail_chars(s: &str, n: usize) -> String {
+    let v: Vec<char> = s.chars().collect();
+    if v.len() > n {
+        v[v.len() - n..].iter().collect()
+    } else {
+        s.to_string()
+    }
+}
+
+/// Resolve the repo's test command from its manifests (Node/Rust/Go/Python). `None` when no
+/// recognized test setup is present, so the gate simply doesn't run.
+fn detect_test_command(repo_dir: &Path) -> Option<Vec<String>> {
+    let sh = |c: &str| Some(vec!["sh".to_string(), "-lc".to_string(), c.to_string()]);
+    let pkg = repo_dir.join("package.json");
+    if pkg.exists() {
+        if let Ok(txt) = std::fs::read_to_string(&pkg) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
+                let test = v
+                    .get("scripts")
+                    .and_then(|s| s.get("test"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+                if !test.trim().is_empty() && !test.contains("no test specified") {
+                    return sh("npm test --silent");
+                }
+            }
+        }
+    }
+    if repo_dir.join("Cargo.toml").exists() {
+        return sh("cargo test --quiet");
+    }
+    if repo_dir.join("go.mod").exists() {
+        return sh("go test ./...");
+    }
+    if repo_dir.join("requirements.txt").exists()
+        || repo_dir.join("pyproject.toml").exists()
+        || repo_dir.join("pytest.ini").exists()
+    {
+        return sh("pytest -q");
+    }
+    None
+}
+
+/// Execute `cmd` inside the running container (working dir `/app`) and return (passed, output).
+async fn run_tests_in_container(docker: &Docker, id: &str, cmd: &[String]) -> (bool, String) {
+    use bollard::exec::{CreateExecOptions, StartExecResults};
+    use futures::StreamExt;
+
+    let exec = match docker
+        .create_exec(
+            id,
+            CreateExecOptions {
+                cmd: Some(cmd.iter().map(|s| s.as_str()).collect()),
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
+                working_dir: Some("/app"),
+                ..Default::default()
+            },
+        )
+        .await
+    {
+        Ok(e) => e,
+        Err(e) => return (false, format!("create_exec: {e}")),
+    };
+
+    let mut output = String::new();
+    match docker.start_exec(&exec.id, None).await {
+        Ok(StartExecResults::Attached { output: mut out, .. }) => {
+            while let Some(chunk) = out.next().await {
+                if let Ok(msg) = chunk {
+                    output.push_str(&msg.to_string());
+                    if output.len() > 20_000 {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(StartExecResults::Detached) => {}
+        Err(e) => return (false, format!("start_exec: {e}")),
+    }
+
+    let passed = matches!(
+        docker.inspect_exec(&exec.id).await,
+        Ok(d) if d.exit_code.unwrap_or(1) == 0
+    );
+    (passed, output)
+}
+
 fn host_port_from_inspect(
     inspect: &bollard::models::ContainerInspectResponse,
     container_port: u16,
@@ -511,6 +634,7 @@ pub async fn verify_patch_ephemeral_docker(
     repo_slug: &str,
     base_branch: &str,
     git_token: &str,
+    git_host: &str,
     patch_content: &str,
     poc_curl: &str,
     health_check_curl: &str,
@@ -543,6 +667,9 @@ pub async fn verify_patch_ephemeral_docker(
             health_status: 0,
             changed_files: Vec::new(),
             deleted_paths: Vec::new(),
+            tests_ran: false,
+            tests_passed: false,
+            test_output: String::new(),
             error: Some(format!("patch exceeds {} bytes", MAX_PATCH_BYTES)),
             steps: collect_steps_only(&sink).await,
         };
@@ -562,7 +689,7 @@ pub async fn verify_patch_ephemeral_docker(
         Some(format!("Cloning {}/{}", repo_slug, base_branch))
     );
 
-    if let Err(e) = git_clone_shallow(repo_slug, base_branch, git_token, &repo_dir).await {
+    if let Err(e) = git_clone_shallow(repo_slug, base_branch, git_token, git_host, &repo_dir).await {
         return fail(&sink, e).await;
     }
 
@@ -612,9 +739,21 @@ pub async fn verify_patch_ephemeral_docker(
     let mut exposed: HashMap<String, HashMap<(), ()>> = HashMap::new();
     exposed.insert(format!("{}/tcp", container_port), HashMap::new());
 
+    // Harden the ephemeral container: cap memory/CPU/pids and drop all Linux capabilities so a
+    // hostile repo or a runaway app can't exhaust the host or escalate. Bridge networking is kept
+    // because the exploit/health probes reach the app via a host-published mapped port.
+    let mem_bytes: i64 = env_u64("WEISSMAN_VERIFY_MEM_MB", 1024).saturating_mul(1024 * 1024) as i64;
+    let nano_cpus: i64 = (env_f64("WEISSMAN_VERIFY_CPUS", 1.0) * 1_000_000_000.0) as i64;
+    let pids_limit: i64 = env_u64("WEISSMAN_VERIFY_PIDS", 512) as i64;
     let host_config = HostConfig {
         binds: Some(vec![mount]),
         port_bindings: Some(port_map),
+        memory: Some(mem_bytes),
+        memory_swap: Some(mem_bytes), // == memory ⇒ no swap
+        nano_cpus: Some(nano_cpus),
+        pids_limit: Some(pids_limit),
+        cap_drop: Some(vec!["ALL".to_string()]),
+        security_opt: Some(vec!["no-new-privileges".to_string()]),
         ..Default::default()
     };
 
@@ -719,6 +858,9 @@ pub async fn verify_patch_ephemeral_docker(
             health_status: 0,
             changed_files: Vec::new(),
             deleted_paths: Vec::new(),
+            tests_ran: false,
+            tests_passed: false,
+            test_output: String::new(),
             error: Some(
                 "Baseline did not return 2xx; set WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS=0 to override"
                     .into(),
@@ -795,9 +937,40 @@ pub async fn verify_patch_ephemeral_docker(
 
     let app_up = if require_health() { health_after_ok } else { true };
     let baseline_proven = baseline_was_vulnerable || !require_baseline_success();
-    let verdict = classify_verdict(baseline_proven, after_status, app_up);
-    let verified = verdict == HealVerdict::Fixed;
+    let mut verdict = classify_verdict(baseline_proven, after_status, app_up);
     let exploit_neutralized = !(200..=299).contains(&after_status);
+
+    // Optional regression-test gate: if the exploit/health checks pass, run the repo's own tests
+    // in-container. A fix that breaks the test suite is downgraded to `BrokeApp` (not a valid fix).
+    let mut tests_ran = false;
+    let mut tests_passed = false;
+    let mut test_output = String::new();
+    if verdict == HealVerdict::Fixed && run_tests_enabled() {
+        if let Some(cmd) = detect_test_command(&repo_dir) {
+            step!("regression_tests", Some(format!("running: {}", cmd.join(" "))));
+            let (passed, out) = run_tests_in_container(&docker, &id, &cmd).await;
+            tests_ran = true;
+            tests_passed = passed;
+            test_output = tail_chars(&out, 2000);
+            step!(
+                if passed {
+                    "regression_tests_passed"
+                } else {
+                    "regression_tests_failed"
+                },
+                Some(tail_chars(&test_output, 300))
+            );
+            if !passed {
+                verdict = HealVerdict::BrokeApp;
+            }
+        } else {
+            step!(
+                "regression_tests_skipped",
+                Some("no recognized test command in the repo".into())
+            );
+        }
+    }
+    let verified = verdict == HealVerdict::Fixed;
 
     cleanup_container(&docker, &id).await;
     let verdict_step = match verdict {
@@ -808,16 +981,24 @@ pub async fn verify_patch_ephemeral_docker(
     };
     let verdict_detail = match verdict {
         HealVerdict::Fixed => format!(
-            "Exploit closed (HTTP {}) and app healthy (HTTP {}) — PR may be opened",
-            after_status, health_status
+            "Exploit closed (HTTP {}) and app healthy (HTTP {}){} — PR may be opened",
+            after_status,
+            health_status,
+            if tests_ran { ", tests passed" } else { "" }
         ),
         HealVerdict::StillVulnerable => {
             format!("Exploit still returns success (HTTP {})", after_status)
         }
-        HealVerdict::BrokeApp => format!(
-            "Patch broke the app: exploit HTTP {}, health HTTP {} — NOT a valid fix",
-            after_status, health_status
-        ),
+        HealVerdict::BrokeApp => {
+            if tests_ran && !tests_passed {
+                "Patch regressed the app's own test suite — NOT a valid fix".to_string()
+            } else {
+                format!(
+                    "Patch broke the app: exploit HTTP {}, health HTTP {} — NOT a valid fix",
+                    after_status, health_status
+                )
+            }
+        }
         HealVerdict::Inconclusive => format!(
             "Inconclusive: exploit HTTP {}, health HTTP {}",
             after_status, health_status
@@ -837,6 +1018,9 @@ pub async fn verify_patch_ephemeral_docker(
         health_status,
         changed_files,
         deleted_paths,
+        tests_ran,
+        tests_passed,
+        test_output,
         error: if verified {
             None
         } else {
@@ -849,6 +1033,12 @@ pub async fn verify_patch_ephemeral_docker(
         },
         steps: collect_steps_only(&sink).await,
     }
+}
+
+/// Append a named step to a live sink (reuses the sink's shared sequence counter), so callers
+/// outside this module (e.g. the self-repair loop) can annotate the verification timeline.
+pub async fn record_step(sink: &StepSink, step: &str, detail: Option<String>) {
+    push_step(&Some(sink.clone()), step, detail).await;
 }
 
 async fn cleanup_container(docker: &Docker, id: &str) {
@@ -874,6 +1064,9 @@ async fn fail(sink: &Option<StepSink>, msg: String) -> VerificationResult {
         health_status: 0,
         changed_files: Vec::new(),
         deleted_paths: Vec::new(),
+        tests_ran: false,
+        tests_passed: false,
+        test_output: String::new(),
         error: Some(msg),
         steps: collect_steps_only(sink).await,
     }

@@ -16,6 +16,8 @@ pub enum DeliveryChannel {
     DiffDownload,
     /// Do not touch the repo — render a WAF / virtual-patch snippet from the detection signature.
     VirtualPatch,
+    /// Applied-fix GitLab Merge Request (v4 API).
+    GitlabMr,
 }
 
 impl DeliveryChannel {
@@ -26,6 +28,7 @@ impl DeliveryChannel {
             "github_direct_commit" | "direct_commit" | "commit" => DeliveryChannel::GithubDirectCommit,
             "diff_download" | "diff" | "patch_download" => DeliveryChannel::DiffDownload,
             "virtual_patch" | "waf" | "virtual" => DeliveryChannel::VirtualPatch,
+            "gitlab_mr" | "gitlab" | "mr" => DeliveryChannel::GitlabMr,
             _ => DeliveryChannel::GithubPr,
         }
     }
@@ -37,6 +40,7 @@ impl DeliveryChannel {
             DeliveryChannel::GithubDirectCommit => "github_direct_commit",
             DeliveryChannel::DiffDownload => "diff_download",
             DeliveryChannel::VirtualPatch => "virtual_patch",
+            DeliveryChannel::GitlabMr => "gitlab_mr",
         }
     }
 
@@ -45,7 +49,9 @@ impl DeliveryChannel {
     pub fn touches_repo(&self) -> bool {
         matches!(
             self,
-            DeliveryChannel::GithubPr | DeliveryChannel::GithubDirectCommit
+            DeliveryChannel::GithubPr
+                | DeliveryChannel::GithubDirectCommit
+                | DeliveryChannel::GitlabMr
         )
     }
 
@@ -57,6 +63,7 @@ impl DeliveryChannel {
             "github_direct_commit",
             "diff_download",
             "virtual_patch",
+            "gitlab_mr",
         ]
     }
 }

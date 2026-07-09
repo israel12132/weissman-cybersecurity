@@ -24,11 +24,13 @@ async fn insert_heal_request_row(
     verification_job_id: &str,
     channel: &str,
     verdict: &str,
+    attempts: i32,
+    receipt: Option<&crate::heal_attestation::HealReceipt>,
 ) {
     if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
         let _ = sqlx::query(
-            r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, vulnerability_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, channel, verdict)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"#,
+            r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, vulnerability_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, channel, verdict, attempts, verification_receipt, verification_digest)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"#,
         )
         .bind(tenant_id)
         .bind(client_id)
@@ -42,6 +44,9 @@ async fn insert_heal_request_row(
         .bind(verification_job_id)
         .bind(channel)
         .bind(verdict)
+        .bind(attempts)
+        .bind(receipt.map(|r| r.receipt.as_str()))
+        .bind(receipt.map(|r| r.digest.as_str()))
         .execute(&mut *tx)
         .await;
         let _ = tx.commit().await;
@@ -71,12 +76,36 @@ fn build_pr_text(
     finding_id: &str,
     vr: &crate::verification_sandbox::VerificationResult,
     diff_summary: &str,
+    attempts: i32,
+    receipt: Option<&crate::heal_attestation::HealReceipt>,
 ) -> (String, String) {
     let title = format!(
         "[Weissman CNAPP] Auto-Heal (verdict: {}): {}",
         vr.verdict.as_str(),
         finding_id
     );
+    let attempts_md = if attempts > 1 {
+        format!(
+            "**Self-repair:** reached a proven fix after {attempts} autonomous attempt(s).\n"
+        )
+    } else {
+        String::new()
+    };
+    let receipt_md = match receipt {
+        Some(r) => format!(
+            "**🔏 Verified receipt:** `{}…` (HMAC-SHA256; verify at `GET /api/heal-verify/&lt;job&gt;/attestation`)\n",
+            r.receipt.chars().take(16).collect::<String>()
+        ),
+        None => String::new(),
+    };
+    let tests_md = if vr.tests_ran {
+        format!(
+            "**Regression tests:** {} in-container.\n",
+            if vr.tests_passed { "passed ✅" } else { "FAILED ❌" }
+        )
+    } else {
+        String::new()
+    };
     let mut files_md = String::new();
     for (path, _content) in vr.changed_files.iter().take(40) {
         files_md.push_str(&format!("- `{}`\n", path));
@@ -102,7 +131,8 @@ fn build_pr_text(
          **Finding:** `{finding}`\n\
          **Verdict:** `{verdict}`\n\
          **Exploit re-run:** baseline HTTP `{baseline}` → after-patch HTTP `{after}`\n\
-         **App health after patch:** HTTP `{health}` ({health_ok})\n\n\
+         **App health after patch:** HTTP `{health}` ({health_ok})\n\
+         {tests_md}{attempts_md}{receipt_md}\n\
          The patch below was applied to a shallow clone in an ephemeral Docker container, the app \
          was restarted, and the original exploit was re-run. This PR contains the **actual applied \
          fix** (the changed source files), not an advisory diff.\n\n\
@@ -115,6 +145,9 @@ fn build_pr_text(
         after = vr.after_patch_status,
         health = vr.health_status,
         health_ok = if vr.health_after_ok { "healthy" } else { "unhealthy" },
+        tests_md = tests_md,
+        attempts_md = attempts_md,
+        receipt_md = receipt_md,
         files = if files_md.is_empty() { "- (none)\n".to_string() } else { files_md },
         deletions = deletions_md,
         summary = diff_summary.chars().take(1500).collect::<String>(),
@@ -140,12 +173,94 @@ async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &st
     }
 }
 
+/// Human-readable failure the self-repair loop feeds back to the LLM, derived from the verdict.
+fn failure_reason(vr: &crate::verification_sandbox::VerificationResult) -> String {
+    use crate::verification_sandbox::HealVerdict;
+    let base = match vr.verdict {
+        HealVerdict::StillVulnerable => format!(
+            "The exploit STILL SUCCEEDS after the patch (HTTP {}). The vulnerability is not fixed.",
+            vr.after_patch_status
+        ),
+        HealVerdict::BrokeApp => format!(
+            "The patch BROKE the application (exploit HTTP {}, health HTTP {}). A valid fix must keep the app serving normal requests.",
+            vr.after_patch_status, vr.health_status
+        ),
+        HealVerdict::Inconclusive => {
+            "The patch could not be verified — it likely did not apply cleanly or produced no file changes.".to_string()
+        }
+        HealVerdict::Fixed => "fixed".to_string(),
+    };
+    match &vr.error {
+        Some(e) if !e.is_empty() => format!("{base} Sandbox detail: {e}"),
+        _ => base,
+    }
+}
+
+/// Load a finding's title/description/severity for patch regeneration (empty tuple if absent).
+async fn load_finding_context(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    finding_id: &str,
+) -> (String, String, String) {
+    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
+        let row = sqlx::query(
+            "SELECT title, COALESCE(description,'') AS description, severity FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+        )
+        .bind(client_id)
+        .bind(finding_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        let _ = tx.commit().await;
+        if let Some(r) = row {
+            return (
+                r.try_get("title").unwrap_or_default(),
+                r.try_get("description").unwrap_or_default(),
+                r.try_get("severity").unwrap_or_default(),
+            );
+        }
+    }
+    (String::new(), String::new(), String::new())
+}
+
+/// Emit metrics (verdict/channel counter + duration histogram) and fire tenant completion
+/// notifications for a terminal heal outcome. Best-effort — never affects the job result.
+#[allow(clippy::too_many_arguments)]
+async fn report_heal_outcome(
+    pool: &PgPool,
+    tenant_id: i64,
+    finding_id: &str,
+    verdict: &str,
+    channel: &str,
+    attempts: i32,
+    pr_url: Option<&str>,
+    ok: bool,
+    started: std::time::Instant,
+) {
+    metrics::counter!(
+        "weissman_heal_total",
+        "verdict" => verdict.to_string(),
+        "channel" => channel.to_string(),
+        "ok" => ok.to_string(),
+    )
+    .increment(1);
+    metrics::histogram!("weissman_heal_duration_seconds", "channel" => channel.to_string())
+        .record(started.elapsed().as_secs_f64());
+    crate::alert_delivery::notify_heal_completed(
+        pool, tenant_id, finding_id, verdict, channel, attempts, pr_url, ok,
+    )
+    .await;
+}
+
 pub async fn run_auto_heal_job(
     app_pool: Arc<PgPool>,
     tenant_id: i64,
     spec_id: Uuid,
 ) -> Result<Value, String> {
     let jid_str = spec_id.to_string();
+    let heal_started = std::time::Instant::now();
 
     let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tenant_id)
         .await
@@ -238,22 +353,109 @@ pub async fn run_auto_heal_job(
     };
 
     use crate::heal_channels::DeliveryChannel;
+    use crate::verification_sandbox::record_step;
 
-    // 1) VERIFY FIRST. No branch is ever created unless the exploit is proven closed AND the app
-    //    is still healthy (verdict == Fixed). This also captures the real applied files.
-    let vr = verify_patch_ephemeral_docker(
+    // 1) VERIFY with an AUTONOMOUS SELF-REPAIR loop. If the fix doesn't reach `Fixed`, feed the
+    //    failure back to the LLM, regenerate a corrected diff, re-validate, and re-verify — up to
+    //    N attempts. A branch is only ever created once a patch is proven Fixed.
+    let max_attempts: u32 = std::env::var("WEISSMAN_HEAL_MAX_ATTEMPTS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|n| *n >= 1 && *n <= 10)
+        .unwrap_or(3);
+
+    // Provider host the sandbox clones from (GitLab uses oauth2 token auth, GitHub x-access-token).
+    let git_host = if channel == DeliveryChannel::GitlabMr {
+        std::env::var("WEISSMAN_GITLAB_HOST").unwrap_or_else(|_| "gitlab.com".into())
+    } else {
+        "github.com".to_string()
+    };
+
+    let mut patch_text = patch_text;
+    let mut attempt: u32 = 1;
+    let mut vr = verify_patch_ephemeral_docker(
         &docker_socket,
         &image,
         container_port as u16,
         &repo_slug,
         &base_branch,
         &git_token,
+        &git_host,
         &patch_text,
         &poc_curl,
         &health_check_curl,
-        Some(step_sink),
+        Some(step_sink.clone()),
     )
     .await;
+
+    // Finding context for regeneration, loaded once on first failure (empty if the row is gone).
+    let mut finding_ctx: Option<(String, String, String)> = None;
+
+    while !vr.verified && attempt < max_attempts {
+        let reason = failure_reason(&vr);
+        record_step(
+            &step_sink,
+            &format!("self_repair_attempt_{}", attempt),
+            Some(format!(
+                "verdict={} — regenerating a corrected patch. {}",
+                vr.verdict.as_str(),
+                reason
+            )),
+        )
+        .await;
+
+        if finding_ctx.is_none() {
+            finding_ctx = Some(
+                load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await,
+            );
+        }
+        let cfg = match crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await {
+            Ok(c) => c,
+            Err(e) => {
+                record_step(&step_sink, "self_repair_aborted", Some(format!("llm config: {e}"))).await;
+                break;
+            }
+        };
+        let (t, d, s) = finding_ctx.clone().unwrap_or_default();
+        let changed_paths: Vec<String> = vr.changed_files.iter().map(|(p, _)| p.clone()).collect();
+        match crate::remediation_patch::regenerate_patch(
+            &cfg, tenant_id, attempt, &t, &d, &s, &poc_curl, &patch_text, &reason, &changed_paths,
+        )
+        .await
+        {
+            Ok(new_patch) => {
+                if let Err(e) = crate::security_hardening::validate_remediation_patch(&new_patch) {
+                    record_step(
+                        &step_sink,
+                        "self_repair_rejected",
+                        Some(format!("regenerated patch rejected: {e}")),
+                    )
+                    .await;
+                    break;
+                }
+                patch_text = new_patch;
+                attempt += 1;
+                vr = verify_patch_ephemeral_docker(
+                    &docker_socket,
+                    &image,
+                    container_port as u16,
+                    &repo_slug,
+                    &base_branch,
+                    &git_token,
+                    &git_host,
+                    &patch_text,
+                    &poc_curl,
+                    &health_check_curl,
+                    Some(step_sink.clone()),
+                )
+                .await;
+            }
+            Err(e) => {
+                record_step(&step_sink, "self_repair_failed", Some(e)).await;
+                break;
+            }
+        }
+    }
 
     let verdict_str = vr.verdict.as_str();
 
@@ -272,10 +474,24 @@ pub async fn run_auto_heal_job(
             None,
             None,
             "",
-            &format!("sandbox_failed: {}", msg),
+            &format!("sandbox_failed after {} attempt(s): {}", attempt, msg),
             &jid_str,
             channel.id(),
             verdict_str,
+            attempt as i32,
+            None,
+        )
+        .await;
+        report_heal_outcome(
+            app_pool.as_ref(),
+            tenant_id,
+            &finding_id,
+            verdict_str,
+            channel.id(),
+            attempt as i32,
+            None,
+            false,
+            heal_started,
         )
         .await;
         finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
@@ -283,9 +499,78 @@ pub async fn run_auto_heal_job(
             "ok": false,
             "error": msg,
             "verdict": verdict_str,
+            "attempts": attempt,
             "spec_id": spec_id,
         }));
     }
+
+    // Secret-safety gate: never commit or hand back a verified fix that itself embeds a secret.
+    {
+        let mut leaked: Vec<String> = Vec::new();
+        for (path, content) in &vr.changed_files {
+            let hits = crate::engine_probes::detect_secrets(content);
+            if !hits.is_empty() {
+                leaked.push(format!("{} ({})", path, hits.join(",")));
+            }
+        }
+        if !leaked.is_empty() {
+            let msg = format!("blocked: verified patch embeds secret(s): {}", leaked.join("; "));
+            record_step(&step_sink, "secret_gate_blocked", Some(msg.clone())).await;
+            insert_heal_request_row(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                vuln_id,
+                "",
+                None,
+                None,
+                "",
+                &msg,
+                &jid_str,
+                channel.id(),
+                verdict_str,
+                attempt as i32,
+                None,
+            )
+            .await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+            return Ok(json!({
+                "ok": false,
+                "error": msg,
+                "verdict": verdict_str,
+                "spec_id": spec_id,
+            }));
+        }
+    }
+
+    // Persist the winning patch so the DiffDownload artifact and receipt reflect what actually passed.
+    if attempt > 1 {
+        if let Ok(mut tx) = db::begin_tenant_tx(app_pool.as_ref(), tenant_id).await {
+            let _ = sqlx::query(
+                "UPDATE auto_heal_job_specs SET patch_text = $3, updated_at = now() WHERE id = $1 AND tenant_id = $2",
+            )
+            .bind(spec_id)
+            .bind(tenant_id)
+            .bind(&patch_text)
+            .execute(&mut *tx)
+            .await;
+            let _ = tx.commit().await;
+        }
+    }
+
+    // Sign a tamper-evident heal receipt over the verified proof (None in dev / no attestation key).
+    let heal_ts = chrono::Utc::now().timestamp();
+    let receipt = crate::heal_attestation::sign_from_result(&finding_id, &poc_curl, &vr, heal_ts);
+    if receipt.is_some() {
+        record_step(
+            &step_sink,
+            "heal_attested",
+            Some("signed tamper-evident verification receipt".into()),
+        )
+        .await;
+    }
+    let attempts_i32 = attempt as i32;
 
     // 2) DELIVER the verified fix via the requested channel.
     let commit_msg = format!(
@@ -320,6 +605,8 @@ pub async fn run_auto_heal_job(
                     &jid_str,
                     channel.id(),
                     verdict_str,
+                    attempts_i32,
+                    None,
                 )
                 .await;
                 finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
@@ -347,6 +634,20 @@ pub async fn run_auto_heal_job(
                     &jid_str,
                     channel.id(),
                     verdict_str,
+                    attempts_i32,
+                    receipt.as_ref(),
+                )
+                .await;
+                report_heal_outcome(
+                    app_pool.as_ref(),
+                    tenant_id,
+                    &finding_id,
+                    verdict_str,
+                    channel.id(),
+                    attempts_i32,
+                    None,
+                    true,
+                    heal_started,
                 )
                 .await;
                 finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
@@ -360,7 +661,7 @@ pub async fn run_auto_heal_job(
                 }));
             }
 
-            let (title, body) = build_pr_text(&finding_id, &vr, &commit.diff_summary);
+            let (title, body) = build_pr_text(&finding_id, &vr, &commit.diff_summary, attempts_i32, receipt.as_ref());
             match auto_heal::open_pull_request(
                 &git_token,
                 &repo_slug,
@@ -386,6 +687,20 @@ pub async fn run_auto_heal_job(
                         &jid_str,
                         channel.id(),
                         verdict_str,
+                        attempts_i32,
+                        receipt.as_ref(),
+                    )
+                    .await;
+                    report_heal_outcome(
+                        app_pool.as_ref(),
+                        tenant_id,
+                        &finding_id,
+                        verdict_str,
+                        channel.id(),
+                        attempts_i32,
+                        pr_url.as_deref(),
+                        true,
+                        heal_started,
                     )
                     .await;
                     finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
@@ -415,6 +730,8 @@ pub async fn run_auto_heal_job(
                         &jid_str,
                         channel.id(),
                         verdict_str,
+                        attempts_i32,
+                        None,
                     )
                     .await;
                     finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
@@ -455,6 +772,20 @@ pub async fn run_auto_heal_job(
                 &jid_str,
                 channel.id(),
                 verdict_str,
+                attempts_i32,
+                receipt.as_ref(),
+            )
+            .await;
+            report_heal_outcome(
+                app_pool.as_ref(),
+                tenant_id,
+                &finding_id,
+                verdict_str,
+                channel.id(),
+                attempts_i32,
+                None,
+                true,
+                heal_started,
             )
             .await;
             finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
@@ -489,6 +820,20 @@ pub async fn run_auto_heal_job(
                 &jid_str,
                 channel.id(),
                 verdict_str,
+                attempts_i32,
+                receipt.as_ref(),
+            )
+            .await;
+            report_heal_outcome(
+                app_pool.as_ref(),
+                tenant_id,
+                &finding_id,
+                verdict_str,
+                channel.id(),
+                attempts_i32,
+                None,
+                true,
+                heal_started,
             )
             .await;
             finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
@@ -497,6 +842,99 @@ pub async fn run_auto_heal_job(
                 "channel": channel.id(),
                 "verdict": verdict_str,
                 "message": "virtual patch rendered; GET /api/heal-verify/:job_id/patch",
+                "spec_id": spec_id,
+            }))
+        }
+        DeliveryChannel::GitlabMr => {
+            let gitlab_host =
+                std::env::var("WEISSMAN_GITLAB_HOST").unwrap_or_else(|_| "gitlab.com".into());
+            let diff_summary: String = vr
+                .changed_files
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .take(20)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let (title, body) =
+                build_pr_text(&finding_id, &vr, &diff_summary, attempts_i32, receipt.as_ref());
+            let outcome = crate::gitlab_heal::create_branch_commit_and_mr(
+                &git_token,
+                &gitlab_host,
+                &repo_slug,
+                &base_branch,
+                &finding_id,
+                vr.changed_files.clone(),
+                &title,
+                &body,
+            )
+            .await;
+            if let Some(e) = &outcome.error {
+                insert_heal_request_row(
+                    app_pool.as_ref(),
+                    tenant_id,
+                    client_id,
+                    &finding_id,
+                    vuln_id,
+                    &outcome.branch_name,
+                    None,
+                    None,
+                    &diff_summary,
+                    &format!("gitlab_mr_failed: {}", e),
+                    &jid_str,
+                    channel.id(),
+                    verdict_str,
+                    attempts_i32,
+                    None,
+                )
+                .await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                return Ok(json!({
+                    "ok": false,
+                    "error": e,
+                    "verdict": verdict_str,
+                    "branch_name": outcome.branch_name,
+                    "spec_id": spec_id,
+                }));
+            }
+            insert_heal_request_row(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                vuln_id,
+                &outcome.branch_name,
+                outcome.mr_url.as_deref(),
+                outcome.mr_iid,
+                &diff_summary,
+                "verified_mr_opened",
+                &jid_str,
+                channel.id(),
+                verdict_str,
+                attempts_i32,
+                receipt.as_ref(),
+            )
+            .await;
+            report_heal_outcome(
+                app_pool.as_ref(),
+                tenant_id,
+                &finding_id,
+                verdict_str,
+                channel.id(),
+                attempts_i32,
+                outcome.mr_url.as_deref(),
+                true,
+                heal_started,
+            )
+            .await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            Ok(json!({
+                "ok": true,
+                "channel": channel.id(),
+                "verdict": verdict_str,
+                "branch_name": outcome.branch_name,
+                "mr_url": outcome.mr_url,
+                "mr_iid": outcome.mr_iid,
+                "diff_summary": diff_summary,
                 "spec_id": spec_id,
             }))
         }

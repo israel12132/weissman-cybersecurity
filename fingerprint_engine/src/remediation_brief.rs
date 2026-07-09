@@ -67,7 +67,7 @@ Output ONE minified JSON object ONLY, no prose outside JSON. Schema: {\
 EVERY text field MUST contain BOTH an impeccable, native, professional Hebrew (\"he\") AND English (\"en\") version \
 of the SAME content — never leave one empty, never mix languages inside a field. Hebrew must read as written by a \
 native security professional. Keep each field concise (1-4 sentences). The \"channels\" array MUST contain one entry \
-for each of these channel ids: github_pr, github_direct_commit, diff_download, virtual_patch — each explaining how to \
+for each of these channel ids: github_pr, github_direct_commit, gitlab_mr, diff_download, virtual_patch — each explaining how to \
 connect that channel (credentials/config needed) and how to apply the fix through it. Do not include exploit payloads.";
 
 /// Bilingual fallback how-tos so the UI always has connection guidance even if the LLM omits
@@ -109,6 +109,13 @@ pub fn default_channel_howtos() -> Vec<ChannelHowTo> {
             "Does not touch the code. Operates at the WAF layer as a compensating control.",
             "הורד את חוקת ה-WAF (למשל ModSecurity) ופרוס אותה כדי לחסום את הניצול עד שהתיקון בקוד ימוזג.",
             "Download the WAF rule (e.g. ModSecurity) and deploy it to block the exploit until the code fix is merged.",
+        ),
+        mk(
+            DeliveryChannel::GitlabMr,
+            "חבר טוקן GitLab (glpat) עם הרשאת api ואת נתיב הפרויקט (owner/repo). ברירת מחדל gitlab.com, ניתן להגדיר מארח עצמי.",
+            "Connect a GitLab token (glpat) with `api` scope and the project path (owner/repo). Defaults to gitlab.com; a self-managed host can be configured.",
+            "בחר בערוץ זה ולחץ \"רפא\" — נפתח Merge Request עם התיקון המוחל לאחר אימות בסנדבוקס.",
+            "Select this channel and click \"Heal\" — a Merge Request with the applied fix is opened after sandbox verification.",
         ),
     ]
 }
