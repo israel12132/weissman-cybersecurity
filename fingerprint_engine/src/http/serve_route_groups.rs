@@ -465,6 +465,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/auto-heal", post(api_auto_heal))
         .route(
+            "/api/clients/:id/findings/:finding_id/brief",
+            get(api_finding_brief).post(api_finding_brief),
+        )
+        .route(
             "/api/clients/:id/heal-requests",
             get(api_heal_requests_list),
         )
@@ -570,6 +574,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             post(api_deception_deploy_cloud),
         )
         .route("/api/heal-verify/:job_id/steps", get(api_heal_verify_steps))
+        .route("/api/heal-verify/:job_id", get(api_heal_verify_status))
+        .route("/api/heal-verify/:job_id/patch", get(api_heal_verify_patch))
         .route("/api/clients/:id/swarm/run", post(api_swarm_run))
         .route("/api/swarm/events", get(api_swarm_events))
         .route("/api/threat-ingest/run", post(api_threat_ingest_run))

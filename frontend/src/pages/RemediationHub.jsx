@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck, Search, RefreshCw, X } from 'lucide-react';
+import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck, Search, RefreshCw, X, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import RemediationDetail from '../components/remediation/RemediationDetail'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -52,10 +53,11 @@ function summarizeFamilies(findings) {
     const label = family?.label || 'Other Findings'
     const status = STATUS_FROM_FINDING(f.status)
     const sev = normSev(f.severity)
-    const cur = buckets.get(key) || { id: key, label, total: 0, statuses: {}, severities: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } }
+    const cur = buckets.get(key) || { id: key, label, total: 0, statuses: {}, severities: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }, items: [] }
     cur.total += 1
     cur.statuses[status] = (cur.statuses[status] || 0) + 1
     cur.severities[sev] += 1
+    cur.items.push(f)
     buckets.set(key, cur)
   }
   return Array.from(buckets.values())
@@ -110,6 +112,8 @@ export default function RemediationHub() {
   const [sevFilter, setSevFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [expanded, setExpanded] = useState({})
+  const [selectedFinding, setSelectedFinding] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -249,44 +253,82 @@ export default function RemediationHub() {
                 />
               </div>
             ) : (
-              workflows.map((w) => (
-                <div key={w.id} className="p-4 hover:bg-white/5 transition-colors">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-1.5 flex-wrap">
-                        <h4 className="text-sm font-semibold text-white truncate">{w.label}</h4>
-                        <StatusBadge status={w.status} t={t} />
+              workflows.map((w) => {
+                const isOpen = !!expanded[w.id]
+                return (
+                <div key={w.id} className="hover:bg-white/[0.03] transition-colors">
+                  <div className="p-4 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((e) => ({ ...e, [w.id]: !e[w.id] }))}
+                      className="flex-1 min-w-0 text-left flex items-start gap-2"
+                    >
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-white/40 mt-0.5 shrink-0" /> : <ChevronRight className="w-4 h-4 text-white/40 mt-0.5 shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                          <h4 className="text-sm font-semibold text-white truncate">{w.label}</h4>
+                          <StatusBadge status={w.status} t={t} />
+                        </div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <SeverityBar severities={w.severities} total={w.total} />
+                          <span className="text-[10px] font-mono text-white/35 whitespace-nowrap">
+                            {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {w.total === 1
+                            ? t('pages.remediationHub.findings_count', { count: w.total })
+                            : t('pages.remediationHub.findings_count_plural', { count: w.total })}{' '}
+                          · {t('pages.remediationHub.status_breakdown', {
+                            pending: w.statuses.pending || 0,
+                            running: w.statuses.running || 0,
+                            resolved: w.statuses.completed || 0,
+                          })}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <SeverityBar severities={w.severities} total={w.total} />
-                        <span className="text-[10px] font-mono text-white/35 whitespace-nowrap">
-                          {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {w.total === 1
-                          ? t('pages.remediationHub.findings_count', { count: w.total })
-                          : t('pages.remediationHub.findings_count_plural', { count: w.total })}{' '}
-                        · {t('pages.remediationHub.status_breakdown', {
-                          pending: w.statuses.pending || 0,
-                          running: w.statuses.running || 0,
-                          resolved: w.statuses.completed || 0,
-                        })}
-                      </div>
-                    </div>
+                    </button>
                     <Link
                       to={`/findings?q=${encodeURIComponent(w.label)}`}
-                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors shrink-0"
+                      className="px-3 py-1.5 bg-white/5 text-white/60 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors shrink-0"
                     >
                       {t('pages.remediationHub.view_findings')}
                     </Link>
                   </div>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pl-10 space-y-1.5">
+                      {w.items.slice(0, 50).map((f) => (
+                        <div key={f.raw_id || f.finding_id} className="flex items-center justify-between gap-3 p-2 rounded-lg border border-white/5 bg-black/20">
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SEV_META[normSev(f.severity)].color }} />
+                            <span className="text-xs text-white/75 truncate">{f.title || f.finding_id}</span>
+                            {f.has_patch && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">FIX</span>}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFinding(f)}
+                            className="px-2.5 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-md text-[11px] font-medium hover:bg-cyan-500/30 transition-colors shrink-0 flex items-center gap-1"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            {t('pages.remediationHub.view_fix', { defaultValue: 'View fix' })}
+                          </button>
+                        </div>
+                      ))}
+                      {w.items.length > 50 && (
+                        <div className="text-[10px] text-white/30 font-mono pl-2">+{w.items.length - 50} more…</div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>
       </div>
+
+      {selectedFinding && (
+        <RemediationDetail finding={selectedFinding} onClose={() => setSelectedFinding(null)} />
+      )}
     </PageShell>
   )
 }

@@ -1478,6 +1478,12 @@ async fn api_auto_heal(
         .clone()
         .unwrap_or_else(|| "node:20-bookworm".to_string());
     let container_port = body.container_port.unwrap_or(3000);
+    // Canonicalize the requested delivery channel (unknown ⇒ safe default github_pr).
+    let channel = crate::heal_channels::DeliveryChannel::from_id(
+        body.channel.as_deref().unwrap_or("github_pr"),
+    )
+    .id();
+    let health_check_curl = body.health_check_curl.as_deref().unwrap_or("");
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
@@ -1486,8 +1492,8 @@ async fn api_auto_heal(
         r#"INSERT INTO auto_heal_job_specs (
             id, tenant_id, user_id, client_id, vuln_id, finding_id,
             git_token, repo_slug, base_branch, patch_text, poc_curl,
-            docker_socket, image, container_port, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending')"#,
+            docker_socket, image, container_port, channel, health_check_curl, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'pending')"#,
     )
     .bind(spec_id)
     .bind(auth.tenant_id)
@@ -1503,6 +1509,8 @@ async fn api_auto_heal(
     .bind(&docker_socket)
     .bind(&image)
     .bind(container_port as i32)
+    .bind(channel)
+    .bind(health_check_curl)
     .execute(&mut *tx)
     .await;
     if ins.is_err() {
@@ -1553,6 +1561,135 @@ async fn api_auto_heal(
                 .into_response()
         }
     }
+}
+
+/// `GET|POST /api/clients/:id/findings/:finding_id/brief` — get-or-generate the bilingual
+/// (he/en) remediation brief for a finding. Cached in `vulnerabilities.remediation_brief`.
+/// `?refresh=1` (or any POST) regenerates. Returns the brief plus the patch/PoC the UI renders.
+async fn api_finding_brief(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    method: axum::http::Method,
+    Path((id, finding_id)): Path<(i64, String)>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) = crate::security_hardening::validate_finding_id_token(&finding_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid finding_id", "detail": detail})),
+        )
+            .into_response();
+    }
+    let force = method == axum::http::Method::POST
+        || params.get("refresh").map(|v| v == "1" || v == "true").unwrap_or(false);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT id, title, COALESCE(description,'') AS description, severity,
+                  COALESCE(generated_patch,'') AS generated_patch,
+                  COALESCE(poc_exploit,'') AS poc_exploit,
+                  remediation_brief
+           FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1"#,
+    )
+    .bind(id)
+    .bind(&finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "finding not found"}))).into_response();
+    };
+    let title: String = r.try_get("title").unwrap_or_default();
+    let description: String = r.try_get("description").unwrap_or_default();
+    let severity: String = r.try_get("severity").unwrap_or_default();
+    let generated_patch: String = r.try_get("generated_patch").unwrap_or_default();
+    let poc_exploit: String = r.try_get("poc_exploit").unwrap_or_default();
+    let cached: Option<Value> = r.try_get::<Option<Value>, _>("remediation_brief").ok().flatten();
+
+    // Serve the cache unless a refresh was requested.
+    if !force {
+        if let Some(b) = cached.filter(|v| !v.is_null()) {
+            return (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "cached": true,
+                    "brief": b,
+                    "generated_patch": generated_patch,
+                    "poc_exploit": poc_exploit,
+                    "has_patch": !generated_patch.trim().is_empty(),
+                })),
+            )
+                .into_response();
+        }
+    }
+
+    let cfg = match crate::council::CouncilConfig::load(&state.app_pool, auth.tenant_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "llm config unavailable", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let brief = match crate::remediation_brief::generate_remediation_brief(
+        &cfg,
+        auth.tenant_id,
+        &title,
+        &description,
+        &severity,
+        "",
+        &generated_patch,
+        "",
+    )
+    .await
+    {
+        Ok(b) => b,
+        Err(e) => {
+            // Fail soft: surface the error but do not 500 — the finding is still usable.
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"ok": false, "error": "brief_generation_failed", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let brief_json = serde_json::to_value(&brief).unwrap_or(Value::Null);
+
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let _ = sqlx::query(
+            "UPDATE vulnerabilities SET remediation_brief = $3 WHERE client_id = $1 AND finding_id = $2",
+        )
+        .bind(id)
+        .bind(&finding_id)
+        .bind(&brief_json)
+        .execute(&mut *tx)
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "cached": false,
+            "brief": brief_json,
+            "generated_patch": generated_patch,
+            "poc_exploit": poc_exploit,
+            "has_patch": !generated_patch.trim().is_empty(),
+        })),
+    )
+        .into_response()
 }
 
 async fn api_heal_requests_list(

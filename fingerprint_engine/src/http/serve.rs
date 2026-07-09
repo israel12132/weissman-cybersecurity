@@ -1152,6 +1152,10 @@ struct AutoHealBody {
     image: Option<String>,
     container_port: Option<u16>,
     poc_exploit: Option<String>,
+    /// Delivery channel id: github_pr (default) | github_direct_commit | diff_download | virtual_patch.
+    channel: Option<String>,
+    /// Optional curl for the post-patch health/control probe; empty ⇒ GET the app root.
+    health_check_curl: Option<String>,
 }
 
 #[derive(Deserialize)]

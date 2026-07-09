@@ -79,6 +79,145 @@ async fn api_heal_verify_steps(
     (StatusCode::OK, Json(json!({ "steps": steps }))).into_response()
 }
 
+/// `GET /api/heal-verify/:job_id` — thin status view for a heal job: spec status + channel +
+/// the resulting verdict / branch / PR (from `heal_requests`). Complements `/steps`.
+async fn api_heal_verify_status(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    let job_uuid = match uuid::Uuid::parse_str(job_id.trim()) {
+        Ok(u) => u,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "invalid job_id"})),
+            )
+                .into_response();
+        }
+    };
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let spec = sqlx::query(
+        r#"SELECT status, COALESCE(channel,'github_pr') AS channel,
+                  (result_artifact IS NOT NULL) AS has_artifact
+           FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(job_uuid)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let hr = sqlx::query(
+        r#"SELECT branch_name, pr_url, pr_number, diff_summary, verification_status,
+                  COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel
+           FROM heal_requests
+           WHERE tenant_id = $1 AND verification_job_id = $2
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(&job_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(spec) = spec else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response();
+    };
+    let mut out = json!({
+        "job_id": job_id,
+        "status": spec.try_get::<String,_>("status").unwrap_or_default(),
+        "channel": spec.try_get::<String,_>("channel").unwrap_or_default(),
+        "has_artifact": spec.try_get::<bool,_>("has_artifact").unwrap_or(false),
+    });
+    if let Some(r) = hr {
+        out["verdict"] = json!(r.try_get::<String, _>("verdict").unwrap_or_default());
+        out["verification_status"] =
+            json!(r.try_get::<String, _>("verification_status").unwrap_or_default());
+        out["branch_name"] = json!(r.try_get::<Option<String>, _>("branch_name").ok().flatten());
+        out["pr_url"] = json!(r.try_get::<Option<String>, _>("pr_url").ok().flatten());
+        out["pr_number"] = json!(r.try_get::<Option<i32>, _>("pr_number").ok().flatten());
+        out["diff_summary"] = json!(r.try_get::<Option<String>, _>("diff_summary").ok().flatten());
+    }
+    (StatusCode::OK, Json(out)).into_response()
+}
+
+/// `GET /api/heal-verify/:job_id/patch` — download the verified artifact: the unified diff
+/// (diff_download channel) as `text/x-patch`, or the virtual-patch snippet as `text/plain`.
+async fn api_heal_verify_patch(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    let job_uuid = match uuid::Uuid::parse_str(job_id.trim()) {
+        Ok(u) => u,
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, "invalid job_id").into_response();
+        }
+    };
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "DB").into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT result_artifact, COALESCE(patch_text,'') AS patch_text
+           FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(job_uuid)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(row) = row else {
+        return (StatusCode::NOT_FOUND, "job not found").into_response();
+    };
+    let artifact = row
+        .try_get::<Option<Value>, _>("result_artifact")
+        .ok()
+        .flatten();
+    let (content_type, filename, body): (&str, String, String) = match artifact {
+        Some(a) if a.get("kind").and_then(Value::as_str) == Some("virtual_patch") => (
+            "text/plain; charset=utf-8",
+            format!("weissman-virtual-patch-{}.conf", job_id),
+            a.get("snippet")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+        ),
+        Some(a) if a.get("unified_diff").and_then(Value::as_str).is_some() => (
+            "text/x-patch; charset=utf-8",
+            format!("weissman-heal-{}.patch", job_id),
+            a.get("unified_diff")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+        ),
+        _ => (
+            "text/x-patch; charset=utf-8",
+            format!("weissman-heal-{}.patch", job_id),
+            row.try_get::<String, _>("patch_text").unwrap_or_default(),
+        ),
+    };
+    (
+        StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, content_type.to_string()),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}\"", filename),
+            ),
+        ],
+        body,
+    )
+        .into_response()
+}
+
 /// EventBridge / custom forwarder: verify `X-Weissman-Signature: sha256=<hex>` with `WEISSMAN_DECEPTION_WEBHOOK_SECRET`.
 async fn api_deception_aws_events(
     State(state): State<Arc<AppState>>,

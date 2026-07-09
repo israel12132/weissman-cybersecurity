@@ -182,6 +182,8 @@ pub mod auth_mfa;
 pub mod auto_domain_discovery_engine;
 pub mod auto_heal;
 pub mod auto_heal_job;
+pub mod heal_channels;
+pub mod remediation_brief;
 pub mod autonomous_identity;
 pub mod autonomous_pentest_engine;
 pub mod aws_attack_engine;

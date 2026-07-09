@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_heal_request_row(
     pool: &PgPool,
     tenant_id: i64,
@@ -21,11 +22,13 @@ async fn insert_heal_request_row(
     diff_summary: &str,
     verification_status: &str,
     verification_job_id: &str,
+    channel: &str,
+    verdict: &str,
 ) {
     if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
         let _ = sqlx::query(
-            r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, vulnerability_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
+            r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, vulnerability_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, channel, verdict)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"#,
         )
         .bind(tenant_id)
         .bind(client_id)
@@ -37,10 +40,86 @@ async fn insert_heal_request_row(
         .bind(diff_summary)
         .bind(verification_status)
         .bind(verification_job_id)
+        .bind(channel)
+        .bind(verdict)
         .execute(&mut *tx)
         .await;
         let _ = tx.commit().await;
     }
+}
+
+/// Persist the verified, deliverable artifact (unified diff, changed-file list, or virtual-patch
+/// snippet) on the spec so non-repo channels and the UI can retrieve it. Never store secrets here.
+async fn store_result_artifact(pool: &PgPool, tenant_id: i64, spec_id: Uuid, artifact: &Value) {
+    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
+        let _ = sqlx::query(
+            r#"UPDATE auto_heal_job_specs SET result_artifact = $3::jsonb, updated_at = now()
+               WHERE id = $1 AND tenant_id = $2"#,
+        )
+        .bind(spec_id)
+        .bind(tenant_id)
+        .bind(artifact.to_string())
+        .execute(&mut *tx)
+        .await;
+        let _ = tx.commit().await;
+    }
+}
+
+/// Build an honest PR title + body from the real verification result. It states the verdict,
+/// the exploit before/after status, health, and the files changed — never over-claiming.
+fn build_pr_text(
+    finding_id: &str,
+    vr: &crate::verification_sandbox::VerificationResult,
+    diff_summary: &str,
+) -> (String, String) {
+    let title = format!(
+        "[Weissman CNAPP] Auto-Heal (verdict: {}): {}",
+        vr.verdict.as_str(),
+        finding_id
+    );
+    let mut files_md = String::new();
+    for (path, _content) in vr.changed_files.iter().take(40) {
+        files_md.push_str(&format!("- `{}`\n", path));
+    }
+    if vr.changed_files.len() > 40 {
+        files_md.push_str(&format!("- …and {} more\n", vr.changed_files.len() - 40));
+    }
+    let deletions_md = if vr.deleted_paths.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n**⚠️ Deletions/binary changes not applied via API (apply manually):**\n{}\n",
+            vr.deleted_paths
+                .iter()
+                .take(20)
+                .map(|p| format!("- `{}`", p))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    };
+    let body = format!(
+        "## Autonomous remediation — sandbox verified\n\n\
+         **Finding:** `{finding}`\n\
+         **Verdict:** `{verdict}`\n\
+         **Exploit re-run:** baseline HTTP `{baseline}` → after-patch HTTP `{after}`\n\
+         **App health after patch:** HTTP `{health}` ({health_ok})\n\n\
+         The patch below was applied to a shallow clone in an ephemeral Docker container, the app \
+         was restarted, and the original exploit was re-run. This PR contains the **actual applied \
+         fix** (the changed source files), not an advisory diff.\n\n\
+         **Changed files:**\n{files}{deletions}\n\
+         _Diff summary:_\n```\n{summary}\n```\n\n\
+         Please review and merge.",
+        finding = finding_id,
+        verdict = vr.verdict.as_str(),
+        baseline = vr.baseline_status,
+        after = vr.after_patch_status,
+        health = vr.health_status,
+        health_ok = if vr.health_after_ok { "healthy" } else { "unhealthy" },
+        files = if files_md.is_empty() { "- (none)\n".to_string() } else { files_md },
+        deletions = deletions_md,
+        summary = diff_summary.chars().take(1500).collect::<String>(),
+    );
+    (title, body)
 }
 
 async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &str) {
@@ -74,7 +153,8 @@ pub async fn run_auto_heal_job(
 
     let row = sqlx::query(
         r#"SELECT status, git_token, client_id, vuln_id, finding_id, repo_slug, base_branch,
-                  patch_text, poc_curl, docker_socket, image, container_port
+                  patch_text, poc_curl, docker_socket, image, container_port,
+                  COALESCE(channel, 'github_pr') AS channel, COALESCE(health_check_curl, '') AS health_check_curl
            FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(spec_id)
@@ -126,6 +206,11 @@ pub async fn run_auto_heal_job(
         .try_get::<String, _>("image")
         .unwrap_or_else(|_| "node:20-bookworm".into());
     let container_port: i32 = row.try_get("container_port").unwrap_or(3000);
+    let channel_id: String = row
+        .try_get::<String, _>("channel")
+        .unwrap_or_else(|_| "github_pr".into());
+    let health_check_curl: String = row.try_get::<String, _>("health_check_curl").unwrap_or_default();
+    let channel = crate::heal_channels::DeliveryChannel::from_id(&channel_id);
 
     sqlx::query("DELETE FROM heal_verification_steps WHERE tenant_id = $1 AND job_id = $2")
         .bind(tenant_id)
@@ -152,40 +237,10 @@ pub async fn run_auto_heal_job(
         seq: Arc::new(AtomicI32::new(0)),
     };
 
-    let commit = auto_heal::create_branch_and_commit_only(
-        &git_token,
-        &repo_slug,
-        &base_branch,
-        &finding_id,
-        vec![("PATCH.txt".to_string(), patch_text.clone())],
-        None,
-    )
-    .await;
+    use crate::heal_channels::DeliveryChannel;
 
-    if let Some(e) = &commit.error {
-        insert_heal_request_row(
-            app_pool.as_ref(),
-            tenant_id,
-            client_id,
-            &finding_id,
-            vuln_id,
-            &commit.branch_name,
-            None,
-            None,
-            &commit.diff_summary,
-            e,
-            &jid_str,
-        )
-        .await;
-        finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
-        return Ok(json!({
-            "ok": false,
-            "error": e,
-            "branch_name": commit.branch_name,
-            "spec_id": spec_id,
-        }));
-    }
-
+    // 1) VERIFY FIRST. No branch is ever created unless the exploit is proven closed AND the app
+    //    is still healthy (verdict == Fixed). This also captures the real applied files.
     let vr = verify_patch_ephemeral_docker(
         &docker_socket,
         &image,
@@ -195,9 +250,12 @@ pub async fn run_auto_heal_job(
         &git_token,
         &patch_text,
         &poc_curl,
+        &health_check_curl,
         Some(step_sink),
     )
     .await;
+
+    let verdict_str = vr.verdict.as_str();
 
     if !vr.verified {
         let msg = vr
@@ -210,79 +268,236 @@ pub async fn run_auto_heal_job(
             client_id,
             &finding_id,
             vuln_id,
-            &commit.branch_name,
+            "",
             None,
             None,
-            &commit.diff_summary,
+            "",
             &format!("sandbox_failed: {}", msg),
             &jid_str,
+            channel.id(),
+            verdict_str,
         )
         .await;
         finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
         return Ok(json!({
             "ok": false,
             "error": msg,
+            "verdict": verdict_str,
             "spec_id": spec_id,
-            "branch_name": commit.branch_name,
         }));
     }
 
-    let pr_result = auto_heal::open_pull_request(
-        &git_token,
-        &repo_slug,
-        &base_branch,
-        &commit.branch_name,
-        &finding_id,
-    )
-    .await;
+    // 2) DELIVER the verified fix via the requested channel.
+    let commit_msg = format!(
+        "Security remediation (verdict: {}) for finding {}",
+        verdict_str, finding_id
+    );
 
-    match pr_result {
-        Ok((pr_url, pr_number)) => {
+    match channel {
+        DeliveryChannel::GithubPr | DeliveryChannel::GithubDirectCommit => {
+            let commit = auto_heal::create_branch_and_commit_only(
+                &git_token,
+                &repo_slug,
+                &base_branch,
+                &finding_id,
+                vr.changed_files.clone(),
+                Some(&commit_msg),
+            )
+            .await;
+
+            if let Some(e) = &commit.error {
+                insert_heal_request_row(
+                    app_pool.as_ref(),
+                    tenant_id,
+                    client_id,
+                    &finding_id,
+                    vuln_id,
+                    &commit.branch_name,
+                    None,
+                    None,
+                    &commit.diff_summary,
+                    &format!("commit_failed: {}", e),
+                    &jid_str,
+                    channel.id(),
+                    verdict_str,
+                )
+                .await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                return Ok(json!({
+                    "ok": false,
+                    "error": e,
+                    "verdict": verdict_str,
+                    "branch_name": commit.branch_name,
+                    "spec_id": spec_id,
+                }));
+            }
+
+            if channel == DeliveryChannel::GithubDirectCommit {
+                insert_heal_request_row(
+                    app_pool.as_ref(),
+                    tenant_id,
+                    client_id,
+                    &finding_id,
+                    vuln_id,
+                    &commit.branch_name,
+                    None,
+                    None,
+                    &commit.diff_summary,
+                    "verified_committed",
+                    &jid_str,
+                    channel.id(),
+                    verdict_str,
+                )
+                .await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+                return Ok(json!({
+                    "ok": true,
+                    "channel": channel.id(),
+                    "verdict": verdict_str,
+                    "branch_name": commit.branch_name,
+                    "diff_summary": commit.diff_summary,
+                    "spec_id": spec_id,
+                }));
+            }
+
+            let (title, body) = build_pr_text(&finding_id, &vr, &commit.diff_summary);
+            match auto_heal::open_pull_request(
+                &git_token,
+                &repo_slug,
+                &base_branch,
+                &commit.branch_name,
+                &title,
+                &body,
+            )
+            .await
+            {
+                Ok((pr_url, pr_number)) => {
+                    insert_heal_request_row(
+                        app_pool.as_ref(),
+                        tenant_id,
+                        client_id,
+                        &finding_id,
+                        vuln_id,
+                        &commit.branch_name,
+                        pr_url.as_deref(),
+                        pr_number,
+                        &commit.diff_summary,
+                        "verified_pr_opened",
+                        &jid_str,
+                        channel.id(),
+                        verdict_str,
+                    )
+                    .await;
+                    finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+                    Ok(json!({
+                        "ok": true,
+                        "channel": channel.id(),
+                        "verdict": verdict_str,
+                        "branch_name": commit.branch_name,
+                        "pr_url": pr_url,
+                        "pr_number": pr_number,
+                        "diff_summary": commit.diff_summary,
+                        "spec_id": spec_id,
+                    }))
+                }
+                Err(e) => {
+                    insert_heal_request_row(
+                        app_pool.as_ref(),
+                        tenant_id,
+                        client_id,
+                        &finding_id,
+                        vuln_id,
+                        &commit.branch_name,
+                        None,
+                        None,
+                        &commit.diff_summary,
+                        &format!("pr_failed: {}", e),
+                        &jid_str,
+                        channel.id(),
+                        verdict_str,
+                    )
+                    .await;
+                    finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                    Ok(json!({
+                        "ok": false,
+                        "error": e,
+                        "verdict": verdict_str,
+                        "spec_id": spec_id,
+                        "branch_name": commit.branch_name,
+                    }))
+                }
+            }
+        }
+        DeliveryChannel::DiffDownload => {
+            // No repo mutation: expose the verified unified diff + changed-file list for download.
+            let changed_paths: Vec<&str> =
+                vr.changed_files.iter().map(|(p, _)| p.as_str()).collect();
+            let artifact = json!({
+                "kind": "diff_download",
+                "verdict": verdict_str,
+                "unified_diff": patch_text,
+                "changed_files": changed_paths,
+                "deleted_paths": vr.deleted_paths,
+            });
+            store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await;
+            let summary = format!("verified unified diff ready ({} files)", vr.changed_files.len());
             insert_heal_request_row(
                 app_pool.as_ref(),
                 tenant_id,
                 client_id,
                 &finding_id,
                 vuln_id,
-                &commit.branch_name,
-                pr_url.as_deref(),
-                pr_number,
-                &commit.diff_summary,
-                "verified_pr_opened",
+                "",
+                None,
+                None,
+                &summary,
+                "verified_diff_ready",
                 &jid_str,
+                channel.id(),
+                verdict_str,
             )
             .await;
             finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
             Ok(json!({
                 "ok": true,
-                "branch_name": commit.branch_name,
-                "pr_url": pr_url,
-                "pr_number": pr_number,
-                "diff_summary": commit.diff_summary,
+                "channel": channel.id(),
+                "verdict": verdict_str,
+                "message": "verified diff ready; GET /api/heal-verify/:job_id/patch",
                 "spec_id": spec_id,
             }))
         }
-        Err(e) => {
+        DeliveryChannel::VirtualPatch => {
+            // No repo mutation: render a compensating WAF/virtual-patch rule from the finding.
+            let snippet = crate::heal_channels::render_virtual_patch(&finding_id, &finding_id, "");
+            let artifact = json!({
+                "kind": "virtual_patch",
+                "verdict": verdict_str,
+                "snippet": snippet,
+            });
+            store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await;
             insert_heal_request_row(
                 app_pool.as_ref(),
                 tenant_id,
                 client_id,
                 &finding_id,
                 vuln_id,
-                &commit.branch_name,
+                "",
                 None,
                 None,
-                &commit.diff_summary,
-                &format!("pr_failed: {}", e),
+                "virtual patch (WAF) rendered",
+                "verified_virtual_patch",
                 &jid_str,
+                channel.id(),
+                verdict_str,
             )
             .await;
-            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
             Ok(json!({
-                "ok": false,
-                "error": e.to_string(),
+                "ok": true,
+                "channel": channel.id(),
+                "verdict": verdict_str,
+                "message": "virtual patch rendered; GET /api/heal-verify/:job_id/patch",
                 "spec_id": spec_id,
-                "branch_name": commit.branch_name,
             }))
         }
     }

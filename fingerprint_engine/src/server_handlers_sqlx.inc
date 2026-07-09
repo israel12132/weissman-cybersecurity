@@ -805,6 +805,7 @@ async fn api_findings(
          COALESCE(poc_sealed, false) AS poc_sealed, \
          COALESCE(poc_commitment_sha256,'') AS poc_commitment_sha256, \
          COALESCE(raw_data, '{}'::jsonb) AS raw_data, \
+         remediation_brief, (COALESCE(generated_patch,'') <> '') AS has_patch, \
          epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, \
          intel_enriched_at, signature_hash, cluster_id, seen_count, \
          confidence_multiplier, effective_risk \
@@ -973,6 +974,8 @@ async fn api_findings(
                 .unwrap_or(""),
             "mitre_attack": mitre,
             "remediation": remediation,
+            "remediation_brief": r.try_get::<Option<Value>, _>("remediation_brief").ok().flatten(),
+            "has_patch": r.try_get::<bool, _>("has_patch").unwrap_or(false),
             "target": target,
             "compliance": compliance,
             "epss_score": epss_score,

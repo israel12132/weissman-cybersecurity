@@ -22,6 +22,36 @@ const EXPLOIT_TIMEOUT_MS: u64 = 20000;
 const MAX_PATCH_BYTES: usize = 512 * 1024;
 const CONTAINER_READY_WAIT_SECS: u64 = 2;
 const CONTAINER_START_ROUNDS: u32 = 30;
+/// Guardrails for the applied-fix capture: never open a PR with a runaway tree.
+const MAX_CHANGED_FILES: usize = 60;
+const MAX_CHANGED_BYTES: usize = 1_500_000;
+
+/// Outcome of the sandbox verification. `Fixed` is the ONLY verdict that opens a PR.
+/// `BrokeApp` guards the previous hole where a patch that crashed the app (5xx /
+/// connection-refused ⇒ "not 2xx") was mis-scored as a successful remediation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum HealVerdict {
+    /// Baseline was exploitable, the app is still healthy, and the exploit is now blocked.
+    Fixed,
+    /// The exploit still succeeds after the patch.
+    StillVulnerable,
+    /// The patch took the app down (5xx / unreachable) instead of fixing the vuln.
+    BrokeApp,
+    /// Could not reach a confident conclusion (e.g. baseline was not exploitable).
+    Inconclusive,
+}
+
+impl HealVerdict {
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HealVerdict::Fixed => "fixed",
+            HealVerdict::StillVulnerable => "still_vulnerable",
+            HealVerdict::BrokeApp => "broke_app",
+            HealVerdict::Inconclusive => "inconclusive",
+        }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct VerificationStep {
@@ -34,11 +64,22 @@ pub struct VerificationStep {
 #[derive(Debug)]
 pub struct VerificationResult {
     pub verified: bool,
+    pub verdict: HealVerdict,
     pub container_id: Option<String>,
     pub baseline_status: u16,
     pub after_patch_status: u16,
     pub baseline_was_vulnerable: bool,
     pub exploit_neutralized: bool,
+    /// Post-patch health/control probe: is the app still serving after the fix?
+    pub health_after_ok: bool,
+    pub health_status: u16,
+    /// Repo-relative path → new full content of every file the patch changed, read from
+    /// the sandbox clone AFTER the patch applied and the exploit was proven closed. These
+    /// are committed verbatim so the PR contains the real, mergeable fix (not a `PATCH.txt`).
+    pub changed_files: Vec<(String, String)>,
+    /// Paths the patch deleted (or binary files) that the blob-tree commit path can't apply;
+    /// surfaced in the PR body for honesty rather than silently dropped.
+    pub deleted_paths: Vec<String>,
     pub error: Option<String>,
     pub steps: Vec<VerificationStep>,
 }
@@ -108,6 +149,41 @@ fn require_baseline_success() -> bool {
     std::env::var("WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(true)
+}
+
+/// When true (default), the post-patch health probe must succeed for a `Fixed` verdict, so a
+/// patch that crashes the app is scored `BrokeApp`. Set `WEISSMAN_VERIFY_REQUIRE_HEALTH=0` for
+/// targets without a usable health endpoint.
+fn require_health() -> bool {
+    std::env::var("WEISSMAN_VERIFY_REQUIRE_HEALTH")
+        .map(|v| !(v == "0" || v.eq_ignore_ascii_case("false")))
+        .unwrap_or(true)
+}
+
+/// Pure verdict decision from the post-patch signals. `app_up` already folds in the
+/// health-required policy (health probe result when required, else `true`). `baseline_proven`
+/// means the baseline exploit was confirmed to work (or the baseline gate was overridden).
+///
+/// - `BrokeApp`  — exploit route errors (5xx / unreachable) or the app is no longer healthy.
+/// - `StillVulnerable` — exploit still returns a 2xx success.
+/// - `Fixed`     — exploit now 3xx/4xx (redirected/blocked) AND the app is still up.
+/// - `Inconclusive` — baseline unproven or an unclassifiable status.
+#[must_use]
+fn classify_verdict(baseline_proven: bool, after_status: u16, app_up: bool) -> HealVerdict {
+    if !baseline_proven {
+        return HealVerdict::Inconclusive;
+    }
+    let exploit_still_succeeds = (200..=299).contains(&after_status);
+    let exploit_errored = after_status == 0 || (500..600).contains(&after_status);
+    if exploit_errored || !app_up {
+        HealVerdict::BrokeApp
+    } else if exploit_still_succeeds {
+        HealVerdict::StillVulnerable
+    } else if (300..500).contains(&after_status) {
+        HealVerdict::Fixed
+    } else {
+        HealVerdict::Inconclusive
+    }
 }
 
 /// Parse a minimal subset of curl: `-X`, `-H`, `-d`, `--data`, URL.
@@ -291,6 +367,118 @@ async fn apply_unified_patch(repo_dir: &Path, patch_file: &Path) -> Result<Strin
     ))
 }
 
+/// After the patch applied in the sandbox clone, enumerate the files it actually changed
+/// and read their post-patch content. This is what gets committed so the PR contains the
+/// real applied fix. Additions and modifications (including rename targets) are captured;
+/// deletions are reported as a summary note but not applied via the blob-tree commit path.
+///
+/// Returns `Err` when the patch produced no capturable changes (so the job fails loudly
+/// instead of opening an empty PR) or when the change set blows past the guardrails.
+async fn collect_changed_files(repo_dir: &Path) -> Result<(Vec<(String, String)>, Vec<String>), String> {
+    // Stage everything so `diff --cached` reports adds, mods, renames and deletes uniformly.
+    let add = Command::new("git")
+        .arg("-C")
+        .arg(repo_dir)
+        .arg("add")
+        .arg("-A")
+        .output()
+        .await
+        .map_err(|e| format!("git add spawn: {}", e))?;
+    if !add.status.success() {
+        return Err(format!(
+            "git add -A failed: {}",
+            String::from_utf8_lossy(&add.stderr)
+                .chars()
+                .take(300)
+                .collect::<String>()
+        ));
+    }
+
+    let diff = Command::new("git")
+        .arg("-C")
+        .arg(repo_dir)
+        .arg("-c")
+        .arg("core.quotepath=false")
+        .arg("diff")
+        .arg("--cached")
+        .arg("--name-status")
+        .output()
+        .await
+        .map_err(|e| format!("git diff spawn: {}", e))?;
+    if !diff.status.success() {
+        return Err(format!(
+            "git diff --cached failed: {}",
+            String::from_utf8_lossy(&diff.stderr)
+                .chars()
+                .take(300)
+                .collect::<String>()
+        ));
+    }
+
+    let listing = String::from_utf8_lossy(&diff.stdout);
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut deleted: Vec<String> = Vec::new();
+    let mut total_bytes: usize = 0;
+
+    for line in listing.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        let mut cols = line.split('\t');
+        let status = cols.next().unwrap_or("");
+        // For renames/copies (R100 / C100) the interesting path is the destination (last column).
+        let path = if status.starts_with('R') || status.starts_with('C') {
+            cols.last().unwrap_or("").to_string()
+        } else {
+            cols.next().unwrap_or("").to_string()
+        };
+        if path.is_empty() {
+            continue;
+        }
+        let code = status.chars().next().unwrap_or(' ');
+        match code {
+            'D' => {
+                deleted.push(path);
+            }
+            'A' | 'M' | 'R' | 'C' | 'T' => {
+                let full = repo_dir.join(&path);
+                let content = match tokio::fs::read(&full).await {
+                    Ok(bytes) => match String::from_utf8(bytes) {
+                        Ok(s) => s,
+                        Err(_) => {
+                            // Binary file: skip content but note it so the PR body is honest.
+                            deleted.push(format!("{} (binary, not committed via API)", path));
+                            continue;
+                        }
+                    },
+                    Err(e) => return Err(format!("read changed file {}: {}", path, e)),
+                };
+                total_bytes = total_bytes.saturating_add(content.len());
+                if files.len() >= MAX_CHANGED_FILES {
+                    return Err(format!(
+                        "patch changes more than {} files — refusing to auto-commit",
+                        MAX_CHANGED_FILES
+                    ));
+                }
+                if total_bytes > MAX_CHANGED_BYTES {
+                    return Err(format!(
+                        "patched files exceed {} bytes — refusing to auto-commit",
+                        MAX_CHANGED_BYTES
+                    ));
+                }
+                files.push((path, content));
+            }
+            _ => {}
+        }
+    }
+
+    if files.is_empty() {
+        return Err("patch produced no committable file changes".into());
+    }
+    Ok((files, deleted))
+}
+
 fn host_port_from_inspect(
     inspect: &bollard::models::ContainerInspectResponse,
     container_port: u16,
@@ -325,6 +513,7 @@ pub async fn verify_patch_ephemeral_docker(
     git_token: &str,
     patch_content: &str,
     poc_curl: &str,
+    health_check_curl: &str,
     step_sink: Option<StepSink>,
 ) -> VerificationResult {
     let sink = step_sink;
@@ -344,11 +533,16 @@ pub async fn verify_patch_ephemeral_docker(
         .await;
         return VerificationResult {
             verified: false,
+            verdict: HealVerdict::Inconclusive,
             container_id: None,
             baseline_status: 0,
             after_patch_status: 0,
             baseline_was_vulnerable: false,
             exploit_neutralized: false,
+            health_after_ok: false,
+            health_status: 0,
+            changed_files: Vec::new(),
+            deleted_paths: Vec::new(),
             error: Some(format!("patch exceeds {} bytes", MAX_PATCH_BYTES)),
             steps: collect_steps_only(&sink).await,
         };
@@ -515,11 +709,16 @@ pub async fn verify_patch_ephemeral_docker(
         );
         return VerificationResult {
             verified: false,
+            verdict: HealVerdict::Inconclusive,
             container_id: Some(id),
             baseline_status,
             after_patch_status: 0,
             baseline_was_vulnerable: false,
             exploit_neutralized: false,
+            health_after_ok: false,
+            health_status: 0,
+            changed_files: Vec::new(),
+            deleted_paths: Vec::new(),
             error: Some(
                 "Baseline did not return 2xx; set WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS=0 to override"
                     .into(),
@@ -534,6 +733,28 @@ pub async fn verify_patch_ephemeral_docker(
         return fail(&sink, e).await;
     }
 
+    // Capture the ACTUAL applied files now (while they're on disk) so the PR contains the
+    // real fix. An empty/oversized change set is a hard verification failure — never a PR.
+    let (changed_files, deleted_paths) = match collect_changed_files(&repo_dir).await {
+        Ok(v) => v,
+        Err(e) => {
+            cleanup_container(&docker, &id).await;
+            return fail(&sink, format!("capture applied fix: {}", e)).await;
+        }
+    };
+    step!(
+        "applied_fix_captured",
+        Some(format!(
+            "{} file(s) changed{}",
+            changed_files.len(),
+            if deleted_paths.is_empty() {
+                String::new()
+            } else {
+                format!(", {} deletion(s) noted", deleted_paths.len())
+            }
+        ))
+    );
+
     step!("container_restart", None);
     if let Err(e) = docker
         .restart_container(&id, Some(RestartContainerOptions { t: 15 }))
@@ -544,7 +765,8 @@ pub async fn verify_patch_ephemeral_docker(
     }
     tokio::time::sleep(Duration::from_secs(CONTAINER_READY_WAIT_SECS)).await;
 
-    let (after_status, after_body) = http_probe(method, &target_url, &hdrs, body.as_deref()).await;
+    let (after_status, after_body) =
+        http_probe(method.clone(), &target_url, &hdrs, body.as_deref()).await;
     step!(
         "exploit_after_patch",
         Some(format!(
@@ -554,30 +776,76 @@ pub async fn verify_patch_ephemeral_docker(
         ))
     );
 
+    // Health / control probe: confirm the app is STILL SERVING after the patch, so a fix that
+    // simply crashes the endpoint (5xx / connection-refused) is not mistaken for a remediation.
+    let (health_method, health_url) = match parse_curl_request(health_check_curl) {
+        Ok((m, u, _, _)) => (m, rewrite_localhost_url(&u, "127.0.0.1", host_bind_port)),
+        Err(_) => (
+            reqwest::Method::GET,
+            format!("http://127.0.0.1:{}/", host_bind_port),
+        ),
+    };
+    let (health_status, _health_body) =
+        http_probe(health_method, &health_url, &reqwest::header::HeaderMap::new(), None).await;
+    let health_after_ok = (200..400).contains(&health_status);
+    step!(
+        "health_after_patch",
+        Some(format!("HTTP {} on {}", health_status, health_url))
+    );
+
+    let app_up = if require_health() { health_after_ok } else { true };
+    let baseline_proven = baseline_was_vulnerable || !require_baseline_success();
+    let verdict = classify_verdict(baseline_proven, after_status, app_up);
+    let verified = verdict == HealVerdict::Fixed;
     let exploit_neutralized = !(200..=299).contains(&after_status);
-    let verified = exploit_neutralized;
 
     cleanup_container(&docker, &id).await;
-    step!(
-        if verified { "verified" } else { "failed" },
-        Some(if verified {
-            "Exploit no longer returns 2xx — PR may be opened".into()
-        } else {
-            "Exploit still returns success range after patch".into()
-        })
-    );
+    let verdict_step = match verdict {
+        HealVerdict::Fixed => "verdict_fixed",
+        HealVerdict::StillVulnerable => "verdict_still_vulnerable",
+        HealVerdict::BrokeApp => "verdict_broke_app",
+        HealVerdict::Inconclusive => "verdict_inconclusive",
+    };
+    let verdict_detail = match verdict {
+        HealVerdict::Fixed => format!(
+            "Exploit closed (HTTP {}) and app healthy (HTTP {}) — PR may be opened",
+            after_status, health_status
+        ),
+        HealVerdict::StillVulnerable => {
+            format!("Exploit still returns success (HTTP {})", after_status)
+        }
+        HealVerdict::BrokeApp => format!(
+            "Patch broke the app: exploit HTTP {}, health HTTP {} — NOT a valid fix",
+            after_status, health_status
+        ),
+        HealVerdict::Inconclusive => format!(
+            "Inconclusive: exploit HTTP {}, health HTTP {}",
+            after_status, health_status
+        ),
+    };
+    step!(verdict_step, Some(verdict_detail));
 
     VerificationResult {
         verified,
+        verdict,
         container_id: Some(id),
         baseline_status,
         after_patch_status: after_status,
         baseline_was_vulnerable,
         exploit_neutralized,
+        health_after_ok,
+        health_status,
+        changed_files,
+        deleted_paths,
         error: if verified {
             None
         } else {
-            Some("Post-patch response still in 2xx range".into())
+            Some(format!(
+                "verdict={} (exploit HTTP {}, health HTTP {})",
+                verdict.as_str(),
+                after_status,
+                health_status
+            ))
         },
         steps: collect_steps_only(&sink).await,
     }
@@ -596,11 +864,16 @@ async fn fail(sink: &Option<StepSink>, msg: String) -> VerificationResult {
     push_step(sink, "failed", Some(msg.clone())).await;
     VerificationResult {
         verified: false,
+        verdict: HealVerdict::Inconclusive,
         container_id: None,
         baseline_status: 0,
         after_patch_status: 0,
         baseline_was_vulnerable: false,
         exploit_neutralized: false,
+        health_after_ok: false,
+        health_status: 0,
+        changed_files: Vec::new(),
+        deleted_paths: Vec::new(),
         error: Some(msg),
         steps: collect_steps_only(sink).await,
     }
@@ -645,5 +918,112 @@ async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
                 })
                 .collect()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verdict_fixed_when_blocked_and_healthy() {
+        // baseline exploitable, exploit now 403, app healthy ⇒ Fixed
+        assert_eq!(classify_verdict(true, 403, true), HealVerdict::Fixed);
+        // 3xx redirect away from the vulnerable success also counts as fixed
+        assert_eq!(classify_verdict(true, 302, true), HealVerdict::Fixed);
+        assert_eq!(classify_verdict(true, 404, true), HealVerdict::Fixed);
+    }
+
+    #[test]
+    fn verdict_broke_app_when_5xx_or_unhealthy() {
+        // exploit route now 500 ⇒ the patch crashed it, not a valid fix
+        assert_eq!(classify_verdict(true, 500, true), HealVerdict::BrokeApp);
+        // connection refused / no response ⇒ BrokeApp
+        assert_eq!(classify_verdict(true, 0, true), HealVerdict::BrokeApp);
+        // exploit blocked (403) but the health probe failed ⇒ app is down ⇒ BrokeApp
+        assert_eq!(classify_verdict(true, 403, false), HealVerdict::BrokeApp);
+    }
+
+    #[test]
+    fn verdict_still_vulnerable_when_2xx() {
+        assert_eq!(classify_verdict(true, 200, true), HealVerdict::StillVulnerable);
+        assert_eq!(classify_verdict(true, 299, true), HealVerdict::StillVulnerable);
+    }
+
+    #[test]
+    fn verdict_inconclusive_when_baseline_unproven() {
+        assert_eq!(classify_verdict(false, 403, true), HealVerdict::Inconclusive);
+    }
+
+    #[test]
+    fn verdict_as_str_roundtrip() {
+        assert_eq!(HealVerdict::Fixed.as_str(), "fixed");
+        assert_eq!(HealVerdict::BrokeApp.as_str(), "broke_app");
+        assert_eq!(HealVerdict::StillVulnerable.as_str(), "still_vulnerable");
+        assert_eq!(HealVerdict::Inconclusive.as_str(), "inconclusive");
+    }
+
+    #[tokio::test]
+    async fn collect_changed_files_reads_applied_content() {
+        // Build a throwaway git repo, commit a baseline, modify + add files, and assert the
+        // collector returns the post-change content (this is what gets committed to the PR).
+        let dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(_) => return, // no tempdir in this environment; skip
+        };
+        let repo = dir.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+        };
+        if run(&["init", "-q"]).is_err() {
+            return; // git not available in test env; skip
+        }
+        let _ = run(&["config", "user.email", "t@t.io"]);
+        let _ = run(&["config", "user.name", "t"]);
+        std::fs::write(repo.join("app.js"), "const x = eval(req.body);\n").unwrap();
+        let _ = run(&["add", "-A"]);
+        let _ = run(&["commit", "-q", "-m", "base"]);
+        // Apply the "fix": modify app.js and add a new file.
+        std::fs::write(repo.join("app.js"), "const x = JSON.parse(req.body);\n").unwrap();
+        std::fs::write(repo.join("SECURITY.md"), "hardened\n").unwrap();
+
+        let (files, deleted) = collect_changed_files(repo).await.expect("collect");
+        assert!(deleted.is_empty());
+        let map: std::collections::HashMap<_, _> = files.into_iter().collect();
+        assert_eq!(
+            map.get("app.js").map(String::as_str),
+            Some("const x = JSON.parse(req.body);\n")
+        );
+        assert_eq!(map.get("SECURITY.md").map(String::as_str), Some("hardened\n"));
+    }
+
+    #[tokio::test]
+    async fn collect_changed_files_errors_on_no_change() {
+        let dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let repo = dir.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+        };
+        if run(&["init", "-q"]).is_err() {
+            return;
+        }
+        let _ = run(&["config", "user.email", "t@t.io"]);
+        let _ = run(&["config", "user.name", "t"]);
+        std::fs::write(repo.join("a.txt"), "x\n").unwrap();
+        let _ = run(&["add", "-A"]);
+        let _ = run(&["commit", "-q", "-m", "base"]);
+        // No change applied ⇒ collector must fail loudly (never open an empty PR).
+        assert!(collect_changed_files(repo).await.is_err());
     }
 }
