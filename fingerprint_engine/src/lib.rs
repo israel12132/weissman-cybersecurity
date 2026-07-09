@@ -55,6 +55,7 @@ pub mod cloud_hunter;
 pub mod cloud_integration_engine;
 pub mod cognitive_starvation_engine;
 pub mod compliance_engine;
+pub mod compliance_posture;
 pub mod correlation_rules;
 pub mod council;
 pub mod council_hitl;

@@ -172,6 +172,35 @@ async fn api_remediation_priority_for_client(
     }
 }
 
+// ─── Per-client compliance-framework posture (crosswalk rolled up over findings) ───
+async fn api_compliance_posture_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::compliance_posture::load_and_aggregate(
+        &state.app_pool,
+        auth.tenant_id,
+        client_id,
+        limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Board-level security posture score (distilled from the fix-first program) ───
 async fn api_posture_score_for_client(
     State(state): State<Arc<AppState>>,

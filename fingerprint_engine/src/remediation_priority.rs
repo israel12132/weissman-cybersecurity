@@ -227,7 +227,8 @@ fn cwe_number(cwe: &str) -> Option<u32> {
 /// MITRE/OWASP's own CWE→category mapping; NIST 800-53r5 and PCI DSS 4.0 entries use the
 /// well-established control most directly addressed by the weakness. Unknown CWEs return empty —
 /// we never invent coverage. Returned refs are deduped by (framework, control) upstream.
-fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
+#[must_use]
+pub fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
     let Some(n) = cwe_number(cwe) else {
         return Vec::new();
     };

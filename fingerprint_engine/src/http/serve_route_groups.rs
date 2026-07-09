@@ -70,6 +70,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/posture/score/:client_id",
             get(api_posture_score_for_client),
         )
+        // Per-client compliance-framework posture: open findings rolled up per framework control.
+        .route(
+            "/api/compliance/posture/:client_id",
+            get(api_compliance_posture_for_client),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),
