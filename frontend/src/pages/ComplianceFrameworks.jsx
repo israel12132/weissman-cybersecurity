@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { createColumnHelper } from '@tanstack/react-table';
 import {
   Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Search, FileCheck, ShieldCheck,
 } from 'lucide-react';
 import PageShell from './PageShell';
 import ShellScanActions from '../components/engine/ShellScanActions';
+import DataTable from '../components/ui/DataTable';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import CopyButton from '../components/ui/CopyButton';
@@ -224,6 +226,52 @@ export default function ComplianceFrameworks() {
       `${m.framework} ${m.control_id} ${m.control_title} ${m.engine_id} ${m.evidence_type}`.toLowerCase().includes(q),
     );
   }, [mappings, mappingsSearch]);
+
+  const mappingColumns = useMemo(() => {
+    const ch = createColumnHelper();
+    return [
+      ch.accessor('framework', {
+        id: 'framework',
+        header: t('pages.complianceFrameworks.map_framework'),
+        size: 130,
+        cell: ({ getValue }) => (
+          <span className="font-mono text-[var(--text-muted)] whitespace-nowrap uppercase">{getValue()}</span>
+        ),
+      }),
+      ch.accessor('control_id', {
+        id: 'control',
+        header: t('pages.complianceFrameworks.map_control'),
+        cell: ({ row, getValue }) => (
+          <span>
+            <span className="font-mono text-cyan-300/85">{getValue()}</span>
+            {row.original.control_title && <span className="text-[var(--text-tertiary)]"> · {row.original.control_title}</span>}
+          </span>
+        ),
+      }),
+      ch.accessor((m) => m.engine_id || '—', {
+        id: 'engine',
+        header: t('pages.complianceFrameworks.map_engine'),
+        size: 160,
+        cell: ({ getValue }) => (
+          <span className="font-mono text-violet-300/85 whitespace-nowrap">{getValue()}</span>
+        ),
+      }),
+      ch.accessor((m) => m.evidence_type || '—', {
+        id: 'evidence',
+        header: t('pages.complianceFrameworks.map_evidence'),
+        cell: ({ row, getValue }) => (
+          <span className="text-[var(--text-tertiary)] whitespace-nowrap">
+            {getValue()}
+            {row.original.live_only && (
+              <span className="ml-1.5 text-[9px] font-mono px-1 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 uppercase">
+                {t('pages.complianceFrameworks.map_live')}
+              </span>
+            )}
+          </span>
+        ),
+      }),
+    ];
+  }, [t]);
 
   const getComplianceColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -570,38 +618,14 @@ export default function ComplianceFrameworks() {
                       className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
                     />
                   </div>
-                  <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded-lg border border-[var(--border-subtle)]">
-                    <table className="w-full text-[12px]">
-                      <thead className="sticky top-0 bg-[var(--bg-2)]">
-                        <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-default)]">
-                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_framework')}</th>
-                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_control')}</th>
-                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_engine')}</th>
-                          <th className="py-2 px-3">{t('pages.complianceFrameworks.map_evidence')}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--border-subtle)]">
-                        {filteredMappings.map((m) => (
-                          <tr key={m.id} className="hover:bg-[var(--row-hover-bg)]">
-                            <td className="py-2 px-3 font-mono text-[var(--text-muted)] whitespace-nowrap uppercase">{m.framework}</td>
-                            <td className="py-2 px-3">
-                              <span className="font-mono text-cyan-300/85">{m.control_id}</span>
-                              {m.control_title && <span className="text-[var(--text-tertiary)]"> · {m.control_title}</span>}
-                            </td>
-                            <td className="py-2 px-3 font-mono text-violet-300/85 whitespace-nowrap">{m.engine_id || '—'}</td>
-                            <td className="py-2 px-3 text-[var(--text-tertiary)] whitespace-nowrap">
-                              {m.evidence_type || '—'}
-                              {m.live_only && (
-                                <span className="ml-1.5 text-[9px] font-mono px-1 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 uppercase">
-                                  {t('pages.complianceFrameworks.map_live')}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={mappingColumns}
+                    data={filteredMappings}
+                    animateRows={false}
+                    getRowId={(m) => m.id}
+                    emptyFilteredMessage={t('pages.complianceFrameworks.mappings_empty')}
+                    emptyState={{ icon: 'search', title: t('pages.complianceFrameworks.mappings_empty') }}
+                  />
                 </>
               )}
             </div>
