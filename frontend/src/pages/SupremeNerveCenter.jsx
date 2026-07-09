@@ -150,7 +150,7 @@ function SupremeNerveCenterInner() {
   const sectionLabel = (id) => t(`supremeNerveCenter.sections.${id}`, id)
 
   return (
-    <div className="flex min-h-screen bg-[#020617] text-slate-100">
+    <div className="flex min-h-screen bg-[var(--bg-0)] text-[var(--text-secondary)]">
       <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--border-default)] bg-[#030712]/90">
         <div className="border-b border-[var(--border-default)] p-4">
           <div className="flex items-center gap-2 text-emerald-400">

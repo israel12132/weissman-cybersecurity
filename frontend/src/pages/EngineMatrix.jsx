@@ -699,10 +699,8 @@ export default function EngineMatrix() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100"
-      style={{
-        background: 'radial-gradient(ellipse 130% 90% at 50% -10%, #1e293b 0%, #0f172a 35%, #020617 65%, #000 100%)',
-      }}
+      className="min-h-[100dvh] text-[var(--text-secondary)]"
+      style={{ background: 'var(--shell-bg)' }}
     >
       <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[var(--scrim)] backdrop-blur-xl">
         <div className="max-w-screen-2xl mx-auto px-4 py-4">

@@ -179,11 +179,8 @@ export default function AskWeissman() {
     <main
       id="main-content"
       tabIndex={-1}
-      className="min-h-[100dvh] text-slate-100 p-5 lg:p-6 flex flex-col outline-none"
-      style={{
-        background:
-          'radial-gradient(ellipse 120% 80% at 50% 0%, #111827 0%, #09090b 50%, #030712 100%)',
-      }}
+      className="min-h-[100dvh] text-[var(--text-secondary)] p-5 lg:p-6 flex flex-col outline-none"
+      style={{ background: 'var(--shell-bg)' }}
     >
       <header className="mb-4 flex items-end justify-between gap-3 flex-wrap shrink-0">
         <div>

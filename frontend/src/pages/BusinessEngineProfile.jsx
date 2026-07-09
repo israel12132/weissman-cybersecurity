@@ -282,7 +282,7 @@ export default function BusinessEngineProfile() {
 
   if (!def) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-slate-300 p-8">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[var(--bg-0)] text-[var(--text-tertiary)] p-8">
         <div className="text-red-400 mb-3">{t('pages.businessEngineProfile.not_configured', { engineId })}</div>
         <Link to="/engines/strategic" className="text-cyan-400 hover:underline">{t('pages.businessEngineProfile.open_strategic')}</Link>
       </div>
@@ -290,7 +290,7 @@ export default function BusinessEngineProfile() {
   }
 
   return (
-    <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 120% 78% at 50% 0%, #1f2937 0%, #020617 55%, #000 100%)' }}>
+    <div className="min-h-[100dvh] text-[var(--text-secondary)]" style={{ background: 'var(--shell-bg)' }}>
       <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/engines/strategic" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono">{t('pages.businessEngineProfile.back_strategic')}</Link>

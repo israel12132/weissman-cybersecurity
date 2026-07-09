@@ -195,7 +195,7 @@ export default function TopTierEngineHub() {
   }
 
   return (
-    <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 130% 80% at 50% 0%, #111827 0%, #020617 55%, #000 100%)' }}>
+    <div className="min-h-[100dvh] text-[var(--text-secondary)]" style={{ background: 'var(--shell-bg)' }}>
       <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">

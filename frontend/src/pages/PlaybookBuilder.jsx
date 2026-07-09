@@ -508,7 +508,7 @@ export default function PlaybookBuilder() {
   }
 
   return (
-    <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] text-slate-100 outline-none">
+    <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] bg-[var(--bg-0)] text-[var(--text-secondary)] outline-none">
       {/* Header */}
       <header className="border-b border-white/[0.06] bg-[#09090b]/80 px-5 py-5 backdrop-blur-xl lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
