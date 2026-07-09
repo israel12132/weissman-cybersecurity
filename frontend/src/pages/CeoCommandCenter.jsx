@@ -58,9 +58,9 @@ export default function CeoCommandCenter() {
 
   return (
     <div
-      className="min-h-screen text-slate-100"
+      className="min-h-screen text-[var(--text-secondary)]"
       style={{
-        background: 'radial-gradient(ellipse 100% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
+        background: 'var(--shell-bg)',
       }}
     >
       <header className="border-b border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md sticky top-0 z-10">

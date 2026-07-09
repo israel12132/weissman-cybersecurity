@@ -444,8 +444,8 @@ export default function StatusPage() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100"
-      style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)' }}
+      className="min-h-[100dvh] text-[var(--text-secondary)]"
+      style={{ background: 'var(--shell-bg)' }}
     >
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <header className="mb-10">

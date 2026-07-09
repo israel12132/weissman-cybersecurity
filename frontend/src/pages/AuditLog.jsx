@@ -265,8 +265,8 @@ export default function AuditLog() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100 p-4 sm:p-6"
-      style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
+      className="min-h-[100dvh] text-[var(--text-secondary)] p-4 sm:p-6"
+      style={{ background: 'var(--shell-bg)' }}
     >
       <header className="max-w-7xl mx-auto mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">

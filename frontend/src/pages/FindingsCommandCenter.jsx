@@ -617,9 +617,9 @@ export default function FindingsCommandCenter() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100"
+      className="min-h-[100dvh] text-[var(--text-secondary)]"
       style={{
-        background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
+        background: 'var(--shell-bg)',
       }}
     >
       <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
