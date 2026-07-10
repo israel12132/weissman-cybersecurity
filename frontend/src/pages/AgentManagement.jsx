@@ -59,6 +59,9 @@ export default function AgentManagement() {
   const [tokenValidity, setTokenValidity] = useState(60)
   const [generatedToken, setGeneratedToken] = useState(null)
   const [err, setErr] = useState(null)
+  // Errors from user actions (token/dispatch) are kept separate from the agent-list
+  // fetch error so the 15s auto-refresh can't silently clear an action's banner.
+  const [actionErr, setActionErr] = useState(null)
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -97,11 +100,11 @@ export default function AgentManagement() {
   useVisiblePolling(refresh, 15000, { paused: !autoRefresh })
 
   const createToken = useCallback(async () => {
-    setErr(null)
+    setActionErr(null)
     setGeneratedToken(null)
     const cid = Number(tokenClient)
     if (!cid) {
-      setErr(t('agents.select_client_first'))
+      setActionErr(t('agents.select_client_first'))
       return
     }
     try {
@@ -114,18 +117,18 @@ export default function AgentManagement() {
       if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
       setGeneratedToken(d)
     } catch (e) {
-      setErr(e.message)
+      setActionErr(e.message)
     }
   }, [tokenClient, tokenValidity, t])
 
   const fleetDispatch = useCallback(async () => {
     const cid = Number(tokenClient)
     if (!cid) {
-      setErr(t('agents.select_client_first'))
+      setActionErr(t('agents.select_client_first'))
       return
     }
     setFleetBusy(true)
-    setErr(null)
+    setActionErr(null)
     try {
       const r = await apiFetch('/api/agents/dispatch', {
         method: 'POST',
@@ -136,7 +139,7 @@ export default function AgentManagement() {
       if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
       await refresh()
     } catch (e) {
-      setErr(e.message)
+      setActionErr(e.message)
     } finally {
       setFleetBusy(false)
     }
@@ -277,7 +280,7 @@ export default function AgentManagement() {
 
         <section className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-5 space-y-4">
           <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">{t('agents.issue_token')}</h2>
-          {err && <div className="text-[12px] font-mono text-rose-400">{err}</div>}
+          {(actionErr || err) && <div className="text-[12px] font-mono text-rose-400">{actionErr || err}</div>}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_140px_auto] gap-3">
             <select
               value={tokenClient}
