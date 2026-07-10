@@ -8,6 +8,7 @@ import {
   useRef,
 } from 'react'
 import { useTelemetry } from './TelemetryContext'
+import { encodeFindingsFilters } from '../lib/findingsUrlState'
 
 const NotificationContext = createContext(null)
 
@@ -25,10 +26,21 @@ function isNoteworthy(evt) {
   return NOTEWORTHY_SEVERITY.has(sev) || NOTEWORTHY_KIND.has(kind)
 }
 
-/** Best-effort deep link for a notification, based on its event shape. */
-function deriveLink(evt) {
+/**
+ * Best-effort deep link for a notification, based on its event shape.
+ * Finding events deep-link to the findings console pre-filtered by severity
+ * (via the shared URL-filter encoder), so a click lands on the relevant rows.
+ * @param {object} evt
+ * @returns {string|null}
+ */
+export function deriveLink(evt) {
   const kind = (evt?.kind || '').toLowerCase()
-  if (kind === 'finding') return '/findings'
+  if (kind === 'finding') {
+    const sev = (evt?.severity || '').toLowerCase()
+    const params = encodeFindingsFilters({ severityFilter: sev })
+    const qs = new URLSearchParams(params).toString()
+    return qs ? `/findings?${qs}` : '/findings'
+  }
   if (evt?.job_id) return '/jobs'
   return null
 }

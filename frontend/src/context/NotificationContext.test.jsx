@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, act, cleanup } from '@testing-library/react'
-import { NotificationProvider, useNotifications } from './NotificationContext'
+import { NotificationProvider, useNotifications, deriveLink } from './NotificationContext'
 
 // Minimal telemetry stub: exposes a way to emit events into the subscriber.
 let emit
@@ -78,5 +78,16 @@ describe('NotificationProvider', () => {
     act(() => emit({ severity: 'high', message: 'sev2' }))
     act(() => screen.getByText('clear').click())
     expect(screen.getByTestId('count').textContent).toBe('0')
+  })
+})
+
+describe('deriveLink', () => {
+  it('deep-links finding events to the severity-filtered findings console', () => {
+    expect(deriveLink({ kind: 'finding', severity: 'Critical' })).toBe('/findings?sev=critical')
+    expect(deriveLink({ kind: 'finding' })).toBe('/findings')
+  })
+  it('links job events to /jobs and returns null otherwise', () => {
+    expect(deriveLink({ job_id: 'j1' })).toBe('/jobs')
+    expect(deriveLink({ kind: 'info' })).toBeNull()
   })
 })
