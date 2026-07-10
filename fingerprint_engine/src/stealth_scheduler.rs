@@ -171,6 +171,34 @@ pub fn schedule(n: usize, plan: &StealthPlan, seed: u64) -> Vec<ScheduledDispatc
     out
 }
 
+/// Build the `command_center_engine` job payload for one scheduled dispatch, carrying the rotated
+/// identity (headers) and stealth annotations so the worker runs it under the same cover. Pure.
+#[must_use]
+pub fn job_payload(
+    engine_id: &str,
+    target: &str,
+    client_id: i64,
+    batch_id: &str,
+    dispatch: &ScheduledDispatch,
+) -> Value {
+    let headers: Vec<Value> = header_set(dispatch.user_agent_index)
+        .into_iter()
+        .map(|(k, v)| json!({ "name": k, "value": v }))
+        .collect();
+    json!({
+        "engine": engine_id,
+        "target": target,
+        "client_id": client_id,
+        "trigger": "arsenal_stealth_batch",
+        "batch_id": batch_id,
+        "stealth": {
+            "lane": dispatch.lane,
+            "delay_ms": dispatch.delay_ms,
+            "headers": headers,
+        },
+    })
+}
+
 /// Total wall-clock the batch will take (ms) — the latest scheduled dispatch's offset.
 #[must_use]
 pub fn estimated_duration_ms(sched: &[ScheduledDispatch]) -> u64 {
@@ -286,6 +314,20 @@ mod tests {
         let small = estimated_duration_ms(&schedule(10, &plan, 5));
         let big = estimated_duration_ms(&schedule(200, &plan, 5));
         assert!(big > small);
+    }
+
+    #[test]
+    fn job_payload_carries_engine_target_and_rotated_headers() {
+        let sched = schedule(3, &StealthPlan::default(), 5);
+        let p = job_payload("graphql_attack", "app.example.com", 7, "batch-1", &sched[1]);
+        assert_eq!(p["engine"], "graphql_attack");
+        assert_eq!(p["target"], "app.example.com");
+        assert_eq!(p["client_id"], 7);
+        assert_eq!(p["batch_id"], "batch-1");
+        assert_eq!(p["trigger"], "arsenal_stealth_batch");
+        let headers = p["stealth"]["headers"].as_array().unwrap();
+        assert!(headers.iter().any(|h| h["name"] == "User-Agent"));
+        assert_eq!(p["stealth"]["lane"].as_u64().unwrap(), sched[1].lane as u64);
     }
 
     #[test]
