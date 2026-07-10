@@ -356,6 +356,19 @@ jobs:
           cat /tmp/weissman-server.log || true
           exit 1
 
+      - name: DAST — OWASP ZAP baseline against the live stack (informational)
+        # We sell DAST, so we run it against our own live stack every CI build. Non-blocking
+        # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
+        # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
+        # container itself — target the runner's docker-bridge gateway to reach the host.
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: http://172.17.0.1:18000/api/health
+          cmd_options: '-I -a'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-baseline-report
+
       - name: Live RLS cross-tenant isolation contract
         env:
           # Superuser connection; the test does SET ROLE weissman_app to exercise
