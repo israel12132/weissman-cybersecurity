@@ -43,14 +43,25 @@ The verdict is a real oracle, not "the response changed":
 
 Only `Fixed` is delivered. A patch that merely crashes the endpoint is `BrokeApp`, never a "fix".
 
+## Candidate tournament (opt-in)
+
+When `WEISSMAN_HEAL_TOURNAMENT_SIZE ≥ 2`, the pipeline first runs a **tournament**: it generates
+several *diverse* candidate patches — each from a different fix strategy (minimal, root-cause input
+validation, safe-API, defense-in-depth, framework-layer; `remediation_patch::CANDIDATE_STRATEGIES`) —
+plus the pre-generated seed patch, verifies each in the sandbox, and **seeds the pipeline with the
+best proven candidate**. The winner is chosen by `score_result`: verdict quality first (`Fixed` >
+`StillVulnerable` > `Inconclusive` > `BrokeApp`), then a tests-passed bonus, then the **smallest
+change** (fewest files, then fewest bytes) — i.e. the cleanest proven fix. If the winner is already
+`Fixed` it is delivered; otherwise the self-repair loop refines from it.
+
 ## Self-repair loop
 
 `auto_heal_job::run_auto_heal_job` verifies, and on any non-`Fixed` verdict feeds the failure
 reason (still-vulnerable / broke-app / didn't-apply, plus the sandbox error and the files the last
 patch touched) back to `remediation_patch::regenerate_patch`. The regenerated diff is re-validated
 (`security_hardening::validate_remediation_patch`) and re-verified, up to `WEISSMAN_HEAL_MAX_ATTEMPTS`
-(default 3). Temperature climbs per attempt. Every attempt streams a step into
-`heal_verification_steps`, so the UI shows the whole journey. The winning patch is persisted.
+(default 3, shared with the tournament budget). Temperature climbs per attempt. Every attempt streams
+a step into `heal_verification_steps`, so the UI shows the whole journey. The winning patch is persisted.
 
 ## Delivery channels (`heal_channels::DeliveryChannel`)
 
@@ -118,7 +129,8 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 
 | Variable                                | Default        | Effect                                            |
 |-----------------------------------------|----------------|---------------------------------------------------|
-| `WEISSMAN_HEAL_MAX_ATTEMPTS`            | `3`            | Self-repair loop attempt cap (1–10)               |
+| `WEISSMAN_HEAL_MAX_ATTEMPTS`            | `3`            | Total generation budget (tournament + self-repair, 1–10) |
+| `WEISSMAN_HEAL_TOURNAMENT_SIZE`         | `1`            | Candidate tournament size (≥2 enables it, max 6)  |
 | `WEISSMAN_HEAL_DEDUP_HOURS`             | `24`           | Duplicate-PR dedup window (0 disables)            |
 | `WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS`| `1`            | Require baseline exploit to be 2xx                |
 | `WEISSMAN_VERIFY_REQUIRE_HEALTH`        | `1`            | Require post-patch health probe to pass           |

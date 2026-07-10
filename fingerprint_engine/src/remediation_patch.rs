@@ -97,9 +97,84 @@ pub async fn regenerate_patch(
     Ok(patch)
 }
 
+/// Distinct fix strategies used to generate a diverse candidate field for the tournament — each
+/// asks the model to approach the same vulnerability from a different angle.
+pub const CANDIDATE_STRATEGIES: &[&str] = &[
+    "Apply the MINIMAL, most surgical code change that closes the vulnerability.",
+    "Fix the ROOT CAUSE with strict input validation / allow-listing at the entry point.",
+    "Fix by switching to a SAFE API for this vulnerability class (parameterized query, safe \
+     deserializer, proper output encoding, path canonicalization, etc.).",
+    "Apply DEFENSE-IN-DEPTH: fix the vulnerable sink AND harden the surrounding code path.",
+    "Fix at the FRAMEWORK/config layer (middleware, security headers, framework guard) without \
+     changing business logic.",
+];
+
+const SYS_CANDIDATE: &str = "You are a principal application-security engineer. Produce a code fix for \
+the given vulnerability, following the requested strategy. Output ONE minified JSON object ONLY, of the \
+form {\"remediation_patch\":string,\"rationale\":string}. `remediation_patch` MUST be a valid unified diff \
+(git/`patch -p1` compatible, `--- a/path` / `+++ b/path` / `@@` hunks) that closes the vulnerability while \
+keeping the application fully functional. Never disable, delete, or crash the endpoint to make the exploit \
+stop. Keep the change minimal and targeted. No exploit payloads in the output.";
+
+/// Generate one tournament candidate for a given strategy. Temperature varies with the strategy
+/// index to widen the search.
+#[allow(clippy::too_many_arguments)]
+pub async fn generate_candidate(
+    cfg: &CouncilConfig,
+    tenant_id: i64,
+    strategy_index: u32,
+    strategy: &str,
+    title: &str,
+    description: &str,
+    severity: &str,
+    poc_curl: &str,
+) -> Result<String, String> {
+    let client = cfg.http_client();
+    let user = format!(
+        "Vulnerability: {title}\nSeverity: {severity}\n\nDescription:\n{desc}\n\n\
+         Reproduction (PoC):\n{poc}\n\n\
+         REQUIRED FIX STRATEGY: {strategy}\n\n\
+         Produce a unified diff implementing this strategy.",
+        title = title.chars().take(600).collect::<String>(),
+        severity = severity,
+        desc = description.chars().take(3500).collect::<String>(),
+        poc = poc_curl.chars().take(2000).collect::<String>(),
+        strategy = strategy,
+    );
+    let raw = openai_chat::chat_completion_text_json_object(
+        &client,
+        cfg.base_url.as_str(),
+        cfg.model_synthesizer.as_str(),
+        Some(SYS_CANDIDATE),
+        &user,
+        attempt_temperature(strategy_index),
+        2200,
+        Some(tenant_id),
+        "heal_tournament_candidate",
+        true,
+    )
+    .await
+    .map_err(|e: LlmError| format!("candidate LLM error: {e}"))?;
+    let out: PatchOut =
+        deserialize_llm_json(&raw).map_err(|e| format!("candidate parse error: {e}"))?;
+    let patch = out.remediation_patch.trim().to_string();
+    if patch.is_empty() {
+        return Err("candidate produced an empty patch".into());
+    }
+    Ok(patch)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strategies_are_distinct_and_nonempty() {
+        assert!(CANDIDATE_STRATEGIES.len() >= 4);
+        for s in CANDIDATE_STRATEGIES {
+            assert!(!s.trim().is_empty());
+        }
+    }
 
     #[test]
     fn temperature_climbs_and_caps() {

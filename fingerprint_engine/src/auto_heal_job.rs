@@ -173,6 +173,25 @@ async fn finalize_spec(pool: &PgPool, tenant_id: i64, spec_id: Uuid, status: &st
     }
 }
 
+/// Tournament score for a candidate's verification result — higher tuple is better.
+/// Ranks by verdict quality, then tests-passed bonus, then a preference for the SMALLEST change
+/// (fewer files, then fewer bytes), so the winner is the cleanest proven fix.
+fn score_result(vr: &crate::verification_sandbox::VerificationResult) -> (u8, u8, i64) {
+    use crate::verification_sandbox::HealVerdict;
+    let verdict_rank = match vr.verdict {
+        HealVerdict::Fixed => 3,
+        HealVerdict::StillVulnerable => 2,
+        HealVerdict::Inconclusive => 1,
+        HealVerdict::BrokeApp => 0,
+    };
+    let tests_bonus = if vr.tests_ran && vr.tests_passed { 1 } else { 0 };
+    let files = vr.changed_files.len() as i64;
+    let bytes: i64 = vr.changed_files.iter().map(|(_, c)| c.len() as i64).sum();
+    // Smaller change ⇒ higher score (negate the penalty).
+    let penalty = files.saturating_mul(1_000_000).saturating_add(bytes);
+    (verdict_rank, tests_bonus, -penalty)
+}
+
 /// Human-readable failure the self-repair loop feeds back to the LLM, derived from the verdict.
 fn failure_reason(vr: &crate::verification_sandbox::VerificationResult) -> String {
     use crate::verification_sandbox::HealVerdict;
@@ -446,24 +465,128 @@ pub async fn run_auto_heal_job(
     };
 
     let mut patch_text = patch_text;
-    let mut attempt: u32 = 1;
-    let mut vr = verify_patch_ephemeral_docker(
-        &docker_socket,
-        &image,
-        container_port as u16,
-        &repo_slug,
-        &base_branch,
-        &git_token,
-        &git_host,
-        &patch_text,
-        &poc_curl,
-        &health_check_curl,
-        Some(step_sink.clone()),
-    )
-    .await;
-
-    // Finding context for regeneration, loaded once on first failure (empty if the row is gone).
+    // Finding context for regeneration / tournament (loaded once; empty if the row is gone).
     let mut finding_ctx: Option<(String, String, String)> = None;
+
+    // TOURNAMENT (opt-in, WEISSMAN_HEAL_TOURNAMENT_SIZE ≥ 2): generate several DIVERSE candidate
+    // patches from different fix strategies, verify each in the sandbox, and seed the pipeline with
+    // the best proven candidate (Fixed + tests-passed + smallest change). The self-repair loop then
+    // refines from that winner if it isn't already Fixed.
+    let tournament_size: u32 = std::env::var("WEISSMAN_HEAL_TOURNAMENT_SIZE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|n: &u32| *n >= 1 && *n <= 6)
+        .unwrap_or(1);
+
+    let (mut vr, mut attempt): (crate::verification_sandbox::VerificationResult, u32) =
+        if tournament_size >= 2 {
+            let (t, d, s) =
+                load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await;
+            finding_ctx = Some((t.clone(), d.clone(), s.clone()));
+            record_step(
+                &step_sink,
+                "tournament_start",
+                Some(format!("generating up to {} candidate fixes", tournament_size)),
+            )
+            .await;
+
+            // Candidate 0 is the pre-generated seed patch; 1..size are LLM candidates by strategy.
+            let mut candidates: Vec<(String, String)> = vec![("seed".to_string(), patch_text.clone())];
+            if let Ok(cfg) = crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await {
+                let n_llm = (tournament_size - 1) as usize;
+                let strategies = crate::remediation_patch::CANDIDATE_STRATEGIES;
+                let gens = (0..n_llm).map(|i| {
+                    let strat = strategies[i % strategies.len()];
+                    crate::remediation_patch::generate_candidate(
+                        &cfg, tenant_id, i as u32, strat, &t, &d, &s, &poc_curl,
+                    )
+                });
+                for (i, r) in futures::future::join_all(gens).await.into_iter().enumerate() {
+                    match r {
+                        Ok(p) if crate::security_hardening::validate_remediation_patch(&p).is_ok() => {
+                            candidates.push((format!("strategy_{}", i + 1), p));
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            record_step(
+                                &step_sink,
+                                &format!("tournament_candidate_{}_skipped", i + 1),
+                                Some(e),
+                            )
+                            .await;
+                        }
+                    }
+                }
+            }
+
+            // Verify each candidate (throwaway in-memory step sink) and keep the best by score.
+            let candidate_count = candidates.len() as u32;
+            let mut best: Option<(String, crate::verification_sandbox::VerificationResult, (u8, u8, i64))> = None;
+            for (label, cand) in candidates {
+                let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(
+                    Vec::<crate::verification_sandbox::VerificationStep>::new(),
+                )));
+                let cvr = verify_patch_ephemeral_docker(
+                    &docker_socket,
+                    &image,
+                    container_port as u16,
+                    &repo_slug,
+                    &base_branch,
+                    &git_token,
+                    &git_host,
+                    &cand,
+                    &poc_curl,
+                    &health_check_curl,
+                    Some(mem),
+                )
+                .await;
+                let sc = score_result(&cvr);
+                record_step(
+                    &step_sink,
+                    &format!("tournament_{}", label),
+                    Some(format!(
+                        "verdict={} files={} score=({},{},{})",
+                        cvr.verdict.as_str(),
+                        cvr.changed_files.len(),
+                        sc.0, sc.1, sc.2
+                    )),
+                )
+                .await;
+                if best.as_ref().map(|(_, _, bs)| sc > *bs).unwrap_or(true) {
+                    best = Some((cand, cvr, sc));
+                }
+            }
+
+            let (best_patch, best_vr, _) = best.expect("tournament always has the seed candidate");
+            record_step(
+                &step_sink,
+                "tournament_winner",
+                Some(format!(
+                    "verdict={} across {} candidate(s)",
+                    best_vr.verdict.as_str(),
+                    candidate_count
+                )),
+            )
+            .await;
+            patch_text = best_patch;
+            (best_vr, candidate_count)
+        } else {
+            let vr0 = verify_patch_ephemeral_docker(
+                &docker_socket,
+                &image,
+                container_port as u16,
+                &repo_slug,
+                &base_branch,
+                &git_token,
+                &git_host,
+                &patch_text,
+                &poc_curl,
+                &health_check_curl,
+                Some(step_sink.clone()),
+            )
+            .await;
+            (vr0, 1)
+        };
 
     while !vr.verified && attempt < max_attempts {
         let reason = failure_reason(&vr);
@@ -1118,5 +1241,27 @@ mod tests {
     fn build_pr_text_no_self_repair_line_on_first_attempt() {
         let (_t, body) = build_pr_text("F-2", &vr(HealVerdict::Fixed, 404, 200), "x", 1, None);
         assert!(!body.contains("Self-repair"));
+    }
+
+    #[test]
+    fn score_prefers_fixed_then_smaller_change() {
+        let fixed_small = vr(HealVerdict::Fixed, 403, 200);
+        let mut fixed_big = vr(HealVerdict::Fixed, 403, 200);
+        fixed_big.changed_files = vec![
+            ("a".to_string(), "x".to_string()),
+            ("b".to_string(), "y".to_string()),
+        ];
+        let still = vr(HealVerdict::StillVulnerable, 200, 200);
+        let broke = vr(HealVerdict::BrokeApp, 500, 0);
+        // Fixed beats still-vulnerable beats broke-app.
+        assert!(score_result(&fixed_small) > score_result(&still));
+        assert!(score_result(&still) > score_result(&broke));
+        // Among Fixed candidates, the smaller change wins.
+        assert!(score_result(&fixed_small) > score_result(&fixed_big));
+        // A Fixed candidate that also passes tests beats one that didn't run them.
+        let mut fixed_tested = vr(HealVerdict::Fixed, 403, 200);
+        fixed_tested.tests_ran = true;
+        fixed_tested.tests_passed = true;
+        assert!(score_result(&fixed_tested) > score_result(&fixed_small));
     }
 }
