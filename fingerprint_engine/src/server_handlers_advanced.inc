@@ -243,6 +243,26 @@ async fn api_arsenal_catalog() -> Response {
     (StatusCode::OK, Json(crate::arsenal_catalog::summary())).into_response()
 }
 
+// ─── Stealth dispatch plan preview (how a batch drips out under concurrency/jitter) ───
+async fn api_arsenal_deploy_plan(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    fn num(q: &std::collections::HashMap<String, String>, k: &str, d: u64) -> u64 {
+        q.get(k).and_then(|s| s.parse::<u64>().ok()).unwrap_or(d)
+    }
+    let count = num(&q, "count", 50).clamp(1, 2000) as usize;
+    let plan = crate::stealth_scheduler::StealthPlan {
+        max_concurrent: num(&q, "max_concurrent", 10) as usize,
+        jitter_min_ms: num(&q, "jitter_min_ms", 250),
+        jitter_max_ms: num(&q, "jitter_max_ms", 1500),
+        base_gap_ms: num(&q, "base_gap_ms", 300),
+    };
+    // Deterministic preview seed derived from the request shape.
+    let seed = (count as u64).wrapping_mul(0x9E37_79B9).wrapping_add(plan.max_concurrent as u64);
+    let summary = crate::stealth_scheduler::plan_summary(count, &plan, seed);
+    (StatusCode::OK, Json(summary)).into_response()
+}
+
 // ─── Arsenal recommendation (client exposure crossed against the engine arsenal) ───
 async fn api_arsenal_recommendation_for_client(
     State(state): State<Arc<AppState>>,
