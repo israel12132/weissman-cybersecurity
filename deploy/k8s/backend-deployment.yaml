@@ -13,9 +13,40 @@ spec:
       labels:
         app: weissman-backend
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across nodes (and zones when available) so a single node/AZ loss
+      # never takes the whole backend down.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: weissman-backend
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: weissman-backend
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: backend
-          image: your-registry/weissman-backend:latest
+          # Published, cosign-signed and SLSA-provenance-attested by the CI `publish` job
+          # (.github/workflows/ci.yml). PRODUCTION: pin by immutable digest, not a tag — the
+          # publish job prints `…@sha256:…`; replace the :latest tag below with it and verify
+          # signature + provenance at admission (cosign policy-controller / Kyverno):
+          #   image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend@sha256:<DIGEST>
+          image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -96,3 +127,11 @@ spec:
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp

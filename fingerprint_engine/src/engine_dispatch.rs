@@ -49,6 +49,23 @@ pub struct EngineRunContext {
     pub oast_api_key: Option<String>,
 }
 
+/// Escalate a run context into the Ghost Network after a WAF/rate-limit block: enable identity
+/// morphing + human-cadence jitter and load the proxy swarm (`WEISSMAN_PROXY_SWARM`) if set.
+/// Called by the resilient retry loop when the previous attempt classified as `Waf`.
+pub fn apply_ghost_escalation(stealth: &mut Option<StealthConfig>) {
+    let s = stealth.get_or_insert_with(StealthConfig::default);
+    s.identity_morphing = true;
+    if s.jitter_max_ms == 0 {
+        s.jitter_min_ms = 200;
+        s.jitter_max_ms = 1200;
+    }
+    if s.proxy_list.is_empty() {
+        if let Ok(sw) = std::env::var("WEISSMAN_PROXY_SWARM") {
+            s.proxy_list = StealthConfig::parse_proxy_swarm(&sw);
+        }
+    }
+}
+
 /// Load tenant OAST settings from `system_configs` (used by scan workers).
 pub async fn load_tenant_oast_configs(
     pool: &sqlx::PgPool,

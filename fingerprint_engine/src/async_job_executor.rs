@@ -459,12 +459,17 @@ async fn execute_job_unscoped(
                             &eng_ref,
                             &tgt,
                             crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                            move |variant| {
+                            move |variant, hint| {
                                 let eng = eng_outer.clone();
-                                let ctx_owned = ctx_owned.clone();
+                                let mut ctx = ctx_owned.clone();
+                                // WAF/rate-limit retry → go stealthy on this attempt.
+                                if hint.force_ghost_network {
+                                    crate::engine_dispatch::apply_ghost_escalation(
+                                        &mut ctx.stealth,
+                                    );
+                                }
                                 async move {
-                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx_owned)
-                                        .await
+                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx).await
                                 }
                             },
                         )
@@ -803,6 +808,10 @@ async fn execute_job_unscoped(
                 weissman_core::models::engine::order_engines_by_registry(&production_engines);
             let ordered_engines =
                 crate::ws_intelligence_bus::prioritize_ws_intelligence_chain(ordered_engines);
+            // Reorder so engines most relevant to THIS target (web vs bare IP vs IPv6, TLS
+            // ports, …) run first. Reorder-only — no engine is dropped.
+            let ordered_engines = crate::target_profile::TargetProfile::classify(&target)
+                .prioritize(&ordered_engines);
 
             let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
             let mut cross_job_params = serde_json::json!({});
@@ -836,8 +845,12 @@ async fn execute_job_unscoped(
                     eid,
                     &target,
                     crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                    move |variant| async move {
-                        crate::engine_dispatch::run_engine(eid, &variant, ctx_ref).await
+                    move |variant, hint| {
+                        let mut c = ctx_ref.clone();
+                        if hint.force_ghost_network {
+                            crate::engine_dispatch::apply_ghost_escalation(&mut c.stealth);
+                        }
+                        async move { crate::engine_dispatch::run_engine(eid, &variant, &c).await }
                     },
                 )
                 .await;

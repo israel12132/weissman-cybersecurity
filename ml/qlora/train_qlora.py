@@ -6,19 +6,24 @@ Produces a LoRA adapter that specialises a 7-8B model on your own security wins,
 runnable on a single 16-24GB GPU. The adapter is served locally by vLLM — no external
 API, no data egress — so the platform gets "its own brain" while staying sovereign.
 
-Pipeline:  export_corpus.py  ->  train_qlora.py  ->  merge/serve via vLLM (see README.md)
+Pipeline:  export_corpus.py -> scrub_corpus.py -> train_qlora.py -> merge/serve via vLLM
 
 Usage:
+    # Validate the corpus + token stats without a GPU:
+    python train_qlora.py --corpus corpus.jsonl --dry-run
+
+    # Train (requires a CUDA GPU):
     python train_qlora.py \\
         --base Qwen/Qwen2.5-7B-Instruct \\
         --corpus corpus.jsonl \\
         --out ./weissman-lora \\
         --epochs 3
 
-Requires a CUDA GPU. See requirements.txt.
+Requires a CUDA GPU for training. See requirements.txt (versions are pinned).
 """
 import argparse
 import json
+import statistics
 
 
 def build_prompt(ex, eos):
@@ -35,6 +40,33 @@ def build_prompt(ex, eos):
     )
 
 
+def load_rows(path):
+    rows = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+    if not rows:
+        raise SystemExit("empty corpus — run export_corpus.py (then scrub_corpus.py) first")
+    return rows
+
+
+def dry_run(args):
+    """Validate the corpus + report token-length stats without loading a model/GPU."""
+    from transformers import AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained(args.base)
+    eos = tok.eos_token or "</s>"
+    rows = load_rows(args.corpus)
+    lengths = [len(tok(build_prompt(r, eos)).input_ids) for r in rows]
+    over = sum(1 for n in lengths if n > args.max_seq)
+    lengths.sort()
+    p95 = lengths[int(0.95 * (len(lengths) - 1))]
+    print(f"corpus: {len(rows)} examples")
+    print(
+        f"tokens/example: min={min(lengths)} mean={statistics.mean(lengths):.0f} "
+        f"p95={p95} max={max(lengths)}"
+    )
+    print(f"over max_seq ({args.max_seq}): {over} ({100 * over / len(rows):.1f}%) will be truncated")
+    print("dry-run OK — corpus is loadable and tokenizes.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="Qwen/Qwen2.5-7B-Instruct")
@@ -45,28 +77,41 @@ def main():
     ap.add_argument("--max-seq", type=int, default=2048)
     ap.add_argument("--batch", type=int, default=1)
     ap.add_argument("--grad-accum", type=int, default=16)
+    ap.add_argument("--eval-frac", type=float, default=0.1, help="held-out fraction (0 disables)")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--dry-run", action="store_true", help="validate corpus + token stats, no GPU")
     args = ap.parse_args()
 
-    # Heavy imports kept inside main so --help works without a GPU stack installed.
+    if args.dry_run:
+        dry_run(args)
+        return
+
+    # Heavy imports kept inside main so --help / --dry-run work without a GPU stack installed.
     import torch
     from datasets import Dataset
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
         BitsAndBytesConfig,
-        TrainingArguments,
+        set_seed,
     )
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from trl import SFTTrainer
+    from trl import SFTConfig, SFTTrainer
+
+    set_seed(args.seed)
 
     tok = AutoTokenizer.from_pretrained(args.base)
     tok.pad_token = tok.pad_token or tok.eos_token
     eos = tok.eos_token or "</s>"
 
-    rows = [json.loads(l) for l in open(args.corpus, encoding="utf-8") if l.strip()]
-    if not rows:
-        raise SystemExit("empty corpus — run export_corpus.py first")
+    rows = load_rows(args.corpus)
     ds = Dataset.from_list([{"text": build_prompt(r, eos)} for r in rows])
+
+    # Held-out eval split so we can see whether we're generalising vs. memorising.
+    eval_ds = None
+    if args.eval_frac and 0 < args.eval_frac < 1 and len(ds) >= 10:
+        split = ds.train_test_split(test_size=args.eval_frac, seed=args.seed)
+        ds, eval_ds = split["train"], split["test"]
 
     bnb = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -86,7 +131,9 @@ def main():
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
 
-    targs = TrainingArguments(
+    # TRL >= 0.12: dataset_text_field / max_seq_length / packing live in SFTConfig, and the
+    # tokenizer is passed as processing_class (the old SFTTrainer kwargs were removed).
+    cfg = SFTConfig(
         output_dir=args.out,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch,
@@ -95,16 +142,29 @@ def main():
         bf16=True,
         logging_steps=10,
         save_strategy="epoch",
+        eval_strategy="epoch" if eval_ds is not None else "no",
+        load_best_model_at_end=eval_ds is not None,
+        metric_for_best_model="eval_loss" if eval_ds is not None else None,
+        greater_is_better=False,
         lr_scheduler_type="cosine",
         warmup_ratio=0.03,
         optim="paged_adamw_8bit",
+        seed=args.seed,
+        dataset_text_field="text",
+        max_seq_length=args.max_seq,
+        packing=False,
         report_to=[],
     )
     trainer = SFTTrainer(
-        model=model, args=targs, train_dataset=ds,
-        dataset_text_field="text", max_seq_length=args.max_seq, tokenizer=tok,
+        model=model,
+        args=cfg,
+        train_dataset=ds,
+        eval_dataset=eval_ds,
+        processing_class=tok,
     )
     trainer.train()
+    if eval_ds is not None:
+        print("eval:", trainer.evaluate())
     trainer.model.save_pretrained(args.out)
     tok.save_pretrained(args.out)
     print(f"\nLoRA adapter saved -> {args.out}")

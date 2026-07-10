@@ -19,7 +19,7 @@ a frontier model on general tasks; it wins on *your* domain because it was train
 ## Pipeline
 
 ```
-DB memory tables ──1──▶ corpus.jsonl ──2──▶ LoRA adapter ──3──▶ served by vLLM ──▶ WEISSMAN_LLM_*
+DB memory tables ─1─▶ corpus.jsonl ─2─▶ corpus.clean.jsonl ─3─▶ LoRA adapter ─4─▶ vLLM ─▶ WEISSMAN_LLM_*
 ```
 
 ### 1. Export the corpus (no GPU needed)
@@ -34,13 +34,26 @@ Pulls real, persisted rows from `supreme_council_memory`, `sovereign_learning_bu
 (synthesized), `pentest_winning_paths`, and validated `genesis_vaccine_vault`. Never fabricated.
 If you get <200 examples, keep running the platform so the memory grows, then re-export.
 
-### 2. Train the QLoRA adapter (CUDA GPU)
+### 2. Scrub the corpus (mandatory — no GPU needed)
+
+```bash
+python scrub_corpus.py --in corpus.jsonl --out corpus.clean.jsonl
+```
+
+Redacts secrets/PII (private keys, JWTs, AWS/GitHub/Slack/API keys, `password=…`, emails),
+de-duplicates, and drops too-short examples — so the model can't memorise and later regurgitate
+a client's live secret. **Always train on the scrubbed file.**
+
+### 3. Train the QLoRA adapter (CUDA GPU)
 
 ```bash
 pip install -r requirements.txt
+# Validate the corpus + token stats first, no GPU:
+python train_qlora.py --corpus corpus.clean.jsonl --dry-run
+# Then train (held-out eval split + fixed seed by default):
 python train_qlora.py \
   --base Qwen/Qwen2.5-7B-Instruct \
-  --corpus corpus.jsonl \
+  --corpus corpus.clean.jsonl \
   --out ./weissman-lora \
   --epochs 3
 ```
@@ -49,7 +62,7 @@ python train_qlora.py \
 Good bases: `Qwen/Qwen2.5-7B-Instruct`, `meta-llama/Llama-3.1-8B-Instruct`,
 `mistralai/Mistral-7B-Instruct-v0.3`.
 
-### 3. Serve the adapter with vLLM (local, sovereign)
+### 4. Serve the adapter with vLLM (local, sovereign)
 
 ```bash
 python -m vllm.entrypoints.openai.api_server \

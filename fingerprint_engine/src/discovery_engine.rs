@@ -166,7 +166,7 @@ async fn fetch_page(
 ) -> Option<(String, u16, Vec<String>)> {
     let req = match stealth {
         Some(s) => {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
             client
                 .get(url)
                 .headers(stealth_engine::random_morph_headers(s))
@@ -480,7 +480,7 @@ pub async fn run_graphql_introspection(
             let body = query_body.clone();
             async move {
                 if let Some(s) = stealth_j.as_deref() {
-                    stealth_engine::apply_jitter(s);
+                    stealth_engine::apply_jitter(s).await;
                 }
                 let req = client
                     .post(&url)
@@ -506,7 +506,7 @@ pub async fn run_graphql_introspection(
         let (path, status, body) = triple;
         if stealth_engine::is_waf_or_rate_limit(status, &body) {
             if let Some(s) = stealth_arc.as_deref() {
-                stealth_engine::apply_rotation_delay(s);
+                stealth_engine::apply_rotation_delay(s).await;
             }
             continue;
         }

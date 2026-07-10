@@ -2,9 +2,27 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: weissman
+  namespace: weissman
   annotations:
     kubernetes.io/ingress.class: nginx
+    # --- TLS via cert-manager (Let's Encrypt). Requires the cert-manager operator and a
+    # matching ClusterIssuer named `letsencrypt-prod`. ---
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # --- WAF (ModSecurity + OWASP CRS) ---
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    # --- Edge rate limiting (defence in depth on top of the app's per-tenant limiter) ---
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+    # --- Transport hardening ---
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
 spec:
+  tls:
+    - hosts:
+        - weissmancyber.com
+      secretName: weissman-tls
   rules:
     - host: weissmancyber.com
       http:

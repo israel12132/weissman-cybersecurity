@@ -1,0 +1,53 @@
+# Postgres HA via CloudNativePG (https://cloudnative-pg.io) — primary + 2 hot standbys with
+# automated failover, synchronous replication, and continuous WAL archiving (PITR) to object
+# storage. Removes the single-Postgres SPOF.
+#
+# Prerequisites:
+#   1. Install the CNPG operator (server-side apply the release manifest).
+#   2. imageName MUST include the pgvector extension (supreme_council_memory /
+#      pentest_winning_paths). Build a CNPG-compatible image FROM the operator's postgres:16
+#      base + `CREATE EXTENSION vector`, or use a community pgvector CNPG image, and set it
+#      below. The stock CNPG image does NOT ship pgvector.
+#   3. Create the `weissman-pg-backup` secret with S3 credentials for WAL/base archiving.
+#
+# CNPG publishes services: weissman-pg-rw (primary), weissman-pg-ro (replicas). Point the app
+# (via PgBouncer) at weissman-pg-rw; route read-only analytics at weissman-pg-ro.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: weissman-pg
+  namespace: weissman
+spec:
+  instances: 3
+  imageName: ghcr.io/your-org/cnpg-postgres16-pgvector:latest # MUST include pgvector — see header
+  primaryUpdateStrategy: unsupervised
+  postgresql:
+    parameters:
+      max_connections: "200"
+      wal_level: replica
+      # Synchronous commit to at least one standby (durability over a single-node loss).
+      synchronous_commit: "on"
+  bootstrap:
+    initdb:
+      database: weissman
+      owner: weissman
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector
+  storage:
+    size: 50Gi
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://weissman-pg-backups/
+      s3Credentials:
+        accessKeyId:
+          name: weissman-pg-backup
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: weissman-pg-backup
+          key: SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+    retentionPolicy: "30d"
+  affinity:
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname

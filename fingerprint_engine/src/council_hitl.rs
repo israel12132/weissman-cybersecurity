@@ -328,8 +328,18 @@ pub async fn mint_oast_probe(
     Ok(token)
 }
 
+/// True when a fresh OAST / deception-trap interaction arrived since the last poll — the
+/// signal that an attacker touched our planted material and the asset is worth re-engaging.
+fn deception_reengage(prev_hit_count: i64, current_hit_count: i64) -> bool {
+    current_hit_count > prev_hit_count
+}
+
 /// Poll `oast_interaction_hits` for the given token, update `oast_probe_tokens.hit_count`.
 /// Returns a JSON summary with `oob_confirmed`, `hit_count`, and `first_hit_at`.
+///
+/// Closes the deception feedback loop: a *new* interaction enqueues a targeted re-scan of
+/// the asset and bumps `weissman_deception_hit_total`, so trap hits drive re-engagement
+/// instead of only being logged.
 pub async fn poll_oast_token(
     pool: &PgPool,
     tenant_id: i64,
@@ -372,6 +382,7 @@ pub async fn poll_oast_token(
     .flatten();
 
     // Update the cache columns in oast_probe_tokens
+    let prev_hit_count: i64 = probe.try_get::<i32, _>("hit_count").unwrap_or(0) as i64;
     sqlx::query(
         r#"UPDATE oast_probe_tokens
            SET hit_count = $1, first_hit_at = COALESCE(first_hit_at, $2), last_polled_at = now()
@@ -383,6 +394,35 @@ pub async fn poll_oast_token(
     .bind(tenant_id)
     .execute(&mut *tx)
     .await?;
+
+    // Deception feedback loop: a new trap interaction → re-engage the asset. Enqueue one
+    // targeted re-scan and bump the metric. Kept atomic with the hit-count update.
+    if deception_reengage(prev_hit_count, hit_count) {
+        metrics::counter!("weissman_deception_hit_total")
+            .increment((hit_count - prev_hit_count) as u64);
+        let target_url: Option<String> = probe.try_get::<String, _>("target_url").ok();
+        let client_id: Option<i64> = probe.try_get::<Option<i64>, _>("client_id").ok().flatten();
+        if let Some(t) = target_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            let payload = json!({
+                "engine": "asm",
+                "target": t,
+                "client_id": client_id,
+                "trigger": "deception_trap_hit",
+            });
+            sqlx::query(
+                r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status)
+                   VALUES ($1, 'command_center_engine', $2, 'pending')"#,
+            )
+            .bind(tenant_id)
+            .bind(&payload)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
 
     tx.commit().await?;
 
@@ -399,4 +439,21 @@ pub async fn poll_oast_token(
         "created_at":     probe.try_get::<chrono::DateTime<chrono::Utc>,_>("created_at").ok(),
         "safety_rails_no_shells": true,
     }))
+}
+
+#[cfg(test)]
+mod deception_loop_tests {
+    use super::deception_reengage;
+
+    #[test]
+    fn reengage_only_on_new_interactions() {
+        // No change in hit count → do not re-engage.
+        assert!(!deception_reengage(0, 0));
+        assert!(!deception_reengage(3, 3));
+        // A fresh interaction (count grew) → re-engage.
+        assert!(deception_reengage(0, 1));
+        assert!(deception_reengage(2, 5));
+        // A stale/decreased count must never re-engage.
+        assert!(!deception_reengage(5, 4));
+    }
 }

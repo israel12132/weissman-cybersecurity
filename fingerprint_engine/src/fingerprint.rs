@@ -32,9 +32,13 @@ static USER_AGENTS: &[&str] = &[
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
 ];
 
-/// Top 200 most common TCP ports (nmap-style prevalence), then 201..1000 for configurable "top 1000".
+/// Real, de-duplicated scan port list: an nmap-services prevalence-ranked head followed by
+/// the IANA well-known range (`1..=1023`). Every entry is a genuine port. The previous
+/// implementation padded up to 1000 with synthetic sequential ports (`231, 232, …`) which
+/// both duplicated real entries (1024–1200 were already present) and advertised a bogus
+/// "top-1000" of meaningless low ports.
 fn top_ports_list() -> Vec<u16> {
-    let mut ports = vec![
+    let prevalence_head = [
         80, 23, 443, 21, 22, 25, 3389, 110, 445, 139, 143, 53, 135, 3306, 8080, 1723, 111, 995,
         993, 5900, 1025, 587, 8888, 199, 1720, 465, 548, 113, 81, 6001, 10000, 514, 5060, 179,
         1026, 2000, 8443, 8000, 32768, 554, 26, 1433, 49152, 2001, 515, 8008, 49154, 1027, 5666,
@@ -53,10 +57,20 @@ fn top_ports_list() -> Vec<u16> {
         1181, 1182, 1183, 1184, 1185, 1186, 1187, 1188, 1189, 1190, 1191, 1192, 1193, 1194, 1195,
         1196, 1197, 1198, 1199, 1200,
     ];
-    while ports.len() < DEFAULT_TOP_PORTS {
-        ports.push((ports.len() + 1) as u16);
+    let mut seen = HashSet::new();
+    let mut ports = Vec::with_capacity(1100);
+    for p in prevalence_head {
+        if seen.insert(p) {
+            ports.push(p);
+        }
     }
-    ports.truncate(DEFAULT_TOP_PORTS);
+    // Fill the tail with any IANA well-known ports (1..=1023) not already in the
+    // prevalence head — all real assignments, ascending, never synthetic filler.
+    for p in 1u16..=1023 {
+        if seen.insert(p) {
+            ports.push(p);
+        }
+    }
     ports
 }
 
@@ -201,6 +215,56 @@ fn from_meta_generator(html: &str) -> Vec<String> {
     out
 }
 
+/// A single detected technology, with its version preserved when the server advertised one
+/// (`nginx/1.18.0` -> name `nginx`, version `1.18.0`) so CVE/EPSS correlation stays precise.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TechInfo {
+    pub name: String,
+    pub version: Option<String>,
+}
+
+/// Structured outcome of a tech-fingerprint attempt. The legacy `Vec<String>` API collapsed a
+/// dead host, a WAF/rate-limit block, and a reachable-but-unrecognised stack all into an empty
+/// vec; this distinguishes them so callers can behave differently for each.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TechScanOutcome {
+    /// Reachable and at least one technology recognised.
+    Detected {
+        techs: Vec<TechInfo>,
+        confidence: u8,
+    },
+    /// Reachable, but the response looks like a WAF / rate-limit block (403/429/503).
+    Blocked { status: u16 },
+    /// Transport failure — DNS / connect / TLS / timeout. Host may be down or filtering.
+    Unreachable { reason: String },
+    /// Reachable, but no technology signal was found (unknown stack).
+    Unknown,
+}
+
+/// Parse a `Server`-style header into a name (+ version when present), preserving the version
+/// that `normalize_tech` would otherwise discard.
+fn tech_info_from_server(value: &str) -> Option<TechInfo> {
+    let v = value.trim();
+    if v.is_empty() {
+        return None;
+    }
+    let mut parts = v.splitn(2, '/');
+    let name = parts.next()?.trim().to_lowercase();
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    let version = parts
+        .next()
+        .and_then(|rest| rest.trim().split_whitespace().next())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty());
+    Some(TechInfo { name, version })
+}
+
 /// Scheme for a given port (https for 443, 8443, 9443, 10443; else http).
 fn scheme_for_port(port: u16) -> &'static str {
     if matches!(port, 443 | 8443 | 9443 | 10443) {
@@ -215,14 +279,36 @@ pub async fn scan_target_tech(url: &str) -> Vec<String> {
     scan_target_tech_with_stealth(url, None).await
 }
 
-/// With optional stealth config (used by ASM when Ghost Network is enabled).
+/// Back-compat wrapper over [`scan_target_tech_outcome_with_stealth`]: returns the sorted,
+/// de-duplicated, version-stripped tech names for a `Detected` outcome, and an empty vec for
+/// blocked / unreachable / unknown (identical behaviour to the previous implementation).
 pub async fn scan_target_tech_with_stealth(
     url: &str,
     stealth: Option<&crate::stealth_engine::StealthConfig>,
 ) -> Vec<String> {
+    match scan_target_tech_outcome_with_stealth(url, stealth).await {
+        TechScanOutcome::Detected { techs, .. } => {
+            let mut out: Vec<String> = techs.into_iter().map(|t| t.name).collect();
+            out.sort();
+            out.dedup();
+            out
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Structured tech fingerprint: distinguishes `Detected` / `Blocked` / `Unreachable` /
+/// `Unknown` and preserves versions, instead of collapsing every non-detection into an empty
+/// vec. This is the unknown-aware path; the `Vec<String>` wrappers above stay for back-compat.
+pub async fn scan_target_tech_outcome_with_stealth(
+    url: &str,
+    stealth: Option<&crate::stealth_engine::StealthConfig>,
+) -> TechScanOutcome {
     let url = url.trim();
     if url.is_empty() {
-        return Vec::new();
+        return TechScanOutcome::Unreachable {
+            reason: "empty target".to_string(),
+        };
     }
 
     let full_url = if url.starts_with("http://") || url.starts_with("https://") {
@@ -233,12 +319,16 @@ pub async fn scan_target_tech_with_stealth(
 
     let client = match stealth {
         Some(s) => {
-            crate::stealth_engine::apply_jitter(s);
+            crate::stealth_engine::apply_jitter(s).await;
             crate::stealth_engine::build_client(s, REQUEST_TIMEOUT_SECS)
         }
         None => match build_client() {
             Ok(c) => c,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                return TechScanOutcome::Unreachable {
+                    reason: format!("client build failed: {e}"),
+                }
+            }
         },
     };
 
@@ -248,36 +338,66 @@ pub async fn scan_target_tech_with_stealth(
     }
     let response = match req.send().await {
         Ok(r) => r,
-        Err(_) => return Vec::new(),
+        Err(e) => {
+            return TechScanOutcome::Unreachable {
+                reason: e.to_string(),
+            }
+        }
     };
 
-    let mut techs: HashSet<String> = HashSet::new();
+    let status = response.status().as_u16();
+
+    let mut techs: Vec<TechInfo> = Vec::new();
+    let mut sources = 0u8;
 
     if let Some(v) = response.headers().get("server") {
         if let Ok(s) = v.to_str() {
-            if let Some(t) = from_server_header(s) {
-                techs.insert(t);
+            if let Some(t) = tech_info_from_server(s) {
+                sources += 1;
+                techs.push(t);
             }
         }
     }
 
     if let Some(v) = response.headers().get("x-powered-by") {
         if let Ok(s) = v.to_str() {
-            if let Some(t) = from_x_powered_by(s) {
-                techs.insert(t);
+            if let Some(name) = from_x_powered_by(s) {
+                sources += 1;
+                techs.push(TechInfo {
+                    name,
+                    version: None,
+                });
             }
         }
     }
 
     if let Ok(body) = response.text().await {
-        for t in from_meta_generator(&body) {
-            techs.insert(t);
+        let metas = from_meta_generator(&body);
+        if !metas.is_empty() {
+            sources += 1;
+        }
+        for name in metas {
+            techs.push(TechInfo {
+                name,
+                version: None,
+            });
         }
     }
 
-    let mut out: Vec<String> = techs.into_iter().collect();
-    out.sort();
-    out
+    if techs.is_empty() {
+        // Reachable but no origin signal. A 403/429/503 with nothing to show is a block;
+        // anything else is simply an unknown stack. A block that still leaked a tech (e.g.
+        // `server: cloudflare`) falls through to Detected, preserving the old Vec behaviour.
+        if matches!(status, 403 | 429 | 503) {
+            return TechScanOutcome::Blocked { status };
+        }
+        return TechScanOutcome::Unknown;
+    }
+
+    // Confidence: more independent signal sources + any explicit version => higher.
+    let has_version = techs.iter().any(|t| t.version.is_some());
+    let confidence = (u32::from(sources) * 30 + if has_version { 15 } else { 0 }).min(100) as u8;
+    TechScanOutcome::Detected { techs, confidence }
 }
 
 /// Scans multiple URLs concurrently and returns a map: url -> list of detected techs.
@@ -465,6 +585,50 @@ mod tests {
         assert!(p.contains(&443));
         let p1000 = get_top_ports(1000);
         assert_eq!(p1000.len(), 1000);
+    }
+
+    #[test]
+    fn test_top_ports_no_duplicates_and_real() {
+        let all = top_ports_list();
+        // No synthetic filler / duplicates: unique count == length.
+        let unique: HashSet<u16> = all.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            all.len(),
+            "top_ports_list must not contain duplicate ports"
+        );
+        // Enough genuine ports to back the advertised top-1000 scan.
+        assert!(
+            all.len() >= 1000,
+            "expected >= 1000 real ports, got {}",
+            all.len()
+        );
+        // Known high-value service ports must be present (dropped by the old filler bug
+        // whenever they fell outside the truncated window or were shadowed by dupes).
+        for p in [80u16, 443, 22, 3389, 8080, 53, 3306, 5432] {
+            assert!(all.contains(&p), "missing well-known port {p}");
+        }
+        // Port 0 is reserved and must never be scanned.
+        assert!(!all.contains(&0), "port 0 must not appear");
+        // The fast-scan default still returns the standard web ports.
+        assert_eq!(get_top_ports(3), vec![80, 443, 8080]);
+    }
+
+    #[test]
+    fn test_tech_info_preserves_version() {
+        let t = tech_info_from_server("nginx/1.18.0").unwrap();
+        assert_eq!(t.name, "nginx");
+        assert_eq!(t.version.as_deref(), Some("1.18.0"));
+        // No version advertised.
+        let t2 = tech_info_from_server("cloudflare").unwrap();
+        assert_eq!(t2.name, "cloudflare");
+        assert_eq!(t2.version, None);
+        // Version followed by a comment token — only the version is kept.
+        let t3 = tech_info_from_server("Apache/2.4.41 (Ubuntu)").unwrap();
+        assert_eq!(t3.name, "apache");
+        assert_eq!(t3.version.as_deref(), Some("2.4.41"));
+        // Empty / garbage product rejected.
+        assert!(tech_info_from_server("   ").is_none());
     }
 
     #[test]

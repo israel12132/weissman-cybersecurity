@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch, apiUrl } from '../lib/apiBase'
+import { useApiQuery } from '../hooks/useApiQuery'
 
 function timeAgo(iso, t) {
   if (!iso) return t('agents.never_seen')
@@ -49,7 +50,11 @@ export default function AgentManagement() {
   const [agents, setAgents] = useState([])
   const [fleetBusy, setFleetBusy] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [clients, setClients] = useState([])
+  // Server-state via the shared TanStack Query hook (dedup + cache + retry) instead of a
+  // hand-rolled useEffect fetch — reference for migrating the other dashboards.
+  const { data: clients = [] } = useApiQuery(['clients'], '/api/clients', {
+    transform: (d) => (Array.isArray(d) ? d : []),
+  })
   const [tokenClient, setTokenClient] = useState('')
   const [tokenValidity, setTokenValidity] = useState(60)
   const [generatedToken, setGeneratedToken] = useState(null)
@@ -82,10 +87,6 @@ export default function AgentManagement() {
 
   useEffect(() => {
     refresh()
-    apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch(() => {})
   }, [refresh])
 
   useEffect(() => {

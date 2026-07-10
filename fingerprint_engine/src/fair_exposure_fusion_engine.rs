@@ -28,10 +28,7 @@ fn exposure_grade_from_findings(findings: &[Value]) -> Option<&str> {
     })
 }
 
-pub async fn run_fair_exposure_fusion_result(
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
+pub async fn run_fair_exposure_fusion_result(target: &str, ctx: &EngineRunContext) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
@@ -42,10 +39,9 @@ pub async fn run_fair_exposure_fusion_result(
     let mut merged = Vec::new();
 
     if include_exposure {
-        let exposure = crate::external_exposure_supreme::run_external_exposure_supreme_result(
-            target, ctx,
-        )
-        .await;
+        let exposure =
+            crate::external_exposure_supreme::run_external_exposure_supreme_result(target, ctx)
+                .await;
         if exposure.success {
             for mut f in exposure.findings {
                 if let Some(obj) = f.as_object_mut() {
@@ -80,7 +76,10 @@ pub async fn run_fair_exposure_fusion_result(
                 if merged.is_empty() {
                     return empty_ok(ENGINE_ID, target);
                 }
-                return EngineResult::ok(merged, format!("{ENGINE_ID}: partial fusion (no client)"));
+                return EngineResult::ok(
+                    merged,
+                    format!("{ENGINE_ID}: partial fusion (no client)"),
+                );
             }
         };
 
@@ -179,10 +178,7 @@ pub async fn run_fair_exposure_fusion_result(
     let count = merged.len();
     EngineResult::ok(
         merged,
-        format!(
-            "{ENGINE_ID}: {} finding(s), exposure grade {grade}",
-            count,
-        ),
+        format!("{ENGINE_ID}: {} finding(s), exposure grade {grade}", count,),
     )
 }
 

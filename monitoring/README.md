@@ -1,157 +1,122 @@
-# Weissman Cybersecurity - Monitoring & Metrics
+# Weissman Cybersecurity — Monitoring & Observability
 
-Prometheus-based monitoring system for production observability.
+Prometheus + Alertmanager + Grafana stack for production observability. The metrics are
+emitted by the Rust backend (`fingerprint_engine/src/observability.rs`), **not** by any
+Python process — earlier revisions of this file documented a Python `src.metrics`
+integration that no longer exists.
 
-## Quick Start
+## Metrics endpoint
 
-### Enable Metrics
-
-```bash
-export METRICS_ENABLED=true
-export METRICS_PORT=9090
-```
-
-### Access Metrics Endpoint
+`weissman-server` exposes Prometheus metrics at **`/api/metrics` on the API port (8000 in
+`docker-compose.yml`)** — not on `:9090` and not at `/metrics`. The endpoint requires a
+Bearer token and returns `401` without one, so it is safe to expose alongside the API.
 
 ```bash
-curl http://localhost:9090/metrics
+# 401 without a token (expected):
+curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8000/api/metrics
+
+# With the scrape token:
+curl -sS -H "Authorization: Bearer $(cat metrics_token)" http://localhost:8000/api/metrics | head
 ```
 
-## Available Metrics
+Prometheus scrapes it with a `credentials_file` (see `monitoring/prometheus.yml`,
+job `weissman-backend`).
 
-### Request Metrics
-- `weissman_requests_total{endpoint, method, status}` - Total requests by endpoint
-- `weissman_request_duration_seconds{endpoint}` - Request latency histogram
+## Available metrics (real names)
 
-### Rate Limiting
-- `weissman_rate_limit_violations_total{identity, key_prefix}` - Rate limit violations by tenant/IP
+### HTTP / request
+- `http_requests_total{endpoint, method, status}` — request counter (5xx = `status=~"5.."`).
+- `http_request_duration_seconds_bucket{endpoint, le}` — latency histogram (use
+  `histogram_quantile(0.99, …)` for P99).
 
-### Caching
-- `weissman_cache_operations_total{cache_key, operation}` - Cache hits/misses by feed
+### Database & runtime
+- `weissman_db_pool_size`, `weissman_db_pool_idle` — connection-pool gauges.
+- `weissman_async_task_panic_total`, `weissman_panic_circuit_open_total` — panic isolation.
 
-### Scanning
-- `weissman_scan_duration_seconds{scan_type}` - Scan execution time histogram
-- `weissman_active_scans` - Currently running scans (gauge)
+### Engines & scanning
+- `weissman_engine_*` — per-engine execution counters/telemetry.
+- `weissman_engine_waf_block_total` — engine attempts classified as WAF/rate-limit blocked
+  (drives adaptive retry escalation).
 
-### Errors
-- `weissman_errors_total{error_type}` - Errors by exception type
+### SOAR / closed-loop verification
+- `weissman_soar_verify_leader` — 1 when this pod holds the verify leader lock.
+- `weissman_soar_verify_cycles_total{outcome}` — verification cycle outcomes.
 
-## Grafana Dashboard
+### Agent fleet
+- `weissman_agents_registered`, `weissman_agents_online`, `weissman_agents_stale`.
 
-Import the provided dashboard from `monitoring/grafana-dashboard.json`:
+### Deception / active defense
+- `weissman_deception_hit_total` — OAST/canary trap interactions (drives the
+  trap-hit → targeted re-scan feedback loop).
 
-### Key Panels
-1. **Request Rate** - Requests per second by endpoint
-2. **Error Rate** - Error percentage over time
-3. **Cache Hit Rate** - Feed cache effectiveness
-4. **Rate Limit Violations** - Abuse patterns
-5. **Scan Performance** - P50/P95/P99 latencies
+### Backup / DR
+- `weissman_backup_last_success_unix_timestamp` — last successful backup (and restore-verify).
 
-## Alerting Rules
+> The Rust process is the source of truth. To confirm a metric exists before writing a
+> dashboard/alert query, grep the live scrape output rather than this list.
 
-### Critical Alerts
-- High error rate (>5% for 5 minutes)
-- Rate limit violations spike (>100/minute)
-- Scan duration P99 > 5 minutes
+## Alert rules
 
-### Warning Alerts
-- Cache hit rate < 60%
-- Active scans > 50 concurrent
+Loaded by Prometheus via the glob `rule_files: /etc/prometheus/alerts/*.yml`:
 
-## Integration Examples
+- `monitoring/alerts/application-alerts.yml` — error rate, P99 latency, DB pool, backend/
+  worker down, SOAR, agent-fleet staleness.
+- `monitoring/alerts/slo-recording-rules.yml` — 99.9% availability SLO recording rules +
+  multi-window multi-burn-rate alerts (`SLOErrorBudgetBurn{Fast,Medium,Slow,Trickle}`) and
+  the always-firing **`Watchdog`** dead-man's switch.
 
-### Python Code
+Validate locally:
 
-```python
-from src.metrics import track_request, track_scan_duration
-
-# Track API endpoint
-with track_request("api_scan", "POST"):
-    # ... scan logic
-    pass
-
-# Track scan execution
-with track_scan_duration("xss"):
-    run_xss_scan(target)
-```
-
-### Prometheus Configuration
-
-```yaml
-# prometheus.yml
-scrape_configs:
-  - job_name: 'weissman'
-    static_configs:
-      - targets: ['localhost:9090']
-    scrape_interval: 15s
-```
-
-### Docker Compose
-
-```yaml
-services:
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-```
-
-## Performance Impact
-
-- Metrics collection: < 1ms per operation
-- Memory overhead: ~10MB for metric storage
-- No impact when METRICS_ENABLED=false
-
-## Troubleshooting
-
-### Metrics Not Appearing
-
-1. Check if metrics are enabled:
 ```bash
-curl http://localhost:9090/metrics | grep weissman
+promtool check rules monitoring/alerts/*.yml
+amtool check-config monitoring/alertmanager.yml
 ```
 
-2. Verify prometheus_client is installed:
+## Alertmanager routing
+
+`monitoring/alertmanager.yml`:
+- `critical-alerts` → Slack `#security-alerts` **and PagerDuty** (`PAGERDUTY_ROUTING_KEY`).
+- `warning-alerts` → Slack `#security-warnings`.
+- `watchdog-heartbeat` → external heartbeat monitor (`WATCHDOG_HEARTBEAT_URL`) — its
+  **absence** is the alarm (dead-man's switch).
+
+Secrets are injected at deploy time via envsubst: `SLACK_WEBHOOK_URL`,
+`PAGERDUTY_ROUTING_KEY`, `WATCHDOG_HEARTBEAT_URL`.
+
+## Grafana dashboards
+
+Provisioned from `monitoring/grafana/dashboards/`:
+- `platform-overview.json` — request rate, error rate, latency, DB pool.
+- `agent-fleet-health.json` — registered/online/stale agents.
+- `soar-verification.json` — SOAR closed-loop verification health.
+
+## Optional exporters
+
+`monitoring/prometheus.yml` keeps the `redis` / `postgres` / `node` exporter scrape jobs
+**commented out on purpose** — enabling them without first deploying the matching exporter
+services (`redis-exporter`, `pg-exporter`, `node-exporter`) produces perpetually-"down"
+targets and noisy `TargetDown` alerts. Deploy the exporters first, then uncomment.
+
+## Distributed tracing (OpenTelemetry)
+
+The server and worker export OTLP spans when `WEISSMAN_OTLP_ENDPOINT` is set
+(`fingerprint_engine/src/observability.rs::build_otel_layer`). Each component labels its
+spans via `WEISSMAN_SERVICE_NAME` (e.g. `weissman-server` / `weissman-worker`) plus
+`service.version` and `deployment.environment` (`WEISSMAN_ENV`).
+
+Bring up the Tempo backend and point the apps at it:
+
 ```bash
-pip list | grep prometheus
+docker compose --profile monitoring --profile tracing up -d tempo
+# on backend + worker:
+export WEISSMAN_OTLP_ENDPOINT=http://tempo:4318/v1/traces
+export WEISSMAN_SERVICE_NAME=weissman-server   # or weissman-worker
 ```
 
-3. Check logs:
-```bash
-grep "metrics:" /var/log/weissman.log
-```
+Traces are queryable in Grafana via the provisioned **Tempo** datasource. Leave
+`WEISSMAN_OTLP_ENDPOINT` unset to run logs-only (no tracing overhead).
 
-### Port Already in Use
+## Further reading
 
-Change the metrics port:
-```bash
-export METRICS_PORT=9091
-```
-
-## Security Considerations
-
-- Metrics endpoint should NOT be publicly accessible
-- Use firewall rules to restrict access to monitoring systems
-- Consider basic auth for production:
-
-```python
-# Add authentication middleware
-from prometheus_client import make_wsgi_app
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.security import check_password_hash
-```
-
-## Further Reading
-
-- [Prometheus Documentation](https://prometheus.io/docs/)
-- [Grafana Tutorials](https://grafana.com/tutorials/)
-- [Python Client Library](https://github.com/prometheus/client_python)
+- [Prometheus](https://prometheus.io/docs/) · [Alertmanager](https://prometheus.io/docs/alerting/latest/configuration/) · [Grafana](https://grafana.com/docs/)
+- SLO objective: `SLA_AND_STATUS.md`

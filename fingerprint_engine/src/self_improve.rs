@@ -95,7 +95,9 @@ pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> bool {
     .flatten();
     let _ = tx.commit().await;
     matches!(
-        val.as_deref().map(|s| s.trim().to_ascii_lowercase()).as_deref(),
+        val.as_deref()
+            .map(|s| s.trim().to_ascii_lowercase())
+            .as_deref(),
         Some("1") | Some("true") | Some("yes") | Some("on")
     )
 }
@@ -452,7 +454,13 @@ async fn gather_signals(pool: &PgPool, tenant_id: i64) -> Vec<(String, i64)> {
 /// Deterministic proposals derived purely from live signals (no LLM needed).
 fn deterministic_proposals(signals: &[(String, i64)]) -> Vec<ImprovementProposal> {
     let mut out = Vec::new();
-    let get = |k: &str| signals.iter().find(|(n, _)| n == k).map(|(_, v)| *v).unwrap_or(0);
+    let get = |k: &str| {
+        signals
+            .iter()
+            .find(|(n, _)| n == k)
+            .map(|(_, v)| *v)
+            .unwrap_or(0)
+    };
 
     if get("dead_jobs") > 0 {
         out.push(ImprovementProposal {
@@ -632,12 +640,11 @@ pub fn spawn_self_improve_loop(app_pool: Arc<PgPool>, telemetry: Arc<Sender<Stri
         loop {
             tick.tick().await;
             // Run for every active tenant that has the toggle on.
-            let tenants: Vec<i64> = sqlx::query_scalar(
-                "SELECT id FROM tenants WHERE active = true ORDER BY id",
-            )
-            .fetch_all(app_pool.as_ref())
-            .await
-            .unwrap_or_default();
+            let tenants: Vec<i64> =
+                sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
+                    .fetch_all(app_pool.as_ref())
+                    .await
+                    .unwrap_or_default();
             for tenant_id in tenants {
                 if !is_enabled(app_pool.as_ref(), tenant_id).await {
                     continue;
