@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ChevronRight, Search } from 'lucide-react'
 import AppSidebar from './AppSidebar'
 import ProfileMenu from '../ui/ProfileMenu'
-import GlobalSearch, { openCommandPalette } from '../GlobalSearch'
+import { openCommandPalette } from '../GlobalSearch'
 import RateLimitStatus from '../RateLimitStatus'
 import NotificationBell from './NotificationBell'
 import ScanStatusIndicator from './ScanStatusIndicator'
@@ -158,7 +158,6 @@ export default function AppShell({
           {children}
         </main>
       </div>
-      <GlobalSearch />
     </div>
   )
 }

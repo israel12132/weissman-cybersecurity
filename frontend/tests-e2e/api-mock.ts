@@ -7,6 +7,15 @@ const MOCK_CLIENT = {
   domains_json: '["https://example.com"]',
 }
 
+// Sample findings so the Findings console renders real rows for driving the
+// selection / bulk-status / saved-views / URL-filter / density features in-browser.
+const MOCK_FINDINGS = [
+  { id: 101, raw_id: 101, severity: 'critical', status: 'OPEN', title: 'SQL Injection in /login', type: 'sqli', description: 'Blind SQL injection on username', source: 'sqli_advanced', engine: 'sqli_advanced', target: 'https://example.com/login', cvss_score: 9.1, priority_score: 95, compliance: ['PCI-DSS 6.5.1'] },
+  { id: 102, raw_id: 102, severity: 'high', status: 'OPEN', title: 'Reflected XSS in search', type: 'xss', description: 'Reflected XSS via q parameter', source: 'xss_engine', engine: 'xss_engine', target: 'https://example.com/search', cvss_score: 7.4 },
+  { id: 103, raw_id: 103, severity: 'medium', status: 'FIXED', title: 'Missing HSTS header', type: 'header', description: 'No Strict-Transport-Security header', source: 'pki_tls', engine: 'pki_tls', target: 'https://example.com', cvss_score: 4.2 },
+  { id: 104, raw_id: 104, severity: 'critical', status: 'OPEN', title: 'Exposed S3 bucket', type: 'cloud', description: 'Publicly readable bucket', source: 'aws_attack', engine: 'aws_attack', target: 's3://example-public', cvss_score: 9.8, kev_listed: true },
+]
+
 function fulfillJson(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
@@ -88,6 +97,27 @@ export async function installCommandCenterApiMocks(page: Page): Promise<void> {
 
     if (/^\/api\/clients\/\d+\/findings$/.test(path) && method === 'GET') {
       return fulfillJson(route, { findings: [] })
+    }
+
+    // Findings console (FindingsCommandCenter / VulnIntelDashboard)
+    if (path === '/api/findings' && method === 'GET') {
+      return fulfillJson(route, MOCK_FINDINGS)
+    }
+    if (/^\/api\/findings\/\d+\/status$/.test(path) && method === 'PATCH') {
+      const body = (() => { try { return req.postDataJSON() } catch { return {} } })()
+      return fulfillJson(route, { ok: true, status: body?.status || 'OPEN' })
+    }
+    if (/^\/api\/findings\/\d+\/verify$/.test(path) && method === 'POST') {
+      return fulfillJson(route, { ok: true, verdict: 'confirmed' })
+    }
+    if (path === '/api/findings/export/csv' && method === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'text/csv', headers: { 'content-disposition': 'attachment; filename="findings.csv"' }, body: 'id,title\n101,SQLi\n' })
+    }
+    if (path === '/api/config/public' && method === 'GET') {
+      return fulfillJson(route, { region: 'us-e2e' })
+    }
+    if (path.startsWith('/api/search') && method === 'GET') {
+      return fulfillJson(route, { results: [{ type: 'finding', id: 101, title: 'SQL Injection in /login', path: '/findings', icon: '🔎' }] })
     }
 
     if (/^\/api\/clients\/\d+\/risk-graph$/.test(path) && method === 'GET') {

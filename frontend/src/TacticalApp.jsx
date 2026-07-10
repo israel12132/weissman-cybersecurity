@@ -11,6 +11,7 @@ import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { ToastProvider } from './components/ui/Toaster'
 import RateLimitProvider from './components/RateLimitProvider'
 import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
+import GlobalSearch from './components/GlobalSearch'
 import SkipToContent from './components/ui/SkipToContent'
 import NotFound from './components/ui/NotFound'
 import RouteLoader from './components/ui/RouteLoader'
@@ -150,6 +151,9 @@ function ProtectedOutlet() {
   return (
     <ProtectedProviders>
       <ChainPredictor />
+      {/* Single global command palette — available on every protected page
+          (⌘K / header button), not just the ones that render AppShell. */}
+      <GlobalSearch />
       <RouteErrorBoundary key={location.pathname}>
         <React.Suspense fallback={<RouteLoader />}>
           <Outlet />

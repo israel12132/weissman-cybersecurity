@@ -6,7 +6,6 @@ import TargetScopePanel from './components/cockpit/TargetScopePanel'
 import ToastContainer from './components/cockpit/Toast'
 import ExecKpiStrip from './components/cockpit/ExecKpiStrip'
 import OnboardingWizard from './components/onboarding/OnboardingWizard'
-import GlobalSearch from './components/GlobalSearch'
 import EvidenceNotice from './components/ui/EvidenceNotice'
 
 function CockpitEvidenceStrip() {
@@ -68,7 +67,6 @@ function CockpitLayout({ ceoIntegrated }) {
             </div>
           </div>
           <ToastContainer />
-          <GlobalSearch />
           <OnboardingWizard open={showOnboarding} onComplete={handleOnboardingComplete} />
     </>
   )
