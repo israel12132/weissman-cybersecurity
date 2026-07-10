@@ -9,13 +9,28 @@ import {
   getExpandedRowModel,
   flexRender,
 } from '@tanstack/react-table'
-import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, Download, Columns3, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, Download, Columns3, Rows2, Rows3, X } from 'lucide-react'
 import EmptyState from './EmptyState'
 import { SkeletonTable } from './Skeleton'
 
 const MAX_VISIBLE_PAGES = 7
 const DEFAULT_PAGE_SIZES = [25, 50, 100]
 const PAGE_SIZE_KEY = 'weissman_table_page_size'
+const DENSITY_KEY = 'weissman_table_density'
+const DENSITY_EVENT = 'weissman:table-density'
+
+/** Global row-density preference (comfortable | compact), synced across tables. */
+function readDensity() {
+  try {
+    return localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfortable'
+  } catch {
+    return 'comfortable'
+  }
+}
+function writeDensity(next) {
+  try { localStorage.setItem(DENSITY_KEY, next) } catch { /* storage may be unavailable */ }
+  try { document.dispatchEvent(new CustomEvent(DENSITY_EVENT)) } catch { /* no-op */ }
+}
 
 /** Case-insensitive substring match across every cell value of a row. */
 function fuzzyGlobalFilter(row, _columnId, value) {
@@ -110,6 +125,7 @@ export default function DataTable({
   exportable = false,
   exportFilename = 'weissman-export',
   columnToggle = false,
+  densityToggle = false,
   toolbarTitle,
   // Hide the built-in pagination bar and render every filtered row (the parent
   // owns paging — e.g. server-side limit/offset over a large ledger).
@@ -159,6 +175,15 @@ export default function DataTable({
   const [columnVisibility, setColumnVisibility] = useState({})
   const [colMenuOpen, setColMenuOpen] = useState(false)
   const colMenuRef = useRef(null)
+
+  // Global row density (comfortable | compact), re-synced when any table toggles it.
+  const [density, setDensity] = useState(readDensity)
+  useEffect(() => {
+    const onChange = () => setDensity(readDensity())
+    document.addEventListener(DENSITY_EVENT, onChange)
+    return () => document.removeEventListener(DENSITY_EVENT, onChange)
+  }, [])
+  const cellPad = density === 'compact' ? 'px-3 py-1.5' : 'px-4 py-3'
 
   // Close the column-visibility menu on outside click / Escape.
   useEffect(() => {
@@ -294,7 +319,7 @@ export default function DataTable({
     setRowSelection({})
   }, [selectionResetSignal])
 
-  const hasToolbar = searchable || exportable || columnToggle || toolbarTitle
+  const hasToolbar = searchable || exportable || columnToggle || densityToggle || toolbarTitle
 
   const handleExport = () => {
     const csv = tableToCsv(table)
@@ -358,6 +383,20 @@ export default function DataTable({
                 className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
             </div>
+          )}
+          {densityToggle && (
+            <button
+              type="button"
+              onClick={() => writeDensity(density === 'compact' ? 'comfortable' : 'compact')}
+              aria-pressed={density === 'compact'}
+              aria-label={density === 'compact' ? 'Switch to comfortable rows' : 'Switch to compact rows'}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
+            >
+              {density === 'compact'
+                ? <Rows3 className="w-3.5 h-3.5" aria-hidden />
+                : <Rows2 className="w-3.5 h-3.5" aria-hidden />}
+              <span aria-hidden="true">{density === 'compact' ? 'Compact' : 'Cozy'}</span>
+            </button>
           )}
           {columnToggle && (
             <div className="relative" ref={colMenuRef}>
@@ -432,7 +471,7 @@ export default function DataTable({
                     key={header.id}
                     aria-sort={ariaSort}
                     style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
-                    className={`px-4 py-3 text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] select-none whitespace-nowrap ${
+                    className={`${cellPad} text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] select-none whitespace-nowrap ${
                       stickyHeader ? '' : 'relative'
                     }`}
                   >
@@ -492,7 +531,7 @@ export default function DataTable({
                 .join(' ')
 
               const cells = row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-4 py-3 align-middle">
+                <td key={cell.id} className={`${cellPad} align-middle`}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))

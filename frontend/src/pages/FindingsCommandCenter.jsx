@@ -945,6 +945,7 @@ export default function FindingsCommandCenter() {
             selectionResetSignal={selectionResetSignal}
             selectLabel={t('findings.select_row')}
             selectAllLabel={t('findings.select_all')}
+            densityToggle
             getRowAccentColor={(row) => getSeverityMeta(row.severity).border ?? getSeverityMeta(row.severity).color}
             emptyFilteredMessage={t('findings.no_filter_match')}
             zebra

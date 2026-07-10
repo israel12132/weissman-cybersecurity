@@ -142,6 +142,21 @@ describe('DataTable expandable sub-rows', () => {
     expect(container.querySelectorAll('input[type="checkbox"]').length).toBe(0)
   })
 
+  it('densityToggle flips row padding and persists', () => {
+    try { localStorage.removeItem('weissman_table_density') } catch { /* ignore */ }
+    const { container, getByRole } = render(
+      <DataTable columns={columns} data={data} animateRows={false} densityToggle />,
+    )
+    // Comfortable by default → cells use py-3.
+    let firstCell = container.querySelector('tbody td')
+    expect(firstCell.className).toContain('py-3')
+    // Toggle → compact (py-1.5) and persisted.
+    fireEvent.click(getByRole('button', { name: /switch to compact rows/i }))
+    firstCell = container.querySelector('tbody td')
+    expect(firstCell.className).toContain('py-1.5')
+    expect(localStorage.getItem('weissman_table_density')).toBe('compact')
+  })
+
   it('detail row spans the full column count', () => {
     const { container } = render(
       <DataTable
