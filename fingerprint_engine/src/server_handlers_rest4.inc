@@ -1884,6 +1884,155 @@ async fn api_heal_revert(
     }
 }
 
+/// `POST /api/clients/:id/heal-batch` — enqueue verified auto-heals for many findings at once
+/// (e.g. a whole remediation family). Operator + destructive dual-authorization required. Findings
+/// without a generated patch are skipped. Bounded to 50 findings per call.
+async fn api_heal_batch(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<HealBatchBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        return r;
+    }
+    let token = body.git_token.as_deref().unwrap_or("").trim();
+    let repo = body.repo_slug.as_deref().unwrap_or("").trim();
+    if token.is_empty() || repo.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "git_token and repo_slug required"}))).into_response();
+    }
+    if let Err(detail) = crate::security_hardening::validate_github_repo_slug(repo) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid repo_slug", "detail": detail}))).into_response();
+    }
+    let base = body.base_branch.as_deref().unwrap_or("main");
+    if let Err(detail) = crate::security_hardening::validate_git_branch_name(base) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid base_branch", "detail": detail}))).into_response();
+    }
+    let channel = crate::heal_channels::DeliveryChannel::from_id(body.channel.as_deref().unwrap_or("github_pr")).id();
+    let health = body.health_check_curl.as_deref().unwrap_or("");
+
+    // Dedup + cap the requested findings.
+    let mut seen = std::collections::HashSet::new();
+    let ids: Vec<String> = body
+        .finding_ids
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && seen.insert(s.clone()))
+        .take(50)
+        .collect();
+
+    let mut results: Vec<Value> = Vec::new();
+    let mut enqueued = 0i64;
+    let mut skipped = 0i64;
+    for fid in ids {
+        if crate::security_hardening::validate_finding_id_token(&fid).is_err() {
+            results.push(json!({"finding_id": fid, "status": "invalid_finding_id"}));
+            skipped += 1;
+            continue;
+        }
+        let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+            results.push(json!({"finding_id": fid, "status": "db_error"}));
+            skipped += 1;
+            continue;
+        };
+        let row = sqlx::query(
+            "SELECT id, COALESCE(generated_patch,'') AS generated_patch, COALESCE(poc_exploit,'') AS poc_exploit FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+        )
+        .bind(id)
+        .bind(&fid)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        let Some(r) = row else {
+            let _ = tx.rollback().await;
+            results.push(json!({"finding_id": fid, "status": "not_found"}));
+            skipped += 1;
+            continue;
+        };
+        let vuln_id: i64 = r.try_get("id").unwrap_or(0);
+        let patch: String = r.try_get::<String, _>("generated_patch").unwrap_or_default();
+        let poc: String = r.try_get::<String, _>("poc_exploit").unwrap_or_default();
+        if patch.trim().is_empty() || crate::security_hardening::validate_remediation_patch(&patch).is_err() {
+            let _ = tx.rollback().await;
+            results.push(json!({"finding_id": fid, "status": "no_valid_patch"}));
+            skipped += 1;
+            continue;
+        }
+        let spec_id = uuid::Uuid::new_v4();
+        let ins = sqlx::query(
+            r#"INSERT INTO auto_heal_job_specs (
+                id, tenant_id, user_id, client_id, vuln_id, finding_id,
+                git_token, repo_slug, base_branch, patch_text, poc_curl, channel, health_check_curl, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending')"#,
+        )
+        .bind(spec_id)
+        .bind(auth.tenant_id)
+        .bind(auth.user_id)
+        .bind(id)
+        .bind(vuln_id)
+        .bind(&fid)
+        .bind(token)
+        .bind(repo)
+        .bind(base)
+        .bind(&patch)
+        .bind(&poc)
+        .bind(channel)
+        .bind(health)
+        .execute(&mut *tx)
+        .await;
+        if ins.is_err() {
+            let _ = tx.rollback().await;
+            results.push(json!({"finding_id": fid, "status": "insert_failed"}));
+            skipped += 1;
+            continue;
+        }
+        let _ = tx.commit().await;
+        match db::job_queue::enqueue_with_max_attempts(
+            state.app_pool.as_ref(),
+            auth.tenant_id,
+            "auto_heal",
+            json!({ "spec_id": spec_id.to_string() }),
+            None,
+            5,
+        )
+        .await
+        {
+            Ok(_) => {
+                results.push(json!({"finding_id": fid, "status": "queued", "job_id": spec_id.to_string()}));
+                enqueued += 1;
+            }
+            Err(e) => {
+                results.push(json!({"finding_id": fid, "status": "enqueue_failed", "detail": e.to_string()}));
+                skipped += 1;
+            }
+        }
+    }
+
+    let ip = extract_client_ip(&headers, addr);
+    let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &actor,
+            "destructive_heal_batch",
+            &format!("client_id={} repo={} enqueued={} skipped={}", id, repo, enqueued, skipped),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    (StatusCode::ACCEPTED, Json(json!({"ok": true, "enqueued": enqueued, "skipped": skipped, "results": results}))).into_response()
+}
+
 async fn api_heal_requests_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

@@ -9,6 +9,8 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import RemediationDetail from '../components/remediation/RemediationDetail'
+import BatchHealPanel from '../components/remediation/BatchHealPanel'
+import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -115,6 +117,8 @@ export default function RemediationHub() {
   const [expanded, setExpanded] = useState({})
   const [selectedFinding, setSelectedFinding] = useState(null)
   const [healStats, setHealStats] = useState(null)
+  const [batchOpen, setBatchOpen] = useState(null)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -143,15 +147,23 @@ export default function RemediationHub() {
       ids.map((id) => apiFetch(`/api/clients/${id}/heal-stats`).then((r) => (r.ok ? r.json() : null)).catch(() => null)),
     ).then((list) => {
       if (cancelled) return
+      const channelMap = {}
       const agg = list.filter(Boolean).reduce(
-        (a, s) => ({
-          total: a.total + (s.total || 0),
-          fixed: a.fixed + (s.fixed || 0),
-          attested: a.attested + (s.attested || 0),
-          attemptsSum: a.attemptsSum + (s.avg_attempts || 1) * (s.total || 0),
-        }),
-        { total: 0, fixed: 0, attested: 0, attemptsSum: 0 },
+        (a, s) => {
+          for (const c of s.by_channel || []) channelMap[c.channel] = (channelMap[c.channel] || 0) + (c.count || 0)
+          return {
+            total: a.total + (s.total || 0),
+            fixed: a.fixed + (s.fixed || 0),
+            broke_app: a.broke_app + (s.broke_app || 0),
+            still_vulnerable: a.still_vulnerable + (s.still_vulnerable || 0),
+            attested: a.attested + (s.attested || 0),
+            attemptsSum: a.attemptsSum + (s.avg_attempts || 1) * (s.total || 0),
+            maxAttempts: Math.max(a.maxAttempts, s.max_attempts || 1),
+          }
+        },
+        { total: 0, fixed: 0, broke_app: 0, still_vulnerable: 0, attested: 0, attemptsSum: 0, maxAttempts: 1 },
       )
+      agg.by_channel = Object.entries(channelMap).map(([channel, count]) => ({ channel, count })).sort((x, y) => y.count - x.count)
       setHealStats(agg.total > 0 ? agg : null)
     })
     return () => { cancelled = true }
@@ -222,14 +234,24 @@ export default function RemediationHub() {
 
         {/* Auto-heal analytics strip */}
         {healStats && (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04]">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-300/80 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics', { defaultValue: 'Auto-heal' })}
-            </span>
-            <HealStat label={t('pages.remediationHub.heal_runs', { defaultValue: 'runs' })} value={healStats.total} />
-            <HealStat label={t('pages.remediationHub.heal_fix_rate', { defaultValue: 'fix rate' })} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
-            <HealStat label={t('pages.remediationHub.heal_avg_attempts', { defaultValue: 'avg attempts' })} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
-            <HealStat label={t('pages.remediationHub.heal_attested', { defaultValue: 'attested' })} value={healStats.attested} color="#34d399" />
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04]">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-300/80 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics', { defaultValue: 'Auto-heal' })}
+              </span>
+              <HealStat label={t('pages.remediationHub.heal_runs', { defaultValue: 'runs' })} value={healStats.total} />
+              <HealStat label={t('pages.remediationHub.heal_fix_rate', { defaultValue: 'fix rate' })} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
+              <HealStat label={t('pages.remediationHub.heal_avg_attempts', { defaultValue: 'avg attempts' })} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
+              <HealStat label={t('pages.remediationHub.heal_attested', { defaultValue: 'attested' })} value={healStats.attested} color="#34d399" />
+              <button
+                type="button"
+                onClick={() => setShowAnalytics((v) => !v)}
+                className="ml-auto text-[10px] font-mono px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
+              >
+                {showAnalytics ? t('pages.remediationHub.hide_analytics', { defaultValue: 'Hide analytics' }) : t('pages.remediationHub.show_analytics', { defaultValue: 'Analytics ▾' })}
+              </button>
+            </div>
+            {showAnalytics && <RemediationAnalyticsPanel stats={healStats} />}
           </div>
         )}
 
@@ -333,6 +355,22 @@ export default function RemediationHub() {
                   </div>
                   {isOpen && (
                     <div className="px-4 pb-4 pl-10 space-y-1.5">
+                      {w.items.some((f) => f.has_patch) && (
+                        <div className="pb-1">
+                          {batchOpen === w.id ? (
+                            <BatchHealPanel findings={w.items} onClose={() => setBatchOpen(null)} />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setBatchOpen(w.id)}
+                              className="text-[11px] px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-1.5"
+                            >
+                              <Wrench className="w-3 h-3" />
+                              {t('pages.remediationHub.batch_heal_open', { defaultValue: 'Heal all fixable ({{n}})', n: w.items.filter((f) => f.has_patch).length })}
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {w.items.slice(0, 50).map((f) => (
                         <div key={f.raw_id || f.finding_id} className="flex items-center justify-between gap-3 p-2 rounded-lg border border-white/5 bg-black/20">
                           <div className="min-w-0 flex items-center gap-2">

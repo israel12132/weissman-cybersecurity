@@ -1482,7 +1482,14 @@
       "revert": "Revert",
       "reverted": "reverted",
       "revert_hint": "Close the auto-opened PR/MR",
-      "heal_history": "Heal history"
+      "heal_history": "Heal history",
+      "batch_heal_open": "Heal all fixable ({{n}})",
+      "batch_heal_title": "Batch heal ({{n}})",
+      "batch_heal_go": "Heal all fixable ({{n}})",
+      "batch_result": "Queued {{enqueued}}, skipped {{skipped}}",
+      "show_analytics": "Analytics ▾",
+      "hide_analytics": "Hide analytics",
+      "heal_other": "Other"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",

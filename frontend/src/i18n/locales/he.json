@@ -1490,7 +1490,14 @@
       "revert": "בטל",
       "reverted": "בוטל",
       "revert_hint": "סגור את ה-PR/MR שנפתח אוטומטית",
-      "heal_history": "היסטוריית ריפוי"
+      "heal_history": "היסטוריית ריפוי",
+      "batch_heal_open": "רפא את כל הניתנים ({{n}})",
+      "batch_heal_title": "ריפוי אצווה ({{n}})",
+      "batch_heal_go": "רפא את כל הניתנים ({{n}})",
+      "batch_result": "בתור {{enqueued}}, דולגו {{skipped}}",
+      "show_analytics": "אנליטיקה ▾",
+      "hide_analytics": "הסתר אנליטיקה",
+      "heal_other": "אחר"
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",

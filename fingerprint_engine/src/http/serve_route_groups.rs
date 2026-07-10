@@ -474,6 +474,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/heal-stats", get(api_heal_stats))
         .route("/api/clients/:id/heal-revert", post(api_heal_revert))
+        .route("/api/clients/:id/heal-batch", post(api_heal_batch))
         .route("/api/clients/:id/deception", get(api_deception_list))
         .route(
             "/api/clients/:id/deception/generate",

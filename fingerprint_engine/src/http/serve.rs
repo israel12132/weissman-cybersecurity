@@ -1170,6 +1170,16 @@ struct HealRevertBody {
 }
 
 #[derive(Deserialize)]
+struct HealBatchBody {
+    finding_ids: Vec<String>,
+    git_token: Option<String>,
+    repo_slug: Option<String>,
+    base_branch: Option<String>,
+    channel: Option<String>,
+    health_check_curl: Option<String>,
+}
+
+#[derive(Deserialize)]
 #[allow(dead_code)]
 struct DeceptionGenerateBody {
     types: Option<Vec<String>>,
