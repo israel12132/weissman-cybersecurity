@@ -62,3 +62,7 @@ reports/
 
 # Company legal details (copy from deploy/company.details.example.json)
 deploy/company.details.json
+
+# Redis snapshot artifacts (written by a local/e2e redis-server into the CWD)
+dump.rdb
+*.rdb
