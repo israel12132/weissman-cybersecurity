@@ -13,6 +13,32 @@ spec:
       labels:
         app: weissman-backend
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across nodes (and zones when available) so a single node/AZ loss
+      # never takes the whole backend down.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: weissman-backend
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: weissman-backend
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: backend
           # Published, cosign-signed and SLSA-provenance-attested by the CI `publish` job
@@ -101,3 +127,11 @@ spec:
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp

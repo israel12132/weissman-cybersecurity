@@ -1,0 +1,100 @@
+# PgBouncer transaction pooler in front of Postgres. Point the app's DATABASE_URL at the
+# `weissman-pgbouncer` service so bursts of short-lived connections don't exhaust Postgres.
+# Reads the upstream DB coordinates from the existing weissman-secrets.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weissman-pgbouncer
+  namespace: weissman
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: weissman-pgbouncer
+  template:
+    metadata:
+      labels:
+        app: weissman-pgbouncer
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: weissman-pgbouncer
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:1.23.1-p2
+          ports:
+            - containerPort: 5432
+          env:
+            # Upstream DB host/port/name/creds come from the same secret the app uses.
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: db_host
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: db_user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: db_password
+            - name: DB_NAME
+              value: weissman
+            - name: POOL_MODE
+              value: transaction
+            - name: MAX_CLIENT_CONN
+              value: "1000"
+            - name: DEFAULT_POOL_SIZE
+              value: "25"
+            - name: AUTH_TYPE
+              value: scram-sha-256
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weissman-pgbouncer
+  namespace: weissman
+spec:
+  selector:
+    app: weissman-pgbouncer
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-pgbouncer
+  namespace: weissman
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-pgbouncer
