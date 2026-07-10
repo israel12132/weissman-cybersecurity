@@ -436,6 +436,7 @@ export default function VulnIntelDashboard() {
               selectedRowId={selectedRowId}
               getRowAccentColor={(row) => getSeverityMeta(row.severity).border}
               emptyFilteredMessage={t('vuln_intel.no_match_title')}
+              densityToggle
               zebra
               stickyHeader
             />
