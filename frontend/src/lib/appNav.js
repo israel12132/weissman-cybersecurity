@@ -58,6 +58,7 @@ export const NAV_GROUPS = [
       { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
+      { to: '/remediation-analytics', labelKey: 'nav.remediation_analytics', icon: '📊' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },

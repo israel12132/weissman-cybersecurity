@@ -110,6 +110,34 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 - `GET /api/clients/:id/heal-stats`: total, verdict distribution, success rate, avg/max attempts,
   attested count, per-channel breakdown (surfaced as a strip on the Remediation Hub).
 - Completion notifications (webhook / Slack / PagerDuty) via `alert_delivery::notify_heal_completed`.
+- **Auto Slack post on completion** (`alert_delivery::post_heal_slack`, `WEISSMAN_SLACK_HEAL_NOTIFY`, on by
+  default): every finished heal posts a Block Kit summary to the tenant's Slack (webhook or
+  `chat.postMessage`). On a `Fixed` outcome that opened a PR/MR it posts the **interactive
+  Approve/Dismiss** blocks (HMAC-signed action values, verified by the interactivity endpoint); otherwise
+  a plain verdict summary. Best-effort and fire-and-forget — it never blocks or fails the heal.
+
+## UI
+
+- **Remediation Hub** (`/remediation`) — workflow board + heal-stats strip.
+- **Remediation Analytics** (`/remediation-analytics`) — a dedicated routed dashboard that aggregates
+  `heal-stats` across every active client (`RemediationAnalyticsPanel`) and a merged, newest-first
+  **recent-heals** activity feed from `/api/clients/:id/heal-requests`.
+- **Remediation Detail** — per-finding self-repair timeline, verified-receipt badge, channel picker.
+
+## Round-trip integration tests
+
+`fingerprint_engine/tests/auto_heal_roundtrip.rs` exercises the real host-side pipeline end to end
+without requiring a Docker socket:
+
+- **git/patch** — `apply_unified_patch` + `collect_changed_files` over a real temp git repo
+  (modify/add/rename/delete), plus the no-change error path.
+- **probe → verdict** — a raw `tokio` TCP server drives the real `http_probe` + `classify_verdict` for
+  `Fixed` / `StillVulnerable` / `BrokeApp` (5xx and health-down) / connection-refused, and
+  `rewrite_localhost_url` host/port mapping.
+- **curl parsing** round-trip.
+- **Docker E2E** (`docker_full_roundtrip_verify_patch_ephemeral`) is gated behind `WEISSMAN_IT_DOCKER=1`
+  and self-skips when no Docker socket is present (as in the sandbox). It uses
+  `WEISSMAN_VERIFY_CLONE_URL_OVERRIDE` to point the sandbox clone at a local `file://` repo.
 
 ## API
 
@@ -145,6 +173,9 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 | `WEISSMAN_REGRESSION_ALERT`             | on             | Fire an alert when a fixed finding reopens        |
 | `WEISSMAN_HEAL_DEDUP_HOURS`             | `24`           | (also above) duplicate-PR window                  |
 | `WEISSMAN_SLACK_SIGNING_SECRET`         | (unset)        | Enables the Slack interactivity approval endpoint |
+| `WEISSMAN_SLACK_HEAL_NOTIFY`            | on             | Auto-post a Slack summary (interactive approval on Fixed+PR) when a heal finishes |
+| `WEISSMAN_VERIFY_CLONE_URL_OVERRIDE`    | (unset)        | Override the sandbox clone URL (used by round-trip integration tests) |
+| `WEISSMAN_IT_DOCKER`                    | `0`            | Set to `1` to run the Docker-gated end-to-end round-trip integration test |
 | `WEISSMAN_AUTOHEAL_REPO`                | (unset)        | Default repo for Slack-approved / config-less heals |
 | `WEISSMAN_AUTOHEAL_SKIP_SANDBOX`        | `0`            | Legacy advisory path (unverified) — testing only  |
 

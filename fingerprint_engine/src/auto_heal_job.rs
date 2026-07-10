@@ -296,6 +296,7 @@ async fn load_finding_context(
 async fn report_heal_outcome(
     pool: &PgPool,
     tenant_id: i64,
+    client_id: i64,
     finding_id: &str,
     verdict: &str,
     channel: &str,
@@ -317,6 +318,28 @@ async fn report_heal_outcome(
         pool, tenant_id, finding_id, verdict, channel, attempts, pr_url, ok,
     )
     .await;
+
+    // Fire-and-forget automatic Slack post (interactive approval on fixed+PR, else a summary).
+    // Detached so a slow Slack never delays the job and can never turn into a job error.
+    {
+        let pool = pool.clone();
+        let finding_id = finding_id.to_string();
+        let verdict = verdict.to_string();
+        let pr_url = pr_url.map(str::to_string);
+        tokio::spawn(async move {
+            crate::alert_delivery::post_heal_slack(
+                &pool,
+                tenant_id,
+                client_id,
+                &finding_id,
+                "",
+                &verdict,
+                pr_url.as_deref(),
+                ok,
+            )
+            .await;
+        });
+    }
 }
 
 pub async fn run_auto_heal_job(
@@ -698,6 +721,7 @@ pub async fn run_auto_heal_job(
         report_heal_outcome(
             app_pool.as_ref(),
             tenant_id,
+            client_id,
             &finding_id,
             verdict_str,
             channel.id(),
@@ -817,6 +841,7 @@ pub async fn run_auto_heal_job(
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
+                client_id,
                 &finding_id,
                 verdict_str,
                 channel.id(),
@@ -908,6 +933,7 @@ pub async fn run_auto_heal_job(
                 report_heal_outcome(
                     app_pool.as_ref(),
                     tenant_id,
+                    client_id,
                     &finding_id,
                     verdict_str,
                     channel.id(),
@@ -961,6 +987,7 @@ pub async fn run_auto_heal_job(
                     report_heal_outcome(
                         app_pool.as_ref(),
                         tenant_id,
+                        client_id,
                         &finding_id,
                         verdict_str,
                         channel.id(),
@@ -1046,6 +1073,7 @@ pub async fn run_auto_heal_job(
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
+                client_id,
                 &finding_id,
                 verdict_str,
                 channel.id(),
@@ -1094,6 +1122,7 @@ pub async fn run_auto_heal_job(
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
+                client_id,
                 &finding_id,
                 verdict_str,
                 channel.id(),
@@ -1184,6 +1213,7 @@ pub async fn run_auto_heal_job(
             report_heal_outcome(
                 app_pool.as_ref(),
                 tenant_id,
+                client_id,
                 &finding_id,
                 verdict_str,
                 channel.id(),

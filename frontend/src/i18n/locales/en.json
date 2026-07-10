@@ -184,6 +184,7 @@
     "self_improve": "Self-Improvement",
     "roe_approvals": "RoE Approvals",
     "remediation": "Remediation Hub",
+    "remediation_analytics": "Remediation Analytics",
     "cloud": "Cloud Control Tower",
     "cloud_posture": "Cloud Posture (CSPM)",
     "iac_security": "IaC Security",
@@ -1400,6 +1401,16 @@
       "empty_step_engine_before": "Run the darkweb_intel engine from the",
       "empty_step_engine_link": "Engine Matrix",
       "empty_step_engine_after": "(requires an authorized domain)."
+    },
+    "remediationAnalytics": {
+      "title": "Remediation Analytics",
+      "subtitle": "Auto-heal outcomes aggregated across every active client",
+      "badge": "ANALYTICS",
+      "intro": "Live auto-heal telemetry from GET /api/clients/:id/heal-stats and /heal-requests.",
+      "open_hub": "Remediation Hub →",
+      "recent_heals": "Recent heals",
+      "empty_title": "No auto-heal runs yet.",
+      "empty_hint": "Trigger a heal from the Remediation Hub to populate analytics."
     },
     "remediationHub": {
       "title": "Remediation Hub",

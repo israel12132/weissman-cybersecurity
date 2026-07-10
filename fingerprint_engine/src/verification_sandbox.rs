@@ -189,7 +189,7 @@ fn require_health() -> bool {
 /// - `Fixed`     — exploit now 3xx/4xx (redirected/blocked) AND the app is still up.
 /// - `Inconclusive` — baseline unproven or an unclassifiable status.
 #[must_use]
-fn classify_verdict(baseline_proven: bool, after_status: u16, app_up: bool) -> HealVerdict {
+pub fn classify_verdict(baseline_proven: bool, after_status: u16, app_up: bool) -> HealVerdict {
     if !baseline_proven {
         return HealVerdict::Inconclusive;
     }
@@ -278,7 +278,7 @@ pub fn parse_curl_request(
     Ok((method, url, headers, body))
 }
 
-fn rewrite_localhost_url(url: &str, host: &str, port: u16) -> String {
+pub fn rewrite_localhost_url(url: &str, host: &str, port: u16) -> String {
     if let Ok(mut u) = url::Url::parse(url) {
         let _ = u.set_host(Some(host));
         let _ = u.set_port(Some(port));
@@ -291,7 +291,7 @@ fn rewrite_localhost_url(url: &str, host: &str, port: u16) -> String {
     format!("http://{}:{}/", host, port)
 }
 
-async fn http_probe(
+pub async fn http_probe(
     method: reqwest::Method,
     url: &str,
     headers: &reqwest::header::HeaderMap,
@@ -339,6 +339,13 @@ async fn git_clone_shallow(
     } else {
         format!("https://x-access-token:{}@{}/{}.git", token, host, repo_slug)
     };
+    // Testability / self-hosted escape hatch: clone from an explicit URL (e.g. file:///…) instead
+    // of the token-derived URL, so the full pipeline can run against a local bare repo with no
+    // network. Ignored when unset/empty.
+    let url = std::env::var("WEISSMAN_VERIFY_CLONE_URL_OVERRIDE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(url);
     let mut cmd = Command::new("git");
     cmd.arg("clone").arg("--depth").arg("1");
     if !branch.trim().is_empty() {
@@ -362,7 +369,7 @@ async fn git_clone_shallow(
     Ok(())
 }
 
-async fn apply_unified_patch(repo_dir: &Path, patch_file: &Path) -> Result<String, String> {
+pub async fn apply_unified_patch(repo_dir: &Path, patch_file: &Path) -> Result<String, String> {
     for plevel in [1i32, 0] {
         let out = Command::new("patch")
             .arg(format!("-p{}", plevel))
@@ -401,7 +408,7 @@ async fn apply_unified_patch(repo_dir: &Path, patch_file: &Path) -> Result<Strin
 ///
 /// Returns `Err` when the patch produced no capturable changes (so the job fails loudly
 /// instead of opening an empty PR) or when the change set blows past the guardrails.
-async fn collect_changed_files(repo_dir: &Path) -> Result<(Vec<(String, String)>, Vec<String>), String> {
+pub async fn collect_changed_files(repo_dir: &Path) -> Result<(Vec<(String, String)>, Vec<String>), String> {
     // Stage everything so `diff --cached` reports adds, mods, renames and deletes uniformly.
     let add = Command::new("git")
         .arg("-C")

@@ -182,6 +182,7 @@
     "self_improve": "שיפור עצמי",
     "roe_approvals": "RoE Approvals",
     "remediation": "Remediation Hub",
+    "remediation_analytics": "אנליטיקת תיקון",
     "cloud": "Cloud Control Tower",
     "cloud_posture": "Cloud Posture (CSPM)",
     "iac_security": "אבטחת תשתית כקוד (IaC)",
@@ -1408,6 +1409,16 @@
       "empty_step_engine_before": "הפעל את מנוע darkweb_intel מ",
       "empty_step_engine_link": "מטריצת המנועים",
       "empty_step_engine_after": "(דורש דומיין מורשה)."
+    },
+    "remediationAnalytics": {
+      "title": "אנליטיקת תיקון",
+      "subtitle": "תוצאות ריפוי אוטומטי מצטברות מכל הלקוחות הפעילים",
+      "badge": "אנליטיקה",
+      "intro": "טלמטריית ריפוי אוטומטי חיה מ-GET /api/clients/:id/heal-stats ו-/heal-requests.",
+      "open_hub": "מרכז תיקון →",
+      "recent_heals": "ריפויים אחרונים",
+      "empty_title": "עדיין אין ריצות ריפוי אוטומטי.",
+      "empty_hint": "הפעל ריפוי ממרכז התיקון כדי לאכלס את האנליטיקה."
     },
     "remediationHub": {
       "title": "מרכז תיקון",
