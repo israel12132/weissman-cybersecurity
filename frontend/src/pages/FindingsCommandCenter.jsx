@@ -410,11 +410,16 @@ export default function FindingsCommandCenter() {
   // Keep the URL in sync with the active filters (shareable / bookmarkable),
   // preserving any unrelated query params. Replace (no history spam).
   useEffect(() => {
+    const FILTER_KEYS = ['q', 'sev', 'status', 'engine', 'kev']
     const encoded = encodeFindingsFilters({ globalFilter, severityFilter, statusFilter, engineFilter, kevFilter })
+    // Compare only our own keys so unrelated params (and their order) never
+    // trigger a redundant write — avoids a cosmetic replace() on mount.
+    const changed = FILTER_KEYS.some((k) => (encoded[k] ?? '') !== (searchParams.get(k) ?? ''))
+    if (!changed) return
     const next = new URLSearchParams(searchParams)
-    for (const k of ['q', 'sev', 'status', 'engine', 'kev']) next.delete(k)
+    for (const k of FILTER_KEYS) next.delete(k)
     for (const [k, v] of Object.entries(encoded)) next.set(k, v)
-    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true })
+    setSearchParams(next, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalFilter, severityFilter, statusFilter, engineFilter, kevFilter])
 
@@ -901,7 +906,7 @@ export default function FindingsCommandCenter() {
               >
                 <option value="">{t('findings.bulk_choose_status')}</option>
                 {FINDING_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{t(s.label)}</option>
+                  <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
                 ))}
               </select>
               <button
@@ -958,7 +963,7 @@ export default function FindingsCommandCenter() {
         onClose={handleCloseDrawer}
         onStatusUpdate={handleStatusUpdate}
         onVerifyComplete={handleVerifyComplete}
-        statusOptions={FINDING_STATUSES.map(({ value, label }) => ({ value, label }))}
+        statusOptions={FINDING_STATUSES.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
         headerExtra={drawerEngineMeta.headerExtra}
         subtitle={drawerEngineMeta.subtitle}
       />
