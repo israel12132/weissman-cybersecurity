@@ -519,27 +519,43 @@ pub async fn run_auto_heal_job(
                 }
             }
 
-            // Verify each candidate (throwaway in-memory step sink) and keep the best by score.
+            // Verify candidates concurrently (bounded), each with a throwaway in-memory step sink,
+            // then record summaries + pick the best by score deterministically.
             let candidate_count = candidates.len() as u32;
+            let concurrency: usize = std::env::var("WEISSMAN_HEAL_TOURNAMENT_CONCURRENCY")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .filter(|n: &usize| *n >= 1 && *n <= 6)
+                .unwrap_or(2);
+            let cport = container_port as u16;
+            let verified: Vec<(String, String, crate::verification_sandbox::VerificationResult)> = {
+                use futures::stream::StreamExt as _;
+                futures::stream::iter(candidates.into_iter().map(|(label, cand)| {
+                    let ds = docker_socket.clone();
+                    let im = image.clone();
+                    let rs = repo_slug.clone();
+                    let bb = base_branch.clone();
+                    let gt = git_token.clone();
+                    let gh = git_host.clone();
+                    let pc = poc_curl.clone();
+                    let hc = health_check_curl.clone();
+                    async move {
+                        let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(
+                            Vec::<crate::verification_sandbox::VerificationStep>::new(),
+                        )));
+                        let cvr = verify_patch_ephemeral_docker(
+                            &ds, &im, cport, &rs, &bb, &gt, &gh, &cand, &pc, &hc, Some(mem),
+                        )
+                        .await;
+                        (label, cand, cvr)
+                    }
+                }))
+                .buffer_unordered(concurrency)
+                .collect()
+                .await
+            };
             let mut best: Option<(String, crate::verification_sandbox::VerificationResult, (u8, u8, i64))> = None;
-            for (label, cand) in candidates {
-                let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(
-                    Vec::<crate::verification_sandbox::VerificationStep>::new(),
-                )));
-                let cvr = verify_patch_ephemeral_docker(
-                    &docker_socket,
-                    &image,
-                    container_port as u16,
-                    &repo_slug,
-                    &base_branch,
-                    &git_token,
-                    &git_host,
-                    &cand,
-                    &poc_curl,
-                    &health_check_curl,
-                    Some(mem),
-                )
-                .await;
+            for (label, cand, cvr) in verified {
                 let sc = score_result(&cvr);
                 record_step(
                     &step_sink,

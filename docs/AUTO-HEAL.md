@@ -131,6 +131,7 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 |-----------------------------------------|----------------|---------------------------------------------------|
 | `WEISSMAN_HEAL_MAX_ATTEMPTS`            | `3`            | Total generation budget (tournament + self-repair, 1–10) |
 | `WEISSMAN_HEAL_TOURNAMENT_SIZE`         | `1`            | Candidate tournament size (≥2 enables it, max 6)  |
+| `WEISSMAN_HEAL_TOURNAMENT_CONCURRENCY`  | `2`            | Max candidates verified in parallel (1–6)         |
 | `WEISSMAN_HEAL_DEDUP_HOURS`             | `24`           | Duplicate-PR dedup window (0 disables)            |
 | `WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS`| `1`            | Require baseline exploit to be 2xx                |
 | `WEISSMAN_VERIFY_REQUIRE_HEALTH`        | `1`            | Require post-patch health probe to pass           |
