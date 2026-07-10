@@ -15,7 +15,12 @@ spec:
     spec:
       containers:
         - name: backend
-          image: your-registry/weissman-backend:latest
+          # Published, cosign-signed and SLSA-provenance-attested by the CI `publish` job
+          # (.github/workflows/ci.yml). PRODUCTION: pin by immutable digest, not a tag — the
+          # publish job prints `…@sha256:…`; replace the :latest tag below with it and verify
+          # signature + provenance at admission (cosign policy-controller / Kyverno):
+          #   image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend@sha256:<DIGEST>
+          image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

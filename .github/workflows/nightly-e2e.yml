@@ -100,6 +100,29 @@ jobs:
           WEISSMAN_FINDINGS_E2E_POLL_MAX: "120"
         run: node scripts/verify_engine_groups_findings_e2e.mjs
 
+  fuzz:
+    name: Fuzz fuzz_core (nightly, time-boxed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly toolchain + cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal --component llvm-tools-preview
+          cargo install cargo-fuzz --locked
+      - name: Fuzz mutate target (120s)
+        working-directory: fuzz_core
+        run: cargo +nightly fuzz run mutate -- -max_total_time=120 -rss_limit_mb=4096
+      - name: Fuzz analyze target (120s)
+        working-directory: fuzz_core
+        run: cargo +nightly fuzz run analyze -- -max_total_time=120 -rss_limit_mb=4096
+      - name: Upload crash artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz_core/fuzz/artifacts/
+          if-no-files-found: ignore
+
   backup-restore-verify:
     name: Backup PITR restore-verify (self-contained)
     runs-on: ubuntu-latest
