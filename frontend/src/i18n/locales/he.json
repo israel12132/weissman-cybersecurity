@@ -1489,7 +1489,8 @@
       "heal_attested": "מאומתים",
       "revert": "בטל",
       "reverted": "בוטל",
-      "revert_hint": "סגור את ה-PR/MR שנפתח אוטומטית"
+      "revert_hint": "סגור את ה-PR/MR שנפתח אוטומטית",
+      "heal_history": "היסטוריית ריפוי"
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",

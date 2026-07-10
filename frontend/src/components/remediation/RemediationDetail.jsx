@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   X, Wrench, Sparkles, ShieldCheck, AlertTriangle, Download, GitPullRequest,
-  Loader2, CheckCircle, XCircle, Languages, ChevronRight,
+  Loader2, CheckCircle, XCircle, Languages, ChevronRight, Clock,
 } from 'lucide-react'
 import { apiFetch, apiUrl } from '../../lib/apiBase'
 
@@ -93,6 +93,7 @@ export default function RemediationDetail({ finding, onClose }) {
   const [jobId, setJobId] = useState(null)
   const [steps, setSteps] = useState([])
   const [jobStatus, setJobStatus] = useState(null)
+  const [history, setHistory] = useState([])
   const pollRef = useRef(null)
 
   const clientId = finding?.client_id
@@ -121,6 +122,20 @@ export default function RemediationDetail({ finding, onClose }) {
 
   // Auto-load the brief on open (uses the cached one if present).
   useEffect(() => { loadBrief(false) }, [loadBrief])
+
+  // Load this finding's heal history (refreshes when a heal completes).
+  useEffect(() => {
+    if (!clientId || !findingId) return undefined
+    let cancelled = false
+    apiFetch(`/api/clients/${clientId}/heal-requests`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((d) => {
+        if (cancelled) return
+        const all = Array.isArray(d?.requests) ? d.requests : []
+        setHistory(all.filter((x) => x.finding_id === findingId).slice(0, 20))
+      })
+    return () => { cancelled = true }
+  }, [clientId, findingId, jobStatus?.status])
 
   // Poll verification steps + status while a heal job runs.
   useEffect(() => {
@@ -466,6 +481,44 @@ export default function RemediationDetail({ finding, onClose }) {
                   <li className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.step_waiting', { defaultValue: 'Waiting for the worker…' })}</li>
                 )}
               </ol>
+            </section>
+          )}
+
+          {/* Heal history for this finding */}
+          {history.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Clock className="w-4 h-4 text-cyan-400" />
+                {t('pages.remediationHub.heal_history', { defaultValue: 'Heal history' })}
+              </h3>
+              <div className="divide-y divide-white/5 rounded-lg border border-white/10 overflow-hidden">
+                {history.map((h) => {
+                  const vm = h.verdict ? VERDICT_META[h.verdict] : null
+                  return (
+                    <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {vm ? (
+                          <span style={{ color: vm.color }}>●</span>
+                        ) : (
+                          <span className="text-white/30">●</span>
+                        )}
+                        <span className="text-white/70 truncate">{h.verification_status || h.verdict || '—'}</span>
+                        {h.channel && <span className="text-[10px] text-white/35 font-mono">{h.channel}</span>}
+                        {h.attempts > 1 && <span className="text-[10px] text-amber-300/70 font-mono">×{h.attempts}</span>}
+                        {h.attested && <span className="text-[10px] text-emerald-300/70">🔏</span>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {h.pr_url && (
+                          <a href={h.pr_url} target="_blank" rel="noreferrer" className="text-cyan-300/80 hover:text-cyan-200">
+                            <GitPullRequest className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                        <span className="text-[10px] text-white/30 font-mono whitespace-nowrap">{(h.created_at || '').slice(0, 10)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </section>
           )}
         </div>

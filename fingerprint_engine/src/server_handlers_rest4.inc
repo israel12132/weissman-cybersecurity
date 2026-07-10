@@ -1893,7 +1893,10 @@ async fn api_heal_requests_list(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
     };
     let rows = sqlx::query(
-        r#"SELECT id, finding_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, created_at FROM heal_requests WHERE client_id = $1 ORDER BY id DESC"#,
+        r#"SELECT id, finding_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, created_at,
+                  COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel, COALESCE(attempts,1) AS attempts,
+                  (COALESCE(verification_receipt,'') <> '') AS attested
+           FROM heal_requests WHERE client_id = $1 ORDER BY id DESC"#,
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -1912,6 +1915,10 @@ async fn api_heal_requests_list(
                 "diff_summary": r.try_get::<Option<String>,_>("diff_summary").ok().flatten(),
                 "verification_status": r.try_get::<String,_>("verification_status").unwrap_or_default(),
                 "verification_job_id": r.try_get::<String,_>("verification_job_id").unwrap_or_default(),
+                "verdict": r.try_get::<String,_>("verdict").unwrap_or_default(),
+                "channel": r.try_get::<String,_>("channel").unwrap_or_default(),
+                "attempts": r.try_get::<i32,_>("attempts").unwrap_or(1),
+                "attested": r.try_get::<bool,_>("attested").unwrap_or(false),
                 "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
             })
         })

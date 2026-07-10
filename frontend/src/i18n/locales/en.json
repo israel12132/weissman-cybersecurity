@@ -1481,7 +1481,8 @@
       "heal_attested": "attested",
       "revert": "Revert",
       "reverted": "reverted",
-      "revert_hint": "Close the auto-opened PR/MR"
+      "revert_hint": "Close the auto-opened PR/MR",
+      "heal_history": "Heal history"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
