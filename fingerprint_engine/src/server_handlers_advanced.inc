@@ -238,6 +238,11 @@ async fn api_portfolio_attack_exposure(
     }
 }
 
+// ─── Complete arsenal inventory (every production engine + authoritative metadata) ───
+async fn api_arsenal_catalog() -> Response {
+    (StatusCode::OK, Json(crate::arsenal_catalog::summary())).into_response()
+}
+
 // ─── Arsenal recommendation (client exposure crossed against the engine arsenal) ───
 async fn api_arsenal_recommendation_for_client(
     State(state): State<Arc<AppState>>,

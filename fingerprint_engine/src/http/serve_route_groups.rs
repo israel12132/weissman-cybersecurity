@@ -90,6 +90,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/remediation/aging/:client_id",
             get(api_finding_aging_for_client),
         )
+        // Complete arsenal inventory: every production engine + classification + category + ATT&CK.
+        .route("/api/arsenal/catalog", get(api_arsenal_catalog))
         // Arsenal recommendation: cross client exposure vs the engine arsenal → one-click plan + gaps.
         .route(
             "/api/arsenal/recommendation/:client_id",

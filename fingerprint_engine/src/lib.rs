@@ -36,6 +36,7 @@ pub mod alias_engine_runner;
 pub mod alias_specialized_probes;
 pub mod api_docs;
 pub mod archival_engine;
+pub mod arsenal_catalog;
 pub mod arsenal_intel;
 pub mod async_job_executor;
 pub mod async_jobs;
