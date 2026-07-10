@@ -61,7 +61,13 @@ impl TargetProfile {
         let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
         let (host, port) = split_host_port(authority);
         let ip = host.parse::<IpAddr>().ok();
-        let ip_family = ip.map(|a| if a.is_ipv4() { IpFamily::V4 } else { IpFamily::V6 });
+        let ip_family = ip.map(|a| {
+            if a.is_ipv4() {
+                IpFamily::V4
+            } else {
+                IpFamily::V6
+            }
+        });
         let is_private = ip.map(is_private_ip).unwrap_or(false);
 
         let mut hints: Vec<&'static str> = Vec::new();
@@ -116,7 +122,12 @@ impl TargetProfile {
         {
             score += 5;
         }
-        if tls && (id.contains("tls") || id.contains("ssl") || id.contains("cert") || id.contains("pqc")) {
+        if tls
+            && (id.contains("tls")
+                || id.contains("ssl")
+                || id.contains("cert")
+                || id.contains("pqc"))
+        {
             score += 4;
         }
         if is_ip
@@ -150,9 +161,7 @@ impl TargetProfile {
     pub fn prioritize(&self, engine_ids: &[String]) -> Vec<String> {
         let mut indexed: Vec<(usize, &String)> = engine_ids.iter().enumerate().collect();
         indexed.sort_by(|(ia, a), (ib, b)| {
-            self.relevance(b)
-                .cmp(&self.relevance(a))
-                .then(ia.cmp(ib)) // stable for equal scores
+            self.relevance(b).cmp(&self.relevance(a)).then(ia.cmp(ib)) // stable for equal scores
         });
         indexed.into_iter().map(|(_, s)| s.clone()).collect()
     }
@@ -168,7 +177,9 @@ mod tests {
         assert_eq!(p.host, "example.com");
         assert_eq!(p.scheme.as_deref(), Some("https"));
         assert!(p.ip_family.is_none());
-        assert!(p.hints.contains(&"web") && p.hints.contains(&"tls") && p.hints.contains(&"hostname"));
+        assert!(
+            p.hints.contains(&"web") && p.hints.contains(&"tls") && p.hints.contains(&"hostname")
+        );
     }
 
     #[test]

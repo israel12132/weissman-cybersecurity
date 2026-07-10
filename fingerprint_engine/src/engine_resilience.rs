@@ -371,12 +371,16 @@ mod tests {
     async fn empty_ok_is_success_and_not_retried() {
         let calls = Arc::new(AtomicU32::new(0));
         let c = calls.clone();
-        let (result, telem) =
-            run_with_resilience("quiet", "example.com", Duration::from_secs(2), move |_v, _hint| {
+        let (result, telem) = run_with_resilience(
+            "quiet",
+            "example.com",
+            Duration::from_secs(2),
+            move |_v, _hint| {
                 c.fetch_add(1, Ordering::SeqCst);
                 async move { EngineResult::ok(vec![], "no live signal observed") }
-            })
-            .await;
+            },
+        )
+        .await;
         assert_eq!(result.status, "ok");
         assert_eq!(telem.attempts, 1);
         assert!(!telem.recovered);
