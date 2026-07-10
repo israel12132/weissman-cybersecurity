@@ -92,6 +92,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         // Portfolio (fleet-wide) posture: every client's grade rolled into one MSSP summary.
         .route("/api/portfolio/posture", get(api_portfolio_posture))
+        // Portfolio (fleet-wide) ATT&CK exposure: technique ranking merged across all clients.
+        .route(
+            "/api/portfolio/attack-exposure",
+            get(api_portfolio_attack_exposure),
+        )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
             patch(api_risk_node_flags_patch),

@@ -205,6 +205,39 @@ async fn api_portfolio_posture(
     }
 }
 
+// ─── Portfolio (fleet-wide) ATT&CK exposure across all clients in the tenant ───
+async fn api_portfolio_attack_exposure(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let max_clients: i64 = q
+        .get("max_clients")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(200)
+        .clamp(1, 500);
+    let per_client_limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::attack_exposure::load_portfolio_exposure(
+        &state.app_pool,
+        auth.tenant_id,
+        max_clients,
+        per_client_limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Backlog-aging analytics (open findings bucketed by age x severity) ───
 async fn api_finding_aging_for_client(
     State(state): State<Arc<AppState>>,
