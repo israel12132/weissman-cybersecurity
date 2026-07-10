@@ -11,6 +11,16 @@ import { ENGINES_BY_ID } from '../lib/enginesRegistry';
 
 const NS = 'pages.engineManagementConsole';
 
+/**
+ * Parse a number-input value, keeping the field editable when cleared: returns ''
+ * (blank, not NaN) so the controlled input never receives NaN and a blanked field
+ * is never serialized to garbage on save.
+ */
+function intField(v) {
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? '' : Math.max(0, n);
+}
+
 function exportEnginesCsv(engines) {
   const header = ['id', 'name', 'category', 'enabled', 'description'];
   const rows = engines.map((e) => [
@@ -613,7 +623,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               type="number"
               value={config.timeout}
               onChange={(e) =>
-                setConfig({ ...config, timeout: parseInt(e.target.value) })
+                setConfig({ ...config, timeout: intField(e.target.value) })
               }
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
@@ -628,7 +638,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               type="number"
               value={config.concurrency}
               onChange={(e) =>
-                setConfig({ ...config, concurrency: parseInt(e.target.value) })
+                setConfig({ ...config, concurrency: intField(e.target.value) })
               }
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
@@ -643,7 +653,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               type="number"
               value={config.max_retries}
               onChange={(e) =>
-                setConfig({ ...config, max_retries: parseInt(e.target.value) })
+                setConfig({ ...config, max_retries: intField(e.target.value) })
               }
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
@@ -660,7 +670,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({
                   ...config,
-                  resource_limit_cpu: parseInt(e.target.value),
+                  resource_limit_cpu: intField(e.target.value),
                 })
               }
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -678,7 +688,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               onChange={(e) =>
                 setConfig({
                   ...config,
-                  resource_limit_memory: parseInt(e.target.value),
+                  resource_limit_memory: intField(e.target.value),
                 })
               }
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"

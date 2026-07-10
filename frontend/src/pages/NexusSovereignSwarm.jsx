@@ -855,8 +855,9 @@ function StatusHistogramPanel({ histogram }) {
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">HTTP Status Histogram (live)</p>
       <div className="space-y-1">
         {rows.slice(0, 10).map((r) => {
+          const status = String(r.status ?? '')
           const pct = Math.round(((r.count ?? 0) / max) * 100)
-          const color = status === '200' ? '#34d399' : status?.startsWith('4') ? '#f59e0b' : status?.startsWith('5') ? '#ef4444' : '#94a3b8'
+          const color = status === '200' ? '#34d399' : status.startsWith('4') ? '#f59e0b' : status.startsWith('5') ? '#ef4444' : '#94a3b8'
           return (
             <div key={status} className="flex items-center gap-2">
               <span className="text-[9px] font-mono w-8 text-right shrink-0" style={{ color }}>{status}</span>
