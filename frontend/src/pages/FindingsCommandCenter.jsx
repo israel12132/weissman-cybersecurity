@@ -8,13 +8,14 @@
  * Export: CSV download of all findings.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { bulkUpdateFindingStatus } from '../lib/bulkFindingStatus'
 import { useSavedViews } from '../hooks/useSavedViews'
+import { encodeFindingsFilters, decodeFindingsFilters } from '../lib/findingsUrlState'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
 import { useToast } from '../components/ui/Toaster'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
@@ -396,13 +397,26 @@ export default function FindingsCommandCenter() {
 
   const [selectedFinding, setSelectedFinding] = useState(null)
 
-  // Filter state
-  const [globalFilter, setGlobalFilter] = useState('')
-  const [severityFilter, setSeverityFilter] = useState('')
-  const [engineFilter, setEngineFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [kevFilter, setKevFilter] = useState(false)
+  // Filter state — hydrated once from the URL so a shared link opens pre-filtered.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialUrlFilters = useMemo(() => decodeFindingsFilters(searchParams), []) // eslint-disable-line react-hooks/exhaustive-deps
+  const [globalFilter, setGlobalFilter] = useState(initialUrlFilters.globalFilter)
+  const [severityFilter, setSeverityFilter] = useState(initialUrlFilters.severityFilter)
+  const [engineFilter, setEngineFilter] = useState(initialUrlFilters.engineFilter)
+  const [statusFilter, setStatusFilter] = useState(initialUrlFilters.statusFilter)
+  const [kevFilter, setKevFilter] = useState(initialUrlFilters.kevFilter)
   const [filtersExpanded, setFiltersExpanded] = useState(true)
+
+  // Keep the URL in sync with the active filters (shareable / bookmarkable),
+  // preserving any unrelated query params. Replace (no history spam).
+  useEffect(() => {
+    const encoded = encodeFindingsFilters({ globalFilter, severityFilter, statusFilter, engineFilter, kevFilter })
+    const next = new URLSearchParams(searchParams)
+    for (const k of ['q', 'sev', 'status', 'engine', 'kev']) next.delete(k)
+    for (const [k, v] of Object.entries(encoded)) next.set(k, v)
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalFilter, severityFilter, statusFilter, engineFilter, kevFilter])
 
   // Sorting
   const [sorting, setSorting] = useState([{ id: 'severity', desc: false }])
