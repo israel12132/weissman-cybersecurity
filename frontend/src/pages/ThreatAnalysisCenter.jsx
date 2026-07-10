@@ -10,6 +10,7 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId } from '../lib/aliasClient';
 import AttackExposurePanel from './AttackExposurePanel';
+import ArsenalConsole from './ArsenalConsole';
 
 const ACCENT = '#22d3ee';
 
@@ -176,6 +177,9 @@ export default function ThreatAnalysisCenter() {
 
         {/* Live MITRE ATT&CK exposure for the selected client (technique ranking + tactic rollup). */}
         <AttackExposurePanel clientId={clientId} />
+
+        {/* Arsenal-aware, one-click response: which engines to deploy vs this exposure + gaps. */}
+        <ArsenalConsole clientId={clientId} />
 
         {persistedNote && (
           <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">

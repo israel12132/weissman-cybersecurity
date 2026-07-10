@@ -4207,7 +4207,17 @@
       "exposure_error": "לא ניתן לטעון חשיפת ATT&CK: {{error}}.",
       "exposure_empty": "אין עדיין ממצאים מתויגי-ATT&CK ללקוח זה.",
       "exposure_tactics": "טקטיקות",
-      "exposure_top": "טכניקות מובילות"
+      "exposure_top": "טכניקות מובילות",
+      "arsenal_heading": "קונסולת הארסנל",
+      "arsenal_coverage": "{{pct}}% מכוסה",
+      "arsenal_inventory": "{{engines}} מנועים בארסנל",
+      "arsenal_deploy": "פרוס מומלצים ({{count}})",
+      "arsenal_recommended": "מנועים מומלצים",
+      "arsenal_none": "אף מנוע בארסנל לא תואם לחשיפה זו.",
+      "arsenal_addressable": "{{count}} ממצאים",
+      "arsenal_gaps": "פערי יכולת",
+      "arsenal_no_gaps": "הארסנל מכסה את כל החשיפה שזוהתה.",
+      "arsenal_gap_hint": "{{count}} ממצאים, אין מנוע"
     },
     "engineReliability": {
       "evidence_notice": "SLO מנועים, error budgets ומצב circuit-breaker מ-GET /api/engines/telemetry ו-GET /api/engines/capabilities. מונים משקפים ביצוע worker אמיתי — ללא theater של uptime."

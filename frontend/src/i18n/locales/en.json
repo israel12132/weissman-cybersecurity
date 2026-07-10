@@ -4199,7 +4199,17 @@
       "exposure_error": "Couldn't load ATT&CK exposure: {{error}}.",
       "exposure_empty": "No ATT&CK-tagged findings for this client yet.",
       "exposure_tactics": "Tactics",
-      "exposure_top": "Top techniques"
+      "exposure_top": "Top techniques",
+      "arsenal_heading": "Arsenal Console",
+      "arsenal_coverage": "{{pct}}% covered",
+      "arsenal_inventory": "{{engines}} engines in arsenal",
+      "arsenal_deploy": "Deploy recommended ({{count}})",
+      "arsenal_recommended": "Recommended engines",
+      "arsenal_none": "No arsenal engines matched this exposure.",
+      "arsenal_addressable": "{{count}} findings",
+      "arsenal_gaps": "Capability gaps",
+      "arsenal_no_gaps": "The arsenal covers all detected exposure.",
+      "arsenal_gap_hint": "{{count}} findings, no engine"
     },
     "engineReliability": {
       "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater."
