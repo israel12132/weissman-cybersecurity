@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
@@ -44,6 +44,9 @@ export default function CeoIntegratedCommandDeck() {
   const [killSaving, setKillSaving] = useState(false)
   const [intervalSaving, setIntervalSaving] = useState(false)
   const [intervalInput, setIntervalInput] = useState('60')
+  // Seed the editable interval field from the snapshot only once, so the 4s poll
+  // never reverts the value the operator is currently typing.
+  const intervalHydratedRef = useRef(false)
   const [vaultOpen, setVaultOpen] = useState(false)
   const [sovereignOpen, setSovereignOpen] = useState(false)
   const [engineToggleBusy, setEngineToggleBusy] = useState(null)
@@ -77,7 +80,10 @@ export default function CeoIntegratedCommandDeck() {
     try {
       const d = await fetchCeoGet('/api/ceo/god-mode/snapshot')
       setGod(d)
-      if (d.scan_interval_secs != null) setIntervalInput(String(d.scan_interval_secs))
+      if (d.scan_interval_secs != null && !intervalHydratedRef.current) {
+        setIntervalInput(String(d.scan_interval_secs))
+        intervalHydratedRef.current = true
+      }
     } catch (e) {
       setGodErr(e.message || t('components.ceo.integratedCommandDeck.godModeSnapshotFailed'))
     }

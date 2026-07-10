@@ -76,7 +76,7 @@ function normalizeQuery(raw, index, t) {
 const SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#22d3ee', info: '#6b7280' }
 const IOC_TYPE_ICON = { ip: '🌐', domain: '🔗', hash: '#️⃣', email: '✉️', url: '🔍' }
 
-function exportIocsCsv(iocs, t) {
+function exportIocsCsv(iocs) {
   const header = ['type', 'value', 'source', 'severity', 'added', 'tags']
   const rows = iocs.map((ioc) => [
     ioc.type,
@@ -413,10 +413,12 @@ export default function ThreatHuntingWorkbench() {
     }
     return campaigns.map((c) => ({
       id: c.id,
-      severity: c.severity || 'medium',
-      title: c.name || c.id,
+      severity: c.priority || 'medium',
+      title: c.title || c.id,
       type: c.status || 'campaign',
-      description: String(c.hitsFound ?? 0),
+      // Include the hypothesis so search matches the hunt's actual content,
+      // not just its numeric hit count.
+      description: `${c.hypothesis || ''} ${c.hitsFound ?? 0}`.trim(),
     }))
   }, [activeTab, iocs, campaigns])
 
@@ -558,7 +560,7 @@ export default function ThreatHuntingWorkbench() {
                 {iocs.length > 0 && visibleIocs.length === 0 ? (
                   <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
                 ) : (
-                  <IocTable iocs={visibleIocs} t={t} onExport={() => exportIocsCsv(iocs, t)} />
+                  <IocTable iocs={visibleIocs} t={t} onExport={() => exportIocsCsv(iocs)} />
                 )}
               </motion.div>
             )}

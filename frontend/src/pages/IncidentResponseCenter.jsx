@@ -474,7 +474,7 @@ export default function IncidentResponseCenter() {
     severity: i.severity || 'medium',
     title: i.title || i.id,
     type: i.status || 'incident',
-    description: i.summary || '',
+    description: i.description || '',
     resource: i.assignee || '',
   })), [incidents])
 
