@@ -100,6 +100,7 @@ mod tests {
             status: "ok".into(),
             recovered: true,
             error: None,
+            failure_class: None,
         };
         record("telemetry_test_engine_zzz", &telem);
         record("telemetry_test_engine_zzz", &telem);
@@ -124,6 +125,7 @@ mod tests {
             status: "timeout".into(),
             recovered: false,
             error: Some("timed out".into()),
+            failure_class: Some("timeout".into()),
         };
         record("telemetry_fail_engine_zzz", &telem);
         let snap = snapshot();
