@@ -292,6 +292,170 @@ async fn api_heal_verify_attestation(
         .into_response()
 }
 
+/// Enqueue an auto-heal approved from a Slack button, using env GitHub token + configured repo.
+async fn enqueue_heal_from_slack(
+    state: &Arc<AppState>,
+    tenant_id: i64,
+    client_id: i64,
+    finding_id: &str,
+) -> Result<String, String> {
+    let token = std::env::var("WEISSMAN_GITHUB_TOKEN").unwrap_or_default();
+    if token.trim().is_empty() {
+        return Err("no WEISSMAN_GITHUB_TOKEN configured".into());
+    }
+    let mut tx = db::begin_tenant_tx(&state.app_pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let repo_cfg: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'auto_heal_repo_slug'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let repo = repo_cfg
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("WEISSMAN_AUTOHEAL_REPO").ok())
+        .unwrap_or_default();
+    if repo.trim().is_empty() {
+        let _ = tx.rollback().await;
+        return Err("no repo configured (system_configs.auto_heal_repo_slug or WEISSMAN_AUTOHEAL_REPO)".into());
+    }
+    let row = sqlx::query(
+        "SELECT id, COALESCE(generated_patch,'') AS gp, COALESCE(poc_exploit,'') AS pe FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+    )
+    .bind(client_id)
+    .bind(finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(r) = row else {
+        let _ = tx.rollback().await;
+        return Err("finding not found".into());
+    };
+    let vuln_id: i64 = r.try_get("id").unwrap_or(0);
+    let patch: String = r.try_get("gp").unwrap_or_default();
+    let poc: String = r.try_get("pe").unwrap_or_default();
+    if patch.trim().is_empty() {
+        let _ = tx.rollback().await;
+        return Err("finding has no generated patch".into());
+    }
+    let spec_id = uuid::Uuid::new_v4();
+    let ins = sqlx::query(
+        r#"INSERT INTO auto_heal_job_specs (id, tenant_id, client_id, vuln_id, finding_id, git_token, repo_slug, base_branch, patch_text, poc_curl, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'main', $8, $9, 'pending')"#,
+    )
+    .bind(spec_id)
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(vuln_id)
+    .bind(finding_id)
+    .bind(&token)
+    .bind(&repo)
+    .bind(&patch)
+    .bind(&poc)
+    .execute(&mut *tx)
+    .await;
+    if ins.is_err() {
+        let _ = tx.rollback().await;
+        return Err("failed to persist heal spec".into());
+    }
+    let _ = tx.commit().await;
+    db::job_queue::enqueue_with_max_attempts(
+        state.app_pool.as_ref(),
+        tenant_id,
+        "auto_heal",
+        json!({ "spec_id": spec_id.to_string() }),
+        None,
+        5,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(spec_id.to_string())
+}
+
+/// `POST /api/integrations/slack/interactivity` — Slack interactive-message callback (signature
+/// verified, not JWT). Handles Approve / Dismiss buttons on a heal proposal.
+async fn api_slack_interactivity(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    let secret = std::env::var("WEISSMAN_SLACK_SIGNING_SECRET").unwrap_or_default();
+    if secret.trim().is_empty() {
+        return (StatusCode::SERVICE_UNAVAILABLE, "slack interactivity not configured").into_response();
+    }
+    let ts = headers
+        .get("x-slack-request-timestamp")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let sig = headers
+        .get("x-slack-signature")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let ts_num: i64 = ts.parse().unwrap_or(0);
+    if ts_num == 0 || (now - ts_num).abs() > 300 {
+        return (StatusCode::UNAUTHORIZED, "stale request").into_response();
+    }
+    if !crate::slack_interactivity::verify_slack_signature(&secret, ts, &body, sig) {
+        return (StatusCode::UNAUTHORIZED, "bad signature").into_response();
+    }
+
+    let body_str = String::from_utf8_lossy(&body);
+    let payload_raw = url::form_urlencoded::parse(body_str.as_bytes())
+        .find(|(k, _)| k == "payload")
+        .map(|(_, v)| v.to_string());
+    let Some(payload_raw) = payload_raw else {
+        return (StatusCode::OK, Json(json!({ "text": "no payload" }))).into_response();
+    };
+    let payload: Value = serde_json::from_str(&payload_raw).unwrap_or(Value::Null);
+    let Some((action_id, value)) = crate::slack_interactivity::parse_interaction(&payload) else {
+        return (StatusCode::OK, Json(json!({ "text": "no action" }))).into_response();
+    };
+
+    match crate::slack_interactivity::SlackHealAction::from_action_id(&action_id) {
+        crate::slack_interactivity::SlackHealAction::Approve => {
+            let Some((tenant_id, client_id, finding_id)) =
+                crate::slack_interactivity::verify_action_value(&value)
+            else {
+                return (
+                    StatusCode::OK,
+                    Json(json!({ "replace_original": false, "text": "⚠️ Invalid or tampered action." })),
+                )
+                    .into_response();
+            };
+            match enqueue_heal_from_slack(&state, tenant_id, client_id, &finding_id).await {
+                Ok(job) => (
+                    StatusCode::OK,
+                    Json(json!({
+                        "replace_original": true,
+                        "text": format!("✅ Auto-heal approved and queued for `{}` (job {}).", finding_id, job)
+                    })),
+                )
+                    .into_response(),
+                Err(e) => (
+                    StatusCode::OK,
+                    Json(json!({ "replace_original": false, "text": format!("⚠️ Could not start heal: {}", e) })),
+                )
+                    .into_response(),
+            }
+        }
+        crate::slack_interactivity::SlackHealAction::Dismiss => (
+            StatusCode::OK,
+            Json(json!({ "replace_original": true, "text": "Auto-heal dismissed." })),
+        )
+            .into_response(),
+        crate::slack_interactivity::SlackHealAction::Unknown => {
+            (StatusCode::OK, Json(json!({ "text": "ok" }))).into_response()
+        }
+    }
+}
+
 /// EventBridge / custom forwarder: verify `X-Weissman-Signature: sha256=<hex>` with `WEISSMAN_DECEPTION_WEBHOOK_SECRET`.
 async fn api_deception_aws_events(
     State(state): State<Arc<AppState>>,

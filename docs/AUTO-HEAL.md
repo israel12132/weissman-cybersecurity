@@ -123,7 +123,10 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 | GET        | `/api/heal-verify/:job_id/patch`                    | Download the verified diff / WAF snippet |
 | GET        | `/api/heal-verify/:job_id/attestation`              | Verify the signed heal receipt           |
 | GET        | `/api/clients/:id/heal-stats`                       | Aggregate heal analytics                 |
+| POST       | `/api/clients/:id/heal-batch`                       | Batch-heal many findings at once          |
+| GET        | `/api/clients/:id/heal-stats`                       | (also feeds the visual analytics panel)   |
 | GET        | `/api/clients/:id/heal-requests`                    | Heal request history                     |
+| POST       | `/api/integrations/slack/interactivity`             | Slack Approve/Dismiss callback (signed)   |
 
 ## Environment variables
 
@@ -140,6 +143,9 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 | `WEISSMAN_GITLAB_HOST`                  | `gitlab.com`   | GitLab host for the `gitlab_mr` channel           |
 | `WEISSMAN_ATTESTATION_KEY`              | (derived)      | HMAC key for signed heal receipts                 |
 | `WEISSMAN_REGRESSION_ALERT`             | on             | Fire an alert when a fixed finding reopens        |
+| `WEISSMAN_HEAL_DEDUP_HOURS`             | `24`           | (also above) duplicate-PR window                  |
+| `WEISSMAN_SLACK_SIGNING_SECRET`         | (unset)        | Enables the Slack interactivity approval endpoint |
+| `WEISSMAN_AUTOHEAL_REPO`                | (unset)        | Default repo for Slack-approved / config-less heals |
 | `WEISSMAN_AUTOHEAL_SKIP_SANDBOX`        | `0`            | Legacy advisory path (unverified) — testing only  |
 
 ## Key modules

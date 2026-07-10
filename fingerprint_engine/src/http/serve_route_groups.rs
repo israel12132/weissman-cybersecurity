@@ -571,6 +571,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/deception/triggered", post(api_deception_triggered))
         .route("/api/deception/aws-events", post(api_deception_aws_events))
+        .route("/api/integrations/slack/interactivity", post(api_slack_interactivity))
         .route("/api/v1/alerts/aws-canary", post(api_v1_alerts_aws_canary))
         .route(
             "/api/clients/:id/deception/deploy-cloud",

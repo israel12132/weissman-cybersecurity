@@ -248,6 +248,10 @@ async fn auth_guard(
     if path == "/api/deception/aws-events" && method == Method::POST {
         return next.run(request).await;
     }
+    if path == "/api/integrations/slack/interactivity" && method == Method::POST {
+        // Slack interactivity callback — authenticated by Slack's request signature, not a JWT.
+        return next.run(request).await;
+    }
     if path == "/api/openapi.json" && method == Method::GET {
         if !weissman_core::tls_policy::is_production_environment() {
             return next.run(request).await;
