@@ -96,6 +96,15 @@ impl FailureClass {
     }
 }
 
+/// Passed to each retry attempt so the engine can *act* on why the previous attempt failed
+/// rather than blindly re-running. `force_ghost_network` is set after a WAF/rate-limit block
+/// so the next attempt turns on the Ghost Network (identity morphing + jitter + proxy swarm).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EscalationHint {
+    pub attempt: u32,
+    pub force_ghost_network: bool,
+}
+
 /// Classify a failed attempt from its status + message. Mirrors the heuristics in
 /// `stealth::is_waf_or_rate_limit` for the WAF case so both layers agree on what a block is.
 pub fn classify_failure(status: &str, message: &str) -> FailureClass {
@@ -137,11 +146,10 @@ pub fn classify_failure(status: &str, message: &str) -> FailureClass {
     FailureClass::Generic
 }
 
-/// Escalate retry behaviour based on *why* the last attempt failed, instead of re-running
-/// the same request against a string-permuted target. Today: widen the per-attempt budget
-/// on timeouts, and record WAF blocks so the next scheduler pass / operator can force the
-/// Ghost Network. Full inline stealth/proxy rotation is a follow-up that needs the engine
-/// closure to accept an escalation profile.
+/// Escalate retry behaviour based on *why* the last attempt failed, instead of re-running the
+/// same request against a string-permuted target. Widens the per-attempt budget on timeouts and
+/// records WAF blocks; the WAF case ALSO flips [`EscalationHint::force_ghost_network`] for the
+/// next attempt (applied by the caller's closure via `engine_dispatch::apply_ghost_escalation`).
 fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
     match class {
         FailureClass::Timeout => {
@@ -201,9 +209,10 @@ fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
 
 /// Run an engine with panic isolation, per-attempt timeout, and adaptive multi-strategy retry.
 ///
-/// `run(variant)` produces the engine future for a given target variant; it is invoked once per
-/// strategy until one returns a non-error result (success, including a clean empty result) or all
-/// strategies are exhausted. Never panics or times out the caller.
+/// `run(variant, hint)` produces the engine future for a given target variant; it is invoked
+/// once per strategy until one returns a non-error result (success, including a clean empty
+/// result) or all strategies are exhausted. `hint` lets the caller escalate evasion after a
+/// WAF/rate-limit block (see [`EscalationHint`]). Never panics or times out the caller.
 pub async fn run_with_resilience<F, Fut>(
     engine_id: &str,
     target: &str,
@@ -211,7 +220,7 @@ pub async fn run_with_resilience<F, Fut>(
     mut run: F,
 ) -> (EngineResult, EngineExecTelemetry)
 where
-    F: FnMut(String) -> Fut,
+    F: FnMut(String, EscalationHint) -> Fut,
     Fut: Future<Output = EngineResult> + Send,
 {
     let strategies = target_strategies(target);
@@ -227,7 +236,12 @@ where
     for variant in &strategies {
         attempts += 1;
         metrics::counter!("weissman_engine_attempt_total").increment(1);
-        let fut = run(variant.clone());
+        // After a WAF/rate-limit block, tell the next attempt to go stealthy.
+        let hint = EscalationHint {
+            attempt: attempts,
+            force_ghost_network: matches!(last_class, Some(FailureClass::Waf)),
+        };
+        let fut = run(variant.clone(), hint);
         match tokio::time::timeout(current_timeout, AssertUnwindSafe(fut).catch_unwind()).await {
             Ok(Ok(result)) => {
                 if should_retry_status(&result.status) {
@@ -335,7 +349,7 @@ mod tests {
             "flaky",
             "https://example.com",
             Duration::from_secs(2),
-            move |_variant| {
+            move |_variant, _hint| {
                 let n = c.fetch_add(1, Ordering::SeqCst);
                 async move {
                     if n == 0 {
@@ -358,7 +372,7 @@ mod tests {
         let calls = Arc::new(AtomicU32::new(0));
         let c = calls.clone();
         let (result, telem) =
-            run_with_resilience("quiet", "example.com", Duration::from_secs(2), move |_v| {
+            run_with_resilience("quiet", "example.com", Duration::from_secs(2), move |_v, _hint| {
                 c.fetch_add(1, Ordering::SeqCst);
                 async move { EngineResult::ok(vec![], "no live signal observed") }
             })
@@ -375,7 +389,7 @@ mod tests {
             "panicky",
             "example.com",
             Duration::from_secs(2),
-            move |_v| async move {
+            move |_v, _hint| async move {
                 panic!("engine blew up");
                 #[allow(unreachable_code)]
                 EngineResult::ok(vec![], "")
@@ -394,7 +408,7 @@ mod tests {
             "hung",
             "example.com",
             Duration::from_millis(40),
-            move |_v| async move {
+            move |_v, _hint| async move {
                 tokio::time::sleep(Duration::from_secs(5)).await;
                 EngineResult::ok(vec![], "")
             },
@@ -454,10 +468,39 @@ mod tests {
             "blocked",
             "example.com",
             Duration::from_secs(2),
-            move |_v| async move { EngineResult::error("HTTP 403 blocked by WAF") },
+            move |_v, _hint| async move { EngineResult::error("HTTP 403 blocked by WAF") },
         )
         .await;
         assert_eq!(result.status, "error");
         assert_eq!(telem.failure_class.as_deref(), Some("waf"));
+    }
+
+    #[tokio::test]
+    async fn waf_block_forces_ghost_network_on_next_attempt() {
+        let hints: Arc<std::sync::Mutex<Vec<bool>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let h = hints.clone();
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let _ = run_with_resilience(
+            "wafed",
+            "https://example.com",
+            Duration::from_secs(2),
+            move |_v, hint| {
+                h.lock().unwrap().push(hint.force_ghost_network);
+                let n = c.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    if n == 0 {
+                        EngineResult::error("HTTP 403 blocked by WAF")
+                    } else {
+                        EngineResult::ok(vec![], "ok")
+                    }
+                }
+            },
+        )
+        .await;
+        let recorded = hints.lock().unwrap().clone();
+        // First attempt: no prior failure. Second attempt (after the WAF block): ghost network.
+        assert_eq!(recorded.first(), Some(&false));
+        assert_eq!(recorded.get(1), Some(&true));
     }
 }

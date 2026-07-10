@@ -147,6 +147,7 @@ pub mod sso_management;
 pub mod stealth_engine;
 pub mod strategic_analyzer;
 pub mod superposition_followup;
+pub mod target_profile;
 pub mod telemetry_bus;
 pub mod template_engine;
 pub mod template_probe;

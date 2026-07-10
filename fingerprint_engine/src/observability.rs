@@ -58,10 +58,22 @@ fn build_otel_layer(
         .map_err(|e| eprintln!("[Weissman][otel] exporter build failed: {e}"))
         .ok()?;
 
+    // Distinguish server vs worker (and env) in the trace backend. Each component sets
+    // WEISSMAN_SERVICE_NAME (e.g. weissman-server / weissman-worker); defaults to "weissman".
+    let service_name = std::env::var("WEISSMAN_SERVICE_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "weissman".to_string());
+    let deployment_env = std::env::var("WEISSMAN_ENV")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "dev".to_string());
     let provider = opentelemetry_sdk::trace::TracerProvider::builder()
         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_resource(opentelemetry_sdk::Resource::new(vec![
-            opentelemetry::KeyValue::new("service.name", "weissman"),
+            opentelemetry::KeyValue::new("service.name", service_name),
+            opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+            opentelemetry::KeyValue::new("deployment.environment", deployment_env),
         ]))
         .build();
     let tracer = provider.tracer("weissman");
