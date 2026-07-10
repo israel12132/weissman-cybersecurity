@@ -14,6 +14,7 @@ import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
 import { bulkUpdateFindingStatus } from '../lib/bulkFindingStatus'
+import { useSavedViews } from '../hooks/useSavedViews'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
 import { useToast } from '../components/ui/Toaster'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
@@ -415,6 +416,10 @@ export default function FindingsCommandCenter() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [selectionResetSignal, setSelectionResetSignal] = useState(0)
 
+  // Saved views (named filter/sort snapshots, per-user, localStorage)
+  const { views: savedViews, saveView, deleteView } = useSavedViews('weissman_findings_views')
+  const [viewName, setViewName] = useState('')
+
   const loadFindings = useCallback(() => {
     setLoading(true)
     setError(null)
@@ -544,6 +549,26 @@ export default function FindingsCommandCenter() {
     if (statusFilter) f.push({ id: 'status', value: statusFilter })
     return f
   }, [severityFilter, engineFilter, statusFilter])
+
+  // Snapshot / restore the full filter+sort state for saved views.
+  const saveCurrentView = useCallback(() => {
+    const name = viewName.trim()
+    if (!name) return
+    saveView(name, { globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, sorting })
+    setViewName('')
+    toast.success(t('findings.view_saved', { name }))
+  }, [viewName, saveView, globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, sorting, toast, t])
+
+  const applyView = useCallback((state) => {
+    if (!state) return
+    setGlobalFilter(state.globalFilter ?? '')
+    setSeverityFilter(state.severityFilter ?? '')
+    setEngineFilter(state.engineFilter ?? '')
+    setStatusFilter(state.statusFilter ?? '')
+    setKevFilter(Boolean(state.kevFilter))
+    if (Array.isArray(state.sorting)) setSorting(state.sorting)
+    setPagination((p) => ({ ...p, pageIndex: 0 }))
+  }, [])
 
   const totalFiltered = useMemo(() => {
     let count = 0
@@ -791,6 +816,42 @@ export default function FindingsCommandCenter() {
                   {t('common.clear_filters')}
                 </button>
               )}
+            </div>
+
+            {/* Saved views — named filter/sort snapshots (per-user, local). */}
+            <div className="flex flex-wrap items-center gap-2 pt-3 mt-1 border-t border-[var(--border-subtle)]">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('findings.views_label')}</span>
+              {savedViews.map((v) => (
+                <span key={v.id} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] pl-2.5 pr-1 py-1 text-[11px] font-mono text-[var(--text-secondary)]">
+                  <button type="button" onClick={() => applyView(v.state)} className="hover:text-cyan-300 transition-colors" title={t('findings.view_apply')}>
+                    {v.name}
+                  </button>
+                  <button type="button" onClick={() => deleteView(v.id)} aria-label={t('findings.view_delete', { name: v.name })} className="w-4 h-4 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-300 transition-colors">×</button>
+                </span>
+              ))}
+              {savedViews.length === 0 && (
+                <span className="text-[11px] font-mono text-[var(--text-disabled)]">{t('findings.views_empty')}</span>
+              )}
+              <form
+                className="inline-flex items-center gap-1.5 ms-auto"
+                onSubmit={(e) => { e.preventDefault(); saveCurrentView() }}
+              >
+                <input
+                  type="text"
+                  value={viewName}
+                  onChange={(e) => setViewName(e.target.value)}
+                  placeholder={t('findings.view_name_placeholder')}
+                  aria-label={t('findings.view_name_placeholder')}
+                  className="w-40 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+                />
+                <button
+                  type="submit"
+                  disabled={!viewName.trim()}
+                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {t('findings.view_save')}
+                </button>
+              </form>
             </div>
           </div>
         )}
