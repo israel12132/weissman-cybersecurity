@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // i18n returns the key so assertions are stable without a provider. initReactI18next/Trans
 // are exported too because a transitively-imported child (ProfileMenu) runs src/i18n/index.js.
@@ -50,12 +51,16 @@ const resp = (over = {}) => ({
   ...over,
 })
 
-const renderPage = () =>
-  render(
-    <MemoryRouter>
-      <AgentManagement />
-    </MemoryRouter>,
+const renderPage = () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <AgentManagement />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
+}
 
 describe('AgentManagement', () => {
   beforeEach(() => {
@@ -68,7 +73,7 @@ describe('AgentManagement', () => {
       if (url === '/api/agents/status') {
         return Promise.resolve(resp({ text: async () => JSON.stringify({ agents: [] }) }))
       }
-      if (url === '/api/clients') return Promise.resolve(resp({ json: async () => [] }))
+      if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
       return Promise.resolve(resp())
     })
     renderPage()
@@ -80,7 +85,7 @@ describe('AgentManagement', () => {
       if (url === '/api/agents/status') {
         return Promise.resolve(resp({ ok: false, status: 500, text: async () => JSON.stringify({ detail: 'backend exploded' }) }))
       }
-      if (url === '/api/clients') return Promise.resolve(resp({ json: async () => [] }))
+      if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
       return Promise.resolve(resp())
     })
     renderPage()
@@ -90,7 +95,7 @@ describe('AgentManagement', () => {
   it('treats a 404 status endpoint as an empty fleet, not an error', async () => {
     apiFetch.mockImplementation((url) => {
       if (url === '/api/agents/status') return Promise.resolve(resp({ status: 404 }))
-      if (url === '/api/clients') return Promise.resolve(resp({ json: async () => [] }))
+      if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
       return Promise.resolve(resp())
     })
     renderPage()
