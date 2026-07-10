@@ -808,10 +808,27 @@ async fn execute_job_unscoped(
                 weissman_core::models::engine::order_engines_by_registry(&production_engines);
             let ordered_engines =
                 crate::ws_intelligence_bus::prioritize_ws_intelligence_chain(ordered_engines);
-            // Reorder so engines most relevant to THIS target (web vs bare IP vs IPv6, TLS
-            // ports, …) run first. Reorder-only — no engine is dropped.
-            let ordered_engines = crate::target_profile::TargetProfile::classify(&target)
-                .prioritize(&ordered_engines);
+            // Classify THIS target (what / where / who) and select + prioritize the engine
+            // set most relevant to it, backed by the authoritative engine→group taxonomy.
+            // Reorder-only — no engine is dropped; the profile summary and recommended focus
+            // set are surfaced for operator visibility.
+            let target_profile = crate::target_profile::TargetProfile::classify(&target);
+            let selection = target_profile.select(&ordered_engines);
+            {
+                let summary = selection
+                    .profile_summary
+                    .replace('\\', "/")
+                    .replace('"', "'");
+                let _ = telemetry.send(format!(
+                    r#"{{"job_id":"{}","message":"Target profile → {} · focus {}/{} engines","status":"running"}}"#,
+                    job.id,
+                    summary,
+                    selection.focus.len(),
+                    ordered_engines.len()
+                ));
+            }
+            let ordered_engines: Vec<String> =
+                selection.ranked.into_iter().map(|c| c.engine_id).collect();
 
             let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
             let mut cross_job_params = serde_json::json!({});
