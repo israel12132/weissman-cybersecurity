@@ -128,7 +128,9 @@ export default function OobVerification() {
   })), [callbacks, probeType])
 
   const recentListFindings = useMemo(() => recentHits.map((c, i) => ({
-    id: c.id || `recent-${i}`,
+    // Always namespace so a callback that appears in BOTH lists (same c.id)
+    // can't share an id and leak between the two filtered views.
+    id: `recent-${c.id ?? i}`,
     severity: 'info',
     title: c.source_ip || c.channel || 'callback',
     type: c.probe_type || c.channel || 'callback',
@@ -155,7 +157,7 @@ export default function OobVerification() {
   const visibleRecentHits = useMemo(() => {
     if (!searchQuery.trim()) return recentHits
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
-    return recentHits.filter((c, i) => ids.has(String(c.id || `recent-${i}`)))
+    return recentHits.filter((c, i) => ids.has(String(`recent-${c.id ?? i}`)))
   }, [recentHits, filteredFindings, searchQuery])
 
   const recentHitsColumns = useMemo(() => [

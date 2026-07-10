@@ -821,7 +821,7 @@ export default function SystemCore() {
               type="number"
               min={0}
               value={poeMaxPocLength}
-              onChange={(e) => setPoeMaxPocLength(Math.max(0, parseInt(e.target.value, 10) ?? 0))}
+              onChange={(e) => { const n = parseInt(e.target.value, 10); setPoeMaxPocLength(Number.isNaN(n) ? 0 : Math.max(0, n)) }}
               onBlur={() => saveConfig('poe_max_poc_length', String(poeMaxPocLength))}
               className="w-36 rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200"
             />

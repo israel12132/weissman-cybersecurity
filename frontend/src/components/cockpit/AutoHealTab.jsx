@@ -278,8 +278,7 @@ export default function AutoHealTab() {
                   {String(req.verification_status || '').includes('verified') && (
                     <CheckCircle className="w-4 h-4 text-[#10b981]" />
                   )}
-                  {String(req.verification_status || '').includes('sandbox_failed') ||
-                  String(req.verification_status || '').includes('pr_failed') ? (
+                  {String(req.verification_status || '').includes('failed') ? (
                     <Clock className="w-4 h-4 text-red-400" />
                   ) : null}
                   {!String(req.verification_status || '').includes('verified') &&
