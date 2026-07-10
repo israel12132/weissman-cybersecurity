@@ -165,6 +165,22 @@ pub async fn mutation_rbac_middleware(req: Request, next: Next) -> Response {
         return next.run(req).await;
     }
     let Some(auth) = req.extensions().get::<AuthContext>().cloned() else {
+        // A mutating /api request reached the RBAC layer with no AuthContext. For the
+        // declared public POSTs (signup/webhooks/refresh/…) this is expected; but any
+        // *protected* path here — or a spike above the public-POST baseline — means
+        // `auth_guard` did not run, a layer-ordering regression that would silently open
+        // every mutation. Emit fail-closed telemetry so it is observable, without changing
+        // behaviour. Login/MFA-verify are excluded as the highest-frequency expected case.
+        let path = req.uri().path();
+        if !crate::http::is_account_lockout_post(&method, path) {
+            metrics::counter!("weissman_rbac_missing_authcontext_total").increment(1);
+            tracing::warn!(
+                target: "rbac",
+                method = %method,
+                path = %path,
+                "mutating request reached RBAC with no AuthContext (expected only for public POSTs; investigate if this is a protected route)"
+            );
+        }
         return next.run(req).await;
     };
     // Agent JWTs use a separate role space; their routes enforce `require_agent`.
