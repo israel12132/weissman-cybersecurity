@@ -186,6 +186,9 @@ pub struct Provenance {
     pub idn: bool,
     /// Mixed-script label — a classic homograph / spoofing signal.
     pub homograph_risk: bool,
+    /// IPs the host actively resolved to (populated by `enrich_dns`; empty until
+    /// active enrichment runs).
+    pub resolved_ips: Vec<IpAddr>,
     /// Human-readable "why we concluded this" trail.
     pub evidence: Vec<String>,
 }
@@ -223,175 +226,45 @@ pub struct TargetProfile {
 // Static knowledge tables
 // ---------------------------------------------------------------------------
 
-/// Multi-label public suffixes (eTLD). Single-label TLDs are handled by the
-/// default fallback, so only suffixes where the naive "last label" rule would be
-/// wrong are listed. Curated ICANN subset covering the common ccTLD registries;
-/// `*` matches exactly one label and a leading `!` marks an exception rule.
-static PUBLIC_SUFFIX_RULES: &[&str] = &[
-    // United Kingdom
-    "co.uk",
-    "org.uk",
-    "gov.uk",
-    "ac.uk",
-    "me.uk",
-    "ltd.uk",
-    "plc.uk",
-    "net.uk",
-    "sch.uk",
-    "nhs.uk",
-    "police.uk",
-    "mod.uk",
-    // Australia / New Zealand
-    "com.au",
-    "net.au",
-    "org.au",
-    "edu.au",
-    "gov.au",
-    "id.au",
-    "asn.au",
-    "co.nz",
-    "org.nz",
-    "net.nz",
-    "govt.nz",
-    "ac.nz",
-    "geek.nz",
-    "school.nz",
-    // Japan / Korea
-    "co.jp",
-    "or.jp",
-    "ne.jp",
-    "ac.jp",
-    "go.jp",
-    "ad.jp",
-    "ed.jp",
-    "gr.jp",
-    "lg.jp",
-    "co.kr",
-    "or.kr",
-    "ne.kr",
-    "go.kr",
-    "re.kr",
-    "pe.kr",
-    // China / Hong Kong / Taiwan
-    "com.cn",
-    "net.cn",
-    "org.cn",
-    "gov.cn",
-    "edu.cn",
-    "ac.cn",
-    "com.hk",
-    "org.hk",
-    "gov.hk",
-    "edu.hk",
-    "idv.hk",
-    "com.tw",
-    "org.tw",
-    "gov.tw",
-    "edu.tw",
-    "net.tw",
-    // India / Singapore / Malaysia / Indonesia / Philippines / Thailand / Vietnam
-    "co.in",
-    "net.in",
-    "org.in",
-    "gov.in",
-    "ac.in",
-    "edu.in",
-    "firm.in",
-    "gen.in",
-    "ind.in",
-    "com.sg",
-    "net.sg",
-    "org.sg",
-    "gov.sg",
-    "edu.sg",
-    "com.my",
-    "gov.my",
-    "org.my",
-    "edu.my",
-    "co.id",
-    "ac.id",
-    "or.id",
-    "go.id",
-    "web.id",
-    "com.ph",
-    "gov.ph",
-    "org.ph",
-    "co.th",
-    "ac.th",
-    "go.th",
-    "in.th",
-    "com.vn",
-    "gov.vn",
-    "edu.vn",
-    // Middle East / Africa
-    "co.il",
-    "org.il",
-    "gov.il",
-    "ac.il",
-    "net.il",
-    "muni.il",
-    "idf.il",
-    "k12.il",
-    "com.sa",
-    "gov.sa",
-    "edu.sa",
-    "org.sa",
-    "com.eg",
-    "gov.eg",
-    "edu.eg",
-    "co.za",
-    "org.za",
-    "gov.za",
-    "ac.za",
-    "net.za",
-    "web.za",
-    "co.ke",
-    "or.ke",
-    "go.ke",
-    "com.ng",
-    "gov.ng",
-    "edu.ng",
-    // Europe / Americas
-    "gouv.fr",
-    "gc.ca",
-    "qc.ca",
-    "com.br",
-    "net.br",
-    "org.br",
-    "gov.br",
-    "edu.br",
-    "com.mx",
-    "gob.mx",
-    "org.mx",
-    "edu.mx",
-    "com.ar",
-    "gob.ar",
-    "org.ar",
-    "com.ua",
-    "gov.ua",
-    "org.ua",
-    "com.pl",
-    "gov.pl",
-    "org.pl",
-    "net.pl",
-    "edu.pl",
-    "com.tr",
-    "gov.tr",
-    "org.tr",
-    "edu.tr",
-    "com.co",
-    "net.co",
-    "nom.co",
-    "gov.co",
-    "com.ru",
-    "org.ru",
-    "net.ru",
-    "gov.ru",
-    // Internal / infrastructure namespaces
-    "home.arpa",
-    "in-addr.arpa",
-    "ip6.arpa",
-];
+/// The full Public Suffix List (publicsuffix.org), normalized to ASCII a-labels
+/// and embedded at build time. `*.x` marks a wildcard rule, `!x` an exception;
+/// ICANN + PRIVATE sections are merged (browser eTLD+1 semantics).
+static PUBLIC_SUFFIX_LIST: &str = include_str!("../../shared/public_suffix_list.psl");
+
+/// Parsed PSL: exact rules, wildcard tails (the part after `*.`), and exception
+/// tails (the part after `!`). Built once from the embedded list.
+struct PslData {
+    rules: std::collections::HashSet<&'static str>,
+    wildcards: std::collections::HashSet<&'static str>,
+    exceptions: std::collections::HashSet<&'static str>,
+}
+
+fn psl() -> &'static PslData {
+    static PSL: std::sync::OnceLock<PslData> = std::sync::OnceLock::new();
+    PSL.get_or_init(|| {
+        let mut rules = std::collections::HashSet::new();
+        let mut wildcards = std::collections::HashSet::new();
+        let mut exceptions = std::collections::HashSet::new();
+        for line in PUBLIC_SUFFIX_LIST.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+            if let Some(exc) = line.strip_prefix('!') {
+                exceptions.insert(exc);
+            } else if let Some(tail) = line.strip_prefix("*.") {
+                wildcards.insert(tail);
+            } else {
+                rules.insert(line);
+            }
+        }
+        PslData {
+            rules,
+            wildcards,
+            exceptions,
+        }
+    })
+}
 
 /// Managed-hosting suffixes → (provider, category). Category ∈
 /// `cloud` | `cdn` | `object-store` | `saas`. Longest match wins.
@@ -632,61 +505,69 @@ fn is_private_class(nc: NetworkClass) -> bool {
     )
 }
 
-fn ends_with_labels(labels: &[&str], suffix: &[&str]) -> bool {
-    if suffix.len() > labels.len() {
-        return false;
+/// Number of labels in the effective public suffix of an ASCII a-label host,
+/// per the embedded Public Suffix List (wildcard + exception aware). O(labels):
+/// each suffix slice is looked up against the rule sets. Defaults to a single
+/// label (the bare TLD) when no rule matches.
+fn public_suffix_len(host_ascii: &str) -> usize {
+    let labels: Vec<&str> = host_ascii.split('.').collect();
+    let n = labels.len();
+    if n == 0 {
+        return 0;
     }
-    let offset = labels.len() - suffix.len();
-    labels[offset..].iter().zip(suffix).all(|(a, b)| a == b)
+    // Byte offset in `host_ascii` where each label's suffix slice begins.
+    let mut offsets = Vec::with_capacity(n);
+    let mut off = 0usize;
+    for l in &labels {
+        offsets.push(off);
+        off += l.len() + 1; // + '.'
+    }
+    let p = psl();
+    // Exception rules win outright: the public suffix is the rule minus its
+    // leftmost label.
+    for i in 0..n {
+        if p.exceptions.contains(&host_ascii[offsets[i]..]) {
+            return (n - i).saturating_sub(1).max(1);
+        }
+    }
+    // Longest matching normal/wildcard rule (smallest i => longest suffix).
+    for i in 0..n {
+        if p.rules.contains(&host_ascii[offsets[i]..]) {
+            return n - i;
+        }
+        // A wildcard rule `*.<suffix(i+1)>` treats label i as the wildcard.
+        if i + 1 < n && p.wildcards.contains(&host_ascii[offsets[i + 1]..]) {
+            return n - i;
+        }
+    }
+    1
 }
 
-/// Number of labels in the effective public suffix for `labels`, per the
-/// curated PSL rules (with `*` wildcard and `!` exception support). Defaults to
-/// a single label (the bare TLD) when no rule matches.
-fn public_suffix_len(labels: &[&str]) -> usize {
-    // Exception rules are authoritative and win outright.
-    for rule in PUBLIC_SUFFIX_RULES {
-        if let Some(stripped) = rule.strip_prefix('!') {
-            let rlabels: Vec<&str> = stripped.split('.').collect();
-            if ends_with_labels(labels, &rlabels) {
-                return rlabels.len().saturating_sub(1).max(1);
-            }
-        }
+/// Lower-case ASCII a-label form of a host (punycode-encodes IDN labels), so the
+/// full PSL — which is stored in a-label form — applies to internationalised
+/// hostnames too. Falls back to a plain lower-case if idna encoding fails.
+fn to_ascii_host(host: &str) -> String {
+    if host.is_ascii() {
+        host.to_ascii_lowercase()
+    } else {
+        idna::domain_to_ascii(host).unwrap_or_else(|_| host.to_ascii_lowercase())
     }
-    let n = labels.len();
-    let mut best = 1usize;
-    for rule in PUBLIC_SUFFIX_RULES {
-        if rule.starts_with('!') {
-            continue;
-        }
-        let rlabels: Vec<&str> = rule.split('.').collect();
-        if rlabels.len() > n {
-            continue;
-        }
-        let offset = n - rlabels.len();
-        let matched = rlabels
-            .iter()
-            .enumerate()
-            .all(|(i, rl)| *rl == "*" || *rl == labels[offset + i]);
-        if matched && rlabels.len() > best {
-            best = rlabels.len();
-        }
-    }
-    best
 }
 
 /// Returns (registrable_domain, subdomain, public_suffix) for a hostname, or
-/// `None` for literal IPs / bare public suffixes.
+/// `None` for literal IPs / bare public suffixes. IDN hosts are normalized to
+/// punycode a-labels first so the full PSL applies.
 fn registrable_domain(host: &str) -> Option<(String, Option<String>, String)> {
-    let host = host.trim_end_matches('.').to_lowercase();
-    if host.is_empty() || host.parse::<IpAddr>().is_ok() {
+    let trimmed = host.trim_end_matches('.');
+    if trimmed.is_empty() || trimmed.parse::<IpAddr>().is_ok() {
         return None;
     }
-    let labels: Vec<&str> = host.split('.').collect();
+    let ascii = to_ascii_host(trimmed);
+    let labels: Vec<&str> = ascii.split('.').collect();
     if labels.len() < 2 || labels.iter().any(|l| l.is_empty()) {
         return None;
     }
-    let suffix_len = public_suffix_len(&labels);
+    let suffix_len = public_suffix_len(&ascii);
     if suffix_len >= labels.len() {
         return None; // whole host is a public suffix
     }
@@ -804,19 +685,30 @@ fn script_bucket(c: char) -> Option<u8> {
     }
 }
 
-/// (is_idn, homograph_risk) for a raw host string.
+/// (is_idn, homograph_risk) for a raw host string. Punycode labels are decoded
+/// via idna so mixed-script (confusable) detection also covers `xn--` hosts.
 fn idn_analysis(host: &str) -> (bool, bool) {
     let has_puny = host
         .split('.')
         .any(|l| l.to_ascii_lowercase().starts_with("xn--"));
     let has_non_ascii = !host.is_ascii();
     let idn = has_puny || has_non_ascii;
-    if !has_non_ascii {
-        // Punycode present but we don't decode on the hot path — flag IDN only.
-        return (idn, false);
+    if !idn {
+        return (false, false);
     }
-    // Mixed-script within any single label is a strong homograph signal.
-    let homograph = host.split('.').any(|label| {
+    // Analyse the Unicode form so raw-unicode and punycode hosts are treated
+    // alike; on decode failure fall back to the raw string.
+    let unicode = if has_puny {
+        let (u, res) = idna::domain_to_unicode(host);
+        if res.is_ok() {
+            u
+        } else {
+            host.to_string()
+        }
+    } else {
+        host.to_string()
+    };
+    let homograph = unicode.split('.').any(|label| {
         let mut buckets = [false; 6];
         for c in label.chars() {
             if let Some(b) = script_bucket(c) {
@@ -824,7 +716,7 @@ fn idn_analysis(host: &str) -> (bool, bool) {
             }
         }
         let distinct = buckets.iter().filter(|&&x| x).count();
-        // Latin + (Cyrillic|Greek|Armenian|other) mixed in one label.
+        // Latin mixed with another script in one label.
         distinct > 1 && buckets[1]
     });
     (idn, homograph)
@@ -1141,6 +1033,75 @@ impl TargetProfile {
     #[must_use]
     pub fn has(&self, facet: &str) -> bool {
         self.facets.iter().any(|f| *f == facet)
+    }
+
+    // ---- Active enrichment ---------------------------------------------
+
+    /// Active DNS enrichment: resolve the host's A/AAAA records and fold the
+    /// results back into the profile. This turns the passive, string-derived
+    /// "seed" into a network-verified profile — most importantly it detects a
+    /// hostname that actually resolves into RFC1918/loopback/ULA space (which
+    /// the passive tier cannot know) and marks the target private. Returns true
+    /// if at least one address was resolved. No-op for literal-IP targets.
+    ///
+    /// Performs one DNS lookup, so call it off the hot classification path (e.g.
+    /// once per scan job), not per engine.
+    pub async fn enrich_dns(&mut self) -> bool {
+        use hickory_resolver::config::ResolverConfig;
+        use hickory_resolver::net::runtime::TokioRuntimeProvider;
+        use hickory_resolver::TokioResolver;
+
+        if self.ip_family.is_some() || self.host.trim().is_empty() {
+            return false;
+        }
+        let resolver = match TokioResolver::builder_with_config(
+            ResolverConfig::default(),
+            TokioRuntimeProvider::default(),
+        )
+        .build()
+        {
+            Ok(r) => r,
+            Err(_) => return false,
+        };
+        let ips: Vec<IpAddr> = match resolver.lookup_ip(self.host.as_str()).await {
+            Ok(lookup) => lookup.iter().collect(),
+            Err(_) => return false,
+        };
+        if ips.is_empty() {
+            return false;
+        }
+        self.apply_resolved_ips(ips);
+        true
+    }
+
+    /// Fold resolved IPs into the profile (pure — unit-testable without DNS):
+    /// record the addresses, and if any resolves into private/internal space,
+    /// flip the profile to private and set the network class accordingly.
+    fn apply_resolved_ips(&mut self, ips: Vec<IpAddr>) {
+        if ips.is_empty() {
+            return;
+        }
+        let mut effective = self.provenance.network_class;
+        for ip in &ips {
+            let nc = network_class(*ip);
+            if is_private_class(nc) {
+                effective = nc;
+                self.is_private = true;
+                if !self.facets.contains(&"private-network") {
+                    self.facets.push("private-network");
+                }
+            } else if effective == NetworkClass::Unknown {
+                effective = nc;
+            }
+        }
+        self.provenance.network_class = effective;
+        self.provenance.evidence.push(format!(
+            "resolved to {} IP(s); network class {:?}",
+            ips.len(),
+            effective
+        ));
+        self.provenance.resolved_ips = ips;
+        self.confidence = self.confidence.saturating_add(10).min(100);
     }
 
     // ---- Selection scoring ---------------------------------------------
@@ -1793,6 +1754,102 @@ mod tests {
         let p = TargetProfile::classify("example.com");
         assert!(p.has("web"));
         assert_eq!(p.asset_class, AssetClass::WebApp);
+    }
+
+    // --- full Public Suffix List coverage ---
+
+    #[test]
+    fn psl_simple_and_multilabel() {
+        let p = TargetProfile::classify("https://a.b.example.co.uk/");
+        assert_eq!(
+            p.provenance.registrable_domain.as_deref(),
+            Some("example.co.uk")
+        );
+        assert_eq!(p.provenance.public_suffix.as_deref(), Some("co.uk"));
+        assert_eq!(p.provenance.subdomain.as_deref(), Some("a.b"));
+    }
+
+    #[test]
+    fn psl_private_section_github_io() {
+        // github.io is a PRIVATE-section public suffix in the full PSL, so the
+        // registrable "site" is the whole label — proving the full list loaded,
+        // not the old curated subset.
+        let p = TargetProfile::classify("https://myproject.github.io/");
+        assert_eq!(
+            p.provenance.registrable_domain.as_deref(),
+            Some("myproject.github.io")
+        );
+        assert_eq!(p.provenance.public_suffix.as_deref(), Some("github.io"));
+    }
+
+    #[test]
+    fn psl_wildcard_and_exception_rules() {
+        // *.ck is a wildcard suffix; !www.ck is an exception (www.ck IS registrable).
+        let wild = TargetProfile::classify("http://foo.bar.ck/");
+        assert_eq!(
+            wild.provenance.registrable_domain.as_deref(),
+            Some("foo.bar.ck")
+        );
+        let exception = TargetProfile::classify("http://www.ck/");
+        assert_eq!(
+            exception.provenance.registrable_domain.as_deref(),
+            Some("www.ck")
+        );
+    }
+
+    #[test]
+    fn psl_kawasaki_exception() {
+        // *.kawasaki.jp wildcard + !city.kawasaki.jp exception.
+        let p = TargetProfile::classify("https://www.city.kawasaki.jp/");
+        assert_eq!(
+            p.provenance.registrable_domain.as_deref(),
+            Some("city.kawasaki.jp")
+        );
+        assert_eq!(p.provenance.subdomain.as_deref(), Some("www"));
+    }
+
+    #[test]
+    fn psl_idn_host_normalized_to_punycode() {
+        // Unicode ccTLD рф → punycode xn--p1ai; registrable domain must resolve.
+        let p = TargetProfile::classify(
+            "https://\u{043F}\u{0440}\u{0438}\u{043C}\u{0435}\u{0440}.\u{0440}\u{0444}/",
+        );
+        let reg = p.provenance.registrable_domain.as_deref().unwrap_or("");
+        assert!(reg.ends_with("xn--p1ai"), "got {reg}");
+        assert!(reg.is_ascii());
+    }
+
+    #[test]
+    fn punycode_homograph_decoded_and_flagged() {
+        // Punycode of "аpple" (Cyrillic а) — must be decoded and flagged, which
+        // the previous hot-path-only implementation could not do.
+        let p = TargetProfile::classify("https://xn--pple-43d.com/");
+        assert!(p.provenance.idn);
+        assert!(p.provenance.homograph_risk);
+    }
+
+    // --- active DNS enrichment (pure fold, no network) ---
+
+    #[test]
+    fn resolved_private_ip_marks_target_private() {
+        let mut p = TargetProfile::classify("https://intranet.example.com/");
+        assert!(!p.is_private, "public until resolved");
+        let before = p.confidence;
+        p.apply_resolved_ips(vec!["10.1.2.3".parse().unwrap()]);
+        assert!(p.is_private);
+        assert!(p.has("private-network"));
+        assert_eq!(p.provenance.network_class, NetworkClass::PrivateRfc1918);
+        assert_eq!(p.provenance.resolved_ips.len(), 1);
+        assert!(p.confidence >= before);
+    }
+
+    #[test]
+    fn resolved_public_ip_keeps_public() {
+        let mut p = TargetProfile::classify("https://example.com/");
+        p.apply_resolved_ips(vec!["93.184.216.34".parse().unwrap()]);
+        assert!(!p.is_private);
+        assert_eq!(p.provenance.network_class, NetworkClass::Public);
+        assert_eq!(p.provenance.resolved_ips.len(), 1);
     }
 
     // --- taxonomy-backed selection over REAL engine ids ---

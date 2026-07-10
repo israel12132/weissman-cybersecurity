@@ -812,7 +812,11 @@ async fn execute_job_unscoped(
             // set most relevant to it, backed by the authoritative engine→group taxonomy.
             // Reorder-only — no engine is dropped; the profile summary and recommended focus
             // set are surfaced for operator visibility.
-            let target_profile = crate::target_profile::TargetProfile::classify(&target);
+            let mut target_profile = crate::target_profile::TargetProfile::classify(&target);
+            // Active DNS enrichment (once per job): verify what the host actually
+            // resolves to — catches hostnames that map into private/internal
+            // space that the passive, string-only tier cannot see.
+            let _ = target_profile.enrich_dns().await;
             let selection = target_profile.select(&ordered_engines);
             {
                 let summary = selection
