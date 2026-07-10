@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Boxes, Search, Play, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Boxes, Search, Play, Loader2, CheckCircle2, XCircle, Rocket } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import { launchEngineScan } from '../lib/launchEngineScan'
 import { parseFirstDomain } from './ArsenalConsole'
@@ -36,6 +36,33 @@ export function filterEngines(engines, query, category) {
   return engines.filter((e) => (!category || e?.category === category) && matchesQuery(e, q))
 }
 
+/** Pure: distinct engine ids from a filtered set, capped for a single stealth batch. Exported. */
+export function batchEngineIds(engines, cap = 500) {
+  if (!Array.isArray(engines)) return []
+  const seen = new Set()
+  const out = []
+  for (const e of engines) {
+    const id = e && typeof e.id === 'string' ? e.id.trim() : ''
+    if (id && !seen.has(id)) {
+      seen.add(id)
+      out.push(id)
+    }
+    if (out.length >= cap) break
+  }
+  return out
+}
+
+/** Pure: humanise a millisecond ETA (e.g. 4200 → "4s", 95000 → "1m 35s"). Exported for tests. */
+export function formatEta(ms) {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n <= 0) return '0s'
+  const s = Math.round(n / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  return rem ? `${m}m ${rem}s` : `${m}m`
+}
+
 const STATUS_ICON = { queued: CheckCircle2, running: Loader2, failed: XCircle }
 const STATUS_TONE = { queued: 'text-emerald-300', running: 'text-cyan-300', failed: 'text-rose-300' }
 
@@ -48,6 +75,8 @@ export default function ArsenalInventory({ clientId }) {
   const [category, setCategory] = useState('')
   const [target, setTarget] = useState('')
   const [runStatus, setRunStatus] = useState({})
+  const [deploying, setDeploying] = useState(false)
+  const [batch, setBatch] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,6 +115,26 @@ export default function ArsenalInventory({ clientId }) {
 
   const filtered = useMemo(() => filterEngines(engines, query, category), [engines, query, category])
   const shown = filtered.slice(0, MAX_RENDER)
+  const batchIds = useMemo(() => batchEngineIds(filtered), [filtered])
+
+  const runAll = useCallback(async () => {
+    if (deploying || clientId == null || batchIds.length === 0) return
+    setDeploying(true)
+    setBatch(null)
+    try {
+      const r = await apiFetch('/api/arsenal/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, target, engines: batchIds }),
+      })
+      const d = await r.json().catch(() => ({}))
+      setBatch(r.ok ? { ok: true, ...d } : { ok: false, detail: d?.detail || `HTTP ${r.status}` })
+    } catch (e) {
+      setBatch({ ok: false, detail: e?.message || 'deploy failed' })
+    } finally {
+      setDeploying(false)
+    }
+  }, [deploying, clientId, target, batchIds])
 
   const run = useCallback(async (engineId) => {
     if (clientId == null || runStatus[engineId] === 'running') return
@@ -111,17 +160,44 @@ export default function ArsenalInventory({ clientId }) {
             {t('pages.threatAnalysis.inv_count', { count: data?.engine_count ?? engines.length, defaultValue: '{{count}} engines' })}
           </span>
         </h3>
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('pages.threatAnalysis.inv_search', { defaultValue: 'Search the arsenal…' })}
-            className="bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40 w-56"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('pages.threatAnalysis.inv_search', { defaultValue: 'Search the arsenal…' })}
+              className="bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40 w-44 md:w-56"
+            />
+          </div>
+          {clientId != null && batchIds.length > 0 && (
+            <button
+              type="button"
+              onClick={runAll}
+              disabled={deploying}
+              title={t('pages.threatAnalysis.inv_runall_hint', { defaultValue: 'Stealth-dispatch every matching engine (rate-limited, jittered, WAF-safe)' })}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-rose-500/40 text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-wait transition-colors whitespace-nowrap"
+            >
+              {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
+              {t('pages.threatAnalysis.inv_runall', { count: batchIds.length, defaultValue: 'Run all ({{count}}) — stealth' })}
+            </button>
+          )}
         </div>
       </div>
+
+      {batch && (
+        <div className={`px-4 py-2 border-b text-[11px] font-mono ${batch.ok ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-rose-500/20 bg-rose-500/5 text-rose-200'}`}>
+          {batch.ok
+            ? t('pages.threatAnalysis.inv_batch_ok', {
+                count: batch.engines_queued ?? 0,
+                waves: batch.plan?.waves ?? 0,
+                eta: formatEta(batch.plan?.estimated_duration_ms),
+                defaultValue: 'Stealth batch queued: {{count}} engines · {{waves}} waves · ~{{eta}} drip',
+              })
+            : t('pages.threatAnalysis.inv_batch_err', { detail: batch.detail, defaultValue: 'Deploy failed: {{detail}}' })}
+        </div>
+      )}
 
       {/* Category filter */}
       <div className="px-4 py-2 border-b border-white/5 flex items-center gap-1.5 flex-wrap">

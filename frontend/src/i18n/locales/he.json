@@ -4225,7 +4225,11 @@
       "inv_run": "הרץ",
       "inv_no_client": "בחר לקוח כדי להריץ",
       "inv_more": "עוד {{count}} — צמצם את החיפוש",
-      "inv_none": "אין מנועים תואמים."
+      "inv_none": "אין מנועים תואמים.",
+      "inv_runall": "הרץ הכל ({{count}}) — חמקן",
+      "inv_runall_hint": "שיגור חמקן של כל מנוע תואם (מוגבל-קצב, jitter, בטוח מול WAF)",
+      "inv_batch_ok": "אצווה חמקנית בתור: {{count}} מנועים · {{waves}} גלים · ~{{eta}} טפטוף",
+      "inv_batch_err": "הפריסה נכשלה: {{detail}}"
     },
     "engineReliability": {
       "evidence_notice": "SLO מנועים, error budgets ומצב circuit-breaker מ-GET /api/engines/telemetry ו-GET /api/engines/capabilities. מונים משקפים ביצוע worker אמיתי — ללא theater של uptime."

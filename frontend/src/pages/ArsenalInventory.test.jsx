@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { matchesQuery, filterEngines } from './ArsenalInventory.jsx'
+import { matchesQuery, filterEngines, batchEngineIds, formatEta } from './ArsenalInventory.jsx'
 
 const ENGINES = [
   { id: 'graphql_attack', category: 'Web / API', techniques: ['T1190'] },
@@ -31,6 +31,25 @@ describe('ArsenalInventory helpers', () => {
     it('is robust to non-array input', () => {
       expect(filterEngines(null, 'x')).toEqual([])
       expect(filterEngines(undefined, '')).toEqual([])
+    })
+  })
+
+  describe('batchEngineIds', () => {
+    it('extracts distinct engine ids, capped', () => {
+      const list = [{ id: 'a' }, { id: 'b' }, { id: 'a' }, { id: '' }, {}, { id: 'c' }]
+      expect(batchEngineIds(list)).toEqual(['a', 'b', 'c'])
+      expect(batchEngineIds(list, 2)).toEqual(['a', 'b'])
+      expect(batchEngineIds(null)).toEqual([])
+    })
+  })
+
+  describe('formatEta', () => {
+    it('humanises milliseconds', () => {
+      expect(formatEta(4200)).toBe('4s')
+      expect(formatEta(60000)).toBe('1m')
+      expect(formatEta(95000)).toBe('1m 35s')
+      expect(formatEta(0)).toBe('0s')
+      expect(formatEta('nope')).toBe('0s')
     })
   })
 })
