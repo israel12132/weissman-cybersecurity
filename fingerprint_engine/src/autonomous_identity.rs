@@ -149,7 +149,7 @@ impl AutonomousSession {
             tokio::time::sleep(std::time::Duration::from_millis(sleep_ms.min(5000))).await;
         }
         if let Some(s) = stealth {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
         }
         let body = build_creds_json(
             &self.email_field,
@@ -310,7 +310,7 @@ async fn post_auth_json(
     stealth: Option<&stealth_engine::StealthConfig>,
 ) {
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let rb = client
         .post(url)

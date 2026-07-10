@@ -280,7 +280,7 @@ pub async fn run_cloud_hunter(
 
     let client = match stealth {
         Some(s) => {
-            crate::stealth_engine::apply_jitter(s);
+            crate::stealth_engine::apply_jitter(s).await;
             crate::stealth_engine::build_client(s, 10)
         }
         None => reqwest::Client::builder()
@@ -302,7 +302,7 @@ pub async fn run_cloud_hunter(
             continue;
         }
         if let Some(s) = stealth {
-            crate::stealth_engine::apply_jitter(s);
+            crate::stealth_engine::apply_jitter(s).await;
         }
 
         let cname_target = resolve_cname(&sub).await;
