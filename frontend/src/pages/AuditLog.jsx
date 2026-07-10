@@ -553,6 +553,7 @@ export default function AuditLog() {
           data={filteredEntries}
           loading={loading}
           hidePagination
+          densityToggle
           animateRows={false}
           getRowId={(e) => e.id}
           renderSubRow={renderAuditDetail}
