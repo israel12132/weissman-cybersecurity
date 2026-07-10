@@ -70,11 +70,7 @@ struct DefenseTelemetry {
 }
 
 async fn load_defense_telemetry(ctx: &EngineRunContext) -> DefenseTelemetry {
-    let (pool, tenant_id, client_id) = match (
-        ctx.app_pool.as_ref(),
-        ctx.tenant_id,
-        ctx.client_id,
-    ) {
+    let (pool, tenant_id, client_id) = match (ctx.app_pool.as_ref(), ctx.tenant_id, ctx.client_id) {
         (Some(p), Some(t), Some(c)) => (p.as_ref(), t, c),
         _ => return DefenseTelemetry::default(),
     };
@@ -197,7 +193,12 @@ pub async fn run_sovereign_active_defense_fusion_result(
         sources.push("liquid_matrix");
         telemetry.mtd_epoch_active = liquid_r.success && !liquid_r.findings.is_empty();
     }
-    if ingest_source(&mut merged, &mut maturity, "cognitive_starvation", &cognitive_r) {
+    if ingest_source(
+        &mut merged,
+        &mut maturity,
+        "cognitive_starvation",
+        &cognitive_r,
+    ) {
         sources.push("cognitive_starvation");
     }
 

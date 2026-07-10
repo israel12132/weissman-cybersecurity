@@ -51,9 +51,13 @@ mod tests {
 
     #[test]
     fn fusion_catalog_subset_of_production() {
-        let prod: std::collections::HashSet<&str> = production_engine_ids().iter().copied().collect();
+        let prod: std::collections::HashSet<&str> =
+            production_engine_ids().iter().copied().collect();
         for id in FUSION_ENGINE_IDS {
-            assert!(prod.contains(id), "fusion engine {id} missing from PRODUCTION_ENGINE_IDS");
+            assert!(
+                prod.contains(id),
+                "fusion engine {id} missing from PRODUCTION_ENGINE_IDS"
+            );
         }
     }
 }

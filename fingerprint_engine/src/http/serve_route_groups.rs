@@ -21,10 +21,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/findings/:id/status",
             patch(api_findings_update_status),
         )
-        .route(
-            "/api/findings/:id/verify",
-            post(api_findings_verify_live),
-        )
+        .route("/api/findings/:id/verify", post(api_findings_verify_live))
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))

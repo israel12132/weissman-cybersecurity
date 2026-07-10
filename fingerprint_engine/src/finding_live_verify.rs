@@ -63,15 +63,15 @@ fn weighted_confidence(checks: &[VerifyCheck]) -> f64 {
     if total <= 0.0 {
         return 0.0;
     }
-    let passed: f64 = checks
-        .iter()
-        .filter(|c| c.passed)
-        .map(|c| c.weight)
-        .sum();
+    let passed: f64 = checks.iter().filter(|c| c.passed).map(|c| c.weight).sum();
     (passed / total).clamp(0.0, 1.0)
 }
 
-fn verdict_from(confidence: f64, reproducible: bool, evidence_ok: bool) -> (&'static str, Option<&'static str>) {
+fn verdict_from(
+    confidence: f64,
+    reproducible: bool,
+    evidence_ok: bool,
+) -> (&'static str, Option<&'static str>) {
     if !evidence_ok && confidence < 0.35 {
         return ("NOISE", Some("FALSE_POSITIVE"));
     }
@@ -151,7 +151,9 @@ fn evidence_markers(raw: &Value) -> Vec<String> {
     }
     if let Some(ev) = raw.get("evidence") {
         if let Some(s) = ev.get("proof").and_then(Value::as_str) {
-            for token in ["HTTP/", "status=", "status:", "200", "301", "302", "403", "404", "500"] {
+            for token in [
+                "HTTP/", "status=", "status:", "200", "301", "302", "403", "404", "500",
+            ] {
                 if s.contains(token) {
                     markers.push(token.to_string());
                 }
@@ -181,11 +183,7 @@ async fn http_probe(url: &str) -> (bool, String, u16) {
         },
     };
     let status = resp.status().as_u16();
-    (
-        status > 0,
-        format!("HTTP {status}"),
-        status,
-    )
+    (status > 0, format!("HTTP {status}"), status)
 }
 
 async fn replay_curl_proof(proof: &str) -> (bool, String) {
@@ -198,7 +196,9 @@ async fn replay_curl_proof(proof: &str) -> (bool, String) {
             let client = match reqwest::Client::builder()
                 .timeout(Duration::from_secs(15))
                 .redirect(reqwest::redirect::Policy::limited(5))
-                .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+                .danger_accept_invalid_certs(
+                    weissman_core::tls_policy::danger_accept_invalid_certs(),
+                )
                 .build()
             {
                 Ok(c) => c,
@@ -256,11 +256,7 @@ async fn load_finding(pool: &PgPool, tenant_id: i64, row_id: i64) -> Result<Find
     })
 }
 
-async fn load_client_domains(
-    pool: &PgPool,
-    tenant_id: i64,
-    client_id: i64,
-) -> Vec<String> {
+async fn load_client_domains(pool: &PgPool, tenant_id: i64, client_id: i64) -> Vec<String> {
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT COALESCE(domains::text, '[]') FROM clients WHERE id = $1 AND tenant_id = $2",
     )
@@ -334,7 +330,10 @@ pub async fn verify_finding_live(
         let domains = load_client_domains(pool, tenant_id, cid).await;
         scope_ok = target_in_client_scope(&row.target, &domains);
         scope_detail = if scope_ok {
-            format!("target aligns with client scope ({} domains)", domains.len())
+            format!(
+                "target aligns with client scope ({} domains)",
+                domains.len()
+            )
         } else {
             format!(
                 "target '{}' outside client scope {:?}",
@@ -375,7 +374,9 @@ pub async fn verify_finding_live(
         reach_detail = detail;
         let markers = evidence_markers(&row.raw_data);
         if !markers.is_empty() && status > 0 {
-            let marker_hit = markers.iter().any(|m| m.parse::<u16>().ok() == Some(status))
+            let marker_hit = markers
+                .iter()
+                .any(|m| m.parse::<u16>().ok() == Some(status))
                 || markers.iter().any(|m| reach_detail.contains(m));
             push_check(
                 &mut checks,
@@ -425,7 +426,8 @@ pub async fn verify_finding_live(
         && !row.target.is_empty()
         && extract_probe_url(&row.target, &row.raw_data).is_some()
     {
-        let target = extract_probe_url(&row.target, &row.raw_data).unwrap_or_else(|| row.target.clone());
+        let target =
+            extract_probe_url(&row.target, &row.raw_data).unwrap_or_else(|| row.target.clone());
         let ctx = crate::remediation_verify::verify_context(
             std::sync::Arc::new(pool.clone()),
             tenant_id,
@@ -433,11 +435,8 @@ pub async fn verify_finding_live(
         );
         let engine = row.source.clone();
         let fid = row.finding_id.clone();
-        let rescan = tokio::time::timeout(
-            Duration::from_secs(90),
-            run_engine(&engine, &target, &ctx),
-        )
-        .await;
+        let rescan =
+            tokio::time::timeout(Duration::from_secs(90), run_engine(&engine, &target, &ctx)).await;
         match rescan {
             Ok(result) => {
                 reproducible = finding_still_present(&fid, &engine, &target, &result.findings);
@@ -524,7 +523,10 @@ mod tests {
     #[test]
     fn scope_matches_tesla_domains() {
         let domains = vec!["https://www.tesla.com".into(), "tesla.com".into()];
-        assert!(target_in_client_scope("https://www.tesla.com/actuator", &domains));
+        assert!(target_in_client_scope(
+            "https://www.tesla.com/actuator",
+            &domains
+        ));
         assert!(!target_in_client_scope("Password Reset Campaign", &domains));
     }
 

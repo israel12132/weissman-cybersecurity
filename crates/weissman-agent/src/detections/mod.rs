@@ -137,9 +137,10 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
                 Ok(findings)
             }
             "timestomping" => timestomp::run(&engine).await,
-            "anti_debug_evasion" | "rootkit_surface_probe" | "rootkit_simulation" | "memory_forensics_evasion" => {
-                process_modules::run_unusual_runtime(&engine).await
-            }
+            "anti_debug_evasion"
+            | "rootkit_surface_probe"
+            | "rootkit_simulation"
+            | "memory_forensics_evasion" => process_modules::run_unusual_runtime(&engine).await,
             "usb_enumeration" => usb_devices::run(&engine).await,
             "sim_swap_engine" => mobile_local::run_sim_swap(&engine).await,
             "nfc_relay_attack" => mobile_local::run_nfc(&engine).await,
