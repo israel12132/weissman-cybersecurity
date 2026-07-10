@@ -1,0 +1,23 @@
+# Minimal Grafana Tempo config: receive OTLP spans, store locally. For production, point
+# storage at object storage (S3/GCS) and add retention.
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+        grpc:
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+compactor:
+  compaction:
+    block_retention: 168h # 7 days

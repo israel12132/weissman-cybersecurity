@@ -97,6 +97,25 @@ Provisioned from `monitoring/grafana/dashboards/`:
 services (`redis-exporter`, `pg-exporter`, `node-exporter`) produces perpetually-"down"
 targets and noisy `TargetDown` alerts. Deploy the exporters first, then uncomment.
 
+## Distributed tracing (OpenTelemetry)
+
+The server and worker export OTLP spans when `WEISSMAN_OTLP_ENDPOINT` is set
+(`fingerprint_engine/src/observability.rs::build_otel_layer`). Each component labels its
+spans via `WEISSMAN_SERVICE_NAME` (e.g. `weissman-server` / `weissman-worker`) plus
+`service.version` and `deployment.environment` (`WEISSMAN_ENV`).
+
+Bring up the Tempo backend and point the apps at it:
+
+```bash
+docker compose --profile monitoring --profile tracing up -d tempo
+# on backend + worker:
+export WEISSMAN_OTLP_ENDPOINT=http://tempo:4318/v1/traces
+export WEISSMAN_SERVICE_NAME=weissman-server   # or weissman-worker
+```
+
+Traces are queryable in Grafana via the provisioned **Tempo** datasource. Leave
+`WEISSMAN_OTLP_ENDPOINT` unset to run logs-only (no tracing overhead).
+
 ## Further reading
 
 - [Prometheus](https://prometheus.io/docs/) · [Alertmanager](https://prometheus.io/docs/alerting/latest/configuration/) · [Grafana](https://grafana.com/docs/)

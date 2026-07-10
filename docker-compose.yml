@@ -305,7 +305,22 @@ services:
       - "9115"
     restart: unless-stopped
 
+  # --- Distributed tracing backend (Grafana Tempo, OTLP receiver). To export spans, set
+  #     WEISSMAN_OTLP_ENDPOINT=http://tempo:4318/v1/traces on backend + worker. ---
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: [tracing]
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./monitoring/tempo.yml:/etc/tempo/tempo.yml:ro
+      - weissman_tempo:/var/tempo
+    expose:
+      - "4318" # OTLP/HTTP
+      - "3200" # Tempo query API
+    restart: unless-stopped
+
 volumes:
   weissman_pg:
   weissman_prometheus:
   weissman_grafana:
+  weissman_tempo:
