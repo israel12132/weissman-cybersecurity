@@ -319,6 +319,19 @@ async fn load_client_findings(
         .collect())
 }
 
+/// Load one client's ATT&CK exposure as ranked [`TechniqueStat`]s (the typed form of
+/// [`load_and_aggregate`]). Read-only; RLS-scoped. Shared with the arsenal-recommendation engine.
+pub async fn load_exposure(
+    pool: &sqlx::PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    limit: i64,
+) -> Result<Vec<TechniqueStat>, String> {
+    let limit = limit.clamp(1, 5000);
+    let findings = load_client_findings(pool, tenant_id, client_id, limit).await?;
+    Ok(aggregate(&findings))
+}
+
 /// Fleet-wide ATT&CK exposure: merge every client's technique exposure into one ranking.
 /// Read-only; RLS-scoped. One findings query per client, bounded by `max_clients`.
 pub async fn load_portfolio_exposure(

@@ -238,6 +238,30 @@ async fn api_portfolio_attack_exposure(
     }
 }
 
+// ─── Arsenal recommendation (client exposure crossed against the engine arsenal) ───
+async fn api_arsenal_recommendation_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::arsenal_intel::load_and_analyze(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Backlog-aging analytics (open findings bucketed by age x severity) ───
 async fn api_finding_aging_for_client(
     State(state): State<Arc<AppState>>,

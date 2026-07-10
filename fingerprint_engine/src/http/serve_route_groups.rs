@@ -90,6 +90,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/remediation/aging/:client_id",
             get(api_finding_aging_for_client),
         )
+        // Arsenal recommendation: cross client exposure vs the engine arsenal → one-click plan + gaps.
+        .route(
+            "/api/arsenal/recommendation/:client_id",
+            get(api_arsenal_recommendation_for_client),
+        )
         // Portfolio (fleet-wide) posture: every client's grade rolled into one MSSP summary.
         .route("/api/portfolio/posture", get(api_portfolio_posture))
         // Portfolio (fleet-wide) ATT&CK exposure: technique ranking merged across all clients.
