@@ -4209,7 +4209,15 @@
       "arsenal_addressable": "{{count}} findings",
       "arsenal_gaps": "Capability gaps",
       "arsenal_no_gaps": "The arsenal covers all detected exposure.",
-      "arsenal_gap_hint": "{{count}} findings, no engine"
+      "arsenal_gap_hint": "{{count}} findings, no engine",
+      "inv_heading": "Full Arsenal",
+      "inv_count": "{{count}} engines",
+      "inv_search": "Search the arsenal…",
+      "inv_all": "All",
+      "inv_run": "Run",
+      "inv_no_client": "Select a client to run",
+      "inv_more": "+{{count}} more — refine your search",
+      "inv_none": "No engines match."
     },
     "engineReliability": {
       "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater."

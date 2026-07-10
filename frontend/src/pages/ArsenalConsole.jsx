@@ -23,8 +23,9 @@ export function coverageTone(pct) {
   return '#f43f5e'
 }
 
-/** Pure: the deploy set — valid, distinct engine ids from the recommendations, capped. Exported. */
-export function deployList(recommended, cap = 8) {
+/** Pure: the deploy set — valid, distinct engine ids from the recommendations. `cap` defaults high
+ *  so the full recommended plan deploys (no artificial limit); pass a smaller cap to bound it. */
+export function deployList(recommended, cap = 200) {
   if (!Array.isArray(recommended)) return []
   const seen = new Set()
   const out = []

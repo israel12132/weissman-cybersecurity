@@ -4217,7 +4217,15 @@
       "arsenal_addressable": "{{count}} ממצאים",
       "arsenal_gaps": "פערי יכולת",
       "arsenal_no_gaps": "הארסנל מכסה את כל החשיפה שזוהתה.",
-      "arsenal_gap_hint": "{{count}} ממצאים, אין מנוע"
+      "arsenal_gap_hint": "{{count}} ממצאים, אין מנוע",
+      "inv_heading": "הארסנל המלא",
+      "inv_count": "{{count}} מנועים",
+      "inv_search": "חפש בארסנל…",
+      "inv_all": "הכול",
+      "inv_run": "הרץ",
+      "inv_no_client": "בחר לקוח כדי להריץ",
+      "inv_more": "עוד {{count}} — צמצם את החיפוש",
+      "inv_none": "אין מנועים תואמים."
     },
     "engineReliability": {
       "evidence_notice": "SLO מנועים, error budgets ומצב circuit-breaker מ-GET /api/engines/telemetry ו-GET /api/engines/capabilities. מונים משקפים ביצוע worker אמיתי — ללא theater של uptime."
