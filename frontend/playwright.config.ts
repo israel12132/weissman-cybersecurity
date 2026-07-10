@@ -39,11 +39,12 @@ export default defineConfig({
           use: {
             baseURL: UI_DEV_BASE,
             ...devices['Desktop Chrome'],
+            launchOptions,
           },
         },
         {
           name: 'chromium-live',
-          testMatch: /live-(journey|ui-crawl)\.spec\.ts/,
+          testMatch: /live-(journey|ui-crawl|feature)\.spec\.ts/,
           dependencies: ['live-setup'],
           use: {
             baseURL: UI_DEV_BASE,
@@ -52,13 +53,14 @@ export default defineConfig({
             screenshot: 'only-on-failure',
             video: 'retain-on-failure',
             ...devices['Desktop Chrome'],
+            launchOptions,
           },
         },
       ]
     : [
         {
           name: 'chromium-mock',
-          testIgnore: /live-journey\.spec\.ts/,
+          testIgnore: /live-(journey|feature)\.spec\.ts/,
           use: {
             baseURL: MOCK_BASE,
             trace: 'on-first-retry',

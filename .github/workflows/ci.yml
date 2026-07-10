@@ -394,7 +394,25 @@ jobs:
         run: |
           cd frontend
           npx playwright install chromium
-          npm run test:e2e:live
+          npm run test:e2e:live -- live-journey live-ui-crawl
+
+      # True-Live counterpart of the mock feature-verify.spec.ts: drives the
+      # Findings-console features added this cycle (multi-select bulk status,
+      # saved views, URL-shareable severity filter, row density) and the ⌘K
+      # command palette against the REAL backend built above (WEISSMAN_ENV=
+      # production), and verifies the bulk-status PATCH actually persisted in
+      # Postgres via an API round-trip. Reuses the already-running server + the
+      # findings the scan steps above wrote to the live DB.
+      - name: Playwright True-Live feature specs (bulk · views · URL filter · density)
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+        run: |
+          cd frontend
+          npm run test:e2e:live -- live-feature
 
       - name: Generate audit evidence pack
         env:
