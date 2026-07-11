@@ -29,9 +29,9 @@ class RootErrorBoundary extends React.Component {
     if (this.state.error) {
       const msg = this.state.error?.message || 'Application error'
       return (
-        <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-slate-200 p-8 font-mono">
+        <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-[var(--text-secondary)] p-8 font-mono">
           <h1 className="text-lg font-semibold text-red-400 mb-2">Failed to load Command Center</h1>
-          <p className="text-sm text-slate-400 mb-6 max-w-lg text-center break-words">{msg}</p>
+          <p className="text-sm text-[var(--text-tertiary)] mb-6 max-w-lg text-center break-words">{msg}</p>
           <button
             type="button"
             className="px-4 py-2 rounded-lg border border-white/20 text-sm hover:bg-white/10"

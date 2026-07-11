@@ -88,7 +88,7 @@ export default function GlobalEdgeSwarmMap() {
 
       {error && <div className="text-sm text-red-400">{error}</div>}
 
-      <div className="flex-1 rounded-2xl border border-white/10 bg-slate-950/90 overflow-hidden min-h-[320px]">
+      <div className="flex-1 rounded-2xl border border-white/10 bg-[var(--bg-0)]/90 overflow-hidden min-h-[320px]">
         <ComposableMap
           projectionConfig={{ scale: 140 }}
           style={{ width: '100%', height: '100%', minHeight: 320 }}

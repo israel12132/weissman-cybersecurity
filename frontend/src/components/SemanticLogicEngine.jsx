@@ -93,7 +93,7 @@ export default function SemanticLogicEngine() {
 
   if (loading && !stateMachine.nodes?.length) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-0)] text-[var(--text-secondary)] flex items-center justify-center">
         <p className="text-cyan-400">{t(`${NS}.loading`)}</p>
       </div>
     )
@@ -104,7 +104,7 @@ export default function SemanticLogicEngine() {
       title={t(`${NS}.title`)}
       subtitle={stateMachine.target ? t(`${NS}.target_label`, { target: stateMachine.target }) : undefined}
       actions={(
-        <button type="button" onClick={load} className="text-sm text-slate-400 hover:text-cyan-400">
+        <button type="button" onClick={load} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
           {t(`${NS}.refresh`)}
         </button>
       )}
@@ -116,8 +116,8 @@ export default function SemanticLogicEngine() {
         </div>
       )}
       <div className="flex-1 flex gap-4 p-4" style={{ minHeight: 'calc(100vh - 120px)' }}>
-        <div className="flex-1 rounded-xl border border-slate-600/80 bg-slate-900/40 overflow-hidden">
-          <div className="px-4 py-2 border-b border-slate-600 text-sm font-medium text-slate-300">{t(`${NS}.state_machine_title`)}</div>
+        <div className="flex-1 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/40 overflow-hidden">
+          <div className="px-4 py-2 border-b border-[var(--border-strong)] text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.state_machine_title`)}</div>
           <div className="h-full min-h-[400px]">
             {nodes.length > 0 ? (
               <ReactFlow
@@ -127,23 +127,23 @@ export default function SemanticLogicEngine() {
                 onEdgesChange={onEdgesChange}
                 nodeTypes={nodeTypes}
                 fitView
-                className="bg-slate-950"
+                className="bg-[var(--bg-0)]"
                 style={{ background: '#0f172a' }}
               >
                 <Background color="#334155" gap={16} />
-                <Controls className="bg-slate-800/90 border-slate-600" />
-                <MiniMap nodeColor="#0d9488" className="bg-slate-800/90" />
+                <Controls className="bg-[var(--bg-3)]/90 border-[var(--border-strong)]" />
+                <MiniMap nodeColor="#0d9488" className="bg-[var(--bg-3)]/90" />
               </ReactFlow>
             ) : (
-              <div className="flex items-center justify-center h-full text-slate-500 text-sm">
+              <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">
                 {stateMachine.message || t(`${NS}.no_openapi`)}
               </div>
             )}
           </div>
         </div>
-        <div className="w-[420px] flex flex-col rounded-xl border border-slate-600/80 bg-slate-900/40 overflow-hidden">
-          <div className="px-4 py-2 border-b border-slate-600 text-sm font-medium text-slate-300">{t(`${NS}.reasoning_title`)}</div>
-          <pre className="flex-1 p-4 overflow-auto text-xs text-slate-400 font-mono whitespace-pre-wrap bg-slate-950/80 min-h-[200px]">
+        <div className="w-[420px] flex flex-col rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/40 overflow-hidden">
+          <div className="px-4 py-2 border-b border-[var(--border-strong)] text-sm font-medium text-[var(--text-secondary)]">{t(`${NS}.reasoning_title`)}</div>
+          <pre className="flex-1 p-4 overflow-auto text-xs text-[var(--text-tertiary)] font-mono whitespace-pre-wrap bg-[var(--bg-0)]/80 min-h-[200px]">
             {reasoning || t(`${NS}.no_reasoning`)}
           </pre>
         </div>

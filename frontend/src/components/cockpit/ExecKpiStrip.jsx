@@ -84,7 +84,7 @@ function Tile({ label, value, footer, color = '#22d3ee', to, intensity = 1, aria
         />
       </div>
       <div className="flex items-baseline gap-1 mt-1">
-        <span className="text-[1.35rem] font-semibold tabular-nums leading-none tracking-tight text-slate-100">
+        <span className="text-[1.35rem] font-semibold tabular-nums leading-none tracking-tight text-[var(--text-primary)]">
           {value}
         </span>
       </div>

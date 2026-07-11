@@ -129,7 +129,7 @@ export default function SatelliteDroneMap() {
 
   return (
     <motion.div
-      className="absolute inset-0 rounded-2xl overflow-hidden bg-slate-950/90 border border-white/10"
+      className="absolute inset-0 rounded-2xl overflow-hidden bg-[var(--bg-0)]/90 border border-white/10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}

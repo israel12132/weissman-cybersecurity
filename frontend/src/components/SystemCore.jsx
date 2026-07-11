@@ -365,18 +365,18 @@ export default function SystemCore() {
         <p className="mb-2 text-amber-400 text-sm">{t('components.systemCore.saving')}</p>
       )}
 
-      <section className="max-w-2xl rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.crypto_heading')}</h2>
+      <section className="max-w-2xl rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.crypto_heading')}</h2>
 
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">{t('components.systemCore.rfc3161_label')}</label>
+            <label className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.rfc3161_label')}</label>
             <button
               type="button"
               role="switch"
               aria-checked={rfc3161Enabled}
               onClick={() => handleRfc3161Toggle(!rfc3161Enabled)}
-              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${rfc3161Enabled ? 'bg-cyan-500/80 border-cyan-400' : 'bg-slate-600 border-slate-500'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${rfc3161Enabled ? 'bg-cyan-500/80 border-cyan-400' : 'bg-[var(--bg-4)] border-[var(--border-strong)]'}`}
             >
               <span
                 className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition ${rfc3161Enabled ? 'translate-x-6' : 'translate-x-1'}`}
@@ -385,71 +385,71 @@ export default function SystemCore() {
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.x509_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.x509_label')}</label>
             <input
               type="text"
               value={x509CertPath}
               onChange={(e) => setX509CertPath(e.target.value)}
               onBlur={handleCertPathBlur}
               placeholder={t('components.systemCore.x509_placeholder')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
         </div>
 
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.crypto_hint')}
         </p>
       </section>
 
-      <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.ghost_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="max-w-2xl mt-8 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.ghost_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.ghost_body')}
         </p>
 
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">
               {t('components.systemCore.jitter_label')}
             </label>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500 w-24">{t('components.systemCore.jitter_aggressive')}</span>
+              <span className="text-xs text-[var(--text-muted)] w-24">{t('components.systemCore.jitter_aggressive')}</span>
               <input
                 type="range"
                 min={0}
                 max={100}
                 value={jitterSlider}
                 onChange={(e) => handleJitterSlider(e.target.value)}
-                className="flex-1 h-2 rounded-full appearance-none bg-slate-600 accent-cyan-500"
+                className="flex-1 h-2 rounded-full appearance-none bg-[var(--bg-4)] accent-cyan-500"
               />
-              <span className="text-xs text-slate-500 w-28">{t('components.systemCore.jitter_stealth')}</span>
+              <span className="text-xs text-[var(--text-muted)] w-28">{t('components.systemCore.jitter_stealth')}</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               {t('components.systemCore.jitter_current', { min: jitterMinMs, max: jitterMaxMs })}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.proxy_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.proxy_label')}</label>
             <textarea
               value={proxySwarm}
               onChange={(e) => setProxySwarm(e.target.value)}
               onBlur={handleProxySwarmBlur}
               placeholder={t('components.systemCore.proxy_placeholder')}
               rows={4}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono text-sm"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono text-sm"
             />
           </div>
 
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">{t('components.systemCore.morphing_label')}</label>
+            <label className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.morphing_label')}</label>
             <button
               type="button"
               role="switch"
               aria-checked={identityMorphing}
               onClick={() => handleIdentityMorphingToggle(!identityMorphing)}
-              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${identityMorphing ? 'bg-cyan-500/80 border-cyan-400' : 'bg-slate-600 border-slate-500'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${identityMorphing ? 'bg-cyan-500/80 border-cyan-400' : 'bg-[var(--bg-4)] border-[var(--border-strong)]'}`}
             >
               <span
                 className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition ${identityMorphing ? 'translate-x-6' : 'translate-x-1'}`}
@@ -467,68 +467,68 @@ export default function SystemCore() {
           </button>
         </div>
 
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.ghost_hint')}
         </p>
       </section>
 
-      <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.semantic_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="max-w-2xl mt-8 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.semantic_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.semantic_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.llm_url_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.llm_url_label')}</label>
             <input
               type="text"
               value={llmBaseUrl}
               onChange={(e) => setLlmBaseUrl(e.target.value)}
               placeholder={t('components.systemCore.llm_url_placeholder')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.llm_model_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.llm_model_label')}</label>
             <input
               type="text"
               value={llmModel}
               onChange={(e) => setLlmModel(e.target.value)}
               placeholder={t('components.systemCore.llm_model_placeholder')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.llm_temp_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.llm_temp_label')}</label>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500 w-12">0.0</span>
+              <span className="text-xs text-[var(--text-muted)] w-12">0.0</span>
               <input
                 type="range"
                 min={0}
                 max={200}
                 value={Math.round(llmTemperature * 100)}
                 onChange={(e) => setLlmTemperature(Number(e.target.value) / 100)}
-                className="flex-1 h-2 rounded-full appearance-none bg-slate-600 accent-cyan-500"
+                className="flex-1 h-2 rounded-full appearance-none bg-[var(--bg-4)] accent-cyan-500"
               />
-              <span className="text-xs text-slate-500 w-12">2.0</span>
+              <span className="text-xs text-[var(--text-muted)] w-12">2.0</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.llm_temp_current', { value: llmTemperature.toFixed(2) })}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('components.systemCore.llm_temp_current', { value: llmTemperature.toFixed(2) })}</p>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.max_depth_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.max_depth_label')}</label>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500">1</span>
+              <span className="text-xs text-[var(--text-muted)]">1</span>
               <input
                 type="range"
                 min={1}
                 max={20}
                 value={maxSequenceDepth}
                 onChange={(e) => setMaxSequenceDepth(Number(e.target.value))}
-                className="flex-1 h-2 rounded-full appearance-none bg-slate-600 accent-cyan-500"
+                className="flex-1 h-2 rounded-full appearance-none bg-[var(--bg-4)] accent-cyan-500"
               />
-              <span className="text-xs text-slate-500">20</span>
+              <span className="text-xs text-[var(--text-muted)]">20</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.max_depth_current', { value: maxSequenceDepth })}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('components.systemCore.max_depth_current', { value: maxSequenceDepth })}</p>
           </div>
           <button
             type="button"
@@ -539,33 +539,33 @@ export default function SystemCore() {
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_semantic')}
           </button>
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.semantic_hint')}
         </p>
       </section>
 
       <section className="max-w-2xl mt-8 rounded-xl border border-violet-600/40 bg-violet-950/20 p-6 backdrop-blur">
         <h2 className="text-lg font-semibold text-violet-200 mb-4">{t('components.systemCore.oast_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.oast_body')}
         </p>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_listener_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.oast_listener_label')}</label>
             <input type="url" value={oastListenerUrl} onChange={(e) => setOastListenerUrl(e.target.value)}
               placeholder="https://oast.your-domain.example:9090"
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)]" />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_domain_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.oast_domain_label')}</label>
             <input type="text" value={oastDomain} onChange={(e) => setOastDomain(e.target.value)}
               placeholder="oast.your-domain.example"
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)]" />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.oast_api_key_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.oast_api_key_label')}</label>
             <input type="password" autoComplete="off" value={oastApiKey} onChange={(e) => setOastApiKey(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200" />
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)]" />
           </div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={saveOastConfig} disabled={saving}
@@ -590,56 +590,56 @@ export default function SystemCore() {
 
       <section className="max-w-2xl mt-8 rounded-xl border border-pink-600/30 bg-pink-950/15 p-6 backdrop-blur">
         <h2 className="text-lg font-semibold text-pink-200 mb-4">{t('components.systemCore.ai_entitlement_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-4">
+        <p className="text-sm text-[var(--text-tertiary)] mb-4">
           {t('components.systemCore.ai_entitlement_body')}
         </p>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-300">{t('components.systemCore.ai_entitlement_label')}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.ai_entitlement_label')}</span>
           <button type="button" role="switch" aria-checked={aiHeavyEntitled}
             onClick={() => handleAiEntitlementToggle(!aiHeavyEntitled)}
-            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${aiHeavyEntitled ? 'bg-pink-500/80 border-pink-400' : 'bg-slate-600 border-slate-500'}`}>
+            className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${aiHeavyEntitled ? 'bg-pink-500/80 border-pink-400' : 'bg-[var(--bg-4)] border-[var(--border-strong)]'}`}>
             <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${aiHeavyEntitled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
       </section>
 
-      <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.timing_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="max-w-2xl mt-8 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.timing_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.timing_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.timing_sample_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.timing_sample_label')}</label>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500 w-10">50</span>
+              <span className="text-xs text-[var(--text-muted)] w-10">50</span>
               <input
                 type="range"
                 min={50}
                 max={500}
                 value={timingSampleSize}
                 onChange={(e) => setTimingSampleSize(Number(e.target.value))}
-                className="flex-1 h-2 rounded-full appearance-none bg-slate-600 accent-cyan-500"
+                className="flex-1 h-2 rounded-full appearance-none bg-[var(--bg-4)] accent-cyan-500"
               />
-              <span className="text-xs text-slate-500 w-10">500</span>
+              <span className="text-xs text-[var(--text-muted)] w-10">500</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.timing_sample_current', { value: timingSampleSize })}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('components.systemCore.timing_sample_current', { value: timingSampleSize })}</p>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.zscore_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.zscore_label')}</label>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500 w-10">2.0</span>
+              <span className="text-xs text-[var(--text-muted)] w-10">2.0</span>
               <input
                 type="range"
                 min={20}
                 max={50}
                 value={Math.round(zScoreSensitivity * 10)}
                 onChange={(e) => setZScoreSensitivity(Number(e.target.value) / 10)}
-                className="flex-1 h-2 rounded-full appearance-none bg-slate-600 accent-cyan-500"
+                className="flex-1 h-2 rounded-full appearance-none bg-[var(--bg-4)] accent-cyan-500"
               />
-              <span className="text-xs text-slate-500 w-10">5.0</span>
+              <span className="text-xs text-[var(--text-muted)] w-10">5.0</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{t('components.systemCore.zscore_current', { value: zScoreSensitivity.toFixed(1), current: zScoreSensitivity.toFixed(1) })}</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('components.systemCore.zscore_current', { value: zScoreSensitivity.toFixed(1), current: zScoreSensitivity.toFixed(1) })}</p>
           </div>
           <button
             type="button"
@@ -650,33 +650,33 @@ export default function SystemCore() {
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_timing')}
           </button>
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.timing_hint')}
         </p>
       </section>
 
-      <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.redteam_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="max-w-2xl mt-8 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.redteam_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.redteam_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.redteam_endpoint_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.redteam_endpoint_label')}</label>
             <input
               type="text"
               value={aiRedteamEndpoint}
               onChange={(e) => setAiRedteamEndpoint(e.target.value)}
               placeholder={t('components.systemCore.redteam_endpoint_placeholder')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.redteam_strategy_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.redteam_strategy_label')}</label>
             <select
               value={adversarialStrategy}
               onChange={(e) => setAdversarialStrategy(e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
             >
               <option value="data_leak">{t('components.systemCore.strategy_data_leak')}</option>
               <option value="code_execution">{t('components.systemCore.strategy_code_exec')}</option>
@@ -691,37 +691,37 @@ export default function SystemCore() {
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_redteam')}
           </button>
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.redteam_hint')}
         </p>
       </section>
 
-      <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.zeroday_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="max-w-2xl mt-8 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.zeroday_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.zeroday_body')}
         </p>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">{t('components.systemCore.zeroday_enable')}</label>
+            <label className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.zeroday_enable')}</label>
             <button
               type="button"
               role="switch"
               aria-checked={enableZeroDayProbing}
               onClick={() => handleZeroDayToggle(!enableZeroDayProbing)}
-              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${enableZeroDayProbing ? 'bg-cyan-500/80 border-cyan-400' : 'bg-slate-600 border-slate-500'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${enableZeroDayProbing ? 'bg-cyan-500/80 border-cyan-400' : 'bg-[var(--bg-4)] border-[var(--border-strong)]'}`}
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition ${enableZeroDayProbing ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.feed_urls_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.feed_urls_label')}</label>
             <textarea
               value={customFeedUrls}
               onChange={(e) => setCustomFeedUrls(e.target.value)}
               placeholder={t('components.systemCore.feed_urls_placeholder')}
               rows={3}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500 font-mono text-sm"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono text-sm"
             />
           </div>
           <button
@@ -733,36 +733,36 @@ export default function SystemCore() {
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_zeroday')}
           </button>
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.zeroday_hint')}
         </p>
       </section>
 
-      <section className="max-w-2xl mt-8 rounded-xl border border-slate-600/80 bg-slate-900/60 p-6 backdrop-blur">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.cicd_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="max-w-2xl mt-8 rounded-xl border border-[var(--border-strong)]/80 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.cicd_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.cicd_body')}
         </p>
         <div className="space-y-6">
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.github_token_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.github_token_label')}</label>
             <input
               type="password"
               value={githubToken}
               onChange={(e) => setGithubToken(e.target.value)}
               placeholder={t('components.systemCore.github_token_placeholder')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)]"
               autoComplete="off"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.gitlab_url_label')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.gitlab_url_label')}</label>
             <input
               type="text"
               value={gitlabApiUrl}
               onChange={(e) => setGitlabApiUrl(e.target.value)}
               placeholder={t('components.systemCore.gitlab_url_placeholder')}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 placeholder-slate-500"
+              className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)]"
             />
           </div>
           <button
@@ -774,14 +774,14 @@ export default function SystemCore() {
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_cicd')}
           </button>
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.cicd_hint')}
         </p>
       </section>
 
-      <section className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-slate-200 mb-4">{t('components.systemCore.poe_heading')}</h2>
-        <p className="text-sm text-slate-400 mb-6">
+      <section className="rounded-xl border border-[var(--border-default)]/60 bg-[var(--bg-1)]/40 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t('components.systemCore.poe_heading')}</h2>
+        <p className="text-sm text-[var(--text-tertiary)] mb-6">
           {t('components.systemCore.poe_body')}
         </p>
         <div className="space-y-6">
@@ -794,11 +794,11 @@ export default function SystemCore() {
                 setEnablePoeSynthesis(!enablePoeSynthesis)
                 saveConfig('enable_poe_synthesis', !enablePoeSynthesis ? 'true' : 'false')
               }}
-              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${enablePoeSynthesis ? 'bg-emerald-600' : 'bg-slate-600'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${enablePoeSynthesis ? 'bg-emerald-600' : 'bg-[var(--bg-4)]'}`}
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition translate-x-1 translate-y-0.5 ${enablePoeSynthesis ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm text-slate-300">{t('components.systemCore.poe_enable')}</span>
+            <span className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.poe_enable')}</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -809,38 +809,38 @@ export default function SystemCore() {
                 setSafetyRailsNoShells(!safetyRailsNoShells)
                 saveConfig('poe_safety_rails_no_shells', !safetyRailsNoShells ? 'true' : 'false')
               }}
-              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${safetyRailsNoShells ? 'bg-emerald-600' : 'bg-slate-600'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${safetyRailsNoShells ? 'bg-emerald-600' : 'bg-[var(--bg-4)]'}`}
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition translate-x-1 translate-y-0.5 ${safetyRailsNoShells ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm text-slate-300">{t('components.systemCore.poe_no_shells')}</span>
+            <span className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.poe_no_shells')}</span>
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.poe_max_length')}</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.poe_max_length')}</label>
             <input
               type="number"
               min={0}
               value={poeMaxPocLength}
               onChange={(e) => { const n = parseInt(e.target.value, 10); setPoeMaxPocLength(Number.isNaN(n) ? 0 : Math.max(0, n)) }}
               onBlur={() => saveConfig('poe_max_poc_length', String(poeMaxPocLength))}
-              className="w-36 rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200"
+              className="w-36 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)]"
             />
           </div>
 
-          <div className="rounded-lg border border-slate-600/80 bg-slate-800/40 p-4">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3">{t('components.systemCore.threat_feed_heading')}</h3>
+          <div className="rounded-lg border border-[var(--border-strong)]/80 bg-[var(--bg-3)]/40 p-4">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3">{t('components.systemCore.threat_feed_heading')}</h3>
             <div className="flex flex-wrap items-center gap-4 mb-3">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${payloadSyncActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-600/40 text-slate-400'}`}>
-                <span className={`w-2 h-2 rounded-full ${payloadSyncActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${payloadSyncActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--bg-4)]/40 text-[var(--text-tertiary)]'}`}>
+                <span className={`w-2 h-2 rounded-full ${payloadSyncActive ? 'bg-emerald-400 animate-pulse' : 'bg-[var(--border-strong)]'}`} />
                 {t('components.systemCore.auto_sync_active')}
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-[var(--text-tertiary)]">
                 {t('components.systemCore.last_synced', { value: payloadSyncLastAt ? new Date(payloadSyncLastAt).toLocaleString() : t('components.systemCore.last_synced_never') })}
               </span>
-              <span className="text-xs text-slate-300 font-mono">
+              <span className="text-xs text-[var(--text-secondary)] font-mono">
                 {t('components.systemCore.live_payloads', { count: livePayloadsCount })}
               </span>
-              <span className="text-xs text-slate-300 font-mono">
+              <span className="text-xs text-[var(--text-secondary)] font-mono">
                 {t('components.systemCore.ephemeral_payloads', { count: activeEphemeralCount })}
               </span>
               <button
@@ -867,20 +867,20 @@ export default function SystemCore() {
                 {payloadSyncRunning ? t('components.systemCore.syncing') : t('components.systemCore.sync_now')}
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-2">{t('components.systemCore.payloads_hint')}</p>
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-[var(--text-muted)] mb-2">{t('components.systemCore.payloads_hint')}</p>
+            <p className="text-xs text-[var(--text-muted)] mb-2">
               {t('components.systemCore.engine_hint')}
             </p>
-            <div className="max-h-48 overflow-y-auto rounded border border-slate-600/60 bg-slate-900/60 divide-y divide-slate-700/60">
+            <div className="max-h-48 overflow-y-auto rounded border border-[var(--border-strong)]/60 bg-[var(--bg-1)]/60 divide-y divide-[var(--border-default)]/60">
               {recentPayloads.length === 0 ? (
-                <div className="py-4 px-3 text-xs text-slate-500 text-center">{t('components.systemCore.no_payloads')}</div>
+                <div className="py-4 px-3 text-xs text-[var(--text-muted)] text-center">{t('components.systemCore.no_payloads')}</div>
               ) : (
                 recentPayloads.map((p) => (
                   <div key={p.id} className="py-2 px-3 text-left">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-amber-400">{p.target_library}</span>
-                      <span className="text-xs text-slate-500">{p.source}</span>
-                      <span className="text-xs text-slate-600">{p.added_at ? new Date(p.added_at).toLocaleString() : ''}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{p.source}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{p.added_at ? new Date(p.added_at).toLocaleString() : ''}</span>
                     </div>
                     {p.source_url && (
                       <a
@@ -893,7 +893,7 @@ export default function SystemCore() {
                         {p.source_url}
                       </a>
                     )}
-                    <pre className="mt-1 text-xs text-slate-400 truncate max-w-full overflow-hidden" title={p.payload_preview}>
+                    <pre className="mt-1 text-xs text-[var(--text-tertiary)] truncate max-w-full overflow-hidden" title={p.payload_preview}>
                       {typeof p.payload_preview === 'string' ? p.payload_preview.slice(0, 120) + (p.payload_preview.length > 120 ? '…' : '') : ''}
                     </pre>
                   </div>
@@ -903,8 +903,8 @@ export default function SystemCore() {
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t('components.systemCore.gadget_chains_label')}</label>
-            <p className="text-xs text-slate-500 mb-2">{t('components.systemCore.gadget_chains_hint')}</p>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.gadget_chains_label')}</label>
+            <p className="text-xs text-[var(--text-muted)] mb-2">{t('components.systemCore.gadget_chains_hint')}</p>
             <textarea
               value={poeGadgetChains}
               onChange={(e) => setPoeGadgetChains(e.target.value)}
@@ -914,12 +914,12 @@ export default function SystemCore() {
                   if (typeof parsed === 'object' && parsed !== null) saveConfig('poe_gadget_chains', JSON.stringify(parsed))
                 } catch (_) {}
               }}
-              className="w-full min-h-[120px] rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-200 font-mono text-sm"
+              className="w-full min-h-[120px] rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] font-mono text-sm"
               placeholder={t('components.systemCore.gadget_chains_placeholder')}
             />
           </div>
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.poe_footer')}
         </p>
       </section>

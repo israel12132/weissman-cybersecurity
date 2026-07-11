@@ -195,7 +195,7 @@ export default function ComplianceDashboardTab() {
           {frameworks.map((f) => (
             <div
               key={f.framework}
-              className="rounded-xl border border-white/10 bg-slate-950/80 p-4 flex flex-col gap-1"
+              className="rounded-xl border border-white/10 bg-[var(--bg-0)]/80 p-4 flex flex-col gap-1"
             >
               <span className="text-xs uppercase tracking-widest text-white/45">{labelForFramework(f.framework)}</span>
               <span className="text-3xl font-bold text-white tabular-nums">{f.compliance_percent}%</span>

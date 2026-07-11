@@ -25,9 +25,9 @@ function MetricCard({ label, value, sub, accent }) {
         accent || 'border-white/10'
       }`}
     >
-      <p className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-mono mb-1">{label}</p>
+      <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--text-muted)] font-mono mb-1">{label}</p>
       <p className="text-lg font-semibold text-white tracking-tight font-mono">{value}</p>
-      {sub && <p className="text-[10px] text-slate-500 font-mono mt-1">{sub}</p>}
+      {sub && <p className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{sub}</p>}
     </div>
   )
 }
@@ -213,12 +213,12 @@ export default function CeoIntegratedCommandDeck() {
             <h2 className="text-xl font-bold text-white tracking-tight">
               {t('components.ceo.integratedCommandDeck.title')}
             </h2>
-            <p className="text-[11px] font-mono text-slate-500 mt-2 max-w-xl leading-relaxed">
+            <p className="text-[11px] font-mono text-[var(--text-muted)] mt-2 max-w-xl leading-relaxed">
               <Trans
                 i18nKey="components.ceo.integratedCommandDeck.subtitle"
                 components={{
-                  1: <span className="text-slate-400" />,
-                  2: <span className="text-slate-400" />,
+                  1: <span className="text-[var(--text-tertiary)]" />,
+                  2: <span className="text-[var(--text-tertiary)]" />,
                 }}
               />
             </p>
@@ -275,7 +275,7 @@ export default function CeoIntegratedCommandDeck() {
                 : '—'
             }
             sub={t('components.ceo.integratedCommandDeck.allTenants')}
-            accent="border-slate-600/40"
+            accent="border-[var(--border-strong)]/40"
           />
           <MetricCard
             label={t('components.ceo.integratedCommandDeck.scanning')}
@@ -294,10 +294,10 @@ export default function CeoIntegratedCommandDeck() {
             <p className="text-[10px] font-mono uppercase tracking-widest text-red-300/90 mb-2">
               {t('components.ceo.integratedCommandDeck.globalSafeMode')}
             </p>
-            <p className="text-[10px] text-slate-500 font-mono mb-3 leading-snug">
+            <p className="text-[10px] text-[var(--text-muted)] font-mono mb-3 leading-snug">
               <Trans
                 i18nKey="components.ceo.integratedCommandDeck.globalSafeModeHint"
-                components={{ 1: <code className="text-slate-400" /> }}
+                components={{ 1: <code className="text-[var(--text-tertiary)]" /> }}
               />
             </p>
             <button
@@ -322,11 +322,11 @@ export default function CeoIntegratedCommandDeck() {
             <p className="text-[10px] font-mono uppercase tracking-widest text-amber-200/90 mb-2">
               {t('components.ceo.integratedCommandDeck.orchestratorInterval')}
             </p>
-            <p className="text-[10px] text-slate-500 font-mono mb-2 leading-snug">
+            <p className="text-[10px] text-[var(--text-muted)] font-mono mb-2 leading-snug">
               <Trans
                 i18nKey="components.ceo.integratedCommandDeck.orchestratorIntervalHint"
                 components={{
-                  1: <code className="text-slate-400" />,
+                  1: <code className="text-[var(--text-tertiary)]" />,
                   2: <code className="text-amber-600/90" />,
                 }}
               />
@@ -355,10 +355,10 @@ export default function CeoIntegratedCommandDeck() {
             <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300/90 mb-2">
               {t('components.ceo.integratedCommandDeck.genesisKillSwitch')}
             </p>
-            <p className="text-[10px] text-slate-500 font-mono mb-3 leading-snug">
+            <p className="text-[10px] text-[var(--text-muted)] font-mono mb-3 leading-snug">
               <Trans
                 i18nKey="components.ceo.integratedCommandDeck.genesisKillSwitchHint"
-                components={{ 1: <code className="text-slate-400" /> }}
+                components={{ 1: <code className="text-[var(--text-tertiary)]" /> }}
               />
             </p>
             <button
@@ -368,7 +368,7 @@ export default function CeoIntegratedCommandDeck() {
               className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest border ${
                 genesisKill
                   ? 'border-rose-500 bg-rose-950/70 text-rose-100'
-                  : 'border-white/20 bg-white/5 text-slate-200 hover:bg-white/10'
+                  : 'border-white/20 bg-white/5 text-[var(--text-secondary)] hover:bg-white/10'
               } disabled:opacity-40`}
             >
               {killSaving
@@ -410,7 +410,7 @@ export default function CeoIntegratedCommandDeck() {
             <span className="text-xs font-mono uppercase tracking-widest text-cyan-200/90">
               {t('components.ceo.integratedCommandDeck.vaccineVault')}
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">{vaultOpen ? '−' : '+'}</span>
+            <span className="text-[10px] text-[var(--text-muted)] font-mono">{vaultOpen ? '−' : '+'}</span>
           </button>
           {vaultOpen && (
             <div className="p-4 max-h-[min(70vh,520px)] overflow-y-auto">
@@ -427,7 +427,7 @@ export default function CeoIntegratedCommandDeck() {
             <span className="text-xs font-mono uppercase tracking-widest text-violet-200/90">
               {t('components.ceo.integratedCommandDeck.sovereignLab')}
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">{sovereignOpen ? '−' : '+'}</span>
+            <span className="text-[10px] text-[var(--text-muted)] font-mono">{sovereignOpen ? '−' : '+'}</span>
           </button>
           {sovereignOpen && (
             <div className="p-4 max-h-[min(70vh,520px)] overflow-y-auto">

@@ -65,7 +65,7 @@ export default function RateLimitStatus({ compact = false }) {
       case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
       case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       case 'healthy': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+      default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -86,7 +86,7 @@ export default function RateLimitStatus({ compact = false }) {
 
   if (loading && compact) {
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
         <Activity className="w-3 h-3 animate-pulse" />
         <span>{t(`${NS}.loading`)}</span>
       </div>
@@ -116,7 +116,7 @@ export default function RateLimitStatus({ compact = false }) {
           <Activity className="w-4 h-4 text-cyan-400" />
           {t(`${NS}.title`)}
         </h3>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-[var(--text-tertiary)]">
           {t(`${NS}.updated`, { time: new Date().toLocaleTimeString() })}
         </span>
       </div>
@@ -132,7 +132,7 @@ export default function RateLimitStatus({ compact = false }) {
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   {getStatusIcon(status)}
-                  <span className="text-gray-300 font-medium">{label}</span>
+                  <span className="text-[var(--text-secondary)] font-medium">{label}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`font-mono ${
@@ -142,14 +142,14 @@ export default function RateLimitStatus({ compact = false }) {
                   }`}>
                     {current}/{max}
                   </span>
-                  <span className="text-gray-500">
+                  <span className="text-[var(--text-muted)]">
                     {t(`${NS}.reset`, { time: formatResetTime(resetIn) })}
                   </span>
                 </div>
               </div>
 
               {/* Progress bar */}
-              <div className="h-1.5 bg-gray-800/50 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-[var(--bg-3)]/50 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
                     status === 'critical' ? 'bg-red-500' :

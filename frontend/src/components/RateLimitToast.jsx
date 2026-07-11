@@ -59,7 +59,7 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
               className="flex-shrink-0 w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors"
               aria-label={t('components.rateLimitToast.close')}
             >
-              <X className="w-4 h-4 text-gray-400" />
+              <X className="w-4 h-4 text-[var(--text-tertiary)]" />
             </button>
           </div>
 
@@ -67,13 +67,13 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
             <div className="flex items-center justify-between gap-3 p-3 bg-black/30 rounded-lg">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-cyan-400" />
-                <span className="text-xs text-gray-300">{t('components.rateLimitToast.retry_in')}</span>
+                <span className="text-xs text-[var(--text-secondary)]">{t('components.rateLimitToast.retry_in')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-mono font-bold text-white">
                   {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
                 </span>
-                <span className="text-xs text-gray-400">{t('components.rateLimitToast.min_abbr')}</span>
+                <span className="text-xs text-[var(--text-tertiary)]">{t('components.rateLimitToast.min_abbr')}</span>
               </div>
             </div>
           </div>

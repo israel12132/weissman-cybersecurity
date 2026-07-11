@@ -234,7 +234,7 @@ export default function CeoWarRoomDock() {
           <h3 className="text-[10px] font-mono uppercase tracking-[0.25em] text-cyan-300/90">
             {t('components.ceo.warRoomDock.title')}
           </h3>
-          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+          <p className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">
             {jobsScopedToClient
               ? t('components.ceo.warRoomDock.jobsForClient', { since, status: statusDisplay })
               : t('components.ceo.warRoomDock.jobsAllTenant', { since, status: statusDisplay })}
@@ -252,7 +252,7 @@ export default function CeoWarRoomDock() {
                 className={`px-2 py-0.5 rounded text-[9px] font-mono uppercase border ${
                   kindFilter === k
                     ? 'border-cyan-400/50 bg-cyan-950/50 text-cyan-200'
-                    : 'border-white/10 text-slate-500 hover:text-slate-300'
+                    : 'border-white/10 text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {lab}
@@ -264,7 +264,7 @@ export default function CeoWarRoomDock() {
           <button
             type="button"
             onClick={() => loadJobs()}
-            className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-[10px] font-mono uppercase text-slate-300 hover:bg-white/10"
+            className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-[10px] font-mono uppercase text-[var(--text-secondary)] hover:bg-white/10"
           >
             {t('components.ceo.warRoomDock.refreshJobs')}
           </button>
@@ -280,14 +280,14 @@ export default function CeoWarRoomDock() {
 
       <div className="grid lg:grid-cols-5 gap-0 min-h-[320px]">
         <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-cyan-500/10 p-3 max-h-[320px] overflow-y-auto bg-black/30">
-          <p className="text-[9px] uppercase tracking-widest text-slate-500 font-mono mb-2">
+          <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)] font-mono mb-2">
             {jobsScopedToClient
               ? t('components.ceo.warRoomDock.liveJobsClient')
               : t('components.ceo.warRoomDock.liveJobsTenant')}
           </p>
           {jobsErr && <p className="text-[10px] text-red-400 font-mono mb-2">{jobsErr}</p>}
           {filteredJobs.length === 0 && !jobsErr && (
-            <p className="text-[11px] text-slate-600 font-mono italic">
+            <p className="text-[11px] text-[var(--text-muted)] font-mono italic">
               {jobs.length === 0
                 ? t('components.ceo.warRoomDock.noJobs')
                 : t('components.ceo.warRoomDock.noJobsInFilter')}
@@ -305,13 +305,13 @@ export default function CeoWarRoomDock() {
                     className={`w-full text-left rounded-lg px-2 py-2 border font-mono text-[10px] transition-all ${
                       active
                         ? 'border-cyan-400/50 bg-cyan-950/50 text-cyan-100'
-                        : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-500/25 hover:text-slate-200'
+                        : 'border-white/10 bg-white/[0.03] text-[var(--text-tertiary)] hover:border-cyan-500/25 hover:text-[var(--text-secondary)]'
                     }`}
                   >
                     <span className="block text-cyan-200/90 truncate" title={id}>
                       {id}
                     </span>
-                    <span className="block text-[9px] text-slate-500 mt-0.5">
+                    <span className="block text-[9px] text-[var(--text-muted)] mt-0.5">
                       {(j.kind || '—') + ' · ' + (j.status || '—')}
                       {j.worker_id ? ` · ${j.worker_id}` : ''}
                     </span>
@@ -333,7 +333,7 @@ export default function CeoWarRoomDock() {
             }}
           >
             {lines.length === 0 && (
-              <div className="text-slate-500 text-[11px] leading-relaxed font-mono space-y-1">
+              <div className="text-[var(--text-muted)] text-[11px] leading-relaxed font-mono space-y-1">
                 {!selectedId && (
                   <p className="text-cyan-900/90 italic">{t('components.ceo.warRoomDock.selectJobHint')}</p>
                 )}
@@ -344,7 +344,7 @@ export default function CeoWarRoomDock() {
                   </p>
                 )}
                 {selectedId && streamStatus === 'live' && (
-                  <p className="text-slate-500">{t('components.ceo.warRoomDock.connectedWaiting')}</p>
+                  <p className="text-[var(--text-muted)]">{t('components.ceo.warRoomDock.connectedWaiting')}</p>
                 )}
                 {selectedId &&
                   streamStatus !== 'connecting' &&
@@ -372,7 +372,7 @@ export default function CeoWarRoomDock() {
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40 border border-white/10">
                       {sev}
                     </span>
-                    <span className="text-[9px] text-slate-400">{row.ts || '—'}</span>
+                    <span className="text-[9px] text-[var(--text-tertiary)]">{row.ts || '—'}</span>
                   </div>
                   <pre className="whitespace-pre-wrap break-words text-[10px] opacity-95 text-cyan-50/90">
                     {JSON.stringify(row.payload != null ? row.payload : row, null, 2)}

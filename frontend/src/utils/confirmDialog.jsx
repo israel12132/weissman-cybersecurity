@@ -39,7 +39,7 @@ const VARIANT_STYLES = {
   },
   neutral: {
     icon: HelpCircle,
-    iconWrap: 'bg-white/10 text-gray-200 ring-1 ring-white/15',
+    iconWrap: 'bg-white/10 text-[var(--text-secondary)] ring-1 ring-white/15',
     confirmBtn:
       'bg-white/90 hover:bg-white text-black shadow-lg focus-visible:ring-white/60',
   },
@@ -189,7 +189,7 @@ function DialogShell({
           <div className="min-w-0 flex-1 pt-0.5">
             <h2 className="text-base font-semibold text-white">{title}</h2>
             {message ? (
-              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-gray-300">{message}</p>
+              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-[var(--text-secondary)]">{message}</p>
             ) : null}
           </div>
         </div>
@@ -197,7 +197,7 @@ function DialogShell({
         {kind === 'prompt' ? (
           <div className="px-5 pb-2">
             {label ? (
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]">
                 {label}
               </label>
             ) : null}
@@ -228,7 +228,7 @@ function DialogShell({
             <button
               type="button"
               onClick={cancel}
-              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-300 outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/30"
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/30"
             >
               {cancelLabel}
             </button>

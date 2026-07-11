@@ -142,7 +142,7 @@ export default function AttackSurfaceGraph() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-0)] text-[var(--text-secondary)] flex items-center justify-center">
         <p className="text-cyan-400">{t(`${NS}.loading`)}</p>
       </div>
     )
@@ -160,7 +160,7 @@ export default function AttackSurfaceGraph() {
         </div>
       )}
       {graph.message && !graph.nodes?.length && (
-        <div className="mx-6 mt-4 p-4 rounded bg-slate-800/80 border border-slate-600 text-slate-400 text-sm">
+        <div className="mx-6 mt-4 p-4 rounded bg-[var(--bg-3)]/80 border border-[var(--border-strong)] text-[var(--text-tertiary)] text-sm">
           {graph.message}
         </div>
       )}
@@ -174,37 +174,37 @@ export default function AttackSurfaceGraph() {
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             fitView
-            className="bg-slate-950"
+            className="bg-[var(--bg-0)]"
             style={{ background: '#0f172a' }}
           >
             <Background color="#334155" gap={20} />
-            <Controls className="bg-slate-800/90 border-slate-600" />
+            <Controls className="bg-[var(--bg-3)]/90 border-[var(--border-strong)]" />
             <MiniMap nodeColor={n => {
               const d = n.data
               if (d?.status === 'takeover') return '#dc2626'
               if (d?.status === 'exposed') return '#f97316'
               return '#0d9488'
-            }} className="bg-slate-800/90" />
+            }} className="bg-[var(--bg-3)]/90" />
           </ReactFlow>
         </div>
         {selectedNode && (
-          <aside className="w-96 border-l border-slate-700 bg-slate-900/95 p-4 overflow-y-auto">
-            <h3 className="text-sm font-semibold text-slate-200 mb-2">{t(`${NS}.node_details`)}</h3>
-            <p className="text-xs text-slate-400 mb-1">{t(`${NS}.label_id`)} {selectedNode.id}</p>
-            <p className="text-sm text-slate-300 mb-2">{selectedNode.label}</p>
-            <p className="text-xs text-slate-500 mb-2">{t(`${NS}.label_type`)} {selectedNode.node_type} · {t(`${NS}.label_status`)} {selectedNode.status}</p>
+          <aside className="w-96 border-l border-[var(--border-default)] bg-[var(--bg-1)]/95 p-4 overflow-y-auto">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t(`${NS}.node_details`)}</h3>
+            <p className="text-xs text-[var(--text-tertiary)] mb-1">{t(`${NS}.label_id`)} {selectedNode.id}</p>
+            <p className="text-sm text-[var(--text-secondary)] mb-2">{selectedNode.label}</p>
+            <p className="text-xs text-[var(--text-muted)] mb-2">{t(`${NS}.label_type`)} {selectedNode.node_type} · {t(`${NS}.label_status`)} {selectedNode.status}</p>
             {selectedNode.source && <p className="text-xs text-amber-400 mb-2">{t(`${NS}.label_source`)} {selectedNode.source}</p>}
-            {selectedNode.finding_id && <p className="text-xs text-slate-500 mb-2">{t(`${NS}.label_finding`)} {selectedNode.finding_id}</p>}
+            {selectedNode.finding_id && <p className="text-xs text-[var(--text-muted)] mb-2">{t(`${NS}.label_finding`)} {selectedNode.finding_id}</p>}
             {selectedNode.cname_target && (
               <p className="text-xs text-cyan-400 mb-2">{t(`${NS}.cname_target`, { target: selectedNode.cname_target })}</p>
             )}
             {selectedNode.raw_finding && (
-              <pre className="text-xs bg-slate-800 rounded p-2 text-slate-400 mb-3 overflow-x-auto">
+              <pre className="text-xs bg-[var(--bg-3)] rounded p-2 text-[var(--text-tertiary)] mb-3 overflow-x-auto">
                 {JSON.stringify(selectedNode.raw_finding, null, 2)}
               </pre>
             )}
-            <h4 className="text-xs font-semibold text-slate-400 uppercase mb-1">{t(`${NS}.ai_remediation`)}</h4>
-            <p className="text-sm text-slate-300">
+            <h4 className="text-xs font-semibold text-[var(--text-tertiary)] uppercase mb-1">{t(`${NS}.ai_remediation`)}</h4>
+            <p className="text-sm text-[var(--text-secondary)]">
               {remediation[selectedNode.status] || remediation.secure}
             </p>
           </aside>

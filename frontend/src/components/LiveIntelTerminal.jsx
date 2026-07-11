@@ -55,13 +55,13 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
         style={style}
         className={`terminal-line px-3 py-0.5 hover:bg-white/5 flex items-center gap-1.5 font-mono text-xs shrink-0 ${isHighlight ? 'terminal-line-highlight' : ''}`}
       >
-        <span className="text-slate-500 tabular-nums shrink-0">[{item.time}]</span>
-        <span className="text-slate-500 shrink-0">|</span>
-        <span className="text-slate-300 truncate max-w-[90px]" title={item.target}>{item.target}</span>
-        <span className="text-slate-500 shrink-0">|</span>
+        <span className="text-[var(--text-muted)] tabular-nums shrink-0">[{item.time}]</span>
+        <span className="text-[var(--text-muted)] shrink-0">|</span>
+        <span className="text-[var(--text-secondary)] truncate max-w-[90px]" title={item.target}>{item.target}</span>
+        <span className="text-[var(--text-muted)] shrink-0">|</span>
         <span className={`shrink-0 font-medium ${severityColor(item.severity)}`}>{String(item.severity).toUpperCase().slice(0, 4)}</span>
-        <span className="text-slate-500 shrink-0">|</span>
-        <span className="text-slate-400 truncate min-w-0 flex-1" title={item.action}>{item.action}</span>
+        <span className="text-[var(--text-muted)] shrink-0">|</span>
+        <span className="text-[var(--text-tertiary)] truncate min-w-0 flex-1" title={item.action}>{item.action}</span>
       </div>
     )
   }
@@ -70,7 +70,7 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
     <div className={`tactical-terminal flex flex-col h-full min-h-0 ${matrixStyle ? 'matrix-style' : ''}`}>
       <div className="terminal-header shrink-0">
         <span className="text-cyber-cyan font-semibold tracking-wider">{t(`${NS}.title`)}</span>
-        <span className="text-slate-500 text-xs font-mono">
+        <span className="text-[var(--text-muted)] text-xs font-mono">
           {'// '}
           {isOnline ? t(`${NS}.feedActive`) : t(`${NS}.reconnecting`)}
         </span>
@@ -79,7 +79,7 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
         {parsed.length === 0 ? (
           <div className="text-cyan-400/90 px-3 py-4 font-mono text-xs border border-cyan-500/20 rounded bg-black/20">
             {idleMessage}
-            <div className="text-slate-500 mt-1 text-[10px]">{t(`${NS}.idleMonitoring`)}</div>
+            <div className="text-[var(--text-muted)] mt-1 text-[10px]">{t(`${NS}.idleMonitoring`)}</div>
           </div>
         ) : (
           <List

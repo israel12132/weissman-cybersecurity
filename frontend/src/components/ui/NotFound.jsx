@@ -19,7 +19,7 @@ export default function NotFound() {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col items-center justify-center p-6 sm:p-10 text-slate-100 animate-fade-in"
+      className="min-h-[100dvh] flex flex-col items-center justify-center p-6 sm:p-10 text-[var(--text-primary)] animate-fade-in"
       style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
     >
       <div className="w-full max-w-lg">

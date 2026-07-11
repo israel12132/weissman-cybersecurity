@@ -120,24 +120,24 @@ export default function AIRedteamArena() {
     <StandaloneLabShell title={t(`${NS}.title`)} subtitle={t(`${NS}.subtitle`)}>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
           <div className="lg:col-span-2">
-            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">{t(`${NS}.target_label`)}</label>
+            <label className="block text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t(`${NS}.target_label`)}</label>
             <input
               type="text"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder={t(`${NS}.target_placeholder`)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500"
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)]"
               disabled={running}
             />
           </div>
           <div className="lg:col-span-2">
-            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">{t(`${NS}.ai_endpoint_label`)}</label>
+            <label className="block text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">{t(`${NS}.ai_endpoint_label`)}</label>
             <input
               type="text"
               value={aiEndpoint}
               onChange={(e) => setAiEndpoint(e.target.value)}
               placeholder={t(`${NS}.ai_endpoint_placeholder`)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500"
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)]"
               disabled={running}
             />
           </div>
@@ -146,12 +146,12 @@ export default function AIRedteamArena() {
           <button
             onClick={startScan}
             disabled={running}
-            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-slate-600 text-white font-medium text-sm"
+            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-[var(--bg-4)] text-white font-medium text-sm"
           >
             {running ? t(`${NS}.running`) : t(`${NS}.launch`)}
           </button>
           {clientId && (
-            <span className="text-slate-500 text-sm self-center">
+            <span className="text-[var(--text-muted)] text-sm self-center">
               {t(`${NS}.client_id`, { id: clientId })}
               {client?.name && ` ${t(`${NS}.client_name`, { name: client.name })}`}
             </span>
@@ -166,7 +166,7 @@ export default function AIRedteamArena() {
                 ? 'border-red-500 bg-red-500/10 text-red-400'
                 : centerStatus?.status === 'SECURE'
                   ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
-                  : 'border-slate-600 bg-slate-800/80 text-slate-300'
+                  : 'border-[var(--border-strong)] bg-[var(--bg-3)]/80 text-[var(--text-secondary)]'
             }`}
           >
             {centerStatus?.status === 'JAILBREAK_SUCCESS' && <>{t(`${NS}.jailbreak_success`)}</>}
@@ -179,13 +179,13 @@ export default function AIRedteamArena() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 overflow-hidden">
-            <div className="bg-rose-900/40 border-b border-slate-700 px-4 py-2 font-semibold text-rose-300">
+          <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 overflow-hidden">
+            <div className="bg-rose-900/40 border-b border-[var(--border-default)] px-4 py-2 font-semibold text-rose-300">
               {t(`${NS}.attacker_title`)}
             </div>
-            <div className="h-80 overflow-y-auto p-4 font-mono text-sm bg-slate-950/80">
+            <div className="h-80 overflow-y-auto p-4 font-mono text-sm bg-[var(--bg-0)]/80">
               {attackerLog.length === 0 && (
-                <span className="text-slate-500">{t(`${NS}.attacker_empty`)}</span>
+                <span className="text-[var(--text-muted)]">{t(`${NS}.attacker_empty`)}</span>
               )}
               {attackerLog.map((entry, i) => (
                 <div key={i} className="mb-2">
@@ -193,29 +193,29 @@ export default function AIRedteamArena() {
                     <div className="text-amber-200 break-words">&gt; {entry.text}</div>
                   )}
                   {entry.type === 'judge' && (
-                    <div className="text-slate-400 text-xs mt-1">{entry.text}</div>
+                    <div className="text-[var(--text-tertiary)] text-xs mt-1">{entry.text}</div>
                   )}
                 </div>
               ))}
             </div>
           </div>
-          <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 overflow-hidden">
-            <div className="bg-slate-700/40 border-b border-slate-700 px-4 py-2 font-semibold text-slate-300">
+          <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 overflow-hidden">
+            <div className="bg-[var(--bg-4)]/40 border-b border-[var(--border-default)] px-4 py-2 font-semibold text-[var(--text-secondary)]">
               {t(`${NS}.defender_title`)}
             </div>
-            <div className="h-80 overflow-y-auto p-4 font-mono text-sm bg-slate-950/80">
+            <div className="h-80 overflow-y-auto p-4 font-mono text-sm bg-[var(--bg-0)]/80">
               {defenderLog.length === 0 && (
-                <span className="text-slate-500">{t(`${NS}.defender_empty`)}</span>
+                <span className="text-[var(--text-muted)]">{t(`${NS}.defender_empty`)}</span>
               )}
               {defenderLog.map((entry, i) => (
-                <div key={i} className="mb-2 text-slate-300 break-words">
+                <div key={i} className="mb-2 text-[var(--text-secondary)] break-words">
                   {entry.text}
                 </div>
               ))}
             </div>
           </div>
         </div>
-        <p className="text-slate-500 text-xs mt-4">
+        <p className="text-[var(--text-muted)] text-xs mt-4">
           {t(`${NS}.footer`)}
         </p>
     </StandaloneLabShell>

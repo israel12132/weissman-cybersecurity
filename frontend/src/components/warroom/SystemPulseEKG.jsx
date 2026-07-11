@@ -110,7 +110,7 @@ export default function SystemPulseEKG() {
           </motion.span>
         )}
         {!targetUrl && !probePending && (
-          <span className="text-[10px] font-mono text-slate-500">{t(`${NS}.noDomain`)}</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t(`${NS}.noDomain`)}</span>
         )}
         {showUnreachable && (
           <span className="text-[10px] font-mono text-amber-400/95" title={t(`${NS}.unreachableTitle`)}>

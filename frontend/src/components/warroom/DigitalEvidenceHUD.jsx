@@ -176,7 +176,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
           aria-hidden
         />
         <motion.div
-          className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-[#22d3ee]/40 bg-slate-950/98 shadow-2xl"
+          className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-[#22d3ee]/40 bg-[var(--bg-0)]/98 shadow-2xl"
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}

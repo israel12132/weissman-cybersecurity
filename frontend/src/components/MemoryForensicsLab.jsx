@@ -58,7 +58,7 @@ function EntropyGauge({ value, isLeak }) {
       </svg>
       <div className="text-center mt-0">
         <span className="font-mono font-bold text-lg" style={{ color: c.stroke }}>{v.toFixed(1)}</span>
-        <span className="text-slate-500 text-xs ml-1">/ {ENTROPY_MAX}</span>
+        <span className="text-[var(--text-muted)] text-xs ml-1">/ {ENTROPY_MAX}</span>
       </div>
       {isLeak && (
         <div className="mt-2 px-3 py-1.5 rounded bg-red-500/20 border border-red-500/60 animate-pulse">
@@ -77,7 +77,7 @@ function DeceptionBadge() {
       <span className="px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-medium border border-emerald-500/50">
         {t(`${NS}.http_200`)}
       </span>
-      <span className="text-slate-500 text-sm">→</span>
+      <span className="text-[var(--text-muted)] text-sm">→</span>
       <span className="px-3 py-1.5 rounded-full bg-red-500/25 text-red-400 text-sm font-semibold border-2 border-red-500/70 flex items-center gap-1.5">
         <span className="text-red-400">⚠</span>
         {t(`${NS}.data_bleed`)}
@@ -262,7 +262,7 @@ export default function MemoryForensicsLab() {
       const inBleedZone = (byteOffset) => bleedStartOffset != null && byteOffset >= bleedStartOffset
       return (
         <div style={style} className="flex flex-nowrap gap-0.5 leading-relaxed font-mono text-sm">
-          <span className="text-slate-500 w-16 shrink-0">
+          <span className="text-[var(--text-muted)] w-16 shrink-0">
             {offset < 0x10000
               ? '0x' + offset.toString(16).toUpperCase().padStart(4, '0')
               : '0x' + offset.toString(16).toUpperCase()}
@@ -281,13 +281,13 @@ export default function MemoryForensicsLab() {
                     ? 'text-amber-400'
                     : isBleed
                       ? 'text-red-400 font-semibold'
-                      : 'text-slate-400'
+                      : 'text-[var(--text-tertiary)]'
               return (
                 <span
                   key={byteOffset}
                   onMouseEnter={() => setHoveredSlot(slot)}
                   onMouseLeave={() => setHoveredSlot(null)}
-                  className={`cursor-default px-0.5 rounded ${severityClass} ${isHovered ? 'bg-cyan-500/40 text-white' : isBleed || (blockEntropy != null && blockEntropy >= ENTROPY_SAFE) ? 'hover:bg-red-500/20' : 'hover:bg-slate-700/50'}`}
+                  className={`cursor-default px-0.5 rounded ${severityClass} ${isHovered ? 'bg-cyan-500/40 text-white' : isBleed || (blockEntropy != null && blockEntropy >= ENTROPY_SAFE) ? 'hover:bg-red-500/20' : 'hover:bg-[var(--bg-4)]/50'}`}
                   title={
                     blockEntropy != null
                       ? `Offset ${byteOffset} → ${slot} (entropy ${blockEntropy.toFixed(2)})`
@@ -314,7 +314,7 @@ export default function MemoryForensicsLab() {
       return (
         <div
           style={style}
-          className={`font-mono text-sm whitespace-pre-wrap break-all ${isBleedChunk ? 'text-red-400 font-semibold' : 'text-slate-400'}`}
+          className={`font-mono text-sm whitespace-pre-wrap break-all ${isBleedChunk ? 'text-red-400 font-semibold' : 'text-[var(--text-tertiary)]'}`}
         >
           {chunk}
         </div>
@@ -334,17 +334,17 @@ export default function MemoryForensicsLab() {
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             placeholder={t(`${NS}.target_placeholder`)}
-            className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500 w-80"
+            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
           />
           <button
             onClick={runScan}
             disabled={running || !clientId}
-            className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-slate-600 text-white text-sm font-medium"
+            className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-[var(--bg-4)] text-white text-sm font-medium"
           >
             {running ? t(`${NS}.running`) : t(`${NS}.run_scan`)}
           </button>
           {jobId && (
-            <span className="text-slate-400 text-sm font-mono">
+            <span className="text-[var(--text-tertiary)] text-sm font-mono">
               {t(`${NS}.job`, { id: jobId })}
               {jobStatus?.status === 'running' && (
                 <>
@@ -366,9 +366,9 @@ export default function MemoryForensicsLab() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6">
-            <h2 className="text-lg font-semibold text-slate-200 mb-2">{t(`${NS}.stack_title`)}</h2>
-            <p className="text-xs text-slate-500 mb-4">{t(`${NS}.stack_hint`)}</p>
+          <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6">
+            <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t(`${NS}.stack_title`)}</h2>
+            <p className="text-xs text-[var(--text-muted)] mb-4">{t(`${NS}.stack_hint`)}</p>
             <div className="space-y-2 font-mono text-sm">
               {STACK_LAYOUT_64.map((slot) => (
                 <div
@@ -377,8 +377,8 @@ export default function MemoryForensicsLab() {
                     hoveredSlot === slot.reg ? 'ring-2 ring-cyan-400 scale-[1.02]' : ''
                   }`}
                 >
-                  <span className="text-slate-100 font-semibold">{slot.reg}</span>
-                  <span className="text-slate-200/90 text-xs">{slot.name}</span>
+                  <span className="text-[var(--text-primary)] font-semibold">{slot.reg}</span>
+                  <span className="text-[var(--text-secondary)]/90 text-xs">{slot.name}</span>
                 </div>
               ))}
             </div>
@@ -389,55 +389,55 @@ export default function MemoryForensicsLab() {
             )}
           </div>
 
-          <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6 flex flex-col">
+          <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-200">{t(`${NS}.weaponization_title`)}</h2>
+              <h2 className="text-lg font-semibold text-[var(--text-secondary)]">{t(`${NS}.weaponization_title`)}</h2>
               <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-medium border border-emerald-500/40">
                 {t(`${NS}.safe_badge`)}
               </span>
             </div>
-            <p className="text-sm text-slate-400 mb-4">
+            <p className="text-sm text-[var(--text-tertiary)] mb-4">
               {t(`${NS}.weaponization_body`)}
             </p>
             {selected ? (
               <div className="space-y-4 text-sm">
                 {isMemoryLeakFinding && (
                   <>
-                    <div className="border border-slate-600 rounded-lg p-4 bg-slate-950/80">
-                      <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">{t(`${NS}.entropy_gauge`)}</p>
+                    <div className="border border-[var(--border-strong)] rounded-lg p-4 bg-[var(--bg-0)]/80">
+                      <p className="text-[var(--text-muted)] text-xs uppercase tracking-wider mb-2">{t(`${NS}.entropy_gauge`)}</p>
                       <EntropyGauge value={entropyDisplay} isLeak={isEntropyCritical} />
                     </div>
                     <div>
-                      <p className="text-slate-500 text-xs uppercase tracking-wider mb-2">{t(`${NS}.deception_title`)}</p>
+                      <p className="text-[var(--text-muted)] text-xs uppercase tracking-wider mb-2">{t(`${NS}.deception_title`)}</p>
                       <DeceptionBadge />
                     </div>
                   </>
                 )}
                 {selected.trigger_reason && (
                   <p>
-                    <span className="text-slate-500">{t(`${NS}.triggered_by`)}</span>{' '}
+                    <span className="text-[var(--text-muted)]">{t(`${NS}.triggered_by`)}</span>{' '}
                     <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 font-medium">
                       {selected.trigger_reason}
                     </span>
                   </p>
                 )}
-                <p><span className="text-slate-500">{t(`${NS}.label_title`)}</span> <span className="text-slate-200">{selected.title}</span></p>
-                <p><span className="text-slate-500">{t(`${NS}.label_severity`)}</span> <span className={selected.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}>{selected.severity}</span></p>
-                <p><span className="text-slate-500">{t(`${NS}.label_verified`)}</span> {selected.verified ? <span className="text-emerald-400">{t(`${NS}.yes`)}</span> : <span className="text-slate-500">{t(`${NS}.no`)}</span>}
+                <p><span className="text-[var(--text-muted)]">{t(`${NS}.label_title`)}</span> <span className="text-[var(--text-secondary)]">{selected.title}</span></p>
+                <p><span className="text-[var(--text-muted)]">{t(`${NS}.label_severity`)}</span> <span className={selected.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}>{selected.severity}</span></p>
+                <p><span className="text-[var(--text-muted)]">{t(`${NS}.label_verified`)}</span> {selected.verified ? <span className="text-emerald-400">{t(`${NS}.yes`)}</span> : <span className="text-[var(--text-muted)]">{t(`${NS}.no`)}</span>}
                 </p>
-                <p><span className="text-slate-500">{t(`${NS}.label_status`)}</span> {selected.weaponization_status || t(`${NS}.safe_badge`)}</p>
+                <p><span className="text-[var(--text-muted)]">{t(`${NS}.label_status`)}</span> {selected.weaponization_status || t(`${NS}.safe_badge`)}</p>
               </div>
             ) : (
-              <p className="text-slate-500 text-sm">{t(`${NS}.select_finding`)}</p>
+              <p className="text-[var(--text-muted)] text-sm">{t(`${NS}.select_finding`)}</p>
             )}
           </div>
         </div>
 
-        <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">{t(`${NS}.poe_findings`)}</h2>
-          {loading && <p className="text-slate-500">{t(`${NS}.loading`)}</p>}
+        <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t(`${NS}.poe_findings`)}</h2>
+          {loading && <p className="text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>}
           {!loading && findings.length === 0 && (
-            <p className="text-slate-500">{t(`${NS}.no_findings`)}</p>
+            <p className="text-[var(--text-muted)]">{t(`${NS}.no_findings`)}</p>
           )}
           {!loading && findings.length > 0 && (
             <ul className="space-y-2">
@@ -449,7 +449,7 @@ export default function MemoryForensicsLab() {
                     className={`w-full text-left rounded-lg px-4 py-3 border transition-colors ${
                       selected?.id === f.id
                         ? 'bg-violet-500/20 border-violet-500/50 text-white'
-                        : 'bg-slate-800/60 border-slate-600 hover:border-slate-500 text-slate-200'
+                        : 'bg-[var(--bg-3)]/60 border-[var(--border-strong)] hover:border-[var(--border-strong)] text-[var(--text-secondary)]'
                     }`}
                   >
                     <span className="font-medium">{f.title}</span>
@@ -470,19 +470,19 @@ export default function MemoryForensicsLab() {
         </div>
 
         {selected && (
-          <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6">
-            <h2 className="text-lg font-semibold text-slate-200 mb-2">
+          <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6">
+            <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">
               {hasEntropyMap || bleedStartOffset != null ? t(`${NS}.hex_heatmap`) : t(`${NS}.hex_viewer`)} {t(`${NS}.hex_stack_hint`)}
             </h2>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-[var(--text-muted)] mb-4">
               {hasEntropyMap || bleedStartOffset != null
                 ? (bleedStartOffset != null
                   ? t(`${NS}.bleed_hint`, { offset: bleedStartOffset })
                   : t(`${NS}.entropy_blocks_hint`))
                 : t(`${NS}.offset_layout_hint`)}
             </p>
-            <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
-              <div className="px-3 py-2 border-b border-slate-700 text-slate-500 text-xs font-mono flex flex-wrap items-center gap-2">
+            <div className="rounded-lg bg-[var(--bg-0)] border border-[var(--border-default)] overflow-hidden">
+              <div className="px-3 py-2 border-b border-[var(--border-default)] text-[var(--text-muted)] text-xs font-mono flex flex-wrap items-center gap-2">
                 <span>VLN-{selected.id}</span>
                 <span>{selected.weaponization_status || 'SAFE'}</span>
                 {selected.trigger_reason && (
@@ -495,7 +495,7 @@ export default function MemoryForensicsLab() {
               </div>
               <div className="p-4 overflow-x-auto" onMouseLeave={() => setHoveredSlot(null)}>
                 {payloadBytes.length === 0 ? (
-                  <span className="text-slate-500">{t(`${NS}.empty`)}</span>
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.empty`)}</span>
                 ) : (
                   <List
                     height={HEX_VIEWER_HEIGHT}
@@ -508,14 +508,14 @@ export default function MemoryForensicsLab() {
                   </List>
                 )}
               </div>
-              <div className="px-3 py-2 border-t border-slate-700 text-slate-500 text-xs">
+              <div className="px-3 py-2 border-t border-[var(--border-default)] text-[var(--text-muted)] text-xs">
                 {hasEntropyMap || bleedStartOffset != null
                   ? t(`${NS}.raw_entropy`)
                   : t(`${NS}.raw_default`)}:
               </div>
               <div className="p-4 overflow-x-auto max-h-96 overflow-y-auto" onMouseLeave={() => setHoveredSlot(null)}>
                 {rawChunks.length === 0 ? (
-                  <span className="text-slate-500">{t(`${NS}.none`)}</span>
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.none`)}</span>
                 ) : (
                   <List
                     height={HEX_VIEWER_HEIGHT}
@@ -530,8 +530,8 @@ export default function MemoryForensicsLab() {
               </div>
             </div>
             {selected.footprint && (
-              <div className="mt-4 p-3 rounded-lg bg-slate-800/60 border border-slate-600 text-slate-400 text-xs font-mono">
-                <strong className="text-slate-300">{t(`${NS}.crash_footprint`)}</strong> {selected.footprint}
+              <div className="mt-4 p-3 rounded-lg bg-[var(--bg-3)]/60 border border-[var(--border-strong)] text-[var(--text-tertiary)] text-xs font-mono">
+                <strong className="text-[var(--text-secondary)]">{t(`${NS}.crash_footprint`)}</strong> {selected.footprint}
               </div>
             )}
           </div>

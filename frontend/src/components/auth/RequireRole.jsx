@@ -24,7 +24,7 @@ export default function RequireRole({ min = 'admin', children }) {
       <div className="min-h-screen flex items-center justify-center bg-[#030712]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
-          <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">
+          <span className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-widest">
             {t('auth.verifying_access')}
           </span>
         </div>

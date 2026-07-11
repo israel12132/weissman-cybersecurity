@@ -12,7 +12,7 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
   }
   if (!discovery || typeof discovery !== 'object') {
     return (
-      <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-[11px] font-mono text-slate-500">
+      <div className="rounded-xl border border-white/10 bg-[var(--bg-0)]/60 px-4 py-3 text-[11px] font-mono text-[var(--text-muted)]">
         {t('components.ceo.discoveryStrip.empty')}
       </div>
     )
@@ -37,28 +37,28 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
           </p>
           <p className="text-sm font-semibold text-white tracking-tight">
             <span className="text-cyan-200/90">{name}</span>
-            <span className="text-slate-600 mx-2">·</span>
+            <span className="text-[var(--text-muted)] mx-2">·</span>
             <span className="font-mono text-amber-200/90 break-all">{target}</span>
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-right">
           <div>
-            <p className="text-[9px] uppercase text-slate-500 font-mono">
+            <p className="text-[9px] uppercase text-[var(--text-muted)] font-mono">
               {t('components.ceo.discoveryStrip.targetList')}
             </p>
             <p className="text-xl font-mono text-white tabular-nums">{tl != null ? tl : '—'}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase text-slate-500 font-mono">
+            <p className="text-[9px] uppercase text-[var(--text-muted)] font-mono">
               {t('components.ceo.discoveryStrip.discoveredPaths')}
             </p>
             <p className="text-xl font-mono text-emerald-300/90 tabular-nums">{dp != null ? dp : '—'}</p>
           </div>
           <div className="text-left min-w-[140px]">
-            <p className="text-[9px] uppercase text-slate-500 font-mono">
+            <p className="text-[9px] uppercase text-[var(--text-muted)] font-mono">
               {t('components.ceo.discoveryStrip.updated')}
             </p>
-            <p className="text-[10px] font-mono text-slate-400">{at}</p>
+            <p className="text-[10px] font-mono text-[var(--text-tertiary)]">{at}</p>
           </div>
         </div>
       </div>

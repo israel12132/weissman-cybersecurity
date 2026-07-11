@@ -130,14 +130,14 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
     <section className="rounded-lg border border-white/10 bg-black/40 backdrop-blur-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-white/10 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-[10px] uppercase tracking-widest text-slate-500 mb-1 font-mono">
+          <label className="block text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1 font-mono">
             {t('components.ceo.warRoomStream.jobUuidLabel')}
           </label>
           <input
             value={jobId}
             onChange={(e) => onJobIdChange(e.target.value)}
             placeholder={t('components.ceo.warRoomStream.jobUuidPlaceholder')}
-            className="w-full font-mono text-sm bg-slate-950/80 border border-white/15 rounded px-3 py-2 text-slate-100 placeholder:text-slate-600"
+            className="w-full font-mono text-sm bg-[var(--bg-0)]/80 border border-white/15 rounded px-3 py-2 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
           />
         </div>
         <div className="flex gap-2">
@@ -151,12 +151,12 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
           <button
             type="button"
             onClick={stop}
-            className="px-4 py-2 rounded bg-slate-900 border border-white/15 text-slate-300 text-xs font-mono uppercase tracking-wide hover:bg-slate-800"
+            className="px-4 py-2 rounded bg-[var(--bg-1)] border border-white/15 text-[var(--text-secondary)] text-xs font-mono uppercase tracking-wide hover:bg-[var(--bg-3)]"
           >
             {t('components.ceo.warRoomStream.stop')}
           </button>
         </div>
-        <div className="text-[10px] font-mono text-slate-500">
+        <div className="text-[10px] font-mono text-[var(--text-muted)]">
           <Trans
             i18nKey="components.ceo.warRoomStream.cursorStatus"
             values={{ since, status: statusLabel(status) }}
@@ -169,7 +169,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
         className="h-[min(420px,50vh)] overflow-y-auto p-3 font-mono text-[11px] leading-relaxed space-y-2 bg-[#050508]"
       >
         {lines.length === 0 && (
-          <div className="text-slate-600 italic">{t('components.ceo.warRoomStream.noEvents')}</div>
+          <div className="text-[var(--text-muted)] italic">{t('components.ceo.warRoomStream.noEvents')}</div>
         )}
         {lines.map((row, i) => {
           const phase = row.phase || 'event'
@@ -180,7 +180,7 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
               <div className="flex flex-wrap gap-2 items-baseline mb-1 opacity-90">
                 <span className="font-bold uppercase tracking-tight">{phase}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/30 border border-white/10">{sev}</span>
-                <span className="text-[10px] text-slate-400">{row.ts || '—'}</span>
+                <span className="text-[10px] text-[var(--text-tertiary)]">{row.ts || '—'}</span>
               </div>
               <pre className="whitespace-pre-wrap break-words text-[10px] opacity-95">
                 {JSON.stringify(row.payload != null ? row.payload : row, null, 2)}
