@@ -63,7 +63,27 @@ pub fn header_set(index: usize) -> Vec<(&'static str, String)> {
         ("Sec-Fetch-Site", "none".to_string()),
         ("Upgrade-Insecure-Requests", "1".to_string()),
         ("Sec-Ch-Ua-Mobile", if is_mobile { "?1" } else { "?0" }.to_string()),
+        ("Sec-Ch-Ua-Platform", ua_platform(ua).to_string()),
     ]
+}
+
+/// Client-Hint platform value ("\"Windows\"" etc.) inferred from the User-Agent, so the CH header
+/// is consistent with the UA rather than contradicting it (a WAF fingerprint giveaway).
+#[must_use]
+pub fn ua_platform(ua: &str) -> &'static str {
+    if ua.contains("Windows") {
+        "\"Windows\""
+    } else if ua.contains("Android") {
+        "\"Android\""
+    } else if ua.contains("iPhone") || ua.contains("iPad") {
+        "\"iOS\""
+    } else if ua.contains("Mac OS X") {
+        "\"macOS\""
+    } else if ua.contains("Linux") {
+        "\"Linux\""
+    } else {
+        "\"Unknown\""
+    }
 }
 
 /// Stealth dispatch policy. All fields are sanitised into safe ranges by [`StealthPlan::sanitized`].
@@ -306,6 +326,21 @@ mod tests {
         let a = header_set(0).into_iter().find(|(k, _)| *k == "User-Agent").unwrap().1;
         let b = header_set(1).into_iter().find(|(k, _)| *k == "User-Agent").unwrap().1;
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn platform_hint_is_consistent_with_the_user_agent() {
+        assert_eq!(ua_platform("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125"), "\"Windows\"");
+        assert_eq!(ua_platform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari"), "\"macOS\"");
+        assert_eq!(ua_platform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)"), "\"iOS\"");
+        assert_eq!(ua_platform("Mozilla/5.0 (Linux; Android 14; Pixel 8)"), "\"Android\"");
+        assert_eq!(ua_platform("Mozilla/5.0 (X11; Linux x86_64) Chrome/125"), "\"Linux\"");
+        // Every rotated UA yields a concrete (non-Unknown) platform.
+        for i in 0..USER_AGENTS.len() {
+            let hs = header_set(i);
+            let plat = hs.iter().find(|(k, _)| *k == "Sec-Ch-Ua-Platform").unwrap();
+            assert_ne!(plat.1, "\"Unknown\"", "UA #{i} has no platform mapping");
+        }
     }
 
     #[test]

@@ -31,19 +31,6 @@ pub fn ghost_swarm_fingerprint_enabled() -> bool {
     )
 }
 
-static GHOST_LANG: &[&str] = &[
-    "en-US,en;q=0.9",
-    "en-GB,en;q=0.8",
-    "de-DE,de;q=0.9,en;q=0.7",
-    "fr-FR,fr;q=0.9,en;q=0.6",
-    "ja-JP,ja;q=0.9,en;q=0.5",
-    "es-ES,es;q=0.9,en;q=0.6",
-    "pt-BR,pt;q=0.9,en;q=0.5",
-    "nl-NL,nl;q=0.9,en;q=0.6",
-];
-
-static GHOST_PLATFORM: &[&str] = &["\"Windows\"", "\"macOS\"", "\"Linux\""];
-
 /// Deterministic fingerprint from global sequence (optionally XOR with edge node id from job payload).
 #[must_use]
 pub fn ghost_swarm_sequence(edge_node_id: Option<i64>) -> u64 {
@@ -54,14 +41,16 @@ pub fn ghost_swarm_sequence(edge_node_id: Option<i64>) -> u64 {
     }
 }
 
-/// Apply rotating User-Agent, Accept-Language, Sec-CH-UA-Platform to a probe request.
+/// Apply the full rotated stealth header set (UA + Accept*, Sec-Fetch-*, Sec-CH-UA-*, …) to a probe
+/// request, drawn from the single authoritative `stealth_scheduler` source so every probe blends in
+/// as a real browser rather than a scanner. Richer than a bare UA — the extra headers defeat header
+/// -profile WAF rules.
 pub fn apply_ghost_swarm_headers(req: RequestBuilder, seq: u64) -> RequestBuilder {
-    let ua = USER_AGENTS[(seq as usize) % USER_AGENTS.len()];
-    let lang = GHOST_LANG[(seq as usize) % GHOST_LANG.len()];
-    let plat = GHOST_PLATFORM[((seq as usize) / 3) % GHOST_PLATFORM.len()];
-    req.header("User-Agent", ua)
-        .header("Accept-Language", lang)
-        .header("Sec-CH-UA-Platform", plat)
+    let mut req = req;
+    for (name, value) in crate::stealth_scheduler::header_set(seq as usize) {
+        req = req.header(name, value);
+    }
+    req
 }
 
 fn load_all_proxies() -> Vec<String> {
