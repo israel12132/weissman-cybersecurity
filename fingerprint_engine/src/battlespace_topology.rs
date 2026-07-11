@@ -175,8 +175,11 @@ async fn load_open_findings(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<Vec<Value>, String> {
+    // Pull the intel columns alongside raw_data and fold them into the finding JSON. These live in
+    // dedicated table columns (not inside raw_data), so without this the STRIPS planner would never
+    // see a finding's KEV status or EPSS/KEV-adjusted effective_risk when grounding its facts.
     let rows = sqlx::query(
-        r#"SELECT raw_data FROM vulnerabilities
+        r#"SELECT raw_data, severity, effective_risk, kev_listed FROM vulnerabilities
             WHERE tenant_id = $1 AND client_id = $2
               AND COALESCE(status, 'OPEN') NOT IN ('FIXED', 'FALSE_POSITIVE')
             ORDER BY id DESC LIMIT 500"#,
@@ -189,7 +192,22 @@ async fn load_open_findings(
 
     Ok(rows
         .into_iter()
-        .filter_map(|r| r.try_get::<Value, _>("raw_data").ok())
+        .filter_map(|r| {
+            let mut v = r.try_get::<Value, _>("raw_data").ok()?;
+            if let Some(obj) = v.as_object_mut() {
+                // Prefer the authoritative column value; only fill when raw_data lacks the key.
+                if let Ok(sev) = r.try_get::<String, _>("severity") {
+                    obj.entry("severity").or_insert(Value::String(sev));
+                }
+                if let Ok(Some(eff)) = r.try_get::<Option<f64>, _>("effective_risk") {
+                    obj.insert("effective_risk".into(), json!(eff));
+                }
+                if let Ok(kev) = r.try_get::<bool, _>("kev_listed") {
+                    obj.insert("kev_listed".into(), json!(kev));
+                }
+            }
+            Some(v)
+        })
         .collect())
 }
 

@@ -255,8 +255,16 @@ async fn process_one(
         Err(msg) => {
             let exhausted = job.attempt_count >= job.max_attempts;
             if bus_on && exhausted {
-                let signing_key = std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET")
+                // Prefer a dedicated forensic-seal key so the tamper-evidence key is isolated
+                // from job-signing and auth. Falls back to the orchestrator key, then JWT.
+                let signing_key = std::env::var("WEISSMAN_FORENSIC_SEAL_SECRET")
                     .ok()
+                    .filter(|s| !s.trim().is_empty())
+                    .or_else(|| {
+                        std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET")
+                            .ok()
+                            .filter(|s| !s.trim().is_empty())
+                    })
                     .or_else(|| std::env::var("WEISSMAN_JWT_SECRET").ok());
                 let key = signing_key.as_deref().map(|s| s.as_bytes());
                 match ForensicBundle::build(

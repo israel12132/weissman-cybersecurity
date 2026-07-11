@@ -225,6 +225,27 @@ pub async fn persist_engine_findings(
     }
     let client_id = client_id.expect("client_id.is_none() checked above");
 
+    // Cap the batch so a single misbehaving/huge engine result can't open an unbounded write
+    // transaction (and a giant findings_json blob). Tunable; the excess is logged, not silently lost.
+    let max_persist = std::env::var("WEISSMAN_MAX_PERSIST_FINDINGS")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(5000);
+    let findings: &[Value] = if findings.len() > max_persist {
+        tracing::warn!(
+            target: "findings_persist",
+            engine = %engine,
+            tenant_id,
+            total = findings.len(),
+            cap = max_persist,
+            "truncating oversized finding batch before persistence"
+        );
+        &findings[..max_persist]
+    } else {
+        findings
+    };
+
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -246,6 +267,14 @@ pub async fn persist_engine_findings(
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| format!("insert report_runs: {e}"))?;
+
+    // Resolve suppression rules ONCE for this (tenant, engine) rather than per finding. All
+    // findings in this call share `engine`, so a single query replaces the former per-finding
+    // is_suppressed() that opened its own tenant transaction each time (N+1). Matched hashes are
+    // collected and their hit_count telemetry is bumped in one statement before commit.
+    let active_suppressions =
+        fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine).await;
+    let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
     for raw in findings.iter().cloned() {
@@ -408,7 +437,21 @@ pub async fn persist_engine_findings(
         } else {
             severity_to_score(&severity)
         };
-        let effective_risk = ((base_risk * conf_mult).min(10.0) * 10.0).round() / 10.0;
+        // Fold live exploit intel (already resolved above) into the platform's core priority
+        // score so a KEV-listed / high-EPSS finding outranks a theoretical one with the same CVSS.
+        let mut effective = base_risk * conf_mult;
+        if let Some(epss) = epss_score {
+            // EPSS = P(exploitation within 30d) ∈ [0,1]; boost up to +50%.
+            effective *= 1.0 + (epss as f64).clamp(0.0, 1.0) * 0.5;
+        }
+        if kev_listed {
+            // CISA KEV = known-exploited in the wild — never rank below high.
+            effective = effective.max(8.5);
+            if kev_known_ransomware {
+                effective = effective.max(9.5);
+            }
+        }
+        let effective_risk = (effective.min(10.0) * 10.0).round() / 10.0;
         let finding_verified = f.get("verified").and_then(Value::as_bool).unwrap_or(false)
             || f.get("verification_method")
                 .and_then(Value::as_str)
@@ -426,16 +469,15 @@ pub async fn persist_engine_findings(
             }
         }
 
-        // If a suppression rule exists for this combo, demote to FALSE_POSITIVE
-        // before insert. We still persist (audit trail) but the inbox stays clean.
-        // We have to commit the existing tx to call is_suppressed (which opens its
-        // own short-lived tx); cheap because we restart immediately below.
-        let suppressed = fp_feedback::is_suppressed(pool, tenant_id, engine, &signature_hash).await;
+        // If a suppression rule exists for this combo, demote to FALSE_POSITIVE before insert. We
+        // still persist (audit trail) but the inbox stays clean. Membership is checked against the
+        // set preloaded once above (no per-finding round-trip); matched hashes get their hit_count
+        // bumped in a single statement before commit.
+        let suppressed = active_suppressions.contains(&signature_hash);
+        if suppressed {
+            suppression_hits.push(signature_hash.clone());
+        }
         let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
-
-        // Re-open the tx if it was committed during the suppression check. We
-        // keep one tx per finding for clean rollback semantics.
-        // (Implementation note: is_suppressed uses its own tx, so ours is still alive.)
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
@@ -690,6 +732,10 @@ pub async fn persist_engine_findings(
             .await;
         });
     }
+
+    // Bump hit_count telemetry for every suppression rule that matched this run, in one statement
+    // inside the batch transaction (replaces the per-finding UPDATE that is_suppressed used to do).
+    fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
 

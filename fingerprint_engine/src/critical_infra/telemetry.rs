@@ -94,7 +94,7 @@ pub async fn emit_critical_risk_finding_persisted(
         "tenant_id": tenant_id,
         "client_id": client_id,
     });
-    let wire = payload.to_string();
+    let wire = crate::http::tenant_stream::stamp_value(tenant_id, payload);
     crate::telemetry_bus::publish_bus("telemetry", &wire).await;
     crate::telemetry_bus::publish_bus("war_room", &wire).await;
     tracing::warn!(
@@ -106,7 +106,10 @@ pub async fn emit_critical_risk_finding_persisted(
 }
 
 async fn fanout(ctx: &EngineRunContext, payload: &Value) {
-    let wire = payload.to_string();
+    let tid = ctx
+        .tenant_id
+        .unwrap_or(crate::http::tenant_stream::SYSTEM_TENANT);
+    let wire = crate::http::tenant_stream::stamp_value(tid, payload.clone());
     if let Some(tx) = &ctx.swarm_broadcast {
         let _ = tx.send(wire.clone());
     }

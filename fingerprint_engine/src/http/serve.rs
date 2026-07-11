@@ -900,9 +900,12 @@ async fn handle_ws_command_center(
             }
             telemetry_msg = rx.recv() => {
                 if let Ok(raw) = telemetry_msg {
-                    if let Some(normalized) = normalize_cc_event(&raw) {
-                        if socket.send(Message::Text(normalized)).await.is_err() {
-                            break;
+                    // Tenant isolation: only forward events stamped for this socket's tenant.
+                    if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                        if let Some(normalized) = normalize_cc_event(&scoped) {
+                            if socket.send(Message::Text(normalized)).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }
@@ -1096,14 +1099,6 @@ struct CouncilDebateBody {
 struct PipelineStateQuery {
     run_id: i64,
     client_id: String,
-}
-
-/// Legacy shape for POST /api/system/configs: `[{ "key", "value" }]`. The handler also accepts `{ "configs": { ... } }`.
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct SystemConfigBody {
-    key: String,
-    value: String,
 }
 
 #[derive(Deserialize)]
@@ -1371,6 +1366,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
                 }
             }
         });
+        crate::audit_log::spawn_audit_checkpoint_worker(app_pool.clone(), auth_pool.clone());
         tokio::spawn(crate::payload_sync_worker::run_worker_loop(
             app_pool.clone(),
             intel_pool.clone(),

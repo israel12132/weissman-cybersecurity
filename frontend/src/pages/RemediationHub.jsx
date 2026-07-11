@@ -8,6 +8,10 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import FixFirstProgram from './FixFirstProgram'
+import PostureScoreCard from './PostureScoreCard'
+import SlaForecastStrip from './SlaForecastStrip'
+import BacklogAgingPanel from './BacklogAgingPanel'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -175,6 +179,19 @@ export default function RemediationHub() {
     >
       <div className="space-y-6">
         <p className="text-xs text-white/45 font-mono">{t('pages.remediationHub.intro')}</p>
+
+        {/* Board-level posture score, distilled from the same fix-first program below. */}
+        <PostureScoreCard />
+
+        {/* Proactive SLA breach forecast over 7/14/30/60/90-day horizons. */}
+        <SlaForecastStrip />
+
+        {/* Backlog-aging health: open findings by age × severity, aged-critical flags. */}
+        <BacklogAgingPanel />
+
+        {/* Authoritative, backend-ranked program (fix-first). The family board below is the
+            client-side derived view over the same findings. */}
+        <FixFirstProgram />
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">

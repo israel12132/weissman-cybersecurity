@@ -5,6 +5,7 @@ import {
   Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Search,
 } from 'lucide-react';
 import PageShell from './PageShell';
+import CompliancePosturePanel from './CompliancePosturePanel';
 import ShellScanActions from '../components/engine/ShellScanActions';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
@@ -205,6 +206,9 @@ export default function ComplianceFrameworks() {
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 px-4 py-3 text-xs text-cyan-100/70">
           {t('pages.complianceFrameworks.evidence_notice')}
         </div>
+
+        {/* Live, client-scoped compliance exposure rolled up from open findings via the crosswalk. */}
+        <CompliancePosturePanel />
 
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
           {loadingFrameworks && frameworks.length === 0 ? (
