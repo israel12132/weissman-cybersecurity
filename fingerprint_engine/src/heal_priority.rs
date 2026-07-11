@@ -48,10 +48,13 @@ pub fn classify_high_impact(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
     // Specific classes only — a bare "injection" needle false-matches benign text like
     // "dependency injection", so we enumerate the real high-impact classes instead.
-    const NEEDLES: [&str; 12] = [
+    const NEEDLES: &[&str] = &[
         "sql injection",
         "code injection",
         "command inj",
+        "ldap injection",
+        "template injection",
+        "ssti",
         "remote code",
         "rce",
         "deserial",

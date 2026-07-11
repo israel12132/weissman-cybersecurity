@@ -52,12 +52,18 @@ pub fn scm_from_host(host: &str) -> Scm {
 #[must_use]
 pub fn waf_mitigable(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
-    // Request-layer classes only; a bare "injection" needle would false-match "dependency injection"
-    // and recommend a WAF rule for something no WAF can block.
-    const NEEDLES: [&str; 12] = [
+    // Request-layer classes only; specific injection needles (never a bare "injection", which would
+    // false-match "dependency injection" and recommend a WAF rule for something no WAF can block).
+    const NEEDLES: &[&str] = &[
         "sql injection",
         "sqli",
         "code injection",
+        "ldap injection",
+        "xpath injection",
+        "template injection",
+        "ssti",
+        "header injection",
+        "crlf",
         "xss",
         "cross-site scripting",
         "path traversal",
@@ -146,6 +152,8 @@ mod tests {
         assert!(waf_mitigable("Reflected XSS in search"));
         assert!(waf_mitigable("Blind SQL Injection"));
         assert!(waf_mitigable("Path traversal in file download"));
+        assert!(waf_mitigable("LDAP injection in the directory search"));
+        assert!(waf_mitigable("Server-side template injection (SSTI)"));
         assert!(!waf_mitigable("Insecure deserialization gadget chain"));
         assert!(!waf_mitigable("Weak password policy"));
         // Must not false-match benign engineering text (bare "injection" removed).

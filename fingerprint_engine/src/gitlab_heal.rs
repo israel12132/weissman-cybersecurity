@@ -152,17 +152,17 @@ async fn file_exists(api_base: &str, project: &str, path: &str, git_ref: &str, t
     )
 }
 
-/// Minimal percent-encoding for a single path/ref segment (encodes `/`, space, `?`, `#`, `%`).
+/// Percent-encode a single URL path/query value (RFC 3986 unreserved only), so a ref or path
+/// containing `/`, space, `?`, `#`, `%`, and — crucially for the `?ref=` query value — `&`, `=`, `+`
+/// is neutralized and cannot inject a query parameter or truncate the ref.
 fn urlencoding_min(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 8);
     for b in s.bytes() {
-        match b {
-            b'/' => out.push_str("%2F"),
-            b' ' => out.push_str("%20"),
-            b'?' => out.push_str("%3F"),
-            b'#' => out.push_str("%23"),
-            b'%' => out.push_str("%25"),
-            _ => out.push(b as char),
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{:02X}", b));
         }
     }
     out
@@ -331,5 +331,9 @@ mod tests {
     fn path_encoding_min() {
         assert_eq!(urlencoding_min("src/app.js"), "src%2Fapp.js");
         assert_eq!(urlencoding_min("a b"), "a%20b");
+        // Query-injection chars must be encoded (used for the ?ref= value).
+        assert_eq!(urlencoding_min("release&x=1"), "release%26x%3D1");
+        assert_eq!(urlencoding_min("feat+1"), "feat%2B1");
+        assert_eq!(urlencoding_min("safe-1.2_x~"), "safe-1.2_x~");
     }
 }

@@ -98,11 +98,16 @@ pub fn safe_branch_suffix(finding_id: &str) -> String {
         .collect();
     // Collapse any ".." (invalid in git refs), then trim leading/trailing separators.
     let cleaned = mapped.replace("..", "-");
-    let cleaned = cleaned.trim_matches(|c| c == '-' || c == '.');
+    let mut cleaned = cleaned.trim_matches(|c| c == '-' || c == '.').to_string();
+    // git forbids a refname component ending in ".lock" — strip it (repeatedly for ".lock.lock").
+    while cleaned.to_ascii_lowercase().ends_with(".lock") {
+        cleaned.truncate(cleaned.len() - ".lock".len());
+        cleaned = cleaned.trim_end_matches(|c| c == '-' || c == '.').to_string();
+    }
     if cleaned.is_empty() {
         "finding".to_string()
     } else {
-        cleaned.to_string()
+        cleaned
     }
 }
 
@@ -190,6 +195,11 @@ mod tests {
         assert_eq!(safe_branch_suffix(""), "finding");
         // no ".." sequence survives, no leading dot
         assert!(!safe_branch_suffix("v1..2").contains(".."));
+        // git forbids a ".lock" *suffix* (a bare "lock" component is fine)
+        assert_eq!(safe_branch_suffix("CVE-2021.lock"), "CVE-2021");
+        assert_eq!(safe_branch_suffix("x.LOCK"), "x");
+        assert_eq!(safe_branch_suffix(".lock"), "lock");
+        assert_eq!(safe_branch_suffix("a.lock.lock"), "a");
     }
 
     #[test]
