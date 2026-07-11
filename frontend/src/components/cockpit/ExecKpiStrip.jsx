@@ -31,7 +31,7 @@ function DeltaArrow({ value }) {
   if (value == null || value === 0) {
     return (
       <span
-        className="inline-flex items-center text-white/25"
+        className="inline-flex items-center text-[var(--text-disabled)]"
         title={t('components.cockpitTabs.execKpiStrip.no_change_vs_24h')}
       >
         <Minus className="w-2.5 h-2.5" strokeWidth={2} />
@@ -59,8 +59,8 @@ function DeltaArrow({ value }) {
 function Tile({ label, value, footer, color = '#22d3ee', to, intensity = 1, ariaLabel, showDivider }) {
   const inner = (
     <div
-      className={`group relative flex flex-col justify-between px-3 py-2 min-w-0 h-full transition-colors hover:bg-white/[0.02] ${
-        showDivider ? 'border-e border-white/[0.04] last:border-e-0' : ''
+      className={`group relative flex flex-col justify-between px-3 py-2 min-w-0 h-full transition-colors hover:bg-[var(--row-hover-bg)] ${
+        showDivider ? 'border-e border-[var(--border-subtle)] last:border-e-0' : ''
       }`}
       role={to ? undefined : 'group'}
       aria-label={ariaLabel || label}
@@ -90,7 +90,7 @@ function Tile({ label, value, footer, color = '#22d3ee', to, intensity = 1, aria
         </span>
       </div>
       {footer && (
-        <div className="text-[9px] font-mono text-white/38 mt-1 truncate tracking-wide">{footer}</div>
+        <div className="text-[9px] font-mono text-[var(--text-muted)] mt-1 truncate tracking-wide">{footer}</div>
       )}
     </div>
   )
@@ -167,11 +167,11 @@ export default function ExecKpiStrip() {
 
   if (loading && !kpis) {
     return (
-      <div className="border-b border-white/[0.04] bg-[#050810]/80">
-        <div className="h-7 border-b border-white/[0.03] bg-white/[0.01] animate-pulse" />
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px p-px bg-white/[0.03]">
+      <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-1)]/80">
+        <div className="h-7 border-b border-[var(--border-subtle)] bg-[var(--row-hover-bg)] animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px p-px bg-[var(--row-hover-bg)]">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-[58px] bg-[#0a0f18]/60 animate-pulse" />
+            <div key={i} className="h-[58px] bg-[var(--bg-1)]/60 animate-pulse" />
           ))}
         </div>
       </div>
@@ -202,30 +202,28 @@ export default function ExecKpiStrip() {
 
   return (
     <div
-      className="border-b border-white/[0.04] backdrop-blur-md"
-      style={{
-        background: 'linear-gradient(180deg, rgba(8,12,20,0.92) 0%, rgba(5,8,14,0.75) 100%)',
-      }}
+      className="border-b border-[var(--border-subtle)] backdrop-blur-md"
+      style={{ background: 'var(--kpi-strip-bg)' }}
     >
       {/* Status ticker */}
-      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-1 border-b border-white/[0.03] text-[9px] font-mono uppercase tracking-[0.18em]">
-        <div className="flex items-center gap-2 text-white/45">
+      <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-1 border-b border-[var(--border-subtle)] text-[9px] font-mono uppercase tracking-[0.18em]">
+        <div className="flex items-center gap-2 text-[var(--text-tertiary)]">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" aria-hidden />
             <span className="text-emerald-400/80">{t('components.cockpitTabs.execKpiStrip.live')}</span>
           </span>
-          <span className="text-white/20">|</span>
+          <span className="text-[var(--text-disabled)]">|</span>
           <span>{t('components.cockpitTabs.execKpiStrip.run_count', { count: fmtCount(jobs.running || 0) })}</span>
-          <span className="text-white/20">|</span>
+          <span className="text-[var(--text-disabled)]">|</span>
           <span>{t('components.cockpitTabs.execKpiStrip.queue_count', { count: fmtCount(jobs.pending || 0) })}</span>
-          <span className="text-white/20 hidden sm:inline">|</span>
+          <span className="text-[var(--text-disabled)] hidden sm:inline">|</span>
           <span className="hidden sm:inline">
             {t('components.cockpitTabs.execKpiStrip.agents_count', {
               online: fmtCount(agents.online || 0),
               registered: fmtCount(agents.registered || 0),
             })}
           </span>
-          <span className="text-white/20 hidden lg:inline">|</span>
+          <span className="text-[var(--text-disabled)] hidden lg:inline">|</span>
           <Link
             to="/engine-reliability"
             className="hidden lg:inline-flex items-center gap-2 hover:text-cyan-300/90 transition-colors"
@@ -233,7 +231,7 @@ export default function ExecKpiStrip() {
             <EngineRealitySummary compact className="text-[8px]" />
           </Link>
         </div>
-        <div className="text-white/30 flex items-center gap-1.5 tabular-nums">
+        <div className="text-[var(--text-muted)] flex items-center gap-1.5 tabular-nums">
           <span>{fmtAgo(lastUpdated)}</span>
           <Button variant="unstyled"
             type="button"
@@ -248,13 +246,13 @@ export default function ExecKpiStrip() {
       </div>
 
       {/* KPI strip — Bloomberg-style dense row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px bg-white/[0.03] mx-0">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-px bg-[var(--row-hover-bg)] mx-0">
         <Tile
           label={t('components.cockpitTabs.execKpiStrip.score')}
           value={
             <span className="flex items-baseline gap-0.5">
               <span style={{ color: scoreColor }}>{fmtCount(score)}</span>
-              <span className="text-[10px] text-white/30 font-mono font-normal">/100</span>
+              <span className="text-[10px] text-[var(--text-muted)] font-mono font-normal">/100</span>
             </span>
           }
           color={scoreColor}
@@ -295,7 +293,7 @@ export default function ExecKpiStrip() {
           value={
             <span className="flex items-baseline gap-0.5">
               <span>{mttr > 0 ? mttr.toFixed(1) : '—'}</span>
-              <span className="text-[10px] text-white/30 font-mono font-normal">
+              <span className="text-[10px] text-[var(--text-muted)] font-mono font-normal">
                 {t('components.cockpitTabs.execKpiStrip.hours_abbr')}
               </span>
             </span>
@@ -310,7 +308,7 @@ export default function ExecKpiStrip() {
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(assets.total_clients)}</span>
-              <span className="text-[10px] text-white/35 font-mono font-normal">
+              <span className="text-[10px] text-[var(--text-muted)] font-mono font-normal">
                 {t('components.cockpitTabs.execKpiStrip.risk_suffix', { count: fmtCount(assets.with_findings) })}
               </span>
             </span>
@@ -325,7 +323,7 @@ export default function ExecKpiStrip() {
           value={
             <span className="flex items-baseline gap-1">
               <span>{fmtCount(agents.online)}</span>
-              <span className="text-[10px] text-white/35 font-mono font-normal">/{fmtCount(agents.registered)}</span>
+              <span className="text-[10px] text-[var(--text-muted)] font-mono font-normal">/{fmtCount(agents.registered)}</span>
             </span>
           }
           color={agents.online > 0 ? '#22c55e' : '#64748b'}

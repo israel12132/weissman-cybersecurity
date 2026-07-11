@@ -76,7 +76,7 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel
       className={`group relative flex items-center gap-2.5 pl-3 pr-2.5 py-[7px] rounded-lg text-[11px] font-medium tracking-wide transition-all duration-200 ${
         active
           ? 'text-cyan-100 bg-cyan-500/[0.08] shadow-[inset_0_0_20px_rgba(34,211,238,0.06)]'
-          : 'text-white/55 hover:text-white/85 hover:bg-white/[0.04]'
+          : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]'
       }`}
     >
       <span
@@ -87,7 +87,7 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel
       />
       <Icon
         className={`w-[15px] h-[15px] shrink-0 transition-colors ${
-          active ? 'text-cyan-400' : 'text-white/35 group-hover:text-white/55'
+          active ? 'text-cyan-400' : 'text-[var(--text-muted)] group-hover:text-[var(--text-tertiary)]'
         }`}
         strokeWidth={active ? 2.25 : 1.75}
       />
@@ -112,7 +112,7 @@ function NavSection({ id, title, children, open, onToggle }) {
       <Button variant="unstyled"
         type="button"
         onClick={() => onToggle(id)}
-        className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-md text-[9px] font-mono uppercase tracking-[0.22em] text-white/35 hover:text-white/55 hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-md text-[9px] font-mono uppercase tracking-[0.22em] text-[var(--text-muted)] hover:text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] transition-colors"
         aria-expanded={open}
       >
         <span className="truncate">{title}</span>
@@ -347,7 +347,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
   const sidebarContent = (
     <>
       {/* Brand */}
-      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-white/[0.06]">
+      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[var(--border-subtle)]">
         {isCeo && (
           <Link
             to="/"
@@ -363,16 +363,16 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           </p>
         </Link>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
-            <div className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/35 mb-1">
+          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--row-hover-bg)] px-2.5 py-2">
+            <div className="text-[8px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1">
               {t('nav.active_threats')}
             </div>
             <div className="text-sm font-semibold font-mono tabular-nums text-cyan-300">
               {stats.total_vulnerabilities.toLocaleString()}
             </div>
           </div>
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
-            <div className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/35 mb-1">
+          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--row-hover-bg)] px-2.5 py-2">
+            <div className="text-[8px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1">
               {t('nav.system_health')}
             </div>
             <div className="text-sm font-semibold font-mono tabular-nums" style={{ color: healthColor }}>
@@ -390,8 +390,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
 
       {/* Grouped navigation */}
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 scrollbar-thin" aria-label={t('a11y.nav_label')}>
-        <div className="mb-2 pb-2 border-b border-white/[0.06]">
-          <div className="px-2 py-1.5 text-[9px] font-mono uppercase tracking-[0.22em] text-white/35">
+        <div className="mb-2 pb-2 border-b border-[var(--border-subtle)]">
+          <div className="px-2 py-1.5 text-[9px] font-mono uppercase tracking-[0.22em] text-[var(--text-muted)]">
             {t('nav.groups.primary')}
           </div>
           <div className="space-y-0.5 pb-1">
@@ -417,8 +417,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       </nav>
 
       {/* Client roster */}
-      <div className="shrink-0 border-t border-white/[0.06] max-h-[28vh] lg:max-h-[22vh] flex flex-col min-h-0">
-        <div className="px-4 py-2 text-[9px] font-mono uppercase tracking-[0.22em] text-white/35">
+      <div className="shrink-0 border-t border-[var(--border-subtle)] max-h-[28vh] lg:max-h-[22vh] flex flex-col min-h-0">
+        <div className="px-4 py-2 text-[9px] font-mono uppercase tracking-[0.22em] text-[var(--text-muted)]">
           {t('nav.client_roster')}
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -441,7 +441,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           )}
           <ul className="space-y-px pb-1">
             {clients.length === 0 && !clientsError && (
-              <li className="px-4 py-2 text-[11px] text-white/35">{t('common.no_data')}</li>
+              <li className="px-4 py-2 text-[11px] text-[var(--text-muted)]">{t('common.no_data')}</li>
             )}
             {clients.length === 0 && clientsError && (
               <li className="px-4 py-2 text-[11px] text-rose-300/80">Client list unavailable.</li>
@@ -457,8 +457,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                     onClick={() => setSelectedClientId(id)}
                     className={`relative flex-1 min-w-0 text-start ps-4 pe-2 py-2 text-[12px] font-medium transition-all border-s-2 ${
                       selected
-                        ? 'bg-cyan-500/[0.07] border-cyan-400 text-white shadow-[inset_0_0_16px_rgba(34,211,238,0.05)]'
-                        : 'border-transparent text-white/55 hover:bg-white/[0.03] hover:text-white/80'
+                        ? 'bg-cyan-500/[0.07] border-cyan-400 text-[var(--text-primary)] shadow-[inset_0_0_16px_rgba(34,211,238,0.05)]'
+                        : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]'
                     }`}
                   >
                     <span className="block truncate">{c.name || `Client ${id}`}</span>
@@ -484,7 +484,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                       setDeletingId(null)
                     }}
                     disabled={isDeleting}
-                    className="shrink-0 p-2 text-white/25 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    className="shrink-0 p-2 text-[var(--text-disabled)] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
                     aria-label={t('a11y.delete_client')}
                   >
                     {isDeleting ? (
@@ -501,8 +501,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       </div>
 
       {/* Add client */}
-      <div className="border-t border-white/[0.06] p-3 shrink-0 relative z-[100] bg-[#060a12]/90">
-        <div className="text-[9px] uppercase tracking-[0.2em] text-white/40 mb-2 font-mono">
+      <div className="border-t border-[var(--border-subtle)] p-3 shrink-0 relative z-[100] bg-[var(--bg-1)]/90">
+        <div className="text-[9px] uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2 font-mono">
           {t('nav.add_client')}
         </div>
         <div className="space-y-2">
@@ -512,7 +512,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             onChange={(e) => setAddName(e.target.value)}
             placeholder={t(`${GN}.placeholder_name`)}
             aria-label={t(`${GN}.placeholder_name`)}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
           <input
             type="text"
@@ -520,9 +520,9 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             onChange={(e) => setAddDomains(e.target.value)}
             placeholder={t(`${GN}.placeholder_domains`)}
             aria-label={t(`${GN}.placeholder_domains`)}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
-          <details className="text-[10px] text-white/45">
+          <details className="text-[10px] text-[var(--text-tertiary)]">
             <summary className="cursor-pointer text-cyan-400/70 hover:text-cyan-300 py-0.5">
               {t(`${GN}.advanced_scope`)}
             </summary>
@@ -533,7 +533,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 onChange={(e) => setAddContactEmail(e.target.value)}
                 placeholder={t(`${GN}.placeholder_contact_email`)}
                 aria-label={t(`${GN}.placeholder_contact_email`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
@@ -541,7 +541,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 onChange={(e) => setAddIpRanges(e.target.value)}
                 placeholder={t(`${GN}.placeholder_ip_ranges`)}
                 aria-label={t(`${GN}.placeholder_ip_ranges`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
@@ -549,14 +549,14 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 onChange={(e) => setAddTechStack(e.target.value)}
                 placeholder={t(`${GN}.placeholder_tech_stack`)}
                 aria-label={t(`${GN}.placeholder_tech_stack`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
-              <label className="flex items-center gap-2 text-[10px] text-white/55 cursor-pointer">
+              <label className="flex items-center gap-2 text-[10px] text-[var(--text-tertiary)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={addAutoDetectTech}
                   onChange={(e) => setAddAutoDetectTech(e.target.checked)}
-                  className="rounded border-white/20"
+                  className="rounded border-[var(--border-strong)]"
                 />
                 {t(`${GN}.auto_detect_tech`)}
               </label>
@@ -566,7 +566,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 onChange={(e) => setAddAwsArn(e.target.value)}
                 placeholder={t(`${GN}.placeholder_aws_arn`)}
                 aria-label={t(`${GN}.placeholder_aws_arn`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
@@ -574,7 +574,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 onChange={(e) => setAddAwsExt(e.target.value)}
                 placeholder={t(`${GN}.placeholder_aws_external_id`)}
                 aria-label={t(`${GN}.placeholder_aws_external_id`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
               <input
                 type="text"
@@ -582,7 +582,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 onChange={(e) => setAddGcp(e.target.value)}
                 placeholder={t(`${GN}.placeholder_gcp_project`)}
                 aria-label={t(`${GN}.placeholder_gcp_project`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-white text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </details>
@@ -605,7 +605,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       </div>
 
       {/* Footer: profile + language */}
-      <div className="shrink-0 border-t border-white/[0.06] px-3 py-3 bg-[#050810]/95 space-y-2.5">
+      <div className="shrink-0 border-t border-[var(--border-subtle)] px-3 py-3 bg-[var(--bg-1)]/95 space-y-2.5">
         <ProfileMenu variant="sidebar" />
         <LanguageSwitcher className="w-full justify-center" />
       </div>
@@ -618,7 +618,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       <Button variant="unstyled"
         type="button"
         onClick={() => setMobileOpen((v) => !v)}
-        className="lg:hidden fixed bottom-4 start-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-[#0a0f1a]/95 backdrop-blur-md text-white/80 shadow-xl"
+        className="lg:hidden fixed bottom-4 start-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-1)]/95 backdrop-blur-md text-[var(--text-secondary)] shadow-xl"
         aria-expanded={mobileOpen}
         aria-label={mobileOpen ? t('a11y.collapse_nav') : t('a11y.expand_nav')}
       >
@@ -627,14 +627,14 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       </Button>
 
       <aside
-        className={`cockpit-sidebar flex flex-col w-full lg:w-[17rem] lg:shrink-0 h-auto lg:h-full border-b lg:border-b-0 lg:border-e border-white/[0.06] overflow-hidden shrink-0 transition-all duration-300 ${
+        className={`cockpit-sidebar flex flex-col w-full lg:w-[17rem] lg:shrink-0 h-auto lg:h-full border-b lg:border-b-0 lg:border-e border-[var(--border-subtle)] overflow-hidden shrink-0 transition-all duration-300 ${
           mobileOpen
             ? 'max-h-[min(85dvh,640px)] lg:max-h-none opacity-100 pointer-events-auto'
             : 'max-h-0 lg:max-h-none opacity-0 lg:opacity-100 pointer-events-none lg:pointer-events-auto'
         }`}
         style={{
-          background: 'linear-gradient(180deg, rgba(10,15,26,0.97) 0%, rgba(5,8,16,0.99) 55%, rgba(3,6,12,1) 100%)',
-          boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.03)',
+          background: 'var(--sidebar-bg)',
+          boxShadow: 'inset -1px 0 0 var(--border-subtle)',
         }}
       >
         {sidebarContent}

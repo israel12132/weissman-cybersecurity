@@ -45,6 +45,8 @@
     radial-gradient(ellipse 70% 50% at 85% 5%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
     radial-gradient(ellipse 120% 80% at 50% 100%, rgba(15, 23, 42, 0.9) 0%, transparent 60%),
     linear-gradient(180deg, #0c1220 0%, #070b14 42%, #04060c 100%);
+  --kpi-strip-bg: linear-gradient(180deg, rgba(8, 12, 20, 0.92) 0%, rgba(5, 8, 14, 0.75) 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(10, 15, 26, 0.97) 0%, rgba(5, 8, 16, 0.99) 55%, rgba(3, 6, 12, 1) 100%);
 
   /* Legacy aliases — existing components reference these */
   --app-bg: var(--bg-0);
@@ -245,6 +247,8 @@
     radial-gradient(ellipse 90% 60% at 15% -10%, rgba(34, 211, 238, 0.06) 0%, transparent 55%),
     radial-gradient(ellipse 70% 50% at 85% 5%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
     linear-gradient(180deg, #eef2f8 0%, #e9edf4 55%, #dfe4ec 100%);
+  --kpi-strip-bg: linear-gradient(180deg, rgba(244, 246, 250, 0.95) 0%, rgba(233, 237, 244, 0.85) 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(238, 242, 248, 0.98) 0%, rgba(233, 237, 244, 0.99) 55%, rgba(228, 232, 240, 1) 100%);
 
   --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #eef2f8 0%, #f4f6fa 55%, #e9edf4 100%);
 
