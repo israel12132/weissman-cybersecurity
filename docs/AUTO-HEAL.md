@@ -160,6 +160,16 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
   (`GET …/sarif`) that ingests straight into GitHub code scanning / SAST dashboards — both rendered by
   the pure, unit-tested `heal_export` module from a single shared `load_heal_report_data` query pass.
 
+## CI integration
+
+A ready-to-use GitHub Action lives at [`docs/ci/upload-heal-sarif.yml`](ci/upload-heal-sarif.yml):
+copy it into a consumer repo's `.github/workflows/`, set the `WEISSMAN_BASE_URL` and
+`WEISSMAN_API_TOKEN` secrets, and it pulls `GET /api/heal-verify/:job_id/sarif` and uploads it to
+GitHub code scanning via `github/codeql-action/upload-sarif` (`security-events: write`). Trigger it
+manually with a job id, or wire your completion webhook to fire a `repository_dispatch`
+(`weissman_heal_completed`, `client_payload.job_id`) so a verified heal lands in the repo's Security
+tab automatically.
+
 ## Round-trip integration tests
 
 `fingerprint_engine/tests/auto_heal_roundtrip.rs` exercises the real host-side pipeline end to end
