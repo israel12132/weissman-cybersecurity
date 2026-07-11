@@ -1522,6 +1522,8 @@ export default function NexusSovereignSwarm() {
   useEffect(() => {
     if (!running || !selectedClientId || !params.emit_live_telemetry) return undefined
     const poll = () => {
+      // Skip the 2.5s swarm-events poll while the tab is hidden (no background hammering).
+      if (typeof document !== 'undefined' && document.hidden) return
       apiFetch(`/api/swarm/events?client_id=${selectedClientId}&since_id=${lastEventId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {

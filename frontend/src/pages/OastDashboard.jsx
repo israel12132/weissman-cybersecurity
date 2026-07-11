@@ -1,4 +1,5 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -67,7 +68,6 @@ export default function OastDashboard() {
   const [toast, setToast] = useState(null)
   const [callbacksInitialLoading, setCallbacksInitialLoading] = useState(true)
   const [refreshLoading, setRefreshLoading] = useState(false)
-  const pollRef = useRef(null)
 
   const [mintTarget, setMintTarget] = useState('')
   const [mintProbeType, setMintProbeType] = useState('log4shell')
@@ -104,9 +104,9 @@ export default function OastDashboard() {
 
   useEffect(() => {
     reloadCallbacks({ silent: true })
-    pollRef.current = setInterval(() => reloadCallbacks({ silent: true }), 5000)
-    return () => clearInterval(pollRef.current)
   }, [reloadCallbacks])
+  // Hidden-tab-aware: pause the 5s OAST callback poll while the tab is backgrounded.
+  useVisiblePolling(() => reloadCallbacks({ silent: true }), 5000)
 
   const listFindings = useMemo(() => callbacks.map((cb, i) => {
     const confirmed = cb.probe_confirmed ?? cb.confirmed ?? true

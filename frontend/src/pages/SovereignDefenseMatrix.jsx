@@ -1,4 +1,5 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -158,9 +159,9 @@ export default function SovereignDefenseMatrix() {
 
   useEffect(() => {
     loadDashboard()
-    const iv = setInterval(loadDashboard, 3000)
-    return () => clearInterval(iv)
   }, [loadDashboard])
+  // Hidden-tab-aware: no 3s dashboard refetch while the tab is in the background.
+  useVisiblePolling(loadDashboard, 3000)
 
   const runEngine = useCallback(async (isAuto = false) => {
     if (!clientId || !target.trim()) {
