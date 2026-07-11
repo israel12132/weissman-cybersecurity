@@ -30,7 +30,10 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https: wss: ws:",
+  // Pinned to same-origin + the one CDN the choropleth map topojson is fetched
+  // from (cdn.jsdelivr.net). NOT the broad `https:` scheme — that would let an
+  // injected script exfiltrate to any host, defeating the CSP for a security app.
+  "connect-src 'self' https://cdn.jsdelivr.net wss: ws:",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "object-src 'none'",

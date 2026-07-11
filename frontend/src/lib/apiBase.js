@@ -32,10 +32,16 @@ export function apiUrl(path) {
 const ACCESS_TOKEN_KEY = 'weissman_access_token'
 
 /**
- * In-memory primary store for the access token. This is the safest place to
- * hold a bearer token: it is never persisted, so an XSS payload cannot read it
- * from `localStorage`/`sessionStorage` after the fact. The HttpOnly refresh
- * cookie + `tryRefreshToken()` rehydrate it on a full page reload.
+ * Access-token storage is tiered by XSS blast radius:
+ *  1. `inMemoryAccessToken` (below) is the primary store — not reachable after
+ *     the tab is closed and never written to disk.
+ *  2. `sessionStorage` is a tab-scoped fallback (see getStoredAccessToken) so the
+ *     token survives a same-tab reload before the HttpOnly refresh cookie +
+ *     `tryRefreshToken()` rehydrate it. It IS readable by same-origin script, so
+ *     it is deliberately *not* localStorage (no cross-tab/session persistence),
+ *     and the strict CSP (`script-src 'self'`) is the primary defense against a
+ *     script being injected to read it in the first place.
+ * The token is never mirrored to localStorage; legacy copies are purged on access.
  */
 let inMemoryAccessToken = null
 
@@ -112,6 +118,21 @@ export function clearStoredAccessToken() {
   if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)
 }
 
+/** True only for same-origin or the configured API-origin URLs — the only places
+ *  the bearer token may be attached. */
+export function isSameApiOrigin(url) {
+  try {
+    const base = typeof window !== 'undefined' ? window.location.href : undefined
+    const target = new URL(url, base)
+    const selfOrigin = typeof window !== 'undefined' ? window.location.origin : null
+    let apiOrigin = null
+    try { apiOrigin = new URL(apiUrl('/'), base).origin } catch { apiOrigin = null }
+    return target.origin === selfOrigin || (apiOrigin != null && target.origin === apiOrigin)
+  } catch {
+    return false
+  }
+}
+
 /** Merge Bearer token for APIs when cookies are blocked (e.g. legacy Secure cookies on http://127.0.0.1). */
 export function authHeaders() {
   const t = getStoredAccessToken()
@@ -152,11 +173,14 @@ export async function apiFetch(pathOrUrl, init = {}) {
   }
   const pathStr = String(pathOrUrl)
   const url = pathStr.startsWith('http') ? pathStr : apiUrl(pathStr)
-  
+
   const doFetch = () => {
     const headers = new Headers(init.headers || {})
     const ah = authHeaders()
-    if (ah.Authorization) headers.set('Authorization', ah.Authorization)
+    // Never leak the bearer token to a foreign origin: only attach it to
+    // same-origin or the configured API-origin requests. Relative paths always
+    // resolve to one of those; a hostile absolute URL would not.
+    if (ah.Authorization && isSameApiOrigin(url)) headers.set('Authorization', ah.Authorization)
     const method = String(init.method || 'GET').toUpperCase()
     const withInit =
       method === 'GET' && init.cache === undefined ? { ...init, cache: 'no-store' } : init

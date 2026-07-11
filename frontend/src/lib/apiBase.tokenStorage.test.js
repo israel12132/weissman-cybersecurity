@@ -3,6 +3,7 @@ import {
   getStoredAccessToken,
   setStoredAccessToken,
   clearStoredAccessToken,
+  isSameApiOrigin,
 } from './apiBase.js'
 
 const ACCESS_TOKEN_KEY = 'weissman_access_token'
@@ -38,5 +39,20 @@ describe('apiBase token storage hardening', () => {
     expect(getStoredAccessToken()).toBeNull()
     expect(sessionStorage.getItem(ACCESS_TOKEN_KEY)).toBeNull()
     expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBeNull()
+  })
+})
+
+describe('isSameApiOrigin — bearer token is never leaked cross-origin', () => {
+  it('allows relative paths (resolve to same/API origin)', () => {
+    expect(isSameApiOrigin('/api/findings')).toBe(true)
+  })
+  it('allows the current same-origin absolute URL', () => {
+    expect(isSameApiOrigin(`${window.location.origin}/api/x`)).toBe(true)
+  })
+  it('rejects a foreign origin', () => {
+    expect(isSameApiOrigin('https://evil.example.com/steal')).toBe(false)
+  })
+  it('rejects a malformed URL rather than defaulting to allow', () => {
+    expect(isSameApiOrigin('http://[::bad')).toBe(false)
   })
 })
