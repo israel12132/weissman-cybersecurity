@@ -14,41 +14,6 @@ macro_rules! cli_wrapper {
     };
 }
 
-async fn missing_header_finding(
-    target: &str,
-    engine_id: &str,
-    title: &str,
-    mitre: &str,
-    headers: &[&str],
-) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
-    let client = http_client().await;
-    let url = normalize_url(target);
-    let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        for h in headers {
-            if !has_header(&p.headers, h) {
-                findings.push(finding(
-                    engine_id,
-                    &format!("{}: missing {}", title, h),
-                    "low",
-                    mitre,
-                    &format!("Response from {} lacks header '{}'.", p.final_url, h),
-                    target,
-                ));
-            }
-        }
-    }
-    if findings.is_empty() {
-        empty_ok(engine_id, target)
-    } else {
-        let n = findings.len();
-        EngineResult::ok(findings, format!("{}: {} missing header(s)", engine_id, n))
-    }
-}
-
 pub async fn run_process_hollowing_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
         "process_hollowing",
@@ -60,7 +25,12 @@ pub async fn run_process_hollowing_result(t: &str) -> EngineResult {
 cli_wrapper!(run_process_hollowing, run_process_hollowing_result);
 
 pub async fn run_dll_hijacking_engine_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "dll_hijacking_engine",
+        t,
+        "DLL search-order / phantom-DLL hijacking requires host filesystem + loader inspection",
+        "T1574.001 plants a malicious DLL in a writable path earlier in a legitimate process's search order — a host filesystem/loader condition with no network signal. The Weissman agent audits DLL search paths, unsigned module loads, and phantom-DLL write targets.",
+    )
 }
 cli_wrapper!(run_dll_hijacking_engine, run_dll_hijacking_engine_result);
 
@@ -208,7 +178,12 @@ pub async fn run_sandbox_evasion_result(t: &str) -> EngineResult {
 cli_wrapper!(run_sandbox_evasion, run_sandbox_evasion_result);
 
 pub async fn run_rootkit_surface_probe_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "rootkit_surface_probe",
+        t,
+        "Rootkit assessment requires kernel/host integrity inspection",
+        "T1014 rootkits hide processes, files and sockets from userland by patching the kernel or hooking syscalls — a network scan cannot see what the kernel is told to hide. The Weissman agent cross-checks kernel structures, SSDT/IDT hooks, and hidden-object discrepancies.",
+    )
 }
 cli_wrapper!(run_rootkit_surface_probe, run_rootkit_surface_probe_result);
 
@@ -232,7 +207,12 @@ cli_wrapper!(
 );
 
 pub async fn run_av_bypass_engine_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "av_bypass_engine",
+        t,
+        "AV/EDR bypass validation requires host endpoint telemetry",
+        "T1562.001 bypass (userland unhooking, AMSI patching, direct syscalls) manipulates the local security stack inside a process — invisible to a remote probe. The Weissman agent detects hook tampering, AMSI/ETW patching, and direct-syscall stubs.",
+    )
 }
 cli_wrapper!(run_av_bypass_engine, run_av_bypass_engine_result);
 
@@ -342,14 +322,12 @@ pub async fn run_https_c2_masquerade_result(t: &str) -> EngineResult {
 cli_wrapper!(run_https_c2_masquerade, run_https_c2_masquerade_result);
 
 pub async fn run_icmp_covert_result(t: &str) -> EngineResult {
-    missing_header_finding(
-        t,
+    crate::engine_probes::agent_required_ok(
         "icmp_covert",
-        "ICMP exposure surface",
-        "T1095",
-        &["x-trace-id"],
+        t,
+        "ICMP covert-channel detection requires packet-level traffic inspection",
+        "T1095 covert channels tunnel data inside ICMP echo payloads and inter-packet timing — detectable only by inspecting the packet stream, not HTTP headers. The Weissman agent / network sensor performs ICMP payload-entropy and timing analysis.",
     )
-    .await
 }
 cli_wrapper!(run_icmp_covert, run_icmp_covert_result);
 
@@ -379,14 +357,12 @@ pub async fn run_timing_evasion_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_timing_evasion_engine, run_timing_evasion_engine_result);
 
 pub async fn run_log_tampering_engine_result(t: &str) -> EngineResult {
-    missing_header_finding(
-        t,
+    crate::engine_probes::agent_required_ok(
         "log_tampering_engine",
-        "Audit chain headers",
-        "T1562.008",
-        &["x-request-id", "x-trace-id"],
+        t,
+        "Log-tampering detection requires audit-trail integrity telemetry",
+        "T1562.008 clears or modifies audit logs on the host or in the cloud control plane — confirmable only against the actual log store, not response headers. The Weissman agent + SIEM integration verify append-only audit-chain integrity and detect gaps/clears.",
     )
-    .await
 }
 cli_wrapper!(run_log_tampering_engine, run_log_tampering_engine_result);
 
@@ -401,7 +377,12 @@ pub async fn run_jit_spray_result(t: &str) -> EngineResult {
 cli_wrapper!(run_jit_spray, run_jit_spray_result);
 
 pub async fn run_com_hijacking_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "com_hijacking",
+        t,
+        "COM hijacking requires host registry inspection",
+        "T1546.015 redirects a COM CLSID to an attacker DLL via HKCU registry keys, executed on the host — no remote signal. The Weissman agent audits COM CLSID registrations and hijackable InprocServer32 entries.",
+    )
 }
 cli_wrapper!(run_com_hijacking, run_com_hijacking_result);
 
@@ -424,6 +405,11 @@ pub async fn run_anti_debug_evasion_result(t: &str) -> EngineResult {
 cli_wrapper!(run_anti_debug_evasion, run_anti_debug_evasion_result);
 
 pub async fn run_parent_pid_spoof_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "parent_pid_spoof",
+        t,
+        "Parent-PID spoofing requires host process-tree telemetry",
+        "T1134.004 forges a process's parent to blend malicious children under a trusted process — a host process-creation event invisible to network probes. The Weissman agent reconstructs the true process tree and flags PPID/creator mismatches.",
+    )
 }
 cli_wrapper!(run_parent_pid_spoof, run_parent_pid_spoof_result);
