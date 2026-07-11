@@ -145,6 +145,7 @@
     "ask_weissman": "Ask Weissman",
     "playbooks": "Playbooks",
     "threat_intel": "Threat Intel",
+    "target_intel": "Target Intelligence",
     "attack_paths": "Attack Paths",
     "scan_scheduler": "Scan Scheduler",
     "alert_rules": "Alert Rules",

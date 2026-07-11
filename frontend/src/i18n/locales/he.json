@@ -140,6 +140,7 @@
     "ask_weissman": "שאל את Weissman",
     "playbooks": "מדריכי SOAR",
     "threat_intel": "מודיעין איומים",
+    "target_intel": "מודיעין מטרה",
     "attack_paths": "נתיבי תקיפה",
     "scan_scheduler": "מתזמן סריקות",
     "alert_rules": "כללי התראה",

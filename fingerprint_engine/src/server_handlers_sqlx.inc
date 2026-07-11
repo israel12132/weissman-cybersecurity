@@ -1086,6 +1086,41 @@ async fn api_engines_requirements() -> Response {
     (StatusCode::OK, Json(crate::engine_requirements::catalog_json())).into_response()
 }
 
+/// Target-intelligence profile (what / where / who / why) + taxonomy-backed,
+/// explainable engine selection for a target string. Pure string+catalog
+/// classification — no network, no tenant data — so it is safe to serve as
+/// unauthenticated info, like `/api/engines/requirements`.
+async fn api_intel_target_profile(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let target = q
+        .get("target")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    if target.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "target query parameter required" })),
+        )
+            .into_response();
+    }
+    let profile = crate::target_profile::TargetProfile::classify(&target);
+    let engines: Vec<String> = weissman_core::models::engine::production_engine_ids()
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    let selection = profile.select(&engines);
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "target": target,
+            "profile": profile.to_json(),
+            "selection": selection.to_json(40),
+        })),
+    )
+        .into_response()
+}
+
 /// Tenant-level prerequisites (LLM, OAST, AI entitlement) for onboarding wizard.
 async fn api_onboarding_tenant_status(
     State(state): State<Arc<AppState>>,

@@ -1035,6 +1035,42 @@ impl TargetProfile {
         self.facets.iter().any(|f| *f == facet)
     }
 
+    /// Serialize the full profile to JSON for the API / UI.
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "host": self.host,
+            "scheme": self.scheme,
+            "port": self.port,
+            "path": self.path,
+            "ip_family": self.ip_family.map(|f| format!("{f:?}")),
+            "is_private": self.is_private,
+            "asset_class": self.asset_class.as_str(),
+            "sensitivity": self.sensitivity.as_str(),
+            "confidence": self.confidence,
+            "facets": self.facets,
+            "hints": self.hints,
+            "service": self.service.map(|s| serde_json::json!({
+                "port": s.port,
+                "name": s.name,
+                "kind": format!("{:?}", s.kind),
+            })),
+            "provenance": {
+                "registrable_domain": self.provenance.registrable_domain,
+                "subdomain": self.provenance.subdomain,
+                "public_suffix": self.provenance.public_suffix,
+                "tld_class": format!("{:?}", self.provenance.tld_class),
+                "hosting_provider": self.provenance.hosting_provider,
+                "hosting_category": self.provenance.hosting_category,
+                "network_class": format!("{:?}", self.provenance.network_class),
+                "idn": self.provenance.idn,
+                "homograph_risk": self.provenance.homograph_risk,
+                "resolved_ips": self.provenance.resolved_ips.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "evidence": self.provenance.evidence,
+            },
+        })
+    }
+
     // ---- Active enrichment ---------------------------------------------
 
     /// Active DNS enrichment: resolve the host's A/AAAA records and fold the
@@ -1580,6 +1616,30 @@ pub struct EngineSelection {
     pub rationale: Vec<String>,
     pub focus: Vec<String>,
     pub ranked: Vec<EngineChoice>,
+}
+
+impl EngineSelection {
+    /// Serialize the selection to JSON for the API / UI. `ranked` is capped to
+    /// the top `limit` engines to keep the payload compact.
+    #[must_use]
+    pub fn to_json(&self, limit: usize) -> serde_json::Value {
+        serde_json::json!({
+            "profile_summary": self.profile_summary,
+            "asset_class": self.asset_class.as_str(),
+            "confidence": self.confidence,
+            "rationale": self.rationale,
+            "focus": self.focus,
+            "focus_count": self.focus.len(),
+            "engine_count": self.ranked.len(),
+            "ranked": self.ranked.iter().take(limit).map(|c| serde_json::json!({
+                "engine_id": c.engine_id,
+                "score": c.score,
+                "group": c.group,
+                "recommended": c.recommended,
+                "reason": c.reason,
+            })).collect::<Vec<_>>(),
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
