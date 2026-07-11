@@ -1410,6 +1410,13 @@
       "empty_step_engine_link": "מטריצת המנועים",
       "empty_step_engine_after": "(דורש דומיין מורשה)."
     },
+    "healReadiness": {
+      "title": "מוכנות ריפוי אוטומטי",
+      "refresh": "רענון",
+      "ready": "מוכן לריפוי אוטומטי",
+      "not_ready": "לא מוכן",
+      "required": "נדרש"
+    },
     "remediationAnalytics": {
       "title": "אנליטיקת תיקון",
       "subtitle": "תוצאות ריפוי אוטומטי מצטברות מכל הלקוחות הפעילים",

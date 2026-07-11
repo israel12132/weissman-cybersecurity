@@ -1402,6 +1402,13 @@
       "empty_step_engine_link": "Engine Matrix",
       "empty_step_engine_after": "(requires an authorized domain)."
     },
+    "healReadiness": {
+      "title": "Auto-heal readiness",
+      "refresh": "Refresh",
+      "ready": "Ready to auto-heal",
+      "not_ready": "Not ready",
+      "required": "required"
+    },
     "remediationAnalytics": {
       "title": "Remediation Analytics",
       "subtitle": "Auto-heal outcomes aggregated across every active client",

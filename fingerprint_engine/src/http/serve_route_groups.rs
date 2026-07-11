@@ -582,6 +582,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/heal-verify/:job_id/patch", get(api_heal_verify_patch))
         .route("/api/heal-verify/:job_id/attestation", get(api_heal_verify_attestation))
         .route("/api/heal-verify/:job_id/report", get(api_heal_verify_report))
+        .route("/api/heal-readiness", get(api_heal_readiness))
         .route("/api/clients/:id/swarm/run", post(api_swarm_run))
         .route("/api/swarm/events", get(api_swarm_events))
         .route("/api/threat-ingest/run", post(api_threat_ingest_run))

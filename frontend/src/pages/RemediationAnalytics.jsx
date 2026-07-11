@@ -8,6 +8,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
+import HealReadinessPanel from '../components/remediation/HealReadinessPanel'
 
 /**
  * RemediationAnalytics — aggregates auto-heal telemetry across every client that
@@ -125,6 +126,8 @@ export default function RemediationAnalytics() {
             {t('pages.remediationAnalytics.open_hub', { defaultValue: 'Remediation Hub →' })}
           </Link>
         </div>
+
+        <HealReadinessPanel />
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">

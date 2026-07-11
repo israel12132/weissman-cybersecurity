@@ -121,7 +121,13 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 - **Remediation Hub** (`/remediation`) — workflow board + heal-stats strip.
 - **Remediation Analytics** (`/remediation-analytics`) — a dedicated routed dashboard that aggregates
   `heal-stats` across every active client (`RemediationAnalyticsPanel`) and a merged, newest-first
-  **recent-heals** activity feed from `/api/clients/:id/heal-requests`.
+  **recent-heals** activity feed from `/api/clients/:id/heal-requests`. It also surfaces the
+  **auto-heal readiness** self-diagnostics panel (`HealReadinessPanel`, `GET /api/heal-readiness`):
+  a bilingual (he/en), scored (0–100) preflight of every pipeline capability — LLM synthesis and the
+  verification sandbox (both required), plus signed receipts, autonomous GitHub PRs, Slack approvals,
+  and LLM auth (recommended/optional) — where each missing capability shows exactly how to connect it.
+  The endpoint returns only presence booleans + guidance, never any secret value; the pure
+  `heal_readiness::evaluate_readiness` scorer is fully unit-tested.
 - **Remediation Detail** — per-finding self-repair timeline, verified-receipt badge, channel picker,
   and a **Remediation report** link (any completed heal) that opens a self-contained, printable
   bilingual (he/en) HTML report at `GET /api/heal-verify/:job_id/report` — the finding, the bilingual
@@ -156,6 +162,7 @@ without requiring a Docker socket:
 | GET        | `/api/heal-verify/:job_id/patch`                    | Download the verified diff / WAF snippet |
 | GET        | `/api/heal-verify/:job_id/attestation`              | Verify the signed heal receipt           |
 | GET        | `/api/heal-verify/:job_id/report`                   | Printable bilingual (he/en) HTML report  |
+| GET        | `/api/heal-readiness`                               | Bilingual pipeline readiness self-check  |
 | GET        | `/api/clients/:id/heal-stats`                       | Aggregate heal analytics                 |
 | POST       | `/api/clients/:id/heal-batch`                       | Batch-heal many findings at once          |
 | GET        | `/api/clients/:id/heal-stats`                       | (also feeds the visual analytics panel)   |

@@ -481,6 +481,58 @@ async fn api_heal_verify_report(
         .into_response()
 }
 
+/// `GET /api/heal-readiness` — bilingual (he/en) self-diagnostics of the auto-heal pipeline: per
+/// capability (LLM, sandbox/Docker, signed receipts, autonomous GitHub PRs, Slack approvals, LLM auth)
+/// whether it is connected and, if not, exactly how to connect it. Returns only presence booleans +
+/// guidance — never any secret value.
+async fn api_heal_readiness(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    use std::collections::HashMap;
+    let mut cfg: HashMap<String, String> = HashMap::new();
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let keys: Vec<String> = vec![
+            "llm_base_url".to_string(),
+            "llm_model".to_string(),
+            "auto_heal_repo_slug".to_string(),
+        ];
+        if let Ok(rows) = sqlx::query(
+            "SELECT key, COALESCE(value,'') AS value FROM system_configs WHERE tenant_id = $1 AND key = ANY($2)",
+        )
+        .bind(auth.tenant_id)
+        .bind(&keys)
+        .fetch_all(&mut *tx)
+        .await
+        {
+            for r in rows {
+                let k: String = r.try_get("key").unwrap_or_default();
+                let v: String = r.try_get("value").unwrap_or_default();
+                if !v.trim().is_empty() {
+                    cfg.insert(k, v);
+                }
+            }
+        }
+        let _ = tx.commit().await;
+    }
+
+    let env_nonempty =
+        |k: &str| std::env::var(k).map(|v| !v.trim().is_empty()).unwrap_or(false);
+
+    let signals = crate::heal_readiness::ReadinessSignals {
+        llm_configured: cfg.contains_key("llm_base_url") || cfg.contains_key("llm_model"),
+        llm_auth_present: weissman_engines::openai_chat::llm_api_key_from_env().is_some(),
+        docker_socket: std::path::Path::new("/var/run/docker.sock").exists()
+            || env_nonempty("DOCKER_HOST"),
+        attestation: crate::finding_attestation::is_enabled(),
+        slack_approvals: env_nonempty("WEISSMAN_SLACK_SIGNING_SECRET"),
+        configless_github: env_nonempty("WEISSMAN_GITHUB_TOKEN")
+            && (cfg.contains_key("auto_heal_repo_slug") || env_nonempty("WEISSMAN_AUTOHEAL_REPO")),
+    };
+    let report = crate::heal_readiness::evaluate_readiness(&signals);
+    (StatusCode::OK, Json(report)).into_response()
+}
+
 /// Enqueue an auto-heal approved from a Slack button, using env GitHub token + configured repo.
 async fn enqueue_heal_from_slack(
     state: &Arc<AppState>,
