@@ -109,11 +109,21 @@ pub fn to_sarif(d: &HealReportData) -> Value {
         format!("{short} — auto-heal verdict: {}. Fix: {fix_en}", d.verdict)
     };
 
-    let locations: Vec<Value> = d
-        .changed_files
-        .iter()
-        .map(|p| json!({ "physicalLocation": { "artifactLocation": { "uri": p } } }))
-        .collect();
+    let locations: Vec<Value> = if d.changed_files.is_empty() {
+        // No repo files changed (e.g. a virtual-patch / WAF rule): anchor the result to a logical
+        // location so it still surfaces in code scanning rather than emitting an empty locations array.
+        let name = if d.finding_id.trim().is_empty() {
+            if d.channel.trim().is_empty() { "auto-heal".to_string() } else { d.channel.clone() }
+        } else {
+            d.finding_id.clone()
+        };
+        vec![json!({ "logicalLocations": [{ "fullyQualifiedName": name, "kind": "resource" }] })]
+    } else {
+        d.changed_files
+            .iter()
+            .map(|p| json!({ "physicalLocation": { "artifactLocation": { "uri": p } } }))
+            .collect()
+    };
 
     // Rule — attach helpUri only when a real PR/MR URL exists (SARIF wants a uri, not an empty string).
     let mut rule = json!({
@@ -126,7 +136,13 @@ pub fn to_sarif(d: &HealReportData) -> Value {
             "tags": ["security", "auto-heal"],
         },
     });
-    if let Some(u) = d.pr_url.as_ref().filter(|u| !u.trim().is_empty()) {
+    // helpUri only for a real http(s) URL (never a non-URI / javascript: value).
+    if let Some(u) = d
+        .pr_url
+        .as_ref()
+        .map(|u| u.trim())
+        .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+    {
         rule["helpUri"] = json!(u);
     }
 
@@ -279,5 +295,23 @@ mod tests {
         // Falls back to a stable rule id and the finding title.
         assert_eq!(s["runs"][0]["tool"]["driver"]["rules"][0]["id"], "weissman-auto-heal");
         assert_eq!(s["runs"][0]["results"][0]["ruleId"], "weissman-auto-heal");
+    }
+
+    #[test]
+    fn sarif_uses_logical_location_when_no_files_changed() {
+        let mut d = data();
+        d.changed_files = vec![]; // e.g. a virtual-patch / WAF rule
+        let s = to_sarif(&d);
+        let loc = &s["runs"][0]["results"][0]["locations"][0];
+        assert!(loc.get("physicalLocation").is_none());
+        assert_eq!(loc["logicalLocations"][0]["fullyQualifiedName"], "F-1");
+    }
+
+    #[test]
+    fn sarif_help_uri_rejects_non_http_url() {
+        let mut d = data();
+        d.pr_url = Some("javascript:alert(1)".into());
+        let s = to_sarif(&d);
+        assert!(s["runs"][0]["tool"]["driver"]["rules"][0].get("helpUri").is_none());
     }
 }
