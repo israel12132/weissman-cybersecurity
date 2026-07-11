@@ -207,10 +207,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       )
     }
     return (
-      <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-black/15 backdrop-blur-sm overflow-auto border-s border-white/[0.04]">
-        <div className="text-center px-6 py-8 rounded-xl bg-[#080c14]/60 backdrop-blur-md border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <p className="text-sm font-medium text-white/90 mb-1 tracking-wide">{t('components.cockpit.no_client')}</p>
-          <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-mono">{t('components.cockpit.select_sidebar')}</p>
+      <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-[var(--bg-0)]/15 backdrop-blur-sm overflow-auto border-s border-[var(--border-subtle)]">
+        <div className="text-center px-6 py-8 rounded-xl bg-[var(--bg-1)]/60 backdrop-blur-md border border-[var(--border-default)] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <p className="text-sm font-medium text-[var(--text-primary)] mb-1 tracking-wide">{t('components.cockpit.no_client')}</p>
+          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-[0.2em] font-mono">{t('components.cockpit.select_sidebar')}</p>
         </div>
       </main>
     )

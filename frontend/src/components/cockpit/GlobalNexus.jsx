@@ -40,7 +40,7 @@ import { confirmDialog } from '../../utils/confirmDialog'
 import Button from '../ui/Button'
 
 const STORAGE_KEY = 'weissman.nav.sections'
-const GN = 'components.cockpit.globalNexus'
+const GN = 'components.cockpitWidgets.globalNexus'
 
 function readSectionState() {
   try {
@@ -468,7 +468,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                     onClick={async (e) => {
                       e.stopPropagation()
                       if (isDeleting) return
-                      if (!(await confirmDialog(t('components.globalNexus.delete_client_confirm', { name: c.name || id })))) return
+                      if (!(await confirmDialog(t(`${GN}.delete_client_confirm`, { name: c.name || id })))) return
                       setDeletingId(id)
                       try {
                         const r = await apiFetch(`/api/clients/${id}`, { method: 'DELETE' })
