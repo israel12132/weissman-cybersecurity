@@ -8,7 +8,16 @@ use axum::Router;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 pub fn apply(router: Router) -> Router {
-    if std::env::var("WEISSMAN_DISABLE_SECURITY_HEADERS").is_ok() {
+    // Only honor the lab switch when explicitly set to a truthy value AND outside
+    // production — a stray or empty `WEISSMAN_DISABLE_SECURITY_HEADERS` (even `=0`)
+    // must never silently strip CSP/HSTS/etc. off every response.
+    let disabled = std::env::var("WEISSMAN_DISABLE_SECURITY_HEADERS")
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    let is_prod = std::env::var("WEISSMAN_ENV")
+        .map(|v| v.trim().eq_ignore_ascii_case("production"))
+        .unwrap_or(false);
+    if disabled && !is_prod {
         return router;
     }
     router
@@ -35,7 +44,10 @@ pub fn apply(router: Router) -> Router {
         .layer(SetResponseHeaderLayer::overriding(
             HeaderName::from_static("content-security-policy"),
             HeaderValue::from_static(
-                "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests",
+                // Fonts are self-hosted (public/fonts/*.woff2) — no Google CDN allowances.
+                // 'unsafe-inline' is required only for style attributes (React inline styles);
+                // scripts stay locked to 'self'.
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests",
             ),
         ))
 }
