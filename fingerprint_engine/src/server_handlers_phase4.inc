@@ -505,7 +505,7 @@ async fn api_heal_verify_report_json(
 ) -> Response {
     match load_heal_report_data(&state, auth.tenant_id, &job_id).await {
         Ok(d) => Json(crate::heal_export::to_report_json(&d)).into_response(),
-        Err((code, msg)) => (code, msg).into_response(),
+        Err((code, msg)) => (code, Json(json!({ "error": msg }))).into_response(),
     }
 }
 
@@ -529,7 +529,7 @@ async fn api_heal_verify_sarif(
             )
                 .into_response()
         }
-        Err((code, msg)) => (code, msg).into_response(),
+        Err((code, msg)) => (code, Json(json!({ "error": msg }))).into_response(),
     }
 }
 
