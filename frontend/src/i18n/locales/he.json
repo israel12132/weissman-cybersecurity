@@ -1490,6 +1490,8 @@
       "verdict_inconclusive": "לא חד-משמעי",
       "view_pr": "צפה ב-Pull Request",
       "download_patch": "הורד תיקון",
+      "download_report": "דוח תיקון",
+      "report_hint": "פתח דוח תיקון דו-לשוני להדפסה",
       "self_repair_attempts": "ריפוי עצמי ×{{n}}",
       "attested": "מאומת",
       "verify_attestation": "אמת קבלה חתומה",

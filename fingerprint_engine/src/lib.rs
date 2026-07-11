@@ -187,6 +187,7 @@ pub mod heal_attestation;
 pub mod heal_channels;
 pub mod remediation_brief;
 pub mod remediation_patch;
+pub mod remediation_report;
 pub mod slack_interactivity;
 pub mod autonomous_identity;
 pub mod autonomous_pentest_engine;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   X, Wrench, Sparkles, ShieldCheck, AlertTriangle, Download, GitPullRequest,
-  Loader2, CheckCircle, XCircle, Languages, ChevronRight, Clock,
+  Loader2, CheckCircle, XCircle, Languages, ChevronRight, Clock, FileText,
 } from 'lucide-react'
 import { apiFetch, apiUrl } from '../../lib/apiBase'
 
@@ -464,11 +464,18 @@ export default function RemediationDetail({ finding, onClose }) {
                   )}
                 </div>
               )}
-              {jobId && (jobStatus?.channel === 'diff_download' || jobStatus?.channel === 'virtual_patch') && jobStatus?.status === 'completed' && (
-                <a href={apiUrl(`/api/heal-verify/${jobId}/patch`)} className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">
-                  <Download className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_patch', { defaultValue: 'Download patch' })}
-                </a>
-              )}
+              <div className="flex items-center gap-4 flex-wrap">
+                {jobId && (jobStatus?.channel === 'diff_download' || jobStatus?.channel === 'virtual_patch') && jobStatus?.status === 'completed' && (
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/patch`)} className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">
+                    <Download className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_patch', { defaultValue: 'Download patch' })}
+                  </a>
+                )}
+                {jobId && jobStatus?.status === 'completed' && (
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/report`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200" title={t('pages.remediationHub.report_hint', { defaultValue: 'Open a printable bilingual remediation report' })}>
+                    <FileText className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_report', { defaultValue: 'Remediation report' })}
+                  </a>
+                )}
+              </div>
 
               <ol className="space-y-1.5 border-l border-white/10 pl-4">
                 {steps.map((s, i) => (

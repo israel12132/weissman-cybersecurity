@@ -1482,6 +1482,8 @@
       "verdict_inconclusive": "Inconclusive",
       "view_pr": "View pull request",
       "download_patch": "Download patch",
+      "download_report": "Remediation report",
+      "report_hint": "Open a printable bilingual remediation report",
       "self_repair_attempts": "self-repair ×{{n}}",
       "attested": "attested",
       "verify_attestation": "Verify signed receipt",

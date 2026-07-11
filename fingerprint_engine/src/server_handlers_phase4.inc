@@ -292,6 +292,182 @@ async fn api_heal_verify_attestation(
         .into_response()
 }
 
+/// `GET /api/heal-verify/:job_id/report` — a self-contained, printable, bilingual (he/en) remediation
+/// report for a completed auto-heal: the finding, the bilingual problem/root-cause/impact/fix, the
+/// verified diff + changed files, per-channel how-to-apply, and the signed receipt (honestly labelled).
+/// Rendered inline as HTML so it can be printed to PDF and handed to an auditor.
+async fn api_heal_verify_report(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    let job_uuid = match uuid::Uuid::parse_str(job_id.trim()) {
+        Ok(u) => u,
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid job_id").into_response(),
+    };
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "DB").into_response();
+    };
+    // Job spec (keyed by UUID).
+    let spec = sqlx::query(
+        r#"SELECT COALESCE(status,'') AS status, COALESCE(channel,'github_pr') AS channel,
+                  result_artifact, COALESCE(patch_text,'') AS patch_text,
+                  COALESCE(finding_id,'') AS finding_id, client_id::bigint AS client_id
+           FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(job_uuid)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let Some(spec) = spec else {
+        let _ = tx.commit().await;
+        return (StatusCode::NOT_FOUND, "job not found").into_response();
+    };
+    let status: String = spec.try_get("status").unwrap_or_default();
+    let channel: String = spec.try_get("channel").unwrap_or_default();
+    let patch_text: String = spec.try_get("patch_text").unwrap_or_default();
+    let finding_id: String = spec.try_get("finding_id").unwrap_or_default();
+    let client_id: i64 = spec.try_get("client_id").unwrap_or_default();
+    let artifact = spec
+        .try_get::<Option<Value>, _>("result_artifact")
+        .ok()
+        .flatten();
+
+    // Heal request row (keyed by the string verification_job_id).
+    let hr = sqlx::query(
+        r#"SELECT COALESCE(verdict,'') AS verdict, COALESCE(verification_status,'') AS verification_status,
+                  pr_url, branch_name, COALESCE(attempts,1)::bigint AS attempts,
+                  COALESCE(verification_receipt,'') AS receipt, COALESCE(verification_digest,'') AS digest
+           FROM heal_requests
+           WHERE tenant_id = $1 AND verification_job_id = $2
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(&job_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    // Finding title/severity + cached bilingual brief.
+    let vuln = sqlx::query(
+        r#"SELECT COALESCE(title,'') AS title, COALESCE(severity,'') AS severity, remediation_brief
+           FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1"#,
+    )
+    .bind(client_id)
+    .bind(&finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let (verdict, verification_status, pr_url, branch_name, attempts, receipt, digest) = match &hr {
+        Some(r) => (
+            r.try_get::<String, _>("verdict").unwrap_or_default(),
+            r.try_get::<String, _>("verification_status").unwrap_or_default(),
+            r.try_get::<Option<String>, _>("pr_url").ok().flatten(),
+            r.try_get::<Option<String>, _>("branch_name").ok().flatten(),
+            r.try_get::<i64, _>("attempts").unwrap_or(1),
+            r.try_get::<String, _>("receipt").unwrap_or_default(),
+            r.try_get::<String, _>("digest").unwrap_or_default(),
+        ),
+        None => (String::new(), String::new(), None, None, 1, String::new(), String::new()),
+    };
+
+    let (mut title, mut severity, brief_val) = match &vuln {
+        Some(r) => (
+            r.try_get::<String, _>("title").unwrap_or_default(),
+            r.try_get::<String, _>("severity").unwrap_or_default(),
+            r.try_get::<Option<Value>, _>("remediation_brief").ok().flatten(),
+        ),
+        None => (String::new(), String::new(), None),
+    };
+    let brief: Option<crate::remediation_brief::RemediationBrief> =
+        brief_val.and_then(|v| serde_json::from_value(v).ok());
+    if title.trim().is_empty() {
+        title = finding_id.clone();
+    }
+    if severity.trim().is_empty() {
+        if let Some(b) = &brief {
+            severity = b.severity.clone();
+        }
+    }
+    let cwe = brief.as_ref().map(|b| b.cwe.clone()).unwrap_or_default();
+
+    // Verified change: prefer the applied artifact, fall back to the stored patch_text.
+    let (unified_diff, changed_files, deleted_paths): (String, Vec<String>, Vec<String>) =
+        match &artifact {
+            Some(a) => {
+                let diff = a
+                    .get("unified_diff")
+                    .and_then(Value::as_str)
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| patch_text.clone());
+                let cf = a
+                    .get("changed_files")
+                    .and_then(Value::as_array)
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                let dp = a
+                    .get("deleted_paths")
+                    .and_then(Value::as_array)
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                (diff, cf, dp)
+            }
+            None => (patch_text.clone(), Vec::new(), Vec::new()),
+        };
+
+    let attestation_enabled = crate::finding_attestation::is_enabled();
+    let receipt_verified = !receipt.is_empty()
+        && !digest.is_empty()
+        && crate::finding_attestation::verify(&digest, &receipt);
+    let generated_at = chrono::Utc::now().to_rfc3339();
+
+    let input = crate::remediation_report::HealReportInput {
+        job_id: &job_id,
+        finding_id: &finding_id,
+        title: &title,
+        severity: &severity,
+        cwe: &cwe,
+        status: &status,
+        verdict: &verdict,
+        verification_status: &verification_status,
+        channel: &channel,
+        pr_url: pr_url.as_deref(),
+        branch_name: branch_name.as_deref(),
+        attempts,
+        receipt: &receipt,
+        digest: &digest,
+        attestation_enabled,
+        receipt_verified,
+        unified_diff: &unified_diff,
+        changed_files: &changed_files,
+        deleted_paths: &deleted_paths,
+        brief: brief.as_ref(),
+        generated_at: &generated_at,
+    };
+    let html = crate::remediation_report::render_heal_report_html(&input);
+    (
+        StatusCode::OK,
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "text/html; charset=utf-8".to_string(),
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("inline; filename=\"weissman-remediation-report-{}.html\"", job_id),
+            ),
+        ],
+        html,
+    )
+        .into_response()
+}
+
 /// Enqueue an auto-heal approved from a Slack button, using env GitHub token + configured repo.
 async fn enqueue_heal_from_slack(
     state: &Arc<AppState>,
