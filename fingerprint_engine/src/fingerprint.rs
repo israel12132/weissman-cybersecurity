@@ -21,16 +21,9 @@ const PORT_SCAN_CONCURRENCY: usize = 500;
 /// Default number of ports to scan (top-N by prevalence). Can be set up to 1000.
 const DEFAULT_TOP_PORTS: usize = 1000;
 
-/// Realistic User-Agent pool to rotate (reduces WAF/bot detection).
-static USER_AGENTS: &[&str] = &[
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-];
+/// Realistic User-Agent pool to rotate (reduces WAF/bot detection). Consolidated to the single
+/// authoritative pool in `stealth_scheduler` so every engine rotates the same fresh identities.
+use crate::stealth_scheduler::USER_AGENTS;
 
 /// Top 200 most common TCP ports (nmap-style prevalence), then 201..1000 for configurable "top 1000".
 fn top_ports_list() -> Vec<u16> {
