@@ -79,6 +79,12 @@ All channels reuse the single verified `changed_files` artifact.
 
 The verification sandbox clones provider-aware (GitHub `x-access-token`, GitLab `oauth2`).
 
+**Automatic channel selection** (`heal_channel_select`, pure + unit-tested) advises the best channel
+for a finding: a code-level PR/MR on the matching SCM (`scm_from_host`) when the repo is writable,
+else a WAF **virtual patch** for request-layer classes (`waf_mitigable`: SQLi/XSS/traversal/SSRF/…) or
+a downloadable diff — each with a bilingual rationale. Surfaced at
+`GET /api/clients/:id/findings/:finding_id/channel-suggestion`.
+
 ## Trust: signed heal receipts (`heal_attestation`)
 
 On a `Fixed` outcome the platform signs an HMAC-SHA256 receipt over
@@ -212,6 +218,7 @@ without requiring a Docker socket:
 | GET        | `/api/clients/:id/heal-stats`                       | Aggregate heal analytics                 |
 | GET        | `/api/clients/:id/heal-trends?days=30`              | Daily trend/SLA analytics (volume, success rate, attempts) |
 | GET        | `/api/clients/:id/heal-priorities?limit=50`         | OPEN findings ranked by auto-heal priority (P0–P3) |
+| GET        | `/api/clients/:id/findings/:finding_id/channel-suggestion` | Advised delivery channel for a finding (bilingual reason) |
 | POST       | `/api/clients/:id/heal-batch`                       | Batch-heal many findings at once          |
 | GET        | `/api/clients/:id/heal-stats`                       | (also feeds the visual analytics panel)   |
 | GET        | `/api/clients/:id/heal-requests`                    | Heal request history                     |

@@ -703,6 +703,59 @@ async fn api_heal_priorities(
         .into_response()
 }
 
+/// `GET /api/clients/:id/findings/:finding_id/channel-suggestion?host=&repo_write=1` — advises the
+/// best delivery channel for a finding (code-level PR/MR on the matching SCM when the repo is
+/// writable; a WAF virtual patch or downloadable diff otherwise), with a bilingual rationale.
+async fn api_channel_suggestion(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path((client_id, finding_id)): Path<(i64, String)>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let host = params
+        .get("host")
+        .cloned()
+        .unwrap_or_else(|| "github.com".to_string());
+    let repo_write = params
+        .get("repo_write")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(true);
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let row = sqlx::query(
+        "SELECT COALESCE(title,'') AS title, COALESCE(description,'') AS description
+           FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+    )
+    .bind(client_id)
+    .bind(&finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+    let (title, desc) = match row {
+        Some(r) => (
+            r.try_get::<String, _>("title").unwrap_or_default(),
+            r.try_get::<String, _>("description").unwrap_or_default(),
+        ),
+        None => (String::new(), String::new()),
+    };
+    let text = format!("{title} {desc}");
+    let scm = crate::heal_channel_select::scm_from_host(&host);
+    let sel = crate::heal_channel_select::select_channel(&text, scm, repo_write);
+    (
+        StatusCode::OK,
+        Json(json!({
+            "finding_id": finding_id,
+            "channel": sel.channel,
+            "reason_en": sel.reason_en,
+            "reason_he": sel.reason_he,
+        })),
+    )
+        .into_response()
+}
+
 /// Enqueue an auto-heal approved from a Slack button, using env GitHub token + configured repo.
 async fn enqueue_heal_from_slack(
     state: &Arc<AppState>,

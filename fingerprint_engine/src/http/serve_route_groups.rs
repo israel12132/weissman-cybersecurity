@@ -587,6 +587,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/heal-readiness", get(api_heal_readiness))
         .route("/api/clients/:id/heal-trends", get(api_heal_trends))
         .route("/api/clients/:id/heal-priorities", get(api_heal_priorities))
+        .route(
+            "/api/clients/:id/findings/:finding_id/channel-suggestion",
+            get(api_channel_suggestion),
+        )
         .route("/api/clients/:id/swarm/run", post(api_swarm_run))
         .route("/api/swarm/events", get(api_swarm_events))
         .route("/api/threat-ingest/run", post(api_threat_ingest_run))

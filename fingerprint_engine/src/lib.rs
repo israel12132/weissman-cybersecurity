@@ -186,6 +186,7 @@ pub mod azure_repos_heal;
 pub mod bitbucket_heal;
 pub mod gitlab_heal;
 pub mod heal_attestation;
+pub mod heal_channel_select;
 pub mod heal_channels;
 pub mod heal_export;
 pub mod heal_policy;
