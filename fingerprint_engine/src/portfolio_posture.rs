@@ -56,8 +56,15 @@ pub fn summarize(clients: &[ClientPosture]) -> Value {
         overdue_now += c.overdue_now;
         score_sum += c.score;
     }
-    let average_score = if count > 0 { round1(score_sum / count as f64) } else { 100.0 };
-    let clients_at_risk = sorted.iter().filter(|c| matches!(c.grade, 'D' | 'F')).count();
+    let average_score = if count > 0 {
+        round1(score_sum / count as f64)
+    } else {
+        100.0
+    };
+    let clients_at_risk = sorted
+        .iter()
+        .filter(|c| matches!(c.grade, 'D' | 'F'))
+        .count();
     let worst: Vec<&ClientPosture> = sorted.iter().take(5).collect();
 
     json!({
@@ -107,14 +114,23 @@ pub async fn load_portfolio(
 
     let client_rows: Vec<(i64, String)> = rows
         .iter()
-        .filter_map(|r| Some((r.try_get::<i64, _>("id").ok()?, r.try_get::<String, _>("name").unwrap_or_default())))
+        .filter_map(|r| {
+            Some((
+                r.try_get::<i64, _>("id").ok()?,
+                r.try_get::<String, _>("name").unwrap_or_default(),
+            ))
+        })
         .collect();
 
     let mut postures: Vec<ClientPosture> = Vec::with_capacity(client_rows.len());
     for (client_id, name) in client_rows {
-        let findings =
-            crate::remediation_priority::load_findings(pool, tenant_id, client_id, per_client_limit)
-                .await?;
+        let findings = crate::remediation_priority::load_findings(
+            pool,
+            tenant_id,
+            client_id,
+            per_client_limit,
+        )
+        .await?;
         let total_findings = findings.len();
         let program = crate::remediation_priority::rank(&findings);
         let posture = crate::posture_score::score(&program, total_findings);

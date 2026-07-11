@@ -288,7 +288,10 @@ fn annotate_actor_intel(f: &mut Value, profile: &ActorProfile, surface: &EdgeSur
     obj.insert("actor_confidence".to_string(), json!(confidence));
     obj.insert("kev_listed".to_string(), json!(kev));
     obj.insert("actor_playbook_rank".to_string(), json!(rank + 1));
-    obj.insert("actor_playbook_size".to_string(), json!(profile.surfaces.len()));
+    obj.insert(
+        "actor_playbook_size".to_string(),
+        json!(profile.surfaces.len()),
+    );
     obj.insert("actor_primary_ttp".to_string(), json!(primary));
 }
 

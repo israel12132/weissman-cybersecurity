@@ -254,7 +254,11 @@ pub fn merge_fleet(per_client: &[Vec<TechniqueStat>]) -> Vec<FleetTechnique> {
         .map(|(technique, a)| FleetTechnique {
             technique,
             name: a.name,
-            tactic: if a.tactic.is_empty() { UNMAPPED_TACTIC.to_string() } else { a.tactic },
+            tactic: if a.tactic.is_empty() {
+                UNMAPPED_TACTIC.to_string()
+            } else {
+                a.tactic
+            },
             finding_count: a.finding_count,
             client_count: a.client_count,
             critical: a.critical,
@@ -345,14 +349,13 @@ pub async fn load_portfolio_exposure(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
-    let client_rows = sqlx::query(
-        r#"SELECT id FROM clients WHERE tenant_id = $1 ORDER BY id LIMIT $2"#,
-    )
-    .bind(tenant_id)
-    .bind(max_clients)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    let client_rows =
+        sqlx::query(r#"SELECT id FROM clients WHERE tenant_id = $1 ORDER BY id LIMIT $2"#)
+            .bind(tenant_id)
+            .bind(max_clients)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
     let client_ids: Vec<i64> = client_rows
         .iter()
@@ -531,7 +534,10 @@ mod tests {
         let cov = aggregate(&findings);
         let t1190 = cov.iter().find(|s| s.technique == "T1190").unwrap();
         assert_eq!(t1190.tactic, "Initial Access");
-        assert_eq!(t1190.name.as_deref(), Some("Exploit Public-Facing Application"));
+        assert_eq!(
+            t1190.name.as_deref(),
+            Some("Exploit Public-Facing Application")
+        );
         let t1999 = cov.iter().find(|s| s.technique == "T1999").unwrap();
         assert_eq!(t1999.tactic, "Unmapped");
         assert!(t1999.name.is_none());
@@ -564,7 +570,7 @@ mod tests {
         assert_eq!(t1190.tactic, "Initial Access");
         let t1059 = fleet.iter().find(|f| f.technique == "T1059").unwrap();
         assert_eq!(t1059.client_count, 1); // only client 1
-        // Ranked by total finding count desc.
+                                           // Ranked by total finding count desc.
         assert_eq!(fleet[0].technique, "T1190");
     }
 

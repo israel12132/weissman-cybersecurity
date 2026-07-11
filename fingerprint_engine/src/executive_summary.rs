@@ -23,8 +23,7 @@ const PROJECTION_STEPS: usize = 10;
 pub fn build_summary(program: &[RemediationItem], total_findings: usize) -> Value {
     let posture = crate::posture_score::score(program, total_findings);
     let projection = crate::posture_score::project(program, total_findings, PROJECTION_STEPS);
-    let forecast =
-        crate::sla_forecast::forecast(program, &crate::sla_forecast::DEFAULT_HORIZONS);
+    let forecast = crate::sla_forecast::forecast(program, &crate::sla_forecast::DEFAULT_HORIZONS);
     let overdue_now = crate::sla_forecast::overdue_now(program);
 
     let kev_actions = program.iter().filter(|i| i.kev).count();
@@ -113,12 +112,14 @@ mod tests {
         ]);
         let s = build_summary(&program, 2);
         let standalone = crate::posture_score::score(&program, 2);
+        assert_eq!(s["posture"]["score"].as_f64().unwrap(), standalone.score);
         assert_eq!(
-            s["posture"]["score"].as_f64().unwrap(),
-            standalone.score
-        );
-        assert_eq!(
-            s["posture"]["grade"].as_str().unwrap().chars().next().unwrap(),
+            s["posture"]["grade"]
+                .as_str()
+                .unwrap()
+                .chars()
+                .next()
+                .unwrap(),
             standalone.grade
         );
     }
@@ -126,12 +127,23 @@ mod tests {
     #[test]
     fn top_actions_are_capped_and_rank_ordered() {
         let findings: Vec<FindingInput> = (0..15)
-            .map(|i| finding(&format!("f{i}"), "high", Some(7.0 + (i as f64) * 0.05), Some(5)))
+            .map(|i| {
+                finding(
+                    &format!("f{i}"),
+                    "high",
+                    Some(7.0 + (i as f64) * 0.05),
+                    Some(5),
+                )
+            })
             .collect();
         let program = rank(&findings);
         let s = build_summary(&program, findings.len());
         let top = s["remediation"]["top_actions"].as_array().unwrap();
-        assert_eq!(top.len(), TOP_ACTIONS, "top actions capped at {TOP_ACTIONS}");
+        assert_eq!(
+            top.len(),
+            TOP_ACTIONS,
+            "top actions capped at {TOP_ACTIONS}"
+        );
         // Ranks are contiguous from 1 (already rank-ordered by rank()).
         assert_eq!(top[0]["rank"].as_u64().unwrap(), 1);
         assert_eq!(top[1]["rank"].as_u64().unwrap(), 2);

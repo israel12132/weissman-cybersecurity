@@ -115,7 +115,13 @@ fn headers_to_json(headers: &HeaderMap) -> serde_json::Value {
 /// Production detection mirroring `weissman_core::tls_policy::is_production_environment`
 /// (kept local to avoid pulling the whole core crate into the standalone listener).
 fn is_production_environment() -> bool {
-    for var in ["WEISSMAN_ENV", "RUST_ENV", "NODE_ENV", "APP_ENV", "RAILS_ENV"] {
+    for var in [
+        "WEISSMAN_ENV",
+        "RUST_ENV",
+        "NODE_ENV",
+        "APP_ENV",
+        "RAILS_ENV",
+    ] {
         if env::var(var)
             .ok()
             .map(|v| {

@@ -62,7 +62,10 @@ pub fn header_set(index: usize) -> Vec<(&'static str, String)> {
         ("Sec-Fetch-Mode", "navigate".to_string()),
         ("Sec-Fetch-Site", "none".to_string()),
         ("Upgrade-Insecure-Requests", "1".to_string()),
-        ("Sec-Ch-Ua-Mobile", if is_mobile { "?1" } else { "?0" }.to_string()),
+        (
+            "Sec-Ch-Ua-Mobile",
+            if is_mobile { "?1" } else { "?0" }.to_string(),
+        ),
         ("Sec-Ch-Ua-Platform", ua_platform(ua).to_string()),
     ]
 }
@@ -185,7 +188,8 @@ pub fn schedule(n: usize, plan: &StealthPlan, seed: u64) -> Vec<ScheduledDispatc
             delay_ms: delay,
             user_agent_index: i % USER_AGENTS.len(),
         });
-        let step = plan.base_gap_ms + jitter_in_range(&mut state, plan.jitter_min_ms, plan.jitter_max_ms);
+        let step =
+            plan.base_gap_ms + jitter_in_range(&mut state, plan.jitter_min_ms, plan.jitter_max_ms);
         lane_time[lane] = lane_time[lane].saturating_add(step);
     }
     out
@@ -268,23 +272,42 @@ mod tests {
         assert!(p.jitter_max_ms >= p.jitter_min_ms);
         assert!(p.base_gap_ms <= 60_000);
 
-        let z = StealthPlan { max_concurrent: 0, ..StealthPlan::default() }.sanitized();
+        let z = StealthPlan {
+            max_concurrent: 0,
+            ..StealthPlan::default()
+        }
+        .sanitized();
         assert_eq!(z.max_concurrent, 1);
     }
 
     #[test]
     fn schedule_never_exceeds_max_concurrent_lanes() {
-        let plan = StealthPlan { max_concurrent: 10, ..StealthPlan::default() };
+        let plan = StealthPlan {
+            max_concurrent: 10,
+            ..StealthPlan::default()
+        };
         let sched = schedule(200, &plan, 42);
         assert_eq!(sched.len(), 200);
         let max_lane = sched.iter().map(|d| d.lane).max().unwrap();
         assert!(max_lane < 10, "no lane beyond max_concurrent");
-        assert_eq!(sched.iter().map(|d| d.lane).collect::<std::collections::BTreeSet<_>>().len(), 10);
+        assert_eq!(
+            sched
+                .iter()
+                .map(|d| d.lane)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            10
+        );
     }
 
     #[test]
     fn within_a_lane_delays_strictly_increase_by_gap_plus_jitter() {
-        let plan = StealthPlan { max_concurrent: 4, jitter_min_ms: 100, jitter_max_ms: 500, base_gap_ms: 200 };
+        let plan = StealthPlan {
+            max_concurrent: 4,
+            jitter_min_ms: 100,
+            jitter_max_ms: 500,
+            base_gap_ms: 200,
+        };
         let p = plan.sanitized();
         let sched = schedule(40, &plan, 7);
         // Group by lane, check monotonic + step bounds.
@@ -293,8 +316,14 @@ mod tests {
             for d in sched.iter().filter(|d| d.lane == lane) {
                 if let Some(pv) = prev {
                     let step = d.delay_ms - pv;
-                    assert!(step >= p.base_gap_ms + p.jitter_min_ms, "step {step} below floor");
-                    assert!(step <= p.base_gap_ms + p.jitter_max_ms, "step {step} above ceiling");
+                    assert!(
+                        step >= p.base_gap_ms + p.jitter_min_ms,
+                        "step {step} below floor"
+                    );
+                    assert!(
+                        step <= p.base_gap_ms + p.jitter_max_ms,
+                        "step {step} above ceiling"
+                    );
                 }
                 prev = Some(d.delay_ms);
             }
@@ -314,27 +343,56 @@ mod tests {
         let sched = schedule(USER_AGENTS.len() * 2, &plan, 1);
         let distinct: std::collections::BTreeSet<usize> =
             sched.iter().map(|d| d.user_agent_index).collect();
-        assert_eq!(distinct.len(), USER_AGENTS.len(), "rotation cycles the whole pool");
+        assert_eq!(
+            distinct.len(),
+            USER_AGENTS.len(),
+            "rotation cycles the whole pool"
+        );
     }
 
     #[test]
     fn header_set_carries_a_rotated_ua_and_companions() {
         let h = header_set(0);
-        assert!(h.iter().any(|(k, v)| *k == "User-Agent" && v == USER_AGENTS[0]));
+        assert!(h
+            .iter()
+            .any(|(k, v)| *k == "User-Agent" && v == USER_AGENTS[0]));
         assert!(h.iter().any(|(k, _)| *k == "Accept-Language"));
         // Rotation actually changes the UA.
-        let a = header_set(0).into_iter().find(|(k, _)| *k == "User-Agent").unwrap().1;
-        let b = header_set(1).into_iter().find(|(k, _)| *k == "User-Agent").unwrap().1;
+        let a = header_set(0)
+            .into_iter()
+            .find(|(k, _)| *k == "User-Agent")
+            .unwrap()
+            .1;
+        let b = header_set(1)
+            .into_iter()
+            .find(|(k, _)| *k == "User-Agent")
+            .unwrap()
+            .1;
         assert_ne!(a, b);
     }
 
     #[test]
     fn platform_hint_is_consistent_with_the_user_agent() {
-        assert_eq!(ua_platform("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125"), "\"Windows\"");
-        assert_eq!(ua_platform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari"), "\"macOS\"");
-        assert_eq!(ua_platform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)"), "\"iOS\"");
-        assert_eq!(ua_platform("Mozilla/5.0 (Linux; Android 14; Pixel 8)"), "\"Android\"");
-        assert_eq!(ua_platform("Mozilla/5.0 (X11; Linux x86_64) Chrome/125"), "\"Linux\"");
+        assert_eq!(
+            ua_platform("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125"),
+            "\"Windows\""
+        );
+        assert_eq!(
+            ua_platform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari"),
+            "\"macOS\""
+        );
+        assert_eq!(
+            ua_platform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)"),
+            "\"iOS\""
+        );
+        assert_eq!(
+            ua_platform("Mozilla/5.0 (Linux; Android 14; Pixel 8)"),
+            "\"Android\""
+        );
+        assert_eq!(
+            ua_platform("Mozilla/5.0 (X11; Linux x86_64) Chrome/125"),
+            "\"Linux\""
+        );
         // Every rotated UA yields a concrete (non-Unknown) platform.
         for i in 0..USER_AGENTS.len() {
             let hs = header_set(i);
@@ -367,7 +425,14 @@ mod tests {
 
     #[test]
     fn summary_reports_waves_and_eta() {
-        let s = plan_summary(200, &StealthPlan { max_concurrent: 10, ..StealthPlan::default() }, 9);
+        let s = plan_summary(
+            200,
+            &StealthPlan {
+                max_concurrent: 10,
+                ..StealthPlan::default()
+            },
+            9,
+        );
         assert_eq!(s["requested"], 200);
         assert_eq!(s["max_concurrent"], 10);
         assert_eq!(s["waves"], 20);

@@ -306,7 +306,10 @@ fn broadcast_engine_progress(
         if let Some(cid) = client_id {
             obj["client_id"] = serde_json::Value::String(cid.to_string());
         }
-        let _ = t.send(crate::http::tenant_stream::stamp(current_cycle_tenant(), &obj.to_string()));
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     let mut p = serde_json::json!({ "engine": engine, "message": message });
     if let Some(cid) = client_id {
@@ -328,7 +331,10 @@ fn broadcast_new_target(
             "client_id": client_id,
             "host": host
         });
-        let _ = t.send(crate::http::tenant_stream::stamp(current_cycle_tenant(), &obj.to_string()));
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     war_mirror_emit(
         war,
@@ -361,7 +367,10 @@ pub(crate) fn broadcast_finding_created(
             "poc_exploit": poc_exploit,
             "poc_sealed": poc_sealed
         });
-        let _ = t.send(crate::http::tenant_stream::stamp(current_cycle_tenant(), &obj.to_string()));
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     war_mirror_emit(
         war,
@@ -393,7 +402,10 @@ fn broadcast_harvested_token(
             "role_name": role_name,
             "context_id": context_id,
         });
-        let _ = t.send(crate::http::tenant_stream::stamp(current_cycle_tenant(), &obj.to_string()));
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     war_mirror_emit(
         war,
@@ -425,7 +437,10 @@ fn broadcast_engine_error(
         if let Some(cid) = client_id {
             obj["client_id"] = serde_json::Value::String(cid.to_string());
         }
-        let _ = t.send(crate::http::tenant_stream::stamp(current_cycle_tenant(), &obj.to_string()));
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     let mut p = serde_json::json!({
         "engine": engine,
@@ -459,7 +474,10 @@ fn broadcast_pipeline_stage(
             "stage_label": label,
             "status": status,
         });
-        let _ = t.send(crate::http::tenant_stream::stamp(current_cycle_tenant(), &obj.to_string()));
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     let label = dag_pipeline::STAGE_LABELS
         .get(stage as usize)

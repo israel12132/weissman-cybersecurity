@@ -605,8 +605,12 @@ mod agent_token_tests {
             bind_ip: None,
             bind_tls_fp: None,
         };
-        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(wrong))
-            .expect("mint");
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(wrong),
+        )
+        .expect("mint");
         assert!(verify_access_token(&token).is_none());
     }
 }

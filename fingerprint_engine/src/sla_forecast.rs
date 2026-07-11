@@ -138,7 +138,7 @@ mod tests {
         let f = forecast(&program, &[7, 14, 30, 60, 90]);
         assert_eq!(f[0].breached, 0); // within 7 days: due_in 10 > 7
         assert_eq!(f[1].breached, 1); // within 14: 10 <= 14
-        // monotonic non-decreasing
+                                      // monotonic non-decreasing
         for w in f.windows(2) {
             assert!(w[1].breached >= w[0].breached);
         }

@@ -945,7 +945,11 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     .with("url", ep.url.clone())
                     .with("status", status)
                     .with("variant", "CL.TE")
-                    .check("conflict_accepted", true, "CL+TE not rejected with 400 (prerequisite only)");
+                    .check(
+                        "conflict_accepted",
+                        true,
+                        "CL+TE not rejected with 400 (prerequisite only)",
+                    );
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,
@@ -1067,7 +1071,11 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     .with("url", ep.url.clone())
                     .with("status", status)
                     .with("variant", "TE.CL")
-                    .check("conflict_accepted", true, "TE+CL not rejected (prerequisite only)");
+                    .check(
+                        "conflict_accepted",
+                        true,
+                        "TE+CL not rejected (prerequisite only)",
+                    );
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,
@@ -1151,7 +1159,11 @@ async fn probe_endpoint(ep: &Endpoint, cfg: &ScanConfig, target: &str) -> Vec<Va
                     .with("url", ep.url.clone())
                     .with("status", status)
                     .with("variant", "0.CL")
-                    .check("zero_cl_accepted", true, "CL:0 + TE accepted (prerequisite only)");
+                    .check(
+                        "zero_cl_accepted",
+                        true,
+                        "CL:0 + TE accepted (prerequisite only)",
+                    );
                 findings.push(with_category(
                     finding_rich(
                         ENGINE_ID,

@@ -725,8 +725,9 @@ async fn execute_job_unscoped(
                     "duration_ms": duration_ms,
                 }));
 
-                channels.emit_telemetry(tid, &
-                    json!({
+                channels.emit_telemetry(
+                    tid,
+                    &json!({
                         "job_id": job.id.to_string(),
                         "engine_id": engine_id,
                         "canonical_engine": canonical,
@@ -1717,7 +1718,11 @@ async fn execute_job_unscoped(
             tokio::spawn(async move {
                 while let Some(ev) = rx_stream.recv().await {
                     if serde_json::to_string(&ev)
-                        .map(|s| radar.send(crate::http::tenant_stream::stamp(tid, &s)).is_ok())
+                        .map(|s| {
+                            radar
+                                .send(crate::http::tenant_stream::stamp(tid, &s))
+                                .is_ok()
+                        })
                         .unwrap_or(false)
                     {}
                 }

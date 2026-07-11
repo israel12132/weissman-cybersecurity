@@ -376,13 +376,9 @@ pub fn facts_from_findings(findings: &[serde_json::Value]) -> HashSet<Fact> {
             .get("effective_risk")
             .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
-        let kev_listed =
-            f.get("kev_listed").and_then(serde_json::Value::as_bool) == Some(true);
+        let kev_listed = f.get("kev_listed").and_then(serde_json::Value::as_bool) == Some(true);
         if verified
-            && (severity == "critical"
-                || severity == "high"
-                || kev_listed
-                || effective_risk >= 8.5)
+            && (severity == "critical" || severity == "high" || kev_listed || effective_risk >= 8.5)
         {
             facts.insert("access:foothold".to_string());
         }

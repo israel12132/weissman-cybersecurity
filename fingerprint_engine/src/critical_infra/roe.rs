@@ -594,8 +594,14 @@ mod tests {
         // A whitelisted host must not be matchable as a substring/suffix of an
         // out-of-scope target's path, query, or hostname.
         let wl = vec!["grid.example.com".to_string()];
-        assert!(!target_in_whitelist("http://evil.com/?ref=grid.example.com", &wl));
-        assert!(!target_in_whitelist("http://grid.example.com.evil.com/", &wl));
+        assert!(!target_in_whitelist(
+            "http://evil.com/?ref=grid.example.com",
+            &wl
+        ));
+        assert!(!target_in_whitelist(
+            "http://grid.example.com.evil.com/",
+            &wl
+        ));
         assert!(target_in_whitelist("https://grid.example.com/status", &wl));
         assert!(target_in_whitelist("https://sub.grid.example.com/", &wl));
 

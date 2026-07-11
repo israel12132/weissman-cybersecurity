@@ -284,12 +284,20 @@ pub fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
         89 => vec![
             injection,
             si10,
-            ControlRef { framework: "PCI DSS 4.0", control: "6.2.4", title: "Injection prevention" },
+            ControlRef {
+                framework: "PCI DSS 4.0",
+                control: "6.2.4",
+                title: "Injection prevention",
+            },
         ],
         79 => vec![
             injection,
             si10,
-            ControlRef { framework: "PCI DSS 4.0", control: "6.2.4", title: "XSS prevention" },
+            ControlRef {
+                framework: "PCI DSS 4.0",
+                control: "6.2.4",
+                title: "XSS prevention",
+            },
         ],
         77 | 78 | 94 | 943 => vec![injection, si10],
         90 | 91 | 611 => vec![injection, si10],
@@ -297,15 +305,27 @@ pub fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
         22 | 23 | 35 => vec![
             broken_access,
             si10,
-            ControlRef { framework: "NIST 800-53r5", control: "AC-3", title: "Access Enforcement" },
+            ControlRef {
+                framework: "NIST 800-53r5",
+                control: "AC-3",
+                title: "Access Enforcement",
+            },
         ],
         639 | 862 | 863 | 425 => vec![
             broken_access,
-            ControlRef { framework: "NIST 800-53r5", control: "AC-3", title: "Access Enforcement" },
+            ControlRef {
+                framework: "NIST 800-53r5",
+                control: "AC-3",
+                title: "Access Enforcement",
+            },
         ],
         352 => vec![
             broken_access,
-            ControlRef { framework: "OWASP ASVS 4.0", control: "V4.2.2", title: "CSRF defenses" },
+            ControlRef {
+                framework: "OWASP ASVS 4.0",
+                control: "V4.2.2",
+                title: "CSRF defenses",
+            },
         ],
         918 => vec![ControlRef {
             framework: "OWASP Top 10 2021",
@@ -315,28 +335,48 @@ pub fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
         732 => vec![
             broken_access,
             ac6,
-            ControlRef { framework: "PCI DSS 4.0", control: "7.2.1", title: "Least-privilege access" },
+            ControlRef {
+                framework: "PCI DSS 4.0",
+                control: "7.2.1",
+                title: "Least-privilege access",
+            },
         ],
         // --- Cryptographic failures -------------------------------------------------------
         327 | 326 | 328 => vec![
             crypto_fail,
-            ControlRef { framework: "NIST 800-53r5", control: "SC-13", title: "Cryptographic Protection" },
+            ControlRef {
+                framework: "NIST 800-53r5",
+                control: "SC-13",
+                title: "Cryptographic Protection",
+            },
         ],
         319 | 311 => vec![
             crypto_fail,
             sc8,
-            ControlRef { framework: "PCI DSS 4.0", control: "4.2.1", title: "Encrypt data in transit" },
+            ControlRef {
+                framework: "PCI DSS 4.0",
+                control: "4.2.1",
+                title: "Encrypt data in transit",
+            },
         ],
         // --- AuthN / secrets --------------------------------------------------------------
         798 | 259 | 321 => vec![
             authn_fail,
             ia5,
-            ControlRef { framework: "PCI DSS 4.0", control: "8.3.1", title: "No hardcoded credentials" },
+            ControlRef {
+                framework: "PCI DSS 4.0",
+                control: "8.3.1",
+                title: "No hardcoded credentials",
+            },
         ],
         287 | 306 | 288 => vec![
             authn_fail,
             ia2,
-            ControlRef { framework: "PCI DSS 4.0", control: "8.3", title: "Strong authentication" },
+            ControlRef {
+                framework: "PCI DSS 4.0",
+                control: "8.3",
+                title: "Strong authentication",
+            },
         ],
         522 | 640 => vec![authn_fail, ia5],
         // --- Misconfiguration / exposure --------------------------------------------------
@@ -347,7 +387,11 @@ pub fn controls_for_cwe(cwe: &str) -> Vec<ControlRef> {
         }],
         200 | 209 | 532 => vec![
             crypto_fail,
-            ControlRef { framework: "NIST 800-53r5", control: "SC-28", title: "Protection of Information at Rest" },
+            ControlRef {
+                framework: "NIST 800-53r5",
+                control: "SC-28",
+                title: "Protection of Information at Rest",
+            },
         ],
         _ => Vec::new(),
     }
@@ -358,7 +402,10 @@ fn compliance_for_group(group: &[FindingInput]) -> Vec<ControlRef> {
     let mut out: Vec<ControlRef> = Vec::new();
     for f in group {
         for ctrl in controls_for_cwe(&f.cwe) {
-            if !out.iter().any(|c| c.framework == ctrl.framework && c.control == ctrl.control) {
+            if !out
+                .iter()
+                .any(|c| c.framework == ctrl.framework && c.control == ctrl.control)
+            {
                 out.push(ctrl);
             }
         }
@@ -436,8 +483,7 @@ fn score_group(group: &[FindingInput]) -> (f64, String) {
         reasons.push(format!("asset value x{asset_value:.2}"));
     }
     if count > 1 {
-        let bonus =
-            ((count - 1) as f64 * FIX_EFFICIENCY_PER_FINDING).min(FIX_EFFICIENCY_CAP);
+        let bonus = ((count - 1) as f64 * FIX_EFFICIENCY_PER_FINDING).min(FIX_EFFICIENCY_CAP);
         score += bonus;
         reasons.push(format!("one fix closes {count} findings"));
     }
@@ -480,9 +526,10 @@ pub fn rank(findings: &[FindingInput]) -> Vec<RemediationItem> {
             let max_epss = group
                 .iter()
                 .filter_map(|f| f.epss)
-                .fold(None, |acc: Option<f64>, e| Some(acc.map_or(e, |a| a.max(e))));
-            let mut finding_ids: Vec<String> =
-                group.iter().map(|f| f.finding_id.clone()).collect();
+                .fold(None, |acc: Option<f64>, e| {
+                    Some(acc.map_or(e, |a| a.max(e)))
+                });
+            let mut finding_ids: Vec<String> = group.iter().map(|f| f.finding_id.clone()).collect();
             finding_ids.sort();
             finding_ids.dedup();
             let kev = group.iter().any(|f| f.kev);
@@ -594,7 +641,9 @@ pub async fn load_findings(
                 severity: r.try_get("severity").unwrap_or_default(),
                 cwe: r.try_get("cwe").unwrap_or_default(),
                 asset: r.try_get("asset").unwrap_or_default(),
-                effective_risk: r.try_get::<Option<f64>, _>("effective_risk").unwrap_or(None),
+                effective_risk: r
+                    .try_get::<Option<f64>, _>("effective_risk")
+                    .unwrap_or(None),
                 epss: r
                     .try_get::<Option<f32>, _>("epss_score")
                     .unwrap_or(None)
@@ -759,8 +808,14 @@ mod tests {
         valuable.cwe = "CWE-79".into(); // separate group
         valuable.asset_value = 3.0;
         let program = rank(&[neutral, valuable]);
-        let v = program.iter().find(|i| i.finding_ids == vec!["valuable"]).unwrap();
-        let n = program.iter().find(|i| i.finding_ids == vec!["neutral"]).unwrap();
+        let v = program
+            .iter()
+            .find(|i| i.finding_ids == vec!["valuable"])
+            .unwrap();
+        let n = program
+            .iter()
+            .find(|i| i.finding_ids == vec!["neutral"])
+            .unwrap();
         assert!(v.priority_score > n.priority_score);
         // Default asset_value must not perturb the base score (5.0 * 10 = 50.0).
         assert_eq!(n.priority_score, 50.0);
@@ -800,14 +855,11 @@ mod tests {
 
     #[test]
     fn ranks_are_contiguous_from_one() {
-        let items = vec![
-            f("a", "high", Some(7.0)),
-            {
-                let mut x = f("b", "low", Some(2.0));
-                x.cwe = "CWE-16".into();
-                x
-            },
-        ];
+        let items = vec![f("a", "high", Some(7.0)), {
+            let mut x = f("b", "low", Some(2.0));
+            x.cwe = "CWE-16".into();
+            x
+        }];
         let program = rank(&items);
         assert_eq!(program[0].rank, 1);
         assert_eq!(program[1].rank, 2);
@@ -902,7 +954,10 @@ mod tests {
             .iter()
             .filter(|c| c.framework == "OWASP Top 10 2021")
             .count();
-        assert_eq!(owasp, 1, "no duplicate OWASP entry from two same-CWE findings");
+        assert_eq!(
+            owasp, 1,
+            "no duplicate OWASP entry from two same-CWE findings"
+        );
         assert!(!controls.is_empty());
     }
 

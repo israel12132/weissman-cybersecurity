@@ -119,7 +119,8 @@ pub async fn verify_latest_checkpoint(
     let Some((head_id, head_hash, stored_mac)) = cp else {
         return Ok(None);
     };
-    let expected = checkpoint_hmac_bytes(&key, &checkpoint_canonical(tenant_id, head_id, &head_hash));
+    let expected =
+        checkpoint_hmac_bytes(&key, &checkpoint_canonical(tenant_id, head_id, &head_hash));
     if !crate::security_hardening::constant_time_hmac_hex_eq(&expected, &stored_mac) {
         return Ok(Some(false));
     }
@@ -544,9 +545,7 @@ mod tests {
 
     fn make_entry(id: i64, prev: &str) -> AuditExportEntry {
         let created = Utc::now();
-        let canonical = canonical_audit_payload(
-            prev, 1, None, "u", "a", "d", "127.0.0.1", created,
-        );
+        let canonical = canonical_audit_payload(prev, 1, None, "u", "a", "d", "127.0.0.1", created);
         AuditExportEntry {
             id,
             tenant_id: 1,

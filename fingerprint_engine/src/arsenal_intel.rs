@@ -176,7 +176,10 @@ mod tests {
 
     #[test]
     fn arsenal_inventory_is_substantial() {
-        assert!(arsenal_engine_count() >= 20, "the arsenal should reference many engines");
+        assert!(
+            arsenal_engine_count() >= 20,
+            "the arsenal should reference many engines"
+        );
         assert!(crate::attack_coverage::catalog().len() >= 30);
     }
 

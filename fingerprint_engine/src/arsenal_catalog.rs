@@ -48,8 +48,23 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "apt", "ttps", "lazarus", "sandworm", "fin7", "conti", "lockbit", "blackcat", "alphv",
-            "cl0p", "clop", "blizzard", "equation", "turla", "kimsuky", "ransomware", "actor",
+            "apt",
+            "ttps",
+            "lazarus",
+            "sandworm",
+            "fin7",
+            "conti",
+            "lockbit",
+            "blackcat",
+            "alphv",
+            "cl0p",
+            "clop",
+            "blizzard",
+            "equation",
+            "turla",
+            "kimsuky",
+            "ransomware",
+            "actor",
         ],
     ) {
         return "APT / Top-Tier";
@@ -57,8 +72,21 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "llm", "prompt", "ai_", "_ai", "model_", "_ml", "ml_", "rag", "agentic", "neural",
-            "watermark", "deepfake", "inversion", "jailbreak", "adversarial",
+            "llm",
+            "prompt",
+            "ai_",
+            "_ai",
+            "model_",
+            "_ml",
+            "ml_",
+            "rag",
+            "agentic",
+            "neural",
+            "watermark",
+            "deepfake",
+            "inversion",
+            "jailbreak",
+            "adversarial",
         ],
     ) {
         return "AI / LLM";
@@ -66,8 +94,22 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "aws", "azure", "gcp", "cloud", "kubernetes", "k8s", "docker", "container", "iac",
-            "terraform", "s3_", "iam", "serverless", "lambda", "eks", "devops",
+            "aws",
+            "azure",
+            "gcp",
+            "cloud",
+            "kubernetes",
+            "k8s",
+            "docker",
+            "container",
+            "iac",
+            "terraform",
+            "s3_",
+            "iam",
+            "serverless",
+            "lambda",
+            "eks",
+            "devops",
         ],
     ) {
         return "Cloud / Infra";
@@ -75,24 +117,66 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "ot_", "_ot", "ics", "scada", "modbus", "bacnet", "iot", "firmware", "plc", "dnp3",
-            "profinet", "rtu", "industrial",
+            "ot_",
+            "_ot",
+            "ics",
+            "scada",
+            "modbus",
+            "bacnet",
+            "iot",
+            "firmware",
+            "plc",
+            "dnp3",
+            "profinet",
+            "rtu",
+            "industrial",
         ],
     ) {
         return "OT / ICS / IoT";
     }
-    if has_any(id, &["supply_chain", "npm", "pypi", "sbom", "dependency", "package"]) {
+    if has_any(
+        id,
+        &[
+            "supply_chain",
+            "npm",
+            "pypi",
+            "sbom",
+            "dependency",
+            "package",
+        ],
+    ) {
         return "Supply Chain";
     }
-    if has_any(id, &["android", "ios_", "mobile", "app_store", "apk", "smishing"]) {
+    if has_any(
+        id,
+        &["android", "ios_", "mobile", "app_store", "apk", "smishing"],
+    ) {
         return "Mobile";
     }
     if has_any(
         id,
         &[
-            "jwt", "oauth", "oidc", "saml", "kerberos", "kerberoast", "ntlm", "crypto", "tls_",
-            "_tls", "pki", "certificate", "cert_", "identity", "mfa", "password", "credential",
-            "hash", "pqc", "padding_oracle", "session",
+            "jwt",
+            "oauth",
+            "oidc",
+            "saml",
+            "kerberos",
+            "kerberoast",
+            "ntlm",
+            "crypto",
+            "tls_",
+            "_tls",
+            "pki",
+            "certificate",
+            "cert_",
+            "identity",
+            "mfa",
+            "password",
+            "credential",
+            "hash",
+            "pqc",
+            "padding_oracle",
+            "session",
         ],
     ) {
         return "Crypto / Identity";
@@ -100,8 +184,26 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "dns", "bgp", "arp", "smb", "netbios", "snmp", "network", "protocol", "packet", "rdp",
-            "ftp", "smtp", "ntp", "tor", "proxy", "port", "bluetooth", "ble_", "rf", "wifi",
+            "dns",
+            "bgp",
+            "arp",
+            "smb",
+            "netbios",
+            "snmp",
+            "network",
+            "protocol",
+            "packet",
+            "rdp",
+            "ftp",
+            "smtp",
+            "ntp",
+            "tor",
+            "proxy",
+            "port",
+            "bluetooth",
+            "ble_",
+            "rf",
+            "wifi",
         ],
     ) {
         return "Network / Protocol";
@@ -109,8 +211,18 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "evasion", "bypass", "stealth", "antiforensic", "anti_debug", "obfuscat", "av_bypass",
-            "edr", "rootkit", "bootkit", "covert", "exfil",
+            "evasion",
+            "bypass",
+            "stealth",
+            "antiforensic",
+            "anti_debug",
+            "obfuscat",
+            "av_bypass",
+            "edr",
+            "rootkit",
+            "bootkit",
+            "covert",
+            "exfil",
         ],
     ) {
         return "Stealth / Evasion";
@@ -118,9 +230,30 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "web", "api", "graphql", "http", "ssrf", "xxe", "ssti", "xss", "sql", "bola", "idor",
-            "cache_poison", "smuggling", "cors", "csrf", "upload", "websocket", "deserial",
-            "prototype_pollution", "rest", "soap", "odata", "swagger", "waf",
+            "web",
+            "api",
+            "graphql",
+            "http",
+            "ssrf",
+            "xxe",
+            "ssti",
+            "xss",
+            "sql",
+            "bola",
+            "idor",
+            "cache_poison",
+            "smuggling",
+            "cors",
+            "csrf",
+            "upload",
+            "websocket",
+            "deserial",
+            "prototype_pollution",
+            "rest",
+            "soap",
+            "odata",
+            "swagger",
+            "waf",
         ],
     ) {
         return "Web / API";
@@ -128,8 +261,19 @@ pub fn category_of(id: &str) -> &'static str {
     if has_any(
         id,
         &[
-            "osint", "asm", "recon", "discovery", "leak", "darkweb", "shodan", "subdomain",
-            "attack_surface", "brand", "impersonation", "footprint", "enum",
+            "osint",
+            "asm",
+            "recon",
+            "discovery",
+            "leak",
+            "darkweb",
+            "shodan",
+            "subdomain",
+            "attack_surface",
+            "brand",
+            "impersonation",
+            "footprint",
+            "enum",
         ],
     ) {
         return "Recon & OSINT";
@@ -246,16 +390,27 @@ mod tests {
     fn catalog_covers_every_production_engine() {
         let entries = catalog();
         assert_eq!(entries.len(), production_engine_ids().len());
-        assert!(entries.len() >= 300, "the arsenal should be large, got {}", entries.len());
+        assert!(
+            entries.len() >= 300,
+            "the arsenal should be large, got {}",
+            entries.len()
+        );
     }
 
     #[test]
     fn every_entry_is_classified_and_categorized() {
         for e in catalog() {
             assert!(!e.id.is_empty());
-            assert!(CATEGORIES.contains(&e.category.as_str()), "unknown category: {}", e.category);
             assert!(
-                matches!(e.kind.as_str(), "real_probe" | "alias" | "agent_required" | "special"),
+                CATEGORIES.contains(&e.category.as_str()),
+                "unknown category: {}",
+                e.category
+            );
+            assert!(
+                matches!(
+                    e.kind.as_str(),
+                    "real_probe" | "alias" | "agent_required" | "special"
+                ),
                 "unknown kind: {}",
                 e.kind
             );
@@ -280,7 +435,9 @@ mod tests {
     fn technique_map_inverts_coverage() {
         let m = engine_technique_map();
         // advanced_web_engines covers T1190 (Exploit Public-Facing Application) in the catalog.
-        let awe = m.get("advanced_web_engines").expect("advanced_web_engines mapped");
+        let awe = m
+            .get("advanced_web_engines")
+            .expect("advanced_web_engines mapped");
         assert!(awe.0.iter().any(|t| t == "T1190"));
     }
 

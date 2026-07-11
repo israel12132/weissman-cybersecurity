@@ -252,7 +252,11 @@ pub struct ProjectionStep {
 /// `max_steps` or when everything is fixed. `findings_closed` folds `closes_findings`, so this also
 /// tells a CISO how many findings each tranche of work retires.
 #[must_use]
-pub fn project(items: &[RemediationItem], total_findings: usize, max_steps: usize) -> Vec<ProjectionStep> {
+pub fn project(
+    items: &[RemediationItem],
+    total_findings: usize,
+    max_steps: usize,
+) -> Vec<ProjectionStep> {
     if items.is_empty() {
         return Vec::new();
     }
@@ -285,8 +289,8 @@ pub async fn load_and_score(
     client_id: i64,
     limit: i64,
 ) -> Result<Value, String> {
-    let findings = crate::remediation_priority::load_findings(pool, tenant_id, client_id, limit)
-        .await?;
+    let findings =
+        crate::remediation_priority::load_findings(pool, tenant_id, client_id, limit).await?;
     let total_findings = findings.len();
     let program = crate::remediation_priority::rank(&findings);
     let posture = score(&program, total_findings);
@@ -354,7 +358,11 @@ mod tests {
         f.on_choke_point = true;
         let program = rank(&[f]);
         let p = score(&program, 1);
-        assert!(p.score < 60.0, "worst-case posture should be failing, got {}", p.score);
+        assert!(
+            p.score < 60.0,
+            "worst-case posture should be failing, got {}",
+            p.score
+        );
         assert_eq!(p.grade, 'F');
         // The most punishing driver is listed first.
         assert!(p.drivers[0].contains("ransomware"));
@@ -364,7 +372,11 @@ mod tests {
     fn a_single_low_finding_barely_dents_posture() {
         let program = rank(&[finding("a", "low", Some(2.0))]);
         let p = score(&program, 1);
-        assert!(p.score >= 90.0, "one low finding should stay an A, got {}", p.score);
+        assert!(
+            p.score >= 90.0,
+            "one low finding should stay an A, got {}",
+            p.score
+        );
         assert_eq!(p.grade, 'A');
     }
 
@@ -408,7 +420,10 @@ mod tests {
         assert_eq!(proj[0].findings_closed, 1);
         assert_eq!(proj[0].projected_score, 100.0);
         assert_eq!(proj[0].projected_grade, 'A');
-        assert!(proj[0].delta > 0.0, "fixing the worst action must improve posture");
+        assert!(
+            proj[0].delta > 0.0,
+            "fixing the worst action must improve posture"
+        );
     }
 
     #[test]

@@ -147,7 +147,10 @@ mod tests {
     fn every_pure_alias_resolves_to_a_different_canonical() {
         let r = audit();
         for a in &r.pure_aliases {
-            assert_ne!(a.alias, a.canonical, "an alias must resolve to a different engine");
+            assert_ne!(
+                a.alias, a.canonical,
+                "an alias must resolve to a different engine"
+            );
             assert_eq!(
                 resolve_engine_id(&a.alias),
                 a.canonical,

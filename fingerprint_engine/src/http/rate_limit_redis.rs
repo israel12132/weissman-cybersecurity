@@ -312,7 +312,8 @@ pub async fn verify_redis_at_startup() -> Result<(), String> {
                 .into(),
         );
     };
-    let mut conn = rl.conn()
+    let mut conn = rl
+        .conn()
         .await
         .map_err(|e| format!("Redis PING failed at startup: {e}"))?;
     redis::cmd("PING")

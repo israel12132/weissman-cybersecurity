@@ -191,6 +191,9 @@ export class SseStream {
   _scheduleReconnect() {
     if (this._closed) return
     this.readyState = SSE_CONNECTING
+    // Re-arm the refresh guard on backoff reconnect so a transient failure doesn't
+    // permanently disable token refresh (prevents stuck 401 loop after net blip).
+    this._refreshedThisCycle = false
     const delay = this._backoffMs
     this._backoffMs = Math.min(this._backoffMs * BACKOFF_FACTOR, this._maxBackoff)
     this._reconnectTimer = setTimeout(() => {

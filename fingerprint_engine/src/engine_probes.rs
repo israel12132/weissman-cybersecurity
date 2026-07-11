@@ -59,8 +59,14 @@ mod extract_host_tests {
 
     #[test]
     fn strips_scheme_path_and_port() {
-        assert_eq!(extract_host("https://grid.example.com/status"), "grid.example.com");
-        assert_eq!(extract_host("http://grid.example.com:8443/"), "grid.example.com");
+        assert_eq!(
+            extract_host("https://grid.example.com/status"),
+            "grid.example.com"
+        );
+        assert_eq!(
+            extract_host("http://grid.example.com:8443/"),
+            "grid.example.com"
+        );
         assert_eq!(extract_host("grid.example.com"), "grid.example.com");
     }
 
