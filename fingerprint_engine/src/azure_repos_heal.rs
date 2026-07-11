@@ -55,7 +55,23 @@ pub fn basic_auth_header(pat: &str) -> String {
 /// `https://dev.azure.com/{org}/{project}` base for the Git REST endpoints.
 #[must_use]
 pub fn org_base(org: &str, project: &str) -> String {
-    format!("https://dev.azure.com/{}/{}", org.trim(), project.trim())
+    format!("https://dev.azure.com/{}/{}", pct(org.trim()), pct(project.trim()))
+}
+
+/// Percent-encode a single URL path/query value (everything but RFC 3986 unreserved), so a branch,
+/// ref filter, or file path containing `&`, `#`, `?`, space, `/`, `=` can't inject query parameters
+/// or break routing.
+fn pct(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{:02X}", b));
+        }
+    }
+    out
 }
 
 fn backoff(attempt: u32) -> Duration {
@@ -111,18 +127,22 @@ async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
 /// Resolve the base branch head commit id (`oldObjectId` for the push refUpdate).
 async fn base_ref_object_id(base_url: &str, repo: &str, base: &str, auth: &str) -> Option<String> {
     let url = format!(
-        "{base_url}/_apis/git/repositories/{repo}/refs?filter=heads/{base}&api-version={API_VER}"
+        "{base_url}/_apis/git/repositories/{}/refs?filter=heads/{}&api-version={API_VER}",
+        pct(repo),
+        pct(base),
     );
     let resp = ado_client().get(&url).header("Authorization", auth).send().await.ok()?;
     if !resp.status().is_success() {
         return None;
     }
     let j: Value = resp.json().await.ok()?;
+    // `filter=heads/{base}` is a PREFIX match, so `main` also returns `maintenance`, `main-2`, … —
+    // require an EXACT `refs/heads/{base}` match rather than falling back to the first ref, which
+    // would cut the heal branch off the wrong commit.
+    let want = format!("refs/heads/{base}");
     j.get("value")
         .and_then(|v| v.as_array())
-        .and_then(|arr| arr.iter().find(|r| {
-            r.get("name").and_then(|n| n.as_str()) == Some(&format!("refs/heads/{base}"))
-        }).or_else(|| arr.first()))
+        .and_then(|arr| arr.iter().find(|r| r.get("name").and_then(|n| n.as_str()) == Some(want.as_str())))
         .and_then(|r| r.get("objectId"))
         .and_then(|o| o.as_str())
         .map(String::from)
@@ -131,8 +151,10 @@ async fn base_ref_object_id(base_url: &str, repo: &str, base: &str, auth: &str) 
 /// Does `path` exist on `base`? Chooses `edit` vs `add` for the push change.
 async fn file_exists(base_url: &str, repo: &str, path: &str, base: &str, auth: &str) -> bool {
     let url = format!(
-        "{base_url}/_apis/git/repositories/{repo}/items?path={}&versionDescriptor.version={base}&api-version={API_VER}",
-        path
+        "{base_url}/_apis/git/repositories/{}/items?path={}&versionDescriptor.version={}&api-version={API_VER}",
+        pct(repo),
+        pct(path),
+        pct(base),
     );
     matches!(
         ado_client().get(&url).header("Authorization", auth).send().await.map(|r| r.status().is_success()),
@@ -162,7 +184,10 @@ pub async fn create_push_and_pr(
     title: &str,
     description: &str,
 ) -> AzurePrOutcome {
-    let branch_name = format!("weissman-heal-{}", finding_id.replace(['/', '\\'], "-"));
+    let branch_name = format!(
+        "weissman-heal-{}",
+        crate::heal_channels::safe_branch_suffix(finding_id)
+    );
     let Some((org, project, repo)) = split_org_project_repo(repo_slug) else {
         return err(branch_name, "invalid Azure DevOps slug (expected org/project/repo)");
     };
@@ -205,7 +230,10 @@ pub async fn create_push_and_pr(
     }
 
     // Single push creating the heal branch off the base head.
-    let push_url = format!("{base_url}/_apis/git/repositories/{repo}/pushes?api-version={API_VER}");
+    let push_url = format!(
+        "{base_url}/_apis/git/repositories/{}/pushes?api-version={API_VER}",
+        pct(&repo)
+    );
     let push_body = serde_json::json!({
         "refUpdates": [ { "name": format!("refs/heads/{branch_name}"), "oldObjectId": old_object_id } ],
         "commits": [ {
@@ -225,7 +253,10 @@ pub async fn create_push_and_pr(
     }
 
     // Open the pull request.
-    let pr_ep = format!("{base_url}/_apis/git/repositories/{repo}/pullrequests?api-version={API_VER}");
+    let pr_ep = format!(
+        "{base_url}/_apis/git/repositories/{}/pullrequests?api-version={API_VER}",
+        pct(&repo)
+    );
     let pr_body = serde_json::json!({
         "sourceRefName": format!("refs/heads/{branch_name}"),
         "targetRefName": format!("refs/heads/{base_branch}"),
@@ -265,7 +296,8 @@ pub async fn abandon_pull_request(
     let base_url = org_base(&org, &project);
     let auth = basic_auth_header(pat);
     let url = format!(
-        "{base_url}/_apis/git/repositories/{repo}/pullrequests/{pr_id}?api-version={API_VER}"
+        "{base_url}/_apis/git/repositories/{}/pullrequests/{pr_id}?api-version={API_VER}",
+        pct(&repo)
     );
     let resp = send_with_retry(|| {
         ado_client()
@@ -305,5 +337,15 @@ mod tests {
     #[test]
     fn org_base_builds_dev_azure_url() {
         assert_eq!(org_base("o", "p"), "https://dev.azure.com/o/p");
+    }
+
+    #[test]
+    fn pct_encodes_query_values_preventing_injection() {
+        // '&' must not survive raw (it would inject a query parameter).
+        assert_eq!(pct("/a&evil=1"), "%2Fa%26evil%3D1");
+        assert_eq!(pct("feat/x"), "feat%2Fx");
+        assert_eq!(pct("notes#1.md"), "notes%231.md");
+        assert_eq!(pct("a b"), "a%20b");
+        assert_eq!(pct("safe-1.2_x~"), "safe-1.2_x~");
     }
 }

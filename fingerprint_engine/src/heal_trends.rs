@@ -72,9 +72,14 @@ pub fn compute_trends(rows: &[(String, String, i64)]) -> TrendReport {
         })
         .collect();
 
+    // First day (chronologically) achieving the max total — `days` is already ascending, and using
+    // `>=` in the fold keeps the earlier day on a tie (`max_by_key` would keep the later one).
     let best_day = days
         .iter()
-        .max_by_key(|d| d.total)
+        .fold(None::<&DayBucket>, |acc, d| match acc {
+            Some(b) if b.total >= d.total => Some(b),
+            _ => Some(d),
+        })
         .filter(|d| d.total > 0)
         .map(|d| d.day.clone());
 
@@ -126,6 +131,18 @@ mod tests {
         // attempts: (1+2+3+1+2)/5 = 1.8
         assert_eq!(r.avg_attempts, 1.8);
         assert_eq!(r.best_day.as_deref(), Some("2026-07-01"));
+    }
+
+    #[test]
+    fn best_day_breaks_ties_toward_the_earliest() {
+        let rows = vec![
+            ("2026-07-02".into(), "fixed".into(), 1),
+            ("2026-07-02".into(), "fixed".into(), 1),
+            ("2026-07-01".into(), "fixed".into(), 1),
+            ("2026-07-01".into(), "fixed".into(), 1),
+        ];
+        // Both days tie at 2; the earliest chronological day must win (documented contract).
+        assert_eq!(compute_trends(&rows).best_day.as_deref(), Some("2026-07-01"));
     }
 
     #[test]

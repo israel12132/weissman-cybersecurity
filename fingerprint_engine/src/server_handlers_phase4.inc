@@ -351,11 +351,12 @@ async fn load_heal_report_data(
     .ok()
     .flatten();
 
-    // Finding title/severity + cached bilingual brief.
+    // Finding title/severity + cached bilingual brief (tenant-scoped as defense-in-depth alongside RLS).
     let vuln = sqlx::query(
         r#"SELECT COALESCE(title,'') AS title, COALESCE(severity,'') AS severity, remediation_brief
-           FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1"#,
+           FROM vulnerabilities WHERE tenant_id = $1 AND client_id = $2 AND finding_id = $3 LIMIT 1"#,
     )
+    .bind(tenant_id)
     .bind(client_id)
     .bind(&finding_id)
     .fetch_optional(&mut *tx)
@@ -658,7 +659,12 @@ async fn api_heal_priorities(
                   (COALESCE(poc_exploit,'') <> '') AS has_poc,
                   GREATEST(0, EXTRACT(EPOCH FROM (now() - discovered_at)) / 86400)::bigint AS age_days
            FROM vulnerabilities
-           WHERE tenant_id = $1 AND client_id = $2 AND status = 'OPEN'"#,
+           WHERE tenant_id = $1 AND client_id = $2 AND status = 'OPEN'
+           ORDER BY CASE lower(severity)
+                      WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+                      WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
+                    discovered_at DESC
+           LIMIT 2000"#,
     )
     .bind(auth.tenant_id)
     .bind(client_id)
@@ -725,8 +731,9 @@ async fn api_channel_suggestion(
     };
     let row = sqlx::query(
         "SELECT COALESCE(title,'') AS title, COALESCE(description,'') AS description
-           FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+           FROM vulnerabilities WHERE tenant_id = $1 AND client_id = $2 AND finding_id = $3 LIMIT 1",
     )
+    .bind(auth.tenant_id)
     .bind(client_id)
     .bind(&finding_id)
     .fetch_optional(&mut *tx)

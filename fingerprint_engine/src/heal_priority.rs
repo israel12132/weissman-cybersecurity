@@ -46,9 +46,12 @@ fn severity_points(sev: &str) -> u8 {
 /// True when the text describes a high-impact vulnerability class.
 pub fn classify_high_impact(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
+    // Specific classes only — a bare "injection" needle false-matches benign text like
+    // "dependency injection", so we enumerate the real high-impact classes instead.
     const NEEDLES: [&str; 12] = [
         "sql injection",
-        "injection",
+        "code injection",
+        "command inj",
         "remote code",
         "rce",
         "deserial",
@@ -56,7 +59,6 @@ pub fn classify_high_impact(text: &str) -> bool {
         "authentication bypass",
         "ssrf",
         "xxe",
-        "command inj",
         "path traversal",
         "privilege escalation",
     ];
@@ -213,6 +215,8 @@ mod tests {
         assert!(classify_high_impact("Potential RCE via deserialization"));
         assert!(classify_high_impact("Authentication bypass on admin"));
         assert!(!classify_high_impact("Missing security header"));
+        // Must not false-match benign engineering text.
+        assert!(!classify_high_impact("Refactor to constructor dependency injection"));
     }
 
     #[test]

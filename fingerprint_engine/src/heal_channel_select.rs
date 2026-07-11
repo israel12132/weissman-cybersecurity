@@ -52,10 +52,12 @@ pub fn scm_from_host(host: &str) -> Scm {
 #[must_use]
 pub fn waf_mitigable(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
+    // Request-layer classes only; a bare "injection" needle would false-match "dependency injection"
+    // and recommend a WAF rule for something no WAF can block.
     const NEEDLES: [&str; 12] = [
         "sql injection",
         "sqli",
-        "injection",
+        "code injection",
         "xss",
         "cross-site scripting",
         "path traversal",
@@ -95,12 +97,21 @@ pub struct ChannelSelection {
 /// * `finding_text` — title/description, used to detect WAF-mitigable classes.
 #[must_use]
 pub fn select_channel(finding_text: &str, scm: Scm, has_repo_write: bool) -> ChannelSelection {
-    if has_repo_write {
+    if has_repo_write && scm != Scm::Unknown {
         let ch = pr_channel_for(scm);
         return ChannelSelection {
             channel: ch.id().to_string(),
             reason_en: format!("Deliver a code-level fix as a pull request on {}.", scm.label()),
             reason_he: format!("מסירת תיקון ברמת הקוד כ-Pull Request ב-{}.", scm.label()),
+        };
+    }
+    if has_repo_write {
+        // Repo is writable but the SCM host is unrecognized — none of our PR/MR clients apply, so
+        // fall back to a downloadable diff rather than mis-routing a non-GitHub host to a GitHub PR.
+        return ChannelSelection {
+            channel: DeliveryChannel::DiffDownload.id().to_string(),
+            reason_en: "The repository host was not recognized as GitHub / GitLab / Bitbucket / Azure — download the verified diff to apply it manually.".to_string(),
+            reason_he: "מארח המאגר לא זוהה כ-GitHub / GitLab / Bitbucket / Azure — הורד את ה-diff המאומת כדי להחילו ידנית.".to_string(),
         };
     }
     if waf_mitigable(finding_text) {
@@ -137,6 +148,8 @@ mod tests {
         assert!(waf_mitigable("Path traversal in file download"));
         assert!(!waf_mitigable("Insecure deserialization gadget chain"));
         assert!(!waf_mitigable("Weak password policy"));
+        // Must not false-match benign engineering text (bare "injection" removed).
+        assert!(!waf_mitigable("Dependency injection container misconfiguration"));
     }
 
     #[test]
@@ -145,8 +158,8 @@ mod tests {
         assert_eq!(select_channel("anything", Scm::GitLab, true).channel, "gitlab_mr");
         assert_eq!(select_channel("anything", Scm::Bitbucket, true).channel, "bitbucket_pr");
         assert_eq!(select_channel("anything", Scm::Azure, true).channel, "azure_repos_pr");
-        // Unknown SCM but writable → safe default.
-        assert_eq!(select_channel("anything", Scm::Unknown, true).channel, "github_pr");
+        // Unknown SCM but writable → safe downloadable diff (never mis-route to a GitHub PR).
+        assert_eq!(select_channel("anything", Scm::Unknown, true).channel, "diff_download");
     }
 
     #[test]

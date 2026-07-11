@@ -30,18 +30,36 @@ fn bb_client() -> &'static reqwest::Client {
     })
 }
 
-/// Split a `workspace/repo` slug into its two parts (segments after the repo are ignored).
+/// Split a `workspace/repo` slug into its two parts. A slug that isn't exactly two non-empty
+/// segments is rejected (`None`) rather than guessed, so a misconfigured 3-part slug can't
+/// silently target the wrong repo.
 #[must_use]
 pub fn split_workspace_repo(slug: &str) -> Option<(String, String)> {
-    let s = slug.trim().trim_matches('/');
-    let mut it = s.splitn(2, '/');
-    let ws = it.next().unwrap_or("").trim();
-    let repo = it.next().unwrap_or("").trim().trim_end_matches('/');
-    if ws.is_empty() || repo.is_empty() {
-        None
-    } else {
-        Some((ws.to_string(), repo.to_string()))
+    let parts: Vec<&str> = slug
+        .trim()
+        .trim_matches('/')
+        .split('/')
+        .filter(|s| !s.trim().is_empty())
+        .collect();
+    if parts.len() != 2 {
+        return None;
     }
+    Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
+}
+
+/// Percent-encode a single URL path/query segment (everything but RFC 3986 unreserved), so a branch
+/// or path containing `/`, `#`, `?`, space, `&`, etc. stays one segment instead of injecting routing.
+fn pct(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{:02X}", b));
+        }
+    }
+    out
 }
 
 fn backoff(attempt: u32) -> Duration {
@@ -107,7 +125,12 @@ async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
 
 /// Current head commit of `base` branch (the `parents` for the new branch's commit), if resolvable.
 async fn base_branch_head(ws: &str, repo: &str, base: &str, token: &str) -> Option<String> {
-    let url = format!("{API_BASE}/repositories/{ws}/{repo}/refs/branches/{base}");
+    let url = format!(
+        "{API_BASE}/repositories/{}/{}/refs/branches/{}",
+        pct(ws),
+        pct(repo),
+        pct(base)
+    );
     let resp = bb_client()
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
@@ -146,7 +169,10 @@ pub async fn create_branch_commit_and_pr(
     title: &str,
     description: &str,
 ) -> BitbucketPrOutcome {
-    let branch_name = format!("weissman-heal-{}", finding_id.replace(['/', '\\'], "-"));
+    let branch_name = format!(
+        "weissman-heal-{}",
+        crate::heal_channels::safe_branch_suffix(finding_id)
+    );
     let Some((ws, repo)) = split_workspace_repo(repo_slug) else {
         return err(branch_name, "invalid Bitbucket slug (expected workspace/repo)");
     };
@@ -160,15 +186,19 @@ pub async fn create_branch_commit_and_pr(
         }
     }
 
-    // Commit via the /src endpoint (multipart/form). File fields are `path=content`; `branch` is
-    // created from `parents` (the base head) when it doesn't yet exist.
-    let parent = base_branch_head(&ws, &repo, base_branch, token).await;
-    let src_url = format!("{API_BASE}/repositories/{ws}/{repo}/src");
+    // Commit via the /src endpoint (multipart/form). File fields are `path=content`; the heal branch
+    // is cut from `parents` (the base head). Resolving the base head is REQUIRED — proceeding without
+    // it would commit against the default branch and produce a whole-tree PR, so treat it as an error.
+    let Some(parent) = base_branch_head(&ws, &repo, base_branch, token).await else {
+        return err(
+            branch_name,
+            format!("could not resolve base branch head for '{base_branch}'"),
+        );
+    };
+    let src_url = format!("{API_BASE}/repositories/{}/{}/src", pct(&ws), pct(&repo));
     let mut form: Vec<(String, String)> = Vec::with_capacity(files.len() + 3);
     form.push(("branch".to_string(), branch_name.clone()));
-    if let Some(p) = &parent {
-        form.push(("parents".to_string(), p.clone()));
-    }
+    form.push(("parents".to_string(), parent));
     form.push((
         "message".to_string(),
         format!("Security remediation from Weissman CNAPP ({finding_id})"),
@@ -188,7 +218,7 @@ pub async fn create_branch_commit_and_pr(
     }
 
     // Open the pull request.
-    let pr_url = format!("{API_BASE}/repositories/{ws}/{repo}/pullrequests");
+    let pr_url = format!("{API_BASE}/repositories/{}/{}/pullrequests", pct(&ws), pct(&repo));
     let pr_body = serde_json::json!({
         "title": title,
         "description": description,
@@ -230,7 +260,11 @@ pub async fn decline_pull_request(
 ) -> Result<(), String> {
     let (ws, repo) = split_workspace_repo(repo_slug)
         .ok_or_else(|| "invalid Bitbucket slug".to_string())?;
-    let url = format!("{API_BASE}/repositories/{ws}/{repo}/pullrequests/{pr_id}/decline");
+    let url = format!(
+        "{API_BASE}/repositories/{}/{}/pullrequests/{pr_id}/decline",
+        pct(&ws),
+        pct(&repo)
+    );
     let resp = send_with_retry(|| {
         bb_client()
             .post(&url)
@@ -251,5 +285,17 @@ mod tests {
         assert_eq!(split_workspace_repo("/acme/api/"), Some(("acme".into(), "api".into())));
         assert_eq!(split_workspace_repo("noslash"), None);
         assert_eq!(split_workspace_repo(""), None);
+        // A 3-part slug is rejected, not silently mis-parsed into ("ws","proj/repo").
+        assert_eq!(split_workspace_repo("ws/proj/repo"), None);
+    }
+
+    #[test]
+    fn pct_encodes_ref_and_path_segments() {
+        assert_eq!(pct("release/2.0"), "release%2F2.0");
+        assert_eq!(pct("feat#1"), "feat%231");
+        assert_eq!(pct("a b"), "a%20b");
+        assert_eq!(pct("src/app.js"), "src%2Fapp.js");
+        // Unreserved chars pass through untouched.
+        assert_eq!(pct("safe-name.1_x~"), "safe-name.1_x~");
     }
 }

@@ -171,7 +171,10 @@ pub async fn create_branch_commit_and_mr(
     title: &str,
     description: &str,
 ) -> GitlabMrOutcome {
-    let branch_name = format!("weissman-heal-{}", finding_id.replace(['/', '\\'], "-"));
+    let branch_name = format!(
+        "weissman-heal-{}",
+        crate::heal_channels::safe_branch_suffix(finding_id)
+    );
     if files.is_empty() {
         return GitlabMrOutcome {
             branch_name,

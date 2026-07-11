@@ -80,6 +80,32 @@ impl DeliveryChannel {
     }
 }
 
+/// Sanitize a finding id into a safe git branch-name suffix: keep `[A-Za-z0-9._-]`, map every other
+/// character (spaces, `~^:?*[`, control chars, `/`, `\`) to `-`, and trim leading/trailing `-` so the
+/// result is a valid ref component. Empty input yields `"finding"`.
+#[must_use]
+pub fn safe_branch_suffix(finding_id: &str) -> String {
+    let mapped: String = finding_id
+        .trim()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    // Collapse any ".." (invalid in git refs), then trim leading/trailing separators.
+    let cleaned = mapped.replace("..", "-");
+    let cleaned = cleaned.trim_matches(|c| c == '-' || c == '.');
+    if cleaned.is_empty() {
+        "finding".to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
 /// Render a defense-in-depth virtual-patch (ModSecurity-style) snippet from the detection
 /// signature. This is a compensating control shown when the operator can't (or won't) touch
 /// the repo — it does not replace the code fix, and says so.
@@ -152,6 +178,18 @@ mod tests {
         assert!(DeliveryChannel::GithubDirectCommit.touches_repo());
         assert!(!DeliveryChannel::DiffDownload.touches_repo());
         assert!(!DeliveryChannel::VirtualPatch.touches_repo());
+    }
+
+    #[test]
+    fn safe_branch_suffix_sanitizes() {
+        assert_eq!(safe_branch_suffix("F-123"), "F-123");
+        assert_eq!(safe_branch_suffix("owner/repo#42"), "owner-repo-42");
+        assert_eq!(safe_branch_suffix("a b~c^d:e"), "a-b-c-d-e");
+        assert_eq!(safe_branch_suffix(".."), "finding");
+        assert_eq!(safe_branch_suffix("--x--"), "x");
+        assert_eq!(safe_branch_suffix(""), "finding");
+        // no ".." sequence survives, no leading dot
+        assert!(!safe_branch_suffix("v1..2").contains(".."));
     }
 
     #[test]
