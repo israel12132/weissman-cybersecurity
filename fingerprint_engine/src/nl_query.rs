@@ -576,11 +576,19 @@ If you cannot map the question to a valid plan, output {"table":"","select":[],"
 async fn llm_to_plan(question: &str) -> Result<Value, String> {
     // We use the shared chat client. Same env config as `council`/`general` —
     // OPENAI_BASE_URL / WEISSMAN_LLM_BASE_URL etc. Fail closed if no provider.
+    // Local-first ("sovereign") default: the same loopback vLLM the rest of the platform uses,
+    // so Ask Weissman runs fully on-box with no external key. Point at OpenAI by setting
+    // WEISSMAN_LLM_BASE_URL/OPENAI_BASE_URL + OPENAI_API_KEY (+ WEISSMAN_NL_QUERY_MODEL).
     let base = std::env::var("WEISSMAN_LLM_BASE_URL")
         .or_else(|_| std::env::var("OPENAI_BASE_URL"))
-        .unwrap_or_else(|_| "https://api.openai.com".to_string());
-    let model =
-        std::env::var("WEISSMAN_NL_QUERY_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+        .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+    // Default to the platform's resolved model (WEISSMAN_LLM_MODEL / Llama-3.2-3B) rather than an
+    // OpenAI-only id, so a local sovereign box works out of the box. Override per-use with
+    // WEISSMAN_NL_QUERY_MODEL when a stronger planner model is desired.
+    let model = std::env::var("WEISSMAN_NL_QUERY_MODEL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| weissman_engines::openai_chat::resolve_llm_model(""));
     let api_key = std::env::var("OPENAI_API_KEY")
         .or_else(|_| std::env::var("WEISSMAN_LLM_API_KEY"))
         .ok()

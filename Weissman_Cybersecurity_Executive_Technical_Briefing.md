@@ -44,10 +44,14 @@
 23. [Technology Stack](#23-technology-stack)
 24. [Engineering Scale (by the numbers)](#24-engineering-scale-by-the-numbers)
 25. [Honest Status & Roadmap Notes](#25-honest-status--roadmap-notes)
+26. [Compliance, Standards & Regulatory Alignment](#26-compliance-standards--regulatory-alignment)
+27. [Assurance, Operational Resilience & Response](#27-assurance-operational-resilience--response)
 - [Appendix A — Complete Engine Catalog (303 canonical engines)](#appendix-a--complete-engine-catalog-303-canonical-engines)
 - [Appendix B — Complete Database Table Inventory (88 tables)](#appendix-b--complete-database-table-inventory-88-tables)
 - [Appendix C — Complete API Endpoint Inventory](#appendix-c--complete-api-endpoint-inventory)
 - [Appendix D — Complete Command Center Page Inventory](#appendix-d--complete-command-center-page-inventory)
+- [Appendix E — Cross-Jurisdiction Regulatory Crosswalk](#appendix-e--cross-jurisdiction-regulatory-crosswalk)
+- [Appendix F — Security Control Catalog & Evidence](#appendix-f--security-control-catalog--evidence)
 
 ---
 
@@ -57,7 +61,7 @@ Weissman Cybersecurity is a **closed-loop, autonomous security platform** that c
 
 It is **not** a vulnerability scanner with a dashboard. It is an integrated system that combines:
 
-- **A very large catalog of security engines** — 500+ engine identifiers in the product catalog mapping to ~300 canonical, individually-implemented engines spanning web, API, cloud, network, OT/ICS/IoT, identity, supply chain, AI/LLM, cryptography, OSINT, and host-level detection. **Every engine is wired to a real network/host probe** (HTTP, TCP, UDP, DNS, TLS, or agent telemetry); the codebase explicitly forbids fabricated or randomized findings.
+- **A very large catalog of security engines** — 563 engine identifiers in the product catalog (303 real_probe / 295 distinct impls, 212 aliases, 48 agent-required), individually-implemented spanning web, API, cloud, network, OT/ICS/IoT, identity, supply chain, AI/LLM, cryptography, OSINT, and host-level detection. **Every engine is wired to a real network/host probe** (HTTP, TCP, UDP, DNS, TLS, or agent telemetry); the codebase explicitly forbids fabricated or randomized findings.
 - **An autonomous AI "Supreme Council"** — a multi-model adversarial debate (offensive proposer, blind defensive critic, sovereign decision-maker) with a **vector-database memory of past successes**, human-in-the-loop approval gates, and a cryptographically-signed audit trail.
 - **A detection-integrity layer** — stable finding identity, deduplication, clustering, a false-positive feedback loop with Bayesian confidence weighting, and per-finding cryptographic attestation.
 - **Live threat intelligence** — local mirrors of CISA KEV and FIRST.org EPSS, enriching every CVE-bearing finding with exploit-probability and known-exploited status at the moment it is persisted.
@@ -115,7 +119,7 @@ flowchart TB
 
     subgraph workers["Async execution"]
       WORKER["weissman-worker\nSKIP LOCKED queue · per-kind timeouts"]
-      ENGINES["500+ engine IDs / ~300 canonical engines"]
+      ENGINES["563 engine IDs / 303 real_probe + 212 alias + 48 agent"]
       OAST["weissman-oast-server\n(DNS+HTTP callback capture)"]
     end
 
@@ -165,7 +169,7 @@ Engines are registered in an authoritative list (`PRODUCTION_ENGINE_IDS`) in `ba
 
 ### 4.2 The catalog (by domain)
 
-The product catalog exposes **500+ engine identifiers** (the frontend registry lists ~529; the ordered execution registry defines ~303 canonical engines; the remainder are vertical/marketing aliases that resolve to canonical implementations). Of the canonical engines, ~49 are **agent-required** (host-level techniques that cannot be observed remotely and are clearly labeled as such); the rest run remotely. Major domains:
+The product catalog exposes **500+ engine identifiers** (the frontend registry lists 563, mirrored 1:1 to `PRODUCTION_ENGINE_IDS`). CI-verified classification (`scripts/engine_reality_audit.mjs`): **303 real_probe** (295 distinct implementations — 8 IDs are delegates sharing an impl), **212 aliases** that resolve to a real probe, and **48 agent-required** host-level techniques clearly labeled as such (`info`/advisory when no agent enrolled), 0 no_path. Major domains:
 
 | Domain | Representative engines | What they actually do (from code) |
 |---|---|---|
@@ -491,7 +495,7 @@ Because the platform performs *offensive* actions, safety is engineered as a fir
 | SQL migrations | **75 files**, ~4,076 lines, **88 `CREATE TABLE`s** |
 | Legacy Python | **~17,000 lines** |
 | Workspace crates | **9** Rust crates |
-| Engine catalog | **500+ engine IDs** (~529 in the UI registry) → **~303 canonical engines** |
+| Engine catalog | **563 engine IDs** → **303 real_probe** (295 distinct impls) + **212 alias** + **48 agent_required**, 0 no_path |
 | API surface | **~130 endpoints**, ~271 handlers, **6 WebSocket channels** |
 | Database | **~88 tables**, full row-level security, 3 scoped DB roles |
 | Async job kinds | **~27** |
@@ -506,17 +510,90 @@ Because the platform performs *offensive* actions, safety is engineered as a fir
 
 In the spirit of a precise, code-grounded briefing, the following nuances are stated plainly (and reflect well on the team's discipline):
 
-- **Engine count is presented honestly in the code itself.** The product surfaces 500+ engine identifiers, but the codebase distinguishes ~303 canonical implementations from vertical/marketing aliases via an explicit accounting module — and a CI gate prevents any UI engine from lacking a real execution path. The platform deliberately avoids inflated "no-op" engines.
-- **Agent detections are pragmatic.** Of the ~20 advertised agent capabilities, several are aliases over shared host-inspection code, and UEBA's richest metrics are Linux-first (other OSes degrade gracefully). One detection (timestomp) exists as a stub and is not yet wired.
+- **Engine count is presented honestly in the code itself.** The product surfaces 563 engine identifiers, and the codebase classifies them (CI-verified) as 303 real_probe implementations (295 distinct), 212 vertical/marketing aliases that resolve to a real probe, and 48 agent-required host techniques — an explicit accounting module plus a CI gate prevents any UI engine from lacking a real execution path. The platform deliberately avoids inflated "no-op" engines.
+- **Agent detections are pragmatic.** Of the ~20 advertised agent capabilities, several are aliases over shared host-inspection code, and UEBA's richest metrics are Linux-first (other OSes degrade gracefully). The timestomp detection is implemented and wired (mtime-vs-ctime backdating heuristics on high-value paths, MITRE T1070.006).
 - **Autonomy ships safe-by-default.** The most powerful "sovereign" features are disabled unless explicitly enabled, and the consequential cloud actions require dual acknowledgment. This is a deliberate safety choice, not a missing feature.
 - **The platform is a Rust rewrite of an earlier Python system.** A legacy Python layer remains in the repository for intel feeds and correlation tooling, but **all production execution — API, orchestration, engines, worker — is Rust.** The old Alembic schema is explicitly deprecated in favor of the SQLx migrations.
 - **Monitoring dashboards are catching up to renamed metrics.** The Prometheus alert rules track the current metric names; a Grafana dashboard still references some legacy names — a cosmetic alignment item.
 
 ---
 
+## 26. Compliance, Standards & Regulatory Alignment
+
+The platform's compliance posture rests on the same integrity invariant as the rest of the system: controls are **implemented in code, measured in real time, and traceable to source**. The compliance engine (`compliance_engine.rs`) maps every live finding to the relevant framework's controls and computes a measurable posture — the percentage of mapped controls not currently violated. The descriptions below reflect **control alignment and mapping**; they are not a third-party certification report. Certification status (e.g. SOC 2 Type II / ISO 27001) is declared by the operating entity and its external auditors.
+
+### 26.1 Real-time framework mapping (built into the product)
+
+For each framework the engine computes three metrics — `total_mapped_controls`, `violated_controls`, `compliance_percent` — and a per-framework PDF report can be generated (`/api/compliance/frameworks/{id}/report`). The mapped frameworks are built into the product:
+
+| Framework | Body · version | Core areas the platform touches |
+|---|---|---|
+| **SOC 2** | AICPA TSC (2017, 2022 points of focus) | Access control (CC6), operations & detection (CC7), change mgmt (CC8), confidentiality, availability |
+| **ISO/IEC 27001:2022** | ISO/IEC · 93 Annex A controls | Threat intel, monitoring, access control, cryptography, secure development |
+| **NIST CSF 2.0** | NIST (2024) · 6 Functions | Identify (ASM), Detect (EDR/UEBA), Respond (SOAR), Govern |
+| **NIST SP 800-53 Rev 5** | NIST · 20 control families | AC, AU, SI, RA-5 (scanning), CA-8 (pen test), SR (supply chain) |
+| **PCI DSS 4.0.1** | PCI SSC (mandatory 3/2025) | Req 6/7/8/10/11 — development, access+MFA, logging, scanning+pen test |
+| **GDPR** | EU 2016/679 | Art. 28/30/32/33/35 — data processor |
+| **NIS 2** | Directive (EU) 2022/2555 | Art. 21 ten measures, 24/72-hour reporting |
+| **HIPAA Security Rule** | HHS OCR · 45 CFR 164 | Access, Audit, Integrity, Transmission (as Business Associate) |
+| **FedRAMP / CMMC 2.0** | GSA / DoD · 800-53-based | Federal markets (ATO via 3PAO / C3PAO) |
+| **IEC 62443** | IEC · OT/ICS | OT/ICS/IoT engines and industrial-protocol probes |
+| **CSA CCM v4 / CAIQ** | Cloud Security Alliance · 197 controls | IAM, TVM, IVS, LOG, supply chain |
+| **CIS Controls v8.1** | CIS · 18 controls | Hardening, asset inventory, vulnerability management |
+
+### 26.2 Framework & standards alignment matrix
+
+| Framework / standard | Body · version | Platform alignment | Assurance type |
+|---|---|---|---|
+| SOC 2 Type II | AICPA · TSC 2017/2022 | Access, operations, change, confidentiality/availability — evidenced via the audit gate | Independent attestation (CPA) — declared by operating entity |
+| ISO/IEC 27001:2022 (+27017/27018/27701/42001) | ISO/IEC | ISMS; Annex A controls mapped and tested; 42001 for AI management | Certificate by accredited body |
+| NIST CSF 2.0 · 800-53 r5 · SSDF 800-218 | NIST | Govern→Recover; ASM=Identify, EDR/UEBA=Detect, SOAR=Respond | Self-attestation / mapping |
+| PCI DSS 4.0.1 | PCI SSC | Vulnerability scanning and pen testing (Req 11) are the product's core | RoC (QSA) / SAQ |
+| HIPAA Security Rule | HHS OCR | Access/Audit/Integrity/Transmission + BAA | Regulatory obligation |
+| FedRAMP · CMMC 2.0 · FIPS 140-3 · Common Criteria | GSA/DoD/NIST/NIAP | 800-53 alignment for federal markets | Independent (3PAO/CMVP/NIAP) |
+| CSA STAR / CAIQ v4.1 | CSA | Maintained SIG/CAIQ response bank (`SIG_CAIQ_PREP_QA.md`) | Level 1 self / Level 2 audited |
+| OWASP ASVS 5.0 · Top 10:2025 · API Top 10 | OWASP | The platform itself tests targets against these risks | Reference |
+| MITRE ATT&CK · D3FEND | MITRE | Threat emulation and kill-chain mapped to ATT&CK | Reference |
+| SLSA v1.0 · SBOM (CISA/NTIA) · cargo-deny | OpenSSF / CISA | SBOM diffing, signed PRs, dependency gate | Reference |
+| FIRST CVSS 4.0 · EPSS | FIRST | KEV→EPSS→CVSS prioritization built into every finding | Built-in |
+| ISO/IEC 29147 · 30111 · RFC 9116 | ISO/IEC · IETF | Coordinated disclosure policy (`security.txt` · security@) | Policy |
+
+### 26.3 Data protection, privacy & transfers
+
+- **GDPR (data processor).** Alignment to Art. 28 (processing agreement — DPA, incorporated by reference at `/dpa.html`), Art. 30 (records of processing), Art. 32 (technical measures — encryption, confidentiality/integrity/availability/resilience), Art. 33 (processor notifies the controller "without undue delay"), Art. 35 (DPIA assistance).
+- **International transfers.** SCCs Module 2 (Controller-to-Processor, Decision (EU) 2021/914) for EEA/UK/Switzerland; the EU–US DPF where applicable, with SCCs as a fallback.
+- **Data residency.** `WEISSMAN_REGION` + `region_manager.should_process_tenant` enforce per-tenant region. SaaS: EU-West (Ireland) by default; Enterprise: US-East / AU-East; **self-hosted: data never leaves customer infrastructure.**
+- **Retention.** Data classes with separate TTLs (7 / 30 / 14 / 30 days); UEBA samples purged past 14 days; deletion/return at end of service.
+- **Israel (home base).** Alignment to the Protection of Privacy (Data Security) Regulations 2017 — tiered controls, security-event logging, and the processor agreement (Reg. 15); and to Amendment 13 of the Privacy Protection Law (effective Aug 2025) — DPO where triggered and reporting to the Privacy Protection Authority. The platform itself provides the required risk survey and penetration test (High tier — at least every 18 months).
+
+### 26.4 Shared responsibility model
+
+| Domain | Weissman (SaaS) | Customer |
+|---|---|---|
+| Physical & host-layer security | ✓ (managed cloud) | — |
+| Platform patching & maintenance | ✓ | — |
+| Multi-tenant isolation (RLS) | ✓ (DB-enforced) | — |
+| Identity & federation (SSO/MFA) | ✓ (infrastructure) | Policy + user management |
+| Scan-scope authorization | Bound enforcement | Approved domains/IPs |
+| Data classification & asset tagging | Mechanism | Per-customer values |
+| Self-hosted | Software + updates | Infra, backup, network, location |
+
+---
+
+## 27. Assurance, Operational Resilience & Response
+
+- **Availability & SLA.** Monthly availability target **99.9%**; tiered service credits (10% / 25%) on miss; public status page `/status` (Redis health, last run, feed freshness).
+- **Incident response.** Immediate triage for security-impacting incidents; **initial response target ≤ 4 business hours** for critical production incidents; post-incident review with root cause and corrective actions; alignment to NIST SP 800-61. Breach-notification targets: GDPR 72 hours (controller) / "without undue delay" (processor), the Privacy Protection Authority (Israel), and equivalents per jurisdiction.
+- **Continuity & recovery.** Automated backups (30-day retention), leader-elected high availability; RTO/RPO objectives defined in the signed agreement.
+- **Audit & evidence.** Full audit gate **G1–G7** (`full_audit_gate.sh`, exit 0); auditor evidence-pack generator (SBOM hash + NIST/SOC 2 mapping); CI engine-wiring gate (0 no_path).
+- **Secure SDLC & supply chain.** Memory-safe Rust core (`unsafe` denied crate-wide except a single documented exception); alignment to NIST SSDF (SP 800-218); `cargo-deny` gate (licensing/vulnerabilities); SBOM; signed-PR verification in the auto-heal pipeline; migration runner with SHA-384 checksums that refuses to start on drift.
+- **Vulnerability management & responsible disclosure.** KEV→EPSS→CVSS×confidence prioritization; coordinated disclosure policy (ISO/IEC 29147 · 30111 · RFC 9116) at security@weissman-cybersecurity.com.
+
+---
+
 ## Appendix A — Complete Engine Catalog (303 canonical engines)
 
-The complete, ordered registry of canonical engine implementations (`FULL_ENGINE_REGISTRY_ORDER` in `backend/weissman-core/src/models/engine.rs`), grouped by domain. These are in addition to ~226 catalog/vertical aliases that resolve to these implementations, for the 500+ identifiers shown in the product.
+The complete, ordered registry of canonical engine implementations (`FULL_ENGINE_REGISTRY_ORDER` in `backend/weissman-core/src/models/engine.rs`), grouped by domain. These are in addition to 212 catalog/vertical aliases that resolve to these implementations, for the 563 identifiers shown in the product.
 
 **Recon, OSINT & Attack-Surface Intelligence:** `osint`, `asm`, `leak_hunter`, `discovery_engine`, `recon`, `satellite_recon`, `darkweb_intel`, `financial_osint`, `blockchain_trace`, `metadata_harvest`, `patent_recon`, `telecom_osint`, `iot_shodan_scan`, `job_posting_osint`, `github_secret_scan`, `dark_web_monitor`, `passive_dns_forensics`, `threat_intel_fusion`, `attack_surface_quantify`, `adversarial_simulation`
 
@@ -613,6 +690,51 @@ All 68 routed pages in the React Command Center (`frontend/src/pages/`):
 `AdminManagement`, `AgentManagement`, `AIAnalysisEngine`, `AlertRulesEngine`, `AskWeissman`, `AstFuzzingStudio`, `AuditLog`, `BaselineAndDrift`, `Billing`, `BusinessEngineProfile`, `CeoCommandCenter`, `CeoVault`, `ClientDetail`, `ClientEngagements`, `ClientEvidenceVault`, `ClientNew`, `ClientSaasIdpDiscovery`, `Clients`, `CloudControlTower`, `ComplianceFrameworks`, `ContainmentRulesBuilder`, `CouncilHitlQueue`, `DarkWebMonitor`, `DigitalTwinSimulator`, `DomainDiscovery`, `EngineClientCatalog`, `EngineDetail`, `EngineManagementConsole`, `EngineMatrix`, `ExploitResearchLab`, `FeedbackLoopVerification`, `FindingsCommandCenter`, `IdentityContextManager`, `IncidentResponseCenter`, `IntegrationManager`, `JobsDashboard`, `KillChainOrchestrator`, `MetricsDashboard`, `MobileSecurity`, `NetworkIntelligence`, `NetworkProtocols`, `NexusSovereignSwarm`, `OastDashboard`, `OobVerification`, `OsintEngineProfile`, `OtIcsSecurity`, `PlaybookBuilder`, `PqcRadar`, `RateLimitAnalytics`, `RemediationHub`, `RiskGraphVisualization`, `RoeApprovals`, `SBOMBrowser`, `ScanScheduler`, `SocialEngineering`, `SsoDashboard`, `StatusPage`, `StrategicEngineProgram`, `SupplyChainHub`, `SystemConfiguration`, `TemplateEngineWorkbench`, `ThreatAnalysisCenter`, `ThreatEmulation`, `ThreatHuntingWorkbench`, `ThreatIntelHub`, `TopTierEngineHub`, `TopTierEngineProfile`, `VulnIntelDashboard`
 
 (Plus shared components: ~29 cockpit components, 7 war-room visualizations, 10 CEO-only components, and a UI primitive library.)
+
+---
+
+## Appendix E — Cross-Jurisdiction Regulatory Crosswalk
+
+Platform alignment with the principal regulatory regimes of the world's most active cybersecurity markets (status current to 2025–2026). "Alignment" = control mapping and operational support; formal certifications are declared by the operating entity.
+
+| Jurisdiction | Regulatory instruments (body · status) | Platform alignment |
+|---|---|---|
+| **United States** | SOC 2 (AICPA) · NIST CSF 2.0 / 800-53 r5 · FedRAMP Rev 5 / 20x · CMMC 2.0 (DFARS 11/2025) · HIPAA · PCI DSS 4.0.1 · SOX ITGC | Controls mapped to 800-53/TSC; scanning+pen test built in; automated evidence |
+| **European Union** | GDPR 2016/679 · NIS2 2022/2555 · DORA 2022/2554 (since 1/2025) · CRA 2024/2847 (reporting 9/2026) · ISO 27001:2022 | Processor per Art. 28/32; NIS2 Art. 21 measures; SBOM+vuln handling for CRA; EU-West default |
+| **United Kingdom** | UK GDPR + DPA 2018 + DUAA 2025 (2/2026) · NCSC CAF v4.0 · Cyber Essentials/Plus | GDPR-parallel; CAF principles alignment (identify/protect/detect/respond) |
+| **Israel** (home base) | Privacy Protection Law + Amendment 13 (8/2025) · Data Security Regs 2017 · INCD Cyber Defense Doctrine (ICDM 2.0) · SI ISO 27001 · Bank of Israel Directive 364 | Tiered controls + processor agreement (Reg. 15); PPA reporting; ICDM/NIST-CSF alignment; pen test ≤18 mo |
+| **Singapore** | PDPA · Cybersecurity Act 2024 (10/2025) · CCoP for CII | Processor security + breach reporting; CII and supply-chain incident support |
+| **Australia** | Privacy Act (2024 amendment) · Essential Eight · ISM / IRAP | Essential Eight alignment; controls for IRAP in the government market |
+| **Japan** | APPI · ISMAP | Processor duties + reporting; ISMAP catalog alignment for government cloud |
+| **India** | DPDP Act 2023 + Rules 2025 (11/2025) | Reasonable security safeguards + breach-report support; DPIA/localization for SDFs |
+| **UAE** | PDPL 2021 · NESA IAS · NCA | NESA/NCA alignment for critical infrastructure; transfer controls |
+| **Saudi Arabia** | PDPL + Data Transfer · NCA ECC-2:2024 · SAMA CSF | Tiered ECC-2 mapping; SAMA financial controls; localization |
+| **Canada** | PIPEDA · Quebec Law 25 | Proportionate safeguards; support for Law 25 transfer PIAs |
+| **Brazil** | LGPD 13.709/2018 · SCCs (mandatory since 8/2025) | Processor controls + SCCs for transfers; reporting support |
+
+## Appendix F — Security Control Catalog & Evidence
+
+Every control is traceable to a module in the source code (from `SECURITY_AND_COMPLIANCE.md` · `SIG_CAIQ_PREP_QA.md`).
+
+| Control domain | Implementation | Evidence in code |
+|---|---|---|
+| Multi-tenant isolation | Forced Row-Level Security, `tenant_id NOT NULL` on 80+ tables | `crates/weissman-db/src/lib.rs` |
+| Audit trail | `audit_logs` append-only for every authenticated write | `fingerprint_engine/src/audit_log.rs` |
+| RBAC | 5 roles + `is_superadmin`, middleware | `rbac.rs` · `http/ceo_rbac.rs` |
+| MFA | TOTP, per-tenant enforcement | `auth_mfa.rs` |
+| SSO | OIDC (PKCE) + SAML (signed, JIT) | `oidc_auth.rs` · `saml_auth.rs` |
+| Passwords · JWT | bcrypt cost-12, ≥12 chars; JWT ≥48 chars | `security_startup.rs` |
+| Read-only NL→SQL | `weissman_ro` role, allow-list, timeouts | `nl_query.rs` |
+| Cryptography | TLS 1.2+ enforced, HMAC-SHA256, constant-time compares | `weissman_core::tls_policy` · `cicd_interceptor.rs` |
+| Encryption at rest | LUKS/KMS; secrets via Vault Transit/Fernet | `database_encryption.py` |
+| Scan-scope validation | Out-of-scope and private-IP rejection | `security_hardening.rs` · `scan_routing.rs` |
+| Rate limiting | Per-tenant middleware; AI quota (50/day) | `http/tenant_scan_limit.rs` |
+| Data retention | Per-class TTL; UEBA purge | `data_retention.rs` |
+| Intel integrity | KEV (6h) · EPSS — never fabricated | `intel_kev.rs` · `intel_epss.rs` |
+| FP suppression | Bayesian weighting + auto-suppression | `fp_feedback.rs` |
+| Migration safety | SHA-384 checksums, refuse-to-start on drift | `no_tx_migrations.rs` |
+| Audit gate | G1–G7, exit 0 | `scripts/full_audit_gate.sh` |
+| Evidence pack | SBOM hash + framework mapping | `scripts/generate_audit_evidence_pack.sh` |
 
 ---
 

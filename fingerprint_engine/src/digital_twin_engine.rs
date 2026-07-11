@@ -1,4 +1,4 @@
-//! Digital Twin Attack Simulator — world-class environment modeling + live attack-path simulation.
+//! Digital Twin — live environment modeling + evidence-only attack-path probes.
 //!
 //! Builds a **live, evidence-only** digital twin of a web application surface from real HTTP/TLS/DNS
 //! signals, then executes operator-selected attack scenarios (XSS, SQLi, MITM/TLS downgrade, CORS)

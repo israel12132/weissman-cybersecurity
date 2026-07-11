@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, X } from 'lucide-react'
@@ -7,6 +7,7 @@ import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
 import SupplyChainGraph from './SupplyChainGraph'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
+import useFocusTrap from '../../hooks/useFocusTrap'
 
 const REACH_META = {
   client_runtime: { color: '#fb7185', key: 'client_runtime' },
@@ -118,6 +119,10 @@ export default function FindingDrawer({
   const { t } = useTranslation()
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [activeTab, setActiveTab] = useState('evidence')
+  const drawerRef = useRef(null)
+
+  // Keep Tab focus inside the modal drawer while it's open (a11y: role="dialog" aria-modal).
+  useFocusTrap(drawerRef, Boolean(finding))
 
   const drawerTabs = useMemo(
     () => [
@@ -152,9 +157,14 @@ export default function FindingDrawer({
     document.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // Remember what had focus so we can restore it when the drawer closes (a11y).
+    const invoker = document.activeElement
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
+      if (invoker instanceof HTMLElement && document.contains(invoker)) {
+        invoker.focus()
+      }
     }
   }, [finding, onClose])
 
@@ -240,6 +250,7 @@ export default function FindingDrawer({
 
           <motion.aside
             key="drawer"
+            ref={drawerRef}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}

@@ -14,9 +14,13 @@ pub struct StealthConfig {
 }
 
 /// Behavioral jitter between sessions (human browsing cadence).
-pub fn apply_behavioral_jitter() {
+///
+/// `async` + `tokio::time::sleep` so the delay yields the worker thread instead of blocking
+/// it — these helpers run inside async engines, and `std::thread::sleep` would stall a whole
+/// tokio worker for up to 2 s per call.
+pub async fn apply_behavioral_jitter() {
     let ms = rand::random_range(200..=2000);
-    std::thread::sleep(Duration::from_millis(ms));
+    tokio::time::sleep(Duration::from_millis(ms)).await;
 }
 
 fn random_spoof_ip() -> String {
@@ -57,7 +61,9 @@ impl StealthConfig {
     }
 }
 
-pub fn apply_jitter(config: &StealthConfig) {
+/// Per-request jitter. `async` so the sleep yields the tokio worker (see
+/// [`apply_behavioral_jitter`]).
+pub async fn apply_jitter(config: &StealthConfig) {
     let (min_ms, max_ms) = (
         config.jitter_min_ms,
         config.jitter_max_ms.max(config.jitter_min_ms),
@@ -66,7 +72,7 @@ pub fn apply_jitter(config: &StealthConfig) {
         return;
     }
     let ms = rand::random_range(min_ms..=max_ms);
-    std::thread::sleep(Duration::from_millis(ms));
+    tokio::time::sleep(Duration::from_millis(ms)).await;
 }
 
 pub fn build_client(config: &StealthConfig, timeout_secs: u64) -> reqwest::Client {
@@ -177,8 +183,10 @@ pub fn is_waf_or_rate_limit(status: u16, body: &str) -> bool {
     false
 }
 
-pub fn apply_rotation_delay(config: &StealthConfig) {
+/// Longer delay after an identity/proxy rotation. `async` so the sleep yields the tokio
+/// worker (see [`apply_behavioral_jitter`]).
+pub async fn apply_rotation_delay(config: &StealthConfig) {
     let extra = rand::random_range(1000..=4000);
     let ms = (config.jitter_max_ms + extra).min(15_000);
-    std::thread::sleep(Duration::from_millis(ms));
+    tokio::time::sleep(Duration::from_millis(ms)).await;
 }

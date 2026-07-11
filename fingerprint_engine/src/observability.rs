@@ -58,10 +58,22 @@ fn build_otel_layer(
         .map_err(|e| eprintln!("[Weissman][otel] exporter build failed: {e}"))
         .ok()?;
 
+    // Distinguish server vs worker (and env) in the trace backend. Each component sets
+    // WEISSMAN_SERVICE_NAME (e.g. weissman-server / weissman-worker); defaults to "weissman".
+    let service_name = std::env::var("WEISSMAN_SERVICE_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "weissman".to_string());
+    let deployment_env = std::env::var("WEISSMAN_ENV")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "dev".to_string());
     let provider = opentelemetry_sdk::trace::TracerProvider::builder()
         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_resource(opentelemetry_sdk::Resource::new(vec![
-            opentelemetry::KeyValue::new("service.name", "weissman"),
+            opentelemetry::KeyValue::new("service.name", service_name),
+            opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+            opentelemetry::KeyValue::new("deployment.environment", deployment_env),
         ]))
         .build();
     let tracer = provider.tracer("weissman");
@@ -226,10 +238,18 @@ pub async fn http_metrics_middleware(
     metrics::counter!(
         "http_requests_total",
         "method" => method_s,
-        "path" => bucket,
+        "path" => bucket.clone(),
         "status" => status_s,
     )
     .increment(1);
+    // Dedicated reliability/security signals consumed by the Grafana dashboards +
+    // application alerts (5xx error rate, rate-limit pressure).
+    if status >= 500 {
+        metrics::counter!("weissman_errors_total", "path" => bucket.clone()).increment(1);
+    }
+    if status == 429 {
+        metrics::counter!("weissman_rate_limit_violations_total", "path" => bucket).increment(1);
+    }
     response
 }
 

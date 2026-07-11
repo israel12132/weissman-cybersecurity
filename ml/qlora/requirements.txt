@@ -1,0 +1,14 @@
+# QLoRA fine-tuning stack (CUDA GPU required for training).
+# export_corpus.py / scrub_corpus.py only need psycopg2-binary; --dry-run also needs
+# transformers (tokenizer only).
+#
+# Versions are pinned to a compatible window: train_qlora.py uses trl.SFTConfig and
+# SFTTrainer(processing_class=...), which require trl>=0.12 and transformers>=4.46.
+psycopg2-binary>=2.9,<3
+torch>=2.3,<2.6
+transformers>=4.46,<5
+datasets>=2.20,<3
+peft>=0.13,<0.15
+trl>=0.12,<0.14
+bitsandbytes>=0.43,<0.45
+accelerate>=0.34,<1.2

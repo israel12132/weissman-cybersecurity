@@ -224,5 +224,4 @@ autonomous defence platform. All work is real and live; **zero simulation**.
 
 ## [2026.05.20] — Last pre-autonomous-defence release
 
-Baseline of 47 tests + 188 routes + the original "engine-room" cockpit. See
-`docs/archive/` for design notes from this era.
+Baseline of 47 tests + 188 routes + the original "engine-room" cockpit.

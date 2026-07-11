@@ -84,7 +84,7 @@ async fn fetch_openapi(
 ) -> Option<Value> {
     for path in &SPEC_PATHS {
         if let Some(s) = st {
-            stealth::apply_jitter(s);
+            stealth::apply_jitter(s).await;
         }
         let url = format!("{}{}", base, path);
         let req = apply_stealth_req(client.get(&url), st);
@@ -557,7 +557,7 @@ async fn get_html_link_discovery_paths(
         };
         let url = format!("{base}{path_norm}");
         if let Some(s) = st {
-            stealth::apply_jitter(s);
+            stealth::apply_jitter(s).await;
         }
         let req = apply_stealth_req(client.get(&url), st);
         let Ok(r) = req.send().await else {
@@ -635,7 +635,7 @@ async fn run_semantic_fallback_paths(
             let url = format!("{}{}", base, path_norm);
             for payload in payloads {
                 if let Some(s) = st {
-                    stealth::apply_jitter(s);
+                    stealth::apply_jitter(s).await;
                 }
                 let body_val = payload
                     .get("body")
@@ -767,7 +767,7 @@ async fn execute_payload(
     st: Option<&stealth::StealthConfig>,
 ) -> (u16, bool) {
     if let Some(s) = st {
-        stealth::apply_jitter(s);
+        stealth::apply_jitter(s).await;
     }
     let url = format!("{}{}", base.trim_end_matches('/'), path);
     let body_val = payload
@@ -843,7 +843,7 @@ pub async fn run_semantic_fuzz_result(
 
     let client = match st_ref {
         Some(s) => {
-            stealth::apply_jitter(s);
+            stealth::apply_jitter(s).await;
             stealth::build_client(s, TARGET_TIMEOUT_SECS)
         }
         None => reqwest::Client::builder()

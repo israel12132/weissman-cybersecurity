@@ -181,6 +181,7 @@
     "ai_analysis": "AI Analysis",
     "exploit_lab": "Exploit Lab",
     "council_queue": "Council Queue",
+    "self_improve": "Self-Improvement",
     "roe_approvals": "RoE Approvals",
     "remediation": "Remediation Hub",
     "cloud": "Cloud Control Tower",
@@ -2042,7 +2043,7 @@
       "evidence_notice": "Cloud asset inventory, K8s posture panel, and multi-provider scans from POST /api/command-center/scan plus GET /api/clients scope. Kubernetes findings require in-scope cluster credentials or reachable API servers."
     },
     "socialEngineering": {
-      "title": "Social Engineering Simulator",
+      "title": "Social Engineering Command Center",
       "subtitle": "Email phishing assessments from live tenant findings and spear_phishing engine runs",
       "active_campaigns": "Active Campaigns",
       "total_campaigns": "Total Campaigns",
@@ -2661,45 +2662,45 @@
       "evidence_notice": "SBOM, dependency, and typosquat findings from POST /api/command-center/scan (sbom_analyzer / typosquatting_monitor / supply_chain engines). Package rows map to verifiable registry lookups."
     },
     "digitalTwinSimulator": {
-      "title": "Digital Twin Simulator",
-      "badge": "APT / SIMULATION",
-      "subtitle": "Environment attack path modeling",
+      "title": "Digital Twin Live Probes",
+      "badge": "APT / LIVE",
+      "subtitle": "Live HTTP/TLS attack-path probes against authorized targets",
       "client_label": "Client:",
       "select_client": "— Select client —",
-      "run_all": "▶ Run All Simulations",
+      "run_all": "▶ Run All Probes",
       "select_client_first": "Select a client first",
       "no_domain": "Client has no approved domain target",
-      "simulation_failed": "Simulation failed",
-      "simulation_queued": "Digital twin simulation queued: {{jobId}}",
+      "simulation_failed": "Probe run failed",
+      "simulation_queued": "Digital twin probe queued: {{jobId}}",
       "env_profile": "Environment Profile",
       "client_heading": "Client",
       "domains_heading": "Domains",
       "tech_stack_heading": "Tech Stack",
       "env_empty": "Select a client to load its environment profile.",
-      "attack_simulations": "Attack Path Simulations",
-      "simulating": "⟳ Simulating",
-      "simulate": "▶ Simulate",
+      "attack_simulations": "Live Attack-Path Probes",
+      "simulating": "⟳ Probing",
+      "simulate": "▶ Run Probe",
       "vulnerable_paths": "Vulnerable — {{count}} attack paths found",
       "not_vulnerable": "No exploitable paths found",
-      "running_simulation": "Running simulation…",
-      "simulation_signals": "{{count}} simulation signals",
-      "simulation_status": "Simulation {{status}}",
+      "running_simulation": "Running live probe…",
+      "simulation_signals": "{{count}} live probe signals",
+      "simulation_status": "Probe {{status}}",
       "scenarios": {
         "xss": {
           "label": "XSS Injection",
-          "description": "Simulates reflected, stored, and DOM-based cross-site scripting attack paths"
+          "description": "Live reflected, stored, and DOM-based XSS differential probes"
         },
         "sqli": {
           "label": "SQL Injection",
-          "description": "Models union-based, blind, time-based, and OOB SQL injection vectors"
+          "description": "Live union-based, blind, time-based, and OOB SQLi error probes"
         },
         "mitm": {
           "label": "MITM / TLS Downgrade",
-          "description": "Simulates man-in-the-middle via SSL stripping, weak cipher downgrade, HSTS bypass"
+          "description": "Live transport probes: SSL stripping signals, weak cipher downgrade, HSTS gaps"
         },
         "cors": {
           "label": "CORS Misconfiguration",
-          "description": "Models cross-origin data exposure via permissive CORS headers and wildcard origins"
+          "description": "Live cross-origin probes via permissive CORS headers and wildcard origins"
         }
       },
       "risk_critical": "critical",
@@ -2708,11 +2709,11 @@
       "risk_low": "low",
       "status_pending": "Running",
       "rerun": "Re-run",
-      "not_run_hint": "Run the simulation to model real attack paths.",
-      "pending_status": "Simulation running — result pending",
+      "not_run_hint": "Run live probes to map real attack paths from HTTP observations.",
+      "pending_status": "Live probe running — result pending",
       "job_ref": "Job {{jobId}}",
       "clear_results": "Clear results",
-      "overview_simulated": "Simulated",
+      "overview_scenarios_completed": "Probes completed",
       "overview_vulnerable": "Vulnerable",
       "overview_clear": "No paths",
       "overview_running": "Running",
@@ -2750,7 +2751,7 @@
       "profile_stack": "Stack",
       "profile_cleartext": "Cleartext HTTP",
       "profile_paths": "Discovered paths",
-      "evidence_notice": "Digital twin scenarios replay authorized finding graphs via POST /api/command-center/scan (digital_twin). Blast-radius math uses GET /api/financial-risk/:clientId when FAIR inputs exist."
+      "evidence_notice": "Every scenario performs real HTTP/TLS network I/O via POST /api/command-center/scan (digital_twin). A clear verdict means probes did not observe an exploitable signal — not a skipped check. Blast-radius uses GET /api/financial-risk/:clientId when FAIR inputs exist."
     },
     "exploitResearchLab": {
       "title": "Exploit Research Lab",
@@ -4847,6 +4848,8 @@
         "loading": "Loading…",
         "noAssets": "No deception assets. Generate tokens, then deploy to AWS above.",
         "canaryAkia": "canary AKIA: {{id}}",
+        "liveOastBadge": "Live OAST",
+        "liveAwsBadge": "Live AWS",
         "refresh": "Refresh"
       },
       "containmentRules": {

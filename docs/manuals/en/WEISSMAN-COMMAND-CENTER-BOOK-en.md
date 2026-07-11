@@ -1,7 +1,7 @@
 <div dir="ltr">
 
 # Weissman Command Center — System Operations Book
-### Complete guide: every board, workflow, and 533 security engines
+### Complete guide: every board, workflow, and 563 security engine IDs
 
 **Version:** 2026-06-20  
 **Base path:** `https://<host>/command-center/`
@@ -29,7 +29,7 @@
 ### Part C — Engines
 13. [How to run any engine](#13-running-engines)
 14. [Engine types (remote / agent / alias)](#14-engine-types)
-15. [533 engines by group — encyclopedia](#15-engine-encyclopedia)
+15. [563 engine IDs by group — encyclopedia](#15-engine-encyclopedia)
 
 ### Appendices
 - [Appendix A — RBAC](#appendix-a)
@@ -93,7 +93,7 @@ Login → Cockpit (/) → Select client → Run engine / scan
 ### `/clients/:id` — Client detail
 Launch Scan, Configure engines/ROE, View Findings, Generate Report. Sub-routes: Engagements, Evidence Vault, SaaS-IDP Discovery.
 
-### `/engines` — Engine matrix (533 engines)
+### `/engines` — Engine matrix (563 engine IDs)
 Filter by group → open engine → Run from Engine Detail.
 
 ### `/engines/:engineId` — Single engine profile
@@ -213,7 +213,7 @@ Each hub: select **client** → **Run Scan** → `POST /api/command-center/scan`
 
 ## 15. Engine encyclopedia
 
-See generated appendix below (533 engines, 14 groups).
+See generated appendix below (562 engines, 14 groups).
 
 ---
 

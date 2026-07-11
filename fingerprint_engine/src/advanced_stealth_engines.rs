@@ -202,8 +202,14 @@ pub async fn run_sandbox_evasion_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_sandbox_evasion, run_sandbox_evasion_result);
 
-pub async fn run_rootkit_simulation_result(t: &str) -> EngineResult {
+pub async fn run_rootkit_surface_probe_result(t: &str) -> EngineResult {
     crate::edr_evasion_engine::run_edr_evasion_result(t).await
+}
+cli_wrapper!(run_rootkit_surface_probe, run_rootkit_surface_probe_result);
+
+/// Legacy CLI name — delegates to live EDR surface probe.
+pub async fn run_rootkit_simulation_result(t: &str) -> EngineResult {
+    run_rootkit_surface_probe_result(t).await
 }
 cli_wrapper!(run_rootkit_simulation, run_rootkit_simulation_result);
 

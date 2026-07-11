@@ -104,6 +104,44 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
         }
     }
 
+    // Read-only NL→SQL role (weissman_ro). The migration creates it with a dev-default
+    // password; align it here so production never keeps the shipped default. Mirrors the
+    // app/auth handling above — no-op when the DSN carries no password.
+    let ro_url = std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    match ro_url.as_deref().and_then(parse_pg_user_password) {
+        Some((user, pw)) => {
+            alter_role_password(&pool, &user, &pw).await?;
+        }
+        None => {
+            // No read-only DSN configured. /api/ask is disabled anyway (no ro pool), so the
+            // weissman_ro role is unused. In production, defence-in-depth: strip LOGIN so the
+            // shipped dev-default password can never be used even if the DB port is exposed.
+            let is_production = std::env::var("WEISSMAN_ENV")
+                .map(|v| v.trim().eq_ignore_ascii_case("production"))
+                .unwrap_or(false);
+            if is_production {
+                if let Err(e) = sqlx::query("ALTER ROLE weissman_ro NOLOGIN")
+                    .execute(&pool)
+                    .await
+                {
+                    tracing::warn!(
+                        target: "auth_rotation",
+                        error = %e,
+                        "could not disable login on unused weissman_ro role (role may not exist yet)"
+                    );
+                } else {
+                    tracing::info!(
+                        target: "auth_rotation",
+                        "weissman_ro has no read-only DSN in production; login disabled (defence-in-depth)"
+                    );
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 

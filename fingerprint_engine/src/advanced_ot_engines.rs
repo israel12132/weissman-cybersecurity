@@ -3,7 +3,8 @@
 //! require an enrolled endpoint agent (no HTTP stand-ins).
 
 use crate::engine_probes::{
-    agent_required_ok, empty_ok, extract_host, finding, tcp_open, tcp_probe_response,
+    agent_required_ok, empty_ok, extract_host, finding, http_client, http_get, join_url,
+    normalize_url, status_indicates_presence, tcp_open, tcp_probe_response, udp_probe_response,
 };
 use crate::engine_result::{print_result, EngineResult};
 use crate::ot_ics_engine::{
@@ -606,28 +607,100 @@ pub async fn run_mqtt_attack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_mqtt_attack, run_mqtt_attack_result);
 
 pub async fn run_coap_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(
-        t,
-        "coap_attack",
-        "CoAP IoT protocol port",
-        "low",
-        "T0809",
-        &[5683, 5684],
-        "CoAP UDP service.",
-    )
-    .await
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings: Vec<Value> = Vec::new();
+    // CoAP GET empty confirmable message to /.well-known/core
+    let coap_get: [u8; 4] = [0x40, 0x01, 0x01, 0x2e];
+    for port in [5683u16, 5684] {
+        if let Some(resp) = udp_probe_response(&host, port, &coap_get).await {
+            findings.push(finding(
+                "coap_attack",
+                &format!("CoAP UDP response on {host}:{port}"),
+                "medium",
+                "T0809",
+                &format!(
+                    "CoAP datagram probe returned {} bytes on UDP/{port} — IoT device may expose /.well-known/core; review auth and resource enumeration.",
+                    resp.len()
+                ),
+                t,
+            ));
+            break;
+        }
+    }
+    if findings.is_empty() {
+        port_probe_finding(
+            t,
+            "coap_attack",
+            "CoAP IoT protocol port",
+            "low",
+            "T0809",
+            &[5683, 5684],
+            "CoAP UDP service (no CoAP response to probe).",
+        )
+        .await
+    } else {
+        EngineResult::ok(
+            findings.clone(),
+            format!("coap_attack: {} signal(s)", findings.len()),
+        )
+    }
 }
 cli_wrapper!(run_coap_attack, run_coap_attack_result);
 
 pub async fn run_zigbee_attack_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let client = http_client().await;
+    let mut findings: Vec<Value> = Vec::new();
+    let bases = [
+        format!("http://{host}:8080"),
+        format!("http://{host}:8888"),
+        normalize_url(t),
+    ];
+    for base in bases {
+        for path in ["/api/info", "/zigbee2mqtt", "/api/devices", "/api/config"] {
+            let url = join_url(&base, path);
+            if let Some(p) = http_get(&client, &url).await {
+                if status_indicates_presence(p.status) {
+                    let body = p.body.to_ascii_lowercase();
+                    if body.contains("zigbee")
+                        || body.contains("mqtt")
+                        || body.contains("hue")
+                        || body.contains("coordinator")
+                    {
+                        findings.push(finding(
+                            "zigbee_attack",
+                            "Zigbee/MQTT gateway HTTP API exposed",
+                            "high",
+                            "T0809",
+                            &format!(
+                                "{} ({}) — Zigbee2MQTT/Hue bridges expose device pairing over HTTP; validate network segmentation.",
+                                p.final_url, p.status
+                            ),
+                            t,
+                        ));
+                        return EngineResult::ok(
+                            findings.clone(),
+                            format!("zigbee_attack: {} signal(s)", findings.len()),
+                        );
+                    }
+                }
+            }
+        }
+    }
     port_probe_finding(
         t,
         "zigbee_attack",
         "Zigbee gateway port",
         "low",
         "T0809",
-        &[9999, 17754],
-        "Zigbee2MQTT / Hue bridge.",
+        &[9999, 17754, 8080],
+        "Zigbee2MQTT / Hue bridge TCP (no HTTP fingerprint).",
     )
     .await
 }

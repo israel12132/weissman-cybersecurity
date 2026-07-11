@@ -7147,7 +7147,7 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "ss7_attack_simulation": [
+  "ss7_signaling_probe": [
     {
       "key": "ports",
       "label": "Ports / Port Range",
@@ -8365,7 +8365,7 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "adversarial_simulation": [
+  "adversarial_threat_emulation": [
     {
       "key": "llm_base_url",
       "label": "LLM Base URL",
@@ -12691,7 +12691,7 @@ export const GENERATED_PARAM_DEFS = {
       ]
     }
   ],
-  "rootkit_simulation": [
+  "rootkit_surface_probe": [
     {
       "key": "stealth_mode",
       "label": "Stealth Mode",

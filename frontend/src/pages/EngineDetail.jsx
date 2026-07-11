@@ -91,7 +91,7 @@ const ENGINE_TYPE_MAP = {
     'deepfake_voice_engine','business_email_compromise','watering_hole_attack',
     'pretexting_engine','insider_threat_engine','brand_impersonation','fake_update_engine',
     'linkedin_phishing','callback_phishing','physical_social_eng','typosquatting_phishing',
-    'adversarial_simulation',
+    'adversarial_threat_emulation',
   ]),
   ai_probe: new Set([
     'llm_jailbreak','prompt_injection_chain','model_inversion_attack','ai_supply_chain_attack',

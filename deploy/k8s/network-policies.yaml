@@ -101,6 +101,7 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+<<<<<<< HEAD
     # External managed Postgres — replace 0.0.0.0/0 with the DB's CIDR in the production
     # overlay. The cloud metadata IP is excluded so a compromised pod can't pivot to
     # instance credentials over this rule (managed Postgres is never at 169.254.169.254).
@@ -109,6 +110,21 @@ spec:
             cidr: 0.0.0.0/0
             except:
               - 169.254.169.254/32
+=======
+    # Managed Postgres — set to your database's CIDR (was 0.0.0.0/0, over-broad).
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+>>>>>>> origin/main
       ports:
         - protocol: TCP
           port: 5432
+    # Engine probes reach arbitrary internet scan targets (this is a scanning product), so
+    # egress here is intentionally broad on all ports — but block the cloud metadata endpoint
+    # to harden against SSRF pivoting. In production, narrow the CIDR to your authorised scope
+    # and add internal RFC1918 ranges to `except` unless internal scanning is in scope.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16

@@ -285,11 +285,18 @@ pub async fn execute_job(
             .unwrap_or(true),
     };
     let channels = channels.clone();
-    crate::fleet_shaping::with_scope(
+    // Real scan-duration telemetry: time every job end-to-end and record it as a
+    // histogram labelled by kind (feeds the Grafana scan-latency panels + SlowScans alert).
+    let kind = job.kind.clone();
+    let started = std::time::Instant::now();
+    let out = crate::fleet_shaping::with_scope(
         scope,
         execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job),
     )
-    .await
+    .await;
+    metrics::histogram!("weissman_scan_duration_seconds", "kind" => kind)
+        .record(started.elapsed().as_secs_f64());
+    out
 }
 
 async fn execute_job_unscoped(
@@ -495,12 +502,17 @@ async fn execute_job_unscoped(
                             &eng_ref,
                             &tgt,
                             crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                            move |variant| {
+                            move |variant, hint| {
                                 let eng = eng_outer.clone();
-                                let ctx_owned = ctx_owned.clone();
+                                let mut ctx = ctx_owned.clone();
+                                // WAF/rate-limit retry → go stealthy on this attempt.
+                                if hint.force_ghost_network {
+                                    crate::engine_dispatch::apply_ghost_escalation(
+                                        &mut ctx.stealth,
+                                    );
+                                }
                                 async move {
-                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx_owned)
-                                        .await
+                                    crate::engine_dispatch::run_engine(&eng, &variant, &ctx).await
                                 }
                             },
                         )
@@ -841,6 +853,10 @@ async fn execute_job_unscoped(
                 weissman_core::models::engine::order_engines_by_registry(&production_engines);
             let ordered_engines =
                 crate::ws_intelligence_bus::prioritize_ws_intelligence_chain(ordered_engines);
+            // Reorder so engines most relevant to THIS target (web vs bare IP vs IPv6, TLS
+            // ports, …) run first. Reorder-only — no engine is dropped.
+            let ordered_engines = crate::target_profile::TargetProfile::classify(&target)
+                .prioritize(&ordered_engines);
 
             let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
             let mut cross_job_params = serde_json::json!({});
@@ -874,8 +890,12 @@ async fn execute_job_unscoped(
                     eid,
                     &target,
                     crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
-                    move |variant| async move {
-                        crate::engine_dispatch::run_engine(eid, &variant, ctx_ref).await
+                    move |variant, hint| {
+                        let mut c = ctx_ref.clone();
+                        if hint.force_ghost_network {
+                            crate::engine_dispatch::apply_ghost_escalation(&mut c.stealth);
+                        }
+                        async move { crate::engine_dispatch::run_engine(eid, &variant, &c).await }
                     },
                 )
                 .await;
@@ -2156,6 +2176,25 @@ async fn execute_job_unscoped(
                 "findings_count": findings.len(),
                 "findings_persisted": persisted,
                 "message": "feedback fuzz completed; findings persisted via findings_persist",
+            }))
+        }
+        "self_improvement_apply" => {
+            // An approved self-improvement proposal. Opening the pull request is performed
+            // out-of-process by an external PR bot (which has git/GitHub credentials); the
+            // Rust worker never writes to a repo. This arm simply acknowledges the job so it
+            // is not treated as a failure, leaving the queue row APPROVED until the PR bot
+            // records the pr_url. `open_pr_only` is always true — never a direct commit.
+            let improvement_id = p.get("improvement_id").and_then(Value::as_i64);
+            tracing::info!(
+                target: "self_improve",
+                improvement_id = ?improvement_id,
+                "self_improvement_apply acknowledged; awaiting external PR bot (PR-only, main untouched)"
+            );
+            Ok(json!({
+                "ok": true,
+                "improvement_id": improvement_id,
+                "open_pr_only": true,
+                "message": "approved; PR creation handled out-of-process by the PR bot",
             }))
         }
         _ => Err(format!("unknown job kind: {}", job.kind)),

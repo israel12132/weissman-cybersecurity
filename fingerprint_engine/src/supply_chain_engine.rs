@@ -1464,7 +1464,7 @@ async fn harvest_manifests(
     for &path in MANIFEST_PATHS {
         let url = format!("{base}{path}");
         if let Some(s) = stealth {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
         }
         let req = apply_stealth_headers(c.get(&url), stealth);
         let Ok(resp) = req.send().await else { continue };
@@ -1640,7 +1640,7 @@ async fn process_js_asset(
     let mut comps = Vec::new();
     let mut findings = Vec::new();
     if let Some(s) = &stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let req = apply_stealth_headers(c.get(&url), stealth.as_ref());
     let Ok(resp) = req.send().await else {
@@ -1660,7 +1660,7 @@ async fn process_js_asset(
             if let Ok(map_u) = asset_u.join(&map_ref) {
                 if map_u.scheme().starts_with("http") && map_u.host_str() == asset_u.host_str() {
                     if let Some(s) = &stealth {
-                        stealth_engine::apply_jitter(s);
+                        stealth_engine::apply_jitter(s).await;
                     }
                     let req = apply_stealth_headers(c.get(map_u.as_str()), stealth.as_ref());
                     if let Ok(mresp) = req.send().await {
@@ -1714,7 +1714,7 @@ async fn harvest_frontend(
     }
 
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let req = apply_stealth_headers(c.get(base_url.as_str()), stealth);
     let Ok(resp) = req.send().await else {
@@ -1811,7 +1811,7 @@ async fn query_osv(
 ) -> Vec<OsvVuln> {
     let mut out = Vec::new();
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     // Sending `version` makes OSV perform authoritative affected-range matching:
     // a result means *this exact version* is vulnerable — not merely that the
@@ -2396,7 +2396,7 @@ pub async fn run_supply_chain_result(
 
     let c = match stealth {
         Some(s) => {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
             stealth_engine::build_client(s, TIMEOUT_SECS)
         }
         None => default_client().await,

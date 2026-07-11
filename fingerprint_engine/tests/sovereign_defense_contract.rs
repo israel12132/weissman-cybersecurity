@@ -32,7 +32,14 @@ fn poison_library_requires_analyst_rbac() {
 }
 
 #[test]
-fn liquid_matrix_declares_simulation_mode() {
+fn liquid_matrix_never_declares_simulation_mode() {
     let src = include_str!("../src/liquid_matrix_engine.rs");
-    assert!(src.contains("simulation_mode"));
+    assert!(
+        !src.contains("simulation_mode"),
+        "liquid_matrix must not tag findings with simulation_mode — live-only policy"
+    );
+    assert!(
+        !src.contains("simulation_note"),
+        "liquid_matrix must not emit simulation_note — use operator_note for SDN config guidance"
+    );
 }

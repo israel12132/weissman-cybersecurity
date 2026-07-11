@@ -53,18 +53,25 @@ impl EmbeddingsConfig {
     /// Read config from the same env vars used by the chat client + override
     /// for embeddings specifically. Returns `None` if no provider is reachable.
     pub fn from_env() -> Option<Self> {
+        // Local-first ("sovereign") default: a self-hosted vLLM/Ollama embedding endpoint on
+        // loopback, so the RAG memory stays 100% on-box with no external key and no data egress.
+        // Point at OpenAI/Azure/Together by setting WEISSMAN_EMBEDDINGS_BASE_URL + OPENAI_API_KEY.
         let base_url = std::env::var("WEISSMAN_EMBEDDINGS_BASE_URL")
             .or_else(|_| std::env::var("WEISSMAN_LLM_BASE_URL"))
             .or_else(|_| std::env::var("OPENAI_BASE_URL"))
-            .unwrap_or_else(|_| "https://api.openai.com".to_string())
+            .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
             .trim_end_matches('/')
+            .trim_end_matches("/v1")
             .to_string();
         let api_key = std::env::var("OPENAI_API_KEY")
             .or_else(|_| std::env::var("WEISSMAN_LLM_API_KEY"))
             .ok()
             .filter(|s| !s.trim().is_empty());
+        // Default to a local open-weight embedding model (same one the council uses). Output is
+        // padded/truncated to EMBEDDING_DIM, so any provider's dimension works.
         let model = std::env::var("WEISSMAN_EMBEDDINGS_MODEL")
-            .unwrap_or_else(|_| "text-embedding-3-small".to_string());
+            .or_else(|_| std::env::var("WEISSMAN_COUNCIL_EMBEDDING_MODEL"))
+            .unwrap_or_else(|_| "BAAI/bge-small-en-v1.5".to_string());
         if !base_url.starts_with("http") {
             return None;
         }

@@ -601,12 +601,12 @@ pub fn synthesize_feedback_from_path(path: &[String]) -> Vec<SimFeedbackStep> {
         fb.push(SimFeedbackStep {
             stage: step.chars().take(512).collect(),
             outcome: if failure_first {
-                "simulated_failure".into()
+                "path_failure".into()
             } else {
-                "simulated_success".into()
+                "path_success".into()
             },
             pivot: if failure_first {
-                "internal_simulation_retry_encoding".into()
+                "internal_path_retry_encoding".into()
             } else {
                 "chain_advances".into()
             },

@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/queryClient'
 import { ProtectedProviders } from './providers/ProtectedProviders'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
@@ -58,6 +60,7 @@ import {
   AstFuzzingStudio,
   FeedbackLoopVerification,
   CouncilHitlQueue,
+  SelfImprovementConsole,
   RoeApprovals,
   SsoDashboard,
   NexusSovereignSwarm,
@@ -220,6 +223,7 @@ export default function TacticalApp() {
           <Route path="ast-fuzzing" element={<AstFuzzingStudio />} />
           <Route path="feedback-loop" element={<FeedbackLoopVerification />} />
           <Route path="council-queue" element={<CouncilHitlQueue />} />
+          <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
           <Route path="sso-config" element={<SsoDashboard />} />
           <Route path="digital-twin" element={<DigitalTwinSimulator />} />
@@ -289,10 +293,12 @@ export default function TacticalApp() {
 
 export function TacticalProviders({ children }) {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <RateLimitProvider>{children}</RateLimitProvider>
-      </ToastProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <ToastProvider>
+          <RateLimitProvider>{children}</RateLimitProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   )
 }

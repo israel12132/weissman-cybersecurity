@@ -1530,7 +1530,7 @@ async fn run_cycle_for_tenant_inner(
         let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
         let mut cross_job_params = serde_json::json!({});
         for source in client_engines.clone() {
-            stealth_engine::apply_behavioral_jitter();
+            stealth_engine::apply_behavioral_jitter().await;
             let label = engine_display_label(source.as_str());
             broadcast_engine_progress(
                 telemetry_tx.as_ref(),

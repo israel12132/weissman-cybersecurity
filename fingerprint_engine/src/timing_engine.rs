@@ -157,7 +157,7 @@ async fn baseline_profile(
     let mut samples = Vec::with_capacity(n);
     for i in 0..n {
         if let Some(s) = stealth.as_deref() {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
         }
         let us =
             measure_request_us(timing_full_url(url.as_str(), None), client, stealth.clone()).await;
@@ -246,7 +246,7 @@ async fn run_timing_attack_impl(
 ) -> EngineResult {
     let stealth: Option<Arc<stealth_engine::StealthConfig>> = stealth.map(Arc::new);
     let client = if let Some(s) = stealth.as_deref() {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
         build_client(Some(s), REQUEST_TIMEOUT_SECS)
     } else {
         build_client(None, REQUEST_TIMEOUT_SECS)
@@ -264,7 +264,7 @@ async fn run_timing_attack_impl(
         let mut payload_samples = Vec::with_capacity(n_payload);
         for i in 0..n_payload {
             if let Some(s) = stealth.as_deref() {
-                stealth_engine::apply_jitter(s);
+                stealth_engine::apply_jitter(s).await;
             }
             let us = measure_request_us(
                 timing_full_url(url.as_str(), Some(payload)),

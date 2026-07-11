@@ -64,7 +64,7 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 | `scripts/full_audit_gate.sh` | Master G1–G7 gate — must exit 0 before inspection day |
 | `scripts/go_live_check.sh` | Production readiness (K8s, DR, secrets template, OT engines) |
 | `scripts/generate_audit_evidence_pack.sh` | Auditor JSON + PDF (wiring, SBOM, NIST/SOC2 mapping) |
-| `scripts/verify_engine_wiring.mjs` | 558 engines ↔ dispatch — 0 gaps |
+| `scripts/verify_engine_wiring.mjs` | 563 engine IDs ↔ dispatch — 0 gaps |
 | `scripts/weissman-ui-audit.mjs` | 112 routes, 95 pages — live API evidence rules |
 
 See **`docs/operations/INSPECTION-DAY-RUNBOOK.md`** for 30+30 minute demo and CISO deep-dive scripts.  
