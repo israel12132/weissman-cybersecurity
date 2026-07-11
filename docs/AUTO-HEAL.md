@@ -127,6 +127,10 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 - `GET /api/clients/:id/heal-stats`: total, verdict distribution, success rate, avg/max attempts,
   attested count, per-channel breakdown (surfaced as a strip on the Remediation Hub).
 - Completion notifications (webhook / Slack / PagerDuty) via `alert_delivery::notify_heal_completed`.
+  Outbound webhook payloads are **signed**: each carries `X-Weissman-Digest` (sha256 of the exact
+  body) and, when an attestation key is set, `X-Weissman-Signature: v1=<hmac>` (same key/scheme as the
+  signed heal receipts) — a receiver verifies by re-hashing the raw body and checking the HMAC, so a
+  forged or tampered notification is detectable.
 - **Auto Slack post on completion** (`alert_delivery::post_heal_slack`, `WEISSMAN_SLACK_HEAL_NOTIFY`, on by
   default): every finished heal posts a Block Kit summary to the tenant's Slack (webhook or
   `chat.postMessage`). On a `Fixed` outcome that opened a PR/MR it posts the **interactive

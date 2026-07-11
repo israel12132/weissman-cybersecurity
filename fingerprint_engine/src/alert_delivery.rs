@@ -159,6 +159,42 @@ async fn post_json(client: &Client, url: &str, payload: &Value) -> bool {
     }
 }
 
+/// (sha256 digest of the body, optional HMAC signature). The digest is always computable so a
+/// recipient can bind the signature to the exact bytes; the signature is present only when an
+/// attestation key is configured (reusing the same key/scheme as the signed heal receipts).
+fn sign_notification_body(body: &str) -> (String, Option<String>) {
+    let digest = crate::crypto_engine::sha256_hex(body.as_bytes());
+    let sig = crate::finding_attestation::attest(&digest);
+    (digest, sig)
+}
+
+/// Like [`post_json`], but sends the exact serialized body with tamper-evidence headers
+/// `X-Weissman-Digest` (sha256 of the body) and, when signing is enabled, `X-Weissman-Signature`
+/// (`v1=<hmac>`), so the receiver can verify the notification is a genuine, untampered Weissman event.
+async fn post_json_signed(client: &Client, url: &str, payload: &Value) -> bool {
+    let body = payload.to_string();
+    let (digest, sig) = sign_notification_body(&body);
+    let mut req = client
+        .post(url)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header("X-Weissman-Digest", digest.as_str())
+        .body(body);
+    if let Some(s) = &sig {
+        req = req.header("X-Weissman-Signature", format!("v1={s}"));
+    }
+    match req.send().await {
+        Ok(resp) if resp.status().is_success() => true,
+        Ok(resp) => {
+            tracing::warn!(target: "alert_delivery", status = %resp.status(), "signed webhook delivery failed");
+            false
+        }
+        Err(e) => {
+            tracing::warn!(target: "alert_delivery", error = %e, "signed webhook delivery error");
+            false
+        }
+    }
+}
+
 fn smtp_enabled() -> bool {
     matches!(
         std::env::var("WEISSMAN_SMTP_ENABLED").ok().as_deref(),
@@ -430,10 +466,10 @@ pub async fn notify_heal_completed(
 
     let mut delivered = false;
     if let Some(url) = config.alert_webhook_url.as_deref() {
-        delivered |= post_json(&client, url, &payload).await;
+        delivered |= post_json_signed(&client, url, &payload).await;
     }
     if let Some(url) = config.slack_webhook_url.as_deref() {
-        delivered |= post_json(&client, url, &payload).await;
+        delivered |= post_json_signed(&client, url, &payload).await;
     }
     if (!ok || verdict == "broke_app") {
         if let Some(key) = resolve_pagerduty_key(&config) {
@@ -671,5 +707,31 @@ pub async fn post_heal_slack(
     };
     if !delivered {
         tracing::debug!(target: "alert_delivery", tenant_id, "heal Slack post not delivered");
+    }
+}
+
+#[cfg(test)]
+mod signing_tests {
+    use super::sign_notification_body;
+
+    #[test]
+    fn body_digest_is_deterministic_and_body_bound() {
+        let (d1, _) = sign_notification_body(r#"{"event":"heal_completed","ok":true}"#);
+        let (d2, _) = sign_notification_body(r#"{"event":"heal_completed","ok":true}"#);
+        assert_eq!(d1, d2, "same body -> same digest");
+        assert_eq!(d1.len(), 64, "sha256 hex is 64 chars");
+        let (d3, _) = sign_notification_body(r#"{"event":"heal_completed","ok":false}"#);
+        assert_ne!(d1, d3, "different body -> different digest");
+    }
+
+    #[test]
+    fn signature_matches_attestation_when_enabled() {
+        // The digest is always present; when signing is enabled the signature must verify against it,
+        // and when it is not, no signature is emitted. Either way the scheme stays consistent.
+        let (digest, sig) = sign_notification_body("hello");
+        match sig {
+            Some(s) => assert!(crate::finding_attestation::verify(&digest, &s)),
+            None => assert!(!crate::finding_attestation::is_enabled()),
+        }
     }
 }
