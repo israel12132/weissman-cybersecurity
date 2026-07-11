@@ -1417,6 +1417,14 @@
       "not_ready": "לא מוכן",
       "required": "נדרש"
     },
+    "healTrends": {
+      "title": "מגמות ריפוי",
+      "total": "ריפויים",
+      "success": "הצלחה",
+      "avg_attempts": "ניסיונות בממוצע",
+      "volume": "נפח יומי",
+      "success_rate": "שיעור הצלחה"
+    },
     "remediationAnalytics": {
       "title": "אנליטיקת תיקון",
       "subtitle": "תוצאות ריפוי אוטומטי מצטברות מכל הלקוחות הפעילים",

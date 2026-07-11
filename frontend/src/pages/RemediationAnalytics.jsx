@@ -9,6 +9,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
 import HealReadinessPanel from '../components/remediation/HealReadinessPanel'
+import HealTrendSparkline from '../components/remediation/HealTrendSparkline'
 
 /**
  * RemediationAnalytics — aggregates auto-heal telemetry across every client that
@@ -128,6 +129,8 @@ export default function RemediationAnalytics() {
         </div>
 
         <HealReadinessPanel />
+
+        <HealTrendSparkline clientIds={clientIds} days={30} />
 
         {error && (
           <div className="p-4 rounded-xl border border-red-500/30 bg-red-900/20 text-red-300 text-sm flex items-center gap-2">

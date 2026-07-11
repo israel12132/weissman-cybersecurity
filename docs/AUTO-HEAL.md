@@ -201,6 +201,7 @@ without requiring a Docker socket:
 | GET        | `/api/heal-verify/:job_id/sarif`                    | SARIF 2.1.0 for GitHub code scanning / SAST |
 | GET        | `/api/heal-readiness`                               | Bilingual pipeline readiness self-check  |
 | GET        | `/api/clients/:id/heal-stats`                       | Aggregate heal analytics                 |
+| GET        | `/api/clients/:id/heal-trends?days=30`              | Daily trend/SLA analytics (volume, success rate, attempts) |
 | POST       | `/api/clients/:id/heal-batch`                       | Batch-heal many findings at once          |
 | GET        | `/api/clients/:id/heal-stats`                       | (also feeds the visual analytics panel)   |
 | GET        | `/api/clients/:id/heal-requests`                    | Heal request history                     |

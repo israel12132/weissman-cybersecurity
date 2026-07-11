@@ -584,6 +584,57 @@ async fn api_heal_readiness(
     (StatusCode::OK, Json(report)).into_response()
 }
 
+/// `GET /api/clients/:id/heal-trends?days=30` — daily auto-heal trend/SLA analytics for a client:
+/// per-day totals, success rate and average attempts, plus an attempts histogram and rollups.
+async fn api_heal_trends(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let days: i32 = params
+        .get("days")
+        .and_then(|d| d.parse::<i32>().ok())
+        .unwrap_or(30)
+        .clamp(1, 365);
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT to_char(created_at, 'YYYY-MM-DD') AS day,
+                  COALESCE(verdict,'') AS verdict,
+                  COALESCE(attempts,1)::bigint AS attempts
+           FROM heal_requests
+           WHERE tenant_id = $1 AND client_id = $2
+             AND created_at >= now() - make_interval(days => $3)
+           ORDER BY created_at ASC"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(client_id)
+    .bind(days)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let parsed: Vec<(String, String, i64)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r.try_get::<String, _>("day").unwrap_or_default(),
+                r.try_get::<String, _>("verdict").unwrap_or_default(),
+                r.try_get::<i64, _>("attempts").unwrap_or(1),
+            )
+        })
+        .collect();
+    let report = crate::heal_trends::compute_trends(&parsed);
+    (
+        StatusCode::OK,
+        Json(json!({ "client_id": client_id, "days": days, "trend": report })),
+    )
+        .into_response()
+}
+
 /// Enqueue an auto-heal approved from a Slack button, using env GitHub token + configured repo.
 async fn enqueue_heal_from_slack(
     state: &Arc<AppState>,

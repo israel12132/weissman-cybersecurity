@@ -1409,6 +1409,14 @@
       "not_ready": "Not ready",
       "required": "required"
     },
+    "healTrends": {
+      "title": "Heal trends",
+      "total": "Heals",
+      "success": "Success",
+      "avg_attempts": "Avg attempts",
+      "volume": "Daily volume",
+      "success_rate": "Success rate"
+    },
     "remediationAnalytics": {
       "title": "Remediation Analytics",
       "subtitle": "Auto-heal outcomes aggregated across every active client",

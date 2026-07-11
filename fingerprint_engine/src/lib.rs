@@ -188,6 +188,7 @@ pub mod heal_channels;
 pub mod heal_export;
 pub mod heal_policy;
 pub mod heal_readiness;
+pub mod heal_trends;
 pub mod remediation_brief;
 pub mod remediation_patch;
 pub mod remediation_report;
