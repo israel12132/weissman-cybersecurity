@@ -260,15 +260,6 @@ async fn auth_guard(
 ) -> Response {
     let path = request.uri().path();
     let method = request.method();
-<<<<<<< HEAD
-    if path == "/api/health" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/ready" && method == Method::GET {
-        return next.run(request).await;
-    }
-=======
->>>>>>> origin/main
     // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
     if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;

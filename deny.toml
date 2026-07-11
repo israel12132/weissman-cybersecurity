@@ -1,17 +1,3 @@
-<<<<<<< HEAD
-# cargo-deny policy — supply-chain guardrails beyond cargo-audit.
-# Checked in CI: `cargo deny check bans sources advisories`.
-# (licenses are intentionally NOT gated here yet — add after a manual license audit so a
-#  single unlisted transitive license can't red-wall the whole build.)
-
-[advisories]
-version = 2
-# Mirror of the documented ci.yml cargo-audit ignores — each is a transitive advisory with
-# NO fixed upgrade available; a NEW advisory still fails the build. Review on every dep bump.
-ignore = [
-    "RUSTSEC-2023-0071", # rsa (Marvin) via openidconnect — RS256 JWT verify only, no fixed release
-    "RUSTSEC-2026-0098", # time 0.2 via genpdf→lopdf/printpdf (PDF reports); genpdf unmaintained
-=======
 # cargo-deny configuration — supply-chain / license / advisory gate.
 # Run locally: `cargo deny check`  (CI runs it too — see .github/workflows/ci.yml)
 
@@ -26,21 +12,10 @@ yanked = "deny"
 ignore = [
     "RUSTSEC-2023-0071", # rsa (Marvin timing) via openidconnect (OIDC) — no fixed release
     "RUSTSEC-2026-0098", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
->>>>>>> origin/main
     "RUSTSEC-2026-0099",
     "RUSTSEC-2026-0104",
 ]
 
-<<<<<<< HEAD
-[bans]
-# Duplicate major versions are common in large trees; surface them without failing the build.
-multiple-versions = "warn"
-# A wildcard version requirement is a real supply-chain smell (pulls anything).
-wildcards = "warn"
-
-[sources]
-# Only crates.io — reject any unknown registry or git source (typosquat / unvetted origin).
-=======
 [licenses]
 version = 2
 # Permissive licenses acceptable for a proprietary product. Copyleft
@@ -70,11 +45,13 @@ expression = "MIT AND ISC AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [bans]
+# Duplicate major versions are common in large trees; surface them without failing the build.
 multiple-versions = "warn"
+# A wildcard version requirement is a real supply-chain smell (pulls anything).
 wildcards = "warn"
 
 [sources]
->>>>>>> origin/main
+# Only crates.io — reject any unknown registry or git source (typosquat / unvetted origin).
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -96,17 +96,10 @@ jobs:
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
 
-<<<<<<< HEAD
-      - name: cargo-deny (bans, sources, advisories)
-        # Supply-chain guardrails beyond cargo-audit: rejects unknown registries/git sources
-        # (typosquat / unvetted origin) and surfaces duplicate/wildcard deps. Policy: deny.toml.
-        run: cargo deny check bans sources advisories
-=======
       - name: Run cargo deny (license + advisory + source provenance gate)
         # Enforces the dependency-license allow-list (fails on GPL/AGPL/unknown),
         # advisory policy, and crates.io-only sources. Config: deny.toml.
         run: cargo deny check licenses advisories sources bans
->>>>>>> origin/main
 
       - name: Check Rust formatting
         run: cargo fmt --all --check

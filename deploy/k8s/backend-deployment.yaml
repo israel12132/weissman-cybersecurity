@@ -16,12 +16,8 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
-<<<<<<< HEAD
         runAsGroup: 65532
         fsGroup: 65532
-        seccompProfile:
-          type: RuntimeDefault
-=======
         seccompProfile:
           type: RuntimeDefault
       # Spread replicas across nodes (and zones when available) so a single node/AZ loss
@@ -45,7 +41,6 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
->>>>>>> origin/main
       containers:
         - name: backend
           # Published, cosign-signed and SLSA-provenance-attested by the CI `publish` job
@@ -141,20 +136,6 @@ spec:
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 20
-<<<<<<< HEAD
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-      volumes:
-        - name: tmp
-          emptyDir: {}
-=======
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: tmp
-              mountPath: /tmp
->>>>>>> origin/main

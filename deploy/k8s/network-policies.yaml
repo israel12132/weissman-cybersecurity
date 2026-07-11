@@ -101,21 +101,14 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
-<<<<<<< HEAD
-    # External managed Postgres — replace 0.0.0.0/0 with the DB's CIDR in the production
-    # overlay. The cloud metadata IP is excluded so a compromised pod can't pivot to
+    # Managed Postgres — set to your database's CIDR (was 0.0.0.0/0, over-broad).
+    # The cloud metadata IP is excluded so a compromised pod can't pivot to
     # instance credentials over this rule (managed Postgres is never at 169.254.169.254).
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 10.0.0.0/8
             except:
               - 169.254.169.254/32
-=======
-    # Managed Postgres — set to your database's CIDR (was 0.0.0.0/0, over-broad).
-    - to:
-        - ipBlock:
-            cidr: 10.0.0.0/8
->>>>>>> origin/main
       ports:
         - protocol: TCP
           port: 5432
