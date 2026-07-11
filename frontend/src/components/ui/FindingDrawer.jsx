@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import useFocusTrap from '../../hooks/useFocusTrap'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, X } from 'lucide-react'
 import SeverityBadge, { getSeverityMeta } from './SeverityBadge'
@@ -119,6 +120,8 @@ export default function FindingDrawer({
   const { t } = useTranslation()
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [activeTab, setActiveTab] = useState('evidence')
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, Boolean(finding))
 
   const drawerTabs = useMemo(
     () => [
@@ -246,6 +249,7 @@ export default function FindingDrawer({
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 300 }}
             className="fixed inset-y-0 right-0 z-[9001] w-full max-w-xl flex flex-col border-s border-[var(--border-default)] bg-[var(--bg-elevated)] backdrop-blur-xl shadow-2xl"
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="finding-drawer-title"
@@ -354,6 +358,7 @@ export default function FindingDrawer({
                         value={finding.status || 'OPEN'}
                         onChange={handleStatusChange}
                         disabled={statusUpdating}
+                        aria-label={t('components.findingDrawer.status')}
                         className="bg-[var(--scrim)] border border-[var(--border-strong)] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
                       >
                         {resolvedStatusOptions.map((s) => (

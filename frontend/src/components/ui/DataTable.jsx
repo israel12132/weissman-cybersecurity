@@ -604,6 +604,7 @@ export default function DataTable({
           <span className="text-[10px] font-mono text-[var(--text-muted)]">Rows:</span>
           <select
             value={pageSize}
+            aria-label="Rows per page"
             onChange={(e) =>
               effectiveOnPaginationChange({ pageIndex: 0, pageSize: Number(e.target.value) })
             }

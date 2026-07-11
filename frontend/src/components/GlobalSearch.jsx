@@ -8,6 +8,7 @@ import { PRIMARY_NAV, NAV_GROUPS, canAccessNavItem } from '../lib/appNav';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import Button from './ui/Button'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 const RECENTS_KEY = 'weissman_palette_recents';
 const RECENTS_MAX = 6;
@@ -42,6 +43,8 @@ export default function GlobalSearch() {
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef(null);
+  const dialogRef = useRef(null);
+  useFocusTrap(dialogRef, isOpen);
 
   // Flat, RBAC-filtered route registry — the source for instant navigation.
   const navRoutes = useMemo(() => {
@@ -231,6 +234,7 @@ export default function GlobalSearch() {
           exit={{ scale: 0.95, y: -20 }}
           className="w-full max-w-2xl bg-[var(--bg-elevated)] backdrop-blur-xl border border-[var(--border-strong)] rounded-2xl shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label={t('components.globalSearch.placeholder')}

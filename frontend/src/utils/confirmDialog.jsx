@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AlertTriangle, HelpCircle, ShieldAlert, Trash2 } from 'lucide-react'
 import Button from '../components/ui/Button'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 /**
  * Promise-based confirm / prompt dialogs that match the Command Center's
@@ -98,7 +99,12 @@ function DialogShell({
   const [value, setValue] = useState(defaultValue ?? '')
   const inputRef = useRef(null)
   const confirmRef = useRef(null)
+  const dialogRef = useRef(null)
   const settledRef = useRef(false)
+  const uid = useId()
+  const msgId = `${uid}-msg`
+  const inputId = `${uid}-input`
+  useFocusTrap(dialogRef, true)
   const rtl = isRtl()
   const style = VARIANT_STYLES[variant] || VARIANT_STYLES.neutral
   const Icon = style.icon
@@ -173,9 +179,11 @@ function DialogShell({
       ].join(' ')}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-describedby={message ? msgId : undefined}
         className={[
           'w-full max-w-md overflow-hidden rounded-2xl border border-white/10',
           'bg-[#0c1018]/95 shadow-2xl shadow-black/60',
@@ -190,7 +198,7 @@ function DialogShell({
           <div className="min-w-0 flex-1 pt-0.5">
             <h2 className="text-base font-semibold text-white">{title}</h2>
             {message ? (
-              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-[var(--text-secondary)]">{message}</p>
+              <p id={msgId} className="mt-1 whitespace-pre-line text-sm leading-relaxed text-[var(--text-secondary)]">{message}</p>
             ) : null}
           </div>
         </div>
@@ -198,13 +206,15 @@ function DialogShell({
         {kind === 'prompt' ? (
           <div className="px-5 pb-2">
             {label ? (
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]">
+              <label htmlFor={inputId} className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]">
                 {label}
               </label>
             ) : null}
             {multiline ? (
               <textarea
                 ref={inputRef}
+                id={inputId}
+                aria-describedby={message ? msgId : undefined}
                 value={value}
                 rows={4}
                 placeholder={placeholder}
@@ -214,6 +224,8 @@ function DialogShell({
             ) : (
               <input
                 ref={inputRef}
+                id={inputId}
+                aria-describedby={message ? msgId : undefined}
                 type={inputType || 'text'}
                 value={value}
                 placeholder={placeholder}

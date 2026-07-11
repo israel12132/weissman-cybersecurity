@@ -82,7 +82,7 @@
   --text-primary: #f0f0f5;
   --text-secondary: #b4b4c0;
   --text-tertiary: #8b8b9a;
-  --text-muted: #636372;
+  --text-muted: #85858f; /* WCAG 1.4.3: ≥4.5:1 on dark surfaces (was #636372 ≈ 3:1) */
   --text-disabled: #45454f;
   --text-inverse: #06060a;
   --text-accent: #67e8f9;
@@ -264,7 +264,7 @@
   --text-primary: #0f1220;
   --text-secondary: #363a47;
   --text-tertiary: #565b6a;
-  --text-muted: #7c828f;
+  --text-muted: #5f6470; /* WCAG 1.4.3: ≥4.5:1 on light surfaces (was #7c828f ≈ 3.9:1) */
   --text-disabled: #aab0bc;
   --text-inverse: #ffffff;
   --text-accent: #0891b2;
@@ -273,6 +273,16 @@
   /* Accent muteds a touch stronger for contrast on white */
   --accent-cyan-muted: rgba(8, 145, 178, 0.14);
   --accent-violet-muted: rgba(124, 58, 237, 0.14);
+
+  /* Severity TEXT hues darkened for light mode — the bright dark-mode hues fail
+     WCAG 1.4.3 on white (e.g. medium #fbbf24 ≈ 1.6:1). These clear ≥4.9:1 on the
+     light severity tints; the *-bg/*-border tints are kept (they read fine on
+     light). Applies to badges, dots and severity-colored text app-wide. */
+  --severity-critical: #b91c1c;
+  --severity-high: #c2410c;
+  --severity-medium: #b45309;
+  --severity-low: #15803d;
+  --severity-info: #0369a1;
 
   /* Shadows — softer, cooler on light */
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);

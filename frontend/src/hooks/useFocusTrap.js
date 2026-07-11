@@ -5,13 +5,16 @@ const FOCUSABLE =
 
 /**
  * Trap Tab focus inside `containerRef` while `active` is true.
- * Focuses the first focusable element on activation.
+ * Focuses the first focusable element on activation, and restores focus to the
+ * element that was focused before activation when the trap tears down (WCAG
+ * 2.4.3 — focus order / no focus loss on overlay close).
  */
 export default function useFocusTrap(containerRef, active) {
   useEffect(() => {
     if (!active || !containerRef.current) return undefined
 
     const root = containerRef.current
+    const previouslyFocused = document.activeElement
     const getFocusable = () => [...root.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
     const focusables = getFocusable()
     focusables[0]?.focus()
@@ -34,6 +37,11 @@ export default function useFocusTrap(containerRef, active) {
     }
 
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function' && document.contains(previouslyFocused)) {
+        previouslyFocused.focus()
+      }
+    }
   }, [active, containerRef])
 }
