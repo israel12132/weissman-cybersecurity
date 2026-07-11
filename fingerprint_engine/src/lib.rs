@@ -145,6 +145,7 @@ pub mod sovereign_defense_store;
 pub mod sovereign_evolution;
 pub mod sso_management;
 pub mod stealth_engine;
+pub mod stealth_queue;
 pub mod strategic_analyzer;
 pub mod superposition_followup;
 pub mod target_profile;

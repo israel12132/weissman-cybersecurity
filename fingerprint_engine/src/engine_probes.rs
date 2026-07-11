@@ -167,8 +167,12 @@ pub async fn http_get_with_headers(
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
     crate::fleet_shaping::acquire_for_url(url).await;
+    // Smart Stealth Queue: bound concurrent requests per target + jitter, and
+    // stamp a rotating browser identity (overriding the fixed probe UA). The
+    // permit is held until this function returns, i.e. for the whole request.
+    let _stealth = crate::stealth_queue::acquire(url).await;
     let started = std::time::Instant::now();
-    let mut req = client.get(url);
+    let mut req = crate::stealth_queue::apply(client.get(url));
     for (k, v) in extra {
         req = req.header(*k, *v);
     }
@@ -224,8 +228,9 @@ pub async fn http_post_json_with_headers(
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
     crate::fleet_shaping::acquire_for_url(url).await;
+    let _stealth = crate::stealth_queue::acquire(url).await;
     let started = std::time::Instant::now();
-    let mut req = client.post(url).json(payload);
+    let mut req = crate::stealth_queue::apply(client.post(url).json(payload));
     for (k, v) in extra {
         req = req.header(*k, *v);
     }
@@ -280,7 +285,9 @@ pub async fn http_post_bytes_with_headers(
     body: &[u8],
     extra: &[(&str, &str)],
 ) -> Option<HttpProbe> {
-    let mut req = client.post(url).body(body.to_vec());
+    crate::fleet_shaping::acquire_for_url(url).await;
+    let _stealth = crate::stealth_queue::acquire(url).await;
+    let mut req = crate::stealth_queue::apply(client.post(url).body(body.to_vec()));
     for (k, v) in extra {
         req = req.header(*k, *v);
     }
