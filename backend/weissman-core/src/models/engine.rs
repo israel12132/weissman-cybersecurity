@@ -993,7 +993,6 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "webrtc_attack",
     "web3_dapp_attack",
     "api_gateway_bypass",
-    "liminal_boundary",
     // ── Production registry tail (auto-synced) ──
     "5g_security",
     "active_directory",
