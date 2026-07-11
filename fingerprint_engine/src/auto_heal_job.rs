@@ -1320,6 +1320,188 @@ pub async fn run_auto_heal_job(
                 "spec_id": spec_id,
             }))
         }
+        DeliveryChannel::BitbucketPr => {
+            let diff_summary: String = vr
+                .changed_files
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .take(20)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let (title, body) =
+                build_pr_text(&finding_id, &vr, &diff_summary, attempts_i32, receipt.as_ref());
+            let outcome = crate::bitbucket_heal::create_branch_commit_and_pr(
+                &git_token,
+                &repo_slug,
+                &base_branch,
+                &finding_id,
+                vr.changed_files.clone(),
+                &title,
+                &body,
+            )
+            .await;
+            if let Some(e) = &outcome.error {
+                insert_heal_request_row(
+                    app_pool.as_ref(),
+                    tenant_id,
+                    client_id,
+                    &finding_id,
+                    vuln_id,
+                    &outcome.branch_name,
+                    None,
+                    None,
+                    &diff_summary,
+                    &format!("bitbucket_pr_failed: {}", e),
+                    &jid_str,
+                    channel.id(),
+                    verdict_str,
+                    attempts_i32,
+                    None,
+                )
+                .await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                return Ok(json!({
+                    "ok": false,
+                    "error": e,
+                    "verdict": verdict_str,
+                    "branch_name": outcome.branch_name,
+                    "spec_id": spec_id,
+                }));
+            }
+            insert_heal_request_row(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                vuln_id,
+                &outcome.branch_name,
+                outcome.pr_url.as_deref(),
+                outcome.pr_id,
+                &diff_summary,
+                "verified_pr_opened",
+                &jid_str,
+                channel.id(),
+                verdict_str,
+                attempts_i32,
+                receipt.as_ref(),
+            )
+            .await;
+            report_heal_outcome(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                verdict_str,
+                channel.id(),
+                attempts_i32,
+                outcome.pr_url.as_deref(),
+                true,
+                heal_started,
+            )
+            .await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            Ok(json!({
+                "ok": true,
+                "channel": channel.id(),
+                "verdict": verdict_str,
+                "branch_name": outcome.branch_name,
+                "pr_url": outcome.pr_url,
+                "pr_id": outcome.pr_id,
+                "diff_summary": diff_summary,
+                "spec_id": spec_id,
+            }))
+        }
+        DeliveryChannel::AzureReposPr => {
+            let diff_summary: String = vr
+                .changed_files
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .take(20)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let (title, body) =
+                build_pr_text(&finding_id, &vr, &diff_summary, attempts_i32, receipt.as_ref());
+            let outcome = crate::azure_repos_heal::create_push_and_pr(
+                &git_token,
+                &repo_slug,
+                &base_branch,
+                &finding_id,
+                vr.changed_files.clone(),
+                &title,
+                &body,
+            )
+            .await;
+            if let Some(e) = &outcome.error {
+                insert_heal_request_row(
+                    app_pool.as_ref(),
+                    tenant_id,
+                    client_id,
+                    &finding_id,
+                    vuln_id,
+                    &outcome.branch_name,
+                    None,
+                    None,
+                    &diff_summary,
+                    &format!("azure_repos_pr_failed: {}", e),
+                    &jid_str,
+                    channel.id(),
+                    verdict_str,
+                    attempts_i32,
+                    None,
+                )
+                .await;
+                finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "failed").await;
+                return Ok(json!({
+                    "ok": false,
+                    "error": e,
+                    "verdict": verdict_str,
+                    "branch_name": outcome.branch_name,
+                    "spec_id": spec_id,
+                }));
+            }
+            insert_heal_request_row(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                vuln_id,
+                &outcome.branch_name,
+                outcome.pr_url.as_deref(),
+                outcome.pr_id,
+                &diff_summary,
+                "verified_pr_opened",
+                &jid_str,
+                channel.id(),
+                verdict_str,
+                attempts_i32,
+                receipt.as_ref(),
+            )
+            .await;
+            report_heal_outcome(
+                app_pool.as_ref(),
+                tenant_id,
+                client_id,
+                &finding_id,
+                verdict_str,
+                channel.id(),
+                attempts_i32,
+                outcome.pr_url.as_deref(),
+                true,
+                heal_started,
+            )
+            .await;
+            finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;
+            Ok(json!({
+                "ok": true,
+                "channel": channel.id(),
+                "verdict": verdict_str,
+                "branch_name": outcome.branch_name,
+                "pr_url": outcome.pr_url,
+                "pr_id": outcome.pr_id,
+                "diff_summary": diff_summary,
+                "spec_id": spec_id,
+            }))
+        }
     }
 }
 

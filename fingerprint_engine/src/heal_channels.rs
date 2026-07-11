@@ -18,6 +18,10 @@ pub enum DeliveryChannel {
     VirtualPatch,
     /// Applied-fix GitLab Merge Request (v4 API).
     GitlabMr,
+    /// Applied-fix Bitbucket Cloud Pull Request (v2 API).
+    BitbucketPr,
+    /// Applied-fix Azure DevOps (Azure Repos) Pull Request (v7 API).
+    AzureReposPr,
 }
 
 impl DeliveryChannel {
@@ -29,6 +33,8 @@ impl DeliveryChannel {
             "diff_download" | "diff" | "patch_download" => DeliveryChannel::DiffDownload,
             "virtual_patch" | "waf" | "virtual" => DeliveryChannel::VirtualPatch,
             "gitlab_mr" | "gitlab" | "mr" => DeliveryChannel::GitlabMr,
+            "bitbucket_pr" | "bitbucket" | "bb" => DeliveryChannel::BitbucketPr,
+            "azure_repos_pr" | "azure_pr" | "azure" | "ado" => DeliveryChannel::AzureReposPr,
             _ => DeliveryChannel::GithubPr,
         }
     }
@@ -41,6 +47,8 @@ impl DeliveryChannel {
             DeliveryChannel::DiffDownload => "diff_download",
             DeliveryChannel::VirtualPatch => "virtual_patch",
             DeliveryChannel::GitlabMr => "gitlab_mr",
+            DeliveryChannel::BitbucketPr => "bitbucket_pr",
+            DeliveryChannel::AzureReposPr => "azure_repos_pr",
         }
     }
 
@@ -52,6 +60,8 @@ impl DeliveryChannel {
             DeliveryChannel::GithubPr
                 | DeliveryChannel::GithubDirectCommit
                 | DeliveryChannel::GitlabMr
+                | DeliveryChannel::BitbucketPr
+                | DeliveryChannel::AzureReposPr
         )
     }
 
@@ -64,6 +74,8 @@ impl DeliveryChannel {
             "diff_download",
             "virtual_patch",
             "gitlab_mr",
+            "bitbucket_pr",
+            "azure_repos_pr",
         ]
     }
 }
@@ -125,6 +137,10 @@ mod tests {
         assert_eq!(DeliveryChannel::from_id("WAF"), DeliveryChannel::VirtualPatch);
         assert_eq!(DeliveryChannel::from_id("commit"), DeliveryChannel::GithubDirectCommit);
         assert_eq!(DeliveryChannel::from_id("diff"), DeliveryChannel::DiffDownload);
+        assert_eq!(DeliveryChannel::from_id("gitlab"), DeliveryChannel::GitlabMr);
+        assert_eq!(DeliveryChannel::from_id("bitbucket"), DeliveryChannel::BitbucketPr);
+        assert_eq!(DeliveryChannel::from_id("ado"), DeliveryChannel::AzureReposPr);
+        assert_eq!(DeliveryChannel::from_id("azure"), DeliveryChannel::AzureReposPr);
         // unknown ⇒ safe default
         assert_eq!(DeliveryChannel::from_id("nonsense"), DeliveryChannel::GithubPr);
         assert_eq!(DeliveryChannel::from_id(""), DeliveryChannel::GithubPr);

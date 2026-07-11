@@ -17,6 +17,8 @@ const CHANNELS = [
   { id: 'github_pr', labelKey: 'channel_github_pr', icon: GitPullRequest, touchesRepo: true },
   { id: 'github_direct_commit', labelKey: 'channel_github_commit', icon: GitPullRequest, touchesRepo: true },
   { id: 'gitlab_mr', labelKey: 'channel_gitlab_mr', icon: GitPullRequest, touchesRepo: true },
+  { id: 'bitbucket_pr', labelKey: 'channel_bitbucket_pr', icon: GitPullRequest, touchesRepo: true },
+  { id: 'azure_repos_pr', labelKey: 'channel_azure_repos_pr', icon: GitPullRequest, touchesRepo: true },
   { id: 'diff_download', labelKey: 'channel_diff_download', icon: Download, touchesRepo: false },
   { id: 'virtual_patch', labelKey: 'channel_virtual_patch', icon: ShieldCheck, touchesRepo: false },
 ]

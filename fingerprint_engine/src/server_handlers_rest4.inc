@@ -1833,16 +1833,25 @@ async fn api_heal_revert(
         body.channel.as_deref().unwrap_or(&stored_channel),
     );
 
-    let result = if channel == crate::heal_channels::DeliveryChannel::GitlabMr {
-        let host = body.gitlab_host.as_deref().unwrap_or("gitlab.com");
-        crate::gitlab_heal::close_merge_request(&token, host, &repo, pr_number).await
-    } else {
-        let del = if body.delete_branch.unwrap_or(false) && !branch.is_empty() {
-            Some(branch.as_str())
-        } else {
-            None
-        };
-        crate::auto_heal::close_pull_request(&token, &repo, pr_number, del).await
+    let result = match channel {
+        crate::heal_channels::DeliveryChannel::GitlabMr => {
+            let host = body.gitlab_host.as_deref().unwrap_or("gitlab.com");
+            crate::gitlab_heal::close_merge_request(&token, host, &repo, pr_number).await
+        }
+        crate::heal_channels::DeliveryChannel::BitbucketPr => {
+            crate::bitbucket_heal::decline_pull_request(&token, &repo, pr_number).await
+        }
+        crate::heal_channels::DeliveryChannel::AzureReposPr => {
+            crate::azure_repos_heal::abandon_pull_request(&token, &repo, pr_number).await
+        }
+        _ => {
+            let del = if body.delete_branch.unwrap_or(false) && !branch.is_empty() {
+                Some(branch.as_str())
+            } else {
+                None
+            };
+            crate::auto_heal::close_pull_request(&token, &repo, pr_number, del).await
+        }
     };
 
     let ip = extract_client_ip(&headers, addr);

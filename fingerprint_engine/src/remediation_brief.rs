@@ -67,7 +67,7 @@ Output ONE minified JSON object ONLY, no prose outside JSON. Schema: {\
 EVERY text field MUST contain BOTH an impeccable, native, professional Hebrew (\"he\") AND English (\"en\") version \
 of the SAME content — never leave one empty, never mix languages inside a field. Hebrew must read as written by a \
 native security professional. Keep each field concise (1-4 sentences). The \"channels\" array MUST contain one entry \
-for each of these channel ids: github_pr, github_direct_commit, gitlab_mr, diff_download, virtual_patch — each explaining how to \
+for each of these channel ids: github_pr, github_direct_commit, gitlab_mr, bitbucket_pr, azure_repos_pr, diff_download, virtual_patch — each explaining how to \
 connect that channel (credentials/config needed) and how to apply the fix through it. Do not include exploit payloads.";
 
 /// Bilingual fallback how-tos so the UI always has connection guidance even if the LLM omits
@@ -116,6 +116,20 @@ pub fn default_channel_howtos() -> Vec<ChannelHowTo> {
             "Connect a GitLab token (glpat) with `api` scope and the project path (owner/repo). Defaults to gitlab.com; a self-managed host can be configured.",
             "בחר בערוץ זה ולחץ \"רפא\" — נפתח Merge Request עם התיקון המוחל לאחר אימות בסנדבוקס.",
             "Select this channel and click \"Heal\" — a Merge Request with the applied fix is opened after sandbox verification.",
+        ),
+        mk(
+            DeliveryChannel::BitbucketPr,
+            "חבר Access Token של Bitbucket Cloud ואת נתיב המאגר (workspace/repo). האימות מתבצע בסנדבוקס לפני פתיחת ה-PR.",
+            "Connect a Bitbucket Cloud access token and the repository slug (workspace/repo). Verification runs in the sandbox before the PR is opened.",
+            "בחר בערוץ זה ולחץ \"רפא\" — נוצר ענף ריפוי, הקבצים נדחפים דרך `/src`, ונפתח Pull Request.",
+            "Select this channel and click \"Heal\" — a heal branch is created, the files are committed via `/src`, and a Pull Request is opened.",
+        ),
+        mk(
+            DeliveryChannel::AzureReposPr,
+            "חבר Personal Access Token של Azure DevOps (הרשאת Code: Read & Write) ואת הנתיב org/project/repo.",
+            "Connect an Azure DevOps Personal Access Token (Code: Read & Write) and the org/project/repo path.",
+            "בחר בערוץ זה ולחץ \"רפא\" — התיקון נדחף כ-commit יחיד לענף ריפוי חדש, ונפתח Pull Request.",
+            "Select this channel and click \"Heal\" — the fix is pushed as a single commit to a new heal branch, and a Pull Request is opened.",
         ),
     ]
 }

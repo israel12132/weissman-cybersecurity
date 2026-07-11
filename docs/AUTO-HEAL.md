@@ -72,6 +72,8 @@ All channels reuse the single verified `changed_files` artifact.
 | `github_pr` (default)  | Commit the applied files to a branch, open a GitHub PR            |
 | `github_direct_commit` | Commit the applied files to a branch, no PR                       |
 | `gitlab_mr`            | Commit + open a GitLab Merge Request (v4 API, `PRIVATE-TOKEN`)    |
+| `bitbucket_pr`         | Commit via `/src` + open a Bitbucket Cloud PR (v2 API, Bearer token) |
+| `azure_repos_pr`       | Push + open an Azure DevOps PR (v7 API, PAT via Basic auth)       |
 | `diff_download`        | No repo mutation; serve the verified unified diff for manual apply |
 | `virtual_patch`        | No repo mutation; render a WAF/ModSecurity compensating rule      |
 

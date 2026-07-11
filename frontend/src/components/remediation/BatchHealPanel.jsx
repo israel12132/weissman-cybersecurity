@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Wrench, Loader2, X, CheckCircle, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 
-const CHANNELS = ['github_pr', 'github_direct_commit', 'gitlab_mr', 'diff_download', 'virtual_patch']
+const CHANNELS = ['github_pr', 'github_direct_commit', 'gitlab_mr', 'bitbucket_pr', 'azure_repos_pr', 'diff_download', 'virtual_patch']
 
 /**
  * BatchHealPanel — heal every fixable finding in a remediation family at once. Groups the findings
@@ -89,7 +89,7 @@ export default function BatchHealPanel({ findings, onClose }) {
               className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40" />
             <select value={channel} onChange={(e) => setChannel(e.target.value)}
               className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40">
-              {CHANNELS.map((c) => <option key={c} value={c}>{t(`pages.remediationHub.channel_${c === 'github_direct_commit' ? 'github_commit' : c === 'github_pr' ? 'github_pr' : c === 'gitlab_mr' ? 'gitlab_mr' : c === 'diff_download' ? 'diff_download' : 'virtual_patch'}`, { defaultValue: c })}</option>)}
+              {CHANNELS.map((c) => <option key={c} value={c}>{t(`pages.remediationHub.channel_${c === 'github_direct_commit' ? 'github_commit' : c}`, { defaultValue: c })}</option>)}
             </select>
           </div>
           <details className="text-[11px] text-white/45">

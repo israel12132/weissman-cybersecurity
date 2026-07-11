@@ -182,6 +182,8 @@ pub mod auth_mfa;
 pub mod auto_domain_discovery_engine;
 pub mod auto_heal;
 pub mod auto_heal_job;
+pub mod azure_repos_heal;
+pub mod bitbucket_heal;
 pub mod gitlab_heal;
 pub mod heal_attestation;
 pub mod heal_channels;
