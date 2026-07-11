@@ -36,6 +36,12 @@ export function filterEngines(engines, query, category) {
   return engines.filter((e) => (!category || e?.category === category) && matchesQuery(e, q))
 }
 
+/** Pure: drop duplicate-alias engines, keeping only distinct operations. Exported for tests. */
+export function excludeAliases(engines) {
+  if (!Array.isArray(engines)) return []
+  return engines.filter((e) => e?.kind !== 'alias')
+}
+
 /** Pure: distinct engine ids from a filtered set, capped for a single stealth batch. Exported. */
 export function batchEngineIds(engines, cap = 500) {
   if (!Array.isArray(engines)) return []
@@ -77,6 +83,7 @@ export default function ArsenalInventory({ clientId }) {
   const [runStatus, setRunStatus] = useState({})
   const [deploying, setDeploying] = useState(false)
   const [batch, setBatch] = useState(null)
+  const [distinctOnly, setDistinctOnly] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -113,7 +120,9 @@ export default function ArsenalInventory({ clientId }) {
   const byCategory = data?.by_category && typeof data.by_category === 'object' ? data.by_category : {}
   const categories = useMemo(() => Object.keys(byCategory).sort(), [byCategory])
 
-  const filtered = useMemo(() => filterEngines(engines, query, category), [engines, query, category])
+  const distinctCount = useMemo(() => excludeAliases(engines).length, [engines])
+  const base = useMemo(() => (distinctOnly ? excludeAliases(engines) : engines), [engines, distinctOnly])
+  const filtered = useMemo(() => filterEngines(base, query, category), [base, query, category])
   const shown = filtered.slice(0, MAX_RENDER)
   const batchIds = useMemo(() => batchEngineIds(filtered), [filtered])
 
@@ -157,7 +166,7 @@ export default function ArsenalInventory({ clientId }) {
           <Boxes className="w-4 h-4 text-cyan-400" />
           {t('pages.threatAnalysis.inv_heading', { defaultValue: 'Full Arsenal' })}
           <span className="text-[10px] font-mono text-white/40">
-            {t('pages.threatAnalysis.inv_count', { count: data?.engine_count ?? engines.length, defaultValue: '{{count}} engines' })}
+            {t('pages.threatAnalysis.inv_count2', { count: data?.engine_count ?? engines.length, distinct: distinctCount, defaultValue: '{{count}} engines · {{distinct}} distinct' })}
           </span>
         </h3>
         <div className="flex items-center gap-2">
@@ -203,6 +212,15 @@ export default function ArsenalInventory({ clientId }) {
       <div className="px-4 py-2 border-b border-white/5 flex items-center gap-1.5 flex-wrap">
         <button
           type="button"
+          onClick={() => setDistinctOnly((v) => !v)}
+          title={t('pages.threatAnalysis.inv_distinct_hint', { defaultValue: 'Hide duplicate aliases — show only distinct operations' })}
+          className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${distinctOnly ? 'text-emerald-200 border-emerald-500/40 bg-emerald-500/10' : 'text-white/45 border-white/10 hover:border-white/25'}`}
+        >
+          {t('pages.threatAnalysis.inv_distinct', { defaultValue: 'Distinct only' })}
+        </button>
+        <span className="w-px h-4 bg-white/10 mx-0.5" />
+        <button
+          type="button"
           onClick={() => setCategory('')}
           className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === '' ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/10'}`}
         >
@@ -227,7 +245,12 @@ export default function ArsenalInventory({ clientId }) {
           const Icon = st ? STATUS_ICON[st] : null
           return (
             <div key={e.id} className="px-4 py-2 flex items-center gap-2 hover:bg-white/5">
-              <span className="flex-1 min-w-0 text-[12px] font-mono text-white/85 truncate">{e.id}</span>
+              <span className="flex-1 min-w-0 text-[12px] font-mono text-white/85 truncate">
+                {e.id}
+                {e.kind === 'alias' && e.canonical && (
+                  <span className="text-[10px] text-sky-300/70 ml-1.5" title={t('pages.threatAnalysis.inv_alias_hint', { defaultValue: 'Duplicate — same operation as its canonical engine' })}>→ {e.canonical}</span>
+                )}
+              </span>
               <span className="hidden md:block text-[10px] text-white/35 w-32 shrink-0 truncate">{e.category}</span>
               <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 ${tone.cls}`}>{tone.label}</span>
               {e.critical_infra && <span className="text-[9px] px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300 shrink-0">CI</span>}

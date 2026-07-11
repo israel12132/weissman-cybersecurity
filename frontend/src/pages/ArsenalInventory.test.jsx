@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { matchesQuery, filterEngines, batchEngineIds, formatEta } from './ArsenalInventory.jsx'
+import { matchesQuery, filterEngines, batchEngineIds, formatEta, excludeAliases } from './ArsenalInventory.jsx'
 
 const ENGINES = [
-  { id: 'graphql_attack', category: 'Web / API', techniques: ['T1190'] },
-  { id: 'aws_attack', category: 'Cloud / Infra', techniques: [] },
-  { id: 'apt28_techniques', category: 'APT / Top-Tier', techniques: ['T1566'] },
+  { id: 'graphql_attack', category: 'Web / API', techniques: ['T1190'], kind: 'real_probe' },
+  { id: 'aws_attack', category: 'Cloud / Infra', techniques: [], kind: 'real_probe' },
+  { id: 'apt28_techniques', category: 'APT / Top-Tier', techniques: ['T1566'], kind: 'real_probe' },
 ]
 
 describe('ArsenalInventory helpers', () => {
@@ -40,6 +40,18 @@ describe('ArsenalInventory helpers', () => {
       expect(batchEngineIds(list)).toEqual(['a', 'b', 'c'])
       expect(batchEngineIds(list, 2)).toEqual(['a', 'b'])
       expect(batchEngineIds(null)).toEqual([])
+    })
+  })
+
+  describe('excludeAliases', () => {
+    it('drops alias-kind engines, keeps distinct', () => {
+      const list = [
+        { id: 'a', kind: 'real_probe' },
+        { id: 'b', kind: 'alias', canonical: 'a' },
+        { id: 'c', kind: 'agent_required' },
+      ]
+      expect(excludeAliases(list).map((e) => e.id)).toEqual(['a', 'c'])
+      expect(excludeAliases(null)).toEqual([])
     })
   })
 
