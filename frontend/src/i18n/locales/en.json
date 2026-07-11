@@ -5412,6 +5412,10 @@
         "subtitle": "Dark Web intel"
       },
       "assetHexGrid": {
+        "select_client": "Select a client to view assets",
+        "loading": "Loading assets…",
+        "error": "Failed to load assets",
+        "empty": "No assets discovered",
         "title": "Asset Grid"
       },
       "killChainVisualizer": {
@@ -5661,6 +5665,8 @@
         "openPr": "Open PR / Approve & merge"
       },
       "deceptionGrid": {
+        "simulationBadge": "Simulation",
+        "liveAwsBadge": "Live AWS",
         "selectClient": "Select a client to manage deception assets.",
         "title": "Deception Grid",
         "triggeredAlert": "{{count}} honeytoken(s) triggered — CRITICAL. Attacker fingerprint logged.",
@@ -5853,6 +5859,11 @@
         "noEvents": "No events yet. Press Run swarm."
       },
       "aiModelRisk": {
+        "endpointsSaved": "Endpoints saved",
+        "addEndpoint": "Add endpoint",
+        "fullIntegrations": "Full integrations",
+        "saving": "Saving…",
+        "saveEndpoints": "Save endpoints",
         "selectClient": "Select a client to view AI model risk telemetry.",
         "title": "AI Model Risk (AI-SecOps)",
         "descriptionSecure": "Configure authorized client LLM/chat API endpoints. Secrets are masked at rest and sent only for live probes.",

@@ -5412,6 +5412,10 @@
         "subtitle": "מודיעין Dark Web"
       },
       "assetHexGrid": {
+        "select_client": "בחר לקוח כדי לראות נכסים",
+        "loading": "טוען נכסים…",
+        "error": "טעינת הנכסים נכשלה",
+        "empty": "לא נמצאו נכסים",
         "title": "רשת נכסים"
       },
       "killChainVisualizer": {
@@ -5661,6 +5665,8 @@
         "openPr": "פתח PR / אשר ומזג"
       },
       "deceptionGrid": {
+        "simulationBadge": "סימולציה",
+        "liveAwsBadge": "AWS חי",
         "selectClient": "בחר לקוח לניהול נכסי הטעיה.",
         "title": "רשת הטעיה",
         "triggeredAlert": "{{count}} honeytoken(s) הופעלו — קריטי. טביעת תוקף נרשמה.",
@@ -5853,6 +5859,11 @@
         "noEvents": "אין אירועים עדיין. לחץ הרץ swarm."
       },
       "aiModelRisk": {
+        "endpointsSaved": "נקודות הקצה נשמרו",
+        "addEndpoint": "הוסף נקודת קצה",
+        "fullIntegrations": "אינטגרציות מלאות",
+        "saving": "שומר…",
+        "saveEndpoints": "שמור נקודות קצה",
         "selectClient": "בחר לקוח לצפייה בטelemetry סיכון מודל AI.",
         "title": "סיכון מודל AI (AI-SecOps)",
         "descriptionSecure": "הגדר endpoints מורשים של LLM/chat ללקוח. סודות מוסווים במנוחה ונשלחים רק לבדיקות חיות.",

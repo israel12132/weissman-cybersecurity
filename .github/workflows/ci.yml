@@ -267,6 +267,9 @@ jobs:
       - name: i18n defaultValue gate
         run: node scripts/verify_i18n_no_default_values.mjs
 
+      - name: i18n templated-key resolution gate
+        run: node scripts/verify_i18n_template_keys.mjs
+
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend
