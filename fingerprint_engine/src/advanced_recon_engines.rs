@@ -210,41 +210,66 @@ pub async fn run_darkweb_intel_result(target: &str) -> EngineResult {
 cli_wrapper!(run_darkweb_intel, run_darkweb_intel_result);
 
 // ── financial_osint ───────────────────────────────────────────────────────────
+/// Extract a SEC Central Index Key (CIK) from an EDGAR response — a confirmed
+/// registrant identifier (`CIK=0001318605`).
+fn extract_edgar_cik(body: &str) -> Option<String> {
+    for marker in ["CIK=", "cik=", "CIK "] {
+        if let Some(idx) = body.find(marker) {
+            let digits: String = body[idx + marker.len()..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            if digits.len() >= 4 {
+                return Some(digits);
+            }
+        }
+    }
+    None
+}
+
 pub async fn run_financial_osint_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    // Query by the organisation label (registrable name), not the full host.
+    let org = host
+        .split('.')
+        .next()
+        .filter(|s| s.len() > 2)
+        .unwrap_or(&host);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let url = format!(
         "https://www.sec.gov/cgi-bin/browse-edgar?company={}&action=getcompany",
-        urlencoding::encode(&host)
+        urlencoding::encode(org)
     );
     if let Some(p) = http_get(&client, &url).await {
         if p.status == 200 && p.body.contains("EDGAR") {
             let body_low = p.body.to_lowercase();
-            let host_tokens: Vec<String> = host
-                .split('.')
-                .filter(|s| s.len() > 2)
-                .map(|s| s.to_lowercase())
-                .collect();
-            let has_filings = body_low.contains("annual report")
+            let cik = extract_edgar_cik(&p.body);
+            let has_filings = cik.is_some()
+                || body_low.contains("annual report")
                 || body_low.contains("10-k")
-                || body_low.contains("10-q")
-                || host_tokens
-                    .iter()
-                    .any(|tok| !tok.is_empty() && body_low.contains(tok.as_str()));
+                || body_low.contains("10-q");
             if has_filings {
+                let (title, detail) = if let Some(cik) = &cik {
+                    (
+                        format!("SEC registrant confirmed (CIK {cik})"),
+                        format!("EDGAR resolved '{org}' to CIK {cik} — a public SEC filer. Pull 10-K/10-Q for subsidiaries, acquisitions, named executives, and material cyber-incident disclosures (Item 1.05)."),
+                    )
+                } else {
+                    (
+                        "SEC EDGAR filings indexed for organisation".to_string(),
+                        format!("EDGAR returned filings referencing '{org}' — review 10-K/10-Q for subsidiary and acquisition intel."),
+                    )
+                };
                 findings.push(finding(
                     "financial_osint",
-                    "SEC EDGAR filings indexed for target keyword",
+                    &title,
                     "info",
                     "T1591.002",
-                    &format!(
-                        "EDGAR search returned filings referencing '{}' — review 10-K/10-Q for subsidiary and acquisition intel.",
-                        host
-                    ),
+                    &detail,
                     target,
                 ));
             }
@@ -253,15 +278,34 @@ pub async fn run_financial_osint_result(target: &str) -> EngineResult {
     if findings.is_empty() {
         empty_ok("financial_osint", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("financial_osint: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("financial_osint: {n}"))
     }
 }
 cli_wrapper!(run_financial_osint, run_financial_osint_result);
 
 // ── blockchain_trace ──────────────────────────────────────────────────────────
+/// Extract the wei balance string from an Etherscan `{status,result}` JSON body.
+fn etherscan_balance_wei(body: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    if v.get("status").and_then(Value::as_str) != Some("1") {
+        return None;
+    }
+    v.get("result")
+        .and_then(Value::as_str)
+        .filter(|s| s.chars().all(|c| c.is_ascii_digit()) && !s.is_empty())
+        .map(str::to_string)
+}
+
+/// Format a wei amount (as a decimal string) into an ETH string with 6 decimals.
+/// Uses u128 so large balances (> 18 ETH ≈ u64 overflow) are handled.
+fn wei_to_eth_string(wei: &str) -> Option<String> {
+    let wei: u128 = wei.trim().parse().ok()?;
+    let whole = wei / 1_000_000_000_000_000_000u128;
+    let frac6 = (wei % 1_000_000_000_000_000_000u128) / 1_000_000_000_000u128;
+    Some(format!("{whole}.{frac6:06}"))
+}
+
 pub async fn run_blockchain_trace_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
@@ -276,25 +320,26 @@ pub async fn run_blockchain_trace_result(target: &str) -> EngineResult {
             t
         );
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && p.body.contains("result") {
-                findings.push(finding(
-                    "blockchain_trace",
-                    "Etherscan balance retrieved",
-                    "info",
-                    "T1583.006",
-                    &format!("Etherscan returned a balance object for {} (supply WEISSMAN_ETHERSCAN_KEY for full traces).", t),
-                    target,
-                ));
+            if p.status == 200 {
+                if let Some(wei) = etherscan_balance_wei(&p.body) {
+                    let eth = wei_to_eth_string(&wei).unwrap_or_else(|| "?".to_string());
+                    findings.push(finding(
+                        "blockchain_trace",
+                        &format!("On-chain ETH balance: {eth} ETH"),
+                        "info",
+                        "T1583.006",
+                        &format!("Etherscan reports {eth} ETH ({wei} wei) for {t}. Pivot on transaction history for wallet clustering / ransom-payment attribution (supply WEISSMAN_ETHERSCAN_KEY for full traces)."),
+                        target,
+                    ));
+                }
             }
         }
     }
     if findings.is_empty() {
         empty_ok("blockchain_trace", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("blockchain_trace: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("blockchain_trace: {n}"))
     }
 }
 cli_wrapper!(run_blockchain_trace, run_blockchain_trace_result);
@@ -664,6 +709,52 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
 cli_wrapper!(run_iot_shodan_scan, run_iot_shodan_scan_result);
 
 // ── job_posting_osint ─────────────────────────────────────────────────────────
+/// Technologies commonly disclosed in job postings — maps a target's stack,
+/// cloud provider, and defensive tooling.
+fn extract_tech_stack(body_low: &str) -> Vec<&'static str> {
+    const TECH: &[&str] = &[
+        "aws",
+        "azure",
+        "gcp",
+        "kubernetes",
+        "docker",
+        "terraform",
+        "ansible",
+        "react",
+        "angular",
+        "node.js",
+        "python",
+        "django",
+        "spring",
+        "golang",
+        "rust",
+        ".net",
+        "kafka",
+        "postgresql",
+        "mongodb",
+        "redis",
+        "elasticsearch",
+        "snowflake",
+        "jenkins",
+        "gitlab",
+        "splunk",
+        "crowdstrike",
+        "sentinelone",
+        "okta",
+        "sailpoint",
+        "cyberark",
+        "palo alto",
+        "fortinet",
+        "servicenow",
+        "salesforce",
+        "sap",
+    ];
+    TECH.iter()
+        .filter(|t| body_low.contains(**t))
+        .copied()
+        .collect()
+}
+
 pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
@@ -685,6 +776,20 @@ pub async fn run_job_posting_osint_result(target: &str) -> EngineResult {
         if let Some(p) = http_get(&client, u).await {
             if p.status == 200 {
                 let body_low = p.body.to_ascii_lowercase();
+                // Real intel: the tech stack disclosed in job postings maps the
+                // target's infrastructure and defensive tooling.
+                let stack = extract_tech_stack(&body_low);
+                if !stack.is_empty() {
+                    findings.push(finding(
+                        "job_posting_osint",
+                        &format!("Tech stack disclosed in job postings ({} technologies)", stack.len()),
+                        "info",
+                        "T1591.004",
+                        &format!("Postings on {u} for '{host}' disclose: {}. This maps the target's infrastructure, cloud provider, and defensive tooling for tailored exploitation and phishing pretexts.", stack.join(", ")),
+                        target,
+                    ));
+                    break;
+                }
                 let mentions_target = host
                     .split('.')
                     .filter(|s| s.len() > 2)
@@ -984,5 +1089,51 @@ mod osint_extract_tests {
             mail_provider_from_mx(&["mail.self-hosted.example".to_string()]),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod osint_deep_tests {
+    use super::{etherscan_balance_wei, extract_edgar_cik, extract_tech_stack, wei_to_eth_string};
+
+    #[test]
+    fn etherscan_balance_parsed_and_converted() {
+        let ok = r#"{"status":"1","message":"OK","result":"1500000000000000000"}"#;
+        assert_eq!(
+            etherscan_balance_wei(ok).as_deref(),
+            Some("1500000000000000000")
+        );
+        assert_eq!(
+            wei_to_eth_string("1500000000000000000").as_deref(),
+            Some("1.500000")
+        );
+        assert_eq!(wei_to_eth_string("0").as_deref(), Some("0.000000"));
+        // Large balance > u64 range.
+        assert_eq!(
+            wei_to_eth_string("100000000000000000000").as_deref(),
+            Some("100.000000")
+        );
+        // NOTOK responses yield nothing.
+        let err = r#"{"status":"0","message":"NOTOK","result":"rate limit"}"#;
+        assert_eq!(etherscan_balance_wei(err), None);
+    }
+
+    #[test]
+    fn edgar_cik_extracted() {
+        assert_eq!(
+            extract_edgar_cik("...&CIK=0001318605&type=10-K...").as_deref(),
+            Some("0001318605")
+        );
+        assert_eq!(extract_edgar_cik("no cik here at all"), None);
+    }
+
+    #[test]
+    fn tech_stack_extracted() {
+        let body =
+            "we run kubernetes on aws with terraform, python microservices and crowdstrike edr";
+        let stack = extract_tech_stack(body);
+        assert!(stack.contains(&"kubernetes") && stack.contains(&"aws"));
+        assert!(stack.contains(&"crowdstrike") && stack.contains(&"terraform"));
+        assert!(extract_tech_stack("nothing technical here").is_empty());
     }
 }
