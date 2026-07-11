@@ -125,7 +125,7 @@ export default function IdentityContextManager() {
                 <h3 className="text-sm font-semibold text-white mb-1">
                   {t('pages.identityContextManager.oauth_hub_title')}
                 </h3>
-                <p className="text-xs text-gray-400 max-w-xl">
+                <p className="text-xs text-[var(--text-tertiary)] max-w-xl">
                   {t('pages.identityContextManager.oauth_hub_body', { })}
                 </p>
               </div>
@@ -171,7 +171,7 @@ export default function IdentityContextManager() {
             className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.identityContextManager.total_identities')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.identityContextManager.total_identities')}</span>
               <Users className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -239,7 +239,7 @@ export default function IdentityContextManager() {
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 className="w-10 h-10 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full mx-auto mb-4"
               />
-              <p className="text-sm text-gray-400 font-mono">{t('pages.identityContextManager.loading')}</p>
+              <p className="text-sm text-[var(--text-tertiary)] font-mono">{t('pages.identityContextManager.loading')}</p>
             </div>
           ) : identities.length === 0 ? (
             <motion.div
@@ -247,12 +247,12 @@ export default function IdentityContextManager() {
               animate={{ opacity: 1, scale: 1 }}
               className="p-12 text-center"
             >
-              <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-sm text-gray-400 mb-2">{t('pages.identityContextManager.empty_title')}</p>
-              <p className="text-xs text-gray-500">{t('pages.identityContextManager.empty_body')}</p>
+              <Users className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3" />
+              <p className="text-sm text-[var(--text-tertiary)] mb-2">{t('pages.identityContextManager.empty_title')}</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('pages.identityContextManager.empty_body')}</p>
             </motion.div>
           ) : visibleIdentities.length === 0 ? (
-            <div className="p-12 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-12 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)] max-h-[70vh] overflow-y-auto">
               {visibleIdentities.map((identity, index) => (
@@ -291,7 +291,7 @@ export default function IdentityContextManager() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                           <span>{t('pages.identityContextManager.email', { email: identity.email })}</span>
                           {identity.last_login && (
                             <>
@@ -347,7 +347,7 @@ export default function IdentityContextManager() {
               <AlertTriangle className="w-5 h-5 text-red-400" />
               <h3 className="text-sm font-semibold text-white">{t('pages.identityContextManager.high_risk_title')}</h3>
             </div>
-            <p className="text-sm text-gray-300">
+            <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.identityContextManager.high_risk_body', { count: stats.highRisk })}
             </p>
           </motion.div>
@@ -401,7 +401,7 @@ function IdentityDetailModal({ identity, onClose }) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: "spring", duration: 0.5 }}
-          className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6 pointer-events-auto shadow-2xl"
+          className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6 pointer-events-auto shadow-2xl"
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title"
@@ -410,7 +410,7 @@ function IdentityDetailModal({ identity, onClose }) {
             <h3 id="modal-title" className="text-lg font-bold text-white">{identity.username}</h3>
             <button
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
+              className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
               aria-label={t('pages.identityContextManager.close_modal')}
             >
               <X className="w-5 h-5" />
@@ -424,7 +424,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.email_label')}</span>
+                <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.email_label')}</span>
                 <div className="text-sm text-white">{identity.email}</div>
               </motion.div>
               <motion.div
@@ -432,7 +432,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.risk_score_label')}</span>
+                <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.risk_score_label')}</span>
                 <div className="text-sm font-semibold text-white">{identity.risk_score}</div>
               </motion.div>
               <motion.div
@@ -440,7 +440,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.last_login_label')}</span>
+                <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.last_login_label')}</span>
                 <div className="text-sm text-white">
                   {identity.last_login ? new Date(identity.last_login).toLocaleString() : t('pages.identityContextManager.never')}
                 </div>
@@ -450,7 +450,7 @@ function IdentityDetailModal({ identity, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
               >
-                <span className="text-xs text-gray-400 block mb-1">{t('pages.identityContextManager.anomalies_label')}</span>
+                <span className="text-xs text-[var(--text-tertiary)] block mb-1">{t('pages.identityContextManager.anomalies_label')}</span>
                 <div className="text-sm text-white">{identity.anomaly_count || 0}</div>
               </motion.div>
             </div>
@@ -470,11 +470,11 @@ function IdentityDetailModal({ identity, onClose }) {
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.35 + i * 0.05 }}
-                      className="text-xs text-gray-400 p-3 bg-[var(--row-hover-bg)] rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors"
+                      className="text-xs text-[var(--text-tertiary)] p-3 bg-[var(--row-hover-bg)] rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <span>{activity.description}</span>
-                        <span className="text-gray-500 text-[10px]">
+                        <span className="text-[var(--text-muted)] text-[10px]">
                           {new Date(activity.timestamp).toLocaleString()}
                         </span>
                       </div>

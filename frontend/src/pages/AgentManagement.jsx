@@ -374,7 +374,7 @@ export default function AgentManagement() {
             ) : filteredAgents.length === 0 ? (
               <EmptyState icon="search-x" title={t('agents.no_filter_title')} body={t('agents.no_filter_body')} />
             ) : visibleAgents.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+              <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
             ) : (
               <DataTable
                 id="agents-table"

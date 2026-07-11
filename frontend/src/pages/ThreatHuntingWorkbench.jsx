@@ -519,7 +519,7 @@ export default function ThreatHuntingWorkbench() {
                         totalCount={campaigns.length}
                       />
                       {visibleCampaigns.length === 0 ? (
-                        <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+                        <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
                       ) : visibleCampaigns.map((c) => (
                         <CampaignCard key={c.id} campaign={c} selected={selectedCampaign} onSelect={setSelectedCampaign} t={t} />
                       ))}
@@ -558,7 +558,7 @@ export default function ThreatHuntingWorkbench() {
                   totalCount={iocs.length}
                 />
                 {iocs.length > 0 && visibleIocs.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+                  <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
                 ) : (
                   <IocTable iocs={visibleIocs} t={t} onExport={() => exportIocsCsv(iocs)} />
                 )}

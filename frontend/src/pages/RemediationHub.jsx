@@ -78,7 +78,7 @@ function StatusBadge({ status, t }) {
   const colors = {
     completed: 'text-green-400 bg-green-500/10 border-green-500/30',
     running: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
-    pending: 'text-gray-400 bg-gray-500/10 border-gray-500/30',
+    pending: 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30',
   }
   const Icon = status === 'completed' ? CheckCircle : status === 'running' ? Clock : AlertTriangle
   return (
@@ -263,7 +263,7 @@ export default function RemediationHub() {
                           {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--text-tertiary)]">
                         {w.total === 1
                           ? t('pages.remediationHub.findings_count', { count: w.total })
                           : t('pages.remediationHub.findings_count_plural', { count: w.total })}{' '}
@@ -312,7 +312,7 @@ function StatCard({ label, value, icon, color, loading }) {
   return (
     <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
         {icon}
       </div>
       <div className="text-2xl font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>

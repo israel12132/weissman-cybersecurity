@@ -215,7 +215,7 @@ export default function SystemConfiguration() {
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
               <div>
                 <h3 className="text-sm font-semibold text-yellow-400">{t(`${NS}.unsaved_warning`)}</h3>
-                <p className="text-xs text-gray-400">{t(`${NS}.unsaved_changes_subtitle`)}</p>
+                <p className="text-xs text-[var(--text-tertiary)]">{t(`${NS}.unsaved_changes_subtitle`)}</p>
               </div>
             </div>
             <button
@@ -238,7 +238,7 @@ export default function SystemConfiguration() {
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-all ${
                   activeTab === tab.id
                     ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/10'
-                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {tab.icon}
@@ -273,7 +273,7 @@ export default function SystemConfiguration() {
                         <div key={item.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-4 py-3">
                           <div className="text-[10px] font-mono uppercase text-cyan-400/70">{item.type}</div>
                           <div className="text-sm font-medium text-white mt-1">{item.title}</div>
-                          <div className="text-xs text-gray-400 font-mono mt-1 break-all">{item.description}</div>
+                          <div className="text-xs text-[var(--text-tertiary)] font-mono mt-1 break-all">{item.description}</div>
                         </div>
                       ))}
                     </div>
@@ -332,7 +332,7 @@ function GeneralSettings({ config, onChange }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.general.org_name`)}
           </label>
           <input
@@ -344,7 +344,7 @@ function GeneralSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.general.timezone`)}
           </label>
           <select
@@ -361,7 +361,7 @@ function GeneralSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.general.language`)}
           </label>
           <select
@@ -378,7 +378,7 @@ function GeneralSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.general.date_format`)}
           </label>
           <select
@@ -410,7 +410,7 @@ function SecuritySettings({ config, onChange }) {
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.password_min_length`)}</label>
+              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.password_min_length`)}</label>
               <input
                 type="number"
                 value={config.password_min_length || 12}
@@ -419,7 +419,7 @@ function SecuritySettings({ config, onChange }) {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.password_max_age`)}</label>
+              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.password_max_age`)}</label>
               <input
                 type="number"
                 value={config.password_max_age || 90}
@@ -429,7 +429,7 @@ function SecuritySettings({ config, onChange }) {
             </div>
           </div>
           <div className="mt-4 space-y-2">
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
                 type="checkbox"
                 checked={config.password_require_uppercase || false}
@@ -438,7 +438,7 @@ function SecuritySettings({ config, onChange }) {
               />
               {t(`${NS}.fields.security.password_require_uppercase`)}
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
                 type="checkbox"
                 checked={config.password_require_numbers || false}
@@ -447,7 +447,7 @@ function SecuritySettings({ config, onChange }) {
               />
               {t(`${NS}.fields.security.password_require_numbers`)}
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
                 type="checkbox"
                 checked={config.password_require_special || false}
@@ -463,7 +463,7 @@ function SecuritySettings({ config, onChange }) {
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.session_timeout`)}</label>
+              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.session_timeout`)}</label>
               <input
                 type="number"
                 value={config.session_timeout || 60}
@@ -472,7 +472,7 @@ function SecuritySettings({ config, onChange }) {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2">{t(`${NS}.fields.security.max_concurrent_sessions`)}</label>
+              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.max_concurrent_sessions`)}</label>
               <input
                 type="number"
                 value={config.max_concurrent_sessions || 3}
@@ -485,7 +485,7 @@ function SecuritySettings({ config, onChange }) {
 
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
-          <label className="flex items-center gap-2 text-sm text-gray-300 mb-3">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3">
             <input
               type="checkbox"
               checked={config.mfa_required || false}
@@ -670,7 +670,7 @@ function ScanningSettings({ config, onChange }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.scanning.default_timeout`)}
           </label>
           <input
@@ -682,7 +682,7 @@ function ScanningSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.scanning.max_concurrency`)}
           </label>
           <input
@@ -694,7 +694,7 @@ function ScanningSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.scanning.auto_retry`)}
           </label>
           <select
@@ -708,7 +708,7 @@ function ScanningSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.scanning.max_retries`)}
           </label>
           <input
@@ -801,7 +801,7 @@ function RetentionSettings({ config, onChange }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.retention.scan_results`)}
           </label>
           <input
@@ -813,7 +813,7 @@ function RetentionSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.retention.audit_logs`)}
           </label>
           <input
@@ -825,7 +825,7 @@ function RetentionSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.retention.findings`)}
           </label>
           <input
@@ -837,7 +837,7 @@ function RetentionSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.retention.metrics`)}
           </label>
           <input
@@ -861,7 +861,7 @@ function PerformanceSettings({ config, onChange }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.performance.worker_threads`)}
           </label>
           <input
@@ -873,7 +873,7 @@ function PerformanceSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.performance.cache_ttl`)}
           </label>
           <input
@@ -885,7 +885,7 @@ function PerformanceSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.performance.max_memory`)}
           </label>
           <input
@@ -897,7 +897,7 @@ function PerformanceSettings({ config, onChange }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
             {t(`${NS}.fields.performance.db_pool_size`)}
           </label>
           <input

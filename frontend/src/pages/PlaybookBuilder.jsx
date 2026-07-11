@@ -33,7 +33,7 @@ const SEV_COLORS = {
   high:     { bg: 'bg-orange-500/15', ring: 'ring-orange-500/40', text: 'text-orange-200' },
   medium:   { bg: 'bg-amber-500/15', ring: 'ring-amber-500/40', text: 'text-amber-200' },
   low:      { bg: 'bg-sky-500/15', ring: 'ring-sky-500/40', text: 'text-sky-200' },
-  info:     { bg: 'bg-zinc-500/15', ring: 'ring-zinc-400/40', text: 'text-zinc-300' },
+  info:     { bg: 'bg-[var(--border-strong)]/15', ring: 'ring-[var(--border-strong)]/40', text: 'text-[var(--text-secondary)]' },
 }
 
 const ACTION_KINDS = [
@@ -190,7 +190,7 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative rounded-xl bg-zinc-900/60 ring-1 ring-white/[0.08] transition-shadow hover:ring-white/[0.12] hover:shadow-lg hover:shadow-black/20"
+      className="group relative rounded-xl bg-[var(--bg-1)]/60 ring-1 ring-white/[0.08] transition-shadow hover:ring-white/[0.12] hover:shadow-lg hover:shadow-black/20"
     >
       <div className="flex items-stretch">
         <div className="flex w-8 shrink-0 cursor-grab flex-col items-center justify-center border-e border-white/[0.06] text-[var(--text-disabled)] transition-colors group-hover:text-[var(--text-muted)]">
@@ -648,14 +648,14 @@ export default function PlaybookBuilder() {
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t('playbooks.name_placeholder')}
-                  className="w-full rounded-xl bg-zinc-900/60 px-4 py-3 text-[16px] font-semibold text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
+                  className="w-full rounded-xl bg-[var(--bg-1)]/60 px-4 py-3 text-[16px] font-semibold text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
                 />
                 <textarea
                   value={draft.description}
                   onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
                   placeholder={t('playbooks.description_placeholder')}
                   rows={2}
-                  className="w-full resize-none rounded-xl bg-zinc-900/40 px-4 py-3 text-[13px] text-[var(--text-secondary)] ring-1 ring-white/[0.06] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/25"
+                  className="w-full resize-none rounded-xl bg-[var(--bg-1)]/40 px-4 py-3 text-[13px] text-[var(--text-secondary)] ring-1 ring-white/[0.06] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/25"
                 />
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[var(--row-hover-bg)] px-3 py-1.5 ring-1 ring-white/[0.08]">
                   <input
@@ -669,7 +669,7 @@ export default function PlaybookBuilder() {
               </div>
 
               {/* Trigger builder */}
-              <section className="rounded-2xl bg-zinc-900/40 p-5 ring-1 ring-white/[0.07]">
+              <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
                 <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/80">
                   <Zap className="h-3.5 w-3.5" />
                   {t('playbooks.when_conditions')}
@@ -743,7 +743,7 @@ export default function PlaybookBuilder() {
               </section>
 
               {/* Actions */}
-              <section className="rounded-2xl bg-zinc-900/40 p-5 ring-1 ring-white/[0.07]">
+              <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
                 <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-300/80">
                   <Play className="h-3.5 w-3.5" />
                   {t('playbooks.do_actions')}
@@ -897,10 +897,10 @@ export default function PlaybookBuilder() {
                     {idx < runs.length - 1 && (
                       <span className="absolute start-[9px] top-5 bottom-0 w-px bg-gradient-to-b from-white/15 to-transparent" />
                     )}
-                    <span className="absolute start-0 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-zinc-800 ring-2 ring-[#0a0a0c]">
+                    <span className="absolute start-0 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--bg-3)] ring-2 ring-[#0a0a0c]">
                       <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
                     </span>
-                    <div className="rounded-xl bg-zinc-900/50 p-3 ring-1 ring-white/[0.06] transition-colors hover:ring-white/[0.1]">
+                    <div className="rounded-xl bg-[var(--bg-1)]/50 p-3 ring-1 ring-white/[0.06] transition-colors hover:ring-white/[0.1]">
                       <div className="flex items-center justify-between gap-2">
                         <time className="text-[10px] font-medium text-[var(--text-muted)]">
                           {r.triggered_at ? new Date(r.triggered_at).toLocaleString() : '—'}

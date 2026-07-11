@@ -76,7 +76,7 @@ export default function ContainmentRulesBuilder() {
       case 'block':
         return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -133,7 +133,7 @@ export default function ContainmentRulesBuilder() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.containmentRulesBuilder.total_rules')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.containmentRulesBuilder.total_rules')}</span>
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -189,16 +189,16 @@ export default function ContainmentRulesBuilder() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               {t('pages.containmentRulesBuilder.loading')}
             </div>
           ) : rules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               {t('pages.containmentRulesBuilder.empty')}
             </div>
           ) : visibleRules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
               {visibleRules.map((rule) => (
@@ -213,7 +213,7 @@ export default function ContainmentRulesBuilder() {
                         className={`p-2 rounded-lg border transition-colors ${
                           rule.enabled
                             ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                            : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                            : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)] border-[var(--border-strong)]/30'
                         }`}
                       >
                         {rule.enabled ? <Play className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
@@ -236,7 +236,7 @@ export default function ContainmentRulesBuilder() {
                           )}
                         </div>
 
-                        <p className="text-xs text-gray-400 mb-3">{rule.description}</p>
+                        <p className="text-xs text-[var(--text-tertiary)] mb-3">{rule.description}</p>
 
                         <div className="flex flex-wrap gap-2 mb-2">
                           {rule.trigger_on?.severity && (
@@ -256,7 +256,7 @@ export default function ContainmentRulesBuilder() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                           {rule.triggered_count !== undefined && (
                             <span>{t('pages.containmentRulesBuilder.triggered_times', { count: rule.triggered_count })}</span>
                           )}
@@ -298,7 +298,7 @@ export default function ContainmentRulesBuilder() {
                 <AlertTriangle className="w-4 h-4 text-red-400" />
                 {t('pages.containmentRulesBuilder.emergency_title')}
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-[var(--text-tertiary)]">
                 {t('pages.containmentRulesBuilder.emergency_body')}
               </p>
             </div>
@@ -359,19 +359,19 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
+      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-[var(--text-primary)]">
+          <button onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
             ✕
           </button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
             <input
               type="text"
               value={formData.name}
@@ -382,7 +382,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">{t('pages.containmentRulesBuilder.action')}</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.action')}</label>
             <select
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
@@ -396,7 +396,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
                 type="checkbox"
                 checked={formData.auto_trigger}
@@ -411,7 +411,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('common.cancel')}
           </button>

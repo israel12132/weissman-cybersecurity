@@ -210,7 +210,7 @@ export default function SocialEngineering() {
       case 'high': return 'text-orange-400 bg-orange-500/10 border-orange-500/30';
       case 'medium': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       case 'low': return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30';
-      default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+      default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -219,7 +219,7 @@ export default function SocialEngineering() {
       case 'open': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       case 'closed':
       case 'resolved': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+      default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -257,14 +257,14 @@ export default function SocialEngineering() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.socialEngineering.active_campaigns')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.active_campaigns')}</span>
               <Mail className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{statValue('active')}</div>
           </div>
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.socialEngineering.total_campaigns')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.total_campaigns')}</span>
               <Users className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-white">{statValue('total_campaigns')}</div>
@@ -278,7 +278,7 @@ export default function SocialEngineering() {
           </div>
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.socialEngineering.assessments_loaded')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.socialEngineering.assessments_loaded')}</span>
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : campaigns.length}</div>
@@ -304,7 +304,7 @@ export default function SocialEngineering() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-semibold text-white mb-1">{t('pages.socialEngineering.run_assessment_heading')}</h3>
-              <p className="text-xs text-gray-400">{t('pages.socialEngineering.run_assessment_subtitle', { engine: ASSESSMENT_ENGINE })}</p>
+              <p className="text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.run_assessment_subtitle', { engine: ASSESSMENT_ENGINE })}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <select
@@ -377,9 +377,9 @@ export default function SocialEngineering() {
                       )}
                     </div>
                     {f.description && (
-                      <p className="text-xs text-gray-400 mb-2 line-clamp-2">{f.description}</p>
+                      <p className="text-xs text-[var(--text-tertiary)] mb-2 line-clamp-2">{f.description}</p>
                     )}
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                       <span>{f.type}</span>
                       {f.component && (
                         <>
@@ -408,7 +408,7 @@ export default function SocialEngineering() {
               >
                 <Mail className="w-5 h-5 text-purple-400 mb-2" />
                 <h4 className="text-sm font-medium text-white mb-1">{templateLabel(template)}</h4>
-                <p className="text-xs text-gray-500">{t('pages.socialEngineering.click_create')}</p>
+                <p className="text-xs text-[var(--text-muted)]">{t('pages.socialEngineering.click_create')}</p>
               </button>
             ))}
           </div>
@@ -417,15 +417,15 @@ export default function SocialEngineering() {
 
       {createOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-3)] p-4">
-          <div className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-gray-900 p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-[var(--bg-1)] p-6 shadow-xl">
             <h3 className="mb-4 text-lg font-semibold text-white">{t('pages.socialEngineering.create_modal_title')}</h3>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs text-gray-400">{t('pages.socialEngineering.campaign_name_label')}</label>
+                <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.campaign_name_label')}</label>
                 <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white" />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-400">{t('pages.socialEngineering.template_label')}</label>
+                <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.template_label')}</label>
                 <select value={createTemplate} onChange={(e) => setCreateTemplate(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
                   {TEMPLATES.map((template) => (
                     <option key={template} value={template}>{templateLabel(template)}</option>
@@ -433,7 +433,7 @@ export default function SocialEngineering() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-400">{t('common.client')}</label>
+                <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('common.client')}</label>
                 <select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
                   {clients.length === 0 ? (
                     <option value="">{t('pages.socialEngineering.no_clients')}</option>
@@ -447,7 +447,7 @@ export default function SocialEngineering() {
               {createError && <p className="text-sm text-red-400">{createError}</p>}
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-[var(--border-default)] px-4 py-2 text-sm text-gray-300 hover:bg-[var(--row-hover-bg)]">{t('common.cancel')}</button>
+              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">{t('common.cancel')}</button>
               <button type="button" onClick={createCampaign} disabled={creating || clients.length === 0} className="rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white hover:bg-purple-600 disabled:opacity-50">
                 {creating ? t('pages.socialEngineering.creating') : t('pages.socialEngineering.create_campaign')}
               </button>

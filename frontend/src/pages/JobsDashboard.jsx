@@ -22,7 +22,7 @@ const STATUS_COLORS = {
   running: 'text-blue-400 bg-blue-900/20 border-blue-500/30',
   completed: 'text-green-400 bg-green-900/20 border-green-500/30',
   failed: 'text-red-400 bg-red-900/20 border-red-500/30',
-  cancelled: 'text-slate-400 bg-slate-900/20 border-slate-500/30',
+  cancelled: 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30',
 }
 
 const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
@@ -151,7 +151,7 @@ export default function JobsDashboard() {
 
   function getStatusBadgeClass(status) {
     const statusLower = normalizeJobStatus(status)
-    return STATUS_COLORS[statusLower] || 'text-slate-400 bg-slate-900/20 border-slate-500/30'
+    return STATUS_COLORS[statusLower] || 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30'
   }
 
   function formatDuration(startTime, endTime) {
@@ -205,7 +205,7 @@ export default function JobsDashboard() {
         header: t('pages.jobsDashboard.col_target'),
         cell: (ctx) => (
           <span
-            className="text-sm text-slate-300 max-w-[180px] truncate block"
+            className="text-sm text-[var(--text-secondary)] max-w-[180px] truncate block"
             title={ctx.getValue()}
           >
             {ctx.getValue() || '—'}
@@ -225,7 +225,7 @@ export default function JobsDashboard() {
         id: 'created',
         header: t('pages.jobsDashboard.col_created'),
         cell: (ctx) => (
-          <span className="text-sm text-slate-300 whitespace-nowrap">{fmtTime(ctx.getValue())}</span>
+          <span className="text-sm text-[var(--text-secondary)] whitespace-nowrap">{fmtTime(ctx.getValue())}</span>
         ),
       }),
       columnHelper.display({
@@ -233,7 +233,7 @@ export default function JobsDashboard() {
         header: t('pages.jobsDashboard.col_duration'),
         enableSorting: false,
         cell: (ctx) => (
-          <span className="text-sm text-slate-300 whitespace-nowrap">
+          <span className="text-sm text-[var(--text-secondary)] whitespace-nowrap">
             {formatDuration(ctx.row.original.created_at, ctx.row.original.completed_at || ctx.row.original.updated_at)}
           </span>
         ),
@@ -315,7 +315,7 @@ export default function JobsDashboard() {
                   <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
                     {statusCounts[status]}
                   </div>
-                  <div className="text-[11px] text-slate-400 capitalize mt-1">
+                  <div className="text-[11px] text-[var(--text-tertiary)] capitalize mt-1">
                     {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}
                   </div>
                 </button>

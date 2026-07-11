@@ -86,7 +86,7 @@ export default function CeoVault() {
   };
 
   const getExpirationColor = (expiresAt) => {
-    if (!expiresAt) return 'text-gray-400';
+    if (!expiresAt) return 'text-[var(--text-tertiary)]';
     const daysUntilExpiry = Math.floor(
       (new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)
     );
@@ -152,7 +152,7 @@ export default function CeoVault() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.ceoVault.total_secrets')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.total_secrets')}</span>
               <Lock className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{secrets.length}</div>
@@ -160,7 +160,7 @@ export default function CeoVault() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.ceoVault.api_keys')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.api_keys')}</span>
               <Key className="w-4 h-4 text-yellow-400" />
             </div>
             <div className="text-2xl font-bold text-white">
@@ -170,7 +170,7 @@ export default function CeoVault() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.ceoVault.expiring_soon')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.expiring_soon')}</span>
               <Shield className="w-4 h-4 text-orange-400" />
             </div>
             <div className="text-2xl font-bold text-white">
@@ -188,7 +188,7 @@ export default function CeoVault() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.ceoVault.expired')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.ceoVault.expired')}</span>
               <Shield className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400">
@@ -229,16 +229,16 @@ export default function CeoVault() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               {t('pages.ceoVault.loading')}
             </div>
           ) : secrets.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               {t('pages.ceoVault.empty')}
             </div>
           ) : visibleSecrets.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
               {visibleSecrets.map((secret) => (
@@ -256,7 +256,7 @@ export default function CeoVault() {
                           <h4 className="text-sm font-semibold text-white">
                             {secret.name}
                           </h4>
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-[var(--text-tertiary)]">
                             {secret.description || t('pages.ceoVault.no_description')}
                           </p>
                         </div>
@@ -278,7 +278,7 @@ export default function CeoVault() {
 
                         <button
                           onClick={() => toggleSecretVisibility(secret.id)}
-                          className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
+                          className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {showSecret[secret.id] ? (
                             <EyeOff className="w-4 h-4" />
@@ -291,7 +291,7 @@ export default function CeoVault() {
                           onClick={() =>
                             copyToClipboard(secret.id, secret.value)
                           }
-                          className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
+                          className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
                           {copiedId === secret.id ? (
                             <Check className="w-4 h-4 text-green-400" />
@@ -302,7 +302,7 @@ export default function CeoVault() {
                       </div>
 
                       {/* Metadata */}
-                      <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
+                      <div className="mt-3 flex items-center gap-4 text-xs text-[var(--text-muted)]">
                         <span>{t('pages.ceoVault.created', { date: secret.created_at })}</span>
                         {secret.expires_at && (
                           <>
@@ -395,14 +395,14 @@ function SecretModal({ secret, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
+      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {secret ? t('pages.ceoVault.edit_secret') : t('pages.ceoVault.create_secret')}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-[var(--text-primary)] transition-colors"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
           </button>
@@ -410,7 +410,7 @@ function SecretModal({ secret, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.ceoVault.name')}
             </label>
             <input
@@ -423,7 +423,7 @@ function SecretModal({ secret, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.ceoVault.description_optional')}
             </label>
             <input
@@ -438,7 +438,7 @@ function SecretModal({ secret, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.ceoVault.type')}
             </label>
             <select
@@ -454,7 +454,7 @@ function SecretModal({ secret, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.ceoVault.secret_value')}
             </label>
             <textarea
@@ -467,7 +467,7 @@ function SecretModal({ secret, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.ceoVault.expiration_optional')}
             </label>
             <input
@@ -484,7 +484,7 @@ function SecretModal({ secret, onClose, onSave }) {
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('pages.ceoVault.cancel')}
           </button>

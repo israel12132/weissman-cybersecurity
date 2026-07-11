@@ -302,7 +302,7 @@ export default function EngineManagementConsole() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-[var(--text-tertiary)]">
                 {t('pages.engineManagementConsole.total_engines')}
               </span>
               <Cpu className="w-4 h-4 text-cyan-400" />
@@ -312,7 +312,7 @@ export default function EngineManagementConsole() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-[var(--text-tertiary)]">
                 {t('pages.engineManagementConsole.enabled')}
               </span>
               <CheckCircle className="w-4 h-4 text-green-400" />
@@ -322,17 +322,17 @@ export default function EngineManagementConsole() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-[var(--text-tertiary)]">
                 {t('pages.engineManagementConsole.disabled')}
               </span>
-              <XCircle className="w-4 h-4 text-gray-400" />
+              <XCircle className="w-4 h-4 text-[var(--text-tertiary)]" />
             </div>
-            <div className="text-2xl font-bold text-gray-400">{stats.disabled}</div>
+            <div className="text-2xl font-bold text-[var(--text-tertiary)]">{stats.disabled}</div>
           </div>
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-[var(--text-tertiary)]">
                 {t('pages.engineManagementConsole.categories')}
               </span>
               <Filter className="w-4 h-4 text-purple-400" />
@@ -345,13 +345,13 @@ export default function EngineManagementConsole() {
         <div className="flex items-center gap-3">
           {/* Search */}
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.engineManagementConsole.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
           </div>
 
@@ -379,7 +379,7 @@ export default function EngineManagementConsole() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   statusFilter === status
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {status === 'all'
@@ -402,7 +402,7 @@ export default function EngineManagementConsole() {
                     category: categoryFilter.toUpperCase(),
                   })}
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--text-tertiary)]">
                   {t('pages.engineManagementConsole.engines_in_category', {
                     count: stats.byCategory[categoryFilter],
                   })}
@@ -450,7 +450,7 @@ export default function EngineManagementConsole() {
           </div>
 
           {filteredEngines.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               {t('pages.engineManagementConsole.empty')}
             </div>
           ) : (
@@ -469,7 +469,7 @@ export default function EngineManagementConsole() {
                           className={`p-1.5 rounded-lg border transition-colors ${
                             engine.enabled
                               ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                              : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'
+                              : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)] border-[var(--border-strong)]/30 hover:bg-[var(--border-strong)]/30'
                           }`}
                         >
                           {engine.enabled ? (
@@ -494,7 +494,7 @@ export default function EngineManagementConsole() {
                           className={`px-2 py-1 rounded-md text-xs font-medium ${
                             engine.enabled
                               ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                              : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)] border border-[var(--border-strong)]/30'
                           }`}
                         >
                           {engine.enabled
@@ -504,12 +504,12 @@ export default function EngineManagementConsole() {
                       </div>
 
                       {/* Description */}
-                      <p className="text-xs text-gray-400 mb-2">
+                      <p className="text-xs text-[var(--text-tertiary)] mb-2">
                         {engine.description || t('pages.engineManagementConsole.no_description')}
                       </p>
 
                       {/* Engine Details */}
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                         <span>
                           {t('pages.engineManagementConsole.id_detail', { id: engine.id })}
                         </span>
@@ -597,17 +597,17 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
+      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-bold text-white">{engine.name}</h3>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[var(--text-tertiary)]">
               {t('pages.engineManagementConsole.engine_config')}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-[var(--text-primary)] transition-colors"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             <XCircle className="w-5 h-5" />
           </button>
@@ -616,7 +616,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
         <div className="space-y-4">
           {/* Timeout */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.engineManagementConsole.timeout_label')}
             </label>
             <input
@@ -631,7 +631,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
           {/* Concurrency */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.engineManagementConsole.concurrency_label')}
             </label>
             <input
@@ -646,7 +646,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
           {/* Max Retries */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.engineManagementConsole.max_retries_label')}
             </label>
             <input
@@ -661,7 +661,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
           {/* CPU Limit */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.engineManagementConsole.cpu_limit_label')}
             </label>
             <input
@@ -679,7 +679,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
           {/* Memory Limit */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {t('pages.engineManagementConsole.memory_limit_label')}
             </label>
             <input
@@ -700,7 +700,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('common.cancel')}
           </button>

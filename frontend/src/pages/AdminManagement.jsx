@@ -204,7 +204,7 @@ export default function AdminManagement() {
                 ? 'bg-cyan-500/20 text-cyan-400'
                 : role === 'analyst'
                 ? 'bg-emerald-500/20 text-emerald-400'
-                : 'bg-slate-500/20 text-slate-400'
+                : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)]'
             }`}
           >
             {role}
@@ -250,7 +250,7 @@ export default function AdminManagement() {
               id={`adminmgmt-edit-user-${user.id}-btn`}
               type="button"
               onClick={() => openEditModal(user)}
-              className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-slate-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]"
+              className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]"
             >
               Edit
             </button>
@@ -275,7 +275,7 @@ export default function AdminManagement() {
       <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle_loading')}>
         <div className="p-8 text-center">
           <div className="text-red-400 text-lg font-semibold mb-2">Access Denied</div>
-          <p className="text-slate-400 text-sm">
+          <p className="text-[var(--text-tertiary)] text-sm">
             You need CEO or Superadmin privileges to access this page.
           </p>
         </div>
@@ -340,7 +340,7 @@ export default function AdminManagement() {
             <div>
               <label
                 htmlFor="adminmgmt-new-email"
-                className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 Email
               </label>
@@ -351,13 +351,13 @@ export default function AdminManagement() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="user@example.com"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
               <label
                 htmlFor="adminmgmt-new-password"
-                className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 Password
               </label>
@@ -368,13 +368,13 @@ export default function AdminManagement() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
               <label
                 htmlFor="adminmgmt-new-role"
-                className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 Role
               </label>
@@ -431,11 +431,11 @@ export default function AdminManagement() {
           </div>
 
           {loading && users.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.loading')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.loading')}</div>
           ) : users.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.no_users')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.no_users')}</div>
           ) : visibleUsers.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <DataTable
               columns={columns}
@@ -454,7 +454,7 @@ export default function AdminManagement() {
         {/* Edit User Modal */}
         {editingUser && (
           <div className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-900 border border-[var(--border-default)] rounded-2xl p-6 w-full max-w-md">
+            <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-2xl p-6 w-full max-w-md">
               <h3 className="text-lg font-semibold text-white mb-4">
                 Edit User: {editingUser.email}
               </h3>
@@ -462,7 +462,7 @@ export default function AdminManagement() {
                 <div>
                   <label
                     htmlFor="adminmgmt-edit-role"
-                    className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                    className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
                   >
                     Role
                   </label>
@@ -495,7 +495,7 @@ export default function AdminManagement() {
                   id="adminmgmt-cancel-edit-btn"
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-[var(--border-strong)] text-slate-400 hover:bg-[var(--row-hover-bg)]"
+                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
                 >
                   Cancel
                 </button>

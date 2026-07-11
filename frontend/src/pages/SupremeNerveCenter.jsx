@@ -70,8 +70,8 @@ function SummaryCard({ label, value, tone, icon: Icon }) {
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4 backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-slate-500">{label}</span>
-        {Icon ? <Icon className="h-4 w-4 text-slate-500" /> : null}
+        <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">{label}</span>
+        {Icon ? <Icon className="h-4 w-4 text-[var(--text-muted)]" /> : null}
       </div>
       <div className="text-2xl font-bold tabular-nums" style={{ color: tone || '#f8fafc' }}>
         {value}
@@ -159,10 +159,10 @@ function SupremeNerveCenterInner() {
         id: 'phase',
         header: t('supremeNerveCenter.colPhase'),
         cell: ({ row, getValue }) => (
-          <span className="text-slate-400">
+          <span className="text-[var(--text-tertiary)]">
             {getValue()}
             {row.original.phase_detail ? (
-              <div className="text-[10px] text-slate-600">{row.original.phase_detail}</div>
+              <div className="text-[10px] text-[var(--text-muted)]">{row.original.phase_detail}</div>
             ) : null}
           </span>
         ),
@@ -177,7 +177,7 @@ function SupremeNerveCenterInner() {
         id: 'target',
         header: t('supremeNerveCenter.colTarget'),
         cell: ({ getValue }) => (
-          <span className="block max-w-[140px] truncate font-mono text-slate-500">{getValue()}</span>
+          <span className="block max-w-[140px] truncate font-mono text-[var(--text-muted)]">{getValue()}</span>
         ),
       }),
       ch.accessor('last_status', {
@@ -230,7 +230,7 @@ function SupremeNerveCenterInner() {
       ch.accessor((j) => j.worker_id || '—', {
         id: 'worker',
         header: t('supremeNerveCenter.colWorker'),
-        cell: ({ getValue }) => <span className="font-mono text-[10px] text-slate-500">{getValue()}</span>,
+        cell: ({ getValue }) => <span className="font-mono text-[10px] text-[var(--text-muted)]">{getValue()}</span>,
       }),
     ]
   }, [t])
@@ -263,7 +263,7 @@ function SupremeNerveCenterInner() {
               {t('supremeNerveCenter.title')}
             </span>
           </div>
-          <p className="mt-1 text-[10px] font-mono uppercase tracking-widest text-slate-500">
+          <p className="mt-1 text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
             {t('supremeNerveCenter.ceoOnly')}
           </p>
         </div>
@@ -276,14 +276,14 @@ function SupremeNerveCenterInner() {
               className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                 section === id
                   ? 'bg-emerald-500/15 text-emerald-300'
-                  : 'text-slate-400 hover:bg-[var(--row-hover-bg)] hover:text-slate-200'
+                  : 'text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]'
               }`}
             >
               {sectionLabel(id)}
             </button>
           ))}
         </nav>
-        <div className="border-t border-[var(--border-default)] p-3 text-[10px] font-mono text-slate-600">
+        <div className="border-t border-[var(--border-default)] p-3 text-[10px] font-mono text-[var(--text-muted)]">
           {lastRefresh ? lastRefresh.toLocaleTimeString() : '—'}
           <br />
           {t('supremeNerveCenter.pollInterval', { sec: POLL_MS / 1000 })}
@@ -363,7 +363,7 @@ function SupremeNerveCenterInner() {
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-                <h2 className="mb-3 text-sm font-medium text-slate-300">
+                <h2 className="mb-3 text-sm font-medium text-[var(--text-secondary)]">
                   {t('supremeNerveCenter.activeRuns')}
                 </h2>
                 <div className="max-h-64 space-y-2 overflow-auto">
@@ -379,41 +379,41 @@ function SupremeNerveCenterInner() {
                           <span className="font-mono text-cyan-300">{e.engine_id}</span>
                           <span style={{ color: lifecycleTone(e.lifecycle) }}>{e.lifecycle}</span>
                         </div>
-                        <div className="mt-1 text-slate-500">
+                        <div className="mt-1 text-[var(--text-muted)]">
                           {e.phase}
                           {e.phase_detail ? ` · ${e.phase_detail}` : ''}
                         </div>
-                        <div className="mt-1 font-mono text-[10px] text-slate-600">
+                        <div className="mt-1 font-mono text-[10px] text-[var(--text-muted)]">
                           {formatMs(e.elapsed_ms)} · {e.target || '—'}
                         </div>
                       </div>
                     ))}
                   {!engines.some((e) => e.lifecycle === 'running' || e.lifecycle === 'stuck') ? (
-                    <p className="text-xs text-slate-600">{t('supremeNerveCenter.noActiveRuns')}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{t('supremeNerveCenter.noActiveRuns')}</p>
                   ) : null}
                 </div>
               </div>
 
               <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-                <h2 className="mb-3 text-sm font-medium text-slate-300">
+                <h2 className="mb-3 text-sm font-medium text-[var(--text-secondary)]">
                   {t('supremeNerveCenter.clientBoot')}
                 </h2>
                 {clientBoot ? (
                   <dl className="space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">{t('supremeNerveCenter.documentReady')}</dt>
+                      <dt className="text-[var(--text-muted)]">{t('supremeNerveCenter.documentReady')}</dt>
                       <dd className="font-mono">{clientBoot.document_ready}</dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">{t('supremeNerveCenter.domMs')}</dt>
+                      <dt className="text-[var(--text-muted)]">{t('supremeNerveCenter.domMs')}</dt>
                       <dd className="font-mono">{clientBoot.navigation_ms}ms</dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">SW</dt>
+                      <dt className="text-[var(--text-muted)]">SW</dt>
                       <dd className="font-mono">{clientBoot.sw_controller ? 'active' : 'none'}</dd>
                     </div>
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">{t('supremeNerveCenter.chunksLoaded')}</dt>
+                      <dt className="text-[var(--text-muted)]">{t('supremeNerveCenter.chunksLoaded')}</dt>
                       <dd className="font-mono">
                         {clientBoot.script_chunks.filter((c) => c.loaded).length}/
                         {clientBoot.script_chunks.length}
@@ -430,20 +430,20 @@ function SupremeNerveCenterInner() {
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
               <div className="relative min-w-[200px] flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   aria-label={t('supremeNerveCenter.searchEngines')}
                   placeholder={t('supremeNerveCenter.searchEngines')}
-                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600"
+                  className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] py-2 pl-9 pr-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-muted)]"
                 />
               </div>
               <select
                 value={lifecycleFilter}
                 onChange={(e) => setLifecycleFilter(e.target.value)}
-                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-slate-300"
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-[var(--text-secondary)]"
               >
                 <option value="all">{t('supremeNerveCenter.filterAll')}</option>
                 <option value="running">{t('supremeNerveCenter.filterRunning')}</option>
@@ -465,7 +465,7 @@ function SupremeNerveCenterInner() {
               columnToggle
               emptyState={{ icon: 'inbox', title: t('supremeNerveCenter.filterAll') }}
             />
-            <p className="px-1 pt-2 text-[10px] text-slate-600">
+            <p className="px-1 pt-2 text-[10px] text-[var(--text-muted)]">
               {t('supremeNerveCenter.engineCount', {
                 shown: filteredEngines.length,
                 total: engines.length,
@@ -483,8 +483,8 @@ function SupremeNerveCenterInner() {
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-sm font-medium text-slate-200">{m.label}</h3>
-                    <span className="text-[10px] font-mono uppercase text-slate-600">{m.category}</span>
+                    <h3 className="text-sm font-medium text-[var(--text-secondary)]">{m.label}</h3>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{m.category}</span>
                   </div>
                   <span
                     className="rounded px-2 py-0.5 text-[10px] font-mono uppercase"
@@ -496,19 +496,19 @@ function SupremeNerveCenterInner() {
                     {m.status}
                   </span>
                 </div>
-                <p className="mb-3 text-xs leading-relaxed text-slate-500">{m.description}</p>
+                <p className="mb-3 text-xs leading-relaxed text-[var(--text-muted)]">{m.description}</p>
                 <dl className="space-y-1 text-[11px]">
                   <div className="flex justify-between">
-                    <dt className="text-slate-600">{t('supremeNerveCenter.moduleLoaded')}</dt>
+                    <dt className="text-[var(--text-muted)]">{t('supremeNerveCenter.moduleLoaded')}</dt>
                     <dd>{m.loaded ? t('supremeNerveCenter.yes') : t('supremeNerveCenter.no')}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-slate-600">{t('supremeNerveCenter.modulePhase')}</dt>
+                    <dt className="text-[var(--text-muted)]">{t('supremeNerveCenter.modulePhase')}</dt>
                     <dd className="font-mono">{m.phase}</dd>
                   </div>
                 </dl>
                 {m.metrics && Object.keys(m.metrics).length > 0 ? (
-                  <pre className="mt-3 max-h-24 overflow-auto rounded bg-[var(--bg-3)] p-2 text-[10px] text-slate-500">
+                  <pre className="mt-3 max-h-24 overflow-auto rounded bg-[var(--bg-3)] p-2 text-[10px] text-[var(--text-muted)]">
                     {JSON.stringify(m.metrics, null, 2)}
                   </pre>
                 ) : null}
@@ -517,7 +517,7 @@ function SupremeNerveCenterInner() {
 
             {clientBoot?.script_chunks?.length ? (
               <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-1)] p-4 md:col-span-2 xl:col-span-3">
-                <h3 className="mb-3 flex items-center gap-2 text-sm text-slate-300">
+                <h3 className="mb-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                   <Box className="h-4 w-4" />
                   {t('supremeNerveCenter.frontendChunks')}
                 </h3>
@@ -551,25 +551,25 @@ function SupremeNerveCenterInner() {
         {section === 'controls' && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-              <h2 className="mb-3 flex items-center gap-2 text-sm text-slate-300">
+              <h2 className="mb-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <Shield className="h-4 w-4" />
                 {t('supremeNerveCenter.controlParams')}
               </h2>
               <dl className="space-y-2 text-xs">
                 {Object.entries(controls).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4 border-b border-[var(--border-subtle)] py-1.5">
-                    <dt className="font-mono text-slate-500">{k}</dt>
-                    <dd className="font-mono text-slate-300">{String(v)}</dd>
+                    <dt className="font-mono text-[var(--text-muted)]">{k}</dt>
+                    <dd className="font-mono text-[var(--text-secondary)]">{String(v)}</dd>
                   </div>
                 ))}
               </dl>
             </div>
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-              <h2 className="mb-3 flex items-center gap-2 text-sm text-slate-300">
+              <h2 className="mb-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <Server className="h-4 w-4" />
                 {t('supremeNerveCenter.ceoTelemetry')}
               </h2>
-              <pre className="max-h-96 overflow-auto text-[10px] text-slate-500">
+              <pre className="max-h-96 overflow-auto text-[10px] text-[var(--text-muted)]">
                 {JSON.stringify(snap?.ceo_telemetry || {}, null, 2)}
               </pre>
             </div>

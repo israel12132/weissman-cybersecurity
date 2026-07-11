@@ -167,7 +167,7 @@ export default function ClientEngagements() {
       <PageShell title={t('pages.clientEngagements.title')} subtitle={t('pages.clientEngagements.loading_subtitle')}>
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-slate-400">{t('pages.clientEngagements.loading')}</p>
+          <p className="mt-4 text-[var(--text-tertiary)]">{t('pages.clientEngagements.loading')}</p>
         </div>
       </PageShell>
     )
@@ -190,10 +190,10 @@ export default function ClientEngagements() {
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <Link to={`/clients/${clientId}`} className="text-sm text-slate-400 hover:text-slate-200">
+          <Link to={`/clients/${clientId}`} className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {t('pages.clientEngagements.back_to_client')}
           </Link>
-          <div className="text-xs text-slate-500 font-mono">
+          <div className="text-xs text-[var(--text-muted)] font-mono">
             {t('pages.clientEngagements.client_id', { id: clientId })}
           </div>
         </div>
@@ -204,11 +204,11 @@ export default function ClientEngagements() {
           </div>
         )}
 
-        <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
+        <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.create_heading')}</h2>
-              <p className="text-xs text-slate-400 mt-1">{t('pages.clientEngagements.create_body')}</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">{t('pages.clientEngagements.create_body')}</p>
             </div>
             <button
               type="button"
@@ -222,9 +222,9 @@ export default function ClientEngagements() {
 
           <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.name')}</label>
+              <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.name')}</label>
               <input
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('pages.clientEngagements.name_placeholder')}
@@ -232,9 +232,9 @@ export default function ClientEngagements() {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.roe_mode')}</label>
+              <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.roe_mode')}</label>
               <select
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
                 value={roeMode}
                 onChange={(e) => setRoeMode(e.target.value)}
               >
@@ -244,29 +244,29 @@ export default function ClientEngagements() {
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.start')}</label>
+              <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.start')}</label>
               <input
                 type="datetime-local"
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
               />
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.end_optional')}</label>
+              <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.end_optional')}</label>
               <input
                 type="datetime-local"
-                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-400 mb-1">{t('pages.clientEngagements.notes_optional')}</label>
+              <label className="block text-xs text-[var(--text-tertiary)] mb-1">{t('pages.clientEngagements.notes_optional')}</label>
               <textarea
-                className="w-full min-h-24 px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-lg text-white"
+                className="w-full min-h-24 px-3 py-2 bg-[var(--bg-1)]/60 border border-[var(--border-default)] rounded-lg text-white"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t('pages.clientEngagements.notes_placeholder')}
@@ -275,14 +275,14 @@ export default function ClientEngagements() {
           </div>
         </div>
 
-        <div className="p-6 bg-slate-900/30 border border-slate-800 rounded-xl">
+        <div className="p-6 bg-[var(--bg-1)]/30 border border-[var(--border-default)] rounded-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.history_heading')}</h2>
-            <span className="text-xs text-slate-500">{t('pages.clientEngagements.total', { count: engagements.length })}</span>
+            <span className="text-xs text-[var(--text-muted)]">{t('pages.clientEngagements.total', { count: engagements.length })}</span>
           </div>
 
           {engagements.length === 0 ? (
-            <div className="text-center py-10 text-slate-500">
+            <div className="text-center py-10 text-[var(--text-muted)]">
               {t('pages.clientEngagements.empty')}
             </div>
           ) : (
@@ -304,11 +304,11 @@ export default function ClientEngagements() {
             ) : (
             <div className="mt-4 space-y-3">
               {visibleEngagements.map((e) => (
-                <div key={e.id} className="p-4 border border-slate-800 rounded-lg bg-[var(--bg-1)]">
+                <div key={e.id} className="p-4 border border-[var(--border-default)] rounded-lg bg-[var(--bg-1)]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="text-white font-medium truncate">{e.name}</div>
-                      <div className="mt-1 text-xs text-slate-400 font-mono">
+                      <div className="mt-1 text-xs text-[var(--text-tertiary)] font-mono">
                         {e.status} · {e.roe_mode} · {e.start_at?.slice(0, 19).replace('T', ' ')}
                         {e.end_at ? ` → ${String(e.end_at).slice(0, 19).replace('T', ' ')}` : ''}
                       </div>
@@ -316,7 +316,7 @@ export default function ClientEngagements() {
                     <div className="flex items-center gap-2 shrink-0">
                       <a
                         href={apiUrl(`/api/engagements/${e.id}`)}
-                        className="px-3 py-1 text-xs border border-slate-700 text-slate-300 rounded hover:bg-slate-800"
+                        className="px-3 py-1 text-xs border border-[var(--border-default)] text-[var(--text-secondary)] rounded hover:bg-[var(--bg-3)]"
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Open engagement JSON from API"

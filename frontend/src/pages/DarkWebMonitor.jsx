@@ -35,7 +35,7 @@ function severityBadgeClass(sev) {
     high: 'text-orange-300 bg-orange-500/10 border-orange-500/40',
     medium: 'text-yellow-300 bg-yellow-500/10 border-yellow-500/40',
     low: 'text-blue-300 bg-blue-500/10 border-blue-500/40',
-    info: 'text-slate-300 bg-slate-700/10 border-slate-500/40',
+    info: 'text-[var(--text-secondary)] bg-[var(--bg-4)]/10 border-[var(--border-strong)]/40',
   }
   return `inline-block px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${map[s] || map.info}`
 }
@@ -220,7 +220,7 @@ export default function DarkWebMonitor() {
               <KpiCard label={t('pages.darkWebMonitor.critical')} value={stats.critical} accent="text-rose-300" />
               <KpiCard label={t('pages.darkWebMonitor.high')} value={stats.high} accent="text-orange-300" />
               <KpiCard label={t('pages.darkWebMonitor.medium')} value={stats.medium} accent="text-yellow-300" />
-              <KpiCard label={t('pages.darkWebMonitor.low_info')} value={stats.low + stats.info} accent="text-slate-300" />
+              <KpiCard label={t('pages.darkWebMonitor.low_info')} value={stats.low + stats.info} accent="text-[var(--text-secondary)]" />
             </div>
 
             {Object.keys(stats.bySource).length > 0 && (

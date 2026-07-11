@@ -148,7 +148,7 @@ export default function SBOMBrowser() {
       case 'low':
         return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -190,11 +190,11 @@ export default function SBOMBrowser() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">{t('pages.sbomBrowser.total_components')}</span>
+                  <span className="text-sm text-[var(--text-tertiary)]">{t('pages.sbomBrowser.total_components')}</span>
                   <Package className="w-4 h-4 text-cyan-400" />
                 </div>
                 <div className="text-2xl font-bold text-white">{stats.total}</div>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-[var(--text-muted)] mt-1">
                   {t('pages.sbomBrowser.direct_transitive', { direct: stats.direct, transitive: stats.transitive })}
                 </div>
               </div>
@@ -250,7 +250,7 @@ export default function SBOMBrowser() {
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                       filter === f
                         ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                        : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                     }`}
                   >
                     {t(`pages.sbomBrowser.filter_${f}`)}
@@ -333,7 +333,7 @@ export default function SBOMBrowser() {
                             <h4 className="text-sm font-semibold text-white font-mono">
                               {component.name || component.package_name}
                             </h4>
-                            <span className="text-xs text-gray-400 font-mono">
+                            <span className="text-xs text-[var(--text-tertiary)] font-mono">
                               v{component.version || component.version_spec || 'unknown'}
                             </span>
                             {component.type && (
@@ -341,7 +341,7 @@ export default function SBOMBrowser() {
                                 className={`px-2 py-0.5 rounded text-xs font-medium ${
                                   component.type === 'direct'
                                     ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                    : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                                    : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)] border border-[var(--border-strong)]/30'
                                 }`}
                               >
                                 {t(`pages.sbomBrowser.type_${component.type}`, component.type)}
@@ -353,7 +353,7 @@ export default function SBOMBrowser() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
                             {component.ecosystem && (
                               <span className="px-2 py-0.5 rounded border border-purple-500/20 text-purple-300/80 bg-purple-500/10">
                                 {component.ecosystem}
@@ -384,7 +384,7 @@ export default function SBOMBrowser() {
                                       className="flex items-center justify-between gap-2"
                                     >
                                       <div className="flex items-center gap-2 min-w-0">
-                                        <span className="text-xs font-mono text-gray-400 shrink-0">
+                                        <span className="text-xs font-mono text-[var(--text-tertiary)] shrink-0">
                                           {cveLabel(vuln)}
                                         </span>
                                         <span
@@ -393,7 +393,7 @@ export default function SBOMBrowser() {
                                           {vuln.severity}
                                         </span>
                                         {vuln.title && (
-                                          <span className="text-xs text-gray-500 truncate">
+                                          <span className="text-xs text-[var(--text-muted)] truncate">
                                             {vuln.title}
                                           </span>
                                         )}
@@ -412,7 +412,7 @@ export default function SBOMBrowser() {
                                   );
                                 })}
                                 {vulns.length > 3 && (
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-xs text-[var(--text-muted)]">
                                     {t('pages.sbomBrowser.more_vulnerabilities', { count: vulns.length - 3 })}
                                   </div>
                                 )}
@@ -435,7 +435,7 @@ export default function SBOMBrowser() {
               <AlertTriangle className="w-5 h-5 text-red-400" />
               <h3 className="text-sm font-semibold text-white">{t('pages.sbomBrowser.alert_title')}</h3>
             </div>
-            <p className="text-sm text-gray-300">
+            <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.sbomBrowser.alert_body', { count: stats.vulnerable })}
             </p>
           </div>

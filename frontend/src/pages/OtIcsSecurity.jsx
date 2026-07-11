@@ -64,7 +64,7 @@ function StatusBadge({ status, t }) {
     running: { label: t('pages.otIcsSecurity.status_running'), cls: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
     completed: { label: t('pages.otIcsSecurity.status_done'), cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
     error: { label: t('pages.otIcsSecurity.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
-    idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-gray-400 border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
+    idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-[var(--text-tertiary)] border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   };
   const { label, cls } = map[status] ?? map.idle;
   return (
@@ -171,7 +171,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
               <span className={`mr-2 uppercase text-[9px] ${
                 f.severity === 'critical' ? 'text-red-400' :
                 f.severity === 'high' ? 'text-orange-400' :
-                f.severity === 'medium' ? 'text-yellow-400' : 'text-gray-400'
+                f.severity === 'medium' ? 'text-yellow-400' : 'text-[var(--text-tertiary)]'
               }`}>
                 {f.severity ?? 'info'}
               </span>
@@ -445,7 +445,7 @@ export default function OtIcsSecurity() {
             {deviceTypes.map(({ type, count, icon: Icon, color, labelKey }) => (
               <div key={type} className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">{t(labelKey)}</span>
+                  <span className="text-sm text-[var(--text-tertiary)]">{t(labelKey)}</span>
                   <Icon className="w-4 h-4" style={{ color }} />
                 </div>
                 <div className="text-2xl font-bold text-white">{count}</div>
@@ -567,7 +567,7 @@ export default function OtIcsSecurity() {
                         <Icon className="w-4 h-4" style={{ color: meta.color }} />
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-[var(--text-tertiary)]">
                           {t('pages.otIcsSecurity.devices_count', { count: p.count ?? 0 })}
                         </span>
                         <span
@@ -628,7 +628,7 @@ export default function OtIcsSecurity() {
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-tertiary)]">
                         <span>{t('pages.otIcsSecurity.ip_label')} {device.ip ?? device.host ?? t('pages.otIcsSecurity.unknown')}</span>
                         {device.port > 0 && (
                           <>
@@ -682,7 +682,7 @@ export default function OtIcsSecurity() {
             <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="text-sm font-semibold text-white mb-1">{t('pages.otIcsSecurity.notice_title')}</h3>
-              <p className="text-xs text-gray-400 leading-relaxed">{t('pages.otIcsSecurity.notice_body')}</p>
+              <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{t('pages.otIcsSecurity.notice_body')}</p>
             </div>
           </div>
         </div>

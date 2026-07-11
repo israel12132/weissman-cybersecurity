@@ -17,7 +17,7 @@ function getStatusColor(status) {
     case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
     case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
     case 'secure': return 'text-green-400 bg-green-500/10 border-green-500/30';
-    default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+    default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
   }
 }
 
@@ -162,7 +162,7 @@ export default function NetworkProtocols() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.protocols_scanned')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.protocols_scanned')}</span>
               <Network className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.scanned}</div>
@@ -170,7 +170,7 @@ export default function NetworkProtocols() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.critical_issues')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.critical_issues')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.critical}</div>
@@ -178,7 +178,7 @@ export default function NetworkProtocols() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.warnings')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.warnings')}</span>
               <Activity className="w-4 h-4 text-yellow-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.warning}</div>
@@ -186,7 +186,7 @@ export default function NetworkProtocols() {
 
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.secure')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.secure')}</span>
               <Shield className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.secure}</div>
@@ -228,7 +228,7 @@ export default function NetworkProtocols() {
                           {statusLabel(protocol.status)}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--text-tertiary)]">
                         {protocol.findings === 1
                           ? t('pages.networkProtocols.findings_one', { count: protocol.findings })
                           : t('pages.networkProtocols.findings_other', { count: protocol.findings })}

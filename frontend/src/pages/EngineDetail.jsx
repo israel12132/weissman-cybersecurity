@@ -189,7 +189,7 @@ function FindingBadge({ severity }) {
     high:     'bg-orange-900/60 text-orange-300 border-orange-700/50',
     medium:   'bg-yellow-900/60 text-yellow-300 border-yellow-700/50',
     low:      'bg-blue-900/60 text-blue-300 border-blue-700/50',
-    info:     'bg-slate-800/60 text-slate-300 border-slate-600/50',
+    info:     'bg-[var(--bg-3)]/60 text-[var(--text-secondary)] border-[var(--border-strong)]/50',
   }
   return (
     <span className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider ${styles[s] || styles.info}`}>{s}</span>
@@ -610,7 +610,7 @@ export default function EngineDetail() {
 
   if (!engine) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-slate-300 font-mono p-8">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-[var(--text-secondary)] font-mono p-8">
         <p className="text-red-400 text-lg mb-4">{t('engines.detail_unknown')}: <code>{engineId}</code></p>
         <Link to="/engines" className="text-cyan-400 hover:underline">{t('engines.detail_back_matrix')}</Link>
       </div>
@@ -619,7 +619,7 @@ export default function EngineDetail() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100"
+      className="min-h-[100dvh] text-[var(--text-primary)]"
       style={{ background: 'radial-gradient(ellipse 120% 80% at 50% -5%, #1e293b 0%, #0f172a 40%, #020617 70%, #000 100%)' }}
     >
       <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-[var(--bg-3)] backdrop-blur-xl">

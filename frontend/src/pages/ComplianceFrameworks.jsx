@@ -282,7 +282,7 @@ export default function ComplianceFrameworks() {
       case 'partial':
         return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -375,7 +375,7 @@ export default function ComplianceFrameworks() {
               </div>
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-white">{t('pages.complianceFrameworks.pack_title')}</h3>
-                <p className="text-xs text-gray-400 mt-0.5 max-w-xl">{t('pages.complianceFrameworks.pack_subtitle')}</p>
+                <p className="text-xs text-[var(--text-tertiary)] mt-0.5 max-w-xl">{t('pages.complianceFrameworks.pack_subtitle')}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -410,7 +410,7 @@ export default function ComplianceFrameworks() {
               {t('pages.complianceFrameworks.pack_pick_client')}
             </div>
           ) : (
-            <div className="mt-2 text-xs font-mono text-gray-500">
+            <div className="mt-2 text-xs font-mono text-[var(--text-muted)]">
               {t('pages.complianceFrameworks.pack_scope', {
                 client: selectedClient?.name || selectedClient?.domain || `#${selectedClientId}`,
                 framework: selectedFramework?.name || t('pages.complianceFrameworks.pack_all_frameworks'),
@@ -637,7 +637,7 @@ export default function ComplianceFrameworks() {
 
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
           {loadingFrameworks && frameworks.length === 0 ? (
-            <div className="text-sm text-gray-500 px-4 py-3">{t('pages.complianceFrameworks.loading')}</div>
+            <div className="text-sm text-[var(--text-muted)] px-4 py-3">{t('pages.complianceFrameworks.loading')}</div>
           ) : frameworks.length === 0 ? (
             <EmptyState
               title={t('pages.complianceFrameworks.no_frameworks_title')}
@@ -658,7 +658,7 @@ export default function ComplianceFrameworks() {
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all whitespace-nowrap ${
                     isSelected
                       ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-                      : 'bg-[var(--bg-2)] text-gray-400 border-[var(--border-default)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]'
+                      : 'bg-[var(--bg-2)] text-[var(--text-tertiary)] border-[var(--border-default)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <span className="text-xl">{FRAMEWORK_ICONS[fw.id] || '🛡️'}</span>
@@ -683,7 +683,7 @@ export default function ComplianceFrameworks() {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-400">{t('pages.complianceFrameworks.total_controls')}</span>
+                      <span className="text-sm text-[var(--text-tertiary)]">{t('pages.complianceFrameworks.total_controls')}</span>
                       <FileText className="w-4 h-4 text-cyan-400" />
                     </div>
                     <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -756,7 +756,7 @@ export default function ComplianceFrameworks() {
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                         filter === f
                           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                       }`}
                     >
                       {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}
@@ -808,7 +808,7 @@ export default function ComplianceFrameworks() {
                       className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
-                        <span className="text-xs font-mono text-gray-500 bg-[var(--row-hover-bg)] px-2 py-1 rounded shrink-0">
+                        <span className="text-xs font-mono text-[var(--text-muted)] bg-[var(--row-hover-bg)] px-2 py-1 rounded shrink-0">
                           {control.id}
                         </span>
                         <div className="flex-1 min-w-0">
@@ -839,7 +839,7 @@ export default function ComplianceFrameworks() {
               <AlertTriangle className="w-5 h-5 text-red-400" />
               <h3 className="text-sm font-semibold text-white">{t('pages.complianceFrameworks.gap_title')}</h3>
             </div>
-            <p className="text-sm text-gray-300 mb-4">
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
               {t('pages.complianceFrameworks.gap_body', {
                 count: stats.nonCompliant,
                 framework: selectedFramework.name,

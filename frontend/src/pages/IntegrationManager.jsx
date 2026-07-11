@@ -138,7 +138,7 @@ export default function IntegrationManager() {
       case 'pending':
         return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -184,7 +184,7 @@ export default function IntegrationManager() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Integrations</span>
+              <span className="text-sm text-[var(--text-tertiary)]">Total Integrations</span>
               <Plug className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -217,7 +217,7 @@ export default function IntegrationManager() {
 
         {/* Add Integration Button */}
         <div className="flex justify-end items-center gap-4">
-          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-xs text-[var(--text-tertiary)] cursor-pointer">
             <input
               type="checkbox"
               checked={dryRunTests}
@@ -277,11 +277,11 @@ export default function IntegrationManager() {
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-400 mb-3">
+                      <p className="text-xs text-[var(--text-tertiary)] mb-3">
                         {integration.description || 'No description'}
                       </p>
 
-                      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                      <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] flex-wrap">
                         {integration.endpoint && (
                           <span className="flex items-center gap-1">
                             Endpoint: <span className="font-mono">{integration.endpoint}</span>
@@ -292,7 +292,7 @@ export default function IntegrationManager() {
                             Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-gray-400">
+                        <span className="px-2 py-0.5 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]">
                           Manual sync · test connection to verify
                         </span>
                         {integration.last_test && (
@@ -324,7 +324,7 @@ export default function IntegrationManager() {
                       onClick={() => setConfigureTarget(integration)}
                       title={t('pages.integrationManager.configure')}
                       aria-label={t('pages.integrationManager.configure')}
-                      className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
+                      className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
                     </button>
@@ -357,7 +357,7 @@ export default function IntegrationManager() {
                   <span className="text-2xl">{integration.icon}</span>
                   <div>
                     <div className="text-sm font-medium text-white">{integration.name}</div>
-                    <div className="text-xs text-gray-400">{integration.category}</div>
+                    <div className="text-xs text-[var(--text-tertiary)]">{integration.category}</div>
                   </div>
                 </button>
               ))}
@@ -458,7 +458,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
 
   return (
     <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
+      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {isEdit
@@ -467,7 +467,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-[var(--text-primary)] transition-colors"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
           </button>
@@ -475,7 +475,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Integration Type
             </label>
             <input
@@ -487,7 +487,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Name
             </label>
             <input
@@ -501,7 +501,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
 
           {providerFields.map((field) => (
             <div key={field}>
-              <label className="block text-sm font-medium text-gray-300 mb-2 capitalize">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2 capitalize">
                 {field.replace(/_/g, ' ')}
               </label>
               <input
@@ -532,7 +532,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             Cancel
           </button>

@@ -135,7 +135,7 @@ export default function RoeApprovals() {
           </div>
         )}
 
-        <div className="text-xs text-slate-500 font-mono">
+        <div className="text-xs text-[var(--text-muted)] font-mono">
           {t('pages.roeApprovals.pending', { count: requests.length })}
         </div>
 

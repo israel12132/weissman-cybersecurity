@@ -186,7 +186,7 @@ export default function BaselineAndDrift() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   timeRange === range
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {t(`pages.baselineAndDrift.range_${range}`)}
@@ -306,7 +306,7 @@ export default function BaselineAndDrift() {
                           </span>
                         </div>
                         {anomaly.description && (
-                          <p className="text-xs text-gray-400 mb-2">{anomaly.description}</p>
+                          <p className="text-xs text-[var(--text-tertiary)] mb-2">{anomaly.description}</p>
                         )}
                         <div className="flex flex-wrap gap-3 text-[10px] font-mono text-[var(--text-muted)]">
                           {anomaly.agent_id && (
@@ -339,7 +339,7 @@ export default function BaselineAndDrift() {
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
               <h3 className="text-sm font-semibold text-white">{t('pages.baselineAndDrift.no_baseline_title')}</h3>
             </div>
-            <p className="text-sm text-gray-300 mb-3">{t('pages.baselineAndDrift.no_baseline_body')}</p>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">{t('pages.baselineAndDrift.no_baseline_body')}</p>
             <Link to="/agents" className="inline-flex px-4 py-2 bg-yellow-500/20 text-yellow-200 rounded-lg text-sm font-medium border border-yellow-500/30 hover:bg-yellow-500/30">
               {t('pages.baselineAndDrift.deploy_agents')}
             </Link>
@@ -355,7 +355,7 @@ function StatCard({ label, value, sub, icon, valueClass, variant, small }) {
   return (
     <div className={`backdrop-blur-md border rounded-xl p-4 ${bg}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-400">{label}</span>
+        <span className="text-sm text-[var(--text-tertiary)]">{label}</span>
         {icon}
       </div>
       <div className={`font-bold text-white ${small ? 'text-sm' : 'text-2xl'} ${valueClass || ''}`}>{value}</div>
@@ -378,7 +378,7 @@ function ChartPanel({ title, icon, children }) {
 
 function EmptyChart({ message }) {
   return (
-    <div className="h-[240px] flex items-center justify-center text-gray-500 text-sm">
+    <div className="h-[240px] flex items-center justify-center text-[var(--text-muted)] text-sm">
       {message}
     </div>
   );

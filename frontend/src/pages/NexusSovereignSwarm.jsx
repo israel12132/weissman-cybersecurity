@@ -730,7 +730,7 @@ function ConfigSchemaPanel({ schema, onClose }) {
   if (!schema) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-3)]" onClick={onClose}>
-      <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-zinc-950 p-4" onClick={(e) => e.stopPropagation()}>
+      <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-[var(--bg-0)] p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
           <p className="text-sm font-bold text-white">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
           <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>

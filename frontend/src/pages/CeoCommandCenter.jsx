@@ -67,7 +67,7 @@ export default function CeoCommandCenter() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold tracking-tight text-white">{t('pages.ceoCommandCenter.title')}</h1>
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mt-1">
+            <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mt-1">
               {t('pages.ceoCommandCenter.subtitle')}
             </p>
           </div>

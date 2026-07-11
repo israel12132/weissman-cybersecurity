@@ -263,7 +263,7 @@ export default function RateLimitAnalytics() {
                     <Clock className="w-4 h-4 text-rose-400 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-sm text-white truncate">{violation.endpoint || violation.type}</div>
-                      <div className="text-xs text-gray-400 font-mono">{violation.time}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] font-mono">{violation.time}</div>
                     </div>
                   </div>
                   <div className="text-xs text-rose-300 font-mono shrink-0">

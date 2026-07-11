@@ -254,7 +254,7 @@ export default function MetricsDashboard() {
               <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-white">{t('pages.metricsDashboard.findings_by_severity')}</h3>
-                  <span className="text-xs text-gray-400">{t('pages.metricsDashboard.total_count', { count: totalFindings })}</span>
+                  <span className="text-xs text-[var(--text-tertiary)]">{t('pages.metricsDashboard.total_count', { count: totalFindings })}</span>
                 </div>
                 {totalFindings > 0 ? (
                   <ResponsiveContainer width="100%" height={260}>
@@ -300,7 +300,7 @@ export default function MetricsDashboard() {
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: SEVERITY_COLORS[severity] }}
                       />
-                      <span className="text-sm text-gray-300 w-20">{label}</span>
+                      <span className="text-sm text-[var(--text-secondary)] w-20">{label}</span>
                       <div className="flex-1 h-2 bg-[var(--table-surface)] rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all duration-300"
@@ -310,7 +310,7 @@ export default function MetricsDashboard() {
                           }}
                         />
                       </div>
-                      <span className="text-sm font-mono text-gray-400 w-10 text-right">{count}</span>
+                      <span className="text-sm font-mono text-[var(--text-tertiary)] w-10 text-right">{count}</span>
                     </div>
                   ))}
                 </div>

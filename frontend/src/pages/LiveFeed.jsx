@@ -153,7 +153,7 @@ export default function LiveFeed() {
               {severities.length > 0 && <FilterPills pills={sevPills} />}
               {lastUpdated && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${paused ? 'bg-gray-500' : 'bg-emerald-400 animate-pulse'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${paused ? 'bg-[var(--border-strong)]' : 'bg-emerald-400 animate-pulse'}`} />
                   {t(`${NS}.updated`, { time: lastUpdated.toLocaleTimeString() })}
                 </span>
               )}
