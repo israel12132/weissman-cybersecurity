@@ -122,7 +122,12 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
 - **Remediation Analytics** (`/remediation-analytics`) — a dedicated routed dashboard that aggregates
   `heal-stats` across every active client (`RemediationAnalyticsPanel`) and a merged, newest-first
   **recent-heals** activity feed from `/api/clients/:id/heal-requests`.
-- **Remediation Detail** — per-finding self-repair timeline, verified-receipt badge, channel picker.
+- **Remediation Detail** — per-finding self-repair timeline, verified-receipt badge, channel picker,
+  and a **Remediation report** link (any completed heal) that opens a self-contained, printable
+  bilingual (he/en) HTML report at `GET /api/heal-verify/:job_id/report` — the finding, the bilingual
+  problem/root-cause/impact/fix explanation, the verified diff + changed files, per-channel how-to-apply,
+  and an honestly-labelled signed-receipt seal. Rendered by the pure `remediation_report` module
+  (every untrusted value HTML-escaped, `http(s)`-only links, zero external resources).
 
 ## Round-trip integration tests
 
@@ -150,6 +155,7 @@ without requiring a Docker socket:
 | GET        | `/api/heal-verify/:job_id`                          | Status + verdict + PR + attempts         |
 | GET        | `/api/heal-verify/:job_id/patch`                    | Download the verified diff / WAF snippet |
 | GET        | `/api/heal-verify/:job_id/attestation`              | Verify the signed heal receipt           |
+| GET        | `/api/heal-verify/:job_id/report`                   | Printable bilingual (he/en) HTML report  |
 | GET        | `/api/clients/:id/heal-stats`                       | Aggregate heal analytics                 |
 | POST       | `/api/clients/:id/heal-batch`                       | Batch-heal many findings at once          |
 | GET        | `/api/clients/:id/heal-stats`                       | (also feeds the visual analytics panel)   |

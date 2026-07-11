@@ -81,21 +81,31 @@ fn verdict_color(verdict: &str) -> &'static str {
     }
 }
 
-/// A two-column (EN ltr / HE rtl) block; empty when both languages are blank.
+/// A two-column (EN ltr / HE rtl) block. Each language column is emitted only when that language
+/// is non-empty, so a one-sided brief field never renders a blank paragraph under a header; the
+/// whole block is empty when both languages are blank.
 fn bilingual_block(label_en: &str, label_he: &str, b: &Bilingual) -> String {
-    if b.he.trim().is_empty() && b.en.trim().is_empty() {
+    let has_en = !b.en.trim().is_empty();
+    let has_he = !b.he.trim().is_empty();
+    if !has_en && !has_he {
         return String::new();
     }
-    format!(
-        r#"<section class="blk">
-  <div class="col" dir="ltr" lang="en"><h3>{le}</h3><p>{en}</p></div>
-  <div class="col he" dir="rtl" lang="he"><h3>{lh}</h3><p>{he}</p></div>
-</section>"#,
-        le = esc(label_en),
-        lh = esc(label_he),
-        en = esc_multiline(&b.en),
-        he = esc_multiline(&b.he),
-    )
+    let mut cols = String::new();
+    if has_en {
+        cols.push_str(&format!(
+            r#"<div class="col" dir="ltr" lang="en"><h3>{le}</h3><p>{en}</p></div>"#,
+            le = esc(label_en),
+            en = esc_multiline(&b.en),
+        ));
+    }
+    if has_he {
+        cols.push_str(&format!(
+            r#"<div class="col he" dir="rtl" lang="he"><h3>{lh}</h3><p>{he}</p></div>"#,
+            lh = esc(label_he),
+            he = esc_multiline(&b.he),
+        ));
+    }
+    format!("<section class=\"blk\">{cols}</section>")
 }
 
 /// Colourised, escaped unified diff.
@@ -253,12 +263,22 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
         .brief
         .map(|b| {
             let mut s = String::new();
-            s.push_str("<h2>What was the problem <span class=\"he\" dir=\"rtl\">מה הייתה הבעיה</span></h2>");
-            s.push_str(&bilingual_block("Problem", "הבעיה", &b.problem));
-            s.push_str(&bilingual_block("Root cause", "שורש הבעיה", &b.root_cause));
-            s.push_str(&bilingual_block("Impact", "השפעה", &b.impact));
-            s.push_str("<h2>How the fix works <span class=\"he\" dir=\"rtl\">איך התיקון עובד</span></h2>");
-            s.push_str(&bilingual_block("Fix explanation", "הסבר התיקון", &b.fix_explanation));
+            // "What was the problem" — only emit the heading if at least one block has content.
+            let problem = bilingual_block("Problem", "הבעיה", &b.problem);
+            let root = bilingual_block("Root cause", "שורש הבעיה", &b.root_cause);
+            let impact = bilingual_block("Impact", "השפעה", &b.impact);
+            if !problem.is_empty() || !root.is_empty() || !impact.is_empty() {
+                s.push_str("<h2>What was the problem <span class=\"he\" dir=\"rtl\">מה הייתה הבעיה</span></h2>");
+                s.push_str(&problem);
+                s.push_str(&root);
+                s.push_str(&impact);
+            }
+            // "How the fix works" — likewise gated on non-empty content.
+            let fix = bilingual_block("Fix explanation", "הסבר התיקון", &b.fix_explanation);
+            if !fix.is_empty() {
+                s.push_str("<h2>How the fix works <span class=\"he\" dir=\"rtl\">איך התיקון עובד</span></h2>");
+                s.push_str(&fix);
+            }
             s
         })
         .unwrap_or_default();
@@ -303,6 +323,18 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
         gen = meta_row("Generated", input.generated_at),
     );
 
+    // Only invite independent receipt verification when a receipt actually exists and verified —
+    // otherwise the seal already says signing is disabled / not a verified fix, and pointing the
+    // reader at an attestation endpoint for a receipt that does not exist would be incoherent.
+    let footer_verify = if input.receipt_verified {
+        format!(
+            " — verify the receipt independently at /api/heal-verify/{}/attestation",
+            esc(input.job_id)
+        )
+    } else {
+        String::new()
+    };
+
     format!(
         r#"<!doctype html>
 <html lang="en">
@@ -335,7 +367,7 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
   <h2>Evidence &amp; metadata <span class="he" dir="rtl">ראיות ונתונים</span></h2>
   {meta}
 </main>
-<footer>Weissman Cybersecurity · Auto-Heal · self-contained report — verify the receipt independently at /api/heal-verify/{job}/attestation</footer>
+<footer>Weissman Cybersecurity · Auto-Heal · self-contained report{footer_verify}</footer>
 </div>
 </body>
 </html>"#,
@@ -357,7 +389,7 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
         diff = render_diff(input.unified_diff),
         channels = render_channels(input),
         meta = meta,
-        job = esc(input.job_id),
+        footer_verify = footer_verify,
     )
 }
 
@@ -453,7 +485,10 @@ mod tests {
     #[test]
     fn verified_seal_only_when_actually_verified() {
         let i = base();
-        assert!(render_heal_report_html(&i).contains("Verified — HMAC-SHA256"));
+        let ok = render_heal_report_html(&i);
+        assert!(ok.contains("Verified — HMAC-SHA256"));
+        // Footer invites independent verification only when a receipt actually verified.
+        assert!(ok.contains("verify the receipt independently"));
 
         let mut bad = base();
         bad.receipt_verified = false;
@@ -461,16 +496,45 @@ mod tests {
 
         let mut disabled = base();
         disabled.attestation_enabled = false;
+        disabled.receipt_verified = false;
         let h = render_heal_report_html(&disabled);
         assert!(h.contains("Signing disabled"));
         assert!(!h.contains("Verified — HMAC-SHA256"));
+        // No incoherent "verify the receipt" instruction when there is no receipt.
+        assert!(!h.contains("verify the receipt independently"));
 
         let mut noreceipt = base();
         noreceipt.receipt = "";
         noreceipt.digest = "";
+        noreceipt.receipt_verified = false;
         let h2 = render_heal_report_html(&noreceipt);
         assert!(h2.contains("not a verified fix"));
         assert!(!h2.contains("Verified — HMAC-SHA256"));
+        assert!(!h2.contains("verify the receipt independently"));
+    }
+
+    #[test]
+    fn partial_language_and_empty_sections_are_omitted() {
+        let brief = RemediationBrief {
+            problem: bi("Only English problem.", ""), // he intentionally empty
+            root_cause: bi("", ""),
+            impact: bi("", ""),
+            fix_explanation: bi("", ""),
+            channels: vec![],
+            ..sample_brief()
+        };
+        let mut i = base();
+        i.brief = Some(&brief);
+        let html = render_heal_report_html(&i);
+        assert!(html.contains("Only English problem."));
+        // Never a blank paragraph, and the empty Hebrew half is omitted (no he column div at all —
+        // the only populated field is English-only). Note the Hebrew *heading* span is unrelated.
+        assert!(!html.contains("<p></p>"));
+        assert!(!html.contains("<div class=\"col he\""));
+        // The problem section heading shows (has content); the fix section is fully omitted.
+        assert!(html.contains("What was the problem"));
+        assert!(!html.contains("How the fix works"));
+        assert!(!html.contains("שורש הבעיה")); // root-cause label omitted (empty)
     }
 
     #[test]

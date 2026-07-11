@@ -345,7 +345,10 @@ async fn api_heal_verify_report(
            ORDER BY id DESC LIMIT 1"#,
     )
     .bind(auth.tenant_id)
-    .bind(&job_id)
+    // Bind the canonical UUID text so a non-canonical (e.g. uppercase / braced) path segment —
+    // which still matches the uuid spec lookup — cannot silently miss the heal_requests row
+    // (which stores the canonical `spec_id.to_string()`) and render a misleading "unverified" report.
+    .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
     .ok()
@@ -385,8 +388,18 @@ async fn api_heal_verify_report(
         ),
         None => (String::new(), String::new(), None),
     };
-    let brief: Option<crate::remediation_brief::RemediationBrief> =
-        brief_val.and_then(|v| serde_json::from_value(v).ok());
+    let brief: Option<crate::remediation_brief::RemediationBrief> = brief_val.and_then(|v| {
+        match serde_json::from_value(v) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                // Fail soft (still render the finding + verified diff), but surface the parse
+                // problem so a stored-but-malformed brief is observable, not silently gutted.
+                tracing::warn!(target: "heal_report", job_id = %job_id, error = %e,
+                    "cached remediation_brief failed to parse; rendering report without it");
+                None
+            }
+        }
+    });
     if title.trim().is_empty() {
         title = finding_id.clone();
     }
