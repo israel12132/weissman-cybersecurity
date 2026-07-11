@@ -96,6 +96,23 @@ reusing the platform attestation key (`finding_attestation`). The receipt + dige
   `no-new-privileges`.
 - **RBAC** — the mutating endpoint requires operator role and destructive/dual-approval headers.
 
+## Governance (advisory disposition)
+
+The pure `heal_policy` module computes a **recommended disposition** for every completed heal and a
+bilingual (he/en) rationale, surfaced on the HTML report, `report.json`, and the SARIF properties:
+
+| disposition       | when                                                                        |
+|-------------------|-----------------------------------------------------------------------------|
+| `block`           | verdict `broke_app` (unless `heal_allow_broke_app_delivery`)                 |
+| `hold`            | any non-`fixed` verdict (still-vulnerable / inconclusive / pending)          |
+| `auto_merge`      | verified `fixed`, within the tenant's auto-merge risk envelope               |
+| `open_for_review` | verified `fixed`, but outside the envelope (severity / attestation / attempts) |
+
+Per-tenant policy lives in `system_configs` (safe defaults shown): `heal_auto_merge_max_severity`
+(`low`), `heal_require_attestation_for_merge` (`true`), `heal_max_attempts_for_merge` (`3`),
+`heal_allow_broke_app_delivery` (`false`). The disposition is **advisory** — it is reported for an
+operator (or future automation) to act on; it never merges anything on its own.
+
 ## Closed loop
 
 `remediation_verify::run_verification` re-runs the same engine against the same target and promotes

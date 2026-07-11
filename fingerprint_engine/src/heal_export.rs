@@ -64,6 +64,8 @@ pub fn to_report_json(d: &HealReportData) -> Value {
             "changed_files": d.changed_files,
             "deleted_paths": d.deleted_paths,
         },
+        // Advisory governance disposition + bilingual rationale, or null when not evaluated.
+        "governance": d.governance,
         // Bilingual brief (he/en) verbatim, or null when none was generated.
         "brief": d.brief,
     })
@@ -155,6 +157,7 @@ pub fn to_sarif(d: &HealReportData) -> Value {
                     "attempts": d.attempts,
                     "unifiedDiff": d.unified_diff,
                     "he": { "problem": problem_he, "fix": fix_he },
+                    "governance": d.governance,
                     "generatedAt": d.generated_at,
                 },
             }],
@@ -166,6 +169,7 @@ pub fn to_sarif(d: &HealReportData) -> Value {
 mod tests {
     use super::*;
     use crate::remediation_brief::{Bilingual, RemediationBrief};
+    use crate::heal_policy::PolicyDecision;
 
     fn bi(en: &str, he: &str) -> Bilingual {
         Bilingual { en: en.to_string(), he: he.to_string() }
@@ -201,6 +205,11 @@ mod tests {
                 ..Default::default()
             }),
             generated_at: "2026-07-11T00:00:00Z".into(),
+            governance: Some(PolicyDecision {
+                disposition: "open_for_review".into(),
+                reason_en: "Open for review — severity exceeds the auto-merge threshold; a human should merge.".into(),
+                reason_he: "פתוח לסקירה".into(),
+            }),
         }
     }
 
@@ -216,6 +225,8 @@ mod tests {
         assert_eq!(j["change"]["changed_files"][0], "src/x.rs");
         // Bilingual brief round-trips.
         assert_eq!(j["brief"]["problem"]["he"], "הזרקת SQL בהתחברות.");
+        // Advisory governance is present.
+        assert_eq!(j["governance"]["disposition"], "open_for_review");
     }
 
     #[test]
@@ -241,6 +252,7 @@ mod tests {
         assert_eq!(res["level"], "error");
         assert_eq!(res["partialFingerprints"]["weissmanFindingId"], "F-1");
         assert_eq!(res["properties"]["attested"], true);
+        assert_eq!(res["properties"]["governance"]["disposition"], "open_for_review");
         assert_eq!(res["properties"]["he"]["problem"], "הזרקת SQL בהתחברות.");
         assert_eq!(res["locations"][0]["physicalLocation"]["artifactLocation"]["uri"], "src/x.rs");
     }

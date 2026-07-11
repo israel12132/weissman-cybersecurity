@@ -38,6 +38,8 @@ pub struct HealReportInput<'a> {
     pub brief: Option<&'a RemediationBrief>,
     /// Pre-formatted timestamp string (ISO-8601 recommended); rendered verbatim (escaped).
     pub generated_at: &'a str,
+    /// Advisory governance disposition (auto-merge / open-for-review / hold / block) + bilingual reason.
+    pub governance: Option<&'a crate::heal_policy::PolicyDecision>,
 }
 
 /// Owned counterpart of [`HealReportInput`] — a single load of everything a completed heal's
@@ -66,6 +68,7 @@ pub struct HealReportData {
     pub deleted_paths: Vec<String>,
     pub brief: Option<RemediationBrief>,
     pub generated_at: String,
+    pub governance: Option<crate::heal_policy::PolicyDecision>,
 }
 
 impl HealReportData {
@@ -93,6 +96,7 @@ impl HealReportData {
             deleted_paths: &self.deleted_paths,
             brief: self.brief.as_ref(),
             generated_at: &self.generated_at,
+            governance: self.governance.as_ref(),
         }
     }
 }
@@ -219,6 +223,34 @@ fn render_receipt(input: &HealReportInput<'_>) -> String {
     }
 }
 
+/// Advisory governance disposition strip (auto-merge / open-for-review / hold / block), bilingual.
+fn render_governance(input: &HealReportInput<'_>) -> String {
+    let Some(g) = input.governance else {
+        return String::new();
+    };
+    let (color, label_en, label_he) = match g.disposition.as_str() {
+        "auto_merge" => ("#16a34a", "Auto-merge", "מיזוג אוטומטי"),
+        "open_for_review" => ("#0ea5e9", "Open for review", "פתוח לסקירה"),
+        "hold" => ("#64748b", "Hold", "מוחזק"),
+        "block" => ("#dc2626", "Blocked", "נחסם"),
+        _ => ("#64748b", "—", "—"),
+    };
+    format!(
+        r#"<div class="gov" style="border-color:{c}">
+      <div class="gov-h" style="color:{c}">⚖ Recommended disposition: {le} · <span class="he" dir="rtl">{lh}</span></div>
+      <div class="blk">
+        <div class="col" dir="ltr" lang="en"><p>{en}</p></div>
+        <div class="col he" dir="rtl" lang="he"><p>{he}</p></div>
+      </div>
+    </div>"#,
+        c = color,
+        le = esc(label_en),
+        lh = esc(label_he),
+        en = esc(&g.reason_en),
+        he = esc(&g.reason_he),
+    )
+}
+
 /// Per-channel connect + apply guidance. The channel actually used is shown first and highlighted.
 fn render_channels(input: &HealReportInput<'_>) -> String {
     let Some(brief) = input.brief else {
@@ -281,6 +313,10 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;ma
 .seal.ok{background:#f0fdf4;border:1px solid #16a34a}
 .seal.bad{background:#fef2f2;border:1px solid #dc2626}
 .seal.off{background:#f8fafc;border:1px solid #cbd5e1}
+.gov{border:1px solid #cbd5e1;border-left-width:4px;border-radius:10px;padding:10px 16px;margin:6px 0;background:#f8fafc}
+.gov-h{font-weight:600;margin-bottom:4px}
+.gov .blk{margin:4px 0 0}
+.gov .col p{margin:0;font-size:13px;color:#334155}
 pre.diff{background:#0b1120;color:#cbd5e1;border-radius:10px;padding:14px;overflow-x:auto;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre}
 pre.diff span{display:block}
 .da{color:#4ade80}.dr{color:#f87171}.dm{color:#22d3ee}.dh{color:#a78bfa}.dc{color:#94a3b8}
@@ -416,6 +452,7 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
 </header>
 <main>
   {receipt}
+  {governance}
   {brief}
   <h2>Verified change <span class="he" dir="rtl">השינוי שאומת</span></h2>
   {files}
@@ -441,6 +478,7 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
             format!("<span class=\"badge\" style=\"background:#334155\">{}</span>", esc(input.cwe))
         },
         receipt = render_receipt(input),
+        governance = render_governance(input),
         brief = brief_sections,
         files = files,
         diff = render_diff(input.unified_diff),
@@ -500,6 +538,7 @@ mod tests {
             deleted_paths: &[],
             brief: None,
             generated_at: "2026-07-10T00:00:00Z",
+            governance: None,
         }
     }
 
@@ -633,6 +672,24 @@ mod tests {
         assert!(!html.contains("<link"));
         assert!(!html.contains("src=")); // no external scripts/images
         assert!(!html.contains("@import"));
+    }
+
+    #[test]
+    fn governance_disposition_renders_bilingually() {
+        let g = crate::heal_policy::PolicyDecision {
+            disposition: "block".to_string(),
+            reason_en: "Blocked — the fix broke the app.".to_string(),
+            reason_he: "נחסם — התיקון שבר את האפליקציה.".to_string(),
+        };
+        let mut i = base();
+        i.governance = Some(&g);
+        let html = render_heal_report_html(&i);
+        assert!(html.contains("Recommended disposition"));
+        assert!(html.contains("Blocked"));
+        assert!(html.contains("נחסם — התיקון שבר את האפליקציה."));
+        // No governance strip when none is supplied.
+        let plain = render_heal_report_html(&base());
+        assert!(!plain.contains("Recommended disposition"));
     }
 
     #[test]

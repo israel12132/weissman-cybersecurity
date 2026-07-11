@@ -186,6 +186,7 @@ pub mod gitlab_heal;
 pub mod heal_attestation;
 pub mod heal_channels;
 pub mod heal_export;
+pub mod heal_policy;
 pub mod heal_readiness;
 pub mod remediation_brief;
 pub mod remediation_patch;

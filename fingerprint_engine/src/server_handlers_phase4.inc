@@ -435,6 +435,10 @@ async fn load_heal_report_data(
         && !digest.is_empty()
         && crate::finding_attestation::verify(&digest, &receipt);
 
+    // Advisory governance disposition under the tenant's heal policy (safe defaults).
+    let policy = crate::heal_policy::HealPolicy::load(&state.app_pool, tenant_id).await;
+    let governance = Some(policy.decide(&verdict, &severity, receipt_verified, attempts));
+
     Ok(crate::remediation_report::HealReportData {
         job_id: job_id.to_string(),
         finding_id,
@@ -457,6 +461,7 @@ async fn load_heal_report_data(
         deleted_paths,
         brief,
         generated_at: chrono::Utc::now().to_rfc3339(),
+        governance,
     })
 }
 
