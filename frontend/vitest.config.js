@@ -35,6 +35,17 @@ export default defineConfig({
         'src/lib/enginesRegistry.js',
         'src/battlespace/commanderIntent.js',
         'src/hooks/useFindingsWorkbench.js',
+        // Modules shipped in the GUI-review cycle — now measured by the gate.
+        'src/lib/roles.js',
+        'src/lib/bulkFindingStatus.js',
+        'src/lib/findingsUrlState.js',
+        'src/lib/suppressionStatus.js',
+        'src/lib/incidentSla.js',
+        'src/lib/riskFormat.js',
+        'src/lib/severity.js',
+        'src/lib/postureScore.js',
+        'src/hooks/useSavedViews.js',
+        'src/hooks/useVisiblePolling.js',
       ],
       exclude: ['**/*.test.{js,jsx}', '**/*.spec.{js,jsx}', 'src/test/**'],
       thresholds: {

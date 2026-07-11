@@ -14,6 +14,7 @@ import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
 import { postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
+import { summarizePostureChecks, orderPostureChecks } from '../lib/postureScore'
 
 const NS = 'pages.securityPosture'
 
@@ -79,18 +80,10 @@ export default function SecurityPosture() {
   }, [load])
 
   const checks = useMemo(() => (Array.isArray(data?.checks) ? data.checks : []), [data])
-  const summary = useMemo(() => {
-    const passed = checks.filter((c) => c.passed)
-    const passedWeight = passed.reduce((s, c) => s + (Number(c.weight) || 0), 0)
-    const totalWeight = checks.reduce((s, c) => s + (Number(c.weight) || 0), 0)
-    return { passed: passed.length, total: checks.length, passedWeight, totalWeight }
-  }, [checks])
+  const summary = useMemo(() => summarizePostureChecks(checks), [checks])
 
   // Failed first, then by descending weight — the remediation worklist.
-  const orderedChecks = useMemo(
-    () => [...checks].sort((a, b) => (a.passed === b.passed ? (b.weight || 0) - (a.weight || 0) : a.passed ? 1 : -1)),
-    [checks],
-  )
+  const orderedChecks = useMemo(() => orderPostureChecks(checks), [checks])
 
   // Live filter over the worklist: free-text (id/detail) + pass/fail status.
   const visibleChecks = useMemo(() => {
