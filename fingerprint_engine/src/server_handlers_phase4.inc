@@ -635,6 +635,74 @@ async fn api_heal_trends(
         .into_response()
 }
 
+/// `GET /api/clients/:id/heal-priorities?limit=50` — ranks the client's OPEN findings by auto-heal
+/// priority (0–100 + P0–P3 tier + bilingual reason), so the most dangerous, most reachable issues
+/// surface first. Exposure / impact class are inferred from the finding text.
+async fn api_heal_priorities(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: usize = params
+        .get("limit")
+        .and_then(|d| d.parse::<usize>().ok())
+        .unwrap_or(50)
+        .clamp(1, 500);
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT finding_id, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity,
+                  COALESCE(description,'') AS description, COALESCE(source,'') AS source,
+                  (COALESCE(poc_exploit,'') <> '') AS has_poc,
+                  GREATEST(0, EXTRACT(EPOCH FROM (now() - discovered_at)) / 86400)::bigint AS age_days
+           FROM vulnerabilities
+           WHERE tenant_id = $1 AND client_id = $2 AND status = 'OPEN'"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(client_id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let mut scored: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let title: String = r.try_get("title").unwrap_or_default();
+            let desc: String = r.try_get("description").unwrap_or_default();
+            let source: String = r.try_get("source").unwrap_or_default();
+            let text = format!("{title} {desc} {source}");
+            let inputs = crate::heal_priority::PriorityInputs {
+                severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+                has_poc: r.try_get::<bool, _>("has_poc").unwrap_or(false),
+                internet_facing: crate::heal_priority::classify_internet_facing(&text),
+                high_impact_category: crate::heal_priority::classify_high_impact(&text),
+                age_days: r.try_get::<i64, _>("age_days").unwrap_or(0),
+            };
+            let p = crate::heal_priority::score_priority(&inputs);
+            json!({
+                "finding_id": r.try_get::<String, _>("finding_id").unwrap_or_default(),
+                "title": title,
+                "severity": inputs.severity,
+                "score": p.score,
+                "tier": p.tier,
+                "reason_en": p.reason_en,
+                "reason_he": p.reason_he,
+                "factors": p.factors,
+            })
+        })
+        .collect();
+    scored.sort_by(|a, b| b["score"].as_u64().cmp(&a["score"].as_u64()));
+    scored.truncate(limit);
+    (
+        StatusCode::OK,
+        Json(json!({ "client_id": client_id, "count": scored.len(), "priorities": scored })),
+    )
+        .into_response()
+}
+
 /// Enqueue an auto-heal approved from a Slack button, using env GitHub token + configured repo.
 async fn enqueue_heal_from_slack(
     state: &Arc<AppState>,
