@@ -25,7 +25,7 @@ export default function GodModeDiscoveryStrip({ discovery, godErr }) {
 
   return (
     <div
-      className="rounded-xl border border-cyan-500/25 bg-gradient-to-r from-cyan-950/40 via-slate-950/80 to-violet-950/30 px-5 py-4 shadow-[inset_0_1px_0_rgba(34,211,238,0.12)]"
+      className="rounded-xl border border-cyan-500/25 bg-gradient-to-r from-cyan-950/40 via-[var(--bg-0)]/80 to-violet-950/30 px-5 py-4 shadow-[inset_0_1px_0_rgba(34,211,238,0.12)]"
       style={{
         boxShadow: '0 0 48px rgba(34, 211, 238, 0.06), inset 0 1px 0 rgba(255,255,255,0.04)',
       }}

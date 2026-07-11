@@ -51,14 +51,14 @@ function Tile({ to, label, value, sub, accent = '#22d3ee', linkLabel, loading })
       className="group relative overflow-hidden rounded-2xl border p-5 backdrop-blur-md transition-all hover:border-[var(--border-strong)] block"
       style={{
         borderColor: `${accent}30`,
-        background: `linear-gradient(145deg, ${accent}08 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.5) 100%)`,
+        background: `linear-gradient(145deg, ${accent}12 0%, var(--bg-elevated) 55%, var(--bg-2) 100%)`,
       }}
     >
       <div className="absolute inset-x-0 top-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}60, transparent)` }} aria-hidden />
       <div className="text-[10px] font-mono uppercase tracking-[0.14em] mb-2" style={{ color: `${accent}cc` }}>
         {label}
       </div>
-      <div className="text-3xl font-bold tabular-nums tracking-tight text-white">
+      <div className="text-3xl font-bold tabular-nums tracking-tight text-[var(--text-primary)]">
         {loading ? <span className="text-[var(--text-disabled)]">—</span> : value}
       </div>
       {sub && <div className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{sub}</div>}

@@ -91,7 +91,7 @@ const STACK_LAYOUT_64 = [
   { name: 'Shellcode', reg: 'Shellcode', color: 'from-emerald-500/80 to-emerald-700/80', size: 'variable' },
   { name: 'RIP (Return, 8B)', reg: 'RIP', color: 'from-rose-500/80 to-rose-700/80', size: 8 },
   { name: 'RBP (Frame, 8B)', reg: 'RBP', color: 'from-amber-500/80 to-amber-700/80', size: 8 },
-  { name: 'Padding', reg: 'Padding', color: 'from-slate-600/80 to-slate-700/80', size: 'variable' },
+  { name: 'Padding', reg: 'Padding', color: 'from-[var(--border-strong)]/80 to-[var(--bg-4)]/80', size: 'variable' },
   { name: 'Buffer', reg: 'Buffer', color: 'from-cyan-600/80 to-cyan-700/80', size: 'variable' },
 ]
 

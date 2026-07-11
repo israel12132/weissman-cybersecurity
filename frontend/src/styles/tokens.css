@@ -40,6 +40,11 @@
   --bg-overlay: rgba(6, 6, 10, 0.82);
   --bg-glass: rgba(12, 12, 18, 0.55);
   --bg-glass-elevated: rgba(18, 18, 26, 0.72);
+  --cockpit-bg:
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(34, 211, 238, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 5%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse 120% 80% at 50% 100%, rgba(15, 23, 42, 0.9) 0%, transparent 60%),
+    linear-gradient(180deg, #0c1220 0%, #070b14 42%, #04060c 100%);
 
   /* Legacy aliases — existing components reference these */
   --app-bg: var(--bg-0);
@@ -236,6 +241,10 @@
   --bg-overlay: rgba(236, 239, 244, 0.86);
   --bg-glass: rgba(255, 255, 255, 0.68);
   --bg-glass-elevated: rgba(255, 255, 255, 0.82);
+  --cockpit-bg:
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(34, 211, 238, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 5%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+    linear-gradient(180deg, #eef2f8 0%, #e9edf4 55%, #dfe4ec 100%);
 
   --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #eef2f8 0%, #f4f6fa 55%, #e9edf4 100%);
 

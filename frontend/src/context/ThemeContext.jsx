@@ -5,7 +5,14 @@ const ThemeContext = createContext(null)
 const STORAGE_KEY = 'weissman_theme'
 const THEMES = ['dark', 'light']
 
-/** Resolve the initial theme: stored pref → OS preference → dark. */
+/**
+ * Resolve the initial theme: explicit stored pref → dark.
+ *
+ * Dark is the fully-polished, production default. We intentionally do NOT
+ * auto-adopt the OS `prefers-color-scheme: light` yet: light mode is an explicit
+ * opt-in (via the toggle) while its gradient/bespoke surfaces are still being
+ * polished, so no customer is shown an unfinished light theme by accident.
+ */
 function initialTheme() {
   if (typeof window === 'undefined') return 'dark'
   try {
@@ -13,13 +20,6 @@ function initialTheme() {
     if (stored && THEMES.includes(stored)) return stored
   } catch {
     /* ignore storage errors */
-  }
-  try {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      return 'light'
-    }
-  } catch {
-    /* ignore */
   }
   return 'dark'
 }

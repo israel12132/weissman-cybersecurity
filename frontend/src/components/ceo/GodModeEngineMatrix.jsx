@@ -144,7 +144,7 @@ export default function GodModeEngineMatrix({
 
   return (
     <div
-      className="rounded-2xl border border-[var(--border-default)]/50 bg-gradient-to-b from-slate-950/95 to-black p-5"
+      className="rounded-2xl border border-[var(--border-default)]/50 bg-gradient-to-b from-[var(--bg-0)]/95 to-black p-5"
       style={{ boxShadow: '0 0 80px rgba(59, 130, 246, 0.05)' }}
     >
       <div className="flex flex-wrap items-end justify-between gap-3 mb-4">

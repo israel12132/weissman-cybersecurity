@@ -193,7 +193,7 @@ export default function CeoIntegratedCommandDeck() {
     <div className="space-y-6">
       {/* Hero */}
       <div
-        className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-black to-indigo-950/40 p-6 overflow-hidden relative"
+        className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-[var(--bg-0)] via-black to-indigo-950/40 p-6 overflow-hidden relative"
         style={{
           boxShadow:
             '0 0 100px rgba(34, 211, 238, 0.07), inset 0 1px 0 rgba(255,255,255,0.06)',

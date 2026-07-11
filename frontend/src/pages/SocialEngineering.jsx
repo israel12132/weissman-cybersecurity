@@ -404,7 +404,7 @@ export default function SocialEngineering() {
                 key={template}
                 type="button"
                 onClick={() => openCreateModal(template)}
-                className="p-4 text-left bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-[var(--border-default)] rounded-lg hover:border-purple-500/30 transition-colors"
+                className="p-4 text-left bg-gradient-to-br from-[var(--bg-2)]/50 to-[var(--bg-1)]/50 border border-[var(--border-default)] rounded-lg hover:border-purple-500/30 transition-colors"
               >
                 <Mail className="w-5 h-5 text-purple-400 mb-2" />
                 <h4 className="text-sm font-medium text-white mb-1">{templateLabel(template)}</h4>

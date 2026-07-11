@@ -228,7 +228,7 @@ export default function CeoWarRoomDock() {
   const statusDisplay = streamStatusLabel(streamStatus)
 
   return (
-    <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-b from-slate-950/95 to-black/90 overflow-hidden shadow-[0_0_40px_rgba(34,211,238,0.06)]">
+    <div className="rounded-xl border border-cyan-500/20 bg-gradient-to-b from-[var(--bg-0)]/95 to-black/90 overflow-hidden shadow-[0_0_40px_rgba(34,211,238,0.06)]">
       <div className="px-4 py-3 border-b border-cyan-500/15 flex flex-wrap items-center justify-between gap-2 bg-black/50">
         <div>
           <h3 className="text-[10px] font-mono uppercase tracking-[0.25em] text-cyan-300/90">
