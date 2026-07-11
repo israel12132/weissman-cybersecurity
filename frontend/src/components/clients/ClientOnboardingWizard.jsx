@@ -398,6 +398,21 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
               </Field>
             )}
 
+            {/* Optional eBPF runtime probe — SSH host/user for kernel-level telemetry. */}
+            <div className="space-y-3 pt-2 border-t border-white/10">
+              <h4 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                <Server className="w-4 h-4" /> {t('pages.clientOnboarding.ebpf_section')}
+              </h4>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label={t('pages.clientOnboarding.ebpf_host')} hint={t('pages.clientOnboarding.ebpf_hint')}>
+                  <input className={inputCls} value={form.ebpf_ssh_host} onChange={(e) => patch({ ebpf_ssh_host: e.target.value })} placeholder="10.0.0.5 / host.example.com" />
+                </Field>
+                <Field label={t('pages.clientOnboarding.ebpf_user')}>
+                  <input className={inputCls} value={form.ebpf_ssh_user} onChange={(e) => patch({ ebpf_ssh_user: e.target.value })} placeholder="root" />
+                </Field>
+              </div>
+            </div>
+
             {(needs.ai || needs.oast) && tenantStatus && (
               <div className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
                 <div className="text-[10px] font-mono uppercase text-white/40">{t('pages.clientOnboarding.tenant_status')}</div>

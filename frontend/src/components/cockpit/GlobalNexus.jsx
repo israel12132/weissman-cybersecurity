@@ -24,11 +24,12 @@ import {
   PanelLeftClose,
   PanelLeft,
   Trash2,
+  UserPlus,
 } from 'lucide-react'
 import { PRIMARY_NAV } from '../../lib/appNav'
 import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
-import { formatApiErrorFromBody, formatApiErrorResponse } from '../../lib/apiError.js'
+import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { apiFetch } from '../../lib/apiBase'
 import { useProductionEngines } from '../../lib/useProductionEngines'
 import TacticalNavLink from '../nav/TacticalNavLink'
@@ -147,17 +148,6 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
   const { toast } = useToast()
   const { clients, clientsError, dismissClientsError, selectedClientId, setSelectedClientId, refreshClients } = useClient()
   const [stats, setStats] = useState({ total_vulnerabilities: 0, security_score: 0, active_scans: 0 })
-  const [addName, setAddName] = useState('')
-  const [addDomains, setAddDomains] = useState('')
-  const [addContactEmail, setAddContactEmail] = useState('')
-  const [addIpRanges, setAddIpRanges] = useState('')
-  const [addTechStack, setAddTechStack] = useState('')
-  const [addAutoDetectTech, setAddAutoDetectTech] = useState(true)
-  const [addAwsArn, setAddAwsArn] = useState('')
-  const [addAwsExt, setAddAwsExt] = useState('')
-  const [addGcp, setAddGcp] = useState('')
-  const [addSubmitting, setAddSubmitting] = useState(false)
-  const [addMessage, setAddMessage] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sectionOpen, setSectionOpen] = useState(() => {
@@ -256,68 +246,6 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     return sections
   }, [t, isCeo])
 
-  const handleAddClient = async (e) => {
-    if (e) e.preventDefault()
-    const name = addName.trim()
-    if (!name) {
-      setAddMessage({ error: t(`${GN}.enter_client_name`) })
-      return
-    }
-    setAddMessage(null)
-    setAddSubmitting(true)
-    try {
-      const toJsonArray = (raw) => {
-        const trimmed = (raw || '').trim()
-        if (!trimmed) return '[]'
-        if (trimmed.startsWith('[')) return trimmed
-        return JSON.stringify(trimmed.split(/[\s,]+/).filter(Boolean))
-      }
-      const domains = toJsonArray(addDomains)
-      const ip_ranges = toJsonArray(addIpRanges)
-      const tech_stack = toJsonArray(addTechStack)
-      const payload = {
-        name,
-        domains,
-        ip_ranges,
-        tech_stack,
-        contact_email: addContactEmail.trim(),
-        auto_detect_tech_stack: addAutoDetectTech,
-        aws_cross_account_role_arn: addAwsArn.trim(),
-        aws_external_id: addAwsExt.trim(),
-        gcp_project_id: addGcp.trim(),
-      }
-      const r = await apiFetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok && d.id != null) {
-        setAddMessage({ success: true })
-        setSelectedClientId(String(d.id))
-        setAddName('')
-        setAddDomains('')
-        setAddContactEmail('')
-        setAddIpRanges('')
-        setAddTechStack('')
-        setAddAutoDetectTech(true)
-        setAddAwsArn('')
-        setAddAwsExt('')
-        setAddGcp('')
-        await refreshClients()
-        toast.success(t(`${GN}.client_added`, { name }))
-        setTimeout(() => setAddMessage(null), 2000)
-      } else {
-        const errMsg = r.status === 401 ? t(`${GN}.login_again`) : formatApiErrorFromBody(d, r.status)
-        setAddMessage({ error: errMsg })
-        toast.error(errMsg)
-      }
-    } catch (_) {
-      setAddMessage({ error: t(`${GN}.network_error`) })
-      toast.error(t(`${GN}.network_error_api`))
-    }
-    setAddSubmitting(false)
-  }
 
   useEffect(() => {
     let cancelled = false
@@ -476,10 +404,10 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                           if (String(selectedClientId) === id) setSelectedClientId(null)
                           await refreshClients()
                         } else {
-                          setAddMessage({ error: await formatApiErrorResponse(r) })
+                          toast.error(await formatApiErrorResponse(r))
                         }
                       } catch (err) {
-                        setAddMessage({ error: err?.message || t(`${GN}.network_error`) })
+                        toast.error(err?.message || t(`${GN}.network_error`))
                       }
                       setDeletingId(null)
                     }}
@@ -500,108 +428,19 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         </div>
       </div>
 
-      {/* Add client */}
-      <div className="border-t border-[var(--border-subtle)] p-3 shrink-0 relative z-[100] bg-[var(--bg-1)]/90">
-        <div className="text-[9px] uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2 font-mono">
+      {/* New client — routes to the dedicated onboarding surface (full parameter set:
+          scope, engine modules, AWS/GCP/Azure/OT integrations, RoE, stealth, eBPF).
+          The inline quick-add form was removed to avoid a weaker duplicate path. */}
+      <div className="border-t border-[var(--border-subtle)] p-3 shrink-0 bg-[var(--bg-1)]/90">
+        <Link
+          id="nav-new-client"
+          to="/clients/new"
+          onClick={() => setMobileOpen(false)}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/25 hover:border-cyan-400/50 transition-all"
+        >
+          <UserPlus className="w-3.5 h-3.5" strokeWidth={1.9} />
           {t('nav.add_client')}
-        </div>
-        <div className="space-y-2">
-          <input
-            type="text"
-            value={addName}
-            onChange={(e) => setAddName(e.target.value)}
-            placeholder={t(`${GN}.placeholder_name`)}
-            aria-label={t(`${GN}.placeholder_name`)}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-          />
-          <input
-            type="text"
-            value={addDomains}
-            onChange={(e) => setAddDomains(e.target.value)}
-            placeholder={t(`${GN}.placeholder_domains`)}
-            aria-label={t(`${GN}.placeholder_domains`)}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-          />
-          <details className="text-[10px] text-[var(--text-tertiary)]">
-            <summary className="cursor-pointer text-cyan-400/70 hover:text-cyan-300 py-0.5">
-              {t(`${GN}.advanced_scope`)}
-            </summary>
-            <div className="space-y-2 pt-2">
-              <input
-                type="email"
-                value={addContactEmail}
-                onChange={(e) => setAddContactEmail(e.target.value)}
-                placeholder={t(`${GN}.placeholder_contact_email`)}
-                aria-label={t(`${GN}.placeholder_contact_email`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-              />
-              <input
-                type="text"
-                value={addIpRanges}
-                onChange={(e) => setAddIpRanges(e.target.value)}
-                placeholder={t(`${GN}.placeholder_ip_ranges`)}
-                aria-label={t(`${GN}.placeholder_ip_ranges`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-              />
-              <input
-                type="text"
-                value={addTechStack}
-                onChange={(e) => setAddTechStack(e.target.value)}
-                placeholder={t(`${GN}.placeholder_tech_stack`)}
-                aria-label={t(`${GN}.placeholder_tech_stack`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-              />
-              <label className="flex items-center gap-2 text-[10px] text-[var(--text-tertiary)] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={addAutoDetectTech}
-                  onChange={(e) => setAddAutoDetectTech(e.target.checked)}
-                  className="rounded border-[var(--border-strong)]"
-                />
-                {t(`${GN}.auto_detect_tech`)}
-              </label>
-              <input
-                type="text"
-                value={addAwsArn}
-                onChange={(e) => setAddAwsArn(e.target.value)}
-                placeholder={t(`${GN}.placeholder_aws_arn`)}
-                aria-label={t(`${GN}.placeholder_aws_arn`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-              />
-              <input
-                type="text"
-                value={addAwsExt}
-                onChange={(e) => setAddAwsExt(e.target.value)}
-                placeholder={t(`${GN}.placeholder_aws_external_id`)}
-                aria-label={t(`${GN}.placeholder_aws_external_id`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-              />
-              <input
-                type="text"
-                value={addGcp}
-                onChange={(e) => setAddGcp(e.target.value)}
-                placeholder={t(`${GN}.placeholder_gcp_project`)}
-                aria-label={t(`${GN}.placeholder_gcp_project`)}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-0)]/40 border border-[var(--border-default)] text-[var(--text-primary)] text-[12px] placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
-              />
-            </div>
-          </details>
-          {addMessage?.error && (
-            <p id="add-client-error-msg" className="text-[10px] text-red-400">{addMessage.error}</p>
-          )}
-          {addMessage?.success && (
-            <p id="add-client-success-msg" className="text-[10px] text-emerald-400">Client added.</p>
-          )}
-          <Button variant="unstyled"
-            id="add-client-submit-btn"
-            type="button"
-            disabled={addSubmitting}
-            onClick={() => handleAddClient()}
-            className="w-full py-2 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/25 hover:border-cyan-400/50 disabled:opacity-50 transition-all"
-          >
-            {addSubmitting ? t(`${GN}.adding`) : t(`${GN}.add_client`)}
-          </Button>
-        </div>
+        </Link>
       </div>
 
       {/* Footer: profile + language */}
