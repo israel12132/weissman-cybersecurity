@@ -2107,6 +2107,18 @@ async fn api_reports(State(state): State<Arc<AppState>>, Extension(auth): Extens
     (StatusCode::OK, Json(Value::Array(out))).into_response()
 }
 
+/// Fixed cost-12 bcrypt hash used to equalize login timing: on the not-found /
+/// empty-hash paths we still run one bcrypt verify against this, so a login for a
+/// non-existent email takes the same time as one for a real user. Without it, the
+/// presence/absence of the expensive verify is a user-enumeration oracle — the
+/// exact timing side-channel this platform's own engine is built to detect.
+/// Computed once on first use.
+fn login_timing_equalizer_hash() -> &'static str {
+    use std::sync::OnceLock;
+    static H: OnceLock<String> = OnceLock::new();
+    H.get_or_init(|| bcrypt::hash("weissman-login-timing-equalizer", 12).unwrap_or_default())
+}
+
 async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap, body: axum::extract::Json<LoginBody>) -> Response {
     let ip = extract_client_ip(&headers, addr);
     let email = body.email.trim();
@@ -2217,6 +2229,9 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             r.try_get::<bool, _>("mfa_enabled").unwrap_or(false),
         ),
         None => {
+            // Constant-time: burn one bcrypt verify so a non-existent email costs
+            // the same as a real one (no user-enumeration by response timing).
+            let _ = bcrypt::verify(password, login_timing_equalizer_hash());
             crate::audit_log::record_login_failure_audit(
                 state.app_pool.as_ref(),
                 tenant_key,
@@ -2230,6 +2245,9 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
         }
     };
     if hash.is_empty() {
+        // Constant-time equalizer (see above): an account with no stored hash must
+        // not be distinguishable from a real one by timing either.
+        let _ = bcrypt::verify(password, login_timing_equalizer_hash());
         crate::audit_log::record_login_failure_audit(
             state.app_pool.as_ref(),
             tenant_key,
