@@ -343,39 +343,90 @@ pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
 cli_wrapper!(run_metadata_harvest, run_metadata_harvest_result);
 
 // ── patent_recon ──────────────────────────────────────────────────────────────
+
+/// Extract the real total result count from a Google Patents XHR JSON body.
+/// The endpoint prefixes its JSON with an anti-hijacking token (`)]}'`) and may
+/// encode the count as a number or a comma-formatted string — handle both.
+fn extract_patent_result_count(body: &str) -> Option<u64> {
+    let cleaned = body.trim_start().trim_start_matches(")]}'").trim_start();
+    let v: Value = serde_json::from_str(cleaned).ok()?;
+    let n = v.get("results").and_then(|r| r.get("total_num_results"))?;
+    n.as_u64().or_else(|| {
+        n.as_str()
+            .and_then(|s| s.replace(',', "").trim().parse().ok())
+    })
+}
+
 pub async fn run_patent_recon_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    // Organisation keyword = the registrable label (drop the TLD path).
+    let org = host
+        .split('.')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&host);
     let client = http_client().await;
-    let mut findings: Vec<Value> = Vec::new();
+    // Google Patents' HTML is a client-rendered SPA, so a substring match on the
+    // page body is meaningless (it always contains the word "patent"). Query the
+    // structured XHR endpoint instead and report the ACTUAL number of patents
+    // attributed to the organisation keyword — real IP-portfolio intelligence.
     let url = format!(
-        "https://patents.google.com/?q={}",
-        urlencoding::encode(&host)
+        "https://patents.google.com/xhr/query?url={}",
+        urlencoding::encode(&format!("q=\"{org}\""))
     );
+    let mut findings: Vec<Value> = Vec::new();
     if let Some(p) = http_get(&client, &url).await {
-        if p.status == 200 && p.body.contains("patent") {
-            findings.push(finding(
-                "patent_recon",
-                "Google Patents queryable for organisation",
-                "info",
-                "T1591",
-                &format!("Google Patents reachable for keyword '{}'. Use full-text search to map IP portfolio.", host),
-                target,
-            ));
+        if p.status == 200 {
+            if let Some(count) = extract_patent_result_count(&p.body) {
+                if count > 0 {
+                    findings.push(finding(
+                        "patent_recon",
+                        &format!("{count} patent record(s) attributed to '{org}'"),
+                        "info",
+                        "T1591",
+                        &format!(
+                            "Google Patents returns {count} result(s) for organisation keyword '{org}'. Enumerate the portfolio to map R&D focus, inventor names (social-engineering targets), and disclosed tech stack."
+                        ),
+                        target,
+                    ));
+                }
+            }
         }
     }
     if findings.is_empty() {
         empty_ok("patent_recon", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("patent_recon: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("patent_recon: {n} portfolio signal(s)"))
     }
 }
 cli_wrapper!(run_patent_recon, run_patent_recon_result);
+
+#[cfg(test)]
+mod patent_recon_tests {
+    use super::extract_patent_result_count;
+
+    #[test]
+    fn parses_numeric_count() {
+        let body = r#"{"results":{"total_num_results":1234}}"#;
+        assert_eq!(extract_patent_result_count(body), Some(1234));
+    }
+
+    #[test]
+    fn strips_xhr_prefix_and_parses_string_count() {
+        let body = ")]}'\n{\"results\":{\"total_num_results\":\"12,345\"}}";
+        assert_eq!(extract_patent_result_count(body), Some(12_345));
+    }
+
+    #[test]
+    fn returns_none_on_garbage_or_missing() {
+        assert_eq!(extract_patent_result_count("not json"), None);
+        assert_eq!(extract_patent_result_count(r#"{"results":{}}"#), None);
+    }
+}
 
 // ── telecom_osint ─────────────────────────────────────────────────────────────
 pub async fn run_telecom_osint_result(target: &str) -> EngineResult {

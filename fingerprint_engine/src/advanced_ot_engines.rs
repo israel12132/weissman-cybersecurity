@@ -848,6 +848,35 @@ pub async fn run_rfid_nfc_attack_result(t: &str) -> EngineResult {
 cli_wrapper!(run_rfid_nfc_attack, run_rfid_nfc_attack_result);
 
 pub async fn run_industrial_protocol_fuzz_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    // Real, read-only ICS protocol handshakes (not a bare TCP connect): send an
+    // actual Modbus FC-03 read, an OPC-UA HEL/ACK discovery, and a BACnet
+    // ReadProperty, then report every protocol that genuinely answers with
+    // fingerprint evidence. Reuses the vetted probes from `ot_ics_engine`.
+    let mut findings: Vec<Value> = Vec::new();
+    if let Some(fp) = probe_modbus_function_code(&host).await {
+        findings.push(ot_fingerprint_finding(&fp, "industrial_protocol_fuzz", t));
+    }
+    if let Some(fp) = probe_opcua_discovery(&host).await {
+        findings.push(ot_fingerprint_finding(&fp, "industrial_protocol_fuzz", t));
+    }
+    if let Some(fp) = probe_bacnet_read_property(&host).await {
+        findings.push(ot_fingerprint_finding(&fp, "industrial_protocol_fuzz", t));
+    }
+    if !findings.is_empty() {
+        let n = findings.len();
+        return EngineResult::ok(
+            findings,
+            format!(
+                "industrial_protocol_fuzz: {n} ICS protocol handshake(s) confirmed via live probes"
+            ),
+        );
+    }
+    // No handshake confirmed — fall back to the open-port surface so coverage
+    // never regresses.
     port_probe_finding(
         t,
         "industrial_protocol_fuzz",
@@ -855,7 +884,7 @@ pub async fn run_industrial_protocol_fuzz_result(t: &str) -> EngineResult {
         "high",
         "T0843",
         &[502, 102, 20000, 4840, 44818],
-        "Common ICS ports to fuzz under controlled conditions.",
+        "ICS ports reachable but no Modbus/OPC-UA/BACnet handshake confirmed — fuzz under authorized, controlled conditions.",
     )
     .await
 }
