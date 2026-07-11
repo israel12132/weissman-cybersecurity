@@ -73,7 +73,17 @@ fn transient(status: StatusCode, headers: &HeaderMap) -> bool {
     false
 }
 
+/// Statuses safe to retry for a NON-idempotent write — the request was definitely not applied
+/// (429/408 never processed), so a retry cannot duplicate a commit/MR.
+fn write_retryable(status: StatusCode) -> bool {
+    matches!(status.as_u16(), 408 | 429)
+}
+
+/// `idempotent` (GET-like) requests retry on any transient status AND network error. Writes retry
+/// only on 429/408 and never on a network error — a write may have been applied server-side, so
+/// blindly retrying risks a duplicate commit/MR.
 async fn send_with_retry(
+    idempotent: bool,
     mut make: impl FnMut() -> reqwest::RequestBuilder,
 ) -> Result<Response, String> {
     let mut attempt = 0u32;
@@ -87,7 +97,12 @@ async fn send_with_retry(
                 let status = r.status();
                 let headers = r.headers().clone();
                 let body = r.text().await.unwrap_or_default();
-                if transient(status, &headers) && attempt < MAX_ATTEMPTS {
+                let retryable = if idempotent {
+                    transient(status, &headers)
+                } else {
+                    write_retryable(status)
+                };
+                if retryable && attempt < MAX_ATTEMPTS {
                     tokio::time::sleep(backoff(attempt)).await;
                     continue;
                 }
@@ -98,10 +113,11 @@ async fn send_with_retry(
                 ));
             }
             Err(e) => {
-                if attempt >= MAX_ATTEMPTS {
-                    return Err(format!("GitLab network error after {attempt}: {e}"));
+                if idempotent && attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
                 }
-                tokio::time::sleep(backoff(attempt)).await;
+                return Err(format!("GitLab network error after {attempt}: {e}"));
             }
         }
     }
@@ -215,7 +231,7 @@ pub async fn create_branch_commit_and_mr(
         "commit_message": format!("Security remediation from Weissman CNAPP ({finding_id})"),
         "actions": actions,
     });
-    if let Err(e) = send_with_retry(|| {
+    if let Err(e) = send_with_retry(false, || {
         client
             .post(&commit_url)
             .header("PRIVATE-TOKEN", token)
@@ -240,7 +256,7 @@ pub async fn create_branch_commit_and_mr(
         "description": description,
         "remove_source_branch": true,
     });
-    match send_with_retry(|| {
+    match send_with_retry(false, || {
         client
             .post(&mr_url)
             .header("PRIVATE-TOKEN", token)
@@ -282,7 +298,7 @@ pub async fn close_merge_request(
     let api_base = v4_base(gitlab_host);
     let project = enc_project(project_path);
     let url = format!("{}/projects/{}/merge_requests/{}", api_base, project, mr_iid);
-    let resp = send_with_retry(|| {
+    let resp = send_with_retry(true, || {
         gitlab_client()
             .put(&url)
             .header("PRIVATE-TOKEN", token)

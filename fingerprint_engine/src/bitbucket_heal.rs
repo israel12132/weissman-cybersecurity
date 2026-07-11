@@ -84,7 +84,15 @@ fn transient(status: StatusCode, headers: &HeaderMap) -> bool {
     false
 }
 
+/// Statuses safe to retry for a NON-idempotent write — the request was definitely not applied.
+fn write_retryable(status: StatusCode) -> bool {
+    matches!(status.as_u16(), 408 | 429)
+}
+
+/// `idempotent` requests retry on any transient status AND network error; writes retry only on
+/// 429/408 and never on a network error, so a retry can't duplicate a `/src` commit or a PR.
 async fn send_with_retry(
+    idempotent: bool,
     mut make: impl FnMut() -> reqwest::RequestBuilder,
 ) -> Result<Response, String> {
     let mut attempt = 0u32;
@@ -98,17 +106,23 @@ async fn send_with_retry(
                 let status = r.status();
                 let headers = r.headers().clone();
                 let body = r.text().await.unwrap_or_default();
-                if transient(status, &headers) && attempt < MAX_ATTEMPTS {
+                let retryable = if idempotent {
+                    transient(status, &headers)
+                } else {
+                    write_retryable(status)
+                };
+                if retryable && attempt < MAX_ATTEMPTS {
                     tokio::time::sleep(backoff(attempt)).await;
                     continue;
                 }
                 return Err(format!("Bitbucket API {}: {}", status, body.chars().take(400).collect::<String>()));
             }
             Err(e) => {
-                if attempt >= MAX_ATTEMPTS {
-                    return Err(format!("Bitbucket network error after {attempt}: {e}"));
+                if idempotent && attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
                 }
-                tokio::time::sleep(backoff(attempt)).await;
+                return Err(format!("Bitbucket network error after {attempt}: {e}"));
             }
         }
     }
@@ -206,7 +220,7 @@ pub async fn create_branch_commit_and_pr(
     for (path, content) in &files {
         form.push((path.trim_start_matches('/').to_string(), content.clone()));
     }
-    if let Err(e) = send_with_retry(|| {
+    if let Err(e) = send_with_retry(false, || {
         bb_client()
             .post(&src_url)
             .header("Authorization", format!("Bearer {token}"))
@@ -226,7 +240,7 @@ pub async fn create_branch_commit_and_pr(
         "destination": { "branch": { "name": base_branch } },
         "close_source_branch": true,
     });
-    match send_with_retry(|| {
+    match send_with_retry(false, || {
         bb_client()
             .post(&pr_url)
             .header("Authorization", format!("Bearer {token}"))
@@ -265,7 +279,7 @@ pub async fn decline_pull_request(
         pct(&ws),
         pct(&repo)
     );
-    let resp = send_with_retry(|| {
+    let resp = send_with_retry(true, || {
         bb_client()
             .post(&url)
             .header("Authorization", format!("Bearer {token}"))

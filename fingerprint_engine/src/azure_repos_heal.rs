@@ -85,7 +85,16 @@ fn transient(status: StatusCode, _headers: &HeaderMap) -> bool {
     matches!(status.as_u16(), 408 | 429 | 500 | 502 | 503 | 504)
 }
 
+/// Statuses safe to retry for a NON-idempotent write — the request was definitely not applied.
+fn write_retryable(status: StatusCode) -> bool {
+    matches!(status.as_u16(), 408 | 429)
+}
+
+/// `idempotent` requests retry on any transient status AND network error; writes retry only on
+/// 429/408 and never on a network error, so a retry can't duplicate a push or a pull request (and,
+/// for Azure specifically, a retried push would otherwise fail on an `oldObjectId` mismatch).
 async fn send_with_retry(
+    idempotent: bool,
     mut make: impl FnMut() -> reqwest::RequestBuilder,
 ) -> Result<Response, String> {
     let mut attempt = 0u32;
@@ -99,17 +108,23 @@ async fn send_with_retry(
                 let status = r.status();
                 let headers = r.headers().clone();
                 let body = r.text().await.unwrap_or_default();
-                if transient(status, &headers) && attempt < MAX_ATTEMPTS {
+                let retryable = if idempotent {
+                    transient(status, &headers)
+                } else {
+                    write_retryable(status)
+                };
+                if retryable && attempt < MAX_ATTEMPTS {
                     tokio::time::sleep(backoff(attempt)).await;
                     continue;
                 }
                 return Err(format!("Azure DevOps API {}: {}", status, body.chars().take(400).collect::<String>()));
             }
             Err(e) => {
-                if attempt >= MAX_ATTEMPTS {
-                    return Err(format!("Azure DevOps network error after {attempt}: {e}"));
+                if idempotent && attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
                 }
-                tokio::time::sleep(backoff(attempt)).await;
+                return Err(format!("Azure DevOps network error after {attempt}: {e}"));
             }
         }
     }
@@ -241,7 +256,7 @@ pub async fn create_push_and_pr(
             "changes": changes,
         } ],
     });
-    if let Err(e) = send_with_retry(|| {
+    if let Err(e) = send_with_retry(false, || {
         ado_client()
             .post(&push_url)
             .header("Authorization", &auth)
@@ -263,7 +278,7 @@ pub async fn create_push_and_pr(
         "title": title,
         "description": description,
     });
-    match send_with_retry(|| {
+    match send_with_retry(false, || {
         ado_client()
             .post(&pr_ep)
             .header("Authorization", &auth)
@@ -299,7 +314,7 @@ pub async fn abandon_pull_request(
         "{base_url}/_apis/git/repositories/{}/pullrequests/{pr_id}?api-version={API_VER}",
         pct(&repo)
     );
-    let resp = send_with_retry(|| {
+    let resp = send_with_retry(true, || {
         ado_client()
             .patch(&url)
             .header("Authorization", &auth)
