@@ -198,7 +198,12 @@ pub async fn run_living_off_land_result(t: &str) -> EngineResult {
 cli_wrapper!(run_living_off_land, run_living_off_land_result);
 
 pub async fn run_sandbox_evasion_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "sandbox_evasion",
+        t,
+        "Sandbox-evasion detection requires detonation telemetry",
+        "T1497 environment checks (VM artifacts, user-activity, timing) run inside the sample on the host to decide whether to detonate — not observable over HTTP. The Weissman agent performs instrumented detonation and flags environment-fingerprinting behavior.",
+    )
 }
 cli_wrapper!(run_sandbox_evasion, run_sandbox_evasion_result);
 
@@ -214,7 +219,12 @@ pub async fn run_rootkit_simulation_result(t: &str) -> EngineResult {
 cli_wrapper!(run_rootkit_simulation, run_rootkit_simulation_result);
 
 pub async fn run_memory_forensics_evasion_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "memory_forensics_evasion",
+        t,
+        "Memory-forensics evasion requires live-memory acquisition",
+        "T1055/T1620 direct-kernel-object manipulation, unlinked pages and anti-dump tricks defeat post-mortem analysis in RAM — a network probe cannot see process memory. The Weissman agent runs volatile-memory integrity checks and detects hidden/unlinked artifacts.",
+    )
 }
 cli_wrapper!(
     run_memory_forensics_evasion,
@@ -344,12 +354,22 @@ pub async fn run_icmp_covert_result(t: &str) -> EngineResult {
 cli_wrapper!(run_icmp_covert, run_icmp_covert_result);
 
 pub async fn run_rop_chain_engine_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "rop_chain_engine",
+        t,
+        "ROP/JOP chain execution requires host runtime inspection",
+        "T1055 return/jump-oriented programming reuses in-memory gadgets while exploiting a live process — there is no network-observable signal. The Weissman agent enforces CFI / shadow-stack telemetry and detects gadget-chain execution.",
+    )
 }
 cli_wrapper!(run_rop_chain_engine, run_rop_chain_engine_result);
 
 pub async fn run_heap_exploitation_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "heap_exploitation",
+        t,
+        "Heap exploitation requires host memory / runtime instrumentation",
+        "T1055 heap grooming, use-after-free and allocator-metadata corruption happen inside a live process's memory — invisible to HTTP/DNS probes. The Weissman agent instruments allocator telemetry and flags heap-spray / corruption patterns at runtime.",
+    )
 }
 cli_wrapper!(run_heap_exploitation, run_heap_exploitation_result);
 
@@ -371,7 +391,12 @@ pub async fn run_log_tampering_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_log_tampering_engine, run_log_tampering_engine_result);
 
 pub async fn run_jit_spray_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "jit_spray",
+        t,
+        "JIT spray requires host JIT-page inspection",
+        "T1055 JIT spray writes executable gadgets into a JIT compiler's code cache on the victim host — not observable from a remote probe. The Weissman agent monitors RWX JIT pages and anomalous code-cache growth.",
+    )
 }
 cli_wrapper!(run_jit_spray, run_jit_spray_result);
 
@@ -389,7 +414,12 @@ cli_wrapper!(
 );
 
 pub async fn run_anti_debug_evasion_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "anti_debug_evasion",
+        t,
+        "Anti-debug technique detection requires host process telemetry",
+        "T1622 anti-debugging (IsDebuggerPresent, timing checks, INT3 scanning) runs inside the target process against a debugger — invisible to a network probe. The Weissman agent correlates anti-debug API usage and process self-inspection.",
+    )
 }
 cli_wrapper!(run_anti_debug_evasion, run_anti_debug_evasion_result);
 
