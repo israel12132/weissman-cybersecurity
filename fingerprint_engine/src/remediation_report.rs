@@ -40,6 +40,63 @@ pub struct HealReportInput<'a> {
     pub generated_at: &'a str,
 }
 
+/// Owned counterpart of [`HealReportInput`] — a single load of everything a completed heal's
+/// report needs, so the HTML report, the machine-readable `report.json`, and the SARIF export can
+/// all be served from one query pass. Borrow it as a [`HealReportInput`] via [`HealReportData::as_input`].
+#[derive(Debug, Clone, Default)]
+pub struct HealReportData {
+    pub job_id: String,
+    pub finding_id: String,
+    pub title: String,
+    pub severity: String,
+    pub cwe: String,
+    pub status: String,
+    pub verdict: String,
+    pub verification_status: String,
+    pub channel: String,
+    pub pr_url: Option<String>,
+    pub branch_name: Option<String>,
+    pub attempts: i64,
+    pub receipt: String,
+    pub digest: String,
+    pub attestation_enabled: bool,
+    pub receipt_verified: bool,
+    pub unified_diff: String,
+    pub changed_files: Vec<String>,
+    pub deleted_paths: Vec<String>,
+    pub brief: Option<RemediationBrief>,
+    pub generated_at: String,
+}
+
+impl HealReportData {
+    /// Borrow this owned data as the renderer's input view.
+    pub fn as_input(&self) -> HealReportInput<'_> {
+        HealReportInput {
+            job_id: &self.job_id,
+            finding_id: &self.finding_id,
+            title: &self.title,
+            severity: &self.severity,
+            cwe: &self.cwe,
+            status: &self.status,
+            verdict: &self.verdict,
+            verification_status: &self.verification_status,
+            channel: &self.channel,
+            pr_url: self.pr_url.as_deref(),
+            branch_name: self.branch_name.as_deref(),
+            attempts: self.attempts,
+            receipt: &self.receipt,
+            digest: &self.digest,
+            attestation_enabled: self.attestation_enabled,
+            receipt_verified: self.receipt_verified,
+            unified_diff: &self.unified_diff,
+            changed_files: &self.changed_files,
+            deleted_paths: &self.deleted_paths,
+            brief: self.brief.as_ref(),
+            generated_at: &self.generated_at,
+        }
+    }
+}
+
 /// HTML-escape text for element content and double-quoted attributes.
 fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 8);

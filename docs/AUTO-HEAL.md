@@ -133,7 +133,11 @@ the finding to `VERIFIED_FIXED` or `REOPENED`. On `REOPENED` (regression) it fir
   bilingual (he/en) HTML report at `GET /api/heal-verify/:job_id/report` — the finding, the bilingual
   problem/root-cause/impact/fix explanation, the verified diff + changed files, per-channel how-to-apply,
   and an honestly-labelled signed-receipt seal. Rendered by the pure `remediation_report` module
-  (every untrusted value HTML-escaped, `http(s)`-only links, zero external resources).
+  (every untrusted value HTML-escaped, `http(s)`-only links, zero external resources). Alongside it,
+  **JSON** and **SARIF** links expose the same proof machine-readably: `report.json`
+  (`weissman-heal-report/v1`) for programmatic/CI consumption and a **SARIF 2.1.0** document
+  (`GET …/sarif`) that ingests straight into GitHub code scanning / SAST dashboards — both rendered by
+  the pure, unit-tested `heal_export` module from a single shared `load_heal_report_data` query pass.
 
 ## Round-trip integration tests
 
@@ -162,6 +166,8 @@ without requiring a Docker socket:
 | GET        | `/api/heal-verify/:job_id/patch`                    | Download the verified diff / WAF snippet |
 | GET        | `/api/heal-verify/:job_id/attestation`              | Verify the signed heal receipt           |
 | GET        | `/api/heal-verify/:job_id/report`                   | Printable bilingual (he/en) HTML report  |
+| GET        | `/api/heal-verify/:job_id/report.json`              | Machine-readable heal proof (`weissman-heal-report/v1`) |
+| GET        | `/api/heal-verify/:job_id/sarif`                    | SARIF 2.1.0 for GitHub code scanning / SAST |
 | GET        | `/api/heal-readiness`                               | Bilingual pipeline readiness self-check  |
 | GET        | `/api/clients/:id/heal-stats`                       | Aggregate heal analytics                 |
 | POST       | `/api/clients/:id/heal-batch`                       | Batch-heal many findings at once          |

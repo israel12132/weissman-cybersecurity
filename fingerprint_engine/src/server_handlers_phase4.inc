@@ -292,22 +292,20 @@ async fn api_heal_verify_attestation(
         .into_response()
 }
 
-/// `GET /api/heal-verify/:job_id/report` — a self-contained, printable, bilingual (he/en) remediation
-/// report for a completed auto-heal: the finding, the bilingual problem/root-cause/impact/fix, the
-/// verified diff + changed files, per-channel how-to-apply, and the signed receipt (honestly labelled).
-/// Rendered inline as HTML so it can be printed to PDF and handed to an auditor.
-async fn api_heal_verify_report(
-    State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
-    Path(job_id): Path<String>,
-) -> Response {
-    let job_uuid = match uuid::Uuid::parse_str(job_id.trim()) {
-        Ok(u) => u,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid job_id").into_response(),
-    };
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, "DB").into_response();
-    };
+/// Load everything a completed heal's report needs in one query pass (spec + heal_requests + brief),
+/// so the HTML report, `report.json`, and the SARIF export can all be served from the same data.
+/// Errs with the response status a handler should return (400 bad id / 404 not found / 503 DB).
+async fn load_heal_report_data(
+    state: &Arc<AppState>,
+    tenant_id: i64,
+    job_id: &str,
+) -> Result<crate::remediation_report::HealReportData, (StatusCode, &'static str)> {
+    let job_uuid = uuid::Uuid::parse_str(job_id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid job_id"))?;
+    let mut tx = db::begin_tenant_tx(&state.app_pool, tenant_id)
+        .await
+        .map_err(|_| (StatusCode::SERVICE_UNAVAILABLE, "DB"))?;
+
     // Job spec (keyed by UUID).
     let spec = sqlx::query(
         r#"SELECT COALESCE(status,'') AS status, COALESCE(channel,'github_pr') AS channel,
@@ -316,14 +314,14 @@ async fn api_heal_verify_report(
            FROM auto_heal_job_specs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(job_uuid)
-    .bind(auth.tenant_id)
+    .bind(tenant_id)
     .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
     let Some(spec) = spec else {
         let _ = tx.commit().await;
-        return (StatusCode::NOT_FOUND, "job not found").into_response();
+        return Err((StatusCode::NOT_FOUND, "job not found"));
     };
     let status: String = spec.try_get("status").unwrap_or_default();
     let channel: String = spec.try_get("channel").unwrap_or_default();
@@ -335,7 +333,7 @@ async fn api_heal_verify_report(
         .ok()
         .flatten();
 
-    // Heal request row (keyed by the string verification_job_id).
+    // Heal request row (keyed by the canonical string verification_job_id).
     let hr = sqlx::query(
         r#"SELECT COALESCE(verdict,'') AS verdict, COALESCE(verification_status,'') AS verification_status,
                   pr_url, branch_name, COALESCE(attempts,1)::bigint AS attempts,
@@ -344,10 +342,9 @@ async fn api_heal_verify_report(
            WHERE tenant_id = $1 AND verification_job_id = $2
            ORDER BY id DESC LIMIT 1"#,
     )
-    .bind(auth.tenant_id)
-    // Bind the canonical UUID text so a non-canonical (e.g. uppercase / braced) path segment —
-    // which still matches the uuid spec lookup — cannot silently miss the heal_requests row
-    // (which stores the canonical `spec_id.to_string()`) and render a misleading "unverified" report.
+    .bind(tenant_id)
+    // Canonical UUID text so a non-canonical path segment (which still matches the uuid spec lookup)
+    // cannot miss the heal_requests row and produce a misleading "unverified" report.
     .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
@@ -392,10 +389,9 @@ async fn api_heal_verify_report(
         match serde_json::from_value(v) {
             Ok(b) => Some(b),
             Err(e) => {
-                // Fail soft (still render the finding + verified diff), but surface the parse
-                // problem so a stored-but-malformed brief is observable, not silently gutted.
+                // Fail soft (still serve the finding + verified diff), but surface the parse problem.
                 tracing::warn!(target: "heal_report", job_id = %job_id, error = %e,
-                    "cached remediation_brief failed to parse; rendering report without it");
+                    "cached remediation_brief failed to parse; serving report without it");
                 None
             }
         }
@@ -438,32 +434,45 @@ async fn api_heal_verify_report(
     let receipt_verified = !receipt.is_empty()
         && !digest.is_empty()
         && crate::finding_attestation::verify(&digest, &receipt);
-    let generated_at = chrono::Utc::now().to_rfc3339();
 
-    let input = crate::remediation_report::HealReportInput {
-        job_id: &job_id,
-        finding_id: &finding_id,
-        title: &title,
-        severity: &severity,
-        cwe: &cwe,
-        status: &status,
-        verdict: &verdict,
-        verification_status: &verification_status,
-        channel: &channel,
-        pr_url: pr_url.as_deref(),
-        branch_name: branch_name.as_deref(),
+    Ok(crate::remediation_report::HealReportData {
+        job_id: job_id.to_string(),
+        finding_id,
+        title,
+        severity,
+        cwe,
+        status,
+        verdict,
+        verification_status,
+        channel,
+        pr_url,
+        branch_name,
         attempts,
-        receipt: &receipt,
-        digest: &digest,
+        receipt,
+        digest,
         attestation_enabled,
         receipt_verified,
-        unified_diff: &unified_diff,
-        changed_files: &changed_files,
-        deleted_paths: &deleted_paths,
-        brief: brief.as_ref(),
-        generated_at: &generated_at,
+        unified_diff,
+        changed_files,
+        deleted_paths,
+        brief,
+        generated_at: chrono::Utc::now().to_rfc3339(),
+    })
+}
+
+/// `GET /api/heal-verify/:job_id/report` — self-contained, printable, bilingual (he/en) HTML report
+/// for a completed auto-heal (finding, bilingual problem/root-cause/impact/fix, verified diff +
+/// changed files, per-channel how-to-apply, and the honestly-labelled signed receipt).
+async fn api_heal_verify_report(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    let data = match load_heal_report_data(&state, auth.tenant_id, &job_id).await {
+        Ok(d) => d,
+        Err((code, msg)) => return (code, msg).into_response(),
     };
-    let html = crate::remediation_report::render_heal_report_html(&input);
+    let html = crate::remediation_report::render_heal_report_html(&data.as_input());
     (
         StatusCode::OK,
         [
@@ -479,6 +488,43 @@ async fn api_heal_verify_report(
         html,
     )
         .into_response()
+}
+
+/// `GET /api/heal-verify/:job_id/report.json` — the same completed-heal data as a stable, structured
+/// JSON document (schema `weissman-heal-report/v1`) for programmatic / CI consumption.
+async fn api_heal_verify_report_json(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match load_heal_report_data(&state, auth.tenant_id, &job_id).await {
+        Ok(d) => Json(crate::heal_export::to_report_json(&d)).into_response(),
+        Err((code, msg)) => (code, msg).into_response(),
+    }
+}
+
+/// `GET /api/heal-verify/:job_id/sarif` — a SARIF 2.1.0 document describing the finding and its
+/// verified auto-heal, so the proof plugs into GitHub code scanning / SAST dashboards.
+async fn api_heal_verify_sarif(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match load_heal_report_data(&state, auth.tenant_id, &job_id).await {
+        Ok(d) => {
+            let body = crate::heal_export::to_sarif(&d).to_string();
+            (
+                StatusCode::OK,
+                [(
+                    axum::http::header::CONTENT_TYPE,
+                    "application/sarif+json; charset=utf-8".to_string(),
+                )],
+                body,
+            )
+                .into_response()
+        }
+        Err((code, msg)) => (code, msg).into_response(),
+    }
 }
 
 /// `GET /api/heal-readiness` — bilingual (he/en) self-diagnostics of the auto-heal pipeline: per

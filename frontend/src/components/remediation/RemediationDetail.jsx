@@ -475,6 +475,16 @@ export default function RemediationDetail({ finding, onClose }) {
                     <FileText className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_report', { defaultValue: 'Remediation report' })}
                   </a>
                 )}
+                {jobId && jobStatus?.status === 'completed' && (
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/report.json`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_json_hint', { defaultValue: 'Machine-readable JSON (weissman-heal-report/v1)' })}>
+                    <FileText className="w-3.5 h-3.5" /> JSON
+                  </a>
+                )}
+                {jobId && jobStatus?.status === 'completed' && (
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/sarif`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_sarif_hint', { defaultValue: 'SARIF 2.1.0 for GitHub code scanning / SAST' })}>
+                    <FileText className="w-3.5 h-3.5" /> SARIF
+                  </a>
+                )}
               </div>
 
               <ol className="space-y-1.5 border-l border-white/10 pl-4">

@@ -1491,6 +1491,8 @@
       "download_patch": "Download patch",
       "download_report": "Remediation report",
       "report_hint": "Open a printable bilingual remediation report",
+      "report_json_hint": "Machine-readable JSON (weissman-heal-report/v1)",
+      "report_sarif_hint": "SARIF 2.1.0 for GitHub code scanning / SAST",
       "self_repair_attempts": "self-repair ×{{n}}",
       "attested": "attested",
       "verify_attestation": "Verify signed receipt",
