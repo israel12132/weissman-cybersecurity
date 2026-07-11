@@ -300,43 +300,150 @@ pub async fn run_blockchain_trace_result(target: &str) -> EngineResult {
 cli_wrapper!(run_blockchain_trace, run_blockchain_trace_result);
 
 // ── metadata_harvest ──────────────────────────────────────────────────────────
+/// Extract `Disallow:` paths from a robots.txt body (a hidden-surface roadmap).
+fn robots_disallow_paths(body: &str) -> Vec<String> {
+    body.lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let low = l.to_ascii_lowercase();
+            if low.starts_with("disallow:") {
+                let path = l[l.find(':').map_or(l.len(), |i| i + 1)..].trim();
+                (!path.is_empty() && path != "/").then(|| path.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// True if a path looks like sensitive / hidden infrastructure.
+fn is_sensitive_path(p: &str) -> bool {
+    let p = p.to_ascii_lowercase();
+    [
+        "admin",
+        "internal",
+        "private",
+        "backup",
+        "config",
+        "/api",
+        "secret",
+        "staging",
+        "/dev",
+        "test",
+        "upload",
+        "/db",
+        "sql",
+        "git",
+        "env",
+        "phpmyadmin",
+        "login",
+        "dashboard",
+        "console",
+        "debug",
+    ]
+    .iter()
+    .any(|k| p.contains(k))
+}
+
+/// Extract `Contact:` lines from a security.txt body.
+fn security_txt_contacts(body: &str) -> Vec<String> {
+    body.lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            if l.to_ascii_lowercase().starts_with("contact:") {
+                let v = l[l.find(':').map_or(l.len(), |i| i + 1)..].trim();
+                (!v.is_empty()).then(|| v.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 pub async fn run_metadata_harvest_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
     let client = http_client().await;
     let base = normalize_url(target);
+    let root = base.trim_end_matches('/').to_string();
     let mut findings: Vec<Value> = Vec::new();
-    for path in [
-        "/robots.txt",
-        "/sitemap.xml",
-        "/.well-known/security.txt",
-        "/humans.txt",
-    ] {
-        let url = format!("{}{}", base.trim_end_matches('/'), path);
-        if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && !p.body.trim().is_empty() {
+
+    // robots.txt — extract the actual Disallow paths (these routinely disclose
+    // hidden admin/internal endpoints; a Disallow entry is a roadmap, not a control).
+    if let Some(p) = http_get(&client, &format!("{root}/robots.txt")).await {
+        if p.status == 200 && !p.body.trim().is_empty() {
+            let paths = robots_disallow_paths(&p.body);
+            let sensitive: Vec<String> = paths
+                .iter()
+                .filter(|p| is_sensitive_path(p))
+                .cloned()
+                .collect();
+            if !sensitive.is_empty() {
+                let shown = sensitive
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 findings.push(finding(
                     "metadata_harvest",
-                    &format!("Public metadata file: {}", path),
+                    &format!("robots.txt discloses {} sensitive disallowed path(s)", sensitive.len()),
+                    "medium",
+                    "T1592.002",
+                    &format!("{root}/robots.txt reveals hidden surface via Disallow: {shown}. Audit and protect these endpoints — Disallow is a hint to crawlers, not access control."),
+                    target,
+                ));
+            } else if !paths.is_empty() {
+                findings.push(finding(
+                    "metadata_harvest",
+                    &format!("robots.txt lists {} disallowed path(s)", paths.len()),
                     "info",
                     "T1592.002",
-                    &format!(
-                        "{} returned HTTP 200 ({} B) — extract hidden paths/contact emails.",
-                        p.final_url,
-                        p.body.len()
-                    ),
+                    &format!("{root}/robots.txt enumerates {} disallowed path(s) — map for hidden content.", paths.len()),
                     target,
                 ));
             }
         }
     }
+    // security.txt — extract disclosure contacts.
+    if let Some(p) = http_get(&client, &format!("{root}/.well-known/security.txt")).await {
+        if p.status == 200 {
+            let contacts = security_txt_contacts(&p.body);
+            if !contacts.is_empty() {
+                findings.push(finding(
+                    "metadata_harvest",
+                    "security.txt published with disclosure contact(s)",
+                    "info",
+                    "T1592.002",
+                    &format!("security.txt exposes contact(s): {}. Useful for coordinated disclosure and social-engineering target mapping.", contacts.join(", ")),
+                    target,
+                ));
+            }
+        }
+    }
+    // sitemap.xml — count exposed URLs (a full content map).
+    if let Some(p) = http_get(&client, &format!("{root}/sitemap.xml")).await {
+        if p.status == 200 && p.body.contains("<loc>") {
+            let n = p.body.matches("<loc>").count();
+            findings.push(finding(
+                "metadata_harvest",
+                &format!("sitemap.xml exposes {n} URL(s)"),
+                "info",
+                "T1592.002",
+                &format!("{root}/sitemap.xml enumerates {n} URL(s) — a complete content map of the target."),
+                target,
+            ));
+        }
+    }
+
     if findings.is_empty() {
         empty_ok("metadata_harvest", target)
     } else {
+        let n = findings.len();
         EngineResult::ok(
-            findings.clone(),
-            format!("metadata_harvest: {}", findings.len()),
+            findings,
+            format!("metadata_harvest: {n} metadata signal(s)"),
         )
     }
 }
@@ -429,6 +536,35 @@ mod patent_recon_tests {
 }
 
 // ── telecom_osint ─────────────────────────────────────────────────────────────
+/// Identify the managed mail provider from a domain's MX hostnames.
+fn mail_provider_from_mx(mx: &[String]) -> Option<&'static str> {
+    let joined = mx.join(" ").to_ascii_lowercase();
+    const PROVIDERS: &[(&str, &str)] = &[
+        ("aspmx.l.google.com", "Google Workspace"),
+        ("googlemail.com", "Google Workspace"),
+        ("google.com", "Google Workspace"),
+        ("protection.outlook.com", "Microsoft 365"),
+        ("outlook.com", "Microsoft 365"),
+        ("pphosted.com", "Proofpoint"),
+        ("ppe-hosted.com", "Proofpoint"),
+        ("mimecast.com", "Mimecast"),
+        ("messagelabs.com", "Broadcom/Symantec Email Security"),
+        ("barracudanetworks.com", "Barracuda"),
+        ("mailgun.org", "Mailgun"),
+        ("sendgrid.net", "SendGrid"),
+        ("amazonaws.com", "Amazon SES"),
+        ("zoho.com", "Zoho Mail"),
+        ("mx.cloudflare.net", "Cloudflare Email Routing"),
+        ("secureserver.net", "GoDaddy Email"),
+        ("yandex.net", "Yandex Mail"),
+        ("qq.com", "Tencent QQ Mail"),
+    ];
+    PROVIDERS
+        .iter()
+        .find(|(needle, _)| joined.contains(needle))
+        .map(|(_, name)| *name)
+}
+
 pub async fn run_telecom_osint_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
@@ -437,22 +573,31 @@ pub async fn run_telecom_osint_result(target: &str) -> EngineResult {
     let mx = dns_mx(&host).await;
     let mut findings: Vec<Value> = Vec::new();
     if !mx.is_empty() {
-        findings.push(finding(
-            "telecom_osint",
-            "MX records publicly resolvable",
-            "info",
-            "T1590.002",
-            &format!("MX records for {}: {}", host, mx.join(", ")),
-            target,
-        ));
+        if let Some(provider) = mail_provider_from_mx(&mx) {
+            findings.push(finding(
+                "telecom_osint",
+                &format!("Mail provider identified: {provider}"),
+                "info",
+                "T1590.002",
+                &format!("MX records for {host} route to {provider} ({}). Tailor the phishing-resistance review (SPF/DKIM/DMARC alignment) and known {provider} filtering-bypass techniques.", mx.join(", ")),
+                target,
+            ));
+        } else {
+            findings.push(finding(
+                "telecom_osint",
+                "MX records publicly resolvable (self-hosted / unrecognized provider)",
+                "info",
+                "T1590.002",
+                &format!("MX records for {host}: {}. No managed provider matched — likely self-hosted mail; assess the mail server directly.", mx.join(", ")),
+                target,
+            ));
+        }
     }
     if findings.is_empty() {
         empty_ok("telecom_osint", target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("telecom_osint: {}", findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("telecom_osint: {n}"))
     }
 }
 cli_wrapper!(run_telecom_osint, run_telecom_osint_result);
@@ -791,5 +936,53 @@ mod tests {
             &["mx.example.com".into()],
             &[]
         ));
+    }
+}
+
+#[cfg(test)]
+mod osint_extract_tests {
+    use super::{
+        is_sensitive_path, mail_provider_from_mx, robots_disallow_paths, security_txt_contacts,
+    };
+
+    #[test]
+    fn robots_paths_extracted_and_root_skipped() {
+        let body = "User-agent: *\nDisallow: /admin\nDisallow: /\nDisallow:   /internal/db\nAllow: /public\n";
+        let paths = robots_disallow_paths(body);
+        assert_eq!(
+            paths,
+            vec!["/admin".to_string(), "/internal/db".to_string()]
+        );
+        assert!(is_sensitive_path("/admin"));
+        assert!(is_sensitive_path("/internal/db"));
+        assert!(!is_sensitive_path("/public/images"));
+    }
+
+    #[test]
+    fn security_txt_contacts_extracted() {
+        let body = "Contact: mailto:security@example.com\nExpires: 2030-01-01\ncontact: https://example.com/report\n";
+        let c = security_txt_contacts(body);
+        assert_eq!(c.len(), 2);
+        assert!(c[0].contains("security@example.com"));
+    }
+
+    #[test]
+    fn mail_provider_identified() {
+        assert_eq!(
+            mail_provider_from_mx(&["aspmx.l.google.com".to_string()]),
+            Some("Google Workspace")
+        );
+        assert_eq!(
+            mail_provider_from_mx(&["example-com.mail.protection.outlook.com".to_string()]),
+            Some("Microsoft 365")
+        );
+        assert_eq!(
+            mail_provider_from_mx(&["mx1.pphosted.com".to_string()]),
+            Some("Proofpoint")
+        );
+        assert_eq!(
+            mail_provider_from_mx(&["mail.self-hosted.example".to_string()]),
+            None
+        );
     }
 }
