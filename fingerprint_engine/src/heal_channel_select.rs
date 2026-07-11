@@ -48,33 +48,34 @@ pub fn scm_from_host(host: &str) -> Scm {
     }
 }
 
+/// True when `haystack` contains `word` as a whole alphanumeric token (so short acronyms like `sqli`
+/// don't false-match a substring, e.g. inside `sqlite`).
+fn contains_word(haystack: &str, word: &str) -> bool {
+    haystack
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|tok| tok == word)
+}
+
 /// True when the vulnerability class is a request-layer issue a WAF rule can block in-flight.
 #[must_use]
 pub fn waf_mitigable(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
-    // Request-layer classes only; specific injection needles (never a bare "injection", which would
-    // false-match "dependency injection" and recommend a WAF rule for something no WAF can block).
-    const NEEDLES: &[&str] = &[
+    // Multi-word phrases (never a bare "injection", which would false-match "dependency injection").
+    const PHRASES: &[&str] = &[
         "sql injection",
-        "sqli",
         "code injection",
         "ldap injection",
         "xpath injection",
         "template injection",
-        "ssti",
         "header injection",
-        "crlf",
-        "xss",
         "cross-site scripting",
         "path traversal",
         "directory traversal",
-        "ssrf",
         "command inj",
-        "xxe",
-        "lfi",
-        "rfi",
     ];
-    NEEDLES.iter().any(|n| t.contains(n))
+    // Short acronyms match whole-word only (avoids `sqli` in `sqlite`, `xss` in a longer token, …).
+    const WORDS: &[&str] = &["sqli", "ssti", "crlf", "xss", "ssrf", "xxe", "lfi", "rfi"];
+    PHRASES.iter().any(|p| t.contains(p)) || WORDS.iter().any(|w| contains_word(&t, w))
 }
 
 /// The PR/MR channel that matches an SCM.
@@ -158,6 +159,9 @@ mod tests {
         assert!(!waf_mitigable("Weak password policy"));
         // Must not false-match benign engineering text (bare "injection" removed).
         assert!(!waf_mitigable("Dependency injection container misconfiguration"));
+        // Short acronyms match whole-word only — "sqli" must not fire inside "sqlite".
+        assert!(!waf_mitigable("SQLite database file world-readable"));
+        assert!(waf_mitigable("SQLi in the search parameter"));
     }
 
     #[test]

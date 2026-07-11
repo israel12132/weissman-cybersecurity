@@ -43,29 +43,35 @@ fn severity_points(sev: &str) -> u8 {
     }
 }
 
+/// True when `haystack` contains `word` as a whole alphanumeric token (so short acronyms like `rce`
+/// don't false-match a substring, e.g. inside `source`).
+fn contains_word(haystack: &str, word: &str) -> bool {
+    haystack
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|tok| tok == word)
+}
+
 /// True when the text describes a high-impact vulnerability class.
 pub fn classify_high_impact(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
-    // Specific classes only — a bare "injection" needle false-matches benign text like
-    // "dependency injection", so we enumerate the real high-impact classes instead.
-    const NEEDLES: &[&str] = &[
+    // Multi-word phrases match as substrings; a bare "injection" is deliberately absent (it would
+    // false-match "dependency injection").
+    const PHRASES: &[&str] = &[
         "sql injection",
         "code injection",
         "command inj",
         "ldap injection",
         "template injection",
-        "ssti",
         "remote code",
-        "rce",
         "deserial",
         "auth bypass",
         "authentication bypass",
-        "ssrf",
-        "xxe",
         "path traversal",
         "privilege escalation",
     ];
-    NEEDLES.iter().any(|n| t.contains(n))
+    // Short acronyms match only as whole words (avoids `rce` in `source`, etc.).
+    const WORDS: &[&str] = &["rce", "ssrf", "xxe", "ssti"];
+    PHRASES.iter().any(|p| t.contains(p)) || WORDS.iter().any(|w| contains_word(&t, w))
 }
 
 /// True when the text suggests an internet-facing / externally exposed asset.
@@ -220,6 +226,9 @@ mod tests {
         assert!(!classify_high_impact("Missing security header"));
         // Must not false-match benign engineering text.
         assert!(!classify_high_impact("Refactor to constructor dependency injection"));
+        // Short acronyms match whole-word only — "rce" must not fire inside "source".
+        assert!(!classify_high_impact("Exposed source map in production build"));
+        assert!(classify_high_impact("RCE in the upload handler"));
     }
 
     #[test]
