@@ -200,6 +200,25 @@ impl StealthStatus {
 #[derive(Clone)]
 pub struct StealthQueue(Arc<Inner>);
 
+/// RAII counter guard for the `waiting` gauge. Increments on construction and
+/// decrements on drop — so the live queue-depth gauge stays accurate even when
+/// an admission future is *cancelled* while parked (dropped mid-await under a
+/// scan timeout / abort), which a plain increment/decrement pair would leak.
+struct WaitGuard<'a>(&'a AtomicU64);
+
+impl<'a> WaitGuard<'a> {
+    fn new(counter: &'a AtomicU64) -> Self {
+        counter.fetch_add(1, Ordering::Relaxed);
+        WaitGuard(counter)
+    }
+}
+
+impl Drop for WaitGuard<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 /// RAII admission ticket. Holds the per-target and global semaphore permits;
 /// dropping it frees both slots for the next queued request.
 #[must_use = "hold the permit for the duration of the request; dropping it early releases the slot"]
@@ -294,11 +313,13 @@ impl StealthQueue {
         };
 
         // Per-target slot first, then the global ceiling. Count ourselves as
-        // "waiting" across both awaits so the live gauge reflects real queue depth.
-        self.0.waiting.fetch_add(1, Ordering::Relaxed);
+        // "waiting" across both awaits so the live gauge reflects real queue
+        // depth — via an RAII guard so a cancelled (dropped) admission future
+        // still decrements the gauge instead of leaking it.
+        let wait = WaitGuard::new(&self.0.waiting);
         let target = target_sem.acquire_owned().await.ok();
         let global = Arc::clone(&self.0.global).acquire_owned().await.ok();
-        self.0.waiting.fetch_sub(1, Ordering::Relaxed);
+        drop(wait); // admitted — no longer queued (pace/jitter below is in-flight)
 
         self.0.admitted_total.fetch_add(1, Ordering::Relaxed);
         metrics::counter!("weissman_stealth_acquire_total").increment(1);
@@ -607,6 +628,30 @@ mod tests {
             s2.admitted_total, 2,
             "cumulative counter does not decrement"
         );
+    }
+
+    #[tokio::test]
+    async fn waiting_gauge_is_cancellation_safe() {
+        // Single per-target slot so a second admission must queue.
+        let q = StealthQueue::new(fast_cfg(1, 10));
+        let _held = q.acquire("host.example").await;
+        assert_eq!(q.status().waiting, 0, "no one waiting yet");
+
+        // Second acquire parks behind the held slot; cancel it by dropping the
+        // future on timeout. The WaitGuard must decrement despite cancellation.
+        {
+            let fut = q.acquire("host.example");
+            let r = tokio::time::timeout(Duration::from_millis(50), fut).await;
+            assert!(r.is_err(), "second acquire should block behind the held slot");
+        }
+        assert_eq!(
+            q.status().waiting,
+            0,
+            "waiting gauge leaked after a parked admission was cancelled"
+        );
+        // The held permit is still valid; admitted_total counted only the one
+        // real admission, not the cancelled attempt.
+        assert_eq!(q.status().admitted_total, 1);
     }
 
     #[test]
