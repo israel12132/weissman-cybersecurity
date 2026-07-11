@@ -36,6 +36,13 @@ function listPages() {
 
 const rawTablePages = []
 const rawButtonCounts = []
+const colorCounts = []
+
+// Hard-coded neutral Tailwind scales that DON'T flip in light mode (unlike the
+// CSS-var tokens). Semantic scales (red/green/amber/cyan…) are intentionally
+// excluded — those encode status and stay fixed across themes.
+const NEUTRAL_COLOR_RE =
+  /\b(?:text|bg|border|from|to|via|ring|divide|placeholder|outline)-(?:slate|gray|zinc|neutral|stone)-\d{2,3}\b/g
 
 for (const file of listPages()) {
   const src = fs.readFileSync(path.join(pagesDir, file), 'utf8')
@@ -46,9 +53,14 @@ for (const file of listPages()) {
   if (btnMatches && btnMatches.length) {
     rawButtonCounts.push({ file, count: btnMatches.length })
   }
+  const colorMatches = src.match(NEUTRAL_COLOR_RE)
+  if (colorMatches && colorMatches.length) {
+    colorCounts.push({ file, count: colorMatches.length })
+  }
 }
 
 rawButtonCounts.sort((a, b) => b.count - a.count)
+colorCounts.sort((a, b) => b.count - a.count)
 
 const totalPages = listPages().length
 console.log('── UI primitive adoption report ──────────────────────────────')
@@ -65,6 +77,13 @@ console.log('  Top offenders (convert to <Button> when next editing):')
 for (const { file, count } of rawButtonCounts.slice(0, 15)) {
   console.log(`  • ${String(count).padStart(4)}  ${file}`)
 }
+console.log('')
+const totalColors = colorCounts.reduce((s, r) => s + r.count, 0)
+console.log(`Hard-coded neutral colors (won't flip in light mode): ${totalColors} in ${colorCounts.length} pages`)
+console.log('  Top offenders (convert slate/gray/zinc → CSS-var tokens):')
+for (const { file, count } of colorCounts.slice(0, 10)) {
+  console.log(`  • ${String(count).padStart(4)}  ${file}`)
+}
 console.log('──────────────────────────────────────────────────────────────')
 
 // --- Regression ratchet ------------------------------------------------------
@@ -73,6 +92,8 @@ const current = {
   rawTablePages: rawTablePages.length,
   adHocButtonPages: rawButtonCounts.length,
   totalAdHocButtons: totalButtons,
+  hardcodedColorPages: colorCounts.length,
+  hardcodedColorOccurrences: totalColors,
 }
 const baselinePath = path.join(root, 'scripts', 'ui-primitives-baseline.json')
 const mode = process.argv.slice(2)

@@ -152,7 +152,7 @@ export default function ScanScheduler() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.scanScheduler.total_schedules')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.scanScheduler.total_schedules')}</span>
               <Calendar className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -166,12 +166,12 @@ export default function ScanScheduler() {
             <div className="text-2xl font-bold text-green-400">{stats.active}</div>
           </div>
 
-          <div className="bg-gray-500/10 backdrop-blur-md border border-gray-500/30 rounded-xl p-4">
+          <div className="bg-[var(--border-default)] backdrop-blur-md border border-[var(--border-strong)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.scanScheduler.paused')}</span>
-              <Pause className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.scanScheduler.paused')}</span>
+              <Pause className="w-4 h-4 text-[var(--text-tertiary)]" />
             </div>
-            <div className="text-2xl font-bold text-gray-400">{stats.paused}</div>
+            <div className="text-2xl font-bold text-[var(--text-tertiary)]">{stats.paused}</div>
           </div>
 
           <div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
@@ -195,7 +195,7 @@ export default function ScanScheduler() {
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   filter === f
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {t(`pages.scanScheduler.filter_${f}`)}
@@ -228,16 +228,16 @@ export default function ScanScheduler() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               Loading schedules...
             </div>
           ) : filteredSchedules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               No schedules found. Click &quot;Create Schedule&quot; to get started.
             </div>
           ) : visibleSchedules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
               {visibleSchedules.map((schedule) => (
@@ -252,7 +252,7 @@ export default function ScanScheduler() {
                         className={`p-2 rounded-lg border transition-colors ${
                           schedule.enabled
                             ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                            : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'
+                            : 'bg-[var(--border-strong)] text-[var(--text-tertiary)] border-[var(--border-strong)] hover:bg-[var(--border-strong)]'
                         }`}
                       >
                         {schedule.enabled ? (
@@ -269,7 +269,7 @@ export default function ScanScheduler() {
                             className={`px-2 py-1 rounded text-xs font-medium ${
                               schedule.enabled
                                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                                : 'bg-[var(--border-strong)] text-[var(--text-tertiary)] border border-[var(--border-strong)]'
                             }`}
                           >
                             {schedule.enabled ? 'Active' : 'Paused'}
@@ -281,10 +281,10 @@ export default function ScanScheduler() {
                           )}
                         </div>
 
-                        <p className="text-xs text-gray-400 mb-3">{schedule.description}</p>
+                        <p className="text-xs text-[var(--text-tertiary)] mb-3">{schedule.description}</p>
 
                         {/* Schedule Details */}
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                        <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] mb-2">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {schedule.cron || schedule.frequency}
@@ -304,7 +304,7 @@ export default function ScanScheduler() {
                         </div>
 
                         {/* Next/Last Run */}
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                           {schedule.next_run && (
                             <span className="text-cyan-400">
                               Next: {new Date(schedule.next_run).toLocaleString()}
@@ -371,7 +371,7 @@ export default function ScanScheduler() {
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Daily Scan</div>
-              <div className="text-xs text-gray-400">Run comprehensive scan every day at 2 AM</div>
+              <div className="text-xs text-[var(--text-tertiary)]">Run comprehensive scan every day at 2 AM</div>
             </button>
             <button
               onClick={() =>
@@ -385,7 +385,7 @@ export default function ScanScheduler() {
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Weekly Scan</div>
-              <div className="text-xs text-gray-400">Deep scan every Sunday</div>
+              <div className="text-xs text-[var(--text-tertiary)]">Deep scan every Sunday</div>
             </button>
             <button
               onClick={() =>
@@ -397,7 +397,7 @@ export default function ScanScheduler() {
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Custom Cron</div>
-              <div className="text-xs text-gray-400">Advanced cron expression</div>
+              <div className="text-xs text-[var(--text-tertiary)]">Advanced cron expression</div>
             </button>
           </div>
         </div>
@@ -479,14 +479,14 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
+      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {schedule ? 'Edit Schedule' : 'Create Scan Schedule'}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-[var(--text-primary)] transition-colors"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
           </button>
@@ -494,7 +494,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Schedule Name</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Schedule Name</label>
             <input
               type="text"
               value={formData.name}
@@ -505,7 +505,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
             <input
               type="text"
               value={formData.description}
@@ -517,7 +517,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Frequency</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Frequency</label>
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
@@ -532,7 +532,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Status</label>
               <select
                 value={formData.enabled ? 'enabled' : 'disabled'}
                 onChange={(e) =>
@@ -548,7 +548,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
           {formData.type === 'custom' && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                 Cron Expression
               </label>
               <input
@@ -558,14 +558,14 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 placeholder="0 2 * * *"
               />
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-[var(--text-muted)] mt-1">
                 Example: 0 2 * * * (runs daily at 2:00 AM)
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Target Client
             </label>
             <select
@@ -594,7 +594,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)] text-[var(--text-secondary)] border border-[var(--border-strong)] rounded-lg text-sm font-medium hover:bg-[var(--border-strong)] transition-colors"
           >
             Cancel
           </button>
