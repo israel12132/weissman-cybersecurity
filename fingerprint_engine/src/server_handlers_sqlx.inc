@@ -1121,6 +1121,21 @@ async fn api_intel_target_profile(
         .into_response()
 }
 
+/// Smart Stealth Queue live telemetry — the effective concurrency caps + pacing
+/// (set at deploy time via `WEISSMAN_STEALTH_*`), plus real-time load: in-flight
+/// requests, queue depth, cumulative admissions, per-host load, and the rotating
+/// identity pool sizes. Read-only by design: a safety-critical rate limiter that
+/// shapes outbound Red-Team traffic is tuned via env at deploy, never weakened
+/// from the browser. Requires auth (not in `PUBLIC_ROUTES`) but no tenant scope —
+/// the queue is a process-global admission gateway.
+async fn api_stealth_status() -> Response {
+    (
+        StatusCode::OK,
+        Json(crate::stealth_queue::status().to_json()),
+    )
+        .into_response()
+}
+
 /// Tenant-level prerequisites (LLM, OAST, AI entitlement) for onboarding wizard.
 async fn api_onboarding_tenant_status(
     State(state): State<Arc<AppState>>,

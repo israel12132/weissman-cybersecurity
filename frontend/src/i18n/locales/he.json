@@ -141,6 +141,7 @@
     "playbooks": "מדריכי SOAR",
     "threat_intel": "מודיעין איומים",
     "target_intel": "מודיעין מטרה",
+    "stealth_ops": "תפעול חמקני",
     "attack_paths": "נתיבי תקיפה",
     "scan_scheduler": "מתזמן סריקות",
     "alert_rules": "כללי התראה",

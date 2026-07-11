@@ -90,6 +90,7 @@ export const NAV_GROUPS = [
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },
+      { to: '/stealth-ops', labelKey: 'nav.stealth_ops', icon: '🕶' },
       { to: '/nexus-swarm', labelKey: 'nav.nexus_swarm', icon: '⚡' },
       { to: '/superposition-collapse', labelKey: 'nav.superposition_collapse', icon: '◈' },
       { to: '/sovereign-defense-matrix', labelKey: 'nav.sovereign_defense', icon: '⬡' },

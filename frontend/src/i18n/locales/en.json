@@ -146,6 +146,7 @@
     "playbooks": "Playbooks",
     "threat_intel": "Threat Intel",
     "target_intel": "Target Intelligence",
+    "stealth_ops": "Stealth Operations",
     "attack_paths": "Attack Paths",
     "scan_scheduler": "Scan Scheduler",
     "alert_rules": "Alert Rules",

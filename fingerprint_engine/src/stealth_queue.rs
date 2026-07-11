@@ -110,6 +110,90 @@ struct Inner {
     global: Arc<Semaphore>,
     per_target: DashMap<String, Arc<Semaphore>>,
     last_start: DashMap<String, Instant>,
+    /// Requests currently parked in [`acquire`] waiting for a slot (live gauge).
+    waiting: AtomicU64,
+    /// Cumulative admissions granted since process start (monotonic counter).
+    admitted_total: AtomicU64,
+}
+
+/// Per-host live load: how many requests are in flight against one target.
+#[derive(Debug, Clone)]
+pub struct HostLoad {
+    pub host: String,
+    pub in_flight: usize,
+    pub capacity: usize,
+}
+
+/// A point-in-time snapshot of the stealth queue for observability. Read-only:
+/// the effective caps are set at deploy time via `WEISSMAN_STEALTH_*` env vars
+/// (a safety-critical rate limiter is never weakened from the web console).
+#[derive(Debug, Clone)]
+pub struct StealthStatus {
+    pub disabled: bool,
+    pub per_target: usize,
+    pub global_capacity: usize,
+    pub jitter_min_ms: u64,
+    pub jitter_max_ms: u64,
+    pub min_interval_ms: u64,
+    /// Requests in flight across all targets right now (global_capacity − free).
+    pub global_in_flight: usize,
+    /// Requests parked in the queue waiting for a slot right now.
+    pub waiting: usize,
+    /// Cumulative admissions granted since start.
+    pub admitted_total: u64,
+    /// Distinct hosts the queue has ever tracked (per-host semaphores retained).
+    pub tracked_hosts: usize,
+    /// Hosts with ≥1 request in flight, busiest first (capped for payload size).
+    pub active_hosts: Vec<HostLoad>,
+    /// Size of the rotating identity pools.
+    pub user_agent_pool: usize,
+    pub accept_language_pool: usize,
+    pub platform_pool: usize,
+    /// Total identities dispensed since start (rotation cursor).
+    pub identities_dispensed: u64,
+}
+
+impl StealthStatus {
+    /// Serialize to the JSON shape consumed by `GET /api/stealth/status`.
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "disabled": self.disabled,
+            "config": {
+                "per_target": self.per_target,
+                "global_capacity": self.global_capacity,
+                "jitter_min_ms": self.jitter_min_ms,
+                "jitter_max_ms": self.jitter_max_ms,
+                "min_interval_ms": self.min_interval_ms,
+                "env_keys": {
+                    "per_target": "WEISSMAN_STEALTH_PER_TARGET",
+                    "global": "WEISSMAN_STEALTH_GLOBAL",
+                    "jitter_min_ms": "WEISSMAN_STEALTH_JITTER_MIN_MS",
+                    "jitter_max_ms": "WEISSMAN_STEALTH_JITTER_MAX_MS",
+                    "min_interval_ms": "WEISSMAN_STEALTH_MIN_INTERVAL_MS",
+                    "disabled": "WEISSMAN_STEALTH_DISABLED"
+                }
+            },
+            "live": {
+                "global_in_flight": self.global_in_flight,
+                "global_free": self.global_capacity.saturating_sub(self.global_in_flight),
+                "waiting": self.waiting,
+                "admitted_total": self.admitted_total,
+                "tracked_hosts": self.tracked_hosts,
+                "active_hosts": self.active_hosts.iter().map(|h| serde_json::json!({
+                    "host": h.host,
+                    "in_flight": h.in_flight,
+                    "capacity": h.capacity,
+                })).collect::<Vec<_>>(),
+            },
+            "identity": {
+                "user_agent_pool": self.user_agent_pool,
+                "accept_language_pool": self.accept_language_pool,
+                "platform_pool": self.platform_pool,
+                "identities_dispensed": self.identities_dispensed,
+            }
+        })
+    }
 }
 
 /// A cheap, cloneable handle to the shared stealth queue.
@@ -134,7 +218,55 @@ impl StealthQueue {
             global,
             per_target: DashMap::new(),
             last_start: DashMap::new(),
+            waiting: AtomicU64::new(0),
+            admitted_total: AtomicU64::new(0),
         }))
+    }
+
+    /// Point-in-time snapshot of caps + live load for observability.
+    #[must_use]
+    pub fn status(&self) -> StealthStatus {
+        let cap = self.0.cfg.per_target.max(1);
+        let global_cap = self.0.cfg.global.max(1);
+        let global_in_flight = global_cap.saturating_sub(self.0.global.available_permits());
+        // Only surface hosts with live traffic; cap the list so a huge engagement
+        // can't bloat the payload. Busiest hosts first.
+        let mut active: Vec<HostLoad> = self
+            .0
+            .per_target
+            .iter()
+            .filter_map(|e| {
+                let in_flight = cap.saturating_sub(e.value().available_permits());
+                (in_flight > 0).then(|| HostLoad {
+                    host: e.key().clone(),
+                    in_flight,
+                    capacity: cap,
+                })
+            })
+            .collect();
+        active.sort_by(|a, b| {
+            b.in_flight
+                .cmp(&a.in_flight)
+                .then_with(|| a.host.cmp(&b.host))
+        });
+        active.truncate(64);
+        StealthStatus {
+            disabled: self.0.cfg.disabled,
+            per_target: cap,
+            global_capacity: global_cap,
+            jitter_min_ms: self.0.cfg.jitter_min_ms,
+            jitter_max_ms: self.0.cfg.jitter_max_ms,
+            min_interval_ms: self.0.cfg.min_interval_ms,
+            global_in_flight,
+            waiting: self.0.waiting.load(Ordering::Relaxed) as usize,
+            admitted_total: self.0.admitted_total.load(Ordering::Relaxed),
+            tracked_hosts: self.0.per_target.len(),
+            active_hosts: active,
+            user_agent_pool: USER_AGENTS.len(),
+            accept_language_pool: ACCEPT_LANG.len(),
+            platform_pool: PLATFORMS.len(),
+            identities_dispensed: IDENTITY_SEQ.load(Ordering::Relaxed),
+        }
     }
 
     /// Admit one request against `host`: wait for a free per-target slot and a
@@ -161,10 +293,14 @@ impl StealthQueue {
             Arc::clone(entry.value())
         };
 
-        // Per-target slot first, then the global ceiling.
+        // Per-target slot first, then the global ceiling. Count ourselves as
+        // "waiting" across both awaits so the live gauge reflects real queue depth.
+        self.0.waiting.fetch_add(1, Ordering::Relaxed);
         let target = target_sem.acquire_owned().await.ok();
         let global = Arc::clone(&self.0.global).acquire_owned().await.ok();
+        self.0.waiting.fetch_sub(1, Ordering::Relaxed);
 
+        self.0.admitted_total.fetch_add(1, Ordering::Relaxed);
         metrics::counter!("weissman_stealth_acquire_total").increment(1);
 
         self.pace(&key).await;
@@ -226,6 +362,12 @@ pub fn shared() -> StealthQueue {
 /// Admit one request against `host` on the process-wide queue.
 pub async fn acquire(host: &str) -> StealthPermit {
     shared().acquire(host).await
+}
+
+/// Snapshot of the process-wide queue for the observability endpoint.
+#[must_use]
+pub fn status() -> StealthStatus {
+    shared().status()
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +566,47 @@ mod tests {
             seen.insert(rotating_identity().0);
         }
         assert!(seen.len() > 1, "user-agents should rotate");
+    }
+
+    #[tokio::test]
+    async fn status_reports_live_load_and_caps() {
+        let q = StealthQueue::new(fast_cfg(3, 10));
+        // Idle: no traffic yet.
+        let s0 = q.status();
+        assert_eq!(s0.per_target, 3);
+        assert_eq!(s0.global_capacity, 10);
+        assert_eq!(s0.global_in_flight, 0);
+        assert_eq!(s0.admitted_total, 0);
+        assert!(s0.active_hosts.is_empty());
+        assert!(s0.user_agent_pool >= 2);
+
+        // Hold two permits against one host: in-flight must reflect them.
+        let _p1 = q.acquire("https://target.example/a").await;
+        let _p2 = q.acquire("https://target.example/b").await;
+        let s1 = q.status();
+        assert_eq!(s1.global_in_flight, 2);
+        assert_eq!(s1.admitted_total, 2);
+        assert_eq!(s1.active_hosts.len(), 1);
+        assert_eq!(s1.active_hosts[0].host, "target.example");
+        assert_eq!(s1.active_hosts[0].in_flight, 2);
+        assert_eq!(s1.active_hosts[0].capacity, 3);
+
+        // JSON snapshot is well-formed and carries the env-key hints.
+        let j = s1.to_json();
+        assert_eq!(j["live"]["global_in_flight"], 2);
+        assert_eq!(
+            j["config"]["env_keys"]["per_target"],
+            "WEISSMAN_STEALTH_PER_TARGET"
+        );
+
+        drop(_p1);
+        drop(_p2);
+        let s2 = q.status();
+        assert_eq!(s2.global_in_flight, 0, "permits freed on drop");
+        assert_eq!(
+            s2.admitted_total, 2,
+            "cumulative counter does not decrement"
+        );
     }
 
     #[test]
