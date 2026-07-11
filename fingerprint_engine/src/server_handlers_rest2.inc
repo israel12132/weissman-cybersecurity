@@ -823,6 +823,28 @@ async fn api_openapi_spec() -> Response {
                     "responses": { "200": { "description": "Mirror health" } }
                 }
             },
+            "/api/intel/target-profile": {
+                "get": {
+                    "summary": "Deterministic target classification + taxonomy-backed engine selection",
+                    "description": "Classifies a target string (URL / host / IP / host:port) into what it is (asset class, facets), where it lives (registrable domain, public suffix, hosting/network class, IDN/homograph), and why it matters (sensitivity, confidence, evidence), then returns the ranked, explainable engine set the platform would prioritise for it. Pure string+catalog classification — no network traffic, no tenant data.",
+                    "tags": ["Intel"],
+                    "parameters": [
+                        { "name": "target", "in": "query", "required": true, "schema": { "type": "string" }, "description": "URL, hostname, IP, or host:port to profile" }
+                    ],
+                    "responses": {
+                        "200": { "description": "{ target, profile, selection } — profile carries asset_class/sensitivity/confidence/provenance/facets; selection carries focus[] + ranked[] with per-engine score/group/reason" },
+                        "400": { "description": "target query parameter required" }
+                    }
+                }
+            },
+            "/api/stealth/status": {
+                "get": {
+                    "summary": "Smart Stealth Queue live telemetry (caps + real-time load)",
+                    "description": "Read-only snapshot of the outbound-traffic admission gateway: effective per-target/global concurrency caps, jitter and pacing (all set at deploy time via WEISSMAN_STEALTH_* env vars), plus live load — global in-flight, queue depth, cumulative admissions, per-host load, and rotating-identity pool sizes. The rate limiter is tuned via env, never weakened from the console.",
+                    "tags": ["Intel"],
+                    "responses": { "200": { "description": "{ disabled, config{…,env_keys}, live{global_in_flight,waiting,admitted_total,active_hosts[]}, identity{…} }" } }
+                }
+            },
             "/api/intel/suppressions": {
                 "get": {
                     "summary": "List active auto-suppression rules (3-FP threshold)",
