@@ -290,6 +290,76 @@ async fn load_finding_context(
     (String::new(), String::new(), String::new())
 }
 
+/// Policy-driven, best-effort auto-merge of a freshly opened GitHub heal PR. A no-op unless
+/// `WEISSMAN_HEAL_AUTO_MERGE` is enabled; then it merges only when the tenant governance policy yields
+/// `auto_merge` for this verified, attested, low-risk fix on the GitHub-PR channel. Never fails the heal.
+#[allow(clippy::too_many_arguments)]
+async fn maybe_auto_merge_pr(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+    finding_id: &str,
+    channel: &str,
+    git_token: &str,
+    repo_slug: &str,
+    pr_number: Option<i64>,
+    verdict: &str,
+    attempts: i32,
+    attested: bool,
+) {
+    if !crate::heal_policy::auto_merge_flag_enabled() {
+        return;
+    }
+    let Some(pr_number) = pr_number else { return };
+
+    // Severity from the finding (tenant-scoped) — the policy gates auto-merge on it.
+    let severity = match crate::db::begin_tenant_tx(pool, tenant_id).await {
+        Ok(mut tx) => {
+            let s = sqlx::query_scalar::<_, String>(
+                "SELECT COALESCE(severity,'') FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+            )
+            .bind(client_id)
+            .bind(finding_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+            let _ = tx.commit().await;
+            s
+        }
+        Err(_) => return,
+    };
+
+    let policy = crate::heal_policy::HealPolicy::load(pool, tenant_id).await;
+    let decision = policy.decide(verdict, &severity, attested, attempts as i64);
+    if !crate::heal_policy::should_auto_merge(&decision.disposition, channel, attested) {
+        return;
+    }
+
+    let title = format!("Weissman Auto-Heal: {finding_id}");
+    match crate::auto_heal::merge_pull_request(git_token, repo_slug, pr_number, &title).await {
+        Ok(true) => {
+            tracing::info!(target: "auto_heal", finding_id, pr_number, "policy auto-merge succeeded");
+            if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
+                let _ = sqlx::query(
+                    "UPDATE heal_requests SET verification_status = 'auto_merged' WHERE tenant_id = $1 AND finding_id = $2 AND pr_number = $3",
+                )
+                .bind(tenant_id)
+                .bind(finding_id)
+                .bind(pr_number as i32)
+                .execute(&mut *tx)
+                .await;
+                let _ = tx.commit().await;
+            }
+        }
+        Ok(false) => {
+            tracing::warn!(target: "auto_heal", finding_id, pr_number, "policy auto-merge not completed by GitHub")
+        }
+        Err(e) => tracing::warn!(target: "auto_heal", finding_id, error = %e, "policy auto-merge failed"),
+    }
+}
+
 /// Emit metrics (verdict/channel counter + duration histogram) and fire tenant completion
 /// notifications for a terminal heal outcome. Best-effort — never affects the job result.
 #[allow(clippy::too_many_arguments)]
@@ -995,6 +1065,21 @@ pub async fn run_auto_heal_job(
                         pr_url.as_deref(),
                         true,
                         heal_started,
+                    )
+                    .await;
+                    // Opt-in, policy-gated autonomous merge (no-op unless WEISSMAN_HEAL_AUTO_MERGE).
+                    maybe_auto_merge_pr(
+                        app_pool.as_ref(),
+                        tenant_id,
+                        client_id,
+                        &finding_id,
+                        channel.id(),
+                        &git_token,
+                        &repo_slug,
+                        pr_number,
+                        verdict_str,
+                        attempts_i32,
+                        receipt.is_some(),
                     )
                     .await;
                     finalize_spec(app_pool.as_ref(), tenant_id, spec_id, "completed").await;

@@ -549,6 +549,34 @@ pub async fn open_pull_request(
     ))
 }
 
+/// Merge an auto-opened remediation PR (policy-driven auto-merge). Best-effort: returns `Ok(true)`
+/// only when GitHub confirms `merged: true`. Uses the squash method for a clean single commit.
+pub async fn merge_pull_request(
+    token: &str,
+    repo_slug: &str,
+    pr_number: i64,
+    commit_title: &str,
+) -> Result<bool, String> {
+    let client = github_client();
+    let auth = format!("Bearer {}", token);
+    let merge_url = format!("{}/repos/{}/pulls/{}/merge", GITHUB_API, repo_slug, pr_number);
+    let resp = github_send_with_retry(|| {
+        client
+            .put(&merge_url)
+            .header("Authorization", &auth)
+            .header("Accept", "application/vnd.github+json")
+            .json(&serde_json::json!({ "merge_method": "squash", "commit_title": commit_title }))
+    })
+    .await?;
+    let status = resp.status();
+    let bytes = resp.bytes().await.unwrap_or_default();
+    let merged = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .ok()
+        .and_then(|v| v.get("merged").and_then(|m| m.as_bool()))
+        .unwrap_or(false);
+    Ok(status.is_success() && merged)
+}
+
 /// Close an auto-opened remediation PR (revert). Optionally deletes the heal branch.
 pub async fn close_pull_request(
     token: &str,

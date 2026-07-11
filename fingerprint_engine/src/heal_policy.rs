@@ -214,6 +214,22 @@ pub fn evaluate_policy(
     decision(Disposition::OpenForReview, en, he)
 }
 
+/// Hard opt-in for autonomous merging (`WEISSMAN_HEAL_AUTO_MERGE`, default OFF). Auto-merge is a
+/// destructive action, so it never runs unless an operator explicitly enables this.
+pub fn auto_merge_flag_enabled() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_HEAL_AUTO_MERGE").ok().as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    )
+}
+
+/// Whether a freshly delivered heal is eligible to be auto-merged: the governance disposition must be
+/// `auto_merge`, the channel a GitHub PR, and the fix attested. The hard env flag is checked
+/// separately (see [`auto_merge_flag_enabled`]) so this stays a pure, testable predicate.
+pub fn should_auto_merge(disposition: &str, channel: &str, attested: bool) -> bool {
+    disposition == "auto_merge" && channel == "github_pr" && attested
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,5 +304,16 @@ mod tests {
         // severity rank 0 must not slip under the threshold.
         let d = evaluate_policy(&strict(), "fixed", "weird", true, 1);
         assert_eq!(d.disposition, "open_for_review");
+    }
+
+    #[test]
+    fn should_auto_merge_requires_disposition_channel_and_attestation() {
+        assert!(should_auto_merge("auto_merge", "github_pr", true));
+        // Wrong disposition, wrong channel, or missing attestation each block it.
+        assert!(!should_auto_merge("open_for_review", "github_pr", true));
+        assert!(!should_auto_merge("auto_merge", "gitlab_mr", true));
+        assert!(!should_auto_merge("auto_merge", "github_direct_commit", true));
+        assert!(!should_auto_merge("auto_merge", "github_pr", false));
+        assert!(!should_auto_merge("block", "github_pr", true));
     }
 }

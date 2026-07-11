@@ -110,8 +110,15 @@ bilingual (he/en) rationale, surfaced on the HTML report, `report.json`, and the
 
 Per-tenant policy lives in `system_configs` (safe defaults shown): `heal_auto_merge_max_severity`
 (`low`), `heal_require_attestation_for_merge` (`true`), `heal_max_attempts_for_merge` (`3`),
-`heal_allow_broke_app_delivery` (`false`). The disposition is **advisory** — it is reported for an
-operator (or future automation) to act on; it never merges anything on its own.
+`heal_allow_broke_app_delivery` (`false`).
+
+**Enforcement (opt-in).** By default the disposition is advisory. When `WEISSMAN_HEAL_AUTO_MERGE=1`
+(hard opt-in, default off), a freshly opened **GitHub-PR** heal that the policy rates `auto_merge` —
+i.e. a verified, **attested**, within-envelope fix — is squash-merged automatically
+(`auto_heal::merge_pull_request`), and its `heal_requests` row flips to `auto_merged`. Everything else
+stays a PR for human review. The merge is best-effort and never fails the heal; `broke_app`/`hold`
+outcomes are never auto-merged, and with no attestation key nothing auto-merges (attestation is
+required by default).
 
 ## Closed loop
 
@@ -215,6 +222,7 @@ without requiring a Docker socket:
 | `WEISSMAN_HEAL_TOURNAMENT_SIZE`         | `1`            | Candidate tournament size (≥2 enables it, max 6)  |
 | `WEISSMAN_HEAL_TOURNAMENT_CONCURRENCY`  | `2`            | Max candidates verified in parallel (1–6)         |
 | `WEISSMAN_HEAL_DEDUP_HOURS`             | `24`           | Duplicate-PR dedup window (0 disables)            |
+| `WEISSMAN_HEAL_AUTO_MERGE`              | off            | Opt-in: auto-merge policy-`auto_merge` GitHub PRs |
 | `WEISSMAN_VERIFY_REQUIRE_BEFORE_SUCCESS`| `1`            | Require baseline exploit to be 2xx                |
 | `WEISSMAN_VERIFY_REQUIRE_HEALTH`        | `1`            | Require post-patch health probe to pass           |
 | `WEISSMAN_VERIFY_RUN_TESTS`             | `0`            | Opt-in in-container regression test gate          |
