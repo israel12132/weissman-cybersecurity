@@ -16,6 +16,7 @@ import { useClient } from '../context/ClientContext';
 import { useToast } from '../components/ui/Toaster';
 import { api } from '../utils/apiFetch';
 import { apiFetch } from '../lib/apiBase';
+import Button from '../components/ui/Button'
 
 const FRAMEWORK_ICONS = {
   iso27001: '🔐',
@@ -380,16 +381,16 @@ export default function ComplianceFrameworks() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {pack && (
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={downloadPack}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-sm font-medium hover:bg-violet-500/20 transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   {t('pages.complianceFrameworks.pack_download')}
-                </button>
+                </Button>
               )}
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={generateEvidencePack}
                 disabled={packLoading || selectedClientId == null}
@@ -401,7 +402,7 @@ export default function ComplianceFrameworks() {
                   : pack
                     ? t('pages.complianceFrameworks.pack_regenerate')
                     : t('pages.complianceFrameworks.pack_generate')}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -492,7 +493,7 @@ export default function ComplianceFrameworks() {
                           : '#facc15';
                       return (
                         <li key={ex.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] overflow-hidden">
-                          <button
+                          <Button variant="unstyled"
                             type="button"
                             onClick={() => toggleSoar(ex.id)}
                             aria-expanded={open}
@@ -513,7 +514,7 @@ export default function ComplianceFrameworks() {
                             <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 hidden sm:inline">
                               {ex.updated_at ? new Date(ex.updated_at).toLocaleString() : ''}
                             </span>
-                          </button>
+                          </Button>
                           {open && (
                             <div className="px-3 pb-3 pt-1 border-t border-[var(--border-subtle)]">
                               {soarLoading ? (
@@ -580,7 +581,7 @@ export default function ComplianceFrameworks() {
 
         {/* Control → evidence mapping matrix (lazy) */}
         <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={toggleMappings}
             aria-expanded={mappingsOpen}
@@ -596,7 +597,7 @@ export default function ComplianceFrameworks() {
             <span className="text-[11px] font-mono text-cyan-400/80">
               {mappingsOpen ? t('pages.complianceFrameworks.mappings_hide') : t('pages.complianceFrameworks.mappings_show')}
             </span>
-          </button>
+          </Button>
           {mappingsOpen && (
             <div className="mt-3">
               {mappingsLoading ? (
@@ -651,7 +652,7 @@ export default function ComplianceFrameworks() {
                 : fw.scope;
 
               return (
-                <button
+                <Button variant="unstyled"
                   key={fw.id}
                   type="button"
                   onClick={() => setSelectedFramework(fw)}
@@ -668,7 +669,7 @@ export default function ComplianceFrameworks() {
                       <div className="text-xs opacity-75 truncate max-w-[180px]">{scoreLabel}</div>
                     )}
                   </div>
-                </button>
+                </Button>
               );
             })
           )}
@@ -749,7 +750,7 @@ export default function ComplianceFrameworks() {
                 </div>
                 <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
                   {FILTER_KEYS.map((f) => (
-                    <button
+                    <Button variant="unstyled"
                       key={f}
                       type="button"
                       onClick={() => setFilter(f)}
@@ -760,12 +761,12 @@ export default function ComplianceFrameworks() {
                       }`}
                     >
                       {t(`pages.complianceFrameworks.filter_${f.replace('-', '_')}`)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
 
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => generateReport(selectedFramework.id)}
                 disabled={exporting || controls.length === 0}
@@ -773,7 +774,7 @@ export default function ComplianceFrameworks() {
               >
                 <Download className="w-4 h-4" />
                 {exporting ? t('pages.complianceFrameworks.exporting') : t('pages.complianceFrameworks.export_report')}
-              </button>
+              </Button>
             </div>
 
             <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">

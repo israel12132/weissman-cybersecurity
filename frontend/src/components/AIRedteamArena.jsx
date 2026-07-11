@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const NS = 'components.tools.aiRedteamArena'
 
@@ -143,13 +144,13 @@ export default function AIRedteamArena() {
           </div>
         </div>
         <div className="flex gap-2 mb-6">
-          <button
+          <Button variant="unstyled"
             onClick={startScan}
             disabled={running}
             className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-[var(--bg-4)] text-white font-medium text-sm"
           >
             {running ? t(`${NS}.running`) : t(`${NS}.launch`)}
-          </button>
+          </Button>
           {clientId && (
             <span className="text-[var(--text-muted)] text-sm self-center">
               {t(`${NS}.client_id`, { id: clientId })}

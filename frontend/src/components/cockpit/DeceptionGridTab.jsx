@@ -8,6 +8,7 @@ import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { ShieldAlert, Plus, MapPin, AlertTriangle, Key, Cloud, Loader2 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.deceptionGrid'
 
@@ -208,7 +209,7 @@ export default function DeceptionGridTab() {
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={deployCloud}
           disabled={deploying}
@@ -216,7 +217,7 @@ export default function DeceptionGridTab() {
         >
           {deploying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
           {deploying ? t(`${NS}.injecting`) : t(`${NS}.deployButton`)}
-        </button>
+        </Button>
         {deployMsg && (
           <p className={`mt-2 text-xs ${deployMsg.ok ? 'text-[#10b981]' : 'text-red-400'}`}>{deployMsg.text}</p>
         )}
@@ -255,7 +256,7 @@ export default function DeceptionGridTab() {
             </label>
           ))}
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={generate}
           disabled={generating}
@@ -263,15 +264,15 @@ export default function DeceptionGridTab() {
         >
           <Plus className="w-4 h-4" />
           {generating ? t(`${NS}.generating`) : t(`${NS}.generateTokens`)}
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
           <span className="text-sm font-medium text-white/90">{t(`${NS}.honeytokenInventory`)}</span>
-          <button type="button" onClick={fetchAssets} className="text-xs text-[#22d3ee] hover:underline">
+          <Button variant="unstyled" type="button" onClick={fetchAssets} className="text-xs text-[#22d3ee] hover:underline">
             {t(`${NS}.refresh`)}
-          </button>
+          </Button>
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>

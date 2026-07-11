@@ -12,6 +12,7 @@ import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -122,7 +123,7 @@ function FindingCard({ f }) {
   const st = SEV_STYLE[sev] || SEV_STYLE.info
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -133,7 +134,7 @@ function FindingCard({ f }) {
           <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
         <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -488,14 +489,14 @@ export default function PkiTlsCommandCenter() {
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #34d399' : 'none' }} />
             <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.pkiTlsPosture.scanning', '⟳ Scanning…') : t('pages.pkiTlsPosture.run_scan', '▶ Run TLS Assessment')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.pkiTlsPosture.hide_params', '▾ Parameters') : t('pages.pkiTlsPosture.show_params', '▸ Parameters')}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>

@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'asm'
 const ACCENT = '#22d3ee'
@@ -114,7 +115,7 @@ function gradeColor(grade) {
 
 function Toggle({ checked, onChange, disabled }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       role="switch"
       aria-checked={checked}
@@ -125,7 +126,7 @@ function Toggle({ checked, onChange, disabled }) {
       }`}
     >
       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-300 ${checked ? 'left-[22px]' : 'left-0.5'}`} />
-    </button>
+    </Button>
   )
 }
 
@@ -500,21 +501,21 @@ export default function AttackSurfaceManagement() {
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setShowConfig((s) => !s)}
             className="px-3 py-2 rounded-lg text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
           >
             {showConfig ? `▾ ${t('pages.attackSurfaceManagement.btn_hide_config')}` : `▸ ${t('pages.attackSurfaceManagement.btn_scan_config')}`}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={handleRun}
             disabled={status === 'running' || !selectedClientId}
             className="px-5 py-2 rounded-lg text-sm font-mono font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {status === 'running' ? `⟳ ${t('pages.attackSurfaceManagement.btn_scanning')}` : `▶ ${t('pages.attackSurfaceManagement.btn_map_attack_surface')}`}
-          </button>
+          </Button>
           <span className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: statusBadge.c }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusBadge.c, boxShadow: status === 'running' ? `0 0 6px ${statusBadge.c}` : 'none' }} />
             {statusBadge.t}
@@ -602,13 +603,13 @@ export default function AttackSurfaceManagement() {
       {report && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
           <div className="flex justify-end">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleExport}
               className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
             >
               ↓ {t('pages.attackSurfaceManagement.btn_export_json')}
-            </button>
+            </Button>
           </div>
           {/* Hero */}
           <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] via-black/40 to-black/60 p-6">
@@ -665,13 +666,13 @@ export default function AttackSurfaceManagement() {
           {assetTypes.length > 2 && (
             <div className="flex flex-wrap gap-1.5">
               {assetTypes.map((a) => (
-                <button key={a} type="button" onClick={() => setAssetFilter(a)}
+                <Button variant="unstyled" key={a} type="button" onClick={() => setAssetFilter(a)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${
                     assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-white/[0.08] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {a === 'all' ? t('pages.attackSurfaceManagement.filter_all_categories') : `${ASSET_META[a]?.icon ?? '◆'} ${ASSET_META[a] ? t(ASSET_META[a].labelKey) : a}`}
-                </button>
+                </Button>
               ))}
             </div>
           )}

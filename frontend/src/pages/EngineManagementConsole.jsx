@@ -8,6 +8,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { ENGINES_BY_ID } from '../lib/enginesRegistry';
+import Button from '../components/ui/Button'
 
 const NS = 'pages.engineManagementConsole';
 
@@ -373,7 +374,7 @@ export default function EngineManagementConsole() {
           {/* Status Filter */}
           <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'enabled', 'disabled'].map((status) => (
-              <button
+              <Button variant="unstyled"
                 key={status}
                 onClick={() => setStatusFilter(status)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -387,7 +388,7 @@ export default function EngineManagementConsole() {
                   : status === 'enabled'
                     ? t('pages.engineManagementConsole.enabled')
                     : t('pages.engineManagementConsole.disabled')}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -409,20 +410,20 @@ export default function EngineManagementConsole() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button
+                <Button variant="unstyled"
                   onClick={() => bulkToggleCategory(categoryFilter, true)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500/30 transition-colors"
                 >
                   <Play className="w-3 h-3" />
                   {t('pages.engineManagementConsole.enable_all')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   onClick={() => bulkToggleCategory(categoryFilter, false)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-medium hover:bg-red-500/30 transition-colors"
                 >
                   <Pause className="w-3 h-3" />
                   {t('pages.engineManagementConsole.disable_all')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -438,7 +439,7 @@ export default function EngineManagementConsole() {
               })}
               {isFiltered ? t(`${NS}.filtered`) : ''}
             </h3>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportEnginesCsv(filteredEngines)}
               disabled={filteredEngines.length === 0}
@@ -446,7 +447,7 @@ export default function EngineManagementConsole() {
             >
               <Download className="w-3.5 h-3.5" />
               {t(`${NS}.export_csv`)}
-            </button>
+            </Button>
           </div>
 
           {filteredEngines.length === 0 ? (
@@ -464,7 +465,7 @@ export default function EngineManagementConsole() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         {/* Status Toggle */}
-                        <button
+                        <Button variant="unstyled"
                           onClick={() => toggleEngine(engine.id, engine.enabled)}
                           className={`p-1.5 rounded-lg border transition-colors ${
                             engine.enabled
@@ -477,7 +478,7 @@ export default function EngineManagementConsole() {
                           ) : (
                             <Pause className="w-3 h-3" />
                           )}
-                        </button>
+                        </Button>
 
                         {/* Engine Name */}
                         <h4 className="text-sm font-semibold text-white">
@@ -549,12 +550,12 @@ export default function EngineManagementConsole() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => openConfigModal(engine)}
                         className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition-colors"
                       >
                         <Settings className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -605,12 +606,12 @@ function EngineConfigModal({ engine, onClose, onSave }) {
               {t('pages.engineManagementConsole.engine_config')}
             </p>
           </div>
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             <XCircle className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -698,18 +699,18 @@ function EngineConfigModal({ engine, onClose, onSave }) {
 
         {/* Actions */}
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('common.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors"
           >
             {t('pages.engineManagementConsole.save_configuration')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

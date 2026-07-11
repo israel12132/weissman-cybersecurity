@@ -10,6 +10,7 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { apiFetch } from '../lib/apiBase';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 const FILTER_KEYS = ['all', 'vulnerable', 'high_severity', 'direct', 'transitive'];
 
@@ -243,7 +244,7 @@ export default function SBOMBrowser() {
             >
               <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
                 {FILTER_KEYS.map((f) => (
-                  <button
+                  <Button variant="unstyled"
                     key={f}
                     type="button"
                     onClick={() => setFilter(f)}
@@ -254,7 +255,7 @@ export default function SBOMBrowser() {
                     }`}
                   >
                     {t(`pages.sbomBrowser.filter_${f}`)}
-                  </button>
+                  </Button>
                 ))}
               </div>
               {ecosystems.length > 0 && (
@@ -272,7 +273,7 @@ export default function SBOMBrowser() {
             </WeissmanListToolbar>
 
             <div className="flex justify-end gap-2">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => exportSBOM('spdx')}
                 disabled={components.length === 0}
@@ -280,8 +281,8 @@ export default function SBOMBrowser() {
               >
                 <Download className="w-4 h-4" />
                 {t('pages.sbomBrowser.export_spdx')}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => exportSBOM('cyclonedx')}
                 disabled={components.length === 0}
@@ -289,7 +290,7 @@ export default function SBOMBrowser() {
               >
                 <Download className="w-4 h-4" />
                 {t('pages.sbomBrowser.export_cyclonedx')}
-              </button>
+              </Button>
             </div>
           </>
         )}

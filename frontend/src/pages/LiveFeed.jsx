@@ -19,6 +19,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.liveFeed'
 const REFRESH_MS = 15000
@@ -106,7 +107,7 @@ export default function LiveFeed() {
       icon={<Radio className="w-5 h-5" />}
       actions={
         <div className="flex items-center gap-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setPaused((p) => !p)}
             aria-pressed={paused}
@@ -114,7 +115,7 @@ export default function LiveFeed() {
           >
             {paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
             {paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}
-          </button>
+          </Button>
           <ShellScanActions onRefresh={load} refreshLoading={loading} exportDisabled />
         </div>
       }

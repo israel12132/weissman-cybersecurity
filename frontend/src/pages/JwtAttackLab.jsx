@@ -11,6 +11,7 @@ import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import SupremeIntelligencePanels, { extractSupremeFromFindings } from '../components/engine/SupremeIntelligencePanels'
+import Button from '../components/ui/Button'
 
 const ACCENT = '#a855f7'
 
@@ -122,7 +123,7 @@ const JWT_CATEGORY_AXES = [
 // ── small controls ────────────────────────────────────────────────────────────
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
+    <Button variant="unstyled" type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
       <span className="min-w-0">
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
@@ -130,7 +131,7 @@ function Toggle({ label, hint, checked, onChange }) {
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-[#a855f7]/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -140,7 +141,7 @@ function Segmented({ label, value, options, onChange }) {
       {label && <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1.5">{label}</p>}
       <div className="flex rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-0.5 gap-0.5">
         {options.map((o) => (
-          <button key={o.value} type="button" onClick={() => onChange(o.value)} className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-mono transition-all ${value === o.value ? 'bg-[#a855f7]/20 text-[#c084fc] border border-[#a855f7]/40' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-transparent'}`}>{o.label}</button>
+          <Button variant="unstyled" key={o.value} type="button" onClick={() => onChange(o.value)} className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-mono transition-all ${value === o.value ? 'bg-[#a855f7]/20 text-[#c084fc] border border-[#a855f7]/40' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-transparent'}`}>{o.label}</Button>
         ))}
       </div>
     </div>
@@ -239,7 +240,7 @@ function FindingRow({ f, t }) {
   const conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) : null
   return (
     <div className={`rounded-xl border ${meta.border} ${meta.bg} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className={`mt-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${meta.text} ${meta.border}`}>{sev}</span>
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] font-mono text-[var(--text-primary)]">{f.title || f.type}</span>
@@ -247,7 +248,7 @@ function FindingRow({ f, t }) {
         </span>
         {conf !== null && <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">{conf}%</span>}
         <span className="text-[var(--text-disabled)] text-xs shrink-0">{open ? '▾' : '▸'}</span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
@@ -472,8 +473,8 @@ export default function JwtAttackLab() {
         </div>
         <div className="flex items-center gap-2">
           {jobStatus && scanning && <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{jobStatus}</span>}
-          <button type="button" onClick={() => { setParams(DEFAULT_PARAMS); showToast('info', t('pages.jwtLab.reset_done')) }} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-all">{t('pages.jwtLab.reset')}</button>
-          <button type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-[#a855f7]/40 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">{scanning ? t('pages.jwtLab.scanning') : t('pages.jwtLab.run_scan')}</button>
+          <Button variant="unstyled" type="button" onClick={() => { setParams(DEFAULT_PARAMS); showToast('info', t('pages.jwtLab.reset_done')) }} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-all">{t('pages.jwtLab.reset')}</Button>
+          <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-[#a855f7]/40 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">{scanning ? t('pages.jwtLab.scanning') : t('pages.jwtLab.run_scan')}</Button>
         </div>
       </div>
 
@@ -486,7 +487,7 @@ export default function JwtAttackLab() {
         <motion.aside initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="xl:col-span-4 space-y-5 rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 self-start">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.jwtLab.control_panel')}</h3>
-            <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[#c084fc]">{showPreview ? t('pages.jwtLab.hide_json') : t('pages.jwtLab.show_json')}</button>
+            <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[#c084fc]">{showPreview ? t('pages.jwtLab.hide_json') : t('pages.jwtLab.show_json')}</Button>
           </div>
 
           <Field label={t('pages.jwtLab.sample_jwt')}>
@@ -593,14 +594,14 @@ export default function JwtAttackLab() {
                   </div>
                   <div className="flex gap-1 flex-wrap">
                     {SEV_FILTER_OPTIONS.map((s) => (
-                      <button
+                      <Button variant="unstyled"
                         key={s}
                         type="button"
                         onClick={() => setSeverityFilter(s)}
                         className={`text-[9px] font-mono px-2 py-0.5 rounded border uppercase ${severityFilter === s ? 'border-[#a855f7]/50 text-[#c084fc] bg-[#a855f7]/10' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'}`}
                       >
                         {s === 'all' ? t('pages.jwtLab.filter_all') : s}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>

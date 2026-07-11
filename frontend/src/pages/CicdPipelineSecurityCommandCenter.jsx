@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'cicd_pipeline'
 
@@ -134,14 +135,14 @@ function Section({ title, icon, accent = '#84cc16', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
           {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -205,10 +206,10 @@ function Toggle({ label, value, onChange, hint }) {
         <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
-      <button type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)}
+      <Button variant="unstyled" type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)}
         className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-lime-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -607,10 +608,10 @@ export default function CicdPipelineSecurityCommandCenter() {
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('cicdSec.control_column', 'DevSecOps Control Column')}
                 </h2>
-                <button type="button" onClick={resetParams}
+                <Button variant="unstyled" type="button" onClick={resetParams}
                   className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors">
                   {t('common.reset', 'Reset')}
-                </button>
+                </Button>
               </div>
 
               <Section title={t('cicdSec.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
@@ -647,10 +648,10 @@ export default function CicdPipelineSecurityCommandCenter() {
                   {PLATFORMS.map((p) => {
                     const on = params.platform_filter.includes(p.id)
                     return (
-                      <button key={p.id} type="button" onClick={() => togglePlatform(p.id)}
+                      <Button variant="unstyled" key={p.id} type="button" onClick={() => togglePlatform(p.id)}
                         className={`text-[10px] font-mono px-2 py-1 rounded-lg border transition-colors ${on ? 'border-lime-400/50 text-lime-200 bg-lime-500/15' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--border-strong)]'}`}>
                         {p.icon} {p.label}
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -681,10 +682,10 @@ export default function CicdPipelineSecurityCommandCenter() {
                   {FRAMEWORKS.map((f) => {
                     const on = params.compliance_frameworks.includes(f)
                     return (
-                      <button key={f} type="button" onClick={() => toggleFramework(f)}
+                      <Button variant="unstyled" key={f} type="button" onClick={() => toggleFramework(f)}
                         className={`text-[9px] font-mono px-2 py-1 rounded-lg border transition-colors ${on ? 'border-cyan-400/40 text-cyan-200 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>
                         {f}
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -702,9 +703,9 @@ export default function CicdPipelineSecurityCommandCenter() {
               </Section>
 
               <Section title={t('cicdSec.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-lime-300/70 hover:text-lime-200">
+                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-lime-300/70 hover:text-lime-200">
                   {showPreview ? t('cicdSec.hide_json', 'hide JSON') : t('cicdSec.show_json', 'show exact request JSON')}
-                </button>
+                </Button>
                 {showPreview && (
                   <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
                     {JSON.stringify(previewBody, null, 2)}
@@ -713,7 +714,7 @@ export default function CicdPipelineSecurityCommandCenter() {
               </Section>
 
               <div className="mt-3 space-y-2">
-                <button type="button" onClick={() => handleRun()} disabled={running || !selectedClientId || !target.trim()}
+                <Button variant="unstyled" type="button" onClick={() => handleRun()} disabled={running || !selectedClientId || !target.trim()}
                   className="w-full py-3 rounded-xl font-mono text-sm uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     borderColor: running ? 'rgba(132,204,22,0.5)' : 'rgba(132,204,22,0.6)',
@@ -722,11 +723,11 @@ export default function CicdPipelineSecurityCommandCenter() {
                     boxShadow: running ? 'none' : '0 0 24px rgba(132,204,22,0.18)',
                   }}>
                   {running ? t('cicdSec.running', 'Assessing CI/CD…') : t('cicdSec.run', 'Run DevSecOps Scan')}
-                </button>
-                <button type="button" onClick={() => handleRun({ dryRun: true })} disabled={running || !selectedClientId || !target.trim()}
+                </Button>
+                <Button variant="unstyled" type="button" onClick={() => handleRun({ dryRun: true })} disabled={running || !selectedClientId || !target.trim()}
                   className="w-full py-2 rounded-xl font-mono text-[11px] uppercase tracking-widest border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                   {t('cicdSec.dry_run', 'Dry-Run Plan (no requests)')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

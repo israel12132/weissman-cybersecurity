@@ -25,6 +25,7 @@ import { confirmDialog } from '../utils/confirmDialog'
 import { apiFetch } from '../lib/apiBase'
 import { isExpired, isExpiringSoon } from '../lib/suppressionStatus'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.findingSuppressions'
 const columnHelper = createColumnHelper()
@@ -199,7 +200,7 @@ export default function FindingSuppressions() {
               cell: (ctx) => {
                 const s = ctx.row.original
                 return (
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => handleDelete(s)}
                     disabled={deletingId === s.id}
@@ -207,7 +208,7 @@ export default function FindingSuppressions() {
                     className="p-1.5 rounded-md text-rose-400/70 hover:text-rose-300 hover:bg-rose-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </Button>
                 )
               },
             }),
@@ -267,7 +268,7 @@ export default function FindingSuppressions() {
               </div>
               <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t(`${NS}.filter_status`)}>
                 {['all', 'active', 'expired'].map((f) => (
-                  <button
+                  <Button variant="unstyled"
                     key={f}
                     type="button"
                     onClick={() => setStatusFilter(f)}
@@ -280,7 +281,7 @@ export default function FindingSuppressions() {
                     ].join(' ')}
                   >
                     {t(`${NS}.filter_${f}`)}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

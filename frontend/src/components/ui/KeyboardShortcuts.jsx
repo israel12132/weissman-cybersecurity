@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useFocusTrap from '../../hooks/useFocusTrap'
+import Button from './Button'
 
 const SHORTCUT_DEFS = [
   { keys: '?', descKey: 'shortcuts.show_help', global: true },
@@ -84,7 +85,7 @@ export default function KeyboardShortcuts() {
   if (!helpOpen) return null
   return (
     <div className="fixed inset-0 z-[9500] flex items-center justify-center p-4">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setHelpOpen(false)}
         className="absolute inset-0 bg-[var(--bg-1)] backdrop-blur-sm"
@@ -101,12 +102,12 @@ export default function KeyboardShortcuts() {
           <h2 id="kbd-help-title" className="text-base font-semibold text-[var(--text-primary)]">
             {t('a11y.keyboard_shortcuts')}
           </h2>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setHelpOpen(false)}
             className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-2xl leading-none"
             aria-label={t('a11y.close')}
-          >×</button>
+          >×</Button>
         </div>
         <table className="w-full text-[13px] font-mono data-grid">
           <tbody className="divide-y divide-[var(--border-subtle)]">

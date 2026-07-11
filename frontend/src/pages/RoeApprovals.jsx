@@ -8,6 +8,7 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { promptDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 function approvalsHave(req) {
   return Number(!!req.first_approved_by_user_id) + Number(!!req.second_approved_by_user_id)
@@ -177,22 +178,22 @@ export default function RoeApprovals() {
                       <p className="mt-1 text-[11px] font-mono text-[var(--text-muted)]">{f.description}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => approve(req)}
                         disabled={actionId === req.id}
                         className="px-3 py-1.5 text-xs border border-emerald-500/40 text-emerald-200 rounded hover:bg-emerald-900/20 disabled:opacity-50"
                       >
                         {t('pages.roeApprovals.approve')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => reject(req)}
                         disabled={actionId === req.id}
                         className="px-3 py-1.5 text-xs border border-rose-500/40 text-rose-200 rounded hover:bg-rose-900/20 disabled:opacity-50"
                       >
                         {t('pages.roeApprovals.reject')}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>

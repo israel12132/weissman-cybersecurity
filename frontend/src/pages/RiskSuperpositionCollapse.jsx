@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'risk_superposition_collapse'
 
@@ -172,14 +173,14 @@ function ParamSection({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider">{title}</span>
         <span className="text-[var(--text-muted)] text-sm">{open ? '−' : '+'}</span>
-      </button>
+      </Button>
       {open && <div className="px-4 pb-4 space-y-3 border-t border-[var(--border-subtle)] pt-3">{children}</div>}
     </div>
   )
@@ -446,14 +447,14 @@ export default function RiskSuperpositionCollapse() {
 
             <div className="flex flex-wrap gap-2">
               {['conservative', 'balanced', 'aggressive'].map((p) => (
-                <button
+                <Button variant="unstyled"
                   key={p}
                   type="button"
                   onClick={() => applyPreset(p)}
                   className="text-[10px] font-mono px-2.5 py-1.5 rounded-lg border border-violet-500/30 text-violet-200 hover:bg-violet-500/15 transition-colors"
                 >
                   {t(`pages.superpositionCollapse.preset_${p}`)}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -584,13 +585,13 @@ export default function RiskSuperpositionCollapse() {
 
           {scanPreview && (
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => setShowPayload((s) => !s)}
                 className="w-full px-4 py-2 text-left text-[10px] font-mono text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
               >
                 {showPayload ? '▼' : '▶'} {t('pages.superpositionCollapse.payload_preview')}
-              </button>
+              </Button>
               {showPayload && (
                 <pre className="px-4 pb-3 text-[10px] font-mono text-cyan-300/90 overflow-auto max-h-48">
                   {JSON.stringify(scanPreview, null, 2)}
@@ -648,10 +649,10 @@ export default function RiskSuperpositionCollapse() {
           <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white">{t('pages.superpositionCollapse.cluster_feed')}</h3>
-              <button type="button" onClick={loadClusters} disabled={clustersLoading}
+              <Button variant="unstyled" type="button" onClick={loadClusters} disabled={clustersLoading}
                 className="text-[10px] font-mono text-cyan-400 hover:underline disabled:opacity-50">
                 {clustersLoading ? '…' : t('pages.superpositionCollapse.refresh_clusters')}
-              </button>
+              </Button>
             </div>
             {clusters.length === 0 ? (
               <p className="text-xs text-[var(--text-muted)] font-mono">{t('pages.superpositionCollapse.no_clusters')}</p>

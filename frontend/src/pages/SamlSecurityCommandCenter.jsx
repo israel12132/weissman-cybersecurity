@@ -13,6 +13,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 
 const ENGINE_ID = 'saml_attack'
@@ -134,14 +135,14 @@ function sevWeight(s) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full text-left"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#fcd34d' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>
         <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: on ? '14px' : '2px' }} />
       </span>
       <span>{label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -323,8 +324,8 @@ export default function SamlSecurityCommandCenter() {
         <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{L.presets}</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {IDP_PRESETS.map((p) => (
-            <button key={p.id} type="button" onClick={() => setTarget(p.hint)}
-              className="px-3 py-1 rounded-lg text-xs font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-amber-200 hover:border-amber-500/30">{p.label}</button>
+            <Button variant="unstyled" key={p.id} type="button" onClick={() => setTarget(p.hint)}
+              className="px-3 py-1 rounded-lg text-xs font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-amber-200 hover:border-amber-500/30">{p.label}</Button>
           ))}
         </div>
 
@@ -343,11 +344,11 @@ export default function SamlSecurityCommandCenter() {
         </div>
 
         <div className="flex justify-between items-center pt-2 border-t border-[var(--border-subtle)]">
-          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)]">{showAdvanced ? '▾' : '▸'} {L.advanced}</button>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)]">{showAdvanced ? '▾' : '▸'} {L.advanced}</Button>
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-amber-500/40 text-amber-200 bg-amber-500/15 disabled:opacity-40">
             {status === 'running' ? L.scanning : L.run}
-          </button>
+          </Button>
         </div>
 
         {showAdvanced && (
@@ -369,7 +370,7 @@ export default function SamlSecurityCommandCenter() {
             <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">{L.ssoPaths}
               <textarea value={params.sso_paths} onChange={(e) => set('sso_paths', e.target.value)} rows={2} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] border border-[var(--border-default)] rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</button>
+            <Button variant="unstyled" type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] border border-[var(--border-default)] rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</Button>
           </div>
         )}
       </div>

@@ -13,6 +13,7 @@ import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { promptDialog } from '../utils/confirmDialog'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'nexus_sovereign_swarm'
 
@@ -326,7 +327,7 @@ function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
@@ -337,7 +338,7 @@ function Section({ title, icon, accent = '#a855f7', count, defaultOpen = true, c
           {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -422,7 +423,7 @@ function Toggle({ label, value, onChange, hint }) {
         <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
-      <button
+      <Button variant="unstyled"
         type="button"
         role="switch"
         aria-checked={value}
@@ -430,7 +431,7 @@ function Toggle({ label, value, onChange, hint }) {
         className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-violet-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}
       >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -733,7 +734,7 @@ function ConfigSchemaPanel({ schema, onClose }) {
       <div className="max-w-2xl w-full max-h-[80vh] overflow-auto rounded-2xl border border-violet-500/30 bg-[var(--bg-0)] p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
           <p className="text-sm font-bold text-white">NSSI Config Schema v{schema.version} · {schema.parameter_count} params</p>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
+          <Button variant="unstyled" type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</Button>
         </div>
         {schema.completeness && (
           <p className="text-[10px] font-mono text-emerald-400/80 mb-2">
@@ -831,14 +832,14 @@ function EngineRecsPanel({ recs, onLaunch, launching }) {
             </Link>
             <span className="text-[9px] font-mono text-[var(--text-muted)] shrink-0">P{r.priority}</span>
             {onLaunch && (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={launching === r.engine_id}
                 onClick={() => onLaunch(r.engine_id)}
                 className="text-[9px] font-mono uppercase px-2 py-1 rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40 shrink-0"
               >
                 {launching === r.engine_id ? '…' : 'Launch'}
-              </button>
+              </Button>
             )}
           </div>
         ))}
@@ -1027,7 +1028,7 @@ function FindingRow({ finding }) {
   const evidence = f.evidence || f.swarm_metrics
   return (
     <div className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left">
         <div className="flex items-start gap-2">
           <span className={`font-mono shrink-0 ${f.severity === 'critical' ? 'text-red-400' : f.severity === 'high' ? 'text-orange-400' : f.severity === 'medium' ? 'text-amber-400' : 'text-cyan-400'}`}>
             [{f.severity || 'info'}]
@@ -1037,7 +1038,7 @@ function FindingRow({ finding }) {
         </div>
         {f.signal_type && <span className="block text-[9px] font-mono text-violet-400/60 ml-1 mt-0.5">{f.signal_type}</span>}
         {f.url && <span className="block text-[10px] font-mono text-[var(--text-disabled)] truncate ml-1 mt-0.5">{f.url}</span>}
-      </button>
+      </Button>
       {open && evidence && (
         <pre className="mt-1.5 ml-1 max-h-40 overflow-auto rounded bg-[var(--bg-3)] border border-[var(--border-default)] p-2 text-[9px] font-mono text-emerald-300/70">
           {JSON.stringify(evidence, null, 2)}
@@ -1053,22 +1054,22 @@ function MissionPresetsBar({ onApply, onSave, onExport, onImport, onWaveReplay, 
       <div className="flex items-center justify-between gap-2">
         <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">Mission Presets</p>
         <div className="flex gap-1 flex-wrap justify-end">
-          <button type="button" onClick={onShowSchema} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-500/30 text-violet-300">Schema</button>
-          <button type="button" onClick={onSave} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Save</button>
-          <button type="button" onClick={onExport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Export</button>
-          <button type="button" onClick={onImport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Import</button>
+          <Button variant="unstyled" type="button" onClick={onShowSchema} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-500/30 text-violet-300">Schema</Button>
+          <Button variant="unstyled" type="button" onClick={onSave} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Save</Button>
+          <Button variant="unstyled" type="button" onClick={onExport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Export</Button>
+          <Button variant="unstyled" type="button" onClick={onImport} className="text-[9px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Import</Button>
         </div>
       </div>
       <div className="flex gap-1 flex-wrap">
         {[1, 2, 3, 4].map((n) => (
-          <button key={n} type="button" onClick={() => onWaveReplay(n)} className="text-[9px] font-mono px-2 py-1 rounded border border-cyan-500/25 text-cyan-300/80 hover:bg-cyan-500/10">
+          <Button variant="unstyled" key={n} type="button" onClick={() => onWaveReplay(n)} className="text-[9px] font-mono px-2 py-1 rounded border border-cyan-500/25 text-cyan-300/80 hover:bg-cyan-500/10">
             Wave {n} only
-          </button>
+          </Button>
         ))}
       </div>
       <div className="grid grid-cols-1 gap-1">
         {Object.entries(MISSION_PRESETS).map(([id, p]) => (
-          <button
+          <Button variant="unstyled"
             key={id}
             type="button"
             onClick={() => onApply(p.patch)}
@@ -1079,16 +1080,16 @@ function MissionPresetsBar({ onApply, onSave, onExport, onImport, onWaveReplay, 
               <span className="text-[11px] font-semibold text-white block">{p.label}</span>
               <span className="text-[9px] text-[var(--text-muted)] block truncate">{p.desc}</span>
             </span>
-          </button>
+          </Button>
         ))}
       </div>
       {Object.keys(customPresets || {}).length > 0 && (
         <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
           <p className="text-[9px] font-mono text-[var(--text-disabled)] uppercase">Saved</p>
           {Object.entries(customPresets).map(([id, p]) => (
-            <button key={id} type="button" onClick={() => onApply(p.patch)} className="w-full text-left text-[10px] font-mono px-2 py-1 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
+            <Button variant="unstyled" key={id} type="button" onClick={() => onApply(p.patch)} className="w-full text-left text-[10px] font-mono px-2 py-1 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
               💾 {p.label || id}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -1670,13 +1671,13 @@ export default function NexusSovereignSwarm() {
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('nexusSwarm.control_column', 'Sovereign Control Column')}
                 </h2>
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={resetParams}
                   className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('nexusSwarm.reset', 'Reset')}
-                </button>
+                </Button>
               </div>
 
               <MissionPresetsBar
@@ -1754,7 +1755,7 @@ export default function NexusSovereignSwarm() {
                   {ARCHETYPES.map((a) => {
                     const on = params.archetypes.includes(a.id)
                     return (
-                      <button
+                      <Button variant="unstyled"
                         key={a.id}
                         type="button"
                         onClick={() => toggleArchetype(a.id)}
@@ -1767,7 +1768,7 @@ export default function NexusSovereignSwarm() {
                           <span className="text-[9px] text-[var(--text-muted)] block leading-tight truncate">{a.desc}</span>
                         </span>
                         <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}`}>{on ? 'ON' : 'OFF'}</span>
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -1801,10 +1802,10 @@ export default function NexusSovereignSwarm() {
                         placeholder="Value"
                         className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-violet-400/40"
                       />
-                      <button type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</button>
+                      <Button variant="unstyled" type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</Button>
                     </div>
                   ))}
-                  <button type="button" onClick={addHeader} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">+ {t('nexusSwarm.add_header', 'add header')}</button>
+                  <Button variant="unstyled" type="button" onClick={addHeader} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">+ {t('nexusSwarm.add_header', 'add header')}</Button>
                 </div>
               </Section>
 
@@ -1851,13 +1852,13 @@ export default function NexusSovereignSwarm() {
 
               {/* Payload preview */}
               <Section title={t('nexusSwarm.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => setShowPreview((s) => !s)}
                   className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
                 >
                   {showPreview ? t('nexusSwarm.hide_json', 'hide JSON') : t('nexusSwarm.show_json', 'show exact request JSON')}
-                </button>
+                </Button>
                 {showPreview && (
                   <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
                     {JSON.stringify(previewBody, null, 2)}
@@ -1867,7 +1868,7 @@ export default function NexusSovereignSwarm() {
 
               {/* Deploy actions */}
               <div className="mt-3 space-y-2">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => handleRun()}
                   disabled={running || !selectedClientId || !target.trim()}
@@ -1880,15 +1881,15 @@ export default function NexusSovereignSwarm() {
                   }}
                 >
                   {running ? t('nexusSwarm.deploying', 'Deploying Swarm…') : t('nexusSwarm.deploy', 'Deploy Sovereign Swarm')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => handleRun({ dryRun: true })}
                   disabled={running || !selectedClientId || !target.trim()}
                   className="w-full py-2 rounded-xl font-mono text-[11px] uppercase tracking-widest border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   {t('nexusSwarm.dry_run', 'Dry-Run Plan (no requests)')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1967,14 +1968,14 @@ export default function NexusSovereignSwarm() {
                 ))}
               </div>
               <div className="flex gap-2 pt-1">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={broadcastFleet}
                   disabled={fleetBusy || !selectedClientId || !target.trim()}
                   className="py-2 px-4 rounded-lg text-[10px] font-mono uppercase border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
                 >
                   {fleetBusy ? t('nexusSwarm.fleet_broadcasting', 'Broadcasting…') : t('nexusSwarm.fleet_broadcast', 'Broadcast Fleet')}
-                </button>
+                </Button>
                 <Link to="/agents" className="py-2 px-3 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                   Agents →
                 </Link>
@@ -1994,13 +1995,13 @@ export default function NexusSovereignSwarm() {
             {/* Findings */}
             {(metrics || realFindings.length > 0) && (
               <div className="flex justify-end">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleExportReport}
                   className="text-[9px] font-mono uppercase px-2 py-1 rounded border border-violet-500/30 text-violet-300 hover:bg-violet-500/10"
                 >
                   Export Intelligence Report
-                </button>
+                </Button>
               </div>
             )}
             <WeissmanFindingsPanel

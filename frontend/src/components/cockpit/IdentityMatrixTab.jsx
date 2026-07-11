@@ -5,6 +5,7 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { motion } from 'framer-motion'
 import { ShieldAlert, UserPlus, Trash2, ArrowRight, Zap, Sparkles } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 export default function IdentityMatrixTab() {
   const { t } = useTranslation()
@@ -148,7 +149,7 @@ export default function IdentityMatrixTab() {
         </div>
         <label className="flex items-center gap-2 ml-auto cursor-pointer">
           <span className="text-sm text-white/70">{t('components.cockpitTabs.identityMatrix.auto_harvest')}</span>
-          <button
+          <Button variant="unstyled"
             type="button"
             role="switch"
             aria-checked={autoHarvest}
@@ -156,7 +157,7 @@ export default function IdentityMatrixTab() {
             className={`relative w-11 h-6 rounded-full transition-colors ${autoHarvest ? 'bg-amber-500/60' : 'bg-white/20'}`}
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${autoHarvest ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
+          </Button>
           <span className="text-xs text-white/50">
             {autoHarvest ? t('components.cockpitTabs.identityMatrix.on') : t('components.cockpitTabs.identityMatrix.off')}
           </span>
@@ -223,13 +224,13 @@ export default function IdentityMatrixTab() {
               className="w-full rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-[#22d3ee]/50 focus:outline-none"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="submit"
             disabled={submitting || !form.role_name.trim()}
             className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 disabled:opacity-50"
           >
             <UserPlus className="w-4 h-4" /> {t('components.cockpitTabs.identityMatrix.add_context')}
-          </button>
+          </Button>
         </div>
       </motion.form>
 
@@ -240,7 +241,7 @@ export default function IdentityMatrixTab() {
             {t('components.cockpitTabs.identityMatrix.session_contexts', { count: contexts.length })}
           </span>
           {contexts.length >= 2 && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setPolling((p) => !p)}
               className={`text-xs px-2 py-1 rounded ${polling ? 'bg-amber-500/20 text-amber-400' : 'text-white/50 hover:text-white/70'}`}
@@ -248,7 +249,7 @@ export default function IdentityMatrixTab() {
               {polling
                 ? t('components.cockpitTabs.identityMatrix.live_updates_on')
                 : t('components.cockpitTabs.identityMatrix.enable_live_updates')}
-            </button>
+            </Button>
           )}
         </div>
         <div className="overflow-x-auto">
@@ -285,14 +286,14 @@ export default function IdentityMatrixTab() {
                   <td className="py-3 px-4 text-white/70">{ctx.token_type}</td>
                   <td className="py-3 px-4 font-mono text-[10px] text-white/50">{ctx.token_masked || '—'}</td>
                   <td className="py-3 px-4">
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => handleDelete(ctx.id)}
                       className="p-1.5 rounded text-red-400/80 hover:bg-red-500/20 hover:text-red-400"
                       aria-label={t('components.cockpitTabs.identityMatrix.delete')}
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}

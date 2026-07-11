@@ -15,6 +15,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'kerberoasting'
 const ACCENT = '#f59e0b'
@@ -455,7 +456,7 @@ function FindingCard({ finding, L }) {
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -467,7 +468,7 @@ function FindingCard({ finding, L }) {
           <div className="text-sm text-[var(--text-primary)] mt-1 font-medium">{finding.title}</div>
         </div>
         <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '−' : '+'}</span>
-      </button>
+      </Button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -519,14 +520,14 @@ function FindingCard({ finding, L }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full text-left"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#fcd34d' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>
         <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: on ? '14px' : '2px' }} />
       </span>
       <span>{label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -534,11 +535,11 @@ function Segmented({ value, onChange, options }) {
   return (
     <div className="inline-flex rounded-lg border border-[var(--border-default)] p-0.5 bg-[var(--table-surface)]">
       {options.map((o) => (
-        <button key={o.value} type="button" onClick={() => onChange(o.value)}
+        <Button variant="unstyled" key={o.value} type="button" onClick={() => onChange(o.value)}
           className="px-3 py-1 rounded-md text-xs font-mono transition-all"
           style={value === o.value ? { backgroundColor: `${ACCENT}25`, color: '#fcd34d' } : { color: '#ffffff50' }}>
           {o.label}
-        </button>
+        </Button>
       ))}
     </div>
   )
@@ -751,15 +752,15 @@ export default function KerberosSecurityCommandCenter() {
             </div>
             <div className="flex gap-2">
               {findings.length > 0 && (
-                <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+                <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   {L.export}
-                </button>
+                </Button>
               )}
-              <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+              <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
                 className="px-5 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40"
                 style={{ borderColor: `${ACCENT}50`, color: '#fcd34d', backgroundColor: `${ACCENT}18` }}>
                 {status === 'running' ? L.scanning : L.run}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -780,11 +781,11 @@ export default function KerberosSecurityCommandCenter() {
           <span className="text-[11px] font-mono text-[var(--text-muted)] block mb-2">{L.presets}</span>
           <div className="flex flex-wrap gap-1.5">
             {AD_PRESETS.map((p) => (
-              <button key={p.id} type="button" title={p.hint}
+              <Button variant="unstyled" key={p.id} type="button" title={p.hint}
                 onClick={() => { set('domain', p.domain); if (!target.trim()) setTarget(p.hint) }}
                 className="text-[10px] font-mono px-2.5 py-1 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-amber-500/40 hover:text-amber-200 transition-colors">
                 {p.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -819,10 +820,10 @@ export default function KerberosSecurityCommandCenter() {
           </div>
         </div>
 
-        <button type="button" onClick={() => setShowAdvanced((s) => !s)}
+        <Button variant="unstyled" type="button" onClick={() => setShowAdvanced((s) => !s)}
           className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] mb-3">
           {showAdvanced ? '▼' : '▶'} {L.advanced}
-        </button>
+        </Button>
 
         {showAdvanced && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-default)]">
@@ -877,9 +878,9 @@ export default function KerberosSecurityCommandCenter() {
               <Toggle on={params.strict_mode} onClick={() => set('strict_mode', !params.strict_mode)} label={L.strictMode} />
             </div>
             <div className="flex items-end">
-              <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-default)] rounded-lg px-3 py-2">
+              <Button variant="unstyled" type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-default)] rounded-lg px-3 py-2">
                 {L.reset}
-              </button>
+              </Button>
             </div>
           </div>
         )}

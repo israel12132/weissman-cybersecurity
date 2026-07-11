@@ -7,6 +7,7 @@ import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { ShieldOff, Plus, AlertTriangle, Server, Container } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.containmentRules'
 
@@ -208,14 +209,14 @@ export default function ContainmentRulesTab() {
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm md:col-span-2"
           />
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={addRule}
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-orange-500/50 bg-orange-500/10 text-orange-300"
         >
           <Plus className="w-4 h-4" />
           {t(`${NS}.saveRule`)}
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-2xl bg-black/40 border border-white/10 p-4">
@@ -247,13 +248,13 @@ export default function ContainmentRulesTab() {
             onChange={e => setExec(x => ({ ...x, aws_instance_id: e.target.value }))}
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm font-mono"
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={execute}
             className="px-4 py-2 rounded-xl bg-red-600/80 text-white text-sm hover:bg-red-600"
           >
             {t(`${NS}.executeQuarantine`)}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -262,9 +263,9 @@ export default function ContainmentRulesTab() {
       <div className="rounded-2xl bg-black/40 border border-white/10 overflow-hidden">
         <div className="px-4 py-2 border-b border-white/10 flex justify-between items-center">
           <span className="text-sm text-white/80">{t(`${NS}.savedRules`)}</span>
-          <button type="button" onClick={fetchRules} className="text-xs text-cyan-400 hover:underline">
+          <Button variant="unstyled" type="button" onClick={fetchRules} className="text-xs text-cyan-400 hover:underline">
             {t(`${NS}.refresh`)}
-          </button>
+          </Button>
         </div>
         {loading ? (
           <div className="p-6 text-white/50 text-sm">{t(`${NS}.loading`)}</div>

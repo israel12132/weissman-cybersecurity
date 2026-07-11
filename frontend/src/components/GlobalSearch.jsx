@@ -7,6 +7,7 @@ import { apiFetch } from '../lib/apiBase';
 import { PRIMARY_NAV, NAV_GROUPS, canAccessNavItem } from '../lib/appNav';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import Button from './ui/Button'
 
 const RECENTS_KEY = 'weissman_palette_recents';
 const RECENTS_MAX = 6;
@@ -277,7 +278,7 @@ export default function GlobalSearch() {
                   const active = index === activeIndex;
                   const isNav = result.type === 'navigate';
                   return (
-                    <button
+                    <Button variant="unstyled"
                       key={`${result.type}-${result.to || result.id || result.path || index}`}
                       type="button"
                       id={`gs-opt-${index}`}
@@ -307,7 +308,7 @@ export default function GlobalSearch() {
                       ) : (
                         <Zap className="w-4 h-4 text-[var(--text-disabled)]" />
                       )}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

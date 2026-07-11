@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from 'react-simple-maps'
 import { Radio, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.globalEdgeSwarmMap'
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
@@ -65,7 +66,7 @@ export default function GlobalEdgeSwarmMap() {
             </p>
           </div>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={load}
           disabled={loading}
@@ -73,7 +74,7 @@ export default function GlobalEdgeSwarmMap() {
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           {t(`${NS}.refresh`)}
-        </button>
+        </Button>
       </div>
 
       {manifest && (

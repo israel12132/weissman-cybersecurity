@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
+import Button from '../components/ui/Button'
 
 const STATUS_COLORS = {
   PENDING_APPROVAL: 'text-amber-400 border-amber-400/30 bg-amber-900/10',
@@ -123,13 +124,13 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             {item.client_id ? t('pages.councilHitlQueue.client_suffix', { id: item.client_id }) : ''}
           </p>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={() => setExpanded(v => !v)}
           className="shrink-0 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors px-3 py-1.5 rounded-lg border border-[var(--border-default)] hover:border-[var(--border-strong)]"
         >
           {expanded ? t('pages.councilHitlQueue.collapse') : t('pages.councilHitlQueue.details')}
-        </button>
+        </Button>
       </div>
 
       <AnimatePresence>
@@ -185,22 +186,22 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             onChange={e => setNote(e.target.value)}
             className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             disabled={loading}
             onClick={() => onApprove(item.id, note)}
             className="px-4 py-1.5 rounded-xl text-[12px] font-semibold font-mono uppercase border border-green-500/40 text-green-400 hover:bg-green-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {t('pages.councilHitlQueue.approve_fire')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             disabled={loading}
             onClick={() => onReject(item.id, note)}
             className="px-4 py-1.5 rounded-xl text-[12px] font-semibold font-mono uppercase border border-rose-500/40 text-rose-400 hover:bg-rose-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {t('pages.councilHitlQueue.reject')}
-          </button>
+          </Button>
         </div>
       )}
     </motion.div>
@@ -330,7 +331,7 @@ export default function CouncilHitlQueue() {
 
         <div className="flex gap-1 flex-wrap items-center">
           {STATUS_TABS.map(tab => (
-            <button
+            <Button variant="unstyled"
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
@@ -341,7 +342,7 @@ export default function CouncilHitlQueue() {
               }`}
             >
               {t(`pages.councilHitlQueue.${TAB_I18N[tab]}`)}
-            </button>
+            </Button>
           ))}
         </div>
 

@@ -37,6 +37,7 @@ import ProfileMenu from '../ui/ProfileMenu'
 import LanguageSwitcher from '../LanguageSwitcher'
 import { useToast } from '../ui/Toaster'
 import { confirmDialog } from '../../utils/confirmDialog'
+import Button from '../ui/Button'
 
 const STORAGE_KEY = 'weissman.nav.sections'
 const GN = 'components.cockpit.globalNexus'
@@ -108,7 +109,7 @@ function NavLink({ to, label, icon: Icon, id, matchPaths, badge, beta, betaLabel
 function NavSection({ id, title, children, open, onToggle }) {
   return (
     <div className="mb-0.5">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => onToggle(id)}
         className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-md text-[9px] font-mono uppercase tracking-[0.22em] text-white/35 hover:text-white/55 hover:bg-white/[0.03] transition-colors"
@@ -122,7 +123,7 @@ function NavSection({ id, title, children, open, onToggle }) {
         >
           <ChevronDown className="w-3 h-3" strokeWidth={2} />
         </motion.span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
@@ -428,13 +429,13 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             >
               <div className="flex justify-between gap-2 items-start">
                 <span className="min-w-0 break-words">{clientsError}</span>
-                <button
+                <Button variant="unstyled"
                   type="button"
                   className="text-rose-400 underline shrink-0 text-[9px]"
                   onClick={dismissClientsError}
                 >
                   {t('common.dismiss')}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -451,7 +452,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
               const isDeleting = deletingId === id
               return (
                 <li key={id} className="flex items-center group">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => setSelectedClientId(id)}
                     className={`relative flex-1 min-w-0 text-start ps-4 pe-2 py-2 text-[12px] font-medium transition-all border-s-2 ${
@@ -461,8 +462,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                     }`}
                   >
                     <span className="block truncate">{c.name || `Client ${id}`}</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="unstyled"
                     type="button"
                     onClick={async (e) => {
                       e.stopPropagation()
@@ -491,7 +492,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                     )}
-                  </button>
+                  </Button>
                 </li>
               )
             })}
@@ -591,7 +592,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           {addMessage?.success && (
             <p id="add-client-success-msg" className="text-[10px] text-emerald-400">Client added.</p>
           )}
-          <button
+          <Button variant="unstyled"
             id="add-client-submit-btn"
             type="button"
             disabled={addSubmitting}
@@ -599,7 +600,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             className="w-full py-2 rounded-lg text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/25 hover:border-cyan-400/50 disabled:opacity-50 transition-all"
           >
             {addSubmitting ? t(`${GN}.adding`) : t(`${GN}.add_client`)}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -614,7 +615,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
   return (
     <>
       {/* Mobile toggle */}
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setMobileOpen((v) => !v)}
         className="lg:hidden fixed bottom-4 start-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-[#0a0f1a]/95 backdrop-blur-md text-white/80 shadow-xl"
@@ -623,7 +624,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       >
         {mobileOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
         <span className="text-[10px] font-mono uppercase tracking-widest">{t('nav.mobile_label')}</span>
-      </button>
+      </Button>
 
       <aside
         className={`cockpit-sidebar flex flex-col w-full lg:w-[17rem] lg:shrink-0 h-auto lg:h-full border-b lg:border-b-0 lg:border-e border-white/[0.06] overflow-hidden shrink-0 transition-all duration-300 ${

@@ -23,6 +23,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
+import Button from '../components/ui/Button'
 
 // ─── Client Profiles ─────────────────────────────────────────────────────────
 // Each profile declares which engine *groups* are relevant for that client type.
@@ -258,7 +259,7 @@ function EngineRow({ engine, status, selected, onSelect, onRun, runDisabled, isP
             Profile
           </Link>
           {isProductionEngine && onRun && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={(e) => { e.stopPropagation(); onRun(engine.id) }}
               disabled={runDisabled || status === 'running'}
@@ -269,7 +270,7 @@ function EngineRow({ engine, status, selected, onSelect, onRun, runDisabled, isP
                 <span className="w-2.5 h-2.5 border border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" />
               ) : '▶'}
               {t('engines.catalog_run_single_label', 'Run')}
-            </button>
+            </Button>
           )}
         </div>
         <p className="text-[10px] text-[var(--text-muted)] mt-0.5 leading-relaxed">{engine.description}</p>
@@ -678,7 +679,7 @@ export default function EngineClientCatalog() {
           )}
         </div>
 
-        <button
+        <Button variant="unstyled"
           id="run-all-engines-btn"
           type="button"
           onClick={handleRunAll}
@@ -699,7 +700,7 @@ export default function EngineClientCatalog() {
           ) : (
             <>🚀 {t('engines.catalog_run_selected', { count: totalRunnable })}</>
           )}
-        </button>
+        </Button>
       </div>
 
       {/* ── Toast ────────────────────────────────────────────────────────── */}
@@ -806,33 +807,33 @@ export default function EngineClientCatalog() {
                 className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15"
               />
               {search && (
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => setSearch('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
                 >
                   ✕
-                </button>
+                </Button>
               )}
             </div>
             <span className="text-[10px] font-mono text-[var(--text-muted)] whitespace-nowrap px-2 py-1 rounded-md bg-[var(--row-hover-bg)] border border-white/[0.06]">
               {t('engines.catalog_shown', { shown: filteredEngines.length, total: totalProfileEngines, selected: totalSelected })}
             </span>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleSelectAll}
               className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
             >
               {t('engines.catalog_select_all')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={handleDeselectAll}
               className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
             >
               {t('engines.catalog_clear_selection')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => setProductionOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
@@ -840,8 +841,8 @@ export default function EngineClientCatalog() {
               }`}
             >
               {t('engines.catalog_production_only')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => setRemoteOnly((v) => !v)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-colors ${
@@ -849,7 +850,7 @@ export default function EngineClientCatalog() {
               }`}
             >
               {t('engines.catalog_remote_only')}
-            </button>
+            </Button>
           </div>
 
           {/* Engines grouped by group */}
@@ -892,7 +893,7 @@ export default function EngineClientCatalog() {
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button
+                            <Button variant="unstyled"
                               type="button"
                               onClick={() => {
                                 setSelectedEngines((prev) => {
@@ -904,8 +905,8 @@ export default function EngineClientCatalog() {
                               className="px-2 py-0.5 rounded text-[9px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] transition-colors"
                             >
                               All
-                            </button>
-                            <button
+                            </Button>
+                            <Button variant="unstyled"
                               type="button"
                               onClick={() => {
                                 setSelectedEngines((prev) => {
@@ -917,7 +918,7 @@ export default function EngineClientCatalog() {
                               className="px-2 py-0.5 rounded text-[9px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] transition-colors"
                             >
                               None
-                            </button>
+                            </Button>
                           </div>
                         </div>
 
@@ -949,7 +950,7 @@ export default function EngineClientCatalog() {
 
           {/* Bottom Run All CTA */}
           <div className="sticky bottom-0 pt-3 pb-1">
-            <button
+            <Button variant="unstyled"
               id="run-all-engines-bottom-btn"
               type="button"
               onClick={handleRunAll}
@@ -977,7 +978,7 @@ export default function EngineClientCatalog() {
                   )}
                 </>
               )}
-            </button>
+            </Button>
             {!selectedClientId && (
               <p className="text-center text-[10px] font-mono text-amber-400/55 mt-1.5">
                 {t('engines.catalog_select_client_bottom')}

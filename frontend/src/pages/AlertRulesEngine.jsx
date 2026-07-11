@@ -8,6 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 /**
  * AlertRulesEngine - Custom alert rule creation and management
@@ -190,7 +191,7 @@ export default function AlertRulesEngine() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'enabled', 'disabled'].map((f) => (
-              <button
+              <Button variant="unstyled"
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -200,17 +201,17 @@ export default function AlertRulesEngine() {
                 }`}
               >
                 {t(`pages.alertRulesEngine.filter_${f}`)}
-              </button>
+              </Button>
             ))}
           </div>
 
-          <button
+          <Button variant="unstyled"
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.alertRulesEngine.create_rule')}
-          </button>
+          </Button>
         </div>
 
         {/* Rules List */}
@@ -248,7 +249,7 @@ export default function AlertRulesEngine() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => toggleRule(rule.id, rule.enabled)}
                         className={`p-2 rounded-lg border transition-colors ${
                           rule.enabled
@@ -261,7 +262,7 @@ export default function AlertRulesEngine() {
                         ) : (
                           <Pause className="w-4 h-4" />
                         )}
-                      </button>
+                      </Button>
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -325,24 +326,24 @@ export default function AlertRulesEngine() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => testRule(rule.id)}
                         className="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-medium hover:bg-yellow-500/30 transition-colors"
                       >
                         Test
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => setEditModal(rule)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => deleteRule(rule.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -355,7 +356,7 @@ export default function AlertRulesEngine() {
         <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-3">Quick Templates</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <button
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'critical-findings',
@@ -367,8 +368,8 @@ export default function AlertRulesEngine() {
             >
               <div className="text-sm font-medium text-white mb-1">Critical Findings</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert on all critical severity findings</div>
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'new-cve',
@@ -380,8 +381,8 @@ export default function AlertRulesEngine() {
             >
               <div className="text-sm font-medium text-white mb-1">New CVE Detection</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert on newly published CVEs</div>
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'high-volume',
@@ -393,7 +394,7 @@ export default function AlertRulesEngine() {
             >
               <div className="text-sm font-medium text-white mb-1">High Volume</div>
               <div className="text-xs text-[var(--text-tertiary)]">Alert when findings exceed threshold</div>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -463,12 +464,12 @@ function RuleModal({ rule, template, onClose, onSave }) {
           <h3 className="text-lg font-bold text-white">
             {rule ? 'Edit Rule' : 'Create Alert Rule'}
           </h3>
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -557,19 +558,19 @@ function RuleModal({ rule, template, onClose, onSave }) {
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : rule ? 'Save Changes' : 'Create Rule'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 
 const ACCENT = '#8b5cf6'
 
@@ -419,7 +420,7 @@ function FindingCard({ finding, L }) {
   const conf = typeof finding.confidence === 'number' ? Math.round(finding.confidence * 100) : null
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -430,7 +431,7 @@ function FindingCard({ finding, L }) {
           <div className="text-sm text-[var(--text-primary)] mt-1 font-medium">{finding.title}</div>
         </div>
         <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '−' : '+'}</span>
-      </button>
+      </Button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -476,14 +477,14 @@ function FindingCard({ finding, L }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#ddd6fe' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>
         <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: on ? '14px' : '2px' }} />
       </span>
       <span className="truncate">{label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -491,11 +492,11 @@ function Segmented({ value, onChange, options }) {
   return (
     <div className="inline-flex rounded-lg border border-[var(--border-default)] p-0.5 bg-[var(--table-surface)]">
       {options.map((o) => (
-        <button key={o.value} type="button" onClick={() => onChange(o.value)}
+        <Button variant="unstyled" key={o.value} type="button" onClick={() => onChange(o.value)}
           className="px-3 py-1 rounded-md text-xs font-mono transition-all"
           style={value === o.value ? { backgroundColor: `${ACCENT}25`, color: '#ddd6fe' } : { color: '#ffffff50' }}>
           {o.label}
-        </button>
+        </Button>
       ))}
     </div>
   )
@@ -617,11 +618,11 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
               <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
             </div>
-            <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+            <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
               className="px-5 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ borderColor: `${ACCENT}50`, color: '#ddd6fe', backgroundColor: `${ACCENT}18` }}>
               {status === 'running' ? L.scanning : L.run}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -637,13 +638,13 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
           <div className="text-[11px] font-mono text-[var(--text-muted)] mb-1">{L.profile}</div>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(SCAN_PROFILES).map(([key, prof]) => (
-              <button key={key} type="button" onClick={() => applyProfile(key)}
+              <Button variant="unstyled" key={key} type="button" onClick={() => applyProfile(key)}
                 className="px-3 py-1 rounded-lg text-xs font-mono border transition-all"
                 style={params.scan_profile === key
                   ? { borderColor: `${ACCENT}50`, color: '#ddd6fe', backgroundColor: `${ACCENT}14` }
                   : { borderColor: '#ffffff14', color: '#ffffff55' }}>
                 {prof.label}
-              </button>
+              </Button>
             ))}
           </div>
           <p className="text-[10px] text-[var(--text-disabled)] mt-1">{L.profileHint}</p>
@@ -660,8 +661,8 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.surfaces}</span>
           <div className="flex gap-1">
-            <button type="button" onClick={() => toggleAll(true)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] px-2 py-0.5 rounded border border-[var(--border-default)]">{L.selectAll}</button>
-            <button type="button" onClick={() => toggleAll(false)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] px-2 py-0.5 rounded border border-[var(--border-default)]">{L.selectNone}</button>
+            <Button variant="unstyled" type="button" onClick={() => toggleAll(true)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] px-2 py-0.5 rounded border border-[var(--border-default)]">{L.selectAll}</Button>
+            <Button variant="unstyled" type="button" onClick={() => toggleAll(false)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] px-2 py-0.5 rounded border border-[var(--border-default)]">{L.selectNone}</Button>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
@@ -677,9 +678,9 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
         </div>
 
         {/* Advanced */}
-        <button type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-xs font-mono text-violet-300/70 hover:text-violet-200 mt-2">
+        <Button variant="unstyled" type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-xs font-mono text-violet-300/70 hover:text-violet-200 mt-2">
           {showAdvanced ? '▾' : '▸'} {L.advanced}
-        </button>
+        </Button>
         <AnimatePresence>
           {showAdvanced && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -719,7 +720,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
                   <span className="text-[11px] font-mono text-[var(--text-muted)]">{L.minConf}: {Math.round(Number(params.min_confidence) * 100)}%</span>
                   <input type="range" min="0" max="1" step="0.05" value={params.min_confidence} onChange={(e) => set('min_confidence', e.target.value)} className="mt-1 w-full accent-violet-500" />
                 </label>
-                <button type="button" onClick={() => setParams(defaultParams())} className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline">{L.reset}</button>
+                <Button variant="unstyled" type="button" onClick={() => setParams(defaultParams())} className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline">{L.reset}</Button>
               </div>
             </motion.div>
           )}

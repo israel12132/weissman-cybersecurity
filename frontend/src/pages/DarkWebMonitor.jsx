@@ -16,6 +16,7 @@ import FindingDrawer from '../components/ui/FindingDrawer'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -178,7 +179,7 @@ export default function DarkWebMonitor() {
       icon={<Eye />}
       actions={(
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setAutoRefresh((v) => !v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
@@ -189,7 +190,7 @@ export default function DarkWebMonitor() {
           >
             <Radio className={`w-3 h-3 inline mr-1 ${autoRefresh ? 'animate-pulse' : ''}`} />
             {autoRefresh ? t('pages.darkWebMonitor.auto_on') : t('pages.darkWebMonitor.auto_off')}
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={load}
             onExport={exportCsv}
@@ -269,7 +270,7 @@ export default function DarkWebMonitor() {
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
             {['all', ...SEV_KEYS].map((s) => (
-              <button
+              <Button variant="unstyled"
                 key={s}
                 type="button"
                 onClick={() => setSeverityFilter(s)}
@@ -280,7 +281,7 @@ export default function DarkWebMonitor() {
                 }`}
               >
                 {s === 'all' ? t('pages.darkWebMonitor.filter_all') : s}
-              </button>
+              </Button>
             ))}
           </div>
           {sources.length > 1 && (

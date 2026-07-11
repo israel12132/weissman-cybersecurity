@@ -11,6 +11,7 @@ import { SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
+import Button from '../components/ui/Button'
 
 export default function ClientDetail() {
   const { id } = useParams()
@@ -166,13 +167,13 @@ export default function ClientDetail() {
           <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-5 py-4 text-rose-300">
             {error}
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => navigate('/clients')}
             className="px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -183,13 +184,13 @@ export default function ClientDetail() {
       <PageShell title={t('client_detail.title')} subtitle={t('client_detail.not_found')}>
         <div className="max-w-2xl mx-auto text-center py-12">
           <p className="text-[var(--text-muted)]">{t('client_detail.not_found')}</p>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => navigate('/clients')}
             className="mt-6 px-4 py-2 rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-sm transition-colors"
           >
             {t('client_detail.back')}
-          </button>
+          </Button>
         </div>
       </PageShell>
     )
@@ -231,7 +232,7 @@ export default function ClientDetail() {
       subtitle={t('client_detail.subtitle')}
       actions={(
         <div className="flex items-center gap-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={exportServerCsv}
             disabled={exportingServer}
@@ -240,7 +241,7 @@ export default function ClientDetail() {
           >
             <Download className={`w-4 h-4 ${exportingServer ? 'animate-pulse' : ''}`} />
             {exportingServer ? t('client_detail.export_server_running') : t('client_detail.export_server')}
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={loadClient}
             onExport={exportCsv}
@@ -261,24 +262,24 @@ export default function ClientDetail() {
           onRefresh={loadClient}
           refreshLabel={t('common.refresh')}
         >
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => navigate('/clients')}
             className={navBtnClass}
           >
             {t('client_detail.back')}
-          </button>
+          </Button>
           <Link to={`/findings?client_id=${client.id}`} className={navBtnClass}>
             {t('client_detail.view_findings')}
           </Link>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={launchScan}
             disabled={launchingScan}
             className="px-4 py-2 rounded-xl text-[11px] font-mono border border-violet-500/35 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
           >
             {launchingScan ? t('client_detail.launching') : t('client_detail.launch_scan')}
-          </button>
+          </Button>
         </PremiumPageHeader>
 
         <div className="flex flex-wrap gap-2">

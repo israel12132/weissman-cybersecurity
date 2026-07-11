@@ -1,5 +1,6 @@
 import React from 'react'
 import i18n from '../../i18n'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.cockpitTabErrorBoundary'
 
@@ -36,13 +37,13 @@ export default class CockpitTabErrorBoundary extends React.Component {
             {i18n.t(`${NS}.switchHint`)}
           </p>
           <p className="text-[11px] font-mono text-white/40 break-words mb-4">{msg}</p>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => this.setState({ error: null })}
             className="px-4 py-2 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/10"
           >
             {i18n.t(`${NS}.retry`)}
-          </button>
+          </Button>
         </div>
       )
     }

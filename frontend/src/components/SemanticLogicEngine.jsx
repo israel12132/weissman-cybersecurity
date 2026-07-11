@@ -9,6 +9,7 @@ import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState,
 import '@xyflow/react/dist/style.css'
 import { apiFetch } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const CENTER_X = 400
 const CENTER_Y = 280
@@ -104,9 +105,9 @@ export default function SemanticLogicEngine() {
       title={t(`${NS}.title`)}
       subtitle={stateMachine.target ? t(`${NS}.target_label`, { target: stateMachine.target }) : undefined}
       actions={(
-        <button type="button" onClick={load} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
+        <Button variant="unstyled" type="button" onClick={load} className="text-sm text-[var(--text-tertiary)] hover:text-cyan-400">
           {t(`${NS}.refresh`)}
-        </button>
+        </Button>
       )}
       contentClassName="p-0"
     >

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
+import Button from './Button'
 
 /**
  * Copy-to-clipboard control for monospace / technical fields.
@@ -26,7 +27,7 @@ export default function CopyButton({ value, label = 'Copy', size = 'sm', classNa
   const pad = size === 'md' ? 'p-1.5' : 'p-1'
 
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={(e) => {
         e.stopPropagation()
@@ -44,7 +45,7 @@ export default function CopyButton({ value, label = 'Copy', size = 'sm', classNa
       {size === 'md' && (
         <span className="text-[10px] font-mono">{copied ? 'Copied' : label}</span>
       )}
-    </button>
+    </Button>
   )
 }
 

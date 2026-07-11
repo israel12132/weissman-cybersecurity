@@ -19,6 +19,7 @@ import {
   defaultOnboardingForm,
   useEngineRequirements,
 } from '../../hooks/useEngineRequirements'
+import Button from '../ui/Button'
 
 const STEPS = ['legal', 'basic', 'scope', 'modules', 'integrations', 'review']
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
@@ -198,7 +199,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
           const q = filterQuery.trim().toLowerCase()
           if (q && !stepLabel.toLowerCase().includes(q) && !s.includes(q)) return null
           return (
-          <button
+          <Button variant="unstyled"
             key={s}
             type="button"
             onClick={() => setStep(i)}
@@ -209,7 +210,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             }`}
           >
             {i + 1}. {stepLabel}
-          </button>
+          </Button>
           )
         })}
       </div>
@@ -293,7 +294,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 const selected = form.engagement_modules.includes(id)
                 const modLabel = isHe ? mod.label_he : mod.label_en
                 return (
-                  <button
+                  <Button variant="unstyled"
                     key={id}
                     type="button"
                     onClick={() => toggleModule(id)}
@@ -307,7 +308,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                     <div className="text-[11px] text-white/40 mt-1 font-mono">
                       {mod.engine_count} engines · {mod.requirements?.length} reqs
                     </div>
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -366,7 +367,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 <div className="text-sm font-medium text-white/70 mb-2">{label(catalog?.requirements?.endpoint_agent)} *</div>
                 <div className="flex flex-wrap gap-2">
                   {AGENT_PLATFORMS.map((p) => (
-                    <button
+                    <Button variant="unstyled"
                       key={p}
                       type="button"
                       onClick={() => togglePlatform(p)}
@@ -377,7 +378,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                       }`}
                     >
                       {p}
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 <p className="mt-2 text-xs text-white/35">{hint(catalog?.requirements?.endpoint_agent)}</p>
@@ -447,7 +448,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
       </div>
 
       <div className="flex items-center justify-between pt-2">
-        <button
+        <Button variant="unstyled"
           type="button"
           disabled={step === 0 || submitting}
           onClick={() => setStep((s) => Math.max(0, s - 1))}
@@ -455,25 +456,25 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
         >
           <ChevronLeft className="w-4 h-4" />
           {t('pages.clientOnboarding.back')}
-        </button>
+        </Button>
         {step < STEPS.length - 1 ? (
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={handleNext}
             className="px-6 py-2 flex items-center gap-1 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 font-medium"
           >
             {t('pages.clientOnboarding.next')}
             <ChevronRight className="w-4 h-4" />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button variant="unstyled"
             type="submit"
             disabled={submitting || !readiness.ready}
             className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 disabled:opacity-50 font-medium inline-flex items-center gap-2"
           >
             {submitting && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {submitting ? t('pages.clientNew.creating') : t('pages.clientNew.create_client')}
-          </button>
+          </Button>
         )}
       </div>
     </form>

@@ -17,6 +17,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
+import Button from '../components/ui/Button'
 
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
@@ -154,7 +155,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
           <h3 className="text-sm font-bold text-white">{t('pages.ssoDashboard.configure_sso', { label: t(`pages.ssoDashboard.providers.${prov.id}.label`) })}</h3>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol} · {t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
         </div>
-        <button type="button" onClick={onCancel} className="ml-auto text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-lg transition-colors">✕</button>
+        <Button variant="unstyled" type="button" onClick={onCancel} className="ml-auto text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-lg transition-colors">✕</Button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -197,16 +198,16 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button
+          <Button variant="unstyled"
             type="submit"
             disabled={saving}
             className="flex-1 px-4 py-2 rounded-xl border border-cyan-500/40 text-cyan-300/80 text-[12px] font-mono uppercase hover:bg-cyan-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {saving ? t('pages.ssoDashboard.saving') : initial ? t('pages.ssoDashboard.update_connection') : t('pages.ssoDashboard.add_connection_btn')}
-          </button>
-          <button type="button" onClick={onCancel} className="px-4 py-2 rounded-xl border border-[var(--border-default)] text-[var(--text-muted)] text-[12px] font-mono hover:border-[var(--border-strong)] transition-all">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={onCancel} className="px-4 py-2 rounded-xl border border-[var(--border-default)] text-[var(--text-muted)] text-[12px] font-mono hover:border-[var(--border-strong)] transition-all">
             {t('pages.ssoDashboard.cancel')}
-          </button>
+          </Button>
         </div>
       </form>
     </motion.div>
@@ -244,15 +245,15 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
       <div className="flex items-center gap-2 flex-wrap shrink-0">
         <ActiveBadge active={idp.active} lastOk={idp.last_test_ok} />
 
-        <button
+        <Button variant="unstyled"
           type="button"
           disabled={testing}
           onClick={() => onTest(idp.id)}
           className="text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-cyan-300/70 hover:border-cyan-500/30 px-2.5 py-1 rounded-xl transition-all disabled:opacity-40"
         >
           {testing ? t('pages.ssoDashboard.testing') : t('pages.ssoDashboard.test_btn')}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled"
           type="button"
           onClick={() => onToggle(idp.id)}
           className={`text-[11px] font-mono border px-2.5 py-1 rounded-xl transition-all ${
@@ -262,21 +263,21 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
           }`}
         >
           {idp.active ? t('pages.ssoDashboard.disable') : t('pages.ssoDashboard.enable')}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled"
           type="button"
           onClick={() => onEdit(idp)}
           className="text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] px-2.5 py-1 rounded-xl transition-all"
         >
           {t('pages.ssoDashboard.edit')}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled"
           type="button"
           onClick={() => onDelete(idp.id)}
           className="text-[11px] font-mono border border-rose-500/20 text-rose-400/50 hover:bg-rose-900/20 px-2.5 py-1 rounded-xl transition-all"
         >
           ✕
-        </button>
+        </Button>
       </div>
     </motion.div>
   )
@@ -470,13 +471,13 @@ export default function SsoDashboard() {
               {t('pages.ssoDashboard.configured_connections')}
               {idps.length > 0 && <span className="ml-2 text-[var(--text-disabled)]">{t('pages.ssoDashboard.connection_count', { count: idps.length })}</span>}
             </h3>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={fetchIdps}
               className="text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] px-2.5 py-1 rounded-xl transition-all"
             >
               {t('pages.ssoDashboard.refresh')}
-            </button>
+            </Button>
           </div>
 
           {loading && (

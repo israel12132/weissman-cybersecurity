@@ -21,6 +21,7 @@ import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { fmtUsd } from '../lib/riskFormat'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.financialRisk'
 const columnHelper = createColumnHelper()
@@ -184,7 +185,7 @@ export default function FinancialRisk() {
               </option>
             ))}
           </select>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => load(true)}
             disabled={selectedClientId == null || recomputing}
@@ -192,7 +193,7 @@ export default function FinancialRisk() {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${recomputing ? 'animate-spin' : ''}`} />
             {t(`${NS}.recompute`)}
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={() => load(false)}
             onExport={() => contributorsCsv(contributors)}
@@ -223,7 +224,7 @@ export default function FinancialRisk() {
             title={t(`${NS}.no_snapshot_title`)}
             body={t(`${NS}.no_snapshot_body`)}
             action={
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => load(true)}
                 disabled={recomputing}
@@ -231,7 +232,7 @@ export default function FinancialRisk() {
               >
                 <RefreshCw className={`w-4 h-4 ${recomputing ? 'animate-spin' : ''}`} />
                 {t(`${NS}.compute_now`)}
-              </button>
+              </Button>
             }
           />
         )}

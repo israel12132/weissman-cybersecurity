@@ -11,6 +11,7 @@ import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -409,7 +410,7 @@ function FindingCard({ f }) {
 
   return (
     <div className={`rounded-xl border ${isPath ? 'border-fuchsia-500/40 bg-fuchsia-500/5' : `${st.bd} ${st.bg}`} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: isPath ? '#e879f9' : st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -425,7 +426,7 @@ function FindingCard({ f }) {
           )}
         </div>
         <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -650,14 +651,14 @@ export default function CloudPostureCommandCenter() {
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #f97316' : 'none' }} />
             <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`pages.cloudPostureCommandCenter.status_${status}`)}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? `⟳ ${t('pages.cloudPostureCommandCenter.btn_scanning')}` : `▶ ${t('pages.cloudPostureCommandCenter.btn_run_scan')}`}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {`${showParams ? '▾' : '▸'} ${t('pages.cloudPostureCommandCenter.parameters')}`}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
@@ -711,10 +712,10 @@ export default function CloudPostureCommandCenter() {
                       <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.cloudPostureCommandCenter.section_frameworks')}</div>
                       <div className="flex flex-wrap gap-2">
                         {FRAMEWORKS.map((fw) => (
-                          <button key={fw} type="button" onClick={() => toggleFramework(fw)}
+                          <Button variant="unstyled" key={fw} type="button" onClick={() => toggleFramework(fw)}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${frameworks.includes(fw) ? 'border-orange-500/40 bg-orange-500/10 text-orange-300' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>
                             {fw}
-                          </button>
+                          </Button>
                         ))}
                       </div>
                     </div>

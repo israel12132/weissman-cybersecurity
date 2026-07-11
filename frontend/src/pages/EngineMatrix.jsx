@@ -22,6 +22,7 @@ import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeade
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { fetchEngineHistorySummary, invalidateEngineHistorySummary } from '../lib/engineHistorySummary'
+import Button from '../components/ui/Button'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -214,7 +215,7 @@ function EngineMatrixCard({
           <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate tracking-tight">{engine.label}</h3>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 opacity-90 group-hover:opacity-100">
-          <button
+          <Button variant="unstyled"
             id={`engine-${engine.id}-toggle`}
             type="button"
             role="switch"
@@ -231,8 +232,8 @@ function EngineMatrixCard({
               }`}
               style={enabled ? { boxShadow: `0 0 8px ${groupColor}90` } : {}}
             />
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             id={`engine-${engine.id}-run-btn`}
             type="button"
             disabled={loading || runBusy || !runnable}
@@ -247,7 +248,7 @@ function EngineMatrixCard({
             className="px-2 py-0.5 rounded-md text-[9px] font-mono uppercase tracking-wider border border-cyan-500/30 text-cyan-300/80 hover:bg-cyan-950/50 hover:text-cyan-200 hover:border-cyan-400/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {runBusy ? '…' : 'Run'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -317,7 +318,7 @@ function GroupSection({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button variant="unstyled"
             id={`engine-group-${groupDef.id}-run-btn`}
             type="button"
             onClick={() => onRunGroup(engines.map((e) => e.id))}
@@ -326,8 +327,8 @@ function GroupSection({
             className="px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wide border border-cyan-500/30 text-cyan-300/80 hover:bg-cyan-950/40 hover:border-cyan-400/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {t('engines.run_group')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             id={`engine-group-${groupDef.id}-enable-all-btn`}
             type="button"
             onClick={() => onEnableAll(engines.map((e) => e.id))}
@@ -335,8 +336,8 @@ function GroupSection({
             className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {t('engines.enable_all')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             id={`engine-group-${groupDef.id}-disable-all-btn`}
             type="button"
             onClick={() => onDisableAll(engines.map((e) => e.id))}
@@ -344,7 +345,7 @@ function GroupSection({
             className="px-2.5 py-1 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {t('engines.disable_all')}
-          </button>
+          </Button>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -752,7 +753,7 @@ export default function EngineMatrix() {
                   {t('engines.enabled_short', { count: totalEnabled })}
                 </span>
               )}
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={handleRunAllEngines}
                 disabled={runAllLoading || configLoading || !selectedClientId || totalRunnable === 0}
@@ -760,7 +761,7 @@ export default function EngineMatrix() {
                 className="px-4 py-2 rounded-xl text-[11px] font-mono font-semibold bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {runAllLoading ? t('engines.running') : t('engines.run_all_engines', { count: totalRunnable })}
-              </button>
+              </Button>
               <ShellScanActions
                 onRefresh={handleMatrixRefresh}
                 onExport={exportMatrixCsv}
@@ -808,18 +809,18 @@ export default function EngineMatrix() {
               className="w-full bg-[var(--bg-2)] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/35 focus:ring-1 focus:ring-cyan-500/15 transition-all"
             />
             {search && (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => setSearch('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
               >
                 ✕
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {TIER_FILTERS.map((tier) => (
-              <button
+              <Button variant="unstyled"
                 key={tier}
                 type="button"
                 onClick={() => setTierFilter(tier)}
@@ -830,13 +831,13 @@ export default function EngineMatrix() {
                 }`}
               >
                 {t(`engines.tier_${tier}`)} ({tierCounts[tier] ?? 0})
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5 pb-1">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setActiveGroup('all')}
             className={`px-3 py-1.5 rounded-xl text-[11px] font-mono transition-all ${
@@ -846,12 +847,12 @@ export default function EngineMatrix() {
             }`}
           >
             {t('engines.all_engines', { count: filteredEngines.length })}
-          </button>
+          </Button>
           {ENGINE_GROUP_DEFS.map((g) => {
             const count = enginesByGroup(g.id).length
             if (tierFilter !== 'catalog' && activeGroup === 'all' && count === 0) return null
             return (
-              <button
+              <Button variant="unstyled"
                 key={g.id}
                 type="button"
                 onClick={() => setActiveGroup(g.id)}
@@ -867,7 +868,7 @@ export default function EngineMatrix() {
                 }
               >
                 {GROUP_ICONS[g.id] ?? '◆'} {g.label} ({count})
-              </button>
+              </Button>
             )
           })}
         </div>

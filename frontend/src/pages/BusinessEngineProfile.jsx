@@ -19,6 +19,7 @@ import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
+import Button from '../components/ui/Button'
 
 const TARGET_REQUIRED_IDS = new Set(['osint', 'asm', 'k8s_container', 'scada_ics', 'semantic_ai_fuzz', 'ai_adversarial_redteam'])
 
@@ -351,14 +352,14 @@ export default function BusinessEngineProfile() {
               placeholder={def.requiresTarget ? t('pages.businessEngineProfile.target_required_placeholder') : t('pages.businessEngineProfile.target_optional_placeholder')}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={queueRun}
               disabled={runState.running}
               className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
             >
               {runState.running ? t('pages.businessEngineProfile.running') : t('pages.businessEngineProfile.queue_scan')}
-            </button>
+            </Button>
           </div>
           {paramSchema.length > 0 && (
             <EngineScanParamsPanel
@@ -371,8 +372,8 @@ export default function BusinessEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</button>
-            <button type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</button>
+            <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
+            <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
             <span className="text-xs font-mono text-[var(--text-tertiary)]">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
           </div>
           {liveJob && (

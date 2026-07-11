@@ -9,6 +9,7 @@ import CeoVaccineVault from './CeoVaccineVault'
 import CeoSovereignLab from './CeoSovereignLab'
 import GodModeDiscoveryStrip from './GodModeDiscoveryStrip'
 import GodModeEngineMatrix from './GodModeEngineMatrix'
+import Button from '../ui/Button'
 
 function formatUptime(sec, t) {
   const s = Number(sec) || 0
@@ -300,7 +301,7 @@ export default function CeoIntegratedCommandDeck() {
                 components={{ 1: <code className="text-[var(--text-tertiary)]" /> }}
               />
             </p>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={safeSaving || !tel}
               onClick={toggleGlobalSafe}
@@ -315,7 +316,7 @@ export default function CeoIntegratedCommandDeck() {
                 : globalSafe
                   ? t('components.ceo.integratedCommandDeck.safeOnRelease')
                   : t('components.ceo.integratedCommandDeck.engageSafeMode')}
-            </button>
+            </Button>
           </div>
 
           <div className="lg:col-span-4 rounded-xl border border-amber-500/30 bg-amber-950/15 p-4 backdrop-blur-sm">
@@ -340,14 +341,14 @@ export default function CeoIntegratedCommandDeck() {
                 onChange={(e) => setIntervalInput(e.target.value)}
                 className="flex-1 min-w-0 font-mono text-sm bg-black/50 border border-amber-500/25 rounded-lg px-3 py-2 text-amber-100"
               />
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={intervalSaving}
                 onClick={saveScanInterval}
                 className="shrink-0 px-4 py-2 rounded-lg border border-amber-500/50 bg-amber-950/40 text-amber-100 text-[10px] font-mono uppercase hover:bg-amber-900/40 disabled:opacity-40"
               >
                 {intervalSaving ? '…' : t('components.ceo.integratedCommandDeck.apply')}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -361,7 +362,7 @@ export default function CeoIntegratedCommandDeck() {
                 components={{ 1: <code className="text-[var(--text-tertiary)]" /> }}
               />
             </p>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={killSaving || !tel}
               onClick={toggleGenesisKill}
@@ -376,7 +377,7 @@ export default function CeoIntegratedCommandDeck() {
                 : genesisKill
                   ? t('components.ceo.integratedCommandDeck.armedDisarm')
                   : t('components.ceo.integratedCommandDeck.armKillSwitch')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -402,7 +403,7 @@ export default function CeoIntegratedCommandDeck() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setVaultOpen((o) => !o)}
             className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-white/10 bg-cyan-950/20 hover:bg-cyan-950/30"
@@ -411,7 +412,7 @@ export default function CeoIntegratedCommandDeck() {
               {t('components.ceo.integratedCommandDeck.vaccineVault')}
             </span>
             <span className="text-[10px] text-[var(--text-muted)] font-mono">{vaultOpen ? '−' : '+'}</span>
-          </button>
+          </Button>
           {vaultOpen && (
             <div className="p-4 max-h-[min(70vh,520px)] overflow-y-auto">
               <CeoVaccineVault />
@@ -419,7 +420,7 @@ export default function CeoIntegratedCommandDeck() {
           )}
         </div>
         <div className="rounded-xl border border-violet-500/15 bg-black/30 overflow-hidden">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setSovereignOpen((o) => !o)}
             className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-white/10 bg-violet-950/20 hover:bg-violet-950/30"
@@ -428,7 +429,7 @@ export default function CeoIntegratedCommandDeck() {
               {t('components.ceo.integratedCommandDeck.sovereignLab')}
             </span>
             <span className="text-[10px] text-[var(--text-muted)] font-mono">{sovereignOpen ? '−' : '+'}</span>
-          </button>
+          </Button>
           {sovereignOpen && (
             <div className="p-4 max-h-[min(70vh,520px)] overflow-y-auto">
               <CeoSovereignLab />

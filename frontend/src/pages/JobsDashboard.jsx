@@ -14,6 +14,7 @@ import { apiFetch } from '../lib/apiBase'
 import { normalizeJobStatus } from '../lib/useJobPoll'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -302,7 +303,7 @@ export default function JobsDashboard() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => (
-                <button
+                <Button variant="unstyled"
                   key={status}
                   type="button"
                   onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
@@ -318,7 +319,7 @@ export default function JobsDashboard() {
                   <div className="text-[11px] text-[var(--text-tertiary)] capitalize mt-1">
                     {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -336,7 +337,7 @@ export default function JobsDashboard() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {STATUS_KEYS.map((key) => (
-                  <button
+                  <Button variant="unstyled"
                     key={key}
                     type="button"
                     onClick={() => setStatusFilter(key)}
@@ -347,7 +348,7 @@ export default function JobsDashboard() {
                     }`}
                   >
                     {t(`pages.jobsDashboard.filter_${key}`)}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

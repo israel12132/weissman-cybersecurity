@@ -6,6 +6,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import ClientOnboardingWizard from '../components/clients/ClientOnboardingWizard'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 export default function ClientNew() {
   const { t } = useTranslation()
@@ -79,14 +80,14 @@ export default function ClientNew() {
         <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice')}</EvidenceNotice>
         <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} filterQuery={searchQuery} />
         <div className="text-center">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => navigate('/clients')}
             className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
             disabled={submitting}
           >
             {t('pages.clientNew.cancel')}
-          </button>
+          </Button>
         </div>
       </div>
     </PageShell>

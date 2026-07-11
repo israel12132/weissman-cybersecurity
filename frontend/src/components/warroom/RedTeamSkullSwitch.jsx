@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { Skull } from 'lucide-react'
+import Button from '../ui/Button'
 
 const NS = 'components.intelWidgets.redTeamSkullSwitch'
 
@@ -47,7 +48,7 @@ export default function RedTeamSkullSwitch() {
       <span className="text-[10px] font-semibold text-white/50 uppercase tracking-[0.2em]">
         {t(`${NS}.weaponization`)}
       </span>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={handleToggle}
         disabled={configLoading}
@@ -63,7 +64,7 @@ export default function RedTeamSkullSwitch() {
         aria-label={isWeaponized ? t(`${NS}.disableRedTeam`) : t(`${NS}.enableRedTeam`)}
       >
         <Skull className="w-7 h-7" strokeWidth={2} />
-      </button>
+      </Button>
       <span className="text-[10px] text-white/60">
         {isWeaponized ? t(`${NS}.redTeamOn`) : t(`${NS}.proofOnly`)}
       </span>

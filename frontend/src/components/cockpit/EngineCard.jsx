@@ -10,6 +10,7 @@ import { clientPrimaryTargetUrl, engineRunsWithoutTarget } from '../../lib/clien
 import { launchEngineScan } from '../../lib/launchEngineScan'
 import { loadEnginesRegistry } from '../../lib/enginesRegistryLoader'
 import EngineRealityBadge from '../EngineRealityBadge'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.engineCard'
 const MAX_TERMINAL_LINES = 80
@@ -171,7 +172,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
+          <Button variant="unstyled"
             type="button"
             title={
               !enabled
@@ -185,8 +186,8 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
             className="px-2 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wide border border-cyan-500/40 text-cyan-200/90 hover:bg-cyan-950/50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {runBusy ? t(`${NS}.runBusy`) : t(`${NS}.run`)}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             role="switch"
             aria-checked={enabled}
@@ -208,7 +209,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
               }`}
               style={enabled ? { boxShadow: '0 1px 3px rgba(0,0,0,0.2)' } : {}}
             />
-          </button>
+          </Button>
         </div>
       </div>
 

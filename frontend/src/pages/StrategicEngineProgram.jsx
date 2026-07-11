@@ -10,6 +10,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useProductionEngines } from '../lib/useProductionEngines'
+import Button from '../components/ui/Button'
 
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2 }
 const columnHelper = createColumnHelper()
@@ -222,7 +223,7 @@ export default function StrategicEngineProgram() {
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'P0', 'P1'].map((p) => (
-              <button
+              <Button variant="unstyled"
                 key={p}
                 type="button"
                 onClick={() => setPriorityFilter(p)}
@@ -233,7 +234,7 @@ export default function StrategicEngineProgram() {
                 }`}
               >
                 {p === 'all' ? t('pages.strategicEngineProgram.filter_all') : p}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

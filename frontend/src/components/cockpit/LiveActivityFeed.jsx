@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTelemetry } from '../../context/TelemetryContext'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.liveActivityFeed'
 
@@ -83,7 +84,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setPaused((p) => !p)}
             className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
@@ -95,15 +96,15 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
             aria-pressed={paused}
           >
             {paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={clearActivity}
             className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/45 hover:text-white/80"
             title={t(`${NS}.clearTitle`)}
           >
             {t(`${NS}.clear`)}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -111,7 +112,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
         {FILTERS.map((f) => {
           const active = filter === f.id
           return (
-            <button
+            <Button variant="unstyled"
               key={f.id}
               type="button"
               onClick={() => setFilter(f.id)}
@@ -123,7 +124,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
               }`}
             >
               {t(`${NS}.${f.labelKey}`)}
-            </button>
+            </Button>
           )
         })}
       </div>

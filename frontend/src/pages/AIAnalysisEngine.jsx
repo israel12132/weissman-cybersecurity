@@ -14,6 +14,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton from '../components/ui/CopyButton'
+import Button from '../components/ui/Button'
 
 const CATEGORY_ICONS = {
   cloud_attacks: { color: '#06b6d4', icon: '☁️' },
@@ -428,7 +429,7 @@ export default function AIAnalysisEngine() {
               { id: 'patterns', label: t('pages.aiAnalysisEngine.tab_patterns') },
               { id: 'correlations', label: t('pages.aiAnalysisEngine.tab_correlations') },
             ].map((tab) => (
-              <button
+              <Button variant="unstyled"
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
@@ -439,7 +440,7 @@ export default function AIAnalysisEngine() {
                 }`}
               >
                 {tab.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -698,14 +699,14 @@ export default function AIAnalysisEngine() {
                         {corr.patternIds.map((pid) => {
                           const p = patterns.find((x) => x.id === pid)
                           return p ? (
-                            <button
+                            <Button variant="unstyled"
                               key={pid}
                               type="button"
                               onClick={() => { setActiveTab('patterns'); setSelectedPattern(p) }}
                               className="text-[10px] px-2 py-0.5 rounded bg-violet-500/20 text-violet-200 border border-violet-500/30 hover:bg-violet-500/30"
                             >
                               {p.name}
-                            </button>
+                            </Button>
                           ) : null
                         })}
                       </div>

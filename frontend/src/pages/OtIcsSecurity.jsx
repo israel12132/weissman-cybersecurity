@@ -16,6 +16,7 @@ import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
+import Button from '../components/ui/Button'
 
 const FINDINGS_ACCENT = '#f97316';
 
@@ -146,14 +147,14 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
             {engine.id}
           </span>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleRun}
           disabled={status === 'running' || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-cyan-500/30 text-cyan-400/70 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {status === 'running' ? '⟳' : t('pages.otIcsSecurity.scan')}
-        </button>
+        </Button>
       </div>
       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t(engine.descKey)}</p>
       {lastRun && (

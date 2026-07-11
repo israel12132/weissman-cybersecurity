@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { getCommandCenterRoute } from '../../lib/engineParamDefs.js'
+import Button from '../ui/Button'
 
 const CREDENTIAL_PATTERN = /aws_|gcp_|azure_|github|token|password|oauth|secret|pem|ssh|oast|llm_|auth_header|cookies|external_id|bearer|api_key/i
 const ADVANCED_PATTERN = /timeout|concurrency|max_|threshold|decay|planner|halflife|expansion|corroboration|belief|fusion|variants|rotation|pool/i
@@ -79,14 +80,14 @@ function ParamSection({ title, defs, values, onChange, disabled, defaultOpen = t
   if (!defs.length) return null
   return (
     <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((s) => !s)}
         className="w-full flex items-center justify-between px-3 py-2 text-left text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)]"
       >
         <span>{title}</span>
         <span className="text-[var(--text-disabled)]">{open ? '−' : '+'}</span>
-      </button>
+      </Button>
       {open && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-3 pb-3 border-t border-[var(--border-subtle)] pt-3">
           {defs.map((def) => (
@@ -138,14 +139,14 @@ export default function EngineScanParamsPanel({
     <div className="flex flex-wrap items-center justify-between gap-2">
       <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-2">
         {collapsible && (
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setCollapsed((c) => !c)}
             className="p-0.5 rounded hover:bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]"
             aria-expanded={!collapsed}
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
-          </button>
+          </Button>
         )}
         {t('components.engineScanParams.title')}
         {' · '}

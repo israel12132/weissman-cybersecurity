@@ -11,6 +11,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const FLAGSHIP_ID = 'bgp_dns_hijacking'
 
@@ -188,7 +189,7 @@ function Section({ title, icon, accent = '#f97316', defaultOpen = true, children
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
@@ -197,7 +198,7 @@ function Section({ title, icon, accent = '#f97316', defaultOpen = true, children
           <span>{icon}</span>{title}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -246,14 +247,14 @@ function SelectField({ label, value, onChange, options }) {
 
 function Toggle({ label, value, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!value)}
+    <Button variant="unstyled" type="button" onClick={() => onChange(!value)}
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
         value ? 'border-[#f97316]/40 bg-[#f97316]/10 text-[#f97316]' : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'}`}>
       <span>{label}</span>
       <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#f97316]/40' : 'bg-[var(--row-hover-bg)]'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${value ? 'left-3.5' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -316,12 +317,12 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
         <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
         {typeof f.confidence === 'number' && <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{Math.round(f.confidence * 100)}%</span>}
         <span className={`text-[var(--text-disabled)] text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[var(--border-subtle)]">
           {f.description && <p className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>}
@@ -462,10 +463,10 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
             {tt('flagship_desc', 'Live multi-resolver consensus, DNSSEC chain validation, RPKI ROA validation, BGP origin-AS / MOAS analysis, NS diversity, CAA & subdomain-takeover — fully read-only.')}
           </p>
         </div>
-        <button type="button" onClick={handleScan} disabled={scanning || !clientId}
+        <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !clientId}
           className="shrink-0 px-5 py-2 rounded-xl font-mono text-sm border border-[#f97316]/40 text-[#f97316] bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           {scanning ? tt('scanning', '⟳ Scanning…') : tt('run_scan', '▶ Run Hijack-Resistance Scan')}
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -473,7 +474,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
         <div className="space-y-3 lg:col-span-1">
           <div className="flex items-center justify-between">
             <h3 className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{tt('params', 'Parameters')}</h3>
-            <button type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] underline">{tt('reset', 'reset')}</button>
+            <Button variant="unstyled" type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] underline">{tt('reset', 'reset')}</Button>
           </div>
           <Section title={tt('sec_probes', 'Probes')} icon="⚡">
             <Toggle label={tt('p_consensus', 'Multi-resolver consensus')} value={params.check_resolver_consensus} onChange={(v) => setParam('check_resolver_consensus', v)} />
@@ -664,10 +665,10 @@ function NetworkEngineCard({ engine, clientId, target, showToast, isFocused, onF
           </div>
           <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">{engine.mitre}</span>
         </div>
-        <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+        <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#f97316]/30 text-[#f97316]/70 hover:bg-[#f97316]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           {status === 'running' ? '⟳' : t('pages.networkIntelligence.scan')}
-        </button>
+        </Button>
       </div>
       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{engine.description}</p>
       {engine.commandCenter && (

@@ -19,6 +19,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { usePageAutoRefresh } from '../hooks/usePageAutoRefresh'
 import { computeSla, slaBand, SLA_BAND_COLOR, slaCountdownLabel } from '../lib/incidentSla'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.incidentResponseCenter'
 
@@ -558,14 +559,14 @@ export default function IncidentResponseCenter() {
         <div className="space-y-2">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">{t(`${NS}.incident_queue`)}</h2>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportIncidentsCsv(incidents)}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-cyan-500/30 text-[10px] font-mono text-cyan-300/80 hover:bg-cyan-500/10"
             >
               <Download className="w-3 h-3" />
               {t(`${NS}.export_csv`)}
-            </button>
+            </Button>
           </div>
           <WeissmanListToolbar
             searchQuery={searchQuery}
@@ -664,7 +665,7 @@ export default function IncidentResponseCenter() {
               {/* Tabs */}
               <div className="flex gap-2 border-b border-[var(--border-default)] pb-2">
                 {['timeline', 'playbook'].map((tabKey) => (
-                  <button
+                  <Button variant="unstyled"
                     key={tabKey}
                     type="button"
                     onClick={() => setTab(tabKey)}
@@ -676,7 +677,7 @@ export default function IncidentResponseCenter() {
                     }}
                   >
                     {tabKey === 'timeline' ? t('pages.incidentResponseCenter.tab_timeline') : t('pages.incidentResponseCenter.tab_playbook')}
-                  </button>
+                  </Button>
                 ))}
               </div>
 

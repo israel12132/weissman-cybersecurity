@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 import { EngineRealitySummary } from '../EngineRealityBadge'
+import Button from '../ui/Button'
 
 const REFRESH_MS = 15_000
 
@@ -234,7 +235,7 @@ export default function ExecKpiStrip() {
         </div>
         <div className="text-white/30 flex items-center gap-1.5 tabular-nums">
           <span>{fmtAgo(lastUpdated)}</span>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={refresh}
             className="text-cyan-400/50 hover:text-cyan-300/80 transition-colors p-0.5"
@@ -242,7 +243,7 @@ export default function ExecKpiStrip() {
             aria-label={t('components.cockpitTabs.execKpiStrip.refresh_kpis')}
           >
             <RefreshCw className="w-3 h-3" strokeWidth={2} />
-          </button>
+          </Button>
         </div>
       </div>
 

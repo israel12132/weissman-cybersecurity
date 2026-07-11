@@ -8,6 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { formatApiErrorFromBody } from '../lib/apiError'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 
 const SAMPLE_KEYS = ['sample_q1', 'sample_q2', 'sample_q3', 'sample_q4', 'sample_q5']
 
@@ -190,7 +191,7 @@ export default function AskWeissman() {
             onExport={() => exportTranscriptCsv(history)}
             exportDisabled={completedTurns.length === 0}
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={clearHistory}
             disabled={history.length === 0}
@@ -198,7 +199,7 @@ export default function AskWeissman() {
           >
             <Trash2 className="w-3.5 h-3.5" />
             {t('pages.askWeissman.clear_history')}
-          </button>
+          </Button>
           <Link to="/" className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] weissman-flip-x">
             {t('ask_weissman.back_cockpit')}
           </Link>
@@ -220,14 +221,14 @@ export default function AskWeissman() {
 
       <div className="flex flex-wrap gap-1.5 mb-3 shrink-0" role="group" aria-label={t('ask_weissman.sample_prompts')}>
         {sampleQuestions.map((s) => (
-          <button
+          <Button variant="unstyled"
             type="button"
             key={s}
             onClick={() => setQuestion(s)}
             className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:border-cyan-500/40 hover:text-cyan-200"
           >
             &ldquo;{s}&rdquo;
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -354,13 +355,13 @@ export default function AskWeissman() {
           className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
           autoFocus
         />
-        <button
+        <Button variant="unstyled"
           type="submit"
           disabled={loading || !question.trim()}
           className="px-4 py-2 rounded-lg text-[12px] font-mono uppercase tracking-widest border border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-40 weissman-flip-x"
         >
           {loading ? t('ask_weissman.asking') : t('ask_weissman.ask_button')}
-        </button>
+        </Button>
       </form>
     </main>
   )

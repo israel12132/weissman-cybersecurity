@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'serverless_attack'
 const ACCENT = '#ec4899'
@@ -116,12 +117,12 @@ function Section({ title, icon, accent = ACCENT, count, defaultOpen = true, chil
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>{title}{count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -129,7 +130,7 @@ function Section({ title, icon, accent = ACCENT, count, defaultOpen = true, chil
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left">
+    <Button variant="unstyled" type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left">
       <span className="min-w-0">
         <span className="block text-[11px] font-mono text-[var(--text-primary)]">{label}</span>
         {hint && <span className="block text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
@@ -137,7 +138,7 @@ function Toggle({ label, hint, checked, onChange }) {
       <span className={`shrink-0 w-8 h-4 rounded-full relative transition-colors ${checked ? 'bg-pink-500/60' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -169,10 +170,10 @@ function Segmented({ label, value, options, onChange }) {
       {label && <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1.5">{label}</p>}
       <div className="flex rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-0.5 gap-0.5">
         {options.map((o) => (
-          <button key={o.value} type="button" onClick={() => onChange(o.value)}
+          <Button variant="unstyled" key={o.value} type="button" onClick={() => onChange(o.value)}
             className={`flex-1 px-2 py-1.5 rounded-md text-[10px] font-mono transition-all ${value === o.value ? 'bg-pink-500/20 text-pink-300 border border-pink-400/40' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-transparent'}`}>
             {o.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -194,7 +195,7 @@ function FindingRow({ f }) {
   const conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) : null
   return (
     <div className={`rounded-xl border ${meta.border} ${meta.bg} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase shrink-0 ${meta.text} ${meta.border}`}>{sev}</span>
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] font-mono text-[var(--text-primary)]">{f.title || f.type}</span>
@@ -202,7 +203,7 @@ function FindingRow({ f }) {
         </span>
         {conf !== null && <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">{conf}%</span>}
         <span className="text-[var(--text-disabled)] text-xs shrink-0">{open ? '▾' : '▸'}</span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
@@ -390,7 +391,7 @@ export default function ServerlessSecurityCommandCenter() {
             <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-pink-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2"><span>🎛️</span> {t('serverlessSec.control', 'Serverless Control Column')}</h2>
-                <button type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">{t('common.reset', 'Reset')}</button>
+                <Button variant="unstyled" type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">{t('common.reset', 'Reset')}</Button>
               </div>
 
               <Section title={t('common.target', 'Target Binding')} icon="🎯" accent="#22d3ee">
@@ -434,10 +435,10 @@ export default function ServerlessSecurityCommandCenter() {
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('serverlessSec.extra_headers', 'Extra Headers')}</span>
-                    <button type="button" onClick={addHeader}
+                    <Button variant="unstyled" type="button" onClick={addHeader}
                       className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-pink-300 hover:border-pink-500/40 transition-colors">
                       + {t('serverlessSec.add_header', 'Add')}
-                    </button>
+                    </Button>
                   </div>
                   {params.extra_headers.map((h, i) => (
                     <div key={i} className="flex items-center gap-1.5">
@@ -447,8 +448,8 @@ export default function ServerlessSecurityCommandCenter() {
                       <input value={h.value} onChange={(e) => setHeader(i, 'value', e.target.value)} placeholder={t('serverlessSec.header_value', 'Value')}
                         aria-label={t('serverlessSec.header_value', 'Value')}
                         className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
-                      <button type="button" onClick={() => removeHeader(i)} aria-label={t('serverlessSec.remove_header', 'Remove header')}
-                        className="shrink-0 w-6 h-6 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-rose-300 hover:border-rose-500/40 transition-colors">×</button>
+                      <Button variant="unstyled" type="button" onClick={() => removeHeader(i)} aria-label={t('serverlessSec.remove_header', 'Remove header')}
+                        className="shrink-0 w-6 h-6 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-rose-300 hover:border-rose-500/40 transition-colors">×</Button>
                     </div>
                   ))}
                   {params.extra_headers.length === 0 && (
@@ -464,14 +465,14 @@ export default function ServerlessSecurityCommandCenter() {
               </Section>
 
               <div className="flex gap-2 mt-3">
-                <button type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun()}
+                <Button variant="unstyled" type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun()}
                   className="flex-1 py-2.5 rounded-xl font-mono text-sm font-semibold bg-gradient-to-r from-pink-600 to-fuchsia-600 text-white disabled:opacity-40 hover:from-pink-500 hover:to-fuchsia-500 transition-all">
                   {running ? t('common.running', 'Running…') : t('serverlessSec.run', 'Run Serverless Scan')}
-                </button>
-                <button type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun({ dryRun: true })}
+                </Button>
+                <Button variant="unstyled" type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun({ dryRun: true })}
                   className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 transition-all">
                   Dry Run
-                </button>
+                </Button>
               </div>
             </div>
           </div>

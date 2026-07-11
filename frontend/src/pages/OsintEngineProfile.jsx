@@ -18,6 +18,7 @@ import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -451,14 +452,14 @@ export default function OsintEngineProfile() {
               compact
               maxVisible={8}
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleRun}
               disabled={running}
               className="px-4 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {running ? t('pages.osintEngineProfile.running') : t('pages.osintEngineProfile.run_btn')}
-            </button>
+            </Button>
           </div>
 
           <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-3">

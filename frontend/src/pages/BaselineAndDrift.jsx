@@ -11,6 +11,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid, SkeletonTable } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
+import Button from '../components/ui/Button'
 
 const SEV_COLORS = {
   critical: '#ef4444',
@@ -179,7 +180,7 @@ export default function BaselineAndDrift() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
             {['24h', '7d', '30d'].map((range) => (
-              <button
+              <Button variant="unstyled"
                 key={range}
                 type="button"
                 onClick={() => setTimeRange(range)}
@@ -190,7 +191,7 @@ export default function BaselineAndDrift() {
                 }`}
               >
                 {t(`pages.baselineAndDrift.range_${range}`)}
-              </button>
+              </Button>
             ))}
           </div>
           <Link
@@ -249,7 +250,7 @@ export default function BaselineAndDrift() {
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             {['all', 'critical', 'high', 'medium', 'low'].map((s) => (
-              <button
+              <Button variant="unstyled"
                 key={s}
                 type="button"
                 onClick={() => setSeverityFilter(s)}
@@ -258,7 +259,7 @@ export default function BaselineAndDrift() {
                 }`}
               >
                 {s === 'all' ? t('pages.baselineAndDrift.filter_all') : `${s} (${severityCounts[s] || 0})`}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

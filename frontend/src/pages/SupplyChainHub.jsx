@@ -12,6 +12,7 @@ import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ACCENT = '#84cc16'
 
@@ -122,14 +123,14 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
             </Link>
           )}
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleRun}
           disabled={running || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#84cc16]/30 text-[#84cc16]/70 hover:bg-[#84cc16]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {running ? t('pages.supplyChainHub.running') : t('pages.supplyChainHub.run')}
-        </button>
+        </Button>
       </div>
       {lastRun && (
         <p className="text-[10px] font-mono text-[var(--text-disabled)]">{t('pages.supplyChainHub.last_run', { time: lastRun })}</p>

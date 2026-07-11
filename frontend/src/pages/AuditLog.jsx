@@ -20,6 +20,7 @@ import DataTable from '../components/ui/DataTable'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -350,7 +351,7 @@ export default function AuditLog() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={exportFull}
               disabled={exportingFull}
@@ -359,7 +360,7 @@ export default function AuditLog() {
             >
               <FileJson className={`w-4 h-4 ${exportingFull ? 'animate-pulse' : ''}`} />
               {exportingFull ? t('audit.export_full_running') : t('audit.export_full')}
-            </button>
+            </Button>
             <ShellScanActions
               onRefresh={load}
               onExport={() => exportCsv(filteredEntries)}
@@ -410,14 +411,14 @@ export default function AuditLog() {
               spellCheck={false}
               className="flex-1 min-w-0 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500/40"
             />
-            <button
+            <Button variant="unstyled"
               type="submit"
               disabled={verifying || !verifyHash.trim()}
               className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/90 text-black text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <BadgeCheck className={`w-4 h-4 ${verifying ? 'animate-pulse' : ''}`} />
               {verifying ? t('audit.verify_running') : t('audit.verify_btn')}
-            </button>
+            </Button>
           </form>
 
           {verifyResult && (
@@ -451,13 +452,13 @@ export default function AuditLog() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('audit.filters')}</span>
           {hasFilters && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={clearFilters}
               className="text-[11px] font-mono text-cyan-400/80 hover:text-cyan-300"
             >
               {t('audit.clear_filters')}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -465,7 +466,7 @@ export default function AuditLog() {
           {ACTION_PILLS.map((pill) => {
             const active = actionFilter === pill.key
             return (
-              <button
+              <Button variant="unstyled"
                 key={pill.key || 'all'}
                 type="button"
                 onClick={() => { setActionFilter(pill.key); setOffset(0) }}
@@ -476,7 +477,7 @@ export default function AuditLog() {
                 }`}
               >
                 {t(pill.labelKey)}
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -519,14 +520,14 @@ export default function AuditLog() {
               { days: 7, label: t('audit.range_7d') },
               { days: 30, label: t('audit.range_30d') },
             ].map((r) => (
-              <button
+              <Button variant="unstyled"
                 key={r.days}
                 type="button"
                 onClick={() => setQuickRange(r.days)}
                 className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] whitespace-nowrap"
               >
                 {r.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -581,7 +582,7 @@ export default function AuditLog() {
             </div>
 
             <div className="flex items-center gap-1">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset(0)}
@@ -589,8 +590,8 @@ export default function AuditLog() {
                 aria-label={t('audit.first_page')}
               >
                 <ChevronsLeft className="h-4 w-4" />
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
@@ -598,7 +599,7 @@ export default function AuditLog() {
                 aria-label={t('audit.prev_page')}
               >
                 <ChevronLeft className="h-4 w-4" />
-              </button>
+              </Button>
 
               <div className="flex items-center gap-1 px-2">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -608,7 +609,7 @@ export default function AuditLog() {
                   else if (currentPage >= totalPages - 2) page = totalPages - 4 + i
                   else page = currentPage - 2 + i
                   return (
-                    <button
+                    <Button variant="unstyled"
                       key={page}
                       type="button"
                       onClick={() => setOffset((page - 1) * pageSize)}
@@ -619,12 +620,12 @@ export default function AuditLog() {
                       }`}
                     >
                       {page}
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
 
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((o) => o + pageSize)}
@@ -632,8 +633,8 @@ export default function AuditLog() {
                 aria-label={t('audit.next_page')}
               >
                 <ChevronRight className="h-4 w-4" />
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((totalPages - 1) * pageSize)}
@@ -641,7 +642,7 @@ export default function AuditLog() {
                 aria-label={t('audit.last_page')}
               >
                 <ChevronsRight className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
         )}

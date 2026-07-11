@@ -10,6 +10,7 @@ import { confirmDialog } from '../utils/confirmDialog';
 
 
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 export default function ContainmentRulesBuilder() {
   const { t } = useTranslation();
@@ -165,13 +166,13 @@ export default function ContainmentRulesBuilder() {
         </div>
 
         <div className="flex justify-end">
-          <button
+          <Button variant="unstyled"
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.containmentRulesBuilder.create_rule')}
-          </button>
+          </Button>
         </div>
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
@@ -208,7 +209,7 @@ export default function ContainmentRulesBuilder() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => toggleRule(rule.id, rule.enabled)}
                         className={`p-2 rounded-lg border transition-colors ${
                           rule.enabled
@@ -217,7 +218,7 @@ export default function ContainmentRulesBuilder() {
                         }`}
                       >
                         {rule.enabled ? <Play className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                      </button>
+                      </Button>
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -271,18 +272,18 @@ export default function ContainmentRulesBuilder() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => setEditModal(rule)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => deleteRule(rule.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -302,9 +303,9 @@ export default function ContainmentRulesBuilder() {
                 {t('pages.containmentRulesBuilder.emergency_body')}
               </p>
             </div>
-            <button className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
+            <Button variant="unstyled" className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
               {t('pages.containmentRulesBuilder.kill_switch')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -364,9 +365,9 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           <h3 className="text-lg font-bold text-white">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
-          <button onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+          <Button variant="unstyled" onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -409,19 +410,19 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('common.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
           >
             {saving ? t('pages.containmentRulesBuilder.saving') : rule ? t('pages.containmentRulesBuilder.save_changes') : t('pages.containmentRulesBuilder.create_rule')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

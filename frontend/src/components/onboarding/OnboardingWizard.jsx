@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 import { formatApiErrorFromBody } from '../../lib/apiError'
+import Button from '../ui/Button'
 
 const STEPS = [
   { id: 1, labelKey: 'client', icon: Building2 },
@@ -242,7 +243,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     {error}
                   </div>
                 )}
-                <button
+                <Button variant="unstyled"
                   type="submit"
                   disabled={submitting}
                   className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm tracking-wide border border-cyan-500/50 bg-gradient-to-r from-cyan-500/15 to-violet-500/10 text-cyan-100 hover:from-cyan-500/25 hover:to-violet-500/15 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -258,7 +259,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}
-                </button>
+                </Button>
               </motion.form>
             )}
 
@@ -319,14 +320,14 @@ export default function OnboardingWizard({ open, onComplete }) {
                 )}
 
                 <div className="flex gap-3">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => { setStep(1); setError('') }}
                     className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                   >
                     {t('components.onboarding.back')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="unstyled"
                     type="button"
                     disabled={!scopeConfirmed}
                     onClick={() => { setError(''); setStep(3) }}
@@ -334,7 +335,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                   >
                     {t('components.onboarding.confirm_scope')}
                     <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               </motion.div>
             )}
@@ -393,15 +394,15 @@ export default function OnboardingWizard({ open, onComplete }) {
                     )}
 
                     <div className="flex gap-3">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => { setStep(2); setError('') }}
                         disabled={submitting}
                         className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors disabled:opacity-50"
                       >
                         {t('components.onboarding.back')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         type="button"
                         onClick={handleLaunchScan}
                         disabled={submitting}
@@ -418,7 +419,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                             {t('components.onboarding.launch_full_scan')}
                           </>
                         )}
-                      </button>
+                      </Button>
                     </div>
                   </>
                 )}

@@ -8,6 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 /**
  * RemediationHub — derives the remediation board entirely from real `/api/findings`
@@ -204,9 +205,9 @@ export default function RemediationHub() {
               className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
             />
             {search && (
-              <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)]">
+              <Button variant="unstyled" type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)]">
                 <X className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
@@ -293,7 +294,7 @@ export default function RemediationHub() {
 
 function Pill({ active, color = '#22d3ee', onClick, children }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       className="px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider border transition-colors"
@@ -304,7 +305,7 @@ function Pill({ active, color = '#22d3ee', onClick, children }) {
       }}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 

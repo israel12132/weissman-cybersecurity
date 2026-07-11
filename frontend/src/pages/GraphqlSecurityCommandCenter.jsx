@@ -12,6 +12,7 @@ import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'graphql_attack'
 
@@ -302,7 +303,7 @@ function Section({ title, icon, accent = '#f472b6', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
@@ -313,7 +314,7 @@ function Section({ title, icon, accent = '#f472b6', count, defaultOpen = true, c
           {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -398,7 +399,7 @@ function Toggle({ label, value, onChange, hint }) {
         <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
-      <button
+      <Button variant="unstyled"
         type="button"
         role="switch"
         aria-checked={value}
@@ -406,7 +407,7 @@ function Toggle({ label, value, onChange, hint }) {
         className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-pink-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}
       >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -600,14 +601,14 @@ function SchemaTypeExplorer({ schemaGraph }) {
           const sensitive = (t.fields || []).some((f) => /pass|secret|token|key|ssn|card|cred|hash|otp|pin/i.test(f))
           const isSel = (active?.type || types[0]?.type) === t.type
           return (
-            <button
+            <Button variant="unstyled"
               key={t.type}
               type="button"
               onClick={() => setSelected(t.type)}
               className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${isSel ? 'border-pink-400/50 bg-pink-500/15 text-pink-200' : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-[var(--border-strong)]'}`}
             >
               {sensitive ? '⚠ ' : ''}{t.type}
-            </button>
+            </Button>
           )
         })}
       </div>
@@ -661,14 +662,14 @@ function ExecutiveSummaryStrip({ summary, onExportPdf, onExportJson }) {
             <span className="text-[10px] font-mono text-[var(--text-tertiary)]">OWASP {summary.owasp_grade}</span>
           )}
           {onExportPdf && (
-            <button type="button" onClick={onExportPdf} className="text-[9px] font-mono px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
+            <Button variant="unstyled" type="button" onClick={onExportPdf} className="text-[9px] font-mono px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
               PDF
-            </button>
+            </Button>
           )}
           {onExportJson && (
-            <button type="button" onClick={onExportJson} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">
+            <Button variant="unstyled" type="button" onClick={onExportJson} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10">
               JSON
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -1021,7 +1022,7 @@ export default function GraphqlSecurityCommandCenter() {
         {/* Scan profiles */}
         <div className="flex flex-wrap gap-2">
           {SCAN_PROFILES.map((p) => (
-            <button
+            <Button variant="unstyled"
               key={p.id}
               type="button"
               onClick={() => loadProfile(p.id)}
@@ -1033,7 +1034,7 @@ export default function GraphqlSecurityCommandCenter() {
                 <p className="text-xs font-semibold text-white">{p.label}</p>
                 <p className="text-[10px] text-[var(--text-muted)] max-w-xs leading-snug">{p.desc}</p>
               </div>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -1046,13 +1047,13 @@ export default function GraphqlSecurityCommandCenter() {
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('graphqlSec.control_column', 'API Security Control Column')}
                 </h2>
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={resetParams}
                   className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('common.reset', 'Reset')}
-                </button>
+                </Button>
               </div>
 
               {/* Target Binding */}
@@ -1224,10 +1225,10 @@ export default function GraphqlSecurityCommandCenter() {
                         placeholder="Value (e.g. Bearer …)"
                         className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
                       />
-                      <button type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</button>
+                      <Button variant="unstyled" type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</Button>
                     </div>
                   ))}
-                  <button type="button" onClick={addHeader} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">+ {t('graphqlSec.add_header', 'add header')}</button>
+                  <Button variant="unstyled" type="button" onClick={addHeader} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">+ {t('graphqlSec.add_header', 'add header')}</Button>
                 </div>
               </Section>
 
@@ -1244,9 +1245,9 @@ export default function GraphqlSecurityCommandCenter() {
 
               {/* Payload preview */}
               <Section title={t('graphqlSec.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">
+                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">
                   {showPreview ? t('graphqlSec.hide_json', 'hide JSON') : t('graphqlSec.show_json', 'show exact request JSON')}
-                </button>
+                </Button>
                 {showPreview && (
                   <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
                     {JSON.stringify(previewBody, null, 2)}
@@ -1256,7 +1257,7 @@ export default function GraphqlSecurityCommandCenter() {
 
               {/* Actions */}
               <div className="mt-3 space-y-2">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => handleRun()}
                   disabled={running || !selectedClientId || !target.trim()}
@@ -1269,15 +1270,15 @@ export default function GraphqlSecurityCommandCenter() {
                   }}
                 >
                   {running ? t('graphqlSec.running', 'Assessing API…') : t('graphqlSec.run', 'Run API Security Scan')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => handleRun({ dryRun: true })}
                   disabled={running || !selectedClientId || !target.trim()}
                   className="w-full py-2 rounded-xl font-mono text-[11px] uppercase tracking-widest border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   {t('graphqlSec.dry_run', 'Dry-Run Plan (no requests)')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

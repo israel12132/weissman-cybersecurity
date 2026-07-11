@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 export default function CeoGenesisPanel() {
   const { t } = useTranslation()
@@ -176,14 +177,14 @@ export default function CeoGenesisPanel() {
             className="w-full font-mono text-xs bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
-        <button
+        <Button variant="unstyled"
           id="ceo-genesis-apply-strategy-btn"
           type="submit"
           disabled={saving}
           className="px-4 py-2 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-100 text-xs font-mono uppercase disabled:opacity-50"
         >
           {saving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyStrategy')}
-        </button>
+        </Button>
       </form>
 
       <form onSubmit={applyHpc} className="rounded-lg border border-amber-500/20 bg-amber-950/10 p-4 space-y-4">
@@ -246,14 +247,14 @@ export default function CeoGenesisPanel() {
             className="w-full font-mono text-sm bg-[var(--bg-0)] border border-white/15 rounded px-3 py-2 text-[var(--text-primary)]"
           />
         </div>
-        <button
+        <Button variant="unstyled"
           id="ceo-genesis-apply-hpc-btn"
           type="submit"
           disabled={hpcSaving}
           className="px-4 py-2 rounded bg-amber-900/60 border border-amber-500/40 text-amber-50 text-xs font-mono uppercase disabled:opacity-50"
         >
           {hpcSaving ? t('components.ceo.genesisPanel.saving') : t('components.ceo.genesisPanel.applyHpcPolicy')}
-        </button>
+        </Button>
         {eff && (
           <div className="text-[10px] font-mono text-[var(--text-tertiary)] space-y-1 border-t border-white/10 pt-3 mt-2">
             <div>

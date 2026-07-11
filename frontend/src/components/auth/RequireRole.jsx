@@ -1,6 +1,7 @@
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
+import Button from '../ui/Button'
 
 /**
  * Route/section guard enforcing a minimum RBAC role.
@@ -49,7 +50,7 @@ export default function RequireRole({ min = 'admin', children }) {
           {t('auth.requires_role', { min, role })}
         </p>
         <div className="flex flex-col sm:flex-row gap-4 items-center">
-          <button
+          <Button variant="unstyled"
             type="button"
             className="text-sm font-mono text-amber-200 border border-amber-500/40 rounded px-4 py-2 hover:bg-amber-950/40"
             onClick={async () => {
@@ -58,7 +59,7 @@ export default function RequireRole({ min = 'admin', children }) {
             }}
           >
             {t('auth.sign_in_again')}
-          </button>
+          </Button>
           <Link
             to="/operations"
             className="text-sm font-mono text-cyan-400 hover:text-cyan-300 underline underline-offset-4"

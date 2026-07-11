@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
 import AppShell from './layout/AppShell'
 import LabForensicEvidence from './ui/LabForensicEvidence'
+import Button from './ui/Button'
 
 export default function SystemCore() {
   const { t } = useTranslation()
@@ -371,7 +372,7 @@ export default function SystemCore() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <label className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.rfc3161_label')}</label>
-            <button
+            <Button variant="unstyled"
               type="button"
               role="switch"
               aria-checked={rfc3161Enabled}
@@ -381,7 +382,7 @@ export default function SystemCore() {
               <span
                 className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition ${rfc3161Enabled ? 'translate-x-6' : 'translate-x-1'}`}
               />
-            </button>
+            </Button>
           </div>
 
           <div>
@@ -444,7 +445,7 @@ export default function SystemCore() {
 
           <div className="flex items-center justify-between">
             <label className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.morphing_label')}</label>
-            <button
+            <Button variant="unstyled"
               type="button"
               role="switch"
               aria-checked={identityMorphing}
@@ -454,17 +455,17 @@ export default function SystemCore() {
               <span
                 className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition ${identityMorphing ? 'translate-x-6' : 'translate-x-1'}`}
               />
-            </button>
+            </Button>
           </div>
 
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={saveGhostConfig}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_ghost')}
-          </button>
+          </Button>
         </div>
 
         <p className="mt-4 text-xs text-[var(--text-muted)]">
@@ -530,14 +531,14 @@ export default function SystemCore() {
             </div>
             <p className="mt-1 text-xs text-[var(--text-muted)]">{t('components.systemCore.max_depth_current', { value: maxSequenceDepth })}</p>
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={saveSemanticConfig}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_semantic')}
-          </button>
+          </Button>
         </div>
         <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.semantic_hint')}
@@ -568,14 +569,14 @@ export default function SystemCore() {
               className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)]" />
           </div>
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={saveOastConfig} disabled={saving}
+            <Button variant="unstyled" type="button" onClick={saveOastConfig} disabled={saving}
               className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium">
               {saving ? t('components.systemCore.saving') : t('components.systemCore.save_oast')}
-            </button>
-            <button type="button" onClick={testOastConnection} disabled={oastTesting || !oastListenerUrl.trim()}
+            </Button>
+            <Button variant="unstyled" type="button" onClick={testOastConnection} disabled={oastTesting || !oastListenerUrl.trim()}
               className="px-4 py-2 rounded-lg border border-violet-500/40 text-violet-200 text-sm hover:bg-violet-500/10 disabled:opacity-50">
               {oastTesting ? t('components.systemCore.oast_testing') : t('components.systemCore.oast_test')}
-            </button>
+            </Button>
             <Link to="/oast" className="px-4 py-2 text-sm text-violet-300 hover:text-violet-200 self-center">
               {t('components.systemCore.oast_dashboard')}
             </Link>
@@ -595,11 +596,11 @@ export default function SystemCore() {
         </p>
         <div className="flex items-center justify-between">
           <span className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.ai_entitlement_label')}</span>
-          <button type="button" role="switch" aria-checked={aiHeavyEntitled}
+          <Button variant="unstyled" type="button" role="switch" aria-checked={aiHeavyEntitled}
             onClick={() => handleAiEntitlementToggle(!aiHeavyEntitled)}
             className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${aiHeavyEntitled ? 'bg-pink-500/80 border-pink-400' : 'bg-[var(--bg-4)] border-[var(--border-strong)]'}`}>
             <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${aiHeavyEntitled ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -641,14 +642,14 @@ export default function SystemCore() {
             </div>
             <p className="mt-1 text-xs text-[var(--text-muted)]">{t('components.systemCore.zscore_current', { value: zScoreSensitivity.toFixed(1), current: zScoreSensitivity.toFixed(1) })}</p>
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={saveTimingConfig}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_timing')}
-          </button>
+          </Button>
         </div>
         <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.timing_hint')}
@@ -682,14 +683,14 @@ export default function SystemCore() {
               <option value="code_execution">{t('components.systemCore.strategy_code_exec')}</option>
             </select>
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={saveAiRedteamConfig}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_redteam')}
-          </button>
+          </Button>
         </div>
         <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.redteam_hint')}
@@ -704,7 +705,7 @@ export default function SystemCore() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <label className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.zeroday_enable')}</label>
-            <button
+            <Button variant="unstyled"
               type="button"
               role="switch"
               aria-checked={enableZeroDayProbing}
@@ -712,7 +713,7 @@ export default function SystemCore() {
               className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${enableZeroDayProbing ? 'bg-cyan-500/80 border-cyan-400' : 'bg-[var(--bg-4)] border-[var(--border-strong)]'}`}
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition ${enableZeroDayProbing ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+            </Button>
           </div>
           <div>
             <label className="block text-sm text-[var(--text-secondary)] mb-2">{t('components.systemCore.feed_urls_label')}</label>
@@ -724,14 +725,14 @@ export default function SystemCore() {
               className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)] font-mono text-sm"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={saveZeroDayConfig}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_zeroday')}
-          </button>
+          </Button>
         </div>
         <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.zeroday_hint')}
@@ -765,14 +766,14 @@ export default function SystemCore() {
               className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] placeholder-[var(--text-muted)]"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={saveCicdConfig}
             disabled={saving}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm"
           >
             {saving ? t('components.systemCore.saving') : t('components.systemCore.save_cicd')}
-          </button>
+          </Button>
         </div>
         <p className="mt-4 text-xs text-[var(--text-muted)]">
           {t('components.systemCore.cicd_hint')}
@@ -786,7 +787,7 @@ export default function SystemCore() {
         </p>
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <button
+            <Button variant="unstyled"
               type="button"
               role="switch"
               aria-checked={enablePoeSynthesis}
@@ -797,11 +798,11 @@ export default function SystemCore() {
               className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${enablePoeSynthesis ? 'bg-emerald-600' : 'bg-[var(--bg-4)]'}`}
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition translate-x-1 translate-y-0.5 ${enablePoeSynthesis ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+            </Button>
             <span className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.poe_enable')}</span>
           </div>
           <div className="flex items-center gap-3">
-            <button
+            <Button variant="unstyled"
               type="button"
               role="switch"
               aria-checked={safetyRailsNoShells}
@@ -812,7 +813,7 @@ export default function SystemCore() {
               className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${safetyRailsNoShells ? 'bg-emerald-600' : 'bg-[var(--bg-4)]'}`}
             >
               <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition translate-x-1 translate-y-0.5 ${safetyRailsNoShells ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+            </Button>
             <span className="text-sm text-[var(--text-secondary)]">{t('components.systemCore.poe_no_shells')}</span>
           </div>
           <div>
@@ -843,7 +844,7 @@ export default function SystemCore() {
               <span className="text-xs text-[var(--text-secondary)] font-mono">
                 {t('components.systemCore.ephemeral_payloads', { count: activeEphemeralCount })}
               </span>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={payloadSyncRunning}
                 onClick={async () => {
@@ -865,7 +866,7 @@ export default function SystemCore() {
                 className="ml-auto px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium"
               >
                 {payloadSyncRunning ? t('components.systemCore.syncing') : t('components.systemCore.sync_now')}
-              </button>
+              </Button>
             </div>
             <p className="text-xs text-[var(--text-muted)] mb-2">{t('components.systemCore.payloads_hint')}</p>
             <p className="text-xs text-[var(--text-muted)] mb-2">

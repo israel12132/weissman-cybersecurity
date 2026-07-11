@@ -10,6 +10,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice';
 import { SkeletonBar } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { apiUrl, authHeaders } from '../lib/apiBase';
+import Button from '../components/ui/Button'
 
 const NS = 'pages.systemConfiguration';
 
@@ -198,14 +199,14 @@ export default function SystemConfiguration() {
               )}
               <span>{saveMessage.text}</span>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setSaveMessage(null)}
               className="opacity-70 hover:opacity-100 shrink-0"
               aria-label="Dismiss"
             >
               ✕
-            </button>
+            </Button>
           </div>
         )}
 
@@ -218,21 +219,21 @@ export default function SystemConfiguration() {
                 <p className="text-xs text-[var(--text-tertiary)]">{t(`${NS}.unsaved_changes_subtitle`)}</p>
               </div>
             </div>
-            <button
+            <Button variant="unstyled"
               onClick={saveConfig}
               disabled={saving}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-black rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {saving ? t(`${NS}.saving`) : t(`${NS}.save_changes`)}
-            </button>
+            </Button>
           </div>
         )}
 
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
           <div className="flex overflow-x-auto border-b border-[var(--border-default)]">
             {tabs.map((tab) => (
-              <button
+              <Button variant="unstyled"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium whitespace-nowrap transition-all ${
@@ -243,7 +244,7 @@ export default function SystemConfiguration() {
               >
                 {tab.icon}
                 {tab.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -309,14 +310,14 @@ export default function SystemConfiguration() {
         </div>
 
         <div className="flex justify-end">
-          <button
+          <Button variant="unstyled"
             onClick={saveConfig}
             disabled={!unsavedChanges || saving}
             className="flex items-center gap-2 px-6 py-3 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
             {saving ? t(`${NS}.saving`) : t(`${NS}.save_all`)}
-          </button>
+          </Button>
         </div>
       </div>
     </PageShell>
@@ -600,14 +601,14 @@ function MfaSelfServicePanel() {
       </div>
       {err && <div className="text-[11px] text-rose-400">{err}</div>}
       {!status.mfa_enabled && !setup && (
-        <button
+        <Button variant="unstyled"
           type="button"
           disabled={busy}
           onClick={startSetup}
           className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
         >
           {busy ? t(`${NS}.mfa.working`) : status.mfa_provisioned ? t(`${NS}.mfa.reprovision`) : t(`${NS}.mfa.setup`)}
-        </button>
+        </Button>
       )}
       {setup && (
         <div className="space-y-2">
@@ -625,14 +626,14 @@ function MfaSelfServicePanel() {
               placeholder={t(`${NS}.mfa.code_placeholder`)}
               className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-sm font-mono w-28"
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={enable}
               disabled={busy || code.length !== 6}
               className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
             >
               {busy ? t(`${NS}.mfa.working`) : t(`${NS}.mfa.enable`)}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -647,14 +648,14 @@ function MfaSelfServicePanel() {
             placeholder={t(`${NS}.mfa.code_placeholder`)}
             className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-sm font-mono w-28"
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={disable}
             disabled={busy || code.length !== 6}
             className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-rose-500/40 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
           >
             {busy ? t(`${NS}.mfa.working`) : t(`${NS}.mfa.disable`)}
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'password_spray'
 const ACCENT = '#f43f5e'
@@ -260,14 +261,14 @@ function sevWeight(s) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full text-left"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#fda4af' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>
         <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: on ? '14px' : '2px' }} />
       </span>
       <span>{label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -622,11 +623,11 @@ export default function PasswordSprayCommandCenter() {
         <div className="flex flex-wrap gap-3 mb-4 items-center">
           <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{L.profile}</span>
           {Object.entries(L.profiles).map(([k, label]) => (
-            <button key={k} type="button" onClick={() => set('scan_profile', k)}
+            <Button variant="unstyled" key={k} type="button" onClick={() => set('scan_profile', k)}
               className="px-3 py-1 rounded-lg text-xs font-mono border transition-all"
               style={params.scan_profile === k ? { borderColor: `${ACCENT}50`, color: '#fda4af', backgroundColor: `${ACCENT}15` } : { borderColor: '#ffffff15', color: '#ffffff50' }}>
               {label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -665,18 +666,18 @@ export default function PasswordSprayCommandCenter() {
         </div>
 
         <div className="flex items-center justify-between gap-4 pt-2 border-t border-[var(--border-subtle)]">
-          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+          <Button variant="unstyled" type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
             {showAdvanced ? '▾' : '▸'} {L.advanced}
-          </button>
+          </Button>
           <div className="flex gap-2">
             {findings.length > 0 && (
-              <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">{L.export}</button>
+              <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">{L.export}</Button>
             )}
-            <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+            <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
               className="px-5 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40"
               style={{ borderColor: `${ACCENT}50`, color: '#fda4af', backgroundColor: `${ACCENT}18` }}>
               {status === 'running' ? L.scanning : L.run}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -706,7 +707,7 @@ export default function PasswordSprayCommandCenter() {
             <label className="text-xs font-mono text-[var(--text-muted)] col-span-full">Subdomain prefixes (comma-sep)
               <input value={params.subdomain_prefixes} onChange={(e) => set('subdomain_prefixes', e.target.value)} placeholder="login,sso,idp,owa,auth" className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] font-mono text-[11px]" />
             </label>
-            <button type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-default)] rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</button>
+            <Button variant="unstyled" type="button" onClick={() => setParams(defaultParams())} className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-[var(--border-default)] rounded-lg px-3 py-2 md:col-span-2 justify-self-start">{L.reset}</Button>
           </div>
         )}
       </div>

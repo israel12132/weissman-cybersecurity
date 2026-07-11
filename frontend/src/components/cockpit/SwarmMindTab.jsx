@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { Network, Play, Radio, Bot } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.swarmMind'
 
@@ -110,7 +111,7 @@ export default function SwarmMindTab() {
               </div>
             ))}
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={runSwarm}
             disabled={running}
@@ -118,7 +119,7 @@ export default function SwarmMindTab() {
           >
             <Play className="w-4 h-4" />
             {running ? t(`${NS}.queued`) : t(`${NS}.runSwarm`)}
-          </button>
+          </Button>
         </div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] text-white/45 font-mono">
           <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-2 text-center">{t(`${NS}.flowRecon`)}</div>

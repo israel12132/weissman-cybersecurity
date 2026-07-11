@@ -11,6 +11,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINES = {
   chronos: 'chronos',
@@ -48,7 +49,7 @@ const DEFAULT_PARAMS = {
 
 function TabButton({ active, label, onClick }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       className={`px-4 py-2 text-xs font-mono uppercase tracking-wider rounded-lg border transition-colors ${
@@ -58,7 +59,7 @@ function TabButton({ active, label, onClick }) {
       }`}
     >
       {label}
-    </button>
+    </Button>
   )
 }
 
@@ -413,13 +414,13 @@ export default function SovereignDefenseMatrix() {
                       />
                     </label>
                   ))}
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={rotateLiquid}
                     className="w-full mt-2 py-2 rounded-lg border border-cyan-500/40 text-cyan-200 text-xs font-mono hover:bg-cyan-500/10"
                   >
                     {t('pages.sovereignDefense.force_rotate')}
-                  </button>
+                  </Button>
                 </motion.div>
               )}
               {tab === 'cognitive' && (

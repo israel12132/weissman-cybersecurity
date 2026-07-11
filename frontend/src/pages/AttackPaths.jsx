@@ -19,6 +19,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.attackPaths'
 const columnHelper = createColumnHelper()
@@ -222,7 +223,7 @@ export default function AttackPaths() {
               </option>
             ))}
           </select>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => load(true)}
             disabled={selectedClientId == null || recomputing}
@@ -230,7 +231,7 @@ export default function AttackPaths() {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${recomputing ? 'animate-spin' : ''}`} />
             {t(`${NS}.recompute`)}
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={() => load(false)}
             onExport={() => chokeCsv(chokePoints)}
@@ -261,7 +262,7 @@ export default function AttackPaths() {
             title={t(`${NS}.no_snapshot_title`)}
             body={t(`${NS}.no_snapshot_body`)}
             action={
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => load(true)}
                 disabled={recomputing}
@@ -269,7 +270,7 @@ export default function AttackPaths() {
               >
                 <RefreshCw className={`w-4 h-4 ${recomputing ? 'animate-spin' : ''}`} />
                 {t(`${NS}.compute_now`)}
-              </button>
+              </Button>
             }
           />
         )}

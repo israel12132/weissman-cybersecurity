@@ -13,6 +13,7 @@ import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -244,7 +245,7 @@ export default function AgentManagement() {
       icon={<Server />}
       actions={(
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setAutoRefresh((v) => !v)}
             className={`px-3 py-1.5 rounded-lg border text-xs font-mono ${
@@ -253,7 +254,7 @@ export default function AgentManagement() {
           >
             <Radio className={`w-3 h-3 inline mr-1 ${autoRefresh ? 'animate-pulse' : ''}`} />
             {autoRefresh ? t('agents.live_on') : t('agents.live_off')}
-          </button>
+          </Button>
           <Link to="/nexus-swarm" className="text-[11px] font-mono px-2 py-1 rounded border border-violet-500/40 text-violet-300 hover:bg-violet-500/10">
             {t('nav.nexus_swarm', 'Nexus Swarm')}
           </Link>
@@ -301,14 +302,14 @@ export default function AgentManagement() {
               className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
               placeholder={t('agents.validity_minutes')}
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={createToken}
               className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-mono text-sm hover:bg-cyan-500/30"
             >
               {t('agents.generate_token')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               disabled={fleetBusy || !tokenClient}
               onClick={fleetDispatch}
@@ -316,7 +317,7 @@ export default function AgentManagement() {
             >
               <Zap className="w-3.5 h-3.5" />
               {fleetBusy ? t('agents.fleet_dispatching') : t('agents.fleet_dispatch')}
-            </button>
+            </Button>
           </div>
 
           {generatedToken && (
@@ -334,7 +335,7 @@ export default function AgentManagement() {
 
         <div className="flex items-center gap-2 flex-wrap">
           {['all', 'online', 'offline'].map((f) => (
-            <button
+            <Button variant="unstyled"
               key={f}
               type="button"
               onClick={() => setStatusFilter(f)}
@@ -345,7 +346,7 @@ export default function AgentManagement() {
               }`}
             >
               {t(`agents.filter_${f}`)}
-            </button>
+            </Button>
           ))}
           <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
             {t('agents.registered_count', { total: visibleAgents.length })}

@@ -12,6 +12,7 @@ import {
 import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, Download, Columns3, Rows2, Rows3, X } from 'lucide-react'
 import EmptyState from './EmptyState'
 import { SkeletonTable } from './Skeleton'
+import Button from './Button'
 
 const MAX_VISIBLE_PAGES = 7
 const DEFAULT_PAGE_SIZES = [25, 50, 100]
@@ -245,7 +246,7 @@ export default function DataTable({
       enableSorting: false,
       cell: ({ row }) =>
         row.getCanExpand() ? (
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={(e) => {
               e.stopPropagation()
@@ -259,7 +260,7 @@ export default function DataTable({
               className={`h-4 w-4 transition-transform ${row.getIsExpanded() ? 'rotate-90 text-cyan-400' : ''}`}
               aria-hidden="true"
             />
-          </button>
+          </Button>
         ) : null,
     }
     return [...prefix, expanderColumn, ...columns]
@@ -385,7 +386,7 @@ export default function DataTable({
             </div>
           )}
           {densityToggle && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => writeDensity(density === 'compact' ? 'comfortable' : 'compact')}
               aria-pressed={density === 'compact'}
@@ -396,11 +397,11 @@ export default function DataTable({
                 ? <Rows3 className="w-3.5 h-3.5" aria-hidden />
                 : <Rows2 className="w-3.5 h-3.5" aria-hidden />}
               <span aria-hidden="true">{density === 'compact' ? 'Compact' : 'Cozy'}</span>
-            </button>
+            </Button>
           )}
           {columnToggle && (
             <div className="relative" ref={colMenuRef}>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => setColMenuOpen((v) => !v)}
                 aria-haspopup="menu"
@@ -409,7 +410,7 @@ export default function DataTable({
               >
                 <Columns3 className="w-3.5 h-3.5" aria-hidden />
                 Columns
-              </button>
+              </Button>
               {colMenuOpen && (
                 <div
                   role="menu"
@@ -417,9 +418,9 @@ export default function DataTable({
                 >
                   <div className="flex items-center justify-between px-1.5 pb-1">
                     <span className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)]">Columns</span>
-                    <button type="button" onClick={() => setColMenuOpen(false)} aria-label="Close" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                    <Button variant="unstyled" type="button" onClick={() => setColMenuOpen(false)} aria-label="Close" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                       <X className="w-3 h-3" aria-hidden />
-                    </button>
+                    </Button>
                   </div>
                   {table.getAllLeafColumns().filter((c) => typeof c.accessorFn === 'function').map((col) => (
                     <label key={col.id} className="flex items-center gap-2 px-1.5 py-1 rounded text-[11px] font-mono text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)] cursor-pointer">
@@ -434,7 +435,7 @@ export default function DataTable({
             </div>
           )}
           {exportable && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleExport}
               disabled={totalFiltered === 0}
@@ -442,7 +443,7 @@ export default function DataTable({
             >
               <Download className="w-3.5 h-3.5" aria-hidden />
               CSV
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -476,14 +477,14 @@ export default function DataTable({
                     }`}
                   >
                     {header.column.getCanSort() ? (
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={header.column.getToggleSortingHandler()}
                         className="inline-flex items-center hover:text-[var(--accent-strong)] transition-colors"
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         <SortIndicator sorted={header.column.getIsSorted()} />
-                      </button>
+                      </Button>
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())
                     )}
@@ -650,7 +651,7 @@ export default function DataTable({
               if (p >= pageCount) return null
               const active = p === pageIndex
               return (
-                <button
+                <Button variant="unstyled"
                   key={p}
                   type="button"
                   onClick={() => table.setPageIndex(p)}
@@ -669,7 +670,7 @@ export default function DataTable({
                   }
                 >
                   {p + 1}
-                </button>
+                </Button>
               )
             })}
 
@@ -697,7 +698,7 @@ export default function DataTable({
 
 function PaginationBtn({ children, onClick, disabled, label }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       disabled={disabled}
@@ -705,7 +706,7 @@ function PaginationBtn({ children, onClick, disabled, label }) {
       className="px-2 py-1 rounded text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
       {children}
-    </button>
+    </Button>
   )
 }
 

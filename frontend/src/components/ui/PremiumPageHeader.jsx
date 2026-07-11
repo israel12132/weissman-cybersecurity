@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import Button from './Button'
 
 /**
  * Executive-grade page header: title, live count badge, last-updated, primary actions.
@@ -72,7 +73,7 @@ export default function PremiumPageHeader({
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {onRefresh && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={onRefresh}
               disabled={loading}
@@ -80,17 +81,17 @@ export default function PremiumPageHeader({
             >
               <span className={loading ? 'inline-block animate-spin' : ''} aria-hidden="true">↻</span>
               {refreshLabel || t('common.refresh')}
-            </button>
+            </Button>
           )}
           {onExport && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={onExport}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-cyan-500/30 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/18 hover:border-cyan-500/45 transition-all"
             >
               <span aria-hidden="true">↓</span>
               {exportLabel || t('common.export')}
-            </button>
+            </Button>
           )}
           {children}
         </div>

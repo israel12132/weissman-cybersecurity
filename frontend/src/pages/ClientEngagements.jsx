@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 function isoNowLocal() {
   const d = new Date()
@@ -210,14 +211,14 @@ export default function ClientEngagements() {
               <h2 className="text-lg font-semibold text-white">{t('pages.clientEngagements.create_heading')}</h2>
               <p className="text-xs text-[var(--text-tertiary)] mt-1">{t('pages.clientEngagements.create_body')}</p>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={createEngagement}
               disabled={creating}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
             >
               {creating ? t('pages.clientEngagements.creating') : t('pages.clientEngagements.create')}
-            </button>
+            </Button>
           </div>
 
           <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -324,13 +325,13 @@ export default function ClientEngagements() {
                         {t('pages.clientEngagements.api')}
                       </a>
                       {e.status !== 'closed' && (
-                        <button
+                        <Button variant="unstyled"
                           type="button"
                           onClick={() => closeEngagement(e)}
                           className="px-3 py-1 text-xs border border-red-500/40 text-red-300 rounded hover:bg-red-900/20"
                         >
                           {t('pages.clientEngagements.close')}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>

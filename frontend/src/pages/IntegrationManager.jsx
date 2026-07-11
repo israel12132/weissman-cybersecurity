@@ -8,6 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 /**
  * IntegrationManager - Third-party integrations hub
@@ -226,13 +227,13 @@ export default function IntegrationManager() {
             />
             Dry-run SOAR tests (recommended)
           </label>
-          <button
+          <Button variant="unstyled"
             onClick={() => setAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.integrationManager.add_integration')}
-          </button>
+          </Button>
         </div>
 
         {/* Active Integrations */}
@@ -306,7 +307,7 @@ export default function IntegrationManager() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => testConnection(integration.id)}
                       disabled={testingConnection === integration.id}
@@ -318,8 +319,8 @@ export default function IntegrationManager() {
                         }`}
                       />
                       Test
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => setConfigureTarget(integration)}
                       title={t('pages.integrationManager.configure')}
@@ -327,14 +328,14 @@ export default function IntegrationManager() {
                       className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => deleteIntegration(integration.id)}
                       className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -349,7 +350,7 @@ export default function IntegrationManager() {
             {availableIntegrations
               .filter((ai) => !integrations.find((i) => i.id === ai.id || i.type === ai.id))
               .map((integration) => (
-                <button
+                <Button variant="unstyled"
                   key={integration.id}
                   onClick={() => setAddModal(integration)}
                   className="flex items-center gap-3 p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
@@ -359,7 +360,7 @@ export default function IntegrationManager() {
                     <div className="text-sm font-medium text-white">{integration.name}</div>
                     <div className="text-xs text-[var(--text-tertiary)]">{integration.category}</div>
                   </div>
-                </button>
+                </Button>
               ))}
           </div>
         </div>
@@ -465,12 +466,12 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               ? t('pages.integrationManager.configure_modal_title', { name: formData.name || formData.type })
               : t('pages.integrationManager.add_integration_modal')}
           </h3>
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -530,13 +531,13 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
         )}
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name || !formData.type}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -548,7 +549,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
               : isEdit
                 ? t('pages.integrationManager.save_changes')
                 : t('pages.integrationManager.add_integration')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

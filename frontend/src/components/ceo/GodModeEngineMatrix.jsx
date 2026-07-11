@@ -1,5 +1,6 @@
 import { Trans, useTranslation } from 'react-i18next'
 import EngineRealityBadge from '../EngineRealityBadge'
+import Button from '../ui/Button'
 
 function SpinnerTiny() {
   return (
@@ -53,7 +54,7 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy, t }) {
           <span className="text-[8px] font-mono uppercase tracking-wide text-[var(--text-muted)]">
             {t('components.ceo.engineMatrix.orchestratorPolicy')}
           </span>
-          <button
+          <Button variant="unstyled"
             type="button"
             role="switch"
             aria-checked={tenantOn}
@@ -107,7 +108,7 @@ function Cell({ engine, scanning, onTenantEngineToggle, engineToggleBusy, t }) {
                 t('components.ceo.engineMatrix.off')
               )}
             </span>
-          </button>
+          </Button>
         </div>
         <span className="text-[10px] font-mono text-cyan-200/85 tabular-nums shrink-0 pt-3">
           {n}/{tot}

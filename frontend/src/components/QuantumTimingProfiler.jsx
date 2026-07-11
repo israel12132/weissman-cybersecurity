@@ -18,6 +18,7 @@ import {
 } from 'recharts'
 import { apiFetch } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const NS = 'components.tools.quantumTimingProfiler'
 
@@ -155,13 +156,13 @@ export default function QuantumTimingProfiler() {
                 className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] focus:ring-2 focus:ring-cyan-500/50"
                 disabled={running}
               />
-              <button
+              <Button variant="unstyled"
                 onClick={startScan}
                 disabled={running}
                 className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-[var(--bg-4)] text-white font-medium text-sm"
               >
                 {running ? t(`${NS}.scanning`) : t(`${NS}.start_scan`)}
-              </button>
+              </Button>
             </div>
             {clientId && (
               <p className="mt-2 text-[var(--text-muted)] text-xs">

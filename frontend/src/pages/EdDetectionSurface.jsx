@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'edr_evasion'
 const ACCENT = '#a855f7'
@@ -69,7 +70,7 @@ function extractScore(findings) {
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
+    <Button variant="unstyled" type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
       <span className="min-w-0">
         <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
         {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
@@ -77,7 +78,7 @@ function Toggle({ label, hint, checked, onChange }) {
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-violet-500/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -87,11 +88,11 @@ function FindingCard({ f }) {
   const style = SEV_STYLE[sev] || SEV_STYLE.info
   return (
     <div className={`rounded-xl border ${style.bd} ${style.bg} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)]">
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${style.text} ${style.bd}`}>{sev}</span>
         <span className="min-w-0 flex-1 text-[12px] font-mono text-[var(--text-primary)]">{f.title || f.type}</span>
         <span className="text-[var(--text-disabled)] text-xs">{open ? '▾' : '▸'}</span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
@@ -224,9 +225,9 @@ export default function EdDetectionSurface() {
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t('pages.edDetection.target_placeholder')} className="flex-1 min-w-[200px] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-primary)]" />
-        <button type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
+        <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
           {scanning ? t('pages.edDetection.scanning') : t('pages.edDetection.run_scan')}
-        </button>
+        </Button>
         {jobStatus && <span className="text-[10px] font-mono text-[var(--text-muted)]">{jobStatus}</span>}
       </div>
 

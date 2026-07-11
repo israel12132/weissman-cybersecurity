@@ -12,6 +12,7 @@ import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import Button from '../components/ui/Button'
 
 /**
  * RateLimitAnalytics — live request-budget monitoring.
@@ -132,7 +133,7 @@ export default function RateLimitAnalytics() {
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
         {RANGES.map((range) => (
-          <button
+          <Button variant="unstyled"
             key={range}
             type="button"
             onClick={() => setTimeRange(range)}
@@ -143,7 +144,7 @@ export default function RateLimitAnalytics() {
             }`}
           >
             {t(`pages.rateLimitAnalytics.range_${range}`)}
-          </button>
+          </Button>
         ))}
       </div>
       <ShellScanActions

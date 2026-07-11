@@ -10,6 +10,7 @@ import { apiFetch } from '../../lib/apiBase'
 import SeverityBadge from '../ui/SeverityBadge'
 import { SkeletonTable } from '../ui/Skeleton'
 import EmptyState from '../ui/EmptyState'
+import Button from '../ui/Button'
 
 function severityToCvss(severity) {
   if (!severity) return '—'
@@ -57,13 +58,13 @@ function CopyableBlock({ label, value }) {
     <div className="rounded-xl border border-white/10 bg-black/60 overflow-hidden">
       <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/10 bg-black/40">
         <span className="text-[10px] uppercase tracking-wider text-[#6b7280] font-mono">{label}</span>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={copy}
           className="text-xs font-medium text-[#22d3ee] hover:text-[#67e8f9] transition-colors"
         >
           {copied ? t('components.cockpitTabs.findings.copy.copied') : t('components.cockpitTabs.findings.copy.copy')}
-        </button>
+        </Button>
       </div>
       <pre className="p-3 font-mono text-[11px] text-[#4ade80] whitespace-pre-wrap break-all overflow-x-auto m-0 max-h-48 overflow-y-auto">
         {text}
@@ -104,14 +105,14 @@ function ExpandedRow({ finding, onClose, onVerified }) {
     <tr className="bg-[#0a0a0a]">
       <td colSpan={5} className="p-0 border-b border-[#1a1a1a] align-top">
         <div className="relative p-4">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={onClose}
             className="absolute top-2 right-2 text-[#6b7280] hover:text-[var(--text-primary)] text-sm"
             aria-label={t('components.cockpitTabs.findings.expanded.close')}
           >
             {t('components.cockpitTabs.findings.expanded.close_button')}
-          </button>
+          </Button>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 pr-20">
             <div>
               <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">
@@ -289,13 +290,13 @@ export default function FindingsTab() {
             {t('components.cockpitTabs.findings.view_attack_chain')}
           </Link>
         )}
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={openPdf}
           className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all duration-300"
         >
           {t('components.cockpitTabs.findings.generate_executive_pdf')}
-        </button>
+        </Button>
       </div>
 
       {/* Table */}

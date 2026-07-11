@@ -13,6 +13,7 @@ import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
 import { prefillParamsForEngine } from '../lib/engineClientPrefill'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'iac_misconfig'
 
@@ -899,14 +900,14 @@ function Section({ title, icon, accent = '#22d3ee', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
           {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -960,9 +961,9 @@ function Toggle({ label, value, onChange, hint }) {
         <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
-      <button type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)} className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-cyan-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}>
+      <Button variant="unstyled" type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)} className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-cyan-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -973,9 +974,9 @@ function Chips({ options, selected, onToggle, render }) {
         const id = typeof o === 'string' ? o : o.id
         const on = selected.includes(id)
         return (
-          <button key={id} type="button" onClick={() => onToggle(id)} className={`text-[10px] font-mono px-2 py-1 rounded-md border transition-all ${on ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-200' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+          <Button variant="unstyled" key={id} type="button" onClick={() => onToggle(id)} className={`text-[10px] font-mono px-2 py-1 rounded-md border transition-all ${on ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-200' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
             {render ? render(o) : id}
-          </button>
+          </Button>
         )
       })}
     </div>
@@ -1117,7 +1118,7 @@ function FindingCard({ f }) {
   const sev = f.severity || 'info'
   return (
     <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left px-3 py-2 hover:bg-[var(--row-hover-bg)] transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left px-3 py-2 hover:bg-[var(--row-hover-bg)] transition-colors">
         <div className="flex items-start gap-2">
           <span className="font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 uppercase" style={{ color: SEV_COLOR[sev], background: `${SEV_COLOR[sev]}1a` }}>{sev}</span>
           <span className="min-w-0 flex-1">
@@ -1126,7 +1127,7 @@ function FindingCard({ f }) {
           </span>
           <span className="text-[var(--text-disabled)] text-xs">{open ? '−' : '+'}</span>
         </div>
-      </button>
+      </Button>
       {open && (
         <div className="px-3 pb-3 space-y-2 border-t border-[var(--border-subtle)] text-[11px]">
           <p className="text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
@@ -1439,9 +1440,9 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
       ))}
       {mermaid.length > 0 && (
         <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/10 px-3 py-2">
-          <button type="button" onClick={() => setShowMermaid((s) => !s)} className="text-[9px] font-mono text-cyan-300/80 hover:text-cyan-200">
+          <Button variant="unstyled" type="button" onClick={() => setShowMermaid((s) => !s)} className="text-[9px] font-mono text-cyan-300/80 hover:text-cyan-200">
             {showMermaid ? t('iacSecurity.live_blast_hide_mermaid', 'Hide mermaid') : t('iacSecurity.live_blast_show_mermaid', 'Show live path mermaid')}
-          </button>
+          </Button>
           {showMermaid && (
             <pre className="text-[8px] font-mono text-[var(--text-tertiary)] mt-2 whitespace-pre-wrap max-h-32 overflow-auto">{mermaid.join('\n\n')}</pre>
           )}
@@ -1586,7 +1587,7 @@ function AttackPathMermaid({ source, chains }) {
     <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/70">Attack Path Graph (Mermaid)</p>
-        <button type="button" onClick={() => setShowSrc((s) => !s)} className="text-[9px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{showSrc ? 'hide source' : 'show mermaid'}</button>
+        <Button variant="unstyled" type="button" onClick={() => setShowSrc((s) => !s)} className="text-[9px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{showSrc ? 'hide source' : 'show mermaid'}</Button>
       </div>
       <div className="flex flex-wrap gap-2">
         {(chains || []).map((c) => (
@@ -1940,7 +1941,7 @@ export default function IacSecurityCenter() {
             <div className="rounded-2xl border border-cyan-500/25 bg-gradient-to-b from-cyan-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2"><span>🎛️</span> {t('iacSecurity.control', 'Scan Control')}</h2>
-                <button type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{t('common.reset', 'Reset')}</button>
+                <Button variant="unstyled" type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{t('common.reset', 'Reset')}</Button>
               </div>
 
               <Section title={t('iacSecurity.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
@@ -1959,14 +1960,14 @@ export default function IacSecurityCenter() {
                   {MODES.map((m) => {
                     const on = params.scan_modes.includes(m.id)
                     return (
-                      <button key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-[var(--row-hover-bg)] border-cyan-400/50' : 'opacity-50 border-[var(--border-default)] hover:opacity-90'}`}>
+                      <Button variant="unstyled" key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-[var(--row-hover-bg)] border-cyan-400/50' : 'opacity-50 border-[var(--border-default)] hover:opacity-90'}`}>
                         <span>{m.icon}</span>
                         <span className="min-w-0 flex-1">
                           <span className="text-xs font-semibold text-white block">{m.label}</span>
                           <span className="text-[9px] text-[var(--text-muted)] block leading-tight">{m.desc}</span>
                         </span>
                         <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}`}>{on ? 'ON' : 'OFF'}</span>
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -1977,7 +1978,7 @@ export default function IacSecurityCenter() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[9px] font-mono text-[var(--text-disabled)] uppercase">{t('iacSecurity.load_sample', 'Load sample')}:</span>
                     {Object.keys(SAMPLES).map((k) => (
-                      <button key={k} type="button" onClick={() => loadSample(k)} className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-cyan-300/70 hover:text-cyan-200 hover:border-cyan-400/40">{k}</button>
+                      <Button variant="unstyled" key={k} type="button" onClick={() => loadSample(k)} className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-cyan-300/70 hover:text-cyan-200 hover:border-cyan-400/40">{k}</Button>
                     ))}
                   </div>
                   <Area label={t('iacSecurity.iac_content', 'IaC content')} value={params.iac_content} onChange={(v) => setField('iac_content', v)} rows={10} placeholder={'Paste Terraform / K8s / Dockerfile / CloudFormation / Compose / GH Actions / ARM…'} />
@@ -2054,13 +2055,13 @@ export default function IacSecurityCenter() {
               </Section>
 
               <Section title={t('iacSecurity.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">{showPreview ? t('iacSecurity.hide_json', 'hide JSON') : t('iacSecurity.show_json', 'show exact request JSON')}</button>
+                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">{showPreview ? t('iacSecurity.hide_json', 'hide JSON') : t('iacSecurity.show_json', 'show exact request JSON')}</Button>
                 {showPreview && <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">{JSON.stringify(previewBody, null, 2)}</pre>}
               </Section>
 
-              <button type="button" onClick={handleRun} disabled={running || !canRun} className="mt-3 w-full py-3 rounded-xl font-mono text-sm uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: running ? 'rgba(34,211,238,0.5)' : 'rgba(34,211,238,0.6)', background: running ? 'rgba(34,211,238,0.12)' : 'rgba(34,211,238,0.22)', color: '#cffafe', boxShadow: running ? 'none' : '0 0 24px rgba(34,211,238,0.18)' }}>
+              <Button variant="unstyled" type="button" onClick={handleRun} disabled={running || !canRun} className="mt-3 w-full py-3 rounded-xl font-mono text-sm uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: running ? 'rgba(34,211,238,0.5)' : 'rgba(34,211,238,0.6)', background: running ? 'rgba(34,211,238,0.12)' : 'rgba(34,211,238,0.22)', color: '#cffafe', boxShadow: running ? 'none' : '0 0 24px rgba(34,211,238,0.18)' }}>
                 {running ? t('iacSecurity.scanning', 'Scanning…') : t('iacSecurity.scan', 'Run IaC Scan')}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -2223,35 +2224,35 @@ export default function IacSecurityCenter() {
                 <div className="flex gap-1 items-center flex-wrap">
                   {summary && (
                     <>
-                      <button type="button" onClick={exportBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 text-emerald-300/80 hover:bg-emerald-500/10">
+                      <Button variant="unstyled" type="button" onClick={exportBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 text-emerald-300/80 hover:bg-emerald-500/10">
                         {t('iacSecurity.export_bundle', 'Export remediation bundle')}
-                      </button>
+                      </Button>
                       {summary.audit_packet && (
-                        <button type="button" onClick={exportAuditPacket} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
+                        <Button variant="unstyled" type="button" onClick={exportAuditPacket} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
                           {t('iacSecurity.export_audit_packet', 'Export audit packet')}
-                        </button>
+                        </Button>
                       )}
                       {summary.gate_evidence && (
-                        <button type="button" onClick={exportGateEvidence} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
+                        <Button variant="unstyled" type="button" onClick={exportGateEvidence} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
                           {t('iacSecurity.export_gate_evidence', 'Export gate evidence')}
-                        </button>
+                        </Button>
                       )}
                       {summary.fix_bundle?.fix_count > 0 && (
                         <>
-                          <button type="button" onClick={exportFixBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
+                          <Button variant="unstyled" type="button" onClick={exportFixBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
                             {t('iacSecurity.export_fixes', 'Export fix bundle')} ({summary.fix_bundle.fix_count})
-                          </button>
+                          </Button>
                           {summary.fix_bundle?.shell_script && (
-                            <button type="button" onClick={exportShellScript} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
+                            <Button variant="unstyled" type="button" onClick={exportShellScript} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
                               Export .sh script
-                            </button>
+                            </Button>
                           )}
                         </>
                       )}
                     </>
                   )}
                   {['all', ...SEVERITIES].map((s) => (
-                    <button key={s} type="button" onClick={() => setSevFilter(s)} className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${sevFilter === s ? 'border-cyan-400/50 text-cyan-200 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>{s}</button>
+                    <Button variant="unstyled" key={s} type="button" onClick={() => setSevFilter(s)} className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${sevFilter === s ? 'border-cyan-400/50 text-cyan-200 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>{s}</Button>
                   ))}
                 </div>
               </div>

@@ -8,6 +8,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const PROBE_IDS = ['log4shell', 'blind_ssrf', 'blind_xss', 'xxe_oob', 'cmd_dns', 'host_ssrf']
 
@@ -42,14 +43,14 @@ function ProbeCard({ probeId, active, onRun, disabled }) {
             {meta.mitre}
           </span>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={() => onRun(probeId)}
           disabled={disabled}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-cyan-500/30 text-cyan-300/70 hover:bg-cyan-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {active ? t('pages.oastDashboard.running') : t('pages.oastDashboard.probe_btn')}
-        </button>
+        </Button>
       </div>
       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t(`pages.oastDashboard.probes.${probeId}.description`)}</p>
     </div>
@@ -307,14 +308,14 @@ export default function OastDashboard() {
               onChange={(e) => setMintLabel(e.target.value)}
               className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={!mintTarget || mintLoading}
               onClick={handleMintToken}
               className="rounded-xl border border-cyan-500/30 text-cyan-300/70 text-[12px] font-mono uppercase px-4 py-2 hover:bg-cyan-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               {mintLoading ? t('pages.oastDashboard.minting') : t('pages.oastDashboard.mint_token')}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -343,13 +344,13 @@ export default function OastDashboard() {
                         ? t('pages.oastDashboard.hit_confirmed')
                         : t('pages.oastDashboard.hits_count', { count: tok.hit_count ?? 0 })}
                     </span>
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => handlePollToken(tok.token)}
                       className="text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] px-2 py-0.5 rounded transition-all"
                     >
                       {t('pages.oastDashboard.poll')}
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <p className="text-[10px] font-mono text-[var(--text-disabled)]">

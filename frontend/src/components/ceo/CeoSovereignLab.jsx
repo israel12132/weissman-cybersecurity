@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 export default function CeoSovereignLab() {
   const { t } = useTranslation()
@@ -64,13 +65,13 @@ export default function CeoSovereignLab() {
             {t('components.ceo.sovereignLab.subtitle')}
           </p>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={load}
           className="text-xs font-mono px-3 py-1.5 rounded border border-violet-400/30 text-violet-200 hover:bg-violet-950/50"
         >
           {t('components.ceo.sovereignLab.refresh')}
-        </button>
+        </Button>
       </div>
       {toast && (
         <div className="px-4 py-2 text-[11px] font-mono text-[var(--text-secondary)] border-b border-white/10 bg-black/30">
@@ -102,14 +103,14 @@ export default function CeoSovereignLab() {
                 <td className="p-2">{row.status}</td>
                 <td className="p-2 text-[var(--text-muted)]">{row.updated_at}</td>
                 <td className="p-2 pr-4">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     disabled={busyId === row.id}
                     onClick={() => trigger(row.id)}
                     className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-violet-900/60 border border-violet-400/35 text-violet-100 disabled:opacity-40"
                   >
                     {busyId === row.id ? '…' : t('components.ceo.sovereignLab.triggerPreflight')}
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

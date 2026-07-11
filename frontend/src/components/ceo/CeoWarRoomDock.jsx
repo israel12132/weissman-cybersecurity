@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
 import { openSseStream } from '../../lib/sseStream'
+import Button from '../ui/Button'
 
 function phaseStyle(phase) {
   const p = (phase || '').toLowerCase()
@@ -245,7 +246,7 @@ export default function CeoWarRoomDock() {
               ['all', t('components.ceo.warRoomDock.filterAll')],
               ['heavy', t('components.ceo.warRoomDock.filterHeavy')],
             ].map(([k, lab]) => (
-              <button
+              <Button variant="unstyled"
                 key={k}
                 type="button"
                 onClick={() => setKindFilter(k)}
@@ -256,25 +257,25 @@ export default function CeoWarRoomDock() {
                 }`}
               >
                 {lab}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
         <div className="flex gap-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => loadJobs()}
             className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 text-[10px] font-mono uppercase text-[var(--text-secondary)] hover:bg-white/10"
           >
             {t('components.ceo.warRoomDock.refreshJobs')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={stopStream}
             className="px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-950/40 text-[10px] font-mono uppercase text-red-200 hover:bg-red-900/50"
           >
             {t('components.ceo.warRoomDock.stopStream')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -299,7 +300,7 @@ export default function CeoWarRoomDock() {
               const active = id === selectedId
               return (
                 <li key={id}>
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => onPickJob(id)}
                     className={`w-full text-left rounded-lg px-2 py-2 border font-mono text-[10px] transition-all ${
@@ -315,7 +316,7 @@ export default function CeoWarRoomDock() {
                       {(j.kind || '—') + ' · ' + (j.status || '—')}
                       {j.worker_id ? ` · ${j.worker_id}` : ''}
                     </span>
-                  </button>
+                  </Button>
                 </li>
               )
             })}

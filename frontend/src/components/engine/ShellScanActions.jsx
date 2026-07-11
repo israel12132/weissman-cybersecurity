@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Download, RefreshCw } from 'lucide-react'
+import Button from '../ui/Button'
 
 /**
  * Standard PageShell header actions: reload last engine run + export CSV.
@@ -14,7 +15,7 @@ export default function ShellScanActions({
   const { t } = useTranslation()
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={onRefresh}
         disabled={refreshDisabled || refreshLoading}
@@ -22,8 +23,8 @@ export default function ShellScanActions({
       >
         <RefreshCw className={`w-3.5 h-3.5 ${refreshLoading ? 'animate-spin' : ''}`} />
         {t('weissmanFindings.refresh')}
-      </button>
-      <button
+      </Button>
+      <Button variant="unstyled"
         type="button"
         onClick={onExport}
         disabled={exportDisabled}
@@ -31,7 +32,7 @@ export default function ShellScanActions({
       >
         <Download className="w-3.5 h-3.5" />
         {t('weissmanFindings.export_csv')}
-      </button>
+      </Button>
     </div>
   )
 }

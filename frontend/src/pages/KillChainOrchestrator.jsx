@@ -20,6 +20,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useProductionEngines } from '../lib/useProductionEngines'
+import Button from '../components/ui/Button'
 
 // ─── Kill Chain Phases (MITRE scaffolding — engines/findings are live) ────────
 
@@ -672,7 +673,7 @@ export default function KillChainOrchestrator() {
                         }`}
                         style={isExpanded ? { borderColor: `${phase.color}40` } : {}}
                       >
-                        <button
+                        <Button variant="unstyled"
                           type="button"
                           className="w-full flex items-center gap-3 p-4 text-left"
                           onClick={() => setActivePhase(isExpanded ? null : phase.id)}
@@ -706,7 +707,7 @@ export default function KillChainOrchestrator() {
                             )}
                             <span className="text-[var(--text-disabled)] text-xs">{isExpanded ? '▲' : '▼'}</span>
                           </div>
-                        </button>
+                        </Button>
 
                         <AnimatePresence>
                           {isExpanded && (

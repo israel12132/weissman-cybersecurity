@@ -17,6 +17,7 @@ import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const PLAN_TIERS = ['starter', 'professional', 'enterprise']
 
@@ -223,13 +224,13 @@ export default function Billing() {
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-mono text-rose-200">{error}</p>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={loadUsage}
                 className="mt-2 text-[11px] font-mono uppercase tracking-widest text-rose-300/80 hover:text-rose-200"
               >
                 {t('common.retry')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -281,7 +282,7 @@ export default function Billing() {
 
                 <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
                   {upgradeSlug ? (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={handleUpgrade}
                       disabled={checkoutLoading}
@@ -298,7 +299,7 @@ export default function Billing() {
                           <ArrowUpRight className="w-4 h-4" />
                         </>
                       )}
-                    </button>
+                    </Button>
                   ) : (
                     <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[11px] font-mono text-[var(--text-tertiary)]">
                       <Shield className="w-3.5 h-3.5" />

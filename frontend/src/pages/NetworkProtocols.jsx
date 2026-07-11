@@ -6,6 +6,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
+import Button from '../components/ui/Button'
 
 /**
  * NetworkProtocols — live protocol-exposure posture served by the SOC
@@ -142,7 +143,7 @@ export default function NetworkProtocols() {
               className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
             disabled={filteredProtocols.length === 0}
@@ -150,7 +151,7 @@ export default function NetworkProtocols() {
           >
             <Download className="h-3.5 w-3.5" />
             {t('pages.networkProtocols.export_csv')}
-          </button>
+          </Button>
         </div>
 
         {error && (

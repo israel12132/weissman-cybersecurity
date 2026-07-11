@@ -15,6 +15,7 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 /** UI ids aligned with backend `APT_SCENARIOS` in threat_emulation_engine.rs */
 const APT_GROUPS = [
@@ -388,7 +389,7 @@ export default function ThreatEmulation() {
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={runEmulation}
           disabled={!selectedClientId || running || Boolean(activeJobId)}
@@ -405,7 +406,7 @@ export default function ThreatEmulation() {
               {t('pages.threatEmulation.run_full')}
             </>
           )}
-        </button>
+        </Button>
       </div>
 
       {toast && (

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, ShieldX } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const VERDICT_META = {
   CONFIRMED: { color: '#22c55e', icon: ShieldCheck },
@@ -147,7 +148,7 @@ export default function FindingVerifyButton({
 
   if (compact) {
     return (
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={runVerify}
         disabled={loading || !rawId}
@@ -156,14 +157,14 @@ export default function FindingVerifyButton({
       >
         {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
         {t('findings.liveVerify.button_short')}
-      </button>
+      </Button>
     )
   }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={runVerify}
           disabled={loading || !rawId}
@@ -175,9 +176,9 @@ export default function FindingVerifyButton({
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
           {deep ? t('findings.liveVerify.button_deep') : t('findings.liveVerify.button')}
-        </button>
+        </Button>
         {!compact && !deep && (
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={(e) => {
               e.stopPropagation()
@@ -209,7 +210,7 @@ export default function FindingVerifyButton({
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] disabled:opacity-40"
           >
             {t('findings.liveVerify.button_deep')}
-          </button>
+          </Button>
         )}
         {active?.verdict && <LiveVerdictBadge verification={active} />}
       </div>

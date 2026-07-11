@@ -9,6 +9,7 @@ import { openSseStream } from '../lib/sseStream'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
 
 function badgeClass(kind) {
   if (kind === 'command_center_engine') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
@@ -247,14 +248,14 @@ export default function TopTierEngineHub() {
               placeholder={t('pages.topTierEngineHub.target_placeholder')}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] md:col-span-2"
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={startHealthProbe}
               disabled={probeRunning}
               className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
             >
               {probeRunning ? t('pages.topTierEngineHub.running_probe') : t('pages.topTierEngineHub.run_health_probe')}
-            </button>
+            </Button>
           </div>
           {probeSummary && <div className="mt-3 text-xs font-mono text-[var(--text-tertiary)]">{probeSummary}</div>}
         </section>

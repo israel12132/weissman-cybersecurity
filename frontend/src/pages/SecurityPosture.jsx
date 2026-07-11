@@ -15,6 +15,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
 import { postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
 import { summarizePostureChecks, orderPostureChecks } from '../lib/postureScore'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.securityPosture'
 
@@ -178,7 +179,7 @@ export default function SecurityPosture() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0" role="group" aria-label={t(`${NS}.filter_status`)}>
                   {['all', 'failed', 'passed'].map((f) => (
-                    <button
+                    <Button variant="unstyled"
                       key={f}
                       type="button"
                       onClick={() => setStatusFilter(f)}
@@ -191,7 +192,7 @@ export default function SecurityPosture() {
                       ].join(' ')}
                     >
                       {t(`${NS}.filter_${f}`)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>

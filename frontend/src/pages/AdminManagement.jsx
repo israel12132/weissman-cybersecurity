@@ -10,6 +10,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { confirmDialog } from '../utils/confirmDialog'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -246,23 +247,23 @@ export default function AdminManagement() {
         const user = ctx.row.original
         return (
           <div className="text-right space-x-2">
-            <button
+            <Button variant="unstyled"
               id={`adminmgmt-edit-user-${user.id}-btn`}
               type="button"
               onClick={() => openEditModal(user)}
               className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]"
             >
               Edit
-            </button>
+            </Button>
             {user.is_active !== false && (
-              <button
+              <Button variant="unstyled"
                 id={`adminmgmt-deactivate-user-${user.id}-btn`}
                 type="button"
                 onClick={() => handleDeactivateUser(user.id, user.email)}
                 className="px-2 py-1 rounded text-xs border border-red-500/30 text-red-400 hover:bg-red-500/20"
               >
                 Deactivate
-              </button>
+              </Button>
             )}
           </div>
         )
@@ -304,14 +305,14 @@ export default function AdminManagement() {
             className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-lg text-sm flex justify-between items-center"
           >
             <span>{successMsg}</span>
-            <button
+            <Button variant="unstyled"
               id="adminmgmt-dismiss-success-btn"
               type="button"
               onClick={() => setSuccessMsg(null)}
               className="text-emerald-400 hover:text-emerald-300 ml-4"
             >
               ✕
-            </button>
+            </Button>
           </div>
         )}
         {error && (
@@ -320,14 +321,14 @@ export default function AdminManagement() {
             className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm flex justify-between items-center"
           >
             <span>{error}</span>
-            <button
+            <Button variant="unstyled"
               id="adminmgmt-dismiss-error-btn"
               type="button"
               onClick={() => setError(null)}
               className="text-red-400 hover:text-red-300 ml-4"
             >
               ✕
-            </button>
+            </Button>
           </div>
         )}
 
@@ -402,14 +403,14 @@ export default function AdminManagement() {
                 />
                 <span className="text-xs text-amber-400 uppercase tracking-widest">Superadmin</span>
               </label>
-              <button
+              <Button variant="unstyled"
                 id="adminmgmt-create-user-btn"
                 type="submit"
                 disabled={submitting}
                 className="px-4 py-2 rounded-lg font-semibold text-sm bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 disabled:opacity-50 transition-colors"
               >
                 {submitting ? t('pages.adminManagement.creating') : t('pages.adminManagement.create_user')}
-              </button>
+              </Button>
             </div>
           </form>
         </section>
@@ -491,15 +492,15 @@ export default function AdminManagement() {
                 </label>
               </div>
               <div className="flex gap-3 mt-6">
-                <button
+                <Button variant="unstyled"
                   id="adminmgmt-cancel-edit-btn"
                   type="button"
                   onClick={() => setEditingUser(null)}
                   className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   id="adminmgmt-save-edit-btn"
                   type="button"
                   onClick={handleUpdateRole}
@@ -507,7 +508,7 @@ export default function AdminManagement() {
                   className="flex-1 px-4 py-2 rounded-lg font-semibold text-sm bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 disabled:opacity-50"
                 >
                   {submitting ? 'Saving…' : 'Save Changes'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -519,7 +520,7 @@ export default function AdminManagement() {
             <span className="text-emerald-400">⚡</span> Quick Actions
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <button
+            <Button variant="unstyled"
               id="adminmgmt-export-users-btn"
               type="button"
               onClick={() => {
@@ -544,31 +545,31 @@ export default function AdminManagement() {
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📄 Export Users (CSV)
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="adminmgmt-audit-log-btn"
               type="button"
               onClick={() => navigate('/')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📋 View Audit Logs
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="adminmgmt-sso-config-btn"
               type="button"
               onClick={() => navigate('/sso-config')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               🔑 SSO Configuration
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="adminmgmt-system-settings-btn"
               type="button"
               onClick={() => navigate('/')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               ⚙️ System Settings
-            </button>
+            </Button>
           </div>
         </section>
       </div>

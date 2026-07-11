@@ -15,6 +15,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'smb_netbios'
 const ACCENT = '#3b82f6'
@@ -481,12 +482,12 @@ function SmbExposureGraph({ graph, running }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] text-left">
+    <Button variant="unstyled" type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] text-left">
       <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-blue-500/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -577,7 +578,7 @@ function FindingCard({ finding, L }) {
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden mb-2">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SEV_COLOR[sev] }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -590,7 +591,7 @@ function FindingCard({ finding, L }) {
           <div className="text-sm text-[var(--text-primary)] mt-0.5 font-medium">{finding.title}</div>
         </div>
         <span className="text-[var(--text-disabled)] text-xs">{open ? '▾' : '▸'}</span>
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden px-3 pb-3">
@@ -830,17 +831,17 @@ export default function SmbNetbiosCommandCenter() {
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
             <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-blue-500/40 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 transition-all disabled:opacity-40">
             {status === 'running' ? L.scanning : `▶ ${L.run}`}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? L.hideParams : L.showParams}
-          </button>
+          </Button>
           {findings.length > 0 && (
-            <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
+            <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
               {L.export}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -891,7 +892,7 @@ export default function SmbNetbiosCommandCenter() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <button type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-left">{L.reset}</button>
+                  <Button variant="unstyled" type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-left">{L.reset}</Button>
                   <div className="text-[10px] font-mono text-[var(--text-disabled)] leading-relaxed rounded-lg border border-[var(--border-subtle)] p-3 bg-[var(--table-surface)]">
                     MITRE T1021.002 · T1210 · T1187 · T1018 — every finding requires an observed SMB/NetBIOS protocol response on the wire.
                   </div>

@@ -11,6 +11,7 @@ import EmptyState from '../components/ui/EmptyState'
 import CopyButton from '../components/ui/CopyButton'
 import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -197,7 +198,7 @@ export default function OobVerification() {
       actions={(
         <div className="flex items-center gap-2">
           {probe?.token && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setAutoPoll((v) => !v)}
               className={`px-3 py-1.5 rounded-lg border text-xs font-mono ${
@@ -206,7 +207,7 @@ export default function OobVerification() {
             >
               <Radio className={`w-3 h-3 inline mr-1 ${autoPoll ? 'animate-pulse' : ''}`} />
               {autoPoll ? t('pages.oobVerification.auto_poll_on') : t('pages.oobVerification.auto_poll_off')}
-            </button>
+            </Button>
           )}
           <Link to="/oast" className="flex items-center gap-1 text-xs font-mono text-cyan-300/80 hover:text-cyan-200">
             <ExternalLink className="w-3.5 h-3.5" />
@@ -266,7 +267,7 @@ export default function OobVerification() {
                 />
               </div>
 
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={!canMint || minting}
                 onClick={mint}
@@ -274,7 +275,7 @@ export default function OobVerification() {
               >
                 <Zap className="w-3.5 h-3.5" />
                 {minting ? t('pages.oobVerification.minting') : t('pages.oobVerification.mint_oob')}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -287,7 +288,7 @@ export default function OobVerification() {
                 <p className="text-[11px] text-[var(--text-disabled)] mt-1">{t('pages.oobVerification.verification_body')}</p>
               </div>
               {probe?.token && (
-                <button
+                <Button variant="unstyled"
                   type="button"
                   disabled={polling}
                   onClick={poll}
@@ -295,7 +296,7 @@ export default function OobVerification() {
                 >
                   <RefreshCw className={`w-3 h-3 ${polling ? 'animate-spin' : ''}`} />
                   {polling ? t('pages.oobVerification.polling') : t('pages.oobVerification.poll_btn')}
-                </button>
+                </Button>
               )}
             </div>
 

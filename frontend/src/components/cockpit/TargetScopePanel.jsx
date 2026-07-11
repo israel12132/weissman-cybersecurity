@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.targetScopePanel'
 
@@ -94,7 +95,7 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
                 {t(`${NS}.otDescription`)}
               </p>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={configLoading}
               role="switch"
@@ -105,7 +106,7 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
               <span
                 className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${clientConfig.industrial_ot_enabled ? 'translate-x-5' : ''}`}
               />
-            </button>
+            </Button>
           </div>
         </section>
 

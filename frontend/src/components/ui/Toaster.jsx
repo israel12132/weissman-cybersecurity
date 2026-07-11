@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
+import Button from './Button'
 
 const ToastCtx = createContext(null)
 
@@ -220,17 +221,17 @@ export function PremiumToastItem({
           )}
           <p className="text-[13px] leading-snug break-words">{message}</p>
           {actionLabel && onAction && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => { onAction(); handleDismiss() }}
               className={`mt-2 text-[10px] uppercase tracking-widest px-2 py-1 rounded-md border ${c.border} ${c.accent} hover:bg-[var(--table-surface)] transition-colors`}
               style={{ transitionDuration: 'var(--duration-fast)' }}
             >
               {actionLabel}
-            </button>
+            </Button>
           )}
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleDismiss}
           aria-label="Dismiss notification"
@@ -238,7 +239,7 @@ export function PremiumToastItem({
           style={{ transitionDuration: 'var(--duration-fast)' }}
         >
           <X className="w-3.5 h-3.5" strokeWidth={2.5} />
-        </button>
+        </Button>
       </div>
       {ttl > 0 && (
         <div className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--row-hover-bg)]" aria-hidden="true">

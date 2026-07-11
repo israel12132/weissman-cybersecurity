@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import EvidenceNotice from './ui/EvidenceNotice'
 import ForensicEngineRealityBadge from '../forensic/ForensicEngineRealityBadge'
+import Button from './ui/Button'
 
 const NS = 'components.tools.zeroDayRadar'
 
@@ -140,16 +141,16 @@ export default function ZeroDayRadar() {
         )}
 
         <div className="flex gap-2 mb-6">
-          <button
+          <Button variant="unstyled"
             onClick={startScan}
             disabled={running}
             className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-[var(--bg-4)] text-white font-medium text-sm"
           >
             {running ? t(`${NS}.scanning`) : t(`${NS}.run_scan`)}
-          </button>
-          <button onClick={loadFeed} disabled={loadingFeed} className="px-4 py-2 rounded-lg bg-[var(--bg-4)] hover:bg-[var(--bg-4)] text-sm">
+          </Button>
+          <Button variant="unstyled" onClick={loadFeed} disabled={loadingFeed} className="px-4 py-2 rounded-lg bg-[var(--bg-4)] hover:bg-[var(--bg-4)] text-sm">
             {loadingFeed ? t(`${NS}.loading_feed`) : t(`${NS}.refresh_feed`)}
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

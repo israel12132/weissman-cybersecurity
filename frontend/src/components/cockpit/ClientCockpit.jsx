@@ -28,6 +28,7 @@ const CeoMissionControlTab = lazy(() => import('./CeoMissionControlTab'))
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../lib/apiBase'
 import { useToast } from '../ui/Toaster'
+import Button from '../ui/Button'
 
 const TAB_DEFS = [
   { id: 'overview', labelKey: 'overview', Component: OverviewTab },
@@ -270,7 +271,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
                   })
                 : t('components.cockpit.health_empty')}
             </span>
-            <button
+            <Button variant="unstyled"
               id="cockpit-safe-mode-toggle"
               type="button"
               disabled={safeSaving}
@@ -282,10 +283,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               } disabled:opacity-50`}
             >
               {safeMode ? t('components.cockpit.safe_mode_on') : t('components.cockpit.safe_mode_off')}
-            </button>
+            </Button>
           </div>
           <div className="flex flex-wrap items-stretch sm:items-center gap-2 shrink-0">
-            <button
+            <Button variant="unstyled"
               id="cockpit-board-report-btn"
               type="button"
               onClick={downloadBoardReport}
@@ -293,8 +294,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-white/20 bg-white/5 text-white/85 hover:bg-white/10 hover:border-white/30 disabled:opacity-50"
             >
               {boardReportLoading ? t('components.cockpit.board_report_loading') : t('components.cockpit.board_report')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="cockpit-engage-scan-btn"
               type="button"
               onClick={runFullScan}
@@ -302,14 +303,14 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm tracking-wide transition-all border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {engageLoading ? t('components.cockpit.engaging') : t('components.cockpit.engage')}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Tab nav */}
         <nav className="flex gap-0 px-3 sm:px-6 border-t border-white/[0.06] overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
           {tabs.map((tab) => (
-            <button
+            <Button variant="unstyled"
               id={`cockpit-tab-${tab.id}`}
               key={tab.id}
               type="button"
@@ -321,7 +322,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               }`}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </nav>
       </header>

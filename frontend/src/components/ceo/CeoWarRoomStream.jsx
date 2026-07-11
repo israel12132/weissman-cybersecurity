@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { openSseStream } from '../../lib/sseStream'
+import Button from '../ui/Button'
 
 function phaseStyle(phase) {
   const p = (phase || '').toLowerCase()
@@ -141,20 +142,20 @@ export default function CeoWarRoomStream({ jobId, onJobIdChange }) {
           />
         </div>
         <div className="flex gap-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={start}
             className="px-4 py-2 rounded bg-red-950/80 border border-red-500/40 text-red-100 text-xs font-mono uppercase tracking-wide hover:bg-red-900/80"
           >
             {t('components.ceo.warRoomStream.subscribeSse')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={stop}
             className="px-4 py-2 rounded bg-[var(--bg-1)] border border-white/15 text-[var(--text-secondary)] text-xs font-mono uppercase tracking-wide hover:bg-[var(--bg-3)]"
           >
             {t('components.ceo.warRoomStream.stop')}
-          </button>
+          </Button>
         </div>
         <div className="text-[10px] font-mono text-[var(--text-muted)]">
           <Trans

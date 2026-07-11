@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiUrl, apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 export default function CeoVaccineVault() {
   const { t } = useTranslation()
@@ -70,13 +71,13 @@ export default function CeoVaccineVault() {
           >
             {t('components.ceo.vaccineVault.exportCriticals')}
           </a>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={load}
             className="text-xs font-mono px-3 py-1.5 rounded border border-cyan-500/30 text-cyan-200 hover:bg-cyan-950/40"
           >
             {t('components.ceo.vaccineVault.refresh')}
-          </button>
+          </Button>
         </div>
       </div>
       {loading && <p className="p-4 text-xs text-[var(--text-muted)] font-mono">{t('components.ceo.vaccineVault.loading')}</p>}
@@ -131,7 +132,7 @@ export default function CeoVaccineVault() {
             <span className="text-xs font-mono text-[var(--text-tertiary)]">
               {t('components.ceo.vaccineVault.rowLabel', { id: selected.id })}
             </span>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={matchBusy}
               onClick={runMatch}
@@ -140,7 +141,7 @@ export default function CeoVaccineVault() {
               {matchBusy
                 ? t('components.ceo.vaccineVault.running')
                 : t('components.ceo.vaccineVault.runMatch')}
-            </button>
+            </Button>
           </div>
           {matchMsg && (
             <pre className="text-[10px] font-mono text-[var(--text-tertiary)] whitespace-pre-wrap break-words max-h-40 overflow-y-auto border border-white/10 rounded p-2">
@@ -149,7 +150,7 @@ export default function CeoVaccineVault() {
           )}
           <div className="flex gap-1 border-b border-white/10 pb-2">
             {tabs.map((tabItem) => (
-              <button
+              <Button variant="unstyled"
                 key={tabItem.id}
                 type="button"
                 onClick={() => setTab(tabItem.id)}
@@ -159,7 +160,7 @@ export default function CeoVaccineVault() {
                 }
               >
                 {tabItem.label}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="min-h-[200px] max-h-[360px] overflow-y-auto text-[11px] font-mono">

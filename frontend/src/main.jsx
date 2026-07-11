@@ -8,6 +8,7 @@ import { bootstrapTacticalShell } from './boot/tacticalBoot'
 import RouteLoader from './components/ui/RouteLoader'
 import './i18n'
 import './index.css'
+import Button from './components/ui/Button'
 
 class RootErrorBoundary extends React.Component {
   constructor(props) {
@@ -32,13 +33,13 @@ class RootErrorBoundary extends React.Component {
         <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-[var(--text-secondary)] p-8 font-mono">
           <h1 className="text-lg font-semibold text-red-400 mb-2">Failed to load Command Center</h1>
           <p className="text-sm text-[var(--text-tertiary)] mb-6 max-w-lg text-center break-words">{msg}</p>
-          <button
+          <Button variant="unstyled"
             type="button"
             className="px-4 py-2 rounded-lg border border-white/20 text-sm hover:bg-white/10"
             onClick={() => window.location.reload()}
           >
             Reload
-          </button>
+          </Button>
         </div>
       )
     }

@@ -12,6 +12,7 @@ import { useEngineHistory } from '../hooks/useEngineHistory'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import KubernetesSecurityPanel from './KubernetesSecurityPanel'
+import Button from '../components/ui/Button'
 
 const CLOUD_TABS = [
   { id: 'aws', label: 'AWS', engine: 'aws_attack', color: '#f97316', icon: '☁' },
@@ -34,7 +35,7 @@ const ENGINE_DESCRIPTIONS = {
 
 function CloudTab({ tab, active, onClick }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={() => onClick(tab.id)}
       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-mono transition-all border ${
@@ -46,7 +47,7 @@ function CloudTab({ tab, active, onClick }) {
     >
       <span>{tab.icon}</span>
       <span>{tab.label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -123,7 +124,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
               />
               <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleRun}
               disabled={status === 'running' || !clientId}
@@ -131,7 +132,7 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
               style={{ borderColor: `${tab.color}40`, color: tab.color, backgroundColor: `${tab.color}10` }}
             >
               {status === 'running' ? t('pages.cloudControlTower.scanning') : t('pages.cloudControlTower.run_scan')}
-            </button>
+            </Button>
           </div>
         </div>
 

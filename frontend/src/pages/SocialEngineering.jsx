@@ -12,6 +12,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { apiFetch } from '../lib/apiBase';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll } from '../lib/useJobPoll';
+import Button from '../components/ui/Button'
 
 const TEMPLATES = [
   'Password Reset',
@@ -316,7 +317,7 @@ export default function SocialEngineering() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={runAssessment}
                 disabled={scanning || !scanClientId || Boolean(scanJobId)}
@@ -324,14 +325,14 @@ export default function SocialEngineering() {
               >
                 <Play className="w-4 h-4" />
                 {scanning || scanJobId ? t('pages.socialEngineering.scanning') : t('pages.socialEngineering.run_assessment')}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => openCreateModal()}
                 className="px-4 py-2 border border-purple-500/40 text-purple-200 rounded-lg text-sm font-medium hover:bg-purple-500/10 transition-colors"
               >
                 {t('pages.socialEngineering.new_campaign')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -400,7 +401,7 @@ export default function SocialEngineering() {
           <p className="text-xs text-[var(--text-muted)] mb-4">{t('pages.socialEngineering.templates_notice')}</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {TEMPLATES.map((template) => (
-              <button
+              <Button variant="unstyled"
                 key={template}
                 type="button"
                 onClick={() => openCreateModal(template)}
@@ -409,7 +410,7 @@ export default function SocialEngineering() {
                 <Mail className="w-5 h-5 text-purple-400 mb-2" />
                 <h4 className="text-sm font-medium text-white mb-1">{templateLabel(template)}</h4>
                 <p className="text-xs text-[var(--text-muted)]">{t('pages.socialEngineering.click_create')}</p>
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -447,10 +448,10 @@ export default function SocialEngineering() {
               {createError && <p className="text-sm text-red-400">{createError}</p>}
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">{t('common.cancel')}</button>
-              <button type="button" onClick={createCampaign} disabled={creating || clients.length === 0} className="rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white hover:bg-purple-600 disabled:opacity-50">
+              <Button variant="unstyled" type="button" onClick={() => setCreateOpen(false)} className="rounded-lg border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">{t('common.cancel')}</Button>
+              <Button variant="unstyled" type="button" onClick={createCampaign} disabled={creating || clients.length === 0} className="rounded-lg bg-purple-500 px-4 py-2 text-sm font-medium text-white hover:bg-purple-600 disabled:opacity-50">
                 {creating ? t('pages.socialEngineering.creating') : t('pages.socialEngineering.create_campaign')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

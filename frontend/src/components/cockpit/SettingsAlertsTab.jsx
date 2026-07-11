@@ -2,6 +2,7 @@ import { useEffect, useState, Component } from 'react'
 import { useTranslation } from 'react-i18next'
 import { loadDestructiveConfirmToken, saveDestructiveConfirmToken } from '../../utils/destructiveConfirm'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.settingsAlerts'
 
@@ -13,13 +14,13 @@ function SettingsAlertsTabCrashUI({ error, onRetry }) {
       <h2 className="text-lg font-semibold text-red-400 mb-2">{t(`${NS}.crashTitle`)}</h2>
       <p className="text-sm text-white/60 mb-4">{t(`${NS}.crashBody`)}</p>
       <p className="text-xs font-mono text-white/50 break-words mb-4">{msg}</p>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={onRetry}
         className="px-4 py-2 rounded-xl text-sm border border-white/20 text-white/80 hover:bg-white/10"
       >
         {t(`${NS}.tryAgain`)}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -171,22 +172,22 @@ function SettingsAlertsTabInner() {
             <p id="settings-message" className={msg.type === 'ok' ? 'text-emerald-400 text-sm' : 'text-red-400 text-sm'}>{msg.text}</p>
           )}
           <div className="flex flex-wrap gap-3">
-            <button
+            <Button variant="unstyled"
               id="settings-save-btn"
               type="button"
               onClick={save}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20"
             >
               {t(`${NS}.saveSettings`)}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="settings-backup-btn"
               type="button"
               onClick={runBackup}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-white/20 bg-white/5 text-white/80 hover:bg-white/10"
             >
               {t(`${NS}.backupDatabase`)}
-            </button>
+            </Button>
           </div>
           {backupMsg && (
             <p

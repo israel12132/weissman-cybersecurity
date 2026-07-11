@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AlertTriangle, HelpCircle, ShieldAlert, Trash2 } from 'lucide-react'
+import Button from '../components/ui/Button'
 
 /**
  * Promise-based confirm / prompt dialogs that match the Command Center's
@@ -225,22 +226,22 @@ function DialogShell({
 
         <div className="flex items-center justify-end gap-2.5 px-5 py-4">
           {kind !== 'alert' ? (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={cancel}
               className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/30"
             >
               {cancelLabel}
-            </button>
+            </Button>
           ) : null}
-          <button
+          <Button variant="unstyled"
             ref={confirmRef}
             type="button"
             onClick={confirm}
             className={`rounded-lg px-4 py-2 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 ${style.confirmBtn}`}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

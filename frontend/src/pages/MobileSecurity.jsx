@@ -12,6 +12,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const MOBILE_ENGINE = 'mobile_attack'
 const SEVERITY_KEYS = ['critical', 'high', 'medium', 'low', 'info']
@@ -291,7 +292,7 @@ export default function MobileSecurity() {
           </div>
           <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'ios', 'android'].map((f) => (
-              <button
+              <Button variant="unstyled"
                 key={f}
                 type="button"
                 onClick={() => setFilter(f)}
@@ -302,7 +303,7 @@ export default function MobileSecurity() {
                 }`}
               >
                 {t(`pages.mobileSecurity.filter_${f}`)}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -359,7 +360,7 @@ export default function MobileSecurity() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => handleScan(app)}
                         disabled={!selectedClientId || (scanningAppId === app.id && Boolean(pendingJobId))}
@@ -367,7 +368,7 @@ export default function MobileSecurity() {
                       >
                         {scanningAppId === app.id && pendingJobId && <Loader2 className="w-3 h-3 animate-spin" />}
                         {scanningAppId === app.id && pendingJobId ? t('pages.mobileSecurity.scanning') : t('pages.mobileSecurity.scan_now')}
-                      </button>
+                      </Button>
                       <Link
                         to={`/findings?q=${encodeURIComponent(app.package_id || app.name || '')}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg text-xs font-medium hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)] transition-colors"

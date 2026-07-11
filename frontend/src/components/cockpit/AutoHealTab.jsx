@@ -7,6 +7,7 @@ import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { Shield, GitPullRequest, CheckCircle, Clock, ExternalLink, Loader2, Container } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.autoHeal'
 
@@ -212,7 +213,7 @@ export default function AutoHealTab() {
         <p className="mt-2 text-[10px] text-white/40">
           {t(`${NS}.skipSandboxHint`)}
         </p>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={triggerHeal}
           disabled={healing != null}
@@ -220,7 +221,7 @@ export default function AutoHealTab() {
         >
           {healing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitPullRequest className="w-4 h-4" />}
           {healing ? t(`${NS}.starting`) : t(`${NS}.verifyButton`)}
-        </button>
+        </Button>
       </div>
 
       {(verifyJobId || verifySteps.length > 0) && (
@@ -261,9 +262,9 @@ export default function AutoHealTab() {
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
           <span className="text-sm font-medium text-white/90">{t(`${NS}.healRequests`)}</span>
-          <button type="button" onClick={fetchRequests} className="text-xs text-[#22d3ee] hover:underline">
+          <Button variant="unstyled" type="button" onClick={fetchRequests} className="text-xs text-[#22d3ee] hover:underline">
             {t(`${NS}.refresh`)}
-          </button>
+          </Button>
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>

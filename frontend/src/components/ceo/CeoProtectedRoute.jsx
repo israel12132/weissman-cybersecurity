@@ -1,5 +1,6 @@
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import Button from '../ui/Button'
 
 export default function CeoProtectedRoute({ children }) {
   const { isAuthenticated, isLoading, isCeo, logout } = useAuth()
@@ -33,7 +34,7 @@ export default function CeoProtectedRoute({ children }) {
           upgraded you, sign in again so your cookies get a fresh token.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 items-center">
-          <button
+          <Button variant="unstyled"
             type="button"
             className="text-sm font-mono text-amber-200 border border-amber-500/40 rounded px-4 py-2 hover:bg-amber-950/40"
             onClick={async () => {
@@ -42,7 +43,7 @@ export default function CeoProtectedRoute({ children }) {
             }}
           >
             Sign in again
-          </button>
+          </Button>
           <Link
             to="/operations"
             className="text-sm font-mono text-cyan-400 hover:text-cyan-300 underline underline-offset-4"

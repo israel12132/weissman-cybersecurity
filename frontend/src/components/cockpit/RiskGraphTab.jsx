@@ -9,6 +9,7 @@ import '@xyflow/react/dist/style.css'
 import { useClient } from '../../context/ClientContext'
 import { Network, RefreshCw, AlertCircle } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NODE_WIDTH = 160
 const NODE_HEIGHT = 48
@@ -140,7 +141,7 @@ export default function RiskGraphTab() {
             {t('components.cockpitTabs.riskGraph.title')}
           </h2>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={buildGraph}
           disabled={building}
@@ -150,7 +151,7 @@ export default function RiskGraphTab() {
           {building
             ? t('components.cockpitTabs.riskGraph.building')
             : t('components.cockpitTabs.riskGraph.build_refresh_graph')}
-        </button>
+        </Button>
       </div>
       {error && (
         <div className="flex items-center gap-2 mb-4 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
@@ -166,14 +167,14 @@ export default function RiskGraphTab() {
         ) : nodes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/50 gap-2">
             <p>{t('components.cockpitTabs.riskGraph.no_graph_data')}</p>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={buildGraph}
               disabled={building}
               className="px-4 py-2 rounded-lg border border-white/20 text-white/80 hover:bg-white/5"
             >
               {t('components.cockpitTabs.riskGraph.build_graph')}
-            </button>
+            </Button>
           </div>
         ) : (
           <ReactFlow

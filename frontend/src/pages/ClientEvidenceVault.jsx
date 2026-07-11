@@ -11,6 +11,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch, apiUrl } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -250,20 +251,20 @@ export default function ClientEvidenceVault() {
         const ev = row.original
         return (
           <div className="flex items-center gap-2">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => downloadEvidence(ev)}
               className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
             >
               {t('pages.clientEvidenceVault.download')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => deleteEvidence(ev)}
               className="px-3 py-1 text-xs bg-red-900/30 text-red-200 rounded hover:bg-red-900/50 border border-red-500/20"
             >
               {t('pages.clientEvidenceVault.delete')}
-            </button>
+            </Button>
           </div>
         )
       },
@@ -317,14 +318,14 @@ export default function ClientEvidenceVault() {
               <h2 className="text-lg font-semibold text-white">{t('pages.clientEvidenceVault.upload_heading')}</h2>
               <p className="text-xs text-[var(--text-tertiary)] mt-1">{t('pages.clientEvidenceVault.upload_body')}</p>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={uploadEvidence}
               disabled={uploading}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
             >
               {uploading ? t('pages.clientEvidenceVault.uploading') : t('pages.clientEvidenceVault.upload')}
-            </button>
+            </Button>
           </div>
 
           <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">

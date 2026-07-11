@@ -12,6 +12,7 @@ import { SkeletonCardGrid, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 function fmtUsd(n) {
   if (n == null) return '$—'
@@ -369,14 +370,14 @@ export default function Clients() {
                         {t('clients_page.at_risk')}
                       </span>
                       {!risk[client.id] && (
-                        <button
+                        <Button variant="unstyled"
                           type="button"
                           onClick={() => recomputeRisk(client.id)}
                           className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
                           title={t('clients_page.compute_title')}
                         >
                           {t('clients_page.compute_risk')}
-                        </button>
+                        </Button>
                       )}
                     </div>
                     <div className="text-2xl font-bold text-rose-200 tabular-nums mt-1 tracking-tight">
@@ -421,7 +422,7 @@ export default function Clients() {
                       {t('clients_page.manage')}
                     </Link>
                     <div className="flex items-center gap-3">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => runScan(client.id, client.name)}
                         disabled={scanningId === client.id || domains.length === 0}
@@ -429,15 +430,15 @@ export default function Clients() {
                         title={domains.length === 0 ? t('clients_page.scan_no_domain') : t('clients_page.scan_title')}
                       >
                         {scanningId === client.id ? t('clients_page.queuing') : t('clients_page.scan_now')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => deleteClient(client.id, client.name)}
                         className="text-sm text-rose-400/80 hover:text-rose-300 transition-colors font-mono"
                         title={t('clients_page.delete_title')}
                       >
                         {t('clients_page.delete_client')}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </article>

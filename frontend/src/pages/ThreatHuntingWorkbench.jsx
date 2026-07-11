@@ -17,6 +17,7 @@ import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.threatHuntingWorkbench'
 
@@ -229,7 +230,7 @@ function QueryCard({ query, t }) {
       layout
       className="rounded-xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] overflow-hidden"
     >
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setExpanded((p) => !p)}
         className="w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-white/3 transition-colors"
@@ -248,7 +249,7 @@ function QueryCard({ query, t }) {
           <div className="text-lg font-bold font-mono" style={{ color: query.hits > 0 ? '#ef4444' : '#4ade80' }}>{query.hits}</div>
           <div className="text-[9px] font-mono text-[var(--text-disabled)]">{t(`${NS}.hits`)}</div>
         </div>
-      </button>
+      </Button>
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -284,14 +285,14 @@ function IocTable({ iocs, t, onExport }) {
     <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
         <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">{t(`${NS}.ioc_heading`)}</span>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={onExport}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 text-[10px] font-mono text-cyan-300/80 hover:bg-cyan-500/10"
         >
           <Download className="w-3 h-3" />
           {t(`${NS}.export_csv`)}
-        </button>
+        </Button>
       </div>
       <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-[var(--border-subtle)] text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">
         <span>{t(`${NS}.col_type`)}</span>
@@ -479,7 +480,7 @@ export default function ThreatHuntingWorkbench() {
 
           <div className="flex gap-2 mb-6 flex-wrap">
             {tabs.map((tab) => (
-              <button
+              <Button variant="unstyled"
                 key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
                 className="px-4 py-2 rounded-xl text-xs font-mono border transition-all"
                 style={{
@@ -490,7 +491,7 @@ export default function ThreatHuntingWorkbench() {
               >
                 {tab.label}
                 <span className="ml-2 text-[9px] opacity-60">({tab.count})</span>
-              </button>
+              </Button>
             ))}
           </div>
 

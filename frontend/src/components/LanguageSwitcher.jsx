@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { SUPPORTED_LANGUAGES } from '../i18n'
 import { loadLocale } from '../i18n/localeLoader'
+import Button from './ui/Button'
 
 /**
  * Compact language picker — segmented button (EN / עברית). Drop into any header. Persists to
@@ -19,7 +20,7 @@ export default function LanguageSwitcher({ className = '' }) {
       {SUPPORTED_LANGUAGES.map((lang) => {
         const active = current === lang.code
         return (
-          <button
+          <Button variant="unstyled"
             key={lang.code}
             type="button"
             onClick={async () => {
@@ -36,7 +37,7 @@ export default function LanguageSwitcher({ className = '' }) {
           >
             <span className="mr-1">{lang.flag}</span>
             {lang.label}
-          </button>
+          </Button>
         )
       })}
     </div>

@@ -26,6 +26,7 @@ import { useClient } from '../context/ClientContext'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -148,10 +149,10 @@ function Terminal({ lines }) {
   return (
     <div className="relative">
       {lines.length > 0 && (
-        <button type="button" onClick={copyAll}
+        <Button variant="unstyled" type="button" onClick={copyAll}
           className="absolute top-2 right-2 z-10 text-[10px] font-mono text-[var(--text-disabled)] hover:text-cyan-400 bg-[var(--scrim)] px-2 py-1 rounded border border-[var(--border-default)] transition-colors">
           Copy
-        </button>
+        </Button>
       )}
       <div ref={termRef} className="h-80 overflow-auto rounded-xl bg-[var(--bg-1)] border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed">
         {lines.length === 0 ? (
@@ -757,7 +758,7 @@ export default function EngineDetail() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={handleRun}
                 disabled={running || !engineRunnable}
@@ -765,21 +766,21 @@ export default function EngineDetail() {
                 className="px-5 py-2.5 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/30 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {running ? t('engines.running') : `▶ ${t('engines.detail_run_engine')}`}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => setActiveTab('history')}
                 className="px-4 py-2.5 rounded-xl font-mono text-sm border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] transition-all"
               >
                 {t('engines.detail_view_history')}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={handleExport}
                 className="px-4 py-2.5 rounded-xl font-mono text-sm border border-emerald-500/30 text-emerald-300/90 hover:bg-emerald-500/10 hover:border-emerald-400/40 transition-all"
               >
                 ↓ {t('engines.detail_export')}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -864,7 +865,7 @@ export default function EngineDetail() {
 
           {/* Action buttons */}
           <div className="flex items-center gap-3 pt-1">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleRun}
               disabled={running || !engineRunnable}
@@ -872,21 +873,21 @@ export default function EngineDetail() {
               className="px-5 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {running ? t('engines.running') : `▶ ${t('engines.run_engine')}`}
-            </button>
+            </Button>
             {running && (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={handleStop}
                 className="px-4 py-2 rounded-xl font-mono text-sm border border-red-500/30 text-red-300 hover:bg-red-950/30 transition-all"
               >
                 ⏹ {t('engines.stop')}
-              </button>
+              </Button>
             )}
             {lines.length > 0 && !running && (
-              <button type="button" onClick={() => { setLines([]); resetFindings(); setLastRunStatus(null) }}
+              <Button variant="unstyled" type="button" onClick={() => { setLines([]); resetFindings(); setLastRunStatus(null) }}
                 className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-all">
                 {t('engines.detail_clear')}
-              </button>
+              </Button>
             )}
           </div>
         </motion.section>
@@ -905,7 +906,7 @@ export default function EngineDetail() {
               { id:'history',  label: t('engines.run_history'),  badge: runHistory.length > 0 ? runHistory.length : null },
               { id:'contract', label: t('engines.contract_tab'), badge: null },
             ].map((tab) => (
-              <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
+              <Button variant="unstyled" key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-[11px] font-mono uppercase tracking-widest transition-colors flex items-center gap-2 ${
                   activeTab === tab.id ? 'text-cyan-400 border-b-2 border-cyan-500 bg-cyan-500/5' : 'text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
                 }`}>
@@ -915,7 +916,7 @@ export default function EngineDetail() {
                     {tab.badge}
                   </span>
                 )}
-              </button>
+              </Button>
             ))}
           </div>
           <div className="p-5">

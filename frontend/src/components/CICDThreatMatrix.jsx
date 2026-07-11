@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const STAGE_KEYS = ['commit', 'build', 'test', 'deploy']
 
@@ -83,13 +84,13 @@ export default function CICDThreatMatrix() {
             placeholder={t(`${NS}.repo_placeholder`)}
             className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
           />
-          <button
+          <Button variant="unstyled"
             onClick={runScan}
             disabled={running || !clientId}
             className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-[var(--bg-4)] text-white text-sm font-medium"
           >
             {running ? t(`${NS}.scanning`) : t(`${NS}.run_scan`)}
-          </button>
+          </Button>
         </div>
 
         <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6">
@@ -100,7 +101,7 @@ export default function CICDThreatMatrix() {
               const isRed = count > 0
               return (
                 <div key={stage.key} className="flex items-center gap-2">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => count > 0 && setModalFinding(findingsByStage[stage.apiName][0])}
                     title={count > 0 ? t(`${NS}.view_findings`, { count }) : ''}
@@ -112,7 +113,7 @@ export default function CICDThreatMatrix() {
                   >
                     {stage.label}
                     {count > 0 && <span className="ml-2 text-xs">({count})</span>}
-                  </button>
+                  </Button>
                   {idx < STAGES.length - 1 && (
                     <span className="text-[var(--text-muted)]">→</span>
                   )}
@@ -138,13 +139,13 @@ export default function CICDThreatMatrix() {
             >
               <div className="px-6 py-4 border-b border-[var(--border-default)] flex items-center justify-between">
                 <h3 className="text-lg font-bold text-red-400">{t(`${NS}.playbook_title`)}</h3>
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => setModalFinding(null)}
                   className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 >
                   ✕
-                </button>
+                </Button>
               </div>
               <div className="p-4 text-sm text-amber-200 bg-amber-500/10 border-b border-[var(--border-default)]">
                 <strong>{t(`${NS}.blast_radius`)}</strong> {modalFinding.blast_radius || '—'}

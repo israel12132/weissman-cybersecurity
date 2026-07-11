@@ -10,6 +10,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const DEFAULT_TEMPLATE = 'multi_step_state_demo'
 
@@ -182,14 +183,14 @@ export default function FeedbackLoopVerification() {
                 <option value={DEFAULT_TEMPLATE}>{DEFAULT_TEMPLATE}</option>
               )}
             </select>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={!canRun || running || loadingYaml}
               onClick={run}
               className="px-4 py-2 rounded-xl border border-violet-500/30 text-violet-300/70 text-[12px] font-mono uppercase hover:bg-violet-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               {running ? t('pages.feedbackLoopVerification.running') : t('pages.feedbackLoopVerification.run_chain')}
-            </button>
+            </Button>
           </div>
 
           {templates.length === 0 && (

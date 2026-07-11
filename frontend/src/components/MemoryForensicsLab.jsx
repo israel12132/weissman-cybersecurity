@@ -9,6 +9,7 @@ import { FixedSizeList as List } from 'react-window'
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const NS = 'components.tools.memoryForensicsLab'
 const ENTROPY_MAX = 8
@@ -336,13 +337,13 @@ export default function MemoryForensicsLab() {
             placeholder={t(`${NS}.target_placeholder`)}
             className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
           />
-          <button
+          <Button variant="unstyled"
             onClick={runScan}
             disabled={running || !clientId}
             className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-[var(--bg-4)] text-white text-sm font-medium"
           >
             {running ? t(`${NS}.running`) : t(`${NS}.run_scan`)}
-          </button>
+          </Button>
           {jobId && (
             <span className="text-[var(--text-tertiary)] text-sm font-mono">
               {t(`${NS}.job`, { id: jobId })}
@@ -443,7 +444,7 @@ export default function MemoryForensicsLab() {
             <ul className="space-y-2">
               {findings.map((f) => (
                 <li key={f.id}>
-                    <button
+                    <Button variant="unstyled"
                     type="button"
                     onClick={() => setSelected(f)}
                     className={`w-full text-left rounded-lg px-4 py-3 border transition-colors ${
@@ -462,7 +463,7 @@ export default function MemoryForensicsLab() {
                         {f.trigger_reason.length > 28 ? f.trigger_reason.slice(0, 28) + '…' : f.trigger_reason}
                       </span>
                     )}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

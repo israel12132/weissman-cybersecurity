@@ -16,6 +16,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../lib/apiBase'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 import { useEngineRequirements, computeLocalReadiness } from '../hooks/useEngineRequirements'
+import Button from '../components/ui/Button'
 
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
 const inputCls =
@@ -287,12 +288,12 @@ export default function ClientIntegrations() {
             <Section icon={Cpu} title={t('pages.clientIntegrations.agents_ot')}>
               <div className="flex flex-wrap gap-2 mb-3">
                 {AGENT_PLATFORMS.map((p) => (
-                  <button key={p} type="button" onClick={() => togglePlatform(p)}
+                  <Button variant="unstyled" key={p} type="button" onClick={() => togglePlatform(p)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono border ${
                       form.agent_platforms.includes(p)
                         ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
                         : 'border-[var(--border-default)] text-[var(--text-tertiary)]'
-                    }`}>{p}</button>
+                    }`}>{p}</Button>
                 ))}
               </div>
               <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3 cursor-pointer">
@@ -331,18 +332,18 @@ export default function ClientIntegrations() {
                     }} />
                 </div>
               ))}
-              <button type="button" className="text-xs text-cyan-400" onClick={() => patch({
+              <Button variant="unstyled" type="button" className="text-xs text-cyan-400" onClick={() => patch({
                 llm_endpoints: [...form.llm_endpoints, { url: '', model: '', authorization: '' }],
               })}>
                 + {t('pages.clientIntegrations.add_endpoint')}
-              </button>
+              </Button>
             </Section>
 
-            <button type="button" disabled={saving} onClick={save}
+            <Button variant="unstyled" type="button" disabled={saving} onClick={save}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-medium text-sm">
               <Save className="w-4 h-4" />
               {saving ? t('common.saving') : t('common.save')}
-            </button>
+            </Button>
           </div>
 
           <aside className="space-y-4">

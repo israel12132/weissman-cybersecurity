@@ -26,6 +26,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { downloadBytes } from '../lib/pdfExport'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { confirmDialog } from '../utils/confirmDialog'
+import Button from '../components/ui/Button'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -152,7 +153,7 @@ function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
     ? 'bg-amber-500/15 ring-amber-400/35 text-amber-200'
     : 'bg-cyan-500/15 ring-cyan-400/35 text-cyan-200'
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-[11px] font-medium ring-1 transition-all ${
@@ -162,7 +163,7 @@ function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
       }`}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -206,15 +207,15 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
               <span className="rounded bg-[var(--row-hover-bg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">{action.kind}</span>
             </div>
             <div className="flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-              <button type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveUpLabel}>
+              <Button variant="unstyled" type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveUpLabel}>
                 <ChevronUp className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveDownLabel}>
+              </Button>
+              <Button variant="unstyled" type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveDownLabel}>
                 <ChevronDown className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label={removeLabel}>
+              </Button>
+              <Button variant="unstyled" type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label={removeLabel}>
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
           <div className={`rounded-lg ring-1 ${jsonError ? 'ring-rose-500/40' : 'ring-white/[0.06]'} bg-[var(--bg-2)]`}>
@@ -537,21 +538,21 @@ export default function PlaybookBuilder() {
             <Link to="/" className="px-3 py-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">
               ← {t('nav.cockpit')}
             </Link>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={insertExample}
               className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
             >
               {t('playbooks.insert_example')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={startNew}
               className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600/80 to-cyan-600/70 px-4 py-2 text-[12px] font-medium text-white shadow-lg shadow-violet-500/10 transition-all hover:from-violet-500/90 hover:to-cyan-500/80"
             >
               <Plus className="h-4 w-4" />
               {t('playbooks.new_playbook')}
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -598,7 +599,7 @@ export default function PlaybookBuilder() {
                   const isActive = selected?.id === pb.id
                   return (
                     <li key={pb.id}>
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => startEdit(pb)}
                         className={`block w-full rounded-xl px-3 py-3 text-left transition-all ${
@@ -621,7 +622,7 @@ export default function PlaybookBuilder() {
                           <span>{t('playbooks.runs_count', { count: pb.run_count || 0 })}</span>
                           <StatusPill status={pb.last_run_status} />
                         </div>
-                      </button>
+                      </Button>
                     </li>
                   )
                 })}
@@ -682,7 +683,7 @@ export default function PlaybookBuilder() {
                         const active = (draft.trigger?.severity || []).includes(s)
                         const colors = SEV_COLORS[s]
                         return (
-                          <button
+                          <Button variant="unstyled"
                             type="button"
                             key={s}
                             onClick={() => toggleSev(s)}
@@ -693,7 +694,7 @@ export default function PlaybookBuilder() {
                             }`}
                           >
                             {t(`playbooks.severity.${s}`)}
-                          </button>
+                          </Button>
                         )
                       })}
                     </div>
@@ -750,14 +751,14 @@ export default function PlaybookBuilder() {
                 </h3>
                 <div className="mb-4 flex flex-wrap gap-1.5">
                   {ACTION_KINDS.map((a) => (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       key={a.kind}
                       onClick={() => addAction(a.kind)}
                       className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
                     >
                       + {t(a.labelKey)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 {(draft.actions || []).length === 0 ? (
@@ -796,7 +797,7 @@ export default function PlaybookBuilder() {
 
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={save}
                   disabled={saving}
@@ -804,16 +805,16 @@ export default function PlaybookBuilder() {
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {saving ? t('playbooks.saving') : selected ? t('playbooks.save_changes') : t('playbooks.create_playbook')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={dryRun}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600/20 px-4 py-2 text-[12px] font-medium text-cyan-200 ring-1 ring-cyan-400/30 transition-all hover:bg-cyan-500/25"
                 >
                   <Play className="h-4 w-4" />
                   {t('playbooks.dry_run')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={exportPlaybookJson}
                   disabled={!draft}
@@ -821,16 +822,16 @@ export default function PlaybookBuilder() {
                 >
                   <Download className="h-4 w-4" />
                   {t('playbooks.export_json_playbook')}
-                </button>
+                </Button>
                 {selected && (
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={remove}
                     className="ms-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] text-rose-300 ring-1 ring-rose-500/25 transition-all hover:bg-rose-500/10"
                   >
                     <Trash2 className="h-4 w-4" />
                     {t('common.delete')}
-                  </button>
+                  </Button>
                 )}
                 {statusMsg && (
                   <span className={`flex items-center gap-1 text-[11px] ${

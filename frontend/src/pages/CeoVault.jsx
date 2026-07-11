@@ -8,6 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 /**
  * CeoVault - Secure credential and secret management
@@ -204,13 +205,13 @@ export default function CeoVault() {
 
         {/* Create Button */}
         <div className="flex justify-end">
-          <button
+          <Button variant="unstyled"
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.ceoVault.add_secret')}
-          </button>
+          </Button>
         </div>
 
         {/* Secrets List */}
@@ -276,7 +277,7 @@ export default function CeoVault() {
                           />
                         </div>
 
-                        <button
+                        <Button variant="unstyled"
                           onClick={() => toggleSecretVisibility(secret.id)}
                           className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                         >
@@ -285,9 +286,9 @@ export default function CeoVault() {
                           ) : (
                             <Eye className="w-4 h-4" />
                           )}
-                        </button>
+                        </Button>
 
-                        <button
+                        <Button variant="unstyled"
                           onClick={() =>
                             copyToClipboard(secret.id, secret.value)
                           }
@@ -298,7 +299,7 @@ export default function CeoVault() {
                           ) : (
                             <Copy className="w-4 h-4" />
                           )}
-                        </button>
+                        </Button>
                       </div>
 
                       {/* Metadata */}
@@ -323,18 +324,18 @@ export default function CeoVault() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => setEditModal(secret)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => deleteSecret(secret.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -400,12 +401,12 @@ function SecretModal({ secret, onClose, onSave }) {
           <h3 className="text-lg font-bold text-white">
             {secret ? t('pages.ceoVault.edit_secret') : t('pages.ceoVault.create_secret')}
           </h3>
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -482,19 +483,19 @@ function SecretModal({ secret, onClose, onSave }) {
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('pages.ceoVault.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name || !formData.value}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? t('pages.ceoVault.saving') : t('pages.ceoVault.save_secret')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

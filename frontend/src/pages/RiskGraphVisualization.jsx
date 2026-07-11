@@ -10,6 +10,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 const NS = 'pages.riskGraphVisualization';
 
@@ -417,7 +418,7 @@ export default function RiskGraphVisualization() {
       icon={<GitBranch />}
       actions={(
         <div className="flex items-center gap-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={exportGraphJson}
             disabled={clientId == null || !graphData.nodes.length}
@@ -426,7 +427,7 @@ export default function RiskGraphVisualization() {
           >
             <Download className="w-4 h-4" />
             {t(`${NS}.export_json`)}
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={reloadGraph}
             onExport={() => exportNodesCsv(graphData.nodes)}
@@ -487,7 +488,7 @@ export default function RiskGraphVisualization() {
             )}
             <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
               {['all', 'critical', 'high', 'medium', 'low'].map((f) => (
-                <button
+                <Button variant="unstyled"
                   key={f}
                   type="button"
                   onClick={() => setFilter(f)}
@@ -498,7 +499,7 @@ export default function RiskGraphVisualization() {
                   }`}
                 >
                   {t(FILTER_KEYS[f])}
-                </button>
+                </Button>
               ))}
             </div>
             <select
@@ -512,7 +513,7 @@ export default function RiskGraphVisualization() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportNodesCsv(graphData.nodes)}
               disabled={graphData.nodes.length === 0}
@@ -520,23 +521,23 @@ export default function RiskGraphVisualization() {
             >
               <Download className="w-4 h-4" />
               {t(`${NS}.export_csv`)}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportGraph('png')}
               className="flex items-center gap-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium hover:bg-cyan-500/30 transition-colors"
             >
               <Download className="w-4 h-4" />
               {t('pages.riskGraphVisualization.export_png')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => setSelectedNode(null)}
               className="flex items-center gap-2 px-3 py-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-colors"
             >
               <Maximize2 className="w-4 h-4" />
               {t('pages.riskGraphVisualization.reset_view')}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -547,14 +548,14 @@ export default function RiskGraphVisualization() {
               <AlertTriangle className="w-4 h-4 text-red-400" />
               {t(`${NS}.attack_paths_heading`)}
             </h3>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={recomputeAttackPaths}
               disabled={pathsLoading || clientId == null}
               className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
             >
               {pathsLoading ? t(`${NS}.loading`) : t(`${NS}.recompute_paths`)}
-            </button>
+            </Button>
           </div>
           {pathsLoading && !attackPaths ? (
             <div className="space-y-2">

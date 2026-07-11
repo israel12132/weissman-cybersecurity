@@ -12,6 +12,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'digital_twin'
 const SIMULATION_SCENARIO_IDS = ['xss', 'sqli', 'mitm', 'cors']
@@ -222,7 +223,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
             {meta.mitre}
           </span>
         </div>
-        <button type="button" onClick={() => onRun(scenarioId)} disabled={disabled || running || isPending}
+        <Button variant="unstyled" type="button" onClick={() => onRun(scenarioId)} disabled={disabled || running || isPending}
           className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ borderColor: `${riskColor}40`, color: riskColor, backgroundColor: `${riskColor}10` }}>
           {running || isPending ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -231,7 +232,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
             : isPending ? t('pages.digitalTwinSimulatostatus_pending')
               : hasResult ? t('pages.digitalTwinSimulator.rerun')
                 : t('pages.digitalTwinSimulator.simulate')}
-        </button>
+        </Button>
       </div>
       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{description}</p>
       <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
@@ -539,14 +540,14 @@ export default function DigitalTwinSimulator() {
             <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://example.com"
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#8b5cf6]/40" />
           </div>
-          <button type="button" onClick={handleBuildTwin} disabled={!selectedClientId || !!runningId}
+          <Button variant="unstyled" type="button" onClick={handleBuildTwin} disabled={!selectedClientId || !!runningId}
             className="px-4 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 transition-all">
             {t('pages.digitalTwinSimulator.build_full_twin')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
             className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-all">
             {showParams ? t('pages.digitalTwinSimulator.hide_params') : t('pages.digitalTwinSimulator.show_params')}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
@@ -605,16 +606,16 @@ export default function DigitalTwinSimulator() {
 
       <div className="flex flex-wrap items-center justify-end gap-2 mb-8">
         {hasAnyResult && (
-          <button type="button" onClick={clearResults}
+          <Button variant="unstyled" type="button" onClick={clearResults}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-all">
             <Trash2 className="w-3.5 h-3.5" />
             {t('pages.digitalTwinSimulator.clear_results')}
-          </button>
+          </Button>
         )}
-        <button type="button" onClick={handleRunAll} disabled={!selectedClientId || !!runningId}
+        <Button variant="unstyled" type="button" onClick={handleRunAll} disabled={!selectedClientId || !!runningId}
           className="px-4 py-2 rounded-xl font-mono text-sm border border-[#8b5cf6]/40 text-[#8b5cf6] bg-[#8b5cf6]/10 hover:bg-[#8b5cf6]/20 disabled:opacity-40 transition-all">
           {t('pages.digitalTwinSimulator.run_all')}
-        </button>
+        </Button>
       </div>
 
       {hasAnyResult && (

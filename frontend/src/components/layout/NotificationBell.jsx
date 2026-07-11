@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Bell, Check, Trash2, ExternalLink } from 'lucide-react'
 import { useNotifications } from '../../context/NotificationContext'
 import useFocusTrap from '../../hooks/useFocusTrap'
+import Button from '../ui/Button'
 
 const SEVERITY_DOT = {
   critical: '#ef4444',
@@ -63,7 +64,7 @@ export default function NotificationBell() {
 
   return (
     <div ref={ref} className="relative">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors"
@@ -84,7 +85,7 @@ export default function NotificationBell() {
             {badge}
           </span>
         )}
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -103,7 +104,7 @@ export default function NotificationBell() {
               )}
             </span>
             <div className="flex items-center gap-1">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={markAllRead}
                 disabled={unreadCount === 0}
@@ -112,8 +113,8 @@ export default function NotificationBell() {
                 className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Check className="w-3.5 h-3.5" aria-hidden />
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={clearAll}
                 disabled={notifications.length === 0}
@@ -122,7 +123,7 @@ export default function NotificationBell() {
                 className="p-1.5 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Trash2 className="w-3.5 h-3.5" aria-hidden />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -133,7 +134,7 @@ export default function NotificationBell() {
               </div>
             ) : (
               notifications.map((n) => (
-                <button
+                <Button variant="unstyled"
                   key={n.id}
                   type="button"
                   onClick={() => onItemClick(n)}
@@ -161,7 +162,7 @@ export default function NotificationBell() {
                       <span>{relativeTime(n.ts, t)}</span>
                     </span>
                   </span>
-                </button>
+                </Button>
               ))
             )}
           </div>

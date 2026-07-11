@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.aiModelRisk'
 
@@ -174,9 +175,9 @@ export default function AIModelRiskTab() {
             </div>
           ))}
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
+            <Button variant="unstyled" type="button" className="text-xs text-violet-300" onClick={() => setEndpoints([...endpoints, { url: '', model: '', authorization: '' }])}>
               + {t(`${NS}.addEndpoint`)}
-            </button>
+            </Button>
             <Link to={`/clients/${selectedClientId}/integrations`} className="text-xs text-cyan-400">
               {t(`${NS}.fullIntegrations`)}
             </Link>
@@ -184,22 +185,22 @@ export default function AIModelRiskTab() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <button
+          <Button variant="unstyled"
             type="button"
             disabled={saving}
             onClick={saveEndpoints}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-violet-500/40 bg-violet-600/20 text-violet-100 hover:bg-violet-600/30 disabled:opacity-40"
           >
             {saving ? t(`${NS}.saving`) : t(`${NS}.saveEndpoints`)}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             disabled={running || !selectedClientId}
             onClick={runFuzz}
             className="px-5 py-2.5 rounded-xl font-semibold text-sm border border-violet-500/50 bg-violet-600/20 text-violet-200 hover:bg-violet-600/30 disabled:opacity-40"
           >
             {running ? t(`${NS}.runningProbes`) : t(`${NS}.runSuite`)}
-          </button>
+          </Button>
         </div>
         {msg && (
           <p className={`mt-3 text-sm ${msg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</p>

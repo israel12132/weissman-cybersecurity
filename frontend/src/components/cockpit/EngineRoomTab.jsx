@@ -7,6 +7,7 @@ import EngineCard from './EngineCard'
 import RedTeamSkullSwitch from '../warroom/RedTeamSkullSwitch'
 import { ENGINE_GROUP_DEFS } from '../../lib/engineGroupDefs'
 import { useProductionEngines } from '../../lib/useProductionEngines'
+import Button from '../ui/Button'
 
 const defaultEngines = []
 
@@ -32,22 +33,22 @@ function GroupSection({ groupDef, engines, enabledSet, configLoading, poeJobId, 
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => onEnableAll(engines.map((e) => e.id))}
             disabled={configLoading}
             className="px-2 py-0.5 rounded text-[10px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Enable All
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={() => onDisableAll(engines.map((e) => e.id))}
             disabled={configLoading}
             className="px-2 py-0.5 rounded text-[10px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Disable All
-          </button>
+          </Button>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -193,13 +194,13 @@ export default function EngineRoomTab() {
           role="alert"
         >
           <span className="min-w-0 break-words">{configError}</span>
-          <button
+          <Button variant="unstyled"
             type="button"
             className="text-rose-400 text-xs underline shrink-0"
             onClick={dismissConfigError}
           >
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
 
@@ -238,14 +239,14 @@ export default function EngineRoomTab() {
             className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
           />
           {search && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setSearch('')}
               aria-label={t('common.close')}
               className="absolute end-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-[var(--text-primary)] text-xs"
             >
               ✕
-            </button>
+            </Button>
           )}
         </div>
         <label className="text-[11px] font-mono text-white/55 inline-flex items-center gap-2 select-none">
@@ -264,7 +265,7 @@ export default function EngineRoomTab() {
 
       {/* Group filter tabs */}
       <div className="flex flex-wrap gap-1.5">
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={() => setActiveGroup('all')}
           className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-all ${
@@ -274,11 +275,11 @@ export default function EngineRoomTab() {
           }`}
         >
           {t('engines.all_engines', { count: totalEngines })}
-        </button>
+        </Button>
         {ENGINE_GROUP_DEFS.map((g) => {
           const groupEngines = enginesByGroup(g.id)
           return (
-            <button
+            <Button variant="unstyled"
               key={g.id}
               type="button"
               onClick={() => setActiveGroup(g.id)}
@@ -294,7 +295,7 @@ export default function EngineRoomTab() {
               }
             >
               {g.label} ({groupEngines.length})
-            </button>
+            </Button>
           )
         })}
       </div>

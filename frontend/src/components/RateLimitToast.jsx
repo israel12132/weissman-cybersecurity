@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Clock, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Button from './ui/Button'
 
 /**
  * RateLimitToast - Toast notification for rate limit errors (429)
@@ -54,13 +55,13 @@ export default function RateLimitToast({ show, onClose, retryAfter = 60, message
               </p>
             </div>
 
-            <button
+            <Button variant="unstyled"
               onClick={onClose}
               className="flex-shrink-0 w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors"
               aria-label={t('components.rateLimitToast.close')}
             >
               <X className="w-4 h-4 text-[var(--text-tertiary)]" />
-            </button>
+            </Button>
           </div>
 
           <div className="px-4 pb-4">

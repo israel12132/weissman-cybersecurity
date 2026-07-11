@@ -19,6 +19,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
+import Button from '../components/ui/Button'
 
 const POLL_MS = 2000
 const SECTIONS = ['overview', 'engines', 'modules', 'jobs', 'controls']
@@ -269,7 +270,7 @@ function SupremeNerveCenterInner() {
         </div>
         <nav className="flex-1 space-y-1 p-2">
           {SECTIONS.map((id) => (
-            <button
+            <Button variant="unstyled"
               key={id}
               type="button"
               onClick={() => setSection(id)}
@@ -280,7 +281,7 @@ function SupremeNerveCenterInner() {
               }`}
             >
               {sectionLabel(id)}
-            </button>
+            </Button>
           ))}
         </nav>
         <div className="border-t border-[var(--border-default)] p-3 text-[10px] font-mono text-[var(--text-muted)]">

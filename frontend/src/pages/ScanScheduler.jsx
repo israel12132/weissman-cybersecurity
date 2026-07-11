@@ -8,6 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 /**
  * ScanScheduler - Automated scan scheduling and management
@@ -189,7 +190,7 @@ export default function ScanScheduler() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'active', 'paused'].map((f) => (
-              <button
+              <Button variant="unstyled"
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -199,17 +200,17 @@ export default function ScanScheduler() {
                 }`}
               >
                 {t(`pages.scanScheduler.filter_${f}`)}
-              </button>
+              </Button>
             ))}
           </div>
 
-          <button
+          <Button variant="unstyled"
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.scanScheduler.create_schedule')}
-          </button>
+          </Button>
         </div>
 
         {/* Schedules List */}
@@ -247,7 +248,7 @@ export default function ScanScheduler() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => toggleSchedule(schedule.id, schedule.enabled)}
                         className={`p-2 rounded-lg border transition-colors ${
                           schedule.enabled
@@ -260,7 +261,7 @@ export default function ScanScheduler() {
                         ) : (
                           <Pause className="w-4 h-4" />
                         )}
-                      </button>
+                      </Button>
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -327,26 +328,26 @@ export default function ScanScheduler() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => runNow(schedule.id)}
                         disabled={!schedule.enabled}
                         className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play className="w-3 h-3" />
                         Run Now
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => setEditModal(schedule)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => deleteSchedule(schedule.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -359,7 +360,7 @@ export default function ScanScheduler() {
         <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-md border border-cyan-500/30 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-3">Quick Templates</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <button
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'daily',
@@ -372,8 +373,8 @@ export default function ScanScheduler() {
             >
               <div className="text-sm font-medium text-white mb-1">Daily Scan</div>
               <div className="text-xs text-[var(--text-tertiary)]">Run comprehensive scan every day at 2 AM</div>
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'weekly',
@@ -386,8 +387,8 @@ export default function ScanScheduler() {
             >
               <div className="text-sm font-medium text-white mb-1">Weekly Scan</div>
               <div className="text-xs text-[var(--text-tertiary)]">Deep scan every Sunday</div>
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'custom',
@@ -398,7 +399,7 @@ export default function ScanScheduler() {
             >
               <div className="text-sm font-medium text-white mb-1">Custom Cron</div>
               <div className="text-xs text-[var(--text-tertiary)]">Advanced cron expression</div>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -484,12 +485,12 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
           <h3 className="text-lg font-bold text-white">
             {schedule ? 'Edit Schedule' : 'Create Scan Schedule'}
           </h3>
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
@@ -592,19 +593,19 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-[var(--border-strong)] text-[var(--text-secondary)] border border-[var(--border-strong)] rounded-lg text-sm font-medium hover:bg-[var(--border-strong)] transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : schedule ? 'Save Changes' : 'Create Schedule'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

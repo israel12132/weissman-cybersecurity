@@ -9,6 +9,7 @@ import RateLimitStatus from '../RateLimitStatus'
 import NotificationBell from './NotificationBell'
 import ScanStatusIndicator from './ScanStatusIndicator'
 import { buildBreadcrumbs } from '../../lib/appNav'
+import Button from '../ui/Button'
 
 // Themeable via the --shell-bg token (flips with data-theme).
 const SHELL_BG = 'var(--shell-bg)'
@@ -89,7 +90,7 @@ export default function AppShell({
               <div className="flex-1 min-w-0 mr-4">
                 <BreadcrumbTrail crumbs={breadcrumbs} />
               </div>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={openCommandPalette}
                 aria-keyshortcuts="Meta+K Control+K"
@@ -99,15 +100,15 @@ export default function AppShell({
                 <Search className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>{t('components.globalSearch.triggerLabel')}</span>
                 <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">{modKey}K</kbd>
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={openCommandPalette}
                 aria-label={t('components.globalSearch.placeholder')}
                 className="sm:hidden inline-flex items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               >
                 <Search className="w-4 h-4" aria-hidden="true" />
-              </button>
+              </Button>
               <ScanStatusIndicator />
               <RateLimitStatus compact />
               <NotificationBell />

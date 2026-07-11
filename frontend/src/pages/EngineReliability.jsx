@@ -10,6 +10,7 @@ import EngineRealityBadge, { REALITY_KIND_META, EngineRealitySummary } from '../
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { api } from '../utils/apiFetch'
+import Button from '../components/ui/Button'
 
 const KIND_FILTERS = ['all', 'real_probe', 'alias', 'agent_required', 'special']
 
@@ -258,7 +259,7 @@ export default function EngineReliability() {
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
                 {KIND_FILTERS.map((k) => (
-                  <button
+                  <Button variant="unstyled"
                     key={k}
                     type="button"
                     onClick={() => setKindFilter(k)}
@@ -271,7 +272,7 @@ export default function EngineReliability() {
                     {k === 'all'
                       ? t('pages.engineReliability.all')
                       : (REALITY_KIND_META[k]?.label ?? k)}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <label className="flex items-center gap-2 text-xs text-[var(--text-tertiary)] cursor-pointer">

@@ -12,6 +12,7 @@ import { apiFetch } from '../lib/apiBase'
 import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
 import { useClient } from '../context/ClientContext'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.templateEngineWorkbench'
 
@@ -207,14 +208,14 @@ function TemplateEngineWorkbenchBody() {
                 )}
                 {templates.length === 0 && <option value="http_baseline">http_baseline</option>}
               </select>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={!canRun || running || loadingYaml}
                 onClick={run}
                 className="px-4 py-2 rounded-xl border border-blue-500/30 text-blue-300/70 text-[12px] font-mono uppercase hover:bg-blue-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {running ? `⟳ ${t(`${NS}.running`)}` : `▶ ${t(`${NS}.run`)}`}
-              </button>
+              </Button>
             </div>
             {error && (
               <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-200">

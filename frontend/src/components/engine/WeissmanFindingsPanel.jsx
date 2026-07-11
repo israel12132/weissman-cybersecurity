@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
 import EmptyState from '../ui/EmptyState'
 import { SkeletonBar, SkeletonWidgetGrid } from '../ui/Skeleton'
+import Button from '../ui/Button'
 
 const SEV_COLORS = {
   critical: '#ef4444',
@@ -141,7 +142,7 @@ export default function WeissmanFindingsPanel({
           </div>
           <div className="flex gap-1 flex-wrap">
             {SEV_FILTER_OPTIONS.map((s) => (
-              <button
+              <Button variant="unstyled"
                 key={s}
                 type="button"
                 onClick={() => onSeverityChange?.(s)}
@@ -152,7 +153,7 @@ export default function WeissmanFindingsPanel({
                 }`}
               >
                 {s === 'all' ? t('weissmanFindings.filter_all') : s}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

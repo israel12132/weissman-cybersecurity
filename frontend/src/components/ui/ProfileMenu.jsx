@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
 import useFocusTrap from '../../hooks/useFocusTrap'
+import Button from './Button'
 
 const QUICK_LINKS = [
   { to: '/ask', labelKey: 'nav.ask_weissman', icon: MessageSquare },
@@ -69,7 +70,7 @@ export default function ProfileMenu({ variant = 'header' }) {
 
   return (
     <div ref={ref} className={`relative ${isSidebar ? 'w-full' : ''}`}>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={triggerClass}
@@ -96,7 +97,7 @@ export default function ProfileMenu({ variant = 'header' }) {
           className={`w-3.5 h-3.5 shrink-0 opacity-50 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           strokeWidth={2}
         />
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -122,7 +123,7 @@ export default function ProfileMenu({ variant = 'header' }) {
               {SUPPORTED_LANGUAGES.map((l) => {
                 const active = lang === l.code
                 return (
-                  <button
+                  <Button variant="unstyled"
                     key={l.code}
                     type="button"
                     onClick={() => i18n.changeLanguage(l.code)}
@@ -134,7 +135,7 @@ export default function ProfileMenu({ variant = 'header' }) {
                     aria-pressed={active}
                   >
                     {l.flag} {l.label}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -144,7 +145,7 @@ export default function ProfileMenu({ variant = 'header' }) {
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1.5 px-1">
               {t('common.theme')}
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={toggleTheme}
               className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[12px] font-mono text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors"
@@ -157,7 +158,7 @@ export default function ProfileMenu({ variant = 'header' }) {
               <span className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
                 {t('common.switch')}
               </span>
-            </button>
+            </Button>
           </div>
 
           <div className="border-t border-[var(--border-default)] pt-3 space-y-0.5">
@@ -181,14 +182,14 @@ export default function ProfileMenu({ variant = 'header' }) {
           </div>
 
           <div className="border-t border-[var(--border-default)] pt-3">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => { setOpen(false); logout() }}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[12px] font-mono text-rose-300 hover:bg-rose-500/10"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} />
               {t('common.logout')}
-            </button>
+            </Button>
           </div>
         </div>
       )}

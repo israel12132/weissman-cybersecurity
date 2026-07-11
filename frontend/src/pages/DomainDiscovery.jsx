@@ -8,6 +8,7 @@ import { SkeletonBar } from '../components/ui/Skeleton'
 
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import Button from '../components/ui/Button'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -164,14 +165,14 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
       )}
 
       {/* Action button */}
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => onScanClick(domain.domain)}
         disabled={!domain.live}
         className="w-full px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wide border border-cyan-500/30 text-cyan-300/70 hover:bg-cyan-950/40 hover:text-cyan-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         {t('pages.domainDiscovery.add_to_scan')}
-      </button>
+      </Button>
     </motion.div>
   )
 }
@@ -483,14 +484,14 @@ export default function DomainDiscovery() {
               />
             </div>
             <div className="flex items-end">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={handleDiscover}
                 disabled={loading || !target.trim()}
                 className="w-full px-5 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {loading ? t('pages.domainDiscovery.discovering') : t('pages.domainDiscovery.discover')}
-              </button>
+              </Button>
             </div>
           </div>
           <p className="text-[11px] text-[var(--text-muted)]">
@@ -556,7 +557,7 @@ export default function DomainDiscovery() {
 
               {/* Selection actions */}
               <div className="flex items-center gap-2">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => exportDomainsCsv(filteredDomains)}
                   disabled={filteredDomains.length === 0}
@@ -564,29 +565,29 @@ export default function DomainDiscovery() {
                 >
                   <Download className="w-3.5 h-3.5" />
                   {t('pages.domainDiscovery.export_csv')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleSelectAll}
                   className="px-3 py-1 rounded-lg text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('pages.domainDiscovery.select_all_count', { count: filteredDomains.length })}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleSelectNone}
                   className="px-3 py-1 rounded-lg text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('pages.domainDiscovery.deselect_all')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleScanAll}
                   disabled={scanAllLoading || selectedDomains.size === 0 || !selectedClientId}
                   className="px-4 py-1.5 rounded-lg text-[11px] font-mono font-semibold bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {scanAllLoading ? t('pages.domainDiscovery.scanning') : t('pages.domainDiscovery.scan_all_selected', { count: selectedDomains.size })}
-                </button>
+                </Button>
               </div>
             </div>
 

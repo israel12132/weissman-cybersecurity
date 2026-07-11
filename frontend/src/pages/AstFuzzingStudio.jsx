@@ -10,6 +10,7 @@ import AstTreeViewer from '../engineC2/modules/AstTreeViewer'
 import { useResolvedEngineManifest } from '../engineC2/EngineManifestContext'
 import { useLocation } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const PRESETS = [
   { id: 'json', value: '{"id":1,"name":"alice","enabled":true,"tags":["a","b"]}' },
@@ -149,14 +150,14 @@ function AstFuzzingStudioBody() {
               {t('pages.astFuzzingStudio.presets_label')}
             </span>
             {PRESETS.map((p) => (
-              <button
+              <Button variant="unstyled"
                 key={p.id}
                 type="button"
                 onClick={() => setPayload(p.value)}
                 className="px-2 py-1 rounded-md text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-amber-200 hover:border-amber-500/30 transition-colors"
               >
                 {t(`pages.astFuzzingStudio.preset_${p.id}`)}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -180,7 +181,7 @@ function AstFuzzingStudioBody() {
                 className="w-24 rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-amber-500/40"
               />
             </label>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={!canRun || loading}
               onClick={run}
@@ -188,16 +189,16 @@ function AstFuzzingStudioBody() {
             >
               {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
               {loading ? t('pages.astFuzzingStudio.generating') : t('pages.astFuzzingStudio.generate')}
-            </button>
+            </Button>
             {payload && (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => setPayload('')}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-default)] text-[var(--text-muted)] text-[12px] font-mono hover:text-[var(--text-secondary)] transition-all"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 {t('pages.astFuzzingStudio.clear')}
-              </button>
+              </Button>
             )}
           </div>
 

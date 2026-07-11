@@ -9,6 +9,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 /**
  * IdentityContextManager - User identity and access context tracking
@@ -152,12 +153,12 @@ export default function IdentityContextManager() {
               <div className="flex-1">
                 <span className="text-sm font-mono text-amber-300/90">{error}</span>
               </div>
-              <button
+              <Button variant="unstyled"
                 onClick={() => clientId != null && fetchIdentities(clientId)}
                 className="text-xs text-amber-400 hover:text-amber-300 font-medium transition-colors"
               >
                 {t('pages.identityContextManager.retry')}
-              </button>
+              </Button>
             </div>
           </motion.div>
         )}
@@ -408,13 +409,13 @@ function IdentityDetailModal({ identity, onClose }) {
         >
           <div className="flex items-center justify-between mb-6">
             <h3 id="modal-title" className="text-lg font-bold text-white">{identity.username}</h3>
-            <button
+            <Button variant="unstyled"
               onClick={onClose}
               className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] rounded-lg transition-all"
               aria-label={t('pages.identityContextManager.close_modal')}
             >
               <X className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
           <div className="space-y-4">
@@ -491,12 +492,12 @@ function IdentityDetailModal({ identity, onClose }) {
             transition={{ delay: 0.4 }}
             className="mt-6"
           >
-            <button
+            <Button variant="unstyled"
               onClick={onClose}
               className="w-full px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900"
             >
               {t('pages.identityContextManager.close')}
-            </button>
+            </Button>
           </motion.div>
         </motion.div>
       </div>

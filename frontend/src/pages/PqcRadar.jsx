@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'pqc_scanner'
 
@@ -95,7 +96,7 @@ function Section({ title, icon, accent = '#10b981', count, defaultOpen = true, c
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
@@ -106,7 +107,7 @@ function Section({ title, icon, accent = '#10b981', count, defaultOpen = true, c
           {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
         <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
@@ -167,7 +168,7 @@ function SelectField({ label, hint, value, onChange, options }) {
 
 function Toggle({ label, value, onChange }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={() => onChange(!value)}
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
@@ -178,7 +179,7 @@ function Toggle({ label, value, onChange }) {
       <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#10b981]/40' : 'bg-[var(--row-hover-bg)]'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${value ? 'left-3.5' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -250,14 +251,14 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
         <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
         {typeof f.confidence === 'number' && (
           <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{Math.round(f.confidence * 100)}%</span>
         )}
         <span className={`text-[var(--text-disabled)] text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+      </Button>
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[var(--border-subtle)]">
           {f.description && <p className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>}
@@ -441,14 +442,14 @@ export default function PqcRadar() {
             />
           </label>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleScan}
           disabled={scanning || !selectedClientId}
           className="px-5 py-2 rounded-xl font-mono text-sm border border-[#10b981]/40 text-[#10b981] bg-[#10b981]/10 hover:bg-[#10b981]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {scanning ? tt('scanning', '⟳ Scanning…') : tt('run_scan', '▶ Run PQC Scan')}
-        </button>
+        </Button>
       </div>
 
       {toast && (
@@ -462,9 +463,9 @@ export default function PqcRadar() {
         <div className="space-y-3 lg:col-span-1">
           <div className="flex items-center justify-between">
             <h3 className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{tt('advanced_params', 'Scan Parameters')}</h3>
-            <button type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] underline">
+            <Button variant="unstyled" type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] underline">
               {tt('reset_defaults', 'reset')}
-            </button>
+            </Button>
           </div>
 
           <Section title={tt('sec_scope', 'Scope')} icon="◎">

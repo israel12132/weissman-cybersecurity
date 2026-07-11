@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
 import { alertDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 function pct(n) {
   const v = Number(n)
@@ -148,14 +149,14 @@ export default function ClientSaasIdpDiscovery() {
           <Link to={`/clients/${clientId}`} className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {t('pages.clientSaasIdpDiscovery.back_to_client')}
           </Link>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={runDiscovery}
             disabled={running}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
           >
             {running ? t('pages.clientSaasIdpDiscovery.running') : t('pages.clientSaasIdpDiscovery.rerun')}
-          </button>
+          </Button>
         </div>
 
         {error && (
@@ -224,22 +225,22 @@ export default function ClientSaasIdpDiscovery() {
                         </div>
                         <div className="flex items-center gap-2">
                           {issuer && (
-                            <button
+                            <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(issuer)}
                               className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_issuer')}
-                            </button>
+                            </Button>
                           )}
                           {finalHost && (
-                            <button
+                            <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(finalHost)}
                               className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_host')}
-                            </button>
+                            </Button>
                           )}
                           <Link
                             to="/sso-config"

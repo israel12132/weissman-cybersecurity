@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Compass, LayoutDashboard, Radar, ShieldAlert } from 'lucide-react'
 import Logo from '../Logo'
+import Button from './Button'
 
 const QUICK_LINKS = [
   { to: '/', label: 'Dashboard', desc: 'Command Center overview', Icon: LayoutDashboard },
@@ -69,14 +70,14 @@ export default function NotFound() {
         </nav>
 
         <div className="flex gap-3 justify-center flex-wrap">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => window.history.back()}
             className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors"
             style={{ transitionDuration: 'var(--duration-fast)' }}
           >
             ← Go back
-          </button>
+          </Button>
           <Link
             to="/status"
             className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"

@@ -7,6 +7,7 @@ import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
 import SupplyChainGraph from './SupplyChainGraph'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
+import Button from './Button'
 
 const REACH_META = {
   client_runtime: { color: '#fb7185', key: 'client_runtime' },
@@ -332,14 +333,14 @@ export default function FindingDrawer({
                   )}
                 </div>
 
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={onClose}
                   className="shrink-0 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                   aria-label={t('components.findingDrawer.close')}
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </Button>
               </div>
 
               {/* Action bar */}
@@ -372,7 +373,7 @@ export default function FindingDrawer({
                     variant="primary"
                   />
                   {actions.map((action) => (
-                    <button
+                    <Button variant="unstyled"
                       key={action.label}
                       type="button"
                       onClick={action.onClick}
@@ -383,7 +384,7 @@ export default function FindingDrawer({
                       }
                     >
                       {action.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
             </div>
@@ -392,7 +393,7 @@ export default function FindingDrawer({
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6 custom-scroll text-sm">
               <div className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)] pb-3 -mt-1">
                 {drawerTabs.map((tab) => (
-                  <button
+                  <Button variant="unstyled"
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
@@ -403,7 +404,7 @@ export default function FindingDrawer({
                     }`}
                   >
                     {tab.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
 

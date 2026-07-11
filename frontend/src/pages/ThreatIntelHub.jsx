@@ -37,6 +37,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
 
 // ── Severity model ────────────────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ function FeedRow({ item, expanded, onToggle, t }) {
   const url = nvdUrl(id)
   return (
     <div className="border-b border-[var(--border-subtle)] last:border-0">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={onToggle}
         className="w-full text-left flex items-start gap-3 py-3 group"
@@ -224,7 +225,7 @@ function FeedRow({ item, expanded, onToggle, t }) {
         <ChevronDown
           className={`w-4 h-4 text-[var(--text-disabled)] shrink-0 mt-1 transition-transform ${expanded ? 'rotate-180' : ''}`}
         />
-      </button>
+      </Button>
       <AnimatePresence initial={false}>
         {expanded && url && (
           <motion.div
@@ -557,13 +558,13 @@ function CoveragePanel({ t }) {
             />
           ))}
           {activeGroup && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setActiveGroup(null)}
               className="w-full text-center text-[10px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] mt-2 transition-colors"
             >
               ✕ {t('pages.threatIntelHub.clear_filter')}
-            </button>
+            </Button>
           )}
 
           <div className="mt-6">
@@ -586,13 +587,13 @@ function CoveragePanel({ t }) {
                 className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-9 pr-8 py-2 text-xs text-[var(--text-secondary)] placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
               />
               {search && (
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => setSearch('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)]"
                 >
                   <X className="w-3.5 h-3.5" />
-                </button>
+                </Button>
               )}
             </div>
             <span className="text-[10px] font-mono text-[var(--text-disabled)] whitespace-nowrap">
@@ -692,7 +693,7 @@ export default function ThreatIntelHub() {
           })}
         </span>
       )}
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setAuto((v) => !v)}
         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-mono border transition-colors ${
@@ -703,7 +704,7 @@ export default function ThreatIntelHub() {
         title={t('pages.threatIntelHub.auto_refresh_hint')}
       >
         {auto ? '◉' : '◯'} {t('pages.threatIntelHub.auto_refresh')}
-      </button>
+      </Button>
       <ShellScanActions
         onRefresh={reloadAll}
         onExport={feedWorkbench.exportCsv}
@@ -850,7 +851,7 @@ export default function ThreatIntelHub() {
 
 function TabButton({ active, onClick, icon: Icon, children }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 -mb-px transition-colors ${
@@ -861,6 +862,6 @@ function TabButton({ active, onClick, icon: Icon, children }) {
     >
       {Icon && <Icon className="w-3.5 h-3.5" />}
       {children}
-    </button>
+    </Button>
   )
 }

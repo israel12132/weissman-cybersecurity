@@ -1,3 +1,4 @@
+import Button from './Button'
 
 /**
  * Pill toggle bar for severity, status, KEV-only, etc.
@@ -15,7 +16,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
           const color = pill.color || '#22d3ee'
           const active = !!pill.active
           return (
-            <button
+            <Button variant="unstyled"
               key={pill.id}
               id={pill.id}
               type="button"
@@ -50,7 +51,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
                   {pill.count}
                 </span>
               )}
-            </button>
+            </Button>
           )
         })}
       </div>

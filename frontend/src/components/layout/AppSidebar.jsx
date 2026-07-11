@@ -5,6 +5,7 @@ import { ChevronDown, Menu, X } from 'lucide-react'
 import Logo from '../Logo'
 import { NAV_GROUPS, PRIMARY_NAV, isNavActive, canAccessNavItem } from '../../lib/appNav'
 import { useAuth } from '../../context/AuthContext'
+import Button from '../ui/Button'
 
 function NavLink({ item, label, active, onNavigate, betaLabel }) {
   return (
@@ -122,7 +123,7 @@ export default function AppSidebar() {
 
           return (
             <div key={group.id} className="mb-1">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => toggleGroup(group.id)}
                 className={[
@@ -135,7 +136,7 @@ export default function AppSidebar() {
                 <ChevronDown
                   className={`w-3 h-3 shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
                 />
-              </button>
+              </Button>
               {!isCollapsed && (
                 <div className="mt-0.5 space-y-0.5">
                   {visibleItems.map((item) => (
@@ -159,17 +160,17 @@ export default function AppSidebar() {
 
   return (
     <>
-      <button
+      <Button variant="unstyled"
         type="button"
         className="print:hidden lg:hidden fixed top-3 left-3 z-40 p-2 rounded-lg border border-[var(--border-strong)] bg-[var(--sidebar-surface)] backdrop-blur-md text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         onClick={() => setMobileOpen(true)}
         aria-label={t('nav.open_menu')}
       >
         <Menu className="w-5 h-5" />
-      </button>
+      </Button>
 
       {mobileOpen && (
-        <button
+        <Button variant="unstyled"
           type="button"
           className="lg:hidden fixed inset-0 z-40 bg-[var(--scrim)] backdrop-blur-sm"
           aria-label={t('nav.close_menu')}
@@ -185,14 +186,14 @@ export default function AppSidebar() {
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         ].join(' ')}
       >
-        <button
+        <Button variant="unstyled"
           type="button"
           className="lg:hidden absolute top-3 right-3 p-1.5 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]"
           onClick={() => setMobileOpen(false)}
           aria-label={t('nav.close_menu')}
         >
           <X className="w-4 h-4" />
-        </button>
+        </Button>
         {sidebarBody}
       </aside>
     </>

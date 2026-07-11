@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 const ACCENT = '#22d3ee';
 
@@ -154,7 +155,7 @@ export default function ThreatAnalysisCenter() {
             refreshDisabled={clientId == null}
             exportDisabled={!filteredFindings.length}
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={persistIncidents}
             disabled={persisting || clientId == null}
@@ -164,7 +165,7 @@ export default function ThreatAnalysisCenter() {
             {persisting
               ? t('pages.threatAnalysis.persisting')
               : t('pages.threatAnalysis.persist')}
-          </button>
+          </Button>
         </div>
       )}
     >

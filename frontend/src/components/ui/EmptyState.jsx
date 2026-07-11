@@ -8,6 +8,7 @@ import {
   Shield,
   ShieldOff,
 } from 'lucide-react'
+import Button from './Button'
 
 const ICON_MAP = {
   inbox: Inbox,
@@ -93,13 +94,13 @@ export default function EmptyState({
                 {cta.label}
               </Link>
             ) : (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={cta.onClick}
                 className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
               >
                 {cta.label}
-              </button>
+              </Button>
             ))}
           {secondary &&
             (secondary.to ? (
@@ -117,13 +118,13 @@ export default function EmptyState({
                 {secondary.label}
               </a>
             ) : (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={secondary.onClick}
                 className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
-              </button>
+              </Button>
             ))}
         </div>
       )}

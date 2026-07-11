@@ -16,6 +16,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'oauth_oidc'
 const ACCENT = '#22d3ee'
@@ -387,7 +388,7 @@ function FindingCard({ finding, L }) {
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-0.5 w-1.5 self-stretch rounded-full" style={{ backgroundColor: sevColor(finding.severity) }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -399,7 +400,7 @@ function FindingCard({ finding, L }) {
           <div className="text-sm text-[var(--text-primary)] mt-1 font-medium">{finding.title}</div>
         </div>
         <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '−' : '+'}</span>
-      </button>
+      </Button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -451,14 +452,14 @@ function FindingCard({ finding, L }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full text-left"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#a5f3fc' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>
         <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: on ? '14px' : '2px' }} />
       </span>
       <span>{label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -466,11 +467,11 @@ function Segmented({ value, onChange, options }) {
   return (
     <div className="inline-flex rounded-lg border border-[var(--border-default)] p-0.5 bg-[var(--table-surface)]">
       {options.map((o) => (
-        <button key={o.value} type="button" onClick={() => onChange(o.value)}
+        <Button variant="unstyled" key={o.value} type="button" onClick={() => onChange(o.value)}
           className="px-3 py-1 rounded-md text-xs font-mono transition-all"
           style={value === o.value ? { backgroundColor: `${ACCENT}25`, color: '#a5f3fc' } : { color: '#ffffff50' }}>
           {o.label}
-        </button>
+        </Button>
       ))}
     </div>
   )
@@ -672,15 +673,15 @@ export default function IdentitySecurityCenter() {
             </div>
             <div className="flex gap-2">
               {findings.length > 0 && (
-                <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+                <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   {L.export}
-                </button>
+                </Button>
               )}
-              <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+              <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
                 className="px-5 py-2 rounded-xl font-mono text-sm border transition-all disabled:opacity-40"
                 style={{ borderColor: `${ACCENT}50`, color: '#a5f3fc', backgroundColor: `${ACCENT}18` }}>
                 {status === 'running' ? L.scanning : L.run}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -695,11 +696,11 @@ export default function IdentitySecurityCenter() {
           <span className="text-[11px] font-mono text-[var(--text-muted)] block mb-2">{L.presets}</span>
           <div className="flex flex-wrap gap-1.5">
             {PROVIDER_PRESETS.map((p) => (
-              <button key={p.id} type="button" title={p.hint}
+              <Button variant="unstyled" key={p.id} type="button" title={p.hint}
                 onClick={() => { set('issuer', p.hint); if (!target.trim()) setTarget(p.hint) }}
                 className="text-[10px] font-mono px-2.5 py-1 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-cyan-500/40 hover:text-cyan-200 transition-colors">
                 {p.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -750,9 +751,9 @@ export default function IdentitySecurityCenter() {
           <Toggle on={params.emit_agent_guidance} onClick={() => set('emit_agent_guidance', !params.emit_agent_guidance)} label={L.emitAgentGuidance} />
         </div>
 
-        <button type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-xs font-mono text-cyan-300/70 hover:text-cyan-200 mt-2">
+        <Button variant="unstyled" type="button" onClick={() => setShowAdvanced((s) => !s)} className="text-xs font-mono text-cyan-300/70 hover:text-cyan-200 mt-2">
           {showAdvanced ? '▾' : '▸'} {L.advanced}
-        </button>
+        </Button>
         <AnimatePresence>
           {showAdvanced && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
@@ -782,7 +783,7 @@ export default function IdentitySecurityCenter() {
                   <input type="number" value={params.concurrency} onChange={(e) => set('concurrency', e.target.value)}
                     className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-sm font-mono text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40" />
                 </label>
-                <button type="button" onClick={() => setParams(defaultParams())} className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline md:col-span-2">{L.reset}</button>
+                <Button variant="unstyled" type="button" onClick={() => setParams(defaultParams())} className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline md:col-span-2">{L.reset}</Button>
               </div>
             </motion.div>
           )}

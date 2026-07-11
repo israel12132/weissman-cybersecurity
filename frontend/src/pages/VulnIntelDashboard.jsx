@@ -15,6 +15,7 @@ import SeverityBadge, { SEVERITY_META, getSeverityMeta } from '../components/ui/
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import Button from '../components/ui/Button'
 
 const STATUS_COLORS = {
   OPEN: '#ef4444',
@@ -261,7 +262,7 @@ export default function VulnIntelDashboard() {
           onRefresh={() => load()}
           refreshLabel={t('common.refresh')}
         >
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
             disabled={filtered.length === 0}
@@ -269,14 +270,14 @@ export default function VulnIntelDashboard() {
           >
             <Download className="h-3.5 w-3.5" />
             {t('vuln_intel.export_csv')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
           >
             {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
-          </button>
+          </Button>
         </PremiumPageHeader>
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -382,8 +383,8 @@ export default function VulnIntelDashboard() {
               <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('findings.views_label')}</span>
               {savedViews.map((v) => (
                 <span key={v.id} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] pl-2.5 pr-1 py-1 text-[11px] font-mono text-[var(--text-secondary)]">
-                  <button type="button" onClick={() => applyView(v.state)} className="hover:text-cyan-300 transition-colors" title={t('findings.view_apply')}>{v.name}</button>
-                  <button type="button" onClick={() => deleteView(v.id)} aria-label={t('findings.view_delete', { name: v.name })} className="w-4 h-4 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-300 transition-colors">×</button>
+                  <Button variant="unstyled" type="button" onClick={() => applyView(v.state)} className="hover:text-cyan-300 transition-colors" title={t('findings.view_apply')}>{v.name}</Button>
+                  <Button variant="unstyled" type="button" onClick={() => deleteView(v.id)} aria-label={t('findings.view_delete', { name: v.name })} className="w-4 h-4 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-300 transition-colors">×</Button>
                 </span>
               ))}
               {savedViews.length === 0 && (
@@ -398,7 +399,7 @@ export default function VulnIntelDashboard() {
                   aria-label={t('findings.view_name_placeholder')}
                   className="w-40 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
                 />
-                <button type="submit" disabled={!viewName.trim()} className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">{t('findings.view_save')}</button>
+                <Button variant="unstyled" type="submit" disabled={!viewName.trim()} className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">{t('findings.view_save')}</Button>
               </form>
             </div>
           </div>

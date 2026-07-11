@@ -30,6 +30,7 @@ import {
   Bar,
   BarChart,
 } from 'recharts'
+import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
 
@@ -357,14 +358,14 @@ export default function TopTierEngineProfile() {
               placeholder={profile.requiresTarget ? t('pages.topTierEngineProfile.target_required') : t('pages.topTierEngineProfile.target_optional')}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={runProbe}
               disabled={runState.running}
               className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
             >
               {runState.running ? t('pages.topTierEngineProfile.running') : t('pages.topTierEngineProfile.queue_scan')}
-            </button>
+            </Button>
           </div>
           {paramSchema.length > 0 && (
             <EngineScanParamsPanel
@@ -377,20 +378,20 @@ export default function TopTierEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={exportJson}
               className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
             >
               {t('pages.topTierEngineProfile.export_json')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={exportPdf}
               className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
             >
               {t('pages.topTierEngineProfile.export_pdf')}
-            </button>
+            </Button>
             {activeJobId && <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{t('pages.topTierEngineProfile.job_id', { id: activeJobId })}</span>}
           </div>
           {runState.msg && <div className="text-[12px] font-mono text-[var(--text-tertiary)]">{runState.msg}</div>}
