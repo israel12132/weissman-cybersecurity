@@ -98,18 +98,21 @@ export function computeLocalReadiness(catalog, tenantStatus, form, selectedModul
   const items = [...reqIds].map((id) => {
     const def = catalog.requirements[id] || {}
     const scope = def.scope || 'client'
-    const satisfied = scope === 'tenant' ? !!checks[id] : !!checks[id]
-    const hard = !optional.has(id)
+    const satisfied = !!checks[id]
+    // Tenant-scoped requirements (tenant_llm/tenant_oast/entitlement) are a
+    // one-time admin config, not a per-client field — surface them but never let
+    // an unconfigured tenant hard-block onboarding of an individual client.
+    const hard = !optional.has(id) && scope !== 'tenant'
     return { id, def, satisfied, hard, scope }
   })
 
   const required = items.filter((i) => i.hard)
   const satisfiedCount = required.filter((i) => i.satisfied).length
-  const total = required.length || 1
 
   return {
     ready: required.every((i) => i.satisfied),
-    percent: Math.round((satisfiedCount * 100) / total),
+    // No hard requirements → fully ready (100%), not the contradictory 0%.
+    percent: required.length === 0 ? 100 : Math.round((satisfiedCount * 100) / required.length),
     satisfied: satisfiedCount,
     total: required.length,
     items,

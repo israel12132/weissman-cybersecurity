@@ -20,4 +20,20 @@ describe('useEngineRequirements helpers', () => {
     const p = buildClientPayload({ ...defaultOnboardingForm(), name: 'Acme', scope_domains: 'a.com' })
     expect(p.name).toBe('Acme')
   })
+  it('buildClientPayload carries the eBPF runtime-probe fields', () => {
+    const p = buildClientPayload({ ...defaultOnboardingForm(), ebpf_ssh_host: '10.0.0.5', ebpf_ssh_user: 'root' })
+    expect(p.onboarding.ebpf_ssh_host).toBe('10.0.0.5')
+    expect(p.onboarding.ebpf_ssh_user).toBe('root')
+  })
+  it('tenant-scoped requirement never hard-blocks client onboarding', () => {
+    const catalog = {
+      requirements: { tenant_llm: { scope: 'tenant' } },
+      modules: { ai_redteam: { requirements: ['tenant_llm'] } },
+    }
+    // Tenant LLM NOT configured → requirement unsatisfied, but tenant-scoped.
+    const r = computeLocalReadiness(catalog, { llm_configured: false }, {}, ['ai_redteam'])
+    expect(r.items.find((i) => i.id === 'tenant_llm')?.hard).toBe(false)
+    expect(r.ready).toBe(true) // onboarding not blocked by a global tenant setting
+    expect(r.percent).toBe(100) // no hard reqs → 100%, not the old contradictory 0%
+  })
 })

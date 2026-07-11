@@ -61,4 +61,14 @@ describe('incidentSla', () => {
     expect(sla.unknown).toBe(true)
     expect(sla.breached).toBe(false)
   })
+
+  it('freezes a resolved incident with no updated timestamp instead of drifting', () => {
+    const created = new Date(0).toISOString()
+    // Far-future clock: an unresolved incident would be massively breached; a
+    // resolved one with no `updated` must freeze at created (elapsed 0 → met).
+    const sla = computeSla({ severity: 'critical', status: 'resolved', created }, 5000 * HOUR)
+    expect(sla.elapsedMs).toBe(0)
+    expect(sla.breached).toBe(false)
+    expect(slaBand(sla)).toBe('met')
+  })
 })

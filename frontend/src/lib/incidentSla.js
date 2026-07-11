@@ -30,7 +30,12 @@ export function computeSla(incident, nowMs) {
     return { targetMs, elapsedMs: 0, remainingMs: targetMs, breached: false, pct: 0, resolved: false, unknown: true }
   }
   const resolved = String(incident?.status ?? '').toLowerCase() === 'resolved'
-  const endMs = resolved && incident?.updated ? new Date(incident.updated).getTime() : nowMs
+  // A resolved incident freezes the clock. Prefer its `updated` timestamp; if it
+  // is missing, freeze at `created` (elapsed 0 → treated as met) rather than
+  // letting the live clock keep counting up for finished work.
+  const endMs = resolved
+    ? (incident?.updated ? new Date(incident.updated).getTime() : createdMs)
+    : nowMs
   const elapsedMs = Math.max(0, (Number.isFinite(endMs) ? endMs : nowMs) - createdMs)
   const remainingMs = targetMs - elapsedMs
   const breached = remainingMs <= 0

@@ -84,19 +84,37 @@ function isKevListed(f) {
   return !!(f?.kev_listed || f?.kev || f?.raw?.kev)
 }
 
-/** Map source/engine-id string → registry label & group */
+// Registry is static, so precompute a normalized-label → engine index ONCE
+// instead of scanning all ~563 engines on every unmatched lookup. Results are
+// memoized by raw input — the accessors below run per-row × per-render over a
+// 2000-row set, so this must be O(1), not an O(n) find per call.
+const _normLabelIndex = (() => {
+  const idx = new Map()
+  for (const e of Object.values(ENGINES_BY_ID)) {
+    const key = String(e.label || '').toLowerCase().replace(/[-_\s]/g, '')
+    if (key && !idx.has(key)) idx.set(key, e)
+  }
+  return idx
+})()
+const _resolveEngineCache = new Map()
+
+/** Map source/engine-id string → registry label & group (memoized, O(1)). */
 function resolveEngine(sourceOrId) {
   if (!sourceOrId) return { label: '—', group: null, mitre: null }
-  // Direct ID match
+  const cached = _resolveEngineCache.get(sourceOrId)
+  if (cached) return cached
+  let result
   const byId = ENGINES_BY_ID[sourceOrId]
-  if (byId) return { label: byId.label, group: byId.group, mitre: byId.mitre }
-  // Fuzzy match on label (case-insensitive)
-  const lower = sourceOrId.toLowerCase().replace(/[-_\s]/g, '')
-  const found = Object.values(ENGINES_BY_ID).find(
-    (e) => e.label.toLowerCase().replace(/[-_\s]/g, '') === lower,
-  )
-  if (found) return { label: found.label, group: found.group, mitre: found.mitre }
-  return { label: sanitizeFindingPlainText(sourceOrId, 64), group: null, mitre: null }
+  if (byId) {
+    result = { label: byId.label, group: byId.group, mitre: byId.mitre }
+  } else {
+    const found = _normLabelIndex.get(sourceOrId.toLowerCase().replace(/[-_\s]/g, ''))
+    result = found
+      ? { label: found.label, group: found.group, mitre: found.mitre }
+      : { label: sanitizeFindingPlainText(sourceOrId, 64), group: null, mitre: null }
+  }
+  _resolveEngineCache.set(sourceOrId, result)
+  return result
 }
 
 function formatDate(val) {
@@ -502,7 +520,10 @@ export default function FindingsCommandCenter() {
     const { ok, failed } = await bulkUpdateFindingStatus(targets, status, {
       apiFetch,
       onSuccess: (rawId, serverStatus) => {
-        setRawFindings((prev) => prev.map((f) => (Number(f.raw_id) === Number(rawId) ? { ...f, status: serverStatus } : f)))
+        // Match on both keys: targets are `raw_id ?? id`, so a finding without a
+        // raw_id was PATCHed by its id and must be matched by id here too, else
+        // the row shows a stale status despite the server success.
+        setRawFindings((prev) => prev.map((f) => (Number(f.raw_id) === Number(rawId) || Number(f.id) === Number(rawId) ? { ...f, status: serverStatus } : f)))
       },
     })
     setBulkBusy(false)
