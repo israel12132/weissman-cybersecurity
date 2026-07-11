@@ -12,6 +12,7 @@ import { apiFetch, apiUrl } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
+import { promptDialog } from '../utils/confirmDialog'
 
 const ENGINE_ID = 'nexus_sovereign_swarm'
 
@@ -1322,13 +1323,18 @@ export default function NexusSovereignSwarm() {
     }))
   }, [])
 
-  const handleSavePreset = useCallback(() => {
-    const name = window.prompt('Preset name')
+  const handleSavePreset = useCallback(async () => {
+    const name = await promptDialog({
+      title: t('nexusSwarm.save_preset_title'),
+      label: t('nexusSwarm.save_preset_label'),
+      placeholder: t('nexusSwarm.save_preset_label'),
+      required: true,
+    })
     if (!name?.trim()) return
     const all = saveCustomPreset(name.trim(), params)
     setCustomPresets(all)
     appendLine(`[NSSI] Saved preset "${name.trim()}"`)
-  }, [params, appendLine])
+  }, [params, appendLine, t])
 
   const handleWaveReplay = useCallback((waveNum) => {
     applyPreset({ single_wave: String(waveNum), adaptive: true, emit_live_telemetry: true })

@@ -16,6 +16,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
+import { confirmDialog } from '../utils/confirmDialog'
 
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
@@ -333,7 +334,7 @@ export default function SsoDashboard() {
   }, [editingIdp, fetchIdps, showToast, t])
 
   const handleDelete = useCallback(async (id) => {
-    if (!window.confirm(t('pages.ssoDashboard.delete_confirm'))) return
+    if (!(await confirmDialog(t('pages.ssoDashboard.delete_confirm')))) return
     try {
       await api.delete(`/api/sso/idps/${id}`)
       showToast(t('pages.ssoDashboard.connection_removed'))

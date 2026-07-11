@@ -36,6 +36,7 @@ import Logo from '../Logo'
 import ProfileMenu from '../ui/ProfileMenu'
 import LanguageSwitcher from '../LanguageSwitcher'
 import { useToast } from '../ui/Toaster'
+import { confirmDialog } from '../../utils/confirmDialog'
 
 const STORAGE_KEY = 'weissman.nav.sections'
 const GN = 'components.cockpit.globalNexus'
@@ -466,7 +467,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                     onClick={async (e) => {
                       e.stopPropagation()
                       if (isDeleting) return
-                      if (!window.confirm(`Delete "${c.name || id}"?`)) return
+                      if (!(await confirmDialog(t('components.globalNexus.delete_client_confirm', { name: c.name || id })))) return
                       setDeletingId(id)
                       try {
                         const r = await apiFetch(`/api/clients/${id}`, { method: 'DELETE' })

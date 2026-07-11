@@ -1112,6 +1112,8 @@
     "confidence": "Risk confidence ×{{value}}"
   },
   "nexusSwarm": {
+    "save_preset_title": "Save preset",
+    "save_preset_label": "Preset name",
     "title": "Nexus Sovereign Swarm Intelligence",
     "subtitle": "Hyper-scale autonomous hive-mind — thousands of AI agents, emergent consensus, breakthrough SIQ scoring",
     "hive_viz": "Live Hive Visualization",
@@ -5170,6 +5172,7 @@
         "loading_tab": "Loading cockpit tab…"
       },
       "globalNexus": {
+        "delete_client_confirm": "Delete \"{{name}}\"?",
         "ceo_integrated": "Cockpit · mission control",
         "ceo_home": "CEO cockpit home",
         "enter_client_name": "Enter client name",

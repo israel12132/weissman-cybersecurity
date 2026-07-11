@@ -1112,6 +1112,8 @@
     "confidence": "ביטחון סיכון ×{{value}}"
   },
   "nexusSwarm": {
+    "save_preset_title": "שמירת קונפיגורציה",
+    "save_preset_label": "שם הקונפיגורציה",
     "title": "Nexus Sovereign Swarm Intelligence",
     "subtitle": "Hive-mind אוטונומי בקנה מידה ענק — אלפי סוכני AI, הסכמה מתפתחת, ציון SIQ פריצת-דרך",
     "hive_viz": "הדמיית Hive חיה",
@@ -5170,6 +5172,7 @@
         "loading_tab": "טוען לשונית תא פיקוד…"
       },
       "globalNexus": {
+        "delete_client_confirm": "למחוק את \"{{name}}\"?",
         "ceo_integrated": "תא פיקוד · בקרת משימה",
         "ceo_home": "דף בית CEO",
         "enter_client_name": "הזן שם לקוח",

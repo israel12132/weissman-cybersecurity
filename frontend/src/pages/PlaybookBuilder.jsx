@@ -25,6 +25,7 @@ import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { downloadBytes } from '../lib/pdfExport'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { confirmDialog } from '../utils/confirmDialog'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -368,7 +369,7 @@ export default function PlaybookBuilder() {
 
   const remove = async () => {
     if (!selected) return
-    if (!window.confirm(t('playbooks.delete_confirm', { name: selected.name }))) return
+    if (!(await confirmDialog(t('playbooks.delete_confirm', { name: selected.name })))) return
     try {
       const r = await apiFetch(`/api/playbooks/${selected.id}`, { method: 'DELETE' })
       if (r.ok) {

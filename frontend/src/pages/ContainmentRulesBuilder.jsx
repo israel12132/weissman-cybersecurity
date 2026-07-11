@@ -6,6 +6,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
+import { confirmDialog } from '../utils/confirmDialog';
 
 
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
@@ -55,7 +56,7 @@ export default function ContainmentRulesBuilder() {
   };
 
   const deleteRule = async (ruleId) => {
-    if (!confirm(t('pages.containmentRulesBuilder.delete_confirm'))) return;
+    if (!(await confirmDialog(t('pages.containmentRulesBuilder.delete_confirm')))) return;
     if (clientId == null) return;
 
     try {
