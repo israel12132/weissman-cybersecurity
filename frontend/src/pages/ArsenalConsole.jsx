@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Swords, Rocket, ShieldAlert, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
-import { launchEngineScan } from '../lib/launchEngineScan'
 
 /**
  * ArsenalConsole — the system's self-aware, one-click response to a client's threat exposure.
@@ -103,19 +102,26 @@ export default function ArsenalConsole({ clientId }) {
   const gaps = Array.isArray(data?.gaps) ? data.gaps : []
   const plan = useMemo(() => deployList(recommended), [recommended])
 
+  // Deploy the recommended plan through the stealth batch endpoint (rate-limited, jittered, rotated
+  // identity) instead of a burst — so the recommended one-click is as WAF-safe as "Run all".
   const deploy = useCallback(async () => {
     if (deploying || plan.length === 0 || clientId == null) return
     setDeploying(true)
-    for (const engineId of plan) {
-      setLaunchStatus((s) => ({ ...s, [engineId]: 'running' }))
-      try {
-        const res = await launchEngineScan({ engineId, clientId, target })
-        setLaunchStatus((s) => ({ ...s, [engineId]: res.ok ? 'queued' : 'failed' }))
-      } catch {
-        setLaunchStatus((s) => ({ ...s, [engineId]: 'failed' }))
-      }
+    setLaunchStatus({})
+    try {
+      const r = await apiFetch('/api/arsenal/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, target, engines: plan }),
+      })
+      const d = await r.json().catch(() => ({}))
+      const state = r.ok ? 'queued' : 'failed'
+      setLaunchStatus(Object.fromEntries(plan.map((id) => [id, state])))
+    } catch {
+      setLaunchStatus(Object.fromEntries(plan.map((id) => [id, 'failed'])))
+    } finally {
+      setDeploying(false)
     }
-    setDeploying(false)
   }, [deploying, plan, clientId, target])
 
   if (clientId == null || loading) return null
