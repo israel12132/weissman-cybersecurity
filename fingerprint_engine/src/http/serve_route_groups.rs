@@ -92,6 +92,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         // Complete arsenal inventory: every production engine + classification + category + ATT&CK.
         .route("/api/arsenal/catalog", get(api_arsenal_catalog))
+        // Arsenal integrity/de-dup audit: distinct engines vs 100%-duplicate aliases (anti-fluff).
+        .route("/api/arsenal/integrity", get(api_arsenal_integrity))
         // Stealth dispatch plan preview: how a batch of N engines drips out (concurrency/jitter/UA).
         .route("/api/arsenal/deploy-plan", get(api_arsenal_deploy_plan))
         // Stealth batch deploy: "run all" → backend drips the engines under concurrency/jitter/UA.

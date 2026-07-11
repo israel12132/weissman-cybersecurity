@@ -243,6 +243,11 @@ async fn api_arsenal_catalog() -> Response {
     (StatusCode::OK, Json(crate::arsenal_catalog::summary())).into_response()
 }
 
+// ─── Arsenal integrity / de-duplication audit (distinct engines vs duplicate aliases) ───
+async fn api_arsenal_integrity() -> Response {
+    (StatusCode::OK, Json(crate::arsenal_integrity::audit_json())).into_response()
+}
+
 // ─── Stealth batch deploy ("run all" → backend drips the batch like a human red-team) ───
 async fn api_arsenal_deploy(
     State(state): State<Arc<AppState>>,
