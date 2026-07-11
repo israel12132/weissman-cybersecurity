@@ -4,8 +4,14 @@
  * <button className=...> instead of the shared ui/ primitives (DataTable,
  * Button). Guides the incremental primitive-adoption effort.
  *
- * Always exits 0 — this is a guide, not a gate. Run:
- *   node scripts/report-ui-primitives.mjs
+ * Modes:
+ *   node scripts/report-ui-primitives.mjs                 # informational report (exit 0)
+ *   node scripts/report-ui-primitives.mjs --check         # regression ratchet: exit 1 if
+ *                                                          # debt increased vs the baseline
+ *   node scripts/report-ui-primitives.mjs --write-baseline # snapshot current counts
+ *
+ * The ratchet lets the large existing backlog stand while blocking NEW raw
+ * <table>/<button className> from creeping in — adoption only moves one way.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -60,5 +66,39 @@ for (const { file, count } of rawButtonCounts.slice(0, 15)) {
   console.log(`  • ${String(count).padStart(4)}  ${file}`)
 }
 console.log('──────────────────────────────────────────────────────────────')
+
+// --- Regression ratchet ------------------------------------------------------
+const totalButtons = rawButtonCounts.reduce((s, r) => s + r.count, 0)
+const current = {
+  rawTablePages: rawTablePages.length,
+  adHocButtonPages: rawButtonCounts.length,
+  totalAdHocButtons: totalButtons,
+}
+const baselinePath = path.join(root, 'scripts', 'ui-primitives-baseline.json')
+const mode = process.argv.slice(2)
+
+if (mode.includes('--write-baseline')) {
+  fs.writeFileSync(baselinePath, `${JSON.stringify(current, null, 2)}\n`)
+  console.log(`\nBaseline written → ${path.relative(root, baselinePath)}:`, current)
+  process.exit(0)
+}
+
+if (mode.includes('--check')) {
+  if (!fs.existsSync(baselinePath)) {
+    console.error('\n✖ No baseline found. Run with --write-baseline first.')
+    process.exit(1)
+  }
+  const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
+  const regressions = Object.keys(current).filter((k) => current[k] > (baseline[k] ?? 0))
+  if (regressions.length) {
+    console.error('\n✖ UI-primitive debt increased vs baseline (adoption must not regress):')
+    for (const k of regressions) console.error(`    ${k}: ${baseline[k]} → ${current[k]}`)
+    console.error('  Use the shared ui/DataTable + ui/Button primitives, or refresh the')
+    console.error('  baseline (--write-baseline) if the increase is genuinely justified.')
+    process.exit(1)
+  }
+  console.log('\n✓ No UI-primitive regressions vs baseline.', current)
+  process.exit(0)
+}
 
 process.exit(0)

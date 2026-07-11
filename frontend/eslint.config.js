@@ -65,6 +65,21 @@ export default [
       'react/no-unescaped-entities': 'warn',
       'react/display-name': 'warn',
       'react/no-unknown-property': 'warn',
+      // Native browser dialogs are banned app-wide — use utils/confirmDialog
+      // (confirmDialog/promptDialog/alertDialog), which are themed, focus-managed
+      // and i18n-friendly. ERROR so a regression can't re-introduce OS chrome.
+      'no-restricted-globals': [
+        'error',
+        { name: 'confirm', message: 'Use confirmDialog from utils/confirmDialog instead of window.confirm.' },
+        { name: 'prompt', message: 'Use promptDialog from utils/confirmDialog instead of window.prompt.' },
+        { name: 'alert', message: 'Use alertDialog from utils/confirmDialog (or a toast) instead of window.alert.' },
+      ],
+      'no-restricted-properties': [
+        'error',
+        { object: 'window', property: 'confirm', message: 'Use confirmDialog from utils/confirmDialog.' },
+        { object: 'window', property: 'prompt', message: 'Use promptDialog from utils/confirmDialog.' },
+        { object: 'window', property: 'alert', message: 'Use alertDialog from utils/confirmDialog (or a toast).' },
+      ],
       // Empty blocks (incl. empty catch) are a hygiene smell, not a correctness bug —
       // surfaced as warnings to burn down rather than blocking the gate.
       'no-empty': ['warn', { allowEmptyCatch: false }],
