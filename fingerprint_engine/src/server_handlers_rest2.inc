@@ -841,9 +841,31 @@ async fn api_openapi_spec() -> Response {
             "/api/stealth/status": {
                 "get": {
                     "summary": "Smart Stealth Queue live telemetry (caps + real-time load)",
-                    "description": "Read-only snapshot of the outbound-traffic admission gateway: effective per-target/global concurrency caps, jitter and pacing (all set at deploy time via WEISSMAN_STEALTH_* env vars), plus live load — global in-flight, queue depth, cumulative admissions, per-host load, and rotating-identity pool sizes. The rate limiter is tuned via env, never weakened from the console.",
+                    "description": "Read-only snapshot of the outbound-traffic admission gateway: effective per-target/global concurrency caps, jitter and pacing, plus live load — global in-flight, queue depth, cumulative admissions, per-host load, and rotating-identity pool sizes. Concurrency caps + the disable flag are env-only (the protection floor); pacing is runtime-tunable via POST /api/stealth/config.",
                     "tags": ["Intel"],
                     "responses": { "200": { "description": "{ disabled, config{…,env_keys}, live{global_in_flight,waiting,admitted_total,active_hosts[]}, identity{…} }" } }
+                }
+            },
+            "/api/stealth/config": {
+                "post": {
+                    "summary": "Tune Smart Stealth Queue live pacing (operator+)",
+                    "description": "Adjust the cadence params — jitter_min_ms, jitter_max_ms, min_interval_ms — at runtime. Server-clamped to a sane ceiling with jitter_min ≤ jitter_max enforced; omitted fields keep their current value. Only cadence is tunable: concurrency caps and the disable kill-switch are env-only, so this can never lower the DoS/WAF protection floor. RBAC: operator+. Changes are audit-logged. Returns fresh status.",
+                    "tags": ["Intel"],
+                    "requestBody": {
+                        "required": false,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "properties": {
+                                "jitter_min_ms":   { "type": "integer", "minimum": 0, "maximum": 60000 },
+                                "jitter_max_ms":   { "type": "integer", "minimum": 0, "maximum": 60000 },
+                                "min_interval_ms": { "type": "integer", "minimum": 0, "maximum": 60000 }
+                            }
+                        } } }
+                    },
+                    "responses": {
+                        "200": { "description": "Applied — fresh status snapshot" },
+                        "403": { "description": "RBAC: operator role required" }
+                    }
                 }
             },
             "/api/intel/suppressions": {

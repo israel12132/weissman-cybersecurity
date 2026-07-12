@@ -114,7 +114,20 @@ struct Inner {
     waiting: AtomicU64,
     /// Cumulative admissions granted since process start (monotonic counter).
     admitted_total: AtomicU64,
+    // Live-tunable *pacing* (cadence) — read on every admission, so held as
+    // atomics that an operator can adjust at runtime via `reconfigure_pacing`.
+    // Pacing only changes *timing*: the concurrency caps (`cfg.per_target` /
+    // `cfg.global`, baked into the semaphores) and the `disabled` kill-switch
+    // stay env-only, so the DoS/WAF protection floor can never be lowered from
+    // the console — only the cadence within that envelope is tuned.
+    jitter_min_ms: AtomicU64,
+    jitter_max_ms: AtomicU64,
+    min_interval_ms: AtomicU64,
 }
+
+/// Upper clamp for runtime-tunable pacing (60s) — generous for careful pacing,
+/// bounded so a fat-fingered value can't wedge a scan behind an hour-long sleep.
+const MAX_PACING_MS: u64 = 60_000;
 
 /// Per-host live load: how many requests are in flight against one target.
 #[derive(Debug, Clone)]
@@ -232,6 +245,9 @@ impl StealthQueue {
     #[must_use]
     pub fn new(cfg: QueueConfig) -> Self {
         let global = Arc::new(Semaphore::new(cfg.global.max(1)));
+        let jitter_min_ms = AtomicU64::new(cfg.jitter_min_ms);
+        let jitter_max_ms = AtomicU64::new(cfg.jitter_max_ms.max(cfg.jitter_min_ms));
+        let min_interval_ms = AtomicU64::new(cfg.min_interval_ms);
         Self(Arc::new(Inner {
             cfg,
             global,
@@ -239,7 +255,30 @@ impl StealthQueue {
             last_start: DashMap::new(),
             waiting: AtomicU64::new(0),
             admitted_total: AtomicU64::new(0),
+            jitter_min_ms,
+            jitter_max_ms,
+            min_interval_ms,
         }))
+    }
+
+    /// Update the live pacing (cadence) params at runtime — jitter bounds and the
+    /// per-host minimum interval. Values are clamped to `[0, MAX_PACING_MS]` and
+    /// `jitter_min ≤ jitter_max` is enforced. Concurrency caps and the disable
+    /// kill-switch are deliberately NOT tunable here (env-only protection floor).
+    /// Returns the effective values actually applied.
+    pub fn reconfigure_pacing(
+        &self,
+        jitter_min_ms: u64,
+        jitter_max_ms: u64,
+        min_interval_ms: u64,
+    ) -> (u64, u64, u64) {
+        let lo = jitter_min_ms.min(MAX_PACING_MS);
+        let hi = jitter_max_ms.min(MAX_PACING_MS).max(lo);
+        let interval = min_interval_ms.min(MAX_PACING_MS);
+        self.0.jitter_min_ms.store(lo, Ordering::Relaxed);
+        self.0.jitter_max_ms.store(hi, Ordering::Relaxed);
+        self.0.min_interval_ms.store(interval, Ordering::Relaxed);
+        (lo, hi, interval)
     }
 
     /// Point-in-time snapshot of caps + live load for observability.
@@ -273,9 +312,9 @@ impl StealthQueue {
             disabled: self.0.cfg.disabled,
             per_target: cap,
             global_capacity: global_cap,
-            jitter_min_ms: self.0.cfg.jitter_min_ms,
-            jitter_max_ms: self.0.cfg.jitter_max_ms,
-            min_interval_ms: self.0.cfg.min_interval_ms,
+            jitter_min_ms: self.0.jitter_min_ms.load(Ordering::Relaxed),
+            jitter_max_ms: self.0.jitter_max_ms.load(Ordering::Relaxed),
+            min_interval_ms: self.0.min_interval_ms.load(Ordering::Relaxed),
             global_in_flight,
             waiting: self.0.waiting.load(Ordering::Relaxed) as usize,
             admitted_total: self.0.admitted_total.load(Ordering::Relaxed),
@@ -335,10 +374,11 @@ impl StealthQueue {
 
     /// Enforce the optional minimum interval between request starts to `key`.
     async fn pace(&self, key: &str) {
-        if self.0.cfg.min_interval_ms == 0 {
+        let min_interval_ms = self.0.min_interval_ms.load(Ordering::Relaxed);
+        if min_interval_ms == 0 {
             return;
         }
-        let min = Duration::from_millis(self.0.cfg.min_interval_ms);
+        let min = Duration::from_millis(min_interval_ms);
         let now = Instant::now();
         let wait = {
             let mut slot = self.0.last_start.entry(key.to_string()).or_insert(now);
@@ -355,8 +395,8 @@ impl StealthQueue {
 
     /// Sleep a random jitter interval within the configured bounds.
     async fn jitter(&self) {
-        let lo = self.0.cfg.jitter_min_ms;
-        let hi = self.0.cfg.jitter_max_ms.max(lo);
+        let lo = self.0.jitter_min_ms.load(Ordering::Relaxed);
+        let hi = self.0.jitter_max_ms.load(Ordering::Relaxed).max(lo);
         if hi == 0 {
             return;
         }
@@ -389,6 +429,16 @@ pub async fn acquire(host: &str) -> StealthPermit {
 #[must_use]
 pub fn status() -> StealthStatus {
     shared().status()
+}
+
+/// Update the process-wide queue's live pacing params. Returns the effective
+/// (clamped) `(jitter_min_ms, jitter_max_ms, min_interval_ms)`.
+pub fn reconfigure_pacing(
+    jitter_min_ms: u64,
+    jitter_max_ms: u64,
+    min_interval_ms: u64,
+) -> (u64, u64, u64) {
+    shared().reconfigure_pacing(jitter_min_ms, jitter_max_ms, min_interval_ms)
 }
 
 // ---------------------------------------------------------------------------
@@ -652,6 +702,30 @@ mod tests {
         // The held permit is still valid; admitted_total counted only the one
         // real admission, not the cancelled attempt.
         assert_eq!(q.status().admitted_total, 1);
+    }
+
+    #[tokio::test]
+    async fn reconfigure_pacing_clamps_and_takes_effect_live() {
+        let q = StealthQueue::new(fast_cfg(4, 20));
+        // Normal update: reflected immediately in status().
+        let (lo, hi, iv) = q.reconfigure_pacing(20, 120, 50);
+        assert_eq!((lo, hi, iv), (20, 120, 50));
+        let s = q.status();
+        assert_eq!(s.jitter_min_ms, 20);
+        assert_eq!(s.jitter_max_ms, 120);
+        assert_eq!(s.min_interval_ms, 50);
+
+        // min > max is repaired (hi lifted to lo); everything clamped to MAX.
+        let (lo, hi, iv) = q.reconfigure_pacing(500, 10, u64::MAX);
+        assert_eq!(lo, 500);
+        assert_eq!(hi, 500, "max lifted to min");
+        assert_eq!(iv, MAX_PACING_MS, "interval clamped to ceiling");
+
+        // Caps and disable are untouched by pacing reconfig (protection floor).
+        let s = q.status();
+        assert_eq!(s.per_target, 4);
+        assert_eq!(s.global_capacity, 20);
+        assert!(!s.disabled);
     }
 
     #[test]

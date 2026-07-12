@@ -151,6 +151,11 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
             roles::OPERATOR
         });
     }
+    // Tuning outbound traffic-shaping (stealth pacing) is an operational lever:
+    // operator+ only, never a read-only viewer or triage analyst.
+    if path.starts_with("/api/stealth") {
+        return Some(roles::OPERATOR);
+    }
     // Baseline: every other write requires at least analyst (blocks read-only viewers).
     Some(roles::ANALYST)
 }
@@ -283,6 +288,11 @@ mod tests {
         assert_eq!(
             required_min_role(&Method::DELETE, "/api/clients/5"),
             Some(roles::ADMIN)
+        );
+        // Stealth traffic-shaping tuning is operator+.
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/stealth/config"),
+            Some(roles::OPERATOR)
         );
         // Everything else that mutates requires at least analyst (viewer blocked).
         assert_eq!(

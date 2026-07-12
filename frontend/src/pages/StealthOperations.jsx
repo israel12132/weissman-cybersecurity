@@ -41,6 +41,9 @@ export default function StealthOperations() {
   const [error, setError] = useState('')
   const [live, setLive] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [pacing, setPacing] = useState(null) // editable draft, seeded once from status
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
   const timer = useRef(null)
 
   const load = useCallback(async () => {
@@ -67,6 +70,60 @@ export default function StealthOperations() {
     }
     return undefined
   }, [load, live])
+
+  // Seed the editable pacing draft once (live polling must not clobber edits).
+  useEffect(() => {
+    if (data && data.config && pacing === null) {
+      setPacing({
+        jitter_min_ms: data.config.jitter_min_ms,
+        jitter_max_ms: data.config.jitter_max_ms,
+        min_interval_ms: data.config.min_interval_ms,
+      })
+    }
+  }, [data, pacing])
+
+  const setP = (k) => (ev) => {
+    const n = Math.max(0, Math.min(60000, Math.floor(Number(ev.target.value) || 0)))
+    setPacing((p) => ({ ...p, [k]: n }))
+    setSaveMsg('')
+  }
+
+  const savePacing = async () => {
+    if (!pacing) return
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      const r = await apiFetch('/api/stealth/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pacing),
+      })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        throw new Error(j.detail || j.error || `HTTP ${r.status}`)
+      }
+      const fresh = await r.json()
+      setData(fresh)
+      setPacing({
+        jitter_min_ms: fresh.config.jitter_min_ms,
+        jitter_max_ms: fresh.config.jitter_max_ms,
+        min_interval_ms: fresh.config.min_interval_ms,
+      })
+      setSaveMsg('Applied ✓')
+    } catch (err) {
+      setSaveMsg((err && err.message) || 'save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const pacingDirty =
+    pacing &&
+    data &&
+    data.config &&
+    (pacing.jitter_min_ms !== data.config.jitter_min_ms ||
+      pacing.jitter_max_ms !== data.config.jitter_max_ms ||
+      pacing.min_interval_ms !== data.config.min_interval_ms)
 
   const cfg = data && data.config
   const l = data && data.live
@@ -153,29 +210,74 @@ export default function StealthOperations() {
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
                 Effective configuration
               </h2>
-              <p className="text-xs text-slate-500 mb-3">
-                Caps are set at deploy time via environment variables — a safety-critical rate
-                limiter is never weakened from the console.
+              {/* Protection floor — env-only, read-only. */}
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+                Concurrency caps · protection floor
+              </div>
+              <p className="text-xs text-slate-500 mb-2">
+                Set at deploy time via env — the DoS/WAF protection floor is never lowered from the
+                console. Restart to change.
               </p>
-              <dl className="space-y-2">
+              <dl className="space-y-2 mb-4">
                 {[
                   ['Per-target concurrency', cfg.per_target, cfg.env_keys.per_target],
                   ['Global ceiling', cfg.global_capacity, cfg.env_keys.global],
-                  ['Jitter min (ms)', cfg.jitter_min_ms, cfg.env_keys.jitter_min_ms],
-                  ['Jitter max (ms)', cfg.jitter_max_ms, cfg.env_keys.jitter_max_ms],
-                  ['Min interval (ms)', cfg.min_interval_ms, cfg.env_keys.min_interval_ms],
                 ].map(([k, v, env]) => (
                   <div key={k} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-2 last:border-0">
                     <div className="min-w-0">
                       <div className="text-sm text-slate-200">{k}</div>
                       <div className="text-[10px] font-mono text-slate-600 truncate">{env}</div>
                     </div>
-                    <span className="text-lg font-mono font-semibold text-cyan-300 tabular-nums shrink-0">
+                    <span className="text-lg font-mono font-semibold text-slate-300 tabular-nums shrink-0">
                       {v}
                     </span>
                   </div>
                 ))}
               </dl>
+
+              {/* Pacing — live-tunable within the enforced envelope (operator+). */}
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+                Pacing · live-tunable (operator+)
+              </div>
+              <p className="text-xs text-slate-500 mb-3">
+                Adjust cadence within the caps. Applied instantly, clamped 0–60000 ms, audit-logged.
+              </p>
+              <div className="space-y-2">
+                {pacing &&
+                  [
+                    ['Jitter min (ms)', 'jitter_min_ms'],
+                    ['Jitter max (ms)', 'jitter_max_ms'],
+                    ['Min interval (ms)', 'min_interval_ms'],
+                  ].map(([k, key]) => (
+                    <label key={key} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-slate-200">{k}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="60000"
+                        value={pacing[key]}
+                        onChange={setP(key)}
+                        className="w-28 rounded-md border border-white/10 bg-slate-950/60 px-2 py-1 text-right text-sm font-mono text-cyan-300 tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                      />
+                    </label>
+                  ))}
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  onClick={savePacing}
+                  disabled={!pacingDirty || saving}
+                  className="rounded-lg bg-cyan-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {saving ? 'Applying…' : 'Apply pacing'}
+                </button>
+                {saveMsg && (
+                  <span
+                    className={`text-xs font-mono ${saveMsg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}
+                  >
+                    {saveMsg}
+                  </span>
+                )}
+              </div>
             </section>
 
             {/* ── Rotating identity ── */}

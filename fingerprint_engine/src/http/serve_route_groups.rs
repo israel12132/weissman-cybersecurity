@@ -107,6 +107,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/engines/requirements", get(api_engines_requirements))
         .route("/api/intel/target-profile", get(api_intel_target_profile))
         .route("/api/stealth/status", get(api_stealth_status))
+        .route("/api/stealth/config", post(api_stealth_config))
         .route(
             "/api/onboarding/tenant-status",
             get(api_onboarding_tenant_status),

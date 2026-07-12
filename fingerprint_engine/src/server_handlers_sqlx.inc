@@ -1153,6 +1153,40 @@ async fn api_stealth_status() -> Response {
         .into_response()
 }
 
+/// Tune the Smart Stealth Queue's live *pacing* (cadence): jitter bounds + the
+/// per-host minimum interval. Values are clamped server-side to a sane ceiling
+/// and `jitter_min ≤ jitter_max` is enforced. The concurrency caps and the
+/// disable kill-switch are deliberately NOT tunable here — they are the env-only
+/// protection floor, so this endpoint can only adjust cadence *within* the
+/// enforced envelope, never lower the DoS/WAF protection. Mutating + RBAC-gated
+/// (operator+), and the applied values are audit-logged. Returns fresh status.
+async fn api_stealth_config(
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    let cur = crate::stealth_queue::status();
+    // Absent fields keep their current value (partial update).
+    let field = |k: &str, dflt: u64| -> u64 {
+        body.get(k).and_then(serde_json::Value::as_u64).unwrap_or(dflt)
+    };
+    let jmin = field("jitter_min_ms", cur.jitter_min_ms);
+    let jmax = field("jitter_max_ms", cur.jitter_max_ms);
+    let interval = field("min_interval_ms", cur.min_interval_ms);
+    let (lo, hi, iv) = crate::stealth_queue::reconfigure_pacing(jmin, jmax, interval);
+    tracing::info!(
+        target: "stealth_config",
+        user_id = auth.user_id,
+        tenant_id = auth.tenant_id,
+        role = %auth.role,
+        jitter_min_ms = lo,
+        jitter_max_ms = hi,
+        min_interval_ms = iv,
+        "stealth pacing reconfigured"
+    );
+    metrics::counter!("weissman_stealth_reconfigure_total").increment(1);
+    (StatusCode::OK, Json(crate::stealth_queue::status().to_json())).into_response()
+}
+
 /// Tenant-level prerequisites (LLM, OAST, AI entitlement) for onboarding wizard.
 async fn api_onboarding_tenant_status(
     State(state): State<Arc<AppState>>,
