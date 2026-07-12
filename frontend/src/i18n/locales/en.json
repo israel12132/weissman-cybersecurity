@@ -6504,6 +6504,7 @@
     "findingDrawer": {
       "closeDrawer": "Close drawer",
       "close": "Close",
+      "detailTabs": "Finding detail sections",
       "defaultTitle": "Finding",
       "copyCve": "Copy CVE",
       "status": "Status",

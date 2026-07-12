@@ -6504,6 +6504,7 @@
     "findingDrawer": {
       "closeDrawer": "סגור מגירה",
       "close": "סגור",
+      "detailTabs": "מקטעי פרטי הממצא",
       "defaultTitle": "ממצא",
       "copyCve": "העתק CVE",
       "status": "סטטוס",

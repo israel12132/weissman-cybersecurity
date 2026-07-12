@@ -121,6 +121,7 @@ export default function FindingDrawer({
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [activeTab, setActiveTab] = useState('evidence')
   const dialogRef = useRef(null)
+  const tabRefs = useRef([])
   useFocusTrap(dialogRef, Boolean(finding))
 
   const drawerTabs = useMemo(
@@ -134,6 +135,19 @@ export default function FindingDrawer({
     ],
     [],
   )
+
+  const onTabKeyDown = (e, index) => {
+    const last = drawerTabs.length - 1
+    let next = null
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = index === last ? 0 : index + 1
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = index === 0 ? last : index - 1
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = last
+    if (next === null) return
+    e.preventDefault()
+    setActiveTab(drawerTabs[next].id)
+    tabRefs.current[next]?.focus()
+  }
 
   const defaultStatusOptions = useMemo(
     () => [
@@ -396,12 +410,23 @@ export default function FindingDrawer({
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6 custom-scroll text-sm">
-              <div className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)] pb-3 -mt-1">
-                {drawerTabs.map((tab) => (
+              <div
+                role="tablist"
+                aria-label={t('components.findingDrawer.detailTabs')}
+                className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)] pb-3 -mt-1"
+              >
+                {drawerTabs.map((tab, index) => (
                   <Button variant="unstyled"
                     key={tab.id}
+                    ref={(el) => { tabRefs.current[index] = el }}
                     type="button"
+                    role="tab"
+                    id={`finding-tab-${tab.id}`}
+                    aria-selected={activeTab === tab.id}
+                    aria-controls="finding-tabpanel"
+                    tabIndex={activeTab === tab.id ? 0 : -1}
                     onClick={() => setActiveTab(tab.id)}
+                    onKeyDown={(e) => onTabKeyDown(e, index)}
                     className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-md border transition-colors ${
                       activeTab === tab.id
                         ? 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
@@ -412,6 +437,14 @@ export default function FindingDrawer({
                   </Button>
                 ))}
               </div>
+
+              <div
+                role="tabpanel"
+                id="finding-tabpanel"
+                aria-labelledby={`finding-tab-${activeTab}`}
+                tabIndex={0}
+                className="space-y-6 focus:outline-none"
+              >
 
               {activeTab === 'evidence' && (
               <>
@@ -712,6 +745,7 @@ export default function FindingDrawer({
                   />
                 </Section>
               )}
+              </div>
             </div>
           </motion.aside>
         </>
