@@ -119,7 +119,8 @@ async fn api_client_semantic_reasoning(
         .filter_map(|r| r.try_get::<String,_>("log_text").ok())
         .collect::<Vec<_>>()
         .join("\n---\n");
-    let summary = if joined.len() > 8000 { format!("{}…", &joined[..8000]) } else { joined };
+    // char-safe truncation — byte slicing at 8000 panics if a multibyte UTF-8 char straddles the boundary
+    let summary = if joined.len() > 8000 { format!("{}…", joined.chars().take(8000).collect::<String>()) } else { joined };
     (StatusCode::OK, Json(json!({ "client_id": id, "reasoning_text": summary }))).into_response()
 }
 

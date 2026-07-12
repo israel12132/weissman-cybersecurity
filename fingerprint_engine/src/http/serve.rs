@@ -546,7 +546,8 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                     let name: String = r.try_get("name").unwrap_or_else(|_| "—".to_string());
                     let domains: String = r.try_get("domains").unwrap_or_else(|_| "[]".to_string());
                     let dom_short = if domains.len() > 60 {
-                        format!("{}…", &domains[..57])
+                        // char-safe truncation — byte slicing panics on a multibyte boundary (IDN/non-ASCII domains)
+                        format!("{}…", domains.chars().take(57).collect::<String>())
                     } else {
                         domains.clone()
                     };

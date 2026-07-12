@@ -455,8 +455,18 @@ async fn api_onboarding_oast_test(
             .into_response();
     };
     let url = format!("{}/api/oast/health", base.trim_end_matches('/'));
+    // SSRF guard: reject non-http(s), cloud-metadata, *.internal and loopback listener URLs before
+    // issuing any outbound request — a tenant user controls `listener_url`.
+    if let Err(e) = crate::security_hardening::validate_poe_target_url(&url) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": format!("listener_url rejected: {}", e)})),
+        )
+            .into_response();
+    }
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_default();
     let mut req = client.get(&url);
@@ -466,10 +476,20 @@ async fn api_onboarding_oast_test(
         .map(str::trim)
         .filter(|s| !s.is_empty() && *s != "••••••••")
     {
+        // caller-supplied key — safe to forward to the caller's own URL
         req = req.header("Authorization", format!("Bearer {}", k));
     } else if let Ok(k) = std::env::var("WEISSMAN_OAST_API_KEY") {
         let k = k.trim();
-        if !k.is_empty() {
+        // NEVER leak the server's OAST key to an arbitrary user-supplied host — forward it only when
+        // the target host matches the configured WEISSMAN_OAST_LISTENER_URL host.
+        let env_host = std::env::var("WEISSMAN_OAST_LISTENER_URL")
+            .ok()
+            .and_then(|u| url::Url::parse(u.trim()).ok())
+            .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()));
+        let target_host = url::Url::parse(&url)
+            .ok()
+            .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()));
+        if !k.is_empty() && env_host.is_some() && env_host == target_host {
             req = req.header("Authorization", format!("Bearer {}", k));
         }
     }
