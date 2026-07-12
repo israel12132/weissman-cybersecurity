@@ -30,10 +30,11 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
   "img-src 'self' data: blob:",
-  // Pinned to same-origin + the one CDN the choropleth map topojson is fetched
-  // from (cdn.jsdelivr.net). NOT the broad `https:` scheme — that would let an
-  // injected script exfiltrate to any host, defeating the CSP for a security app.
-  "connect-src 'self' https://cdn.jsdelivr.net wss: ws:",
+  // Same-origin only. The choropleth map topojson is now vendored (bundled from
+  // the world-atlas npm package), so no external CDN is needed. NOT the broad
+  // `https:` scheme — that would let an injected script exfiltrate to any host,
+  // defeating the CSP for a security app.
+  "connect-src 'self' wss: ws:",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "object-src 'none'",

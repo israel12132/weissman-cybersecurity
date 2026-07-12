@@ -4,9 +4,11 @@ import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from 're
 import { Radio, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 import Button from '../ui/Button'
+// Vendored locally (see world-atlas dependency) so the map needs no external
+// CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
+import worldGeography from 'world-atlas/countries-110m.json'
 
 const NS = 'components.cockpitWidgets.globalEdgeSwarmMap'
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
 function fallbackCoord(region, pop) {
   const r = `${region} ${pop}`.toLowerCase()
@@ -95,7 +97,7 @@ export default function GlobalEdgeSwarmMap() {
           style={{ width: '100%', height: '100%', minHeight: 320 }}
         >
           <ZoomableGroup center={[20, 0]} zoom={0.85}>
-            <Geographies geography={GEO_URL}>
+            <Geographies geography={worldGeography}>
               {({ geographies }) =>
                 geographies.map((geo) => (
                   <Geography

@@ -7,9 +7,11 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { useWarRoomSound } from '../../hooks/useWarRoomSound'
 import { stableGeoFromLabel } from '../../lib/stableGeoFromLabel'
 import { apiFetch } from '../../lib/apiBase'
+// Vendored locally (see world-atlas dependency) so the map needs no external
+// CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
+import worldGeography from 'world-atlas/countries-110m.json'
 
 const NS = 'components.cockpitWidgets.satelliteDroneMap'
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 const US_CENTER = [37.09, -95.71]
 const PATROL_IDLE_MS = 30000
 const PATROL_PAN_SPEED = 0.08
@@ -141,7 +143,7 @@ export default function SatelliteDroneMap() {
           style={{ width: '100%', height: '100%' }}
         >
           <ZoomableGroup center={center} zoom={zoom}>
-            <Geographies geography={GEO_URL}>
+            <Geographies geography={worldGeography}>
               {({ geographies }) =>
                 geographies.map((geo) => (
                   <Geography
