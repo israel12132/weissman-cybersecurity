@@ -132,8 +132,11 @@ async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| format!("{ctx}: invalid JSON: {e}"))
 }
 
-/// Does `path` exist on `git_ref`? Determines create vs update action for the commit.
-async fn file_exists(api_base: &str, project: &str, path: &str, git_ref: &str, token: &str) -> bool {
+/// Resolve whether `path` exists on `git_ref` to pick `update` vs `create`. Returns `Some(true)`
+/// (exists), `Some(false)` (a definitive 404 → absent), or `None` (indeterminate after retrying
+/// transient failures) — the caller must NOT guess an action on `None`, since a wrong `create`/`update`
+/// gets the whole atomic commit rejected. (Parity with the Azure/Bitbucket clients.)
+async fn file_state(api_base: &str, project: &str, path: &str, git_ref: &str, token: &str) -> Option<bool> {
     let url = format!(
         "{}/projects/{}/repository/files/{}?ref={}",
         api_base,
@@ -141,15 +144,34 @@ async fn file_exists(api_base: &str, project: &str, path: &str, git_ref: &str, t
         urlencoding_min(path),
         urlencoding_min(git_ref)
     );
-    matches!(
-        gitlab_client()
-            .get(&url)
-            .header("PRIVATE-TOKEN", token)
-            .send()
-            .await
-            .map(|r| r.status().is_success()),
-        Ok(true)
-    )
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        match gitlab_client().get(&url).header("PRIVATE-TOKEN", token).send().await {
+            Ok(r) => {
+                let status = r.status();
+                if status.is_success() {
+                    return Some(true);
+                }
+                if status == StatusCode::NOT_FOUND {
+                    return Some(false);
+                }
+                let headers = r.headers().clone();
+                if transient(status, &headers) && attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
+                }
+                return None; // auth/other error → indeterminate, do not guess
+            }
+            Err(_) => {
+                if attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
+                }
+                return None;
+            }
+        }
+    }
 }
 
 /// Percent-encode a single URL path/query value (RFC 3986 unreserved only), so a ref or path
@@ -215,10 +237,19 @@ pub async fn create_branch_commit_and_mr(
                 error: Some(format!("invalid file path: {path:?}")),
             };
         }
-        let action = if file_exists(&api_base, &project, p, base_branch, token).await {
-            "update"
-        } else {
-            "create"
+        let action = match file_state(&api_base, &project, p, base_branch, token).await {
+            Some(true) => "update",
+            Some(false) => "create",
+            None => {
+                return GitlabMrOutcome {
+                    branch_name,
+                    mr_url: None,
+                    mr_iid: None,
+                    error: Some(format!(
+                        "could not determine repository state of '{p}'; not committing to avoid a wrong action"
+                    )),
+                }
+            }
         };
         actions.push(serde_json::json!({ "action": action, "file_path": p, "content": content }));
     }
