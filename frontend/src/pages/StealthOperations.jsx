@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 
 // Live-load tint by saturation ratio.
@@ -37,6 +38,7 @@ function LoadBar({ inFlight, capacity }) {
 }
 
 export default function StealthOperations() {
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [live, setLive] = useState(true)
@@ -109,7 +111,7 @@ export default function StealthOperations() {
         jitter_max_ms: fresh.config.jitter_max_ms,
         min_interval_ms: fresh.config.min_interval_ms,
       })
-      setSaveMsg('Applied ✓')
+      setSaveMsg(t('stealthOps.applied'))
     } catch (err) {
       setSaveMsg((err && err.message) || 'save failed')
     } finally {
@@ -135,13 +137,9 @@ export default function StealthOperations() {
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
-            <span aria-hidden>🛡️</span> Stealth Operations
+            <span aria-hidden>🛡️</span> {t('stealthOps.title')}
           </h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Live view of the Smart Stealth Queue — the admission gateway that paces a full-arsenal
-            launch into careful, human-cadence Red-Team traffic: per-target concurrency caps,
-            global ceiling, jitter, adaptive pacing, and rotating browser identity.
-          </p>
+          <p className="text-sm text-slate-400 mt-1 max-w-2xl">{t('stealthOps.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -153,13 +151,13 @@ export default function StealthOperations() {
             }`}
           >
             <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-            {live ? 'Live · 2s' : 'Paused'}
+            {live ? t('stealthOps.live') : t('stealthOps.paused')}
           </button>
           <button
             onClick={load}
             className="rounded-lg border border-white/15 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/60"
           >
-            Refresh
+            {t('stealthOps.refresh')}
           </button>
         </div>
       </header>
@@ -172,7 +170,7 @@ export default function StealthOperations() {
 
       {loading && !data && (
         <div className="rounded-xl border border-dashed border-white/10 bg-slate-900/20 px-6 py-12 text-center text-sm text-slate-500">
-          Loading stealth queue telemetry…
+          {t('stealthOps.loading')}
         </div>
       )}
 
@@ -180,26 +178,33 @@ export default function StealthOperations() {
         <>
           {data.disabled && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-300 mb-4">
-              ⚠ Stealth shaping is <span className="font-mono">DISABLED</span> (WEISSMAN_STEALTH_DISABLED).
-              Requests are not being paced or capped — intended only for offline/CI runs.
+              {t('stealthOps.disabledWarn')}
             </div>
           )}
 
           {/* ── Live metrics ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             <Stat
-              label="Global in-flight"
+              label={t('stealthOps.globalInFlight')}
               value={`${l.global_in_flight}`}
-              sub={`of ${cfg.global_capacity} · ${l.global_free} free`}
+              sub={t('stealthOps.ofFree', { cap: cfg.global_capacity, free: l.global_free })}
             />
-            <Stat label="Queued / waiting" value={`${l.waiting}`} sub="parked for a slot" />
-            <Stat label="Active hosts" value={`${l.active_hosts.length}`} sub={`${l.tracked_hosts} tracked`} />
-            <Stat label="Admitted total" value={l.admitted_total.toLocaleString()} sub="since start" />
+            <Stat label={t('stealthOps.queued')} value={`${l.waiting}`} sub={t('stealthOps.parkedForSlot')} />
+            <Stat
+              label={t('stealthOps.activeHostsStat')}
+              value={`${l.active_hosts.length}`}
+              sub={t('stealthOps.tracked', { n: l.tracked_hosts })}
+            />
+            <Stat
+              label={t('stealthOps.admittedTotal')}
+              value={l.admitted_total.toLocaleString()}
+              sub={t('stealthOps.sinceStart')}
+            />
           </div>
 
           <div className="mb-5">
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-              Global egress saturation
+              {t('stealthOps.globalSaturation')}
             </div>
             <LoadBar inFlight={l.global_in_flight} capacity={cfg.global_capacity} />
           </div>
@@ -208,20 +213,17 @@ export default function StealthOperations() {
             {/* ── Config ── */}
             <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
-                Effective configuration
+                {t('stealthOps.effectiveConfig')}
               </h2>
               {/* Protection floor — env-only, read-only. */}
               <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                Concurrency caps · protection floor
+                {t('stealthOps.concurrencyCaps')}
               </div>
-              <p className="text-xs text-slate-500 mb-2">
-                Set at deploy time via env — the DoS/WAF protection floor is never lowered from the
-                console. Restart to change.
-              </p>
+              <p className="text-xs text-slate-500 mb-2">{t('stealthOps.capsNote')}</p>
               <dl className="space-y-2 mb-4">
                 {[
-                  ['Per-target concurrency', cfg.per_target, cfg.env_keys.per_target],
-                  ['Global ceiling', cfg.global_capacity, cfg.env_keys.global],
+                  [t('stealthOps.perTarget'), cfg.per_target, cfg.env_keys.per_target],
+                  [t('stealthOps.globalCeiling'), cfg.global_capacity, cfg.env_keys.global],
                 ].map(([k, v, env]) => (
                   <div key={k} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-2 last:border-0">
                     <div className="min-w-0">
@@ -237,17 +239,15 @@ export default function StealthOperations() {
 
               {/* Pacing — live-tunable within the enforced envelope (operator+). */}
               <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                Pacing · live-tunable (operator+)
+                {t('stealthOps.pacingTitle')}
               </div>
-              <p className="text-xs text-slate-500 mb-3">
-                Adjust cadence within the caps. Applied instantly, clamped 0–60000 ms, audit-logged.
-              </p>
+              <p className="text-xs text-slate-500 mb-3">{t('stealthOps.pacingNote')}</p>
               <div className="space-y-2">
                 {pacing &&
                   [
-                    ['Jitter min (ms)', 'jitter_min_ms'],
-                    ['Jitter max (ms)', 'jitter_max_ms'],
-                    ['Min interval (ms)', 'min_interval_ms'],
+                    [t('stealthOps.jitterMin'), 'jitter_min_ms'],
+                    [t('stealthOps.jitterMax'), 'jitter_max_ms'],
+                    [t('stealthOps.minInterval'), 'min_interval_ms'],
                   ].map(([k, key]) => (
                     <label key={key} className="flex items-center justify-between gap-3">
                       <span className="text-sm text-slate-200">{k}</span>
@@ -268,7 +268,7 @@ export default function StealthOperations() {
                   disabled={!pacingDirty || saving}
                   className="rounded-lg bg-cyan-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  {saving ? 'Applying…' : 'Apply pacing'}
+                  {saving ? t('stealthOps.applying') : t('stealthOps.applyPacing')}
                 </button>
                 {saveMsg && (
                   <span
@@ -283,20 +283,17 @@ export default function StealthOperations() {
             {/* ── Rotating identity ── */}
             <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
-                Rotating identity
+                {t('stealthOps.rotatingIdentity')}
               </h2>
-              <p className="text-xs text-slate-500 mb-3">
-                Each admission is stamped with a realistic browser identity so traffic blends in as
-                ordinary client sessions.
-              </p>
+              <p className="text-xs text-slate-500 mb-3">{t('stealthOps.identityNote')}</p>
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <Stat label="User-Agents" value={id.user_agent_pool} />
-                <Stat label="Accept-Lang" value={id.accept_language_pool} />
-                <Stat label="Platforms" value={id.platform_pool} />
+                <Stat label={t('stealthOps.userAgents')} value={id.user_agent_pool} />
+                <Stat label={t('stealthOps.acceptLang')} value={id.accept_language_pool} />
+                <Stat label={t('stealthOps.platforms')} value={id.platform_pool} />
               </div>
               <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-slate-500">
-                  Identities dispensed
+                  {t('stealthOps.identitiesDispensed')}
                 </div>
                 <div className="text-lg font-mono font-semibold text-white tabular-nums">
                   {id.identities_dispensed.toLocaleString()}
@@ -309,15 +306,15 @@ export default function StealthOperations() {
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mt-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                Active targets · live load
+                {t('stealthOps.activeTargets')}
               </h2>
               <span className="text-xs font-mono text-slate-500">
-                showing {l.active_hosts.length}
+                {t('stealthOps.showing', { n: l.active_hosts.length })}
               </span>
             </div>
             {l.active_hosts.length === 0 ? (
               <div className="text-sm text-slate-500 py-6 text-center">
-                No requests in flight. Launch a scan to see the queue shape traffic per target.
+                {t('stealthOps.noRequests')}
               </div>
             ) : (
               <ul className="space-y-2">

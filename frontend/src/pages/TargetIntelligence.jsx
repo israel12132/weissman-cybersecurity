@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 
 // Sensitivity tint.
@@ -51,6 +52,7 @@ function ConfidenceBar({ value }) {
 }
 
 export default function TargetIntelligence() {
+  const { t } = useTranslation()
   const [target, setTarget] = useState('')
   const [enrich, setEnrich] = useState(false)
   const [data, setData] = useState(null)
@@ -88,12 +90,9 @@ export default function TargetIntelligence() {
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
       <header className="mb-5">
         <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
-          <span aria-hidden>🎯</span> Target Intelligence
+          <span aria-hidden>🎯</span> {t('targetIntel.title')}
         </h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Deterministic classification of what a target is, where it lives, who owns it, and why it
-          matters — plus the taxonomy-backed engine set selected for it.
-        </p>
+        <p className="text-sm text-slate-400 mt-1">{t('targetIntel.subtitle')}</p>
       </header>
 
       <form onSubmit={analyze} className="mb-6">
@@ -101,7 +100,7 @@ export default function TargetIntelligence() {
           <input
             value={target}
             onChange={(ev) => setTarget(ev.target.value)}
-            placeholder="https://example.com  ·  10.0.0.5:502  ·  bucket.s3.amazonaws.com"
+            placeholder={t('targetIntel.placeholder')}
             className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
           <button
@@ -109,7 +108,7 @@ export default function TargetIntelligence() {
             disabled={loading || !target.trim()}
             className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Analyzing…' : 'Analyze'}
+            {loading ? t('targetIntel.analyzing') : t('targetIntel.analyze')}
           </button>
         </div>
         <label className="mt-2 flex items-center gap-2 text-xs text-slate-400 select-none cursor-pointer w-fit">
@@ -119,7 +118,7 @@ export default function TargetIntelligence() {
             onChange={(ev) => setEnrich(ev.target.checked)}
             className="accent-cyan-500"
           />
-          Resolve DNS (active) — verify resolved IPs, private-space, and CDN/hosting attribution
+          {t('targetIntel.resolveDns')}
         </label>
       </form>
 
@@ -135,7 +134,7 @@ export default function TargetIntelligence() {
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                Profile
+                {t('targetIntel.profile')}
               </h2>
               <span
                 className={`rounded-md border px-2 py-0.5 text-[11px] font-mono uppercase ${SEV[p.sensitivity] || SEV.standard}`}
@@ -149,12 +148,12 @@ export default function TargetIntelligence() {
               <div className="text-xs text-slate-400 font-mono break-all">{p.host}</div>
               {data.resolved ? (
                 <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> DNS resolved · IP-verified
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {t('targetIntel.dnsResolved')}
                 </div>
               ) : (
                 enrich && (
                   <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono text-slate-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600" /> passive only — no A/AAAA record resolved
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600" /> {t('targetIntel.passiveOnly')}
                   </div>
                 )
               )}
@@ -162,43 +161,43 @@ export default function TargetIntelligence() {
 
             <div className="mb-3">
               <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                Confidence
+                {t('targetIntel.confidence')}
               </div>
               <ConfidenceBar value={p.confidence} />
             </div>
 
             <div className="mb-2">
-              <Field label="scheme" value={p.scheme} />
-              <Field label="port" value={p.port} />
-              {svc && <Field label="service" value={`${svc.name} (${svc.kind})`} />}
-              <Field label="ip family" value={p.ip_family} />
-              <Field label="private" value={p.is_private ? 'yes' : null} />
+              <Field label={t('targetIntel.fields.scheme')} value={p.scheme} />
+              <Field label={t('targetIntel.fields.port')} value={p.port} />
+              {svc && <Field label={t('targetIntel.fields.service')} value={`${svc.name} (${svc.kind})`} />}
+              <Field label={t('targetIntel.fields.ipFamily')} value={p.ip_family} />
+              <Field label={t('targetIntel.fields.private')} value={p.is_private ? t('targetIntel.yes') : null} />
             </div>
 
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mt-4 mb-1">
-              Provenance · who / where
+              {t('targetIntel.provenance')}
             </div>
             <div className="mb-2">
-              <Field label="registrable domain" value={prov.registrable_domain} />
-              <Field label="subdomain" value={prov.subdomain} />
-              <Field label="public suffix" value={prov.public_suffix} />
-              <Field label="tld class" value={prov.tld_class !== 'Unknown' ? prov.tld_class : null} />
-              <Field label="hosting" value={prov.hosting_provider} />
+              <Field label={t('targetIntel.fields.registrableDomain')} value={prov.registrable_domain} />
+              <Field label={t('targetIntel.fields.subdomain')} value={prov.subdomain} />
+              <Field label={t('targetIntel.fields.publicSuffix')} value={prov.public_suffix} />
+              <Field label={t('targetIntel.fields.tldClass')} value={prov.tld_class !== 'Unknown' ? prov.tld_class : null} />
+              <Field label={t('targetIntel.fields.hosting')} value={prov.hosting_provider} />
               <Field
-                label="network class"
+                label={t('targetIntel.fields.networkClass')}
                 value={prov.network_class !== 'Unknown' ? prov.network_class : null}
               />
-              <Field label="idn" value={prov.idn ? 'yes' : null} />
-              <Field label="homograph risk" value={prov.homograph_risk ? '⚠ yes' : null} />
+              <Field label={t('targetIntel.fields.idn')} value={prov.idn ? t('targetIntel.yes') : null} />
+              <Field label={t('targetIntel.fields.homographRisk')} value={prov.homograph_risk ? `⚠ ${t('targetIntel.yes')}` : null} />
               {Array.isArray(prov.resolved_ips) && prov.resolved_ips.length > 0 && (
-                <Field label="resolved ips" value={prov.resolved_ips.join(', ')} />
+                <Field label={t('targetIntel.fields.resolvedIps')} value={prov.resolved_ips.join(', ')} />
               )}
             </div>
 
             {Array.isArray(p.facets) && p.facets.length > 0 && (
               <div className="mt-3">
                 <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                  Facets
+                  {t('targetIntel.facets')}
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {p.facets.map((f) => (
@@ -216,7 +215,7 @@ export default function TargetIntelligence() {
             {Array.isArray(prov.evidence) && prov.evidence.length > 0 && (
               <div className="mt-3">
                 <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                  Evidence · why
+                  {t('targetIntel.evidence')}
                 </div>
                 <ul className="space-y-0.5">
                   {prov.evidence.map((ev, i) => (
@@ -234,17 +233,17 @@ export default function TargetIntelligence() {
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                Engine selection
+                {t('targetIntel.engineSelection')}
               </h2>
               <span className="text-xs font-mono text-slate-400">
-                focus {sel.focus_count} / {sel.engine_count}
+                {t('targetIntel.focusCount', { focus: sel.focus_count, total: sel.engine_count })}
               </span>
             </div>
 
             <p className="text-xs text-slate-400 mb-3">{sel.profile_summary}</p>
 
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-              Recommended focus
+              {t('targetIntel.recommendedFocus')}
             </div>
             <div className="flex flex-wrap gap-1 mb-4">
               {(sel.focus || []).slice(0, 24).map((eid) => (
@@ -256,12 +255,12 @@ export default function TargetIntelligence() {
                 </span>
               ))}
               {(!sel.focus || sel.focus.length === 0) && (
-                <span className="text-xs text-slate-500">no engine cleared the focus threshold</span>
+                <span className="text-xs text-slate-500">{t('targetIntel.noFocus')}</span>
               )}
             </div>
 
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-              Ranked (top {Math.min(40, (sel.ranked || []).length)})
+              {t('targetIntel.rankedTop', { n: Math.min(40, (sel.ranked || []).length) })}
             </div>
             <ol className="space-y-1 max-h-[26rem] overflow-y-auto pr-1">
               {(sel.ranked || []).map((c) => (
@@ -297,8 +296,7 @@ export default function TargetIntelligence() {
 
       {!data && !loading && !error && (
         <div className="rounded-xl border border-dashed border-white/10 bg-slate-900/20 px-6 py-12 text-center text-sm text-slate-500">
-          Enter a URL, host, IP, or <span className="font-mono">host:port</span> to profile it and see
-          the engine set the platform would prioritize.
+          {t('targetIntel.emptyState')}
         </div>
       )}
     </div>

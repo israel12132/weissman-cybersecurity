@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
 
 /**
@@ -10,6 +11,7 @@ import { apiFetch } from '../../lib/apiBase'
  * agent-required — so the roster is never read as inflated capability.
  */
 export default function EngineAccountingBanner() {
+  const { t } = useTranslation()
   const [a, setA] = useState(null)
   const [err, setErr] = useState(false)
 
@@ -32,18 +34,18 @@ export default function EngineAccountingBanner() {
 
   const ratioPct = Math.round((Number(a.distinct_ratio) || 0) * 100)
   const cells = [
-    { label: 'Advertised IDs', value: a.total_ids, tone: 'text-slate-200' },
-    { label: 'Distinct real probes', value: a.distinct_canonical, tone: 'text-emerald-300' },
-    { label: 'Aliases', value: a.alias_ids, tone: 'text-amber-300' },
-    { label: 'Agent-required', value: a.agent_required, tone: 'text-sky-300' },
-    { label: 'Remotely detecting', value: a.remotely_detecting, tone: 'text-cyan-300' },
+    { label: t('engineAccounting.advertisedIds'), value: a.total_ids, tone: 'text-slate-200' },
+    { label: t('engineAccounting.distinctReal'), value: a.distinct_canonical, tone: 'text-emerald-300' },
+    { label: t('engineAccounting.aliases'), value: a.alias_ids, tone: 'text-amber-300' },
+    { label: t('engineAccounting.agentRequired'), value: a.agent_required, tone: 'text-sky-300' },
+    { label: t('engineAccounting.remotelyDetecting'), value: a.remotely_detecting, tone: 'text-cyan-300' },
   ]
 
   return (
     <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-          Capability accounting · honest count
+          {t('engineAccounting.title')}
         </h2>
         <span className="text-[11px] font-mono text-slate-500">GET /api/engines/accounting</span>
       </div>
@@ -60,7 +62,7 @@ export default function EngineAccountingBanner() {
       </div>
 
       <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
-        <span>Distinct capability ratio (distinct real probes ÷ advertised IDs)</span>
+        <span>{t('engineAccounting.ratioLabel')}</span>
         <span className="font-mono text-slate-300 tabular-nums">{ratioPct}%</span>
       </div>
       <div className="h-2 rounded-full bg-white/10 overflow-hidden">
