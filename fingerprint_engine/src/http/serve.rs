@@ -881,6 +881,10 @@ async fn handle_ws_command_center(
 
     let mut rx = telemetry.subscribe();
     let mut ticker = tokio::time::interval(Duration::from_secs(15));
+    // The telemetry broadcast is process-global; gate every forwarded event to
+    // this socket's tenant. Refreshed on the ticker so newly-added clients start
+    // showing up without a reconnect.
+    let mut client_ids = tenant_client_id_set(pool.as_ref(), tenant_id).await;
 
     loop {
         tokio::select! {
@@ -902,6 +906,9 @@ async fn handle_ws_command_center(
             }
             telemetry_msg = rx.recv() => {
                 if let Ok(raw) = telemetry_msg {
+                    if !telemetry_event_visible_to_tenant(&raw, tenant_id, &client_ids) {
+                        continue;
+                    }
                     if let Some(normalized) = normalize_cc_event(&raw) {
                         if socket.send(Message::Text(normalized)).await.is_err() {
                             break;
@@ -910,6 +917,7 @@ async fn handle_ws_command_center(
                 }
             }
             _ = ticker.tick() => {
+                client_ids = tenant_client_id_set(pool.as_ref(), tenant_id).await;
                 let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else { continue; };
                 let row = sqlx::query(
                     "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
@@ -1205,6 +1213,66 @@ const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","
 fn scrub_internal_error<E: std::fmt::Display>(e: E) -> &'static str {
     tracing::error!(target: "http", error = %e, "internal server error");
     "internal error"
+}
+
+// The set of client ids owned by a tenant (id as text, matching how producers
+// stringify client_id in telemetry payloads). RLS scopes the SELECT to the
+// tenant. Used to gate the shared telemetry broadcast per subscriber.
+async fn tenant_client_id_set(pool: &PgPool, tenant_id: i64) -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
+        if let Ok(rows) = sqlx::query("SELECT id::text AS id FROM clients")
+            .fetch_all(&mut *tx)
+            .await
+        {
+            for row in rows {
+                if let Ok(id) = row.try_get::<String, _>("id") {
+                    set.insert(id);
+                }
+            }
+        }
+    }
+    set
+}
+
+// Tenant-isolation gate for the process-global telemetry broadcast. The channel
+// is shared across all tenants, so every consumer MUST filter: forward an event
+// only if it belongs to the subscriber's tenant. Fail-closed — an unparseable or
+// foreign-tenant payload is dropped.
+//   * tenant_id present  → strict match against the subscriber's tenant.
+//   * else client_id present → the client must be owned by the subscriber's tenant.
+//   * else (no tenant identity) → a genuine system-wide aggregate; allowed.
+fn telemetry_event_visible_to_tenant(
+    payload: &str,
+    tenant_id: i64,
+    client_ids: &std::collections::HashSet<String>,
+) -> bool {
+    let value: Value = match serde_json::from_str(payload) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let obj = match value.as_object() {
+        Some(o) => o,
+        None => return false,
+    };
+    let ev_tenant = obj.get("tenant_id").and_then(|x| {
+        x.as_i64()
+            .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+    });
+    if let Some(t) = ev_tenant {
+        return t == tenant_id;
+    }
+    let ev_client = obj.get("client_id").and_then(|x| {
+        if let Some(s) = x.as_str() {
+            Some(s.to_string())
+        } else {
+            x.as_i64().map(|n| n.to_string())
+        }
+    });
+    match ev_client {
+        Some(c) => client_ids.contains(&c),
+        None => true,
+    }
 }
 
 // Handlers: see `handler_fragments.rs` (single wiring point for all `.inc` fragments).
@@ -1674,4 +1742,73 @@ async fn shutdown_signal() {
         () = terminate => {},
     }
     eprintln!("[Weissman] Shutdown signal received — draining connections…");
+}
+
+#[cfg(test)]
+mod telemetry_tenant_gate_tests {
+    use super::telemetry_event_visible_to_tenant;
+    use std::collections::HashSet;
+
+    fn clients(ids: &[&str]) -> HashSet<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn matching_tenant_id_is_visible() {
+        let set = clients(&[]);
+        assert!(telemetry_event_visible_to_tenant(
+            r#"{"event":"x","tenant_id":7,"client_id":"99"}"#, 7, &set));
+    }
+
+    #[test]
+    fn foreign_tenant_id_is_hidden_even_if_client_matches() {
+        // tenant_id takes strict precedence: a foreign tenant is dropped
+        // regardless of client ownership.
+        let set = clients(&["5"]);
+        assert!(!telemetry_event_visible_to_tenant(
+            r#"{"event":"x","tenant_id":8,"client_id":"5"}"#, 7, &set));
+    }
+
+    #[test]
+    fn client_owned_event_without_tenant_id_is_visible() {
+        let set = clients(&["5", "6"]);
+        assert!(telemetry_event_visible_to_tenant(
+            r#"{"event":"containment_executed","client_id":"5"}"#, 7, &set));
+    }
+
+    #[test]
+    fn foreign_client_event_is_hidden() {
+        let set = clients(&["5"]);
+        assert!(!telemetry_event_visible_to_tenant(
+            r#"{"event":"containment_executed","client_id":"999"}"#, 7, &set));
+    }
+
+    #[test]
+    fn numeric_client_id_is_coerced_and_matched() {
+        let set = clients(&["42"]);
+        assert!(telemetry_event_visible_to_tenant(
+            r#"{"event":"x","client_id":42}"#, 7, &set));
+    }
+
+    #[test]
+    fn bare_event_with_no_tenant_identity_is_visible() {
+        let set = clients(&[]);
+        assert!(telemetry_event_visible_to_tenant(
+            r#"{"event":"system_heartbeat","status":"ok"}"#, 7, &set));
+    }
+
+    #[test]
+    fn unparseable_payload_is_dropped() {
+        let set = clients(&["5"]);
+        assert!(!telemetry_event_visible_to_tenant("not json", 7, &set));
+    }
+
+    #[test]
+    fn tenant_id_as_string_is_parsed() {
+        let set = clients(&[]);
+        assert!(telemetry_event_visible_to_tenant(
+            r#"{"tenant_id":"7"}"#, 7, &set));
+        assert!(!telemetry_event_visible_to_tenant(
+            r#"{"tenant_id":"8"}"#, 7, &set));
+    }
 }

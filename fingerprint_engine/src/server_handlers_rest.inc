@@ -1467,6 +1467,7 @@ async fn ws_threat_intel(ws: WebSocketUpgrade, State(state): State<Arc<AppState>
 
 async fn api_telemetry_stream(
     State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
     let want_job: Option<String> = q
@@ -1474,8 +1475,16 @@ async fn api_telemetry_stream(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
     let filter_job = want_job.clone();
+    // The telemetry broadcast is process-global (all tenants). Gate this
+    // subscriber to its own tenant so it can never receive another tenant's
+    // findings/containment events.
+    let sub_tenant = auth.tenant_id;
+    let client_ids = tenant_client_id_set(state.app_pool.as_ref(), sub_tenant).await;
     let rx = state.telemetry_broadcast_tx.subscribe();
     let stream = crate::http::sse_bridge::bridge_broadcast(rx, move |payload: &str| {
+        if !telemetry_event_visible_to_tenant(payload, sub_tenant, &client_ids) {
+            return false;
+        }
         if let Some(ref want) = filter_job {
             let matches = serde_json::from_str::<serde_json::Value>(payload)
                 .ok()
