@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -10,6 +10,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { confirmDialog } from '../utils/confirmDialog'
+import useFocusTrap from '../hooks/useFocusTrap'
 import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
@@ -39,6 +40,8 @@ export default function AdminManagement() {
   const [editingUser, setEditingUser] = useState(null)
   const [editRole, setEditRole] = useState('')
   const [editIsSuperadmin, setEditIsSuperadmin] = useState(false)
+  const editModalRef = useRef(null)
+  useFocusTrap(editModalRef, !!editingUser)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -454,8 +457,17 @@ export default function AdminManagement() {
 
         {/* Edit User Modal */}
         {editingUser && (
-          <div className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-2xl p-6 w-full max-w-md">
+          <div
+            className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onKeyDown={(e) => { if (e.key === 'Escape') setEditingUser(null) }}
+          >
+            <div
+              ref={editModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Edit user ${editingUser.email}`}
+              className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-2xl p-6 w-full max-w-md"
+            >
               <h3 className="text-lg font-semibold text-white mb-4">
                 Edit User: {editingUser.email}
               </h3>

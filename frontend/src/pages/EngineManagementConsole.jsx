@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Settings, Cpu, Play, Pause, Filter, Search, Clock, CheckCircle, XCircle, Download } from 'lucide-react';
 import PageShell from './PageShell'
@@ -583,6 +584,8 @@ export default function EngineManagementConsole() {
  * Engine Configuration Modal
  */
 function EngineConfigModal({ engine, onClose, onSave }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, true)
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     timeout: engine.timeout || 30,
@@ -597,8 +600,11 @@ function EngineConfigModal({ engine, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
+    <div
+      className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Configure ${engine.name}`} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-bold text-white">{engine.name}</h3>
@@ -607,6 +613,7 @@ function EngineConfigModal({ engine, onClose, onSave }) {
             </p>
           </div>
           <Button variant="unstyled"
+            aria-label="Close"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >

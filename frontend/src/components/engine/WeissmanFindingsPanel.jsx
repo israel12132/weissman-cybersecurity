@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
 import EmptyState from '../ui/EmptyState'
@@ -179,7 +180,15 @@ export default function WeissmanFindingsPanel({
         />
       ) : (
         <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
-          {list.map((f, i) => (renderFinding ? renderFinding(f, i) : defaultRender(f, i)))}
+          {list.map((f, i) => (
+            // Stable key wrapper: keying by array index made each card's internal expand-state
+            // follow the *position*, so filtering/searching or live-streaming reorders collapsed the
+            // open card and re-opened an unrelated one. The Fragment key governs list reconciliation
+            // regardless of the key the caller's renderFinding sets, fixing every consumer at once.
+            <Fragment key={f?.id ?? f?.fingerprint ?? f?.finding_id ?? `${f?.type ?? ''}-${f?.title ?? ''}-${f?.severity ?? ''}`}>
+              {renderFinding ? renderFinding(f, i) : defaultRender(f, i)}
+            </Fragment>
+          ))}
         </div>
       )}
     </div>

@@ -1225,7 +1225,7 @@ export default function GraphqlSecurityCommandCenter() {
                         placeholder="Value (e.g. Bearer …)"
                         className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40"
                       />
-                      <Button variant="unstyled" type="button" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</Button>
+                      <Button variant="unstyled" type="button" aria-label="Remove header" onClick={() => removeHeader(i)} className="text-[var(--text-disabled)] hover:text-rose-400 text-sm px-1">✕</Button>
                     </div>
                   ))}
                   <Button variant="unstyled" type="button" onClick={addHeader} className="text-[10px] font-mono text-pink-300/70 hover:text-pink-200">+ {t('graphqlSec.add_header', 'add header')}</Button>

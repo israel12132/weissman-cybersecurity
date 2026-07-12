@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../lib/apiBase'
+import { isHttpUrl } from '../utils/safeUrl'
 import AppShell from './layout/AppShell'
 import LabForensicEvidence from './ui/LabForensicEvidence'
 import Button from './ui/Button'
@@ -884,15 +885,19 @@ export default function SystemCore() {
                       <span className="text-xs text-[var(--text-muted)]">{p.added_at ? new Date(p.added_at).toLocaleString() : ''}</span>
                     </div>
                     {p.source_url && (
-                      <a
-                        href={p.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block mt-0.5 text-xs text-cyan-400 hover:text-cyan-300 truncate max-w-full"
-                        title={p.source_url}
-                      >
-                        {p.source_url}
-                      </a>
+                      isHttpUrl(p.source_url) ? (
+                        <a
+                          href={p.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block mt-0.5 text-xs text-cyan-400 hover:text-cyan-300 truncate max-w-full"
+                          title={p.source_url}
+                        >
+                          {p.source_url}
+                        </a>
+                      ) : (
+                        <span className="block mt-0.5 text-xs text-[var(--text-muted)] truncate max-w-full" title={p.source_url}>{p.source_url}</span>
+                      )
                     )}
                     <pre className="mt-1 text-xs text-[var(--text-tertiary)] truncate max-w-full overflow-hidden" title={p.payload_preview}>
                       {typeof p.payload_preview === 'string' ? p.payload_preview.slice(0, 120) + (p.payload_preview.length > 120 ? '…' : '') : ''}

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { isHttpUrl } from '../utils/safeUrl'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
@@ -1153,7 +1154,7 @@ function FindingCard({ f }) {
           )}
           {Array.isArray(f.references) && f.references.length > 0 && (
             <div className="flex flex-col gap-0.5">
-              {f.references.filter((r) => r.startsWith('http')).slice(0, 3).map((r) => (
+              {f.references.filter(isHttpUrl).slice(0, 3).map((r) => (
                 <a key={r} href={r} target="_blank" rel="noreferrer" className="text-[9px] font-mono text-cyan-400/60 hover:text-cyan-300 truncate">{r}</a>
               ))}
             </div>
@@ -1425,9 +1426,13 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
             <p key={i} className="text-[9px] font-mono text-[var(--text-muted)] truncate">{p.toxic_class}: {p.file}</p>
           ))}
           {liveBlast.autopilot.pr_url && (
-            <a href={liveBlast.autopilot.pr_url} target="_blank" rel="noreferrer" className="text-[9px] font-mono text-cyan-300 underline">
-              {liveBlast.autopilot.pr_url}
-            </a>
+            isHttpUrl(liveBlast.autopilot.pr_url) ? (
+              <a href={liveBlast.autopilot.pr_url} target="_blank" rel="noreferrer" className="text-[9px] font-mono text-cyan-300 underline">
+                {liveBlast.autopilot.pr_url}
+              </a>
+            ) : (
+              <span className="text-[9px] font-mono text-[var(--text-muted)]">{liveBlast.autopilot.pr_url}</span>
+            )
           )}
         </div>
       )}

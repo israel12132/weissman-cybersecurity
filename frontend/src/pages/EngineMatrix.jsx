@@ -197,11 +197,21 @@ function EngineMatrixCard({
 
   return (
     <div
-      className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-white/[0.08] p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-400/25"
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${engine.name || engine.id} engine`}
+      className="group relative rounded-2xl bg-gradient-to-br from-white/[0.07] via-black/40 to-black/60 backdrop-blur-xl border border-white/[0.08] p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-400/25 focus-visible:outline-none focus-visible:border-cyan-400/60 focus-visible:ring-1 focus-visible:ring-cyan-400/50"
       style={enabled ? { boxShadow: `inset 0 1px 0 ${groupColor}18` } : {}}
       onClick={(e) => {
         if (e.target.closest('button')) return
         navigate(`/engines/${engine.id}`)
+      }}
+      onKeyDown={(e) => {
+        if (e.target.closest('button')) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          navigate(`/engines/${engine.id}`)
+        }
       }}
     >
       <div

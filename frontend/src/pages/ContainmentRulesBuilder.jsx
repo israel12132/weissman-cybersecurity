@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
 import PageShell from './PageShell'
@@ -330,6 +331,8 @@ export default function ContainmentRulesBuilder() {
 }
 
 function RuleModal({ rule, clientId, onClose, onSave }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, true)
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: rule?.name || '',
@@ -359,8 +362,11 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
+    <div
+      className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}

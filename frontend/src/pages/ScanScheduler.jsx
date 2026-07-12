@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit } from 'lucide-react';
 import PageShell from './PageShell'
@@ -428,6 +429,8 @@ export default function ScanScheduler() {
  * Schedule Create/Edit Modal
  */
 function ScheduleModal({ schedule, template, onClose, onSave }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, true)
   const [clients, setClients] = useState([]);
   const [formData, setFormData] = useState({
     name: schedule?.name || template?.name || '',
@@ -479,13 +482,17 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
+    <div
+      className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={schedule ? 'Edit scan schedule' : 'Create scan schedule'} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {schedule ? 'Edit Schedule' : 'Create Scan Schedule'}
           </h3>
           <Button variant="unstyled"
+            aria-label="Close"
             onClick={onClose}
             className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >

@@ -155,7 +155,7 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
           <h3 className="text-sm font-bold text-white">{t('pages.ssoDashboard.configure_sso', { label: t(`pages.ssoDashboard.providers.${prov.id}.label`) })}</h3>
           <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol} · {t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
         </div>
-        <Button variant="unstyled" type="button" onClick={onCancel} className="ml-auto text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-lg transition-colors">✕</Button>
+        <Button variant="unstyled" type="button" aria-label="Close" onClick={onCancel} className="ml-auto text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-lg transition-colors">✕</Button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

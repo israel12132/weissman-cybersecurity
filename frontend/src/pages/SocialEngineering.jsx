@@ -1,6 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import {
   Mail, Users, AlertTriangle, Play, Shield,
@@ -42,6 +43,8 @@ export default function SocialEngineering() {
   const [error, setError] = useState('');
   const [clients, setClients] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const createModalRef = useRef(null);
+  useFocusTrap(createModalRef, createOpen);
   const [createTemplate, setCreateTemplate] = useState(TEMPLATES[0]);
   const [createName, setCreateName] = useState('');
   const [createClientId, setCreateClientId] = useState('');
@@ -417,8 +420,11 @@ export default function SocialEngineering() {
       </div>
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-3)] p-4">
-          <div className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-[var(--bg-1)] p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-3)] p-4"
+          onKeyDown={(e) => { if (e.key === 'Escape') setCreateOpen(false) }}
+        >
+          <div ref={createModalRef} role="dialog" aria-modal="true" aria-label={t('pages.socialEngineering.create_modal_title')} className="w-full max-w-md rounded-xl border border-[var(--border-default)] bg-[var(--bg-1)] p-6 shadow-xl">
             <h3 className="mb-4 text-lg font-semibold text-white">{t('pages.socialEngineering.create_modal_title')}</h3>
             <div className="space-y-4">
               <div>
