@@ -88,7 +88,7 @@ async fn api_llm_fuzz_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue llm_fuzz_run failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

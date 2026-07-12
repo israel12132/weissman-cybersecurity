@@ -1331,7 +1331,7 @@ async fn api_scan_run_all(
             tracing::error!(target: "async_jobs", error = %e, "enqueue tenant_full_scan failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -1798,7 +1798,7 @@ async fn api_scan_all_engines(
             tracing::error!(target: "async_jobs", error = %e, "enqueue scan_all_engines failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -1910,7 +1910,7 @@ async fn api_scan_discovered_domains(
             tracing::error!(target: "async_jobs", error = %e, "enqueue scan_discovered_domains failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

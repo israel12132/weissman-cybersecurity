@@ -82,7 +82,7 @@ async fn api_risk_node_flags_patch(
     match res {
         Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": node_id}))).into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false, "detail": "node not found"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e.to_string()}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }
 
@@ -590,7 +590,7 @@ async fn api_playbooks_delete(
     match res {
         Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e.to_string()}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }
 
@@ -679,7 +679,7 @@ async fn api_soar_execution_get(
             (StatusCode::OK, Json(json!({"ok": true, "execution": execution}))).into_response()
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e.to_string()}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }
 

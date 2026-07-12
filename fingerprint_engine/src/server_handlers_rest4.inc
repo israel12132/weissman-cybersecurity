@@ -64,7 +64,7 @@ async fn api_deep_fuzz(
             tracing::error!(target: "async_jobs", error = %e, "enqueue deep_fuzz failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -134,7 +134,7 @@ async fn api_general_mission(
             tracing::error!(target: "async_jobs", error = %e, "enqueue general_mission failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -221,7 +221,7 @@ async fn api_council_debate(
             tracing::error!(target: "async_jobs", error = %e, "enqueue council_debate failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -283,7 +283,7 @@ async fn api_general_ascension(
             tracing::error!(target: "async_jobs", error = %e, "enqueue ascension_wave failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -373,7 +373,7 @@ async fn api_timing_scan_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue timing_scan failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -439,7 +439,7 @@ async fn api_ai_redteam_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue ai_redteam failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -491,7 +491,7 @@ async fn api_threat_intel_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue threat_intel_run failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -553,7 +553,7 @@ async fn api_pipeline_scan_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue pipeline_scan failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -1548,7 +1548,7 @@ async fn api_auto_heal(
             }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "enqueue_failed", "detail": e.to_string()})),
+                Json(json!({"error": "enqueue_failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -2014,7 +2014,7 @@ async fn api_payload_sync_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue payload_sync failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"started": false, "detail": e.to_string()})),
+                Json(json!({"started": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

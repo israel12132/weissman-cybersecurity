@@ -553,7 +553,7 @@ async fn api_client_cloud_scan_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue cloud_scan_run failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

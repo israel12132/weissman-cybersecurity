@@ -2243,7 +2243,7 @@ async fn api_scan_schedules_update(
             let _ = tx.rollback().await;
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }
@@ -2402,7 +2402,7 @@ async fn api_scan_schedules_delete(
         Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }
@@ -2826,7 +2826,7 @@ async fn sbom_components_for_ui(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e.to_string(), "components": []})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e), "components": []})),
         )
             .into_response()
     })?;
@@ -2940,7 +2940,7 @@ async fn sbom_export_for_client(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response()
     })?;
@@ -3567,7 +3567,7 @@ async fn api_ceo_vault_secrets_alias(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string(), "secrets": [] })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e), "secrets": [] })),
         )
             .into_response(),
     }
@@ -3626,7 +3626,7 @@ async fn api_ceo_vault_secrets_post(
         Ok(id) => (StatusCode::CREATED, Json(json!({ "ok": true, "id": id }))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -3657,7 +3657,7 @@ async fn api_ceo_vault_secrets_put(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -3678,7 +3678,7 @@ async fn api_ceo_vault_secrets_delete(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
