@@ -130,7 +130,6 @@ export default function StealthOperations() {
   const cfg = data && data.config
   const l = data && data.live
   const id = data && data.identity
-  const globalRatio = l && cfg ? (l.global_in_flight || 0) / Math.max(1, cfg.global_capacity) : 0
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
@@ -255,6 +254,7 @@ export default function StealthOperations() {
                         type="number"
                         min="0"
                         max="60000"
+                        aria-label={k}
                         value={pacing[key]}
                         onChange={setP(key)}
                         className="w-28 rounded-md border border-white/10 bg-slate-950/60 px-2 py-1 text-right text-sm font-mono text-cyan-300 tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-500/40"

@@ -101,6 +101,7 @@ export default function TargetIntelligence() {
             value={target}
             onChange={(ev) => setTarget(ev.target.value)}
             placeholder={t('targetIntel.placeholder')}
+            aria-label={t('targetIntel.title')}
             className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
           <button
@@ -116,6 +117,7 @@ export default function TargetIntelligence() {
             type="checkbox"
             checked={enrich}
             onChange={(ev) => setEnrich(ev.target.checked)}
+            aria-label={t('targetIntel.resolveDns')}
             className="accent-cyan-500"
           />
           {t('targetIntel.resolveDns')}
