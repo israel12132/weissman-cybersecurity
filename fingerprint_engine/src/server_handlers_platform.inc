@@ -1731,7 +1731,7 @@ async fn api_soc_social_engineering_campaigns_post(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("campaign persist failed: {}", e)})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }
@@ -3781,7 +3781,7 @@ async fn api_compliance_control_mappings(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "error": format!("db: {e}") })),
+            Json(json!({ "ok": false, "error": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -3813,7 +3813,7 @@ async fn api_compliance_evidence_pack(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("db: {e}") })),
+                Json(json!({ "error": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -3858,7 +3858,7 @@ async fn api_compliance_evidence_pack(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("control mappings: {e}") })),
+                Json(json!({ "error": scrub_internal_error(&e) })),
             )
                 .into_response();
         }

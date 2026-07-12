@@ -759,7 +759,7 @@ async fn api_clients_create(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "ok": false,
-                    "detail": format!("Database error while creating client: {e}"),
+                    "detail": scrub_internal_error(&e),
                 })),
             )
                 .into_response();
@@ -1431,7 +1431,7 @@ async fn api_scan(
             tracing::error!(target: "async_jobs", error = %e, job_kind = %job_kind, "enqueue scan job failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": format!("enqueue failed: {}", e)})),
+                Json(json!({"detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

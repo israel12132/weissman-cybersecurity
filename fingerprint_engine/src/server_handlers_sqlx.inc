@@ -1525,7 +1525,7 @@ async fn api_top_tier_health_probe_start(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"detail": format!("enqueue failed: {}", e)})),
+            Json(json!({"detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }

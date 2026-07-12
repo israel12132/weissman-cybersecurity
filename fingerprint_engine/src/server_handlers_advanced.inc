@@ -24,7 +24,7 @@ async fn api_attack_paths_for_client(
             Err(e) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "ok": false, "detail": format!("compute: {e}") })),
+                    Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
                 ).into_response();
             }
         }
@@ -181,7 +181,7 @@ async fn api_threat_analysis_for_client(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("query: {e}")})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -712,7 +712,7 @@ async fn api_financial_risk_for_client(
             Ok(s) => Some(s),
             Err(e) => return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("compute: {e}")})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             ).into_response(),
         }
     } else {

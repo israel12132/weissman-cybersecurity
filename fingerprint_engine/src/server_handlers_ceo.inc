@@ -465,7 +465,7 @@ async fn api_ceo_god_mode_snapshot_get(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -539,7 +539,7 @@ async fn api_ceo_tenant_engines_get(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -581,7 +581,7 @@ async fn api_ceo_tenant_engines_put(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -624,7 +624,7 @@ async fn api_ceo_supreme_nerve_center_get(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({
                 "ok": false,
-                "detail": format!("nerve center snapshot failed: {e}"),
+                "detail": scrub_internal_error(&e),
             })),
         )
             .into_response(),

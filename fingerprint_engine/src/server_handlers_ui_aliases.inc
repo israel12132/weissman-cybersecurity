@@ -455,7 +455,7 @@ async fn api_compliance_frameworks_report(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("PDF failed: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }

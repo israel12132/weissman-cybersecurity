@@ -90,7 +90,7 @@ async fn install_agent_binary(axum::extract::Path(platform): axum::extract::Path
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("read binary: {}", e)})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }
@@ -117,7 +117,7 @@ async fn install_agent_binary_sha256(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": format!("{}", e)})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }
@@ -176,7 +176,7 @@ async fn api_agents_create_token(
             tracing::error!(target: "agents", error = %e, "create_enrollment_token failed");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("{}", e)})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }
@@ -271,7 +271,7 @@ async fn api_agents_enroll(
             tracing::error!(target: "agents", error = %e, "register_agent failed");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("{}", e)})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }
@@ -439,7 +439,7 @@ async fn api_agents_dispatch_task(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("{}", e)})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }
