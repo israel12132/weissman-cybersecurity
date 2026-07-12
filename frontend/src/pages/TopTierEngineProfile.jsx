@@ -192,17 +192,18 @@ export default function TopTierEngineProfile() {
 
   useEffect(() => {
     if (!activeJobId) return undefined
+    let cancelled = false
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`)
       const d = await r.json().catch(() => null)
-      if (!r.ok || !d) return
+      if (cancelled || !r.ok || !d) return
       setLiveJob(d)
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
         setRunState((prev) => ({ ...prev, running: false }))
       }
     }, 2000)
-    return () => clearInterval(iv)
+    return () => { cancelled = true; clearInterval(iv) }
   }, [activeJobId])
 
   async function runProbe() {

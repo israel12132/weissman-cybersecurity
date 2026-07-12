@@ -198,10 +198,11 @@ export default function SovereignDefenseMatrix() {
 
   useEffect(() => {
     if (!jobId || !runState.running) return undefined
+    let cancelled = false
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
       const d = await r.json().catch(() => null)
-      if (!r.ok || !d) return
+      if (cancelled || !r.ok || !d) return
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed') {
         const raw = d.result_json || d.result || {}
@@ -213,7 +214,8 @@ export default function SovereignDefenseMatrix() {
         setRunState({ running: false, msg: d.error || status })
       }
     }, 2500)
-    return () => clearInterval(iv)
+    // No setState from a tick that resolves after unmount / after `running` flips.
+    return () => { cancelled = true; clearInterval(iv) }
   }, [jobId, runState.running, loadDashboard, t])
 
   const rotateLiquid = async () => {

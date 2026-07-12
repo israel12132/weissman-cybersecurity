@@ -367,10 +367,11 @@ export default function RiskSuperpositionCollapse() {
 
   useEffect(() => {
     if (!jobId || !runState.running) return undefined
+    let cancelled = false
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
       const d = await r.json().catch(() => null)
-      if (!r.ok || !d) return
+      if (cancelled || !r.ok || !d) return
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed') {
         const raw = d.result_json || d.result || {}
@@ -380,6 +381,7 @@ export default function RiskSuperpositionCollapse() {
         } else {
           const fr = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
           const hist = await fr.json().catch(() => ({}))
+          if (cancelled) return
           setFindings(Array.isArray(hist?.findings) ? hist.findings : [])
         }
         setLastUpdated(new Date().toISOString())
@@ -389,7 +391,9 @@ export default function RiskSuperpositionCollapse() {
         setRunState({ running: false, msg: d.error || status })
       }
     }, 2500)
-    return () => clearInterval(iv)
+    // Guard against a tick that resolves after unmount / after `running` flips —
+    // no setState on a torn-down effect, and no chained second fetch either.
+    return () => { cancelled = true; clearInterval(iv) }
   }, [jobId, runState.running, loadClusters, t])
 
   return (

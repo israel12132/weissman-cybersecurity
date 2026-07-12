@@ -100,10 +100,11 @@ export default function TopTierEngineHub() {
 
   useEffect(() => {
     if (!probeRunning || !probeJobId) return undefined
+    let cancelled = false
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(probeJobId)}`)
       const d = await r.json().catch(() => null)
-      if (!r.ok || !d) return
+      if (cancelled || !r.ok || !d) return
       if (d.status === 'completed' || d.status === 'failed' || d.status === 'dead') {
         setProbeRunning(false)
       }
@@ -125,7 +126,7 @@ export default function TopTierEngineHub() {
         })
       }
     }, 2000)
-    return () => clearInterval(iv)
+    return () => { cancelled = true; clearInterval(iv) }
   }, [probeJobId, probeRunning])
 
   async function startHealthProbe() {

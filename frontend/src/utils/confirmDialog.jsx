@@ -104,6 +104,8 @@ function DialogShell({
   const uid = useId()
   const msgId = `${uid}-msg`
   const inputId = `${uid}-input`
+  const errId = `${uid}-err`
+  const [reqError, setReqError] = useState(false)
   useFocusTrap(dialogRef, true)
   const rtl = isRtl()
   const style = VARIANT_STYLES[variant] || VARIANT_STYLES.neutral
@@ -126,6 +128,7 @@ function DialogShell({
     if (kind === 'prompt') {
       const v = value.trim()
       if (required && !v) {
+        setReqError(true)
         inputRef.current?.focus()
         return
       }
@@ -214,25 +217,34 @@ function DialogShell({
               <textarea
                 ref={inputRef}
                 id={inputId}
-                aria-describedby={message ? msgId : undefined}
+                aria-required={required || undefined}
+                aria-invalid={reqError || undefined}
+                aria-describedby={[message ? msgId : null, reqError ? errId : null].filter(Boolean).join(' ') || undefined}
                 value={value}
                 rows={4}
                 placeholder={placeholder}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); if (reqError) setReqError(false) }}
                 className="w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/30"
               />
             ) : (
               <input
                 ref={inputRef}
                 id={inputId}
-                aria-describedby={message ? msgId : undefined}
+                aria-required={required || undefined}
+                aria-invalid={reqError || undefined}
+                aria-describedby={[message ? msgId : null, reqError ? errId : null].filter(Boolean).join(' ') || undefined}
                 type={inputType || 'text'}
                 value={value}
                 placeholder={placeholder}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); if (reqError) setReqError(false) }}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/30"
               />
             )}
+            {reqError ? (
+              <p id={errId} role="alert" className="mt-1.5 text-xs text-rose-400">
+                {rtl ? 'שדה חובה' : 'This field is required.'}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
