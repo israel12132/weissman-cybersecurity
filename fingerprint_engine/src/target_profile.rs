@@ -25,7 +25,7 @@
 //!   `classify`, `relevance`, `prioritize`) is preserved so existing callers and
 //!   tests are unaffected; the deep intelligence is additive.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use crate::engine_requirements;
 
@@ -503,6 +503,90 @@ fn is_private_class(nc: NetworkClass) -> bool {
             | NetworkClass::LinkLocal
             | NetworkClass::UniqueLocalV6
     )
+}
+
+/// Curated, high-confidence CDN/edge IPv4 ranges for attributing *who hosts a
+/// target* from its resolved IP when the hostname is opaque — a custom domain
+/// fronted by a CDN, the exact case where the passive string tier is blind.
+///
+/// Deliberately limited to ranges that are **small, stable, and published by the
+/// operator** (Cloudflare and Fastly). Large, frequently-churning cloud ranges
+/// (AWS/GCP/Azure) are intentionally omitted rather than risk stale or wrong
+/// attribution — an honest curated seed, not an exhaustive IP-to-ASN map. Values
+/// are `(network octets, prefix, provider, category)`.
+static CDN_V4_RANGES: &[([u8; 4], u8, &str, &str)] = &[
+    // Cloudflare — https://www.cloudflare.com/ips-v4 (stable for years).
+    ([173, 245, 48, 0], 20, "Cloudflare", "cdn"),
+    ([103, 21, 244, 0], 22, "Cloudflare", "cdn"),
+    ([103, 22, 200, 0], 22, "Cloudflare", "cdn"),
+    ([103, 31, 4, 0], 22, "Cloudflare", "cdn"),
+    ([141, 101, 64, 0], 18, "Cloudflare", "cdn"),
+    ([108, 162, 192, 0], 18, "Cloudflare", "cdn"),
+    ([190, 93, 240, 0], 20, "Cloudflare", "cdn"),
+    ([188, 114, 96, 0], 20, "Cloudflare", "cdn"),
+    ([197, 234, 240, 0], 22, "Cloudflare", "cdn"),
+    ([198, 41, 128, 0], 17, "Cloudflare", "cdn"),
+    ([162, 158, 0, 0], 15, "Cloudflare", "cdn"),
+    ([104, 16, 0, 0], 13, "Cloudflare", "cdn"),
+    ([104, 24, 0, 0], 14, "Cloudflare", "cdn"),
+    ([172, 64, 0, 0], 13, "Cloudflare", "cdn"),
+    ([131, 0, 72, 0], 22, "Cloudflare", "cdn"),
+    // Fastly — anycast edge (https://api.fastly.com/public-ip-list).
+    ([151, 101, 0, 0], 16, "Fastly", "cdn"),
+    ([199, 232, 0, 0], 16, "Fastly", "cdn"),
+];
+
+/// Curated, high-confidence CDN/edge IPv6 ranges (see [`CDN_V4_RANGES`]).
+static CDN_V6_RANGES: &[([u16; 8], u8, &str, &str)] = &[
+    // Cloudflare — https://www.cloudflare.com/ips-v6
+    ([0x2606, 0x4700, 0, 0, 0, 0, 0, 0], 32, "Cloudflare", "cdn"),
+    ([0x2803, 0xf800, 0, 0, 0, 0, 0, 0], 32, "Cloudflare", "cdn"),
+    ([0x2405, 0xb500, 0, 0, 0, 0, 0, 0], 32, "Cloudflare", "cdn"),
+    ([0x2405, 0x8100, 0, 0, 0, 0, 0, 0], 32, "Cloudflare", "cdn"),
+    ([0x2a06, 0x98c0, 0, 0, 0, 0, 0, 0], 29, "Cloudflare", "cdn"),
+    ([0x2c0f, 0xf248, 0, 0, 0, 0, 0, 0], 32, "Cloudflare", "cdn"),
+    // Fastly
+    ([0x2a04, 0x4e40, 0, 0, 0, 0, 0, 0], 32, "Fastly", "cdn"),
+];
+
+fn v4_in_cidr(ip: Ipv4Addr, net: [u8; 4], prefix: u8) -> bool {
+    let ip = u32::from_be_bytes(ip.octets());
+    let net = u32::from_be_bytes(net);
+    let mask = if prefix == 0 {
+        0
+    } else {
+        u32::MAX << (32 - u32::from(prefix))
+    };
+    (ip & mask) == (net & mask)
+}
+
+fn v6_in_cidr(ip: Ipv6Addr, net: [u16; 8], prefix: u8) -> bool {
+    let ip = u128::from(ip);
+    let net = net
+        .iter()
+        .fold(0u128, |acc, seg| (acc << 16) | u128::from(*seg));
+    let mask = if prefix == 0 {
+        0
+    } else {
+        u128::MAX << (128 - u32::from(prefix))
+    };
+    (ip & mask) == (net & mask)
+}
+
+/// Attribute a hosting/CDN provider from a public IP against the curated edge
+/// ranges. Returns `(provider, category)` or `None` when the IP is not in a
+/// known range (the honest default — no guessing).
+fn provider_from_ip(ip: IpAddr) -> Option<(&'static str, &'static str)> {
+    match ip {
+        IpAddr::V4(v4) => CDN_V4_RANGES
+            .iter()
+            .find(|(net, pfx, _, _)| v4_in_cidr(v4, *net, *pfx))
+            .map(|(_, _, name, kind)| (*name, *kind)),
+        IpAddr::V6(v6) => CDN_V6_RANGES
+            .iter()
+            .find(|(net, pfx, _, _)| v6_in_cidr(v6, *net, *pfx))
+            .map(|(_, _, name, kind)| (*name, *kind)),
+    }
 }
 
 /// Number of labels in the effective public suffix of an ASCII a-label host,
@@ -1136,6 +1220,31 @@ impl TargetProfile {
             ips.len(),
             effective
         ));
+
+        // Attribute the hosting/CDN provider from a public resolved IP when the
+        // hostname did not reveal one — catches custom domains fronted by a CDN,
+        // which the passive string tier is blind to. High-confidence curated
+        // ranges only; never overwrites a hostname-derived provider.
+        if self.provenance.hosting_provider.is_none() {
+            if let Some((provider, kind, ip)) = ips
+                .iter()
+                .filter(|ip| !is_private_class(network_class(**ip)))
+                .find_map(|ip| provider_from_ip(*ip).map(|(p, k)| (p, k, *ip)))
+            {
+                self.provenance.hosting_provider = Some(provider);
+                self.provenance.hosting_category = Some(kind);
+                if kind == "cdn" && !self.facets.contains(&"cdn") {
+                    self.facets.push("cdn");
+                }
+                if !self.facets.contains(&"cdn-fronted") {
+                    self.facets.push("cdn-fronted");
+                }
+                self.provenance.evidence.push(format!(
+                    "resolved IP {ip} in {provider} {kind} range — origin likely behind the edge"
+                ));
+            }
+        }
+
         self.provenance.resolved_ips = ips;
         self.confidence = self.confidence.saturating_add(10).min(100);
     }
@@ -1910,6 +2019,59 @@ mod tests {
         assert!(!p.is_private);
         assert_eq!(p.provenance.network_class, NetworkClass::Public);
         assert_eq!(p.provenance.resolved_ips.len(), 1);
+    }
+
+    #[test]
+    fn resolved_cdn_ip_attributes_provider_when_host_opaque() {
+        // Opaque custom domain — hostname reveals no provider.
+        let mut p = TargetProfile::classify("https://portal.acme-corp.example/");
+        assert_eq!(p.provenance.hosting_provider, None, "opaque before resolve");
+        // Resolves into Cloudflare's 104.16.0.0/13.
+        p.apply_resolved_ips(vec!["104.18.32.47".parse().unwrap()]);
+        assert_eq!(p.provenance.hosting_provider, Some("Cloudflare"));
+        assert_eq!(p.provenance.hosting_category, Some("cdn"));
+        assert!(p.has("cdn"));
+        assert!(p.has("cdn-fronted"));
+    }
+
+    #[test]
+    fn resolved_fastly_v6_ip_attributes_provider() {
+        let mut p = TargetProfile::classify("https://media.opaque-host.example/");
+        // Fastly IPv6 2a04:4e40::/32.
+        p.apply_resolved_ips(vec!["2a04:4e40::1".parse().unwrap()]);
+        assert_eq!(p.provenance.hosting_provider, Some("Fastly"));
+        assert!(p.has("cdn-fronted"));
+    }
+
+    #[test]
+    fn hostname_derived_provider_is_not_overwritten_by_ip() {
+        // s3.amazonaws.com is attributed from the hostname; even if it resolves
+        // into a CDN range, the hostname signal must win (no clobber).
+        let mut p = TargetProfile::classify("https://data.myapp.s3.amazonaws.com/");
+        assert_eq!(p.provenance.hosting_provider, Some("Amazon S3"));
+        p.apply_resolved_ips(vec!["104.18.32.47".parse().unwrap()]);
+        assert_eq!(
+            p.provenance.hosting_provider,
+            Some("Amazon S3"),
+            "hostname attribution must not be clobbered by IP attribution"
+        );
+    }
+
+    #[test]
+    fn non_cdn_public_ip_yields_no_provider() {
+        let mut p = TargetProfile::classify("https://plain.opaque-host.example/");
+        p.apply_resolved_ips(vec!["93.184.216.34".parse().unwrap()]);
+        assert_eq!(p.provenance.hosting_provider, None, "no guessing on unknown IP");
+        assert!(!p.has("cdn-fronted"));
+    }
+
+    #[test]
+    fn cidr_matcher_respects_prefix_boundaries() {
+        // 104.16.0.0/13 covers 104.16–104.23; 104.24.0.0/14 covers 104.24–104.27.
+        assert!(provider_from_ip("104.16.0.1".parse().unwrap()).is_some());
+        assert!(provider_from_ip("104.23.255.254".parse().unwrap()).is_some());
+        // 8.8.8.8 (Google DNS) is deliberately not in the curated CDN set.
+        assert!(provider_from_ip("8.8.8.8".parse().unwrap()).is_none());
     }
 
     // --- taxonomy-backed selection over REAL engine ids ---
