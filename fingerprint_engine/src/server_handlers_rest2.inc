@@ -829,10 +829,11 @@ async fn api_openapi_spec() -> Response {
                     "description": "Classifies a target string (URL / host / IP / host:port) into what it is (asset class, facets), where it lives (registrable domain, public suffix, hosting/network class, IDN/homograph), and why it matters (sensitivity, confidence, evidence), then returns the ranked, explainable engine set the platform would prioritise for it. Pure string+catalog classification — no network traffic, no tenant data.",
                     "tags": ["Intel"],
                     "parameters": [
-                        { "name": "target", "in": "query", "required": true, "schema": { "type": "string" }, "description": "URL, hostname, IP, or host:port to profile" }
+                        { "name": "target", "in": "query", "required": true, "schema": { "type": "string" }, "description": "URL, hostname, IP, or host:port to profile" },
+                        { "name": "enrich", "in": "query", "required": false, "schema": { "type": "boolean" }, "description": "Opt-in: perform one bounded A/AAAA lookup to network-verify the seed (resolved IPs, private-space detection, CDN/hosting attribution). Off by default." }
                     ],
                     "responses": {
-                        "200": { "description": "{ target, profile, selection } — profile carries asset_class/sensitivity/confidence/provenance/facets; selection carries focus[] + ranked[] with per-engine score/group/reason" },
+                        "200": { "description": "{ target, resolved, profile, selection } — profile carries asset_class/sensitivity/confidence/provenance/facets; selection carries focus[] + ranked[] with per-engine score/group/reason. `resolved` is true when active DNS enrichment succeeded" },
                         "400": { "description": "target query parameter required" }
                     }
                 }

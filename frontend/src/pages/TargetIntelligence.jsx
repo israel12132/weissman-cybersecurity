@@ -52,6 +52,7 @@ function ConfidenceBar({ value }) {
 
 export default function TargetIntelligence() {
   const [target, setTarget] = useState('')
+  const [enrich, setEnrich] = useState(false)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -64,7 +65,8 @@ export default function TargetIntelligence() {
     setError('')
     setData(null)
     try {
-      const r = await apiFetch(`/api/intel/target-profile?target=${encodeURIComponent(t)}`)
+      const qs = `target=${encodeURIComponent(t)}${enrich ? '&enrich=1' : ''}`
+      const r = await apiFetch(`/api/intel/target-profile?${qs}`)
       if (!r.ok) {
         const j = await r.json().catch(() => ({}))
         throw new Error(j.error || `HTTP ${r.status}`)
@@ -94,20 +96,31 @@ export default function TargetIntelligence() {
         </p>
       </header>
 
-      <form onSubmit={analyze} className="flex gap-2 mb-6">
-        <input
-          value={target}
-          onChange={(ev) => setTarget(ev.target.value)}
-          placeholder="https://example.com  ·  10.0.0.5:502  ·  bucket.s3.amazonaws.com"
-          className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-        />
-        <button
-          type="submit"
-          disabled={loading || !target.trim()}
-          className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Analyzing…' : 'Analyze'}
-        </button>
+      <form onSubmit={analyze} className="mb-6">
+        <div className="flex gap-2">
+          <input
+            value={target}
+            onChange={(ev) => setTarget(ev.target.value)}
+            placeholder="https://example.com  ·  10.0.0.5:502  ·  bucket.s3.amazonaws.com"
+            className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+          />
+          <button
+            type="submit"
+            disabled={loading || !target.trim()}
+            className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Analyzing…' : 'Analyze'}
+          </button>
+        </div>
+        <label className="mt-2 flex items-center gap-2 text-xs text-slate-400 select-none cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={enrich}
+            onChange={(ev) => setEnrich(ev.target.checked)}
+            className="accent-cyan-500"
+          />
+          Resolve DNS (active) — verify resolved IPs, private-space, and CDN/hosting attribution
+        </label>
       </form>
 
       {error && (
@@ -134,6 +147,17 @@ export default function TargetIntelligence() {
             <div className="mb-3">
               <div className="text-lg font-semibold text-white">{p.asset_class}</div>
               <div className="text-xs text-slate-400 font-mono break-all">{p.host}</div>
+              {data.resolved ? (
+                <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> DNS resolved · IP-verified
+                </div>
+              ) : (
+                enrich && (
+                  <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono text-slate-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600" /> passive only — no A/AAAA record resolved
+                  </div>
+                )
+              )}
             </div>
 
             <div className="mb-3">

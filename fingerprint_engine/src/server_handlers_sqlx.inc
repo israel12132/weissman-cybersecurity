@@ -1087,9 +1087,11 @@ async fn api_engines_requirements() -> Response {
 }
 
 /// Target-intelligence profile (what / where / who / why) + taxonomy-backed,
-/// explainable engine selection for a target string. Pure string+catalog
-/// classification — no network, no tenant data — so it is safe to serve as
-/// unauthenticated info, like `/api/engines/requirements`.
+/// explainable engine selection for a target string. By default a pure
+/// string+catalog classification — no network, no tenant data. With `?enrich=1`
+/// (alias `?resolve=1`) it also performs one bounded A/AAAA lookup to
+/// network-verify the seed: resolved IPs, private-space detection, and CDN /
+/// hosting attribution from the edge IP. JWT-gated (not in PUBLIC_ROUTES).
 async fn api_intel_target_profile(
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
@@ -1104,7 +1106,21 @@ async fn api_intel_target_profile(
         )
             .into_response();
     }
-    let profile = crate::target_profile::TargetProfile::classify(&target);
+    let mut profile = crate::target_profile::TargetProfile::classify(&target);
+    // Opt-in active DNS enrichment, bounded so a slow/hostile resolver can't
+    // stall the request. Off by default keeps this a fast, no-network classifier.
+    let want_enrich = q
+        .get("enrich")
+        .or_else(|| q.get("resolve"))
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"));
+    let resolved = if want_enrich {
+        matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(3), profile.enrich_dns()).await,
+            Ok(true)
+        )
+    } else {
+        false
+    };
     let engines: Vec<String> = weissman_core::models::engine::production_engine_ids()
         .iter()
         .map(|s| (*s).to_string())
@@ -1114,6 +1130,7 @@ async fn api_intel_target_profile(
         StatusCode::OK,
         Json(serde_json::json!({
             "target": target,
+            "resolved": resolved,
             "profile": profile.to_json(),
             "selection": selection.to_json(40),
         })),
