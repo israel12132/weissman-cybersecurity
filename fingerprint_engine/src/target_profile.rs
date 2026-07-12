@@ -1305,6 +1305,15 @@ impl TargetProfile {
         if self.ip_family == Some(IpFamily::V6) && id.contains("ipv4") {
             score -= 3;
         }
+        // A CDN-fronted origin (attributed from the resolved edge IP) makes
+        // origin-discovery and WAF-evasion the high-value moves — the real
+        // attack surface sits behind the edge, not on it. Additive and gated on
+        // the facet, so non-fronted targets score exactly as before.
+        if self.has("cdn-fronted")
+            && (id.contains("origin") || id.contains("waf") || id.contains("bypass"))
+        {
+            score += 5;
+        }
         score
     }
 
@@ -2072,6 +2081,19 @@ mod tests {
         assert!(provider_from_ip("104.23.255.254".parse().unwrap()).is_some());
         // 8.8.8.8 (Google DNS) is deliberately not in the curated CDN set.
         assert!(provider_from_ip("8.8.8.8".parse().unwrap()).is_none());
+    }
+
+    #[test]
+    fn cdn_fronted_target_boosts_origin_and_waf_engines() {
+        let mut p = TargetProfile::classify("https://portal.opaque-corp.example/");
+        p.apply_resolved_ips(vec!["104.18.32.47".parse().unwrap()]); // Cloudflare edge
+        assert!(p.has("cdn-fronted"));
+        let engines = ids(&["origin_discovery", "waf_bypass", "wordpress_scan", "osint"]);
+        let ordered = p.prioritize(&engines);
+        let pos = |name: &str| ordered.iter().position(|e| e == name).unwrap();
+        // Behind an edge, origin discovery + WAF evasion outrank a generic CMS scan.
+        assert!(pos("origin_discovery") < pos("wordpress_scan"));
+        assert!(pos("waf_bypass") < pos("wordpress_scan"));
     }
 
     // --- taxonomy-backed selection over REAL engine ids ---
