@@ -692,7 +692,10 @@ mod tests {
         {
             let fut = q.acquire("host.example");
             let r = tokio::time::timeout(Duration::from_millis(50), fut).await;
-            assert!(r.is_err(), "second acquire should block behind the held slot");
+            assert!(
+                r.is_err(),
+                "second acquire should block behind the held slot"
+            );
         }
         assert_eq!(
             q.status().waiting,

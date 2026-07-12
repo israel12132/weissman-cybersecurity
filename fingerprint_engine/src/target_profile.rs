@@ -1910,7 +1910,10 @@ mod tests {
         // Regression guard: broad `windows.net` was rejected precisely because
         // these non-identity Azure services share the parent domain.
         let sql = TargetProfile::classify("https://myserver.database.windows.net/");
-        assert!(!sql.has("identity"), "Azure SQL is not an identity provider");
+        assert!(
+            !sql.has("identity"),
+            "Azure SQL is not an identity provider"
+        );
         let blob = TargetProfile::classify("https://acct.blob.core.windows.net/");
         assert_eq!(blob.provenance.hosting_provider, Some("Azure Blob Storage"));
         assert!(!blob.has("identity"));
@@ -2134,7 +2137,10 @@ mod tests {
     fn non_cdn_public_ip_yields_no_provider() {
         let mut p = TargetProfile::classify("https://plain.opaque-host.example/");
         p.apply_resolved_ips(vec!["93.184.216.34".parse().unwrap()]);
-        assert_eq!(p.provenance.hosting_provider, None, "no guessing on unknown IP");
+        assert_eq!(
+            p.provenance.hosting_provider, None,
+            "no guessing on unknown IP"
+        );
         assert!(!p.has("cdn-fronted"));
     }
 
