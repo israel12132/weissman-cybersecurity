@@ -467,7 +467,39 @@ async fn main() {
                 } else {
                     light_sem.clone()
                 };
-                let permit = match sem.acquire_owned().await {
+                // Keep the just-claimed job's lock alive while we wait for a
+                // concurrency permit. If the pool is saturated and we block past
+                // LOCK_SECS, locked_until would lapse and the reclaim task could
+                // hand this job to a second worker — and legacy (non-bus) mode has
+                // no post-claim re-check to catch the resulting double execution.
+                // Only one job is ever in this window (the loop blocks here before
+                // claiming the next), so a single pinned heartbeat suffices.
+                let permit = {
+                    let acquire = sem.acquire_owned();
+                    tokio::pin!(acquire);
+                    let mut hb =
+                        tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
+                    hb.tick().await; // consume the immediate first tick
+                    loop {
+                        tokio::select! {
+                            p = &mut acquire => break p,
+                            _ = hb.tick() => {
+                                if !bus.is_enabled() {
+                                    if let Err(e) = job_queue::heartbeat(
+                                        app_pool.as_ref(), job.id, LOCK_SECS,
+                                    ).await {
+                                        warn!(
+                                            target: "weissman_worker",
+                                            job_id = %job.id, error = %e,
+                                            "pre-exec heartbeat failed while awaiting permit"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+                let permit = match permit {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
