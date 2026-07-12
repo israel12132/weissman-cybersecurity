@@ -273,29 +273,36 @@ async fn api_dashboard_exec_kpis(
     .unwrap_or(0);
 
     // ── Job pipeline (pending / running / 24h completed / 24h failed) ──────────────
+    // weissman_async_jobs is intentionally RLS-free (cross-tenant worker dequeue), so begin_tenant_tx
+    // does NOT scope it — every query below must carry an explicit `tenant_id = $1` filter or it would
+    // aggregate every tenant's jobs (mirrors the correct api_metrics_dashboard sibling above).
     let jobs_pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'pending' AND tenant_id = $1",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
     let jobs_running: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running'",
+        "SELECT COUNT(*)::bigint FROM weissman_async_jobs WHERE status = 'running' AND tenant_id = $1",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
     let jobs_completed_24h: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours'",
+          WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
     let jobs_failed_24h: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM weissman_async_jobs
-          WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours'",
+          WHERE status IN ('failed','dead') AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
@@ -304,8 +311,9 @@ async fn api_dashboard_exec_kpis(
     let avg_scan_secs: f64 = sqlx::query_scalar::<_, Option<f64>>(
         "SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at)))::float8
            FROM weissman_async_jobs
-          WHERE status = 'completed' AND updated_at > now() - interval '24 hours'",
+          WHERE status = 'completed' AND updated_at > now() - interval '24 hours' AND tenant_id = $1",
     )
+    .bind(auth.tenant_id)
     .fetch_one(&mut *tx)
     .await
     .ok()
