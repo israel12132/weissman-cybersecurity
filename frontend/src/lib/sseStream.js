@@ -3,7 +3,7 @@
  * Auth via Authorization: Bearer and HttpOnly cookies — never query-string secrets.
  */
 
-import { apiUrl, authHeaders, getStoredAccessToken, setStoredAccessToken } from './apiBase'
+import { apiUrl, authHeaders, getStoredAccessToken, tryRefreshToken } from './apiBase'
 
 export const SSE_CONNECTING = 0
 export const SSE_OPEN = 1
@@ -13,24 +13,9 @@ const DEFAULT_MIN_BACKOFF_MS = 1000
 const DEFAULT_MAX_BACKOFF_MS = 30_000
 const BACKOFF_FACTOR = 1.5
 
-async function refreshAccessToken() {
-  try {
-    const r = await fetch(apiUrl('/api/auth/refresh'), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    })
-    if (!r.ok) return false
-    const data = await r.json().catch(() => ({}))
-    if (data.ok && data.access_token) {
-      setStoredAccessToken(data.access_token)
-      return true
-    }
-    return false
-  } catch {
-    return false
-  }
-}
+// Reuse apiBase's single-flight refresh so the stream shares one refresh with
+// the API calls that 401 at the same time (no competing refresh stampede).
+const refreshAccessToken = tryRefreshToken
 
 function resolveUrl(pathOrUrl) {
   const s = String(pathOrUrl || '')

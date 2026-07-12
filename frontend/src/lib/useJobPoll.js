@@ -16,6 +16,7 @@ export function useJobPoll(jobId, { onUpdate, onComplete, intervalMs = 2000, ena
     if (!enabled || !jobId) return undefined
 
     let cancelled = false
+    let iv = null
 
     async function poll() {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
@@ -25,14 +26,18 @@ export function useJobPoll(jobId, { onUpdate, onComplete, intervalMs = 2000, ena
       const status = (job.status || '').toLowerCase()
       if (TERMINAL.has(status)) {
         onCompleteRef.current?.(job)
+        // Job is finished — stop hitting the endpoint (the hook contract is
+        // "poll until terminal"; without this it polls forever once done).
+        cancelled = true
+        if (iv) clearInterval(iv)
       }
     }
 
     poll()
-    const iv = setInterval(poll, intervalMs)
+    iv = setInterval(poll, intervalMs)
     return () => {
       cancelled = true
-      clearInterval(iv)
+      if (iv) clearInterval(iv)
     }
   }, [jobId, enabled, intervalMs])
 }

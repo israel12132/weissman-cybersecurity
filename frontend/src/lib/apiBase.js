@@ -143,7 +143,7 @@ export function authHeaders() {
  * Attempt to refresh the access token using the refresh token cookie.
  * Returns true if refresh succeeded, false otherwise.
  */
-async function tryRefreshToken() {
+async function doRefreshToken() {
   try {
     const r = await fetch(apiUrl('/api/auth/refresh'), {
       method: 'POST',
@@ -160,6 +160,19 @@ async function tryRefreshToken() {
   } catch {
     return false
   }
+}
+
+// Single-flight guard: when several requests (and the SSE/WS streams) all 401 at
+// once on an expired token, they must share ONE refresh. Otherwise, with refresh
+// -token rotation, the first call rotates the cookie and the rest present the
+// now-consumed token, fail, and trigger a spurious logout (refresh stampede).
+let refreshPromise = null
+export async function tryRefreshToken() {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = doRefreshToken().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
 }
 
 /**

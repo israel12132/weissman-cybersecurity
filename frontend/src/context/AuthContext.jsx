@@ -150,6 +150,13 @@ export function AuthProvider({ children }) {
       /* still clear local state */
     }
     clearStoredAccessToken()
+    // Clear tab-scoped app state that can carry tenant data across a re-login on
+    // a shared/kiosk workstation (the notification inbox persists findings).
+    try {
+      sessionStorage.removeItem('weissman_notifications')
+    } catch (_) {
+      /* sessionStorage may be unavailable — non-fatal */
+    }
     setIsAuthenticated(false)
     setSession(null)
   }, [])

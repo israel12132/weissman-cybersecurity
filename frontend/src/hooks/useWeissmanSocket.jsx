@@ -35,6 +35,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const DEBOUNCE_SAME_EVENT_MS = 5000;
 const RECONNECT_BASE_MS = 2000;   // initial reconnect delay
 const RECONNECT_MAX_MS = 30000;   // maximum reconnect delay
+const MAX_EVENTS = 500;           // cap the live buffer so a long shift on a
+                                  // busy feed can't grow the array unbounded
 const HEARTBEAT_INTERVAL_MS = 25000;
 
 // Arc-triggering event kinds (used by App.jsx for visual effects)
@@ -145,7 +147,10 @@ export function useWeissmanSocket() {
       payload, // Keep full payload for custom processing
     };
 
-    setEvents((prev) => [...prev, event]);
+    setEvents((prev) => {
+      const next = [...prev, event];
+      return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
+    });
   }, []);
 
   // -------------------------------------------------------------------------
