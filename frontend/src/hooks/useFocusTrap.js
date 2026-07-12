@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 
+// Exclude tabindex="-1" everywhere (not just the generic [tabindex] clause) so
+// roving-tabindex controls — e.g. the inactive tabs in an ARIA tablist — are
+// never picked as the first/last boundary of the trap.
 const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  'button:not([disabled]):not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
 
 /**
  * Trap Tab focus inside `containerRef` while `active` is true.

@@ -161,7 +161,9 @@ export default function SatelliteDroneMap() {
               <Line
                 coordinates={[
                   [(usCenter || US_CENTER)[1], (usCenter || US_CENTER)[0]],
-                  ...targetCoordsList.map(([lat, lng]) => [lng, lat]),
+                  // targetCoordsList already holds [lng, lat] (from geoForTarget),
+                  // the order react-simple-maps expects — same as the markers below.
+                  ...targetCoordsList,
                 ]}
                 stroke="#22d3ee"
                 strokeWidth={1}
