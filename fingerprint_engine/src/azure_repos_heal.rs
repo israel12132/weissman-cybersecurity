@@ -163,18 +163,44 @@ async fn base_ref_object_id(base_url: &str, repo: &str, base: &str, auth: &str) 
         .map(String::from)
 }
 
-/// Does `path` exist on `base`? Chooses `edit` vs `add` for the push change.
-async fn file_exists(base_url: &str, repo: &str, path: &str, base: &str, auth: &str) -> bool {
+/// Resolve whether `path` exists on `base` to pick `edit` vs `add`. Returns `Some(true)` (exists),
+/// `Some(false)` (a definitive 404 → absent), or `None` (indeterminate after retrying transient
+/// failures) — the caller must NOT guess a change type on `None`, since a wrong `add`/`edit` gets the
+/// whole push rejected.
+async fn file_state(base_url: &str, repo: &str, path: &str, base: &str, auth: &str) -> Option<bool> {
     let url = format!(
         "{base_url}/_apis/git/repositories/{}/items?path={}&versionDescriptor.version={}&api-version={API_VER}",
         pct(repo),
         pct(path),
         pct(base),
     );
-    matches!(
-        ado_client().get(&url).header("Authorization", auth).send().await.map(|r| r.status().is_success()),
-        Ok(true)
-    )
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        match ado_client().get(&url).header("Authorization", auth).send().await {
+            Ok(r) => {
+                let status = r.status();
+                if status.is_success() {
+                    return Some(true);
+                }
+                if status == StatusCode::NOT_FOUND {
+                    return Some(false);
+                }
+                if transient(status, r.headers()) && attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
+                }
+                return None; // auth/other error → indeterminate, do not guess
+            }
+            Err(_) => {
+                if attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(backoff(attempt)).await;
+                    continue;
+                }
+                return None;
+            }
+        }
+    }
 }
 
 /// Result of an Azure Repos heal PR attempt.
@@ -232,10 +258,15 @@ pub async fn create_push_and_pr(
         } else {
             format!("/{}", path.trim_start_matches('/'))
         };
-        let change_type = if file_exists(&base_url, &repo, &p, base_branch, &auth).await {
-            "edit"
-        } else {
-            "add"
+        let change_type = match file_state(&base_url, &repo, &p, base_branch, &auth).await {
+            Some(true) => "edit",
+            Some(false) => "add",
+            None => {
+                return err(
+                    branch_name,
+                    format!("could not determine repository state of '{p}'; not pushing to avoid a wrong change type"),
+                )
+            }
         };
         changes.push(serde_json::json!({
             "changeType": change_type,

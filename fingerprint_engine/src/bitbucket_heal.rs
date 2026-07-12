@@ -47,6 +47,16 @@ pub fn split_workspace_repo(slug: &str) -> Option<(String, String)> {
     Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
 }
 
+/// True when a repo-root file path collides with a Bitbucket `/src` reserved control field name
+/// (`branch`/`message`/`parents`/`author`/`files`) — such a file, sent as a form field, would corrupt
+/// the commit (e.g. add a second `branch=` field), so we reject it rather than deliver a bad commit.
+fn collides_with_src_field(path: &str) -> bool {
+    matches!(
+        path.trim_start_matches('/'),
+        "branch" | "message" | "parents" | "author" | "files"
+    )
+}
+
 /// Percent-encode a single URL path/query segment (everything but RFC 3986 unreserved), so a branch
 /// or path containing `/`, `#`, `?`, space, `&`, etc. stays one segment instead of injecting routing.
 fn pct(s: &str) -> String {
@@ -198,6 +208,12 @@ pub async fn create_branch_commit_and_pr(
         if p.is_empty() || p.contains("..") {
             return err(branch_name, format!("invalid file path: {path:?}"));
         }
+        if collides_with_src_field(p) {
+            return err(
+                branch_name,
+                format!("file path {p:?} collides with a Bitbucket /src control field; deliver this fix via a different channel"),
+            );
+        }
     }
 
     // Commit via the /src endpoint (multipart/form). File fields are `path=content`; the heal branch
@@ -311,5 +327,16 @@ mod tests {
         assert_eq!(pct("src/app.js"), "src%2Fapp.js");
         // Unreserved chars pass through untouched.
         assert_eq!(pct("safe-name.1_x~"), "safe-name.1_x~");
+    }
+
+    #[test]
+    fn detects_src_control_field_collision() {
+        assert!(collides_with_src_field("branch"));
+        assert!(collides_with_src_field("/message"));
+        assert!(collides_with_src_field("parents"));
+        // A path (not a root file of that exact name) does not collide.
+        assert!(!collides_with_src_field("src/branch.rs"));
+        assert!(!collides_with_src_field("app/message"));
+        assert!(!collides_with_src_field("main.rs"));
     }
 }
