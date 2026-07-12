@@ -331,6 +331,24 @@ static HOSTING_SUFFIXES: &[(&str, &str, &str)] = &[
     ("github.io", "GitHub Pages", "cloud"),
     ("githubusercontent.com", "GitHub", "cloud"),
     ("gitlab.io", "GitLab Pages", "cloud"),
+    ("azurefd.net", "Azure Front Door", "cdn"),
+    ("cloudfunctions.net", "Google Cloud Functions", "cloud"),
+    // Identity / SSO providers (IdP) — high-value SSO / federation / phishing
+    // surface. Customer tenants live as sub-domains of these (e.g.
+    // `acme.okta.com`, `login.microsoftonline.com`), so the registrable-domain
+    // suffix match catches them and flags the target as an identity provider.
+    ("okta.com", "Okta", "identity"),
+    ("oktapreview.com", "Okta", "identity"),
+    ("okta-emea.com", "Okta", "identity"),
+    ("auth0.com", "Auth0", "identity"),
+    ("onelogin.com", "OneLogin", "identity"),
+    ("pingidentity.com", "Ping Identity", "identity"),
+    ("pingone.com", "Ping Identity", "identity"),
+    ("jumpcloud.com", "JumpCloud", "identity"),
+    ("duosecurity.com", "Cisco Duo", "identity"),
+    ("microsoftonline.com", "Microsoft Entra ID", "identity"),
+    ("b2clogin.com", "Azure AD B2C", "identity"),
+    ("sts.windows.net", "Microsoft Entra ID (STS)", "identity"),
     // SaaS
     ("myshopify.com", "Shopify", "saas"),
     ("wpengine.com", "WP Engine", "saas"),
@@ -339,6 +357,8 @@ static HOSTING_SUFFIXES: &[(&str, &str, &str)] = &[
     ("zendesk.com", "Zendesk", "saas"),
     ("salesforce.com", "Salesforce", "saas"),
     ("force.com", "Salesforce", "saas"),
+    ("atlassian.net", "Atlassian", "saas"),
+    ("service-now.com", "ServiceNow", "saas"),
 ];
 
 /// Hostnames whose registrable domain implies source-control / package / CI
@@ -1048,6 +1068,12 @@ impl TargetProfile {
                 "cdn" => push("cdn", &mut facets),
                 "saas" => {
                     push("saas", &mut facets);
+                    push("web", &mut facets);
+                }
+                "identity" => {
+                    // SSO / federation endpoint — drives IdP/SAML/Kerberos
+                    // engine selection and the IdentityProvider asset class.
+                    push("identity", &mut facets);
                     push("web", &mut facets);
                 }
                 _ => {}
@@ -1860,6 +1886,44 @@ mod tests {
         let p = TargetProfile::classify("https://portal.azurewebsites.net/");
         assert_eq!(p.provenance.hosting_provider, Some("Azure App Service"));
         assert!(p.has("cloud-azure"));
+    }
+
+    #[test]
+    fn detects_identity_provider_from_hostname() {
+        // An Okta customer tenant → identity facet, IdentityProvider asset class,
+        // and Elevated sensitivity (SSO/federation surface).
+        let p = TargetProfile::classify("https://acme.okta.com/");
+        assert_eq!(p.provenance.hosting_provider, Some("Okta"));
+        assert!(p.has("identity"));
+        assert_eq!(p.asset_class, AssetClass::IdentityProvider);
+        assert_eq!(p.sensitivity, Sensitivity::Elevated);
+
+        // Azure AD / Entra ID login endpoint.
+        let p2 = TargetProfile::classify("https://login.microsoftonline.com/");
+        assert_eq!(p2.provenance.hosting_provider, Some("Microsoft Entra ID"));
+        assert!(p2.has("identity"));
+        assert_eq!(p2.asset_class, AssetClass::IdentityProvider);
+    }
+
+    #[test]
+    fn azure_storage_and_sql_are_not_misclassified_as_identity() {
+        // Regression guard: broad `windows.net` was rejected precisely because
+        // these non-identity Azure services share the parent domain.
+        let sql = TargetProfile::classify("https://myserver.database.windows.net/");
+        assert!(!sql.has("identity"), "Azure SQL is not an identity provider");
+        let blob = TargetProfile::classify("https://acct.blob.core.windows.net/");
+        assert_eq!(blob.provenance.hosting_provider, Some("Azure Blob Storage"));
+        assert!(!blob.has("identity"));
+    }
+
+    #[test]
+    fn identity_provider_ranks_identity_engines_first() {
+        let p = TargetProfile::classify("https://sso.acme.okta.com/");
+        let engines = ids(&["saml_attack", "kerberoast", "wordpress_scan", "scada_ics"]);
+        let ordered = p.prioritize(&engines);
+        let pos = |name: &str| ordered.iter().position(|e| e == name).unwrap();
+        assert!(pos("saml_attack") < pos("scada_ics"));
+        assert!(pos("kerberoast") < pos("scada_ics"));
     }
 
     #[test]
