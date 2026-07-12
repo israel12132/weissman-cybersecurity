@@ -85,9 +85,7 @@ fn build_pr_text(
         finding_id
     );
     let attempts_md = if attempts > 1 {
-        format!(
-            "**Self-repair:** reached a proven fix after {attempts} autonomous attempt(s).\n"
-        )
+        format!("**Self-repair:** reached a proven fix after {attempts} autonomous attempt(s).\n")
     } else {
         String::new()
     };
@@ -101,7 +99,11 @@ fn build_pr_text(
     let tests_md = if vr.tests_ran {
         format!(
             "**Regression tests:** {} in-container.\n",
-            if vr.tests_passed { "passed ✅" } else { "FAILED ❌" }
+            if vr.tests_passed {
+                "passed ✅"
+            } else {
+                "FAILED ❌"
+            }
         )
     } else {
         String::new()
@@ -144,11 +146,19 @@ fn build_pr_text(
         baseline = vr.baseline_status,
         after = vr.after_patch_status,
         health = vr.health_status,
-        health_ok = if vr.health_after_ok { "healthy" } else { "unhealthy" },
+        health_ok = if vr.health_after_ok {
+            "healthy"
+        } else {
+            "unhealthy"
+        },
         tests_md = tests_md,
         attempts_md = attempts_md,
         receipt_md = receipt_md,
-        files = if files_md.is_empty() { "- (none)\n".to_string() } else { files_md },
+        files = if files_md.is_empty() {
+            "- (none)\n".to_string()
+        } else {
+            files_md
+        },
         deletions = deletions_md,
         summary = diff_summary.chars().take(1500).collect::<String>(),
     );
@@ -184,7 +194,11 @@ fn score_result(vr: &crate::verification_sandbox::VerificationResult) -> (u8, u8
         HealVerdict::Inconclusive => 1,
         HealVerdict::BrokeApp => 0,
     };
-    let tests_bonus = if vr.tests_ran && vr.tests_passed { 1 } else { 0 };
+    let tests_bonus = if vr.tests_ran && vr.tests_passed {
+        1
+    } else {
+        0
+    };
     let files = vr.changed_files.len() as i64;
     let bytes: i64 = vr.changed_files.iter().map(|(_, c)| c.len() as i64).sum();
     // Smaller change ⇒ higher score (negate the penalty).
@@ -356,7 +370,9 @@ async fn maybe_auto_merge_pr(
         Ok(false) => {
             tracing::warn!(target: "auto_heal", finding_id, pr_number, "policy auto-merge not completed by GitHub")
         }
-        Err(e) => tracing::warn!(target: "auto_heal", finding_id, error = %e, "policy auto-merge failed"),
+        Err(e) => {
+            tracing::warn!(target: "auto_heal", finding_id, error = %e, "policy auto-merge failed")
+        }
     }
 }
 
@@ -482,7 +498,9 @@ pub async fn run_auto_heal_job(
     let channel_id: String = row
         .try_get::<String, _>("channel")
         .unwrap_or_else(|_| "github_pr".into());
-    let health_check_curl: String = row.try_get::<String, _>("health_check_curl").unwrap_or_default();
+    let health_check_curl: String = row
+        .try_get::<String, _>("health_check_curl")
+        .unwrap_or_default();
     let channel = crate::heal_channels::DeliveryChannel::from_id(&channel_id);
 
     // Concurrency guard: never run the sandbox for a finding that another spec is already healing
@@ -579,13 +597,18 @@ pub async fn run_auto_heal_job(
             record_step(
                 &step_sink,
                 "tournament_start",
-                Some(format!("generating up to {} candidate fixes", tournament_size)),
+                Some(format!(
+                    "generating up to {} candidate fixes",
+                    tournament_size
+                )),
             )
             .await;
 
             // Candidate 0 is the pre-generated seed patch; 1..size are LLM candidates by strategy.
-            let mut candidates: Vec<(String, String)> = vec![("seed".to_string(), patch_text.clone())];
-            if let Ok(cfg) = crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await {
+            let mut candidates: Vec<(String, String)> =
+                vec![("seed".to_string(), patch_text.clone())];
+            if let Ok(cfg) = crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await
+            {
                 let n_llm = (tournament_size - 1) as usize;
                 let strategies = crate::remediation_patch::CANDIDATE_STRATEGIES;
                 let gens = (0..n_llm).map(|i| {
@@ -594,9 +617,16 @@ pub async fn run_auto_heal_job(
                         &cfg, tenant_id, i as u32, strat, &t, &d, &s, &poc_curl,
                     )
                 });
-                for (i, r) in futures::future::join_all(gens).await.into_iter().enumerate() {
+                for (i, r) in futures::future::join_all(gens)
+                    .await
+                    .into_iter()
+                    .enumerate()
+                {
                     match r {
-                        Ok(p) if crate::security_hardening::validate_remediation_patch(&p).is_ok() => {
+                        Ok(p)
+                            if crate::security_hardening::validate_remediation_patch(&p)
+                                .is_ok() =>
+                        {
                             candidates.push((format!("strategy_{}", i + 1), p));
                         }
                         Ok(_) => {}
@@ -621,7 +651,11 @@ pub async fn run_auto_heal_job(
                 .filter(|n: &usize| *n >= 1 && *n <= 6)
                 .unwrap_or(2);
             let cport = container_port as u16;
-            let verified: Vec<(String, String, crate::verification_sandbox::VerificationResult)> = {
+            let verified: Vec<(
+                String,
+                String,
+                crate::verification_sandbox::VerificationResult,
+            )> = {
                 use futures::stream::StreamExt as _;
                 futures::stream::iter(candidates.into_iter().map(|(label, cand)| {
                     let ds = docker_socket.clone();
@@ -633,11 +667,22 @@ pub async fn run_auto_heal_job(
                     let pc = poc_curl.clone();
                     let hc = health_check_curl.clone();
                     async move {
-                        let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(
-                            Vec::<crate::verification_sandbox::VerificationStep>::new(),
-                        )));
+                        let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(Vec::<
+                            crate::verification_sandbox::VerificationStep,
+                        >::new(
+                        ))));
                         let cvr = verify_patch_ephemeral_docker(
-                            &ds, &im, cport, &rs, &bb, &gt, &gh, &cand, &pc, &hc, Some(mem),
+                            &ds,
+                            &im,
+                            cport,
+                            &rs,
+                            &bb,
+                            &gt,
+                            &gh,
+                            &cand,
+                            &pc,
+                            &hc,
+                            Some(mem),
                         )
                         .await;
                         (label, cand, cvr)
@@ -647,7 +692,11 @@ pub async fn run_auto_heal_job(
                 .collect()
                 .await
             };
-            let mut best: Option<(String, crate::verification_sandbox::VerificationResult, (u8, u8, i64))> = None;
+            let mut best: Option<(
+                String,
+                crate::verification_sandbox::VerificationResult,
+                (u8, u8, i64),
+            )> = None;
             for (label, cand, cvr) in verified {
                 let sc = score_result(&cvr);
                 record_step(
@@ -657,7 +706,9 @@ pub async fn run_auto_heal_job(
                         "verdict={} files={} score=({},{},{})",
                         cvr.verdict.as_str(),
                         cvr.changed_files.len(),
-                        sc.0, sc.1, sc.2
+                        sc.0,
+                        sc.1,
+                        sc.2
                     )),
                 )
                 .await;
@@ -718,14 +769,28 @@ pub async fn run_auto_heal_job(
         let cfg = match crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await {
             Ok(c) => c,
             Err(e) => {
-                record_step(&step_sink, "self_repair_aborted", Some(format!("llm config: {e}"))).await;
+                record_step(
+                    &step_sink,
+                    "self_repair_aborted",
+                    Some(format!("llm config: {e}")),
+                )
+                .await;
                 break;
             }
         };
         let (t, d, s) = finding_ctx.clone().unwrap_or_default();
         let changed_paths: Vec<String> = vr.changed_files.iter().map(|(p, _)| p.clone()).collect();
         match crate::remediation_patch::regenerate_patch(
-            &cfg, tenant_id, attempt, &t, &d, &s, &poc_curl, &patch_text, &reason, &changed_paths,
+            &cfg,
+            tenant_id,
+            attempt,
+            &t,
+            &d,
+            &s,
+            &poc_curl,
+            &patch_text,
+            &reason,
+            &changed_paths,
         )
         .await
         {
@@ -821,7 +886,10 @@ pub async fn run_auto_heal_job(
             }
         }
         if !leaked.is_empty() {
-            let msg = format!("blocked: verified patch embeds secret(s): {}", leaked.join("; "));
+            let msg = format!(
+                "blocked: verified patch embeds secret(s): {}",
+                leaked.join("; ")
+            );
             record_step(&step_sink, "secret_gate_blocked", Some(msg.clone())).await;
             insert_heal_request_row(
                 app_pool.as_ref(),
@@ -887,7 +955,10 @@ pub async fn run_auto_heal_job(
             record_step(
                 &step_sink,
                 "dedup_existing_pr",
-                Some(format!("reusing existing open heal PR/MR: {}", existing_url)),
+                Some(format!(
+                    "reusing existing open heal PR/MR: {}",
+                    existing_url
+                )),
             )
             .await;
             insert_heal_request_row(
@@ -1024,7 +1095,13 @@ pub async fn run_auto_heal_job(
                 }));
             }
 
-            let (title, body) = build_pr_text(&finding_id, &vr, &commit.diff_summary, attempts_i32, receipt.as_ref());
+            let (title, body) = build_pr_text(
+                &finding_id,
+                &vr,
+                &commit.diff_summary,
+                attempts_i32,
+                receipt.as_ref(),
+            );
             match auto_heal::open_pull_request(
                 &git_token,
                 &repo_slug,
@@ -1136,7 +1213,10 @@ pub async fn run_auto_heal_job(
                 "deleted_paths": vr.deleted_paths,
             });
             store_result_artifact(app_pool.as_ref(), tenant_id, spec_id, &artifact).await;
-            let summary = format!("verified unified diff ready ({} files)", vr.changed_files.len());
+            let summary = format!(
+                "verified unified diff ready ({} files)",
+                vr.changed_files.len()
+            );
             insert_heal_request_row(
                 app_pool.as_ref(),
                 tenant_id,
@@ -1236,8 +1316,13 @@ pub async fn run_auto_heal_job(
                 .take(20)
                 .collect::<Vec<_>>()
                 .join(", ");
-            let (title, body) =
-                build_pr_text(&finding_id, &vr, &diff_summary, attempts_i32, receipt.as_ref());
+            let (title, body) = build_pr_text(
+                &finding_id,
+                &vr,
+                &diff_summary,
+                attempts_i32,
+                receipt.as_ref(),
+            );
             let outcome = crate::gitlab_heal::create_branch_commit_and_mr(
                 &git_token,
                 &gitlab_host,
@@ -1328,8 +1413,13 @@ pub async fn run_auto_heal_job(
                 .take(20)
                 .collect::<Vec<_>>()
                 .join(", ");
-            let (title, body) =
-                build_pr_text(&finding_id, &vr, &diff_summary, attempts_i32, receipt.as_ref());
+            let (title, body) = build_pr_text(
+                &finding_id,
+                &vr,
+                &diff_summary,
+                attempts_i32,
+                receipt.as_ref(),
+            );
             let outcome = crate::bitbucket_heal::create_branch_commit_and_pr(
                 &git_token,
                 &repo_slug,
@@ -1419,8 +1509,13 @@ pub async fn run_auto_heal_job(
                 .take(20)
                 .collect::<Vec<_>>()
                 .join(", ");
-            let (title, body) =
-                build_pr_text(&finding_id, &vr, &diff_summary, attempts_i32, receipt.as_ref());
+            let (title, body) = build_pr_text(
+                &finding_id,
+                &vr,
+                &diff_summary,
+                attempts_i32,
+                receipt.as_ref(),
+            );
             let outcome = crate::azure_repos_heal::create_push_and_pr(
                 &git_token,
                 &repo_slug,
@@ -1533,7 +1628,9 @@ mod tests {
 
     #[test]
     fn failure_reason_maps_verdicts() {
-        assert!(failure_reason(&vr(HealVerdict::StillVulnerable, 200, 200)).contains("STILL SUCCEEDS"));
+        assert!(
+            failure_reason(&vr(HealVerdict::StillVulnerable, 200, 200)).contains("STILL SUCCEEDS")
+        );
         assert!(failure_reason(&vr(HealVerdict::BrokeApp, 500, 0)).contains("BROKE"));
         assert!(failure_reason(&vr(HealVerdict::Inconclusive, 0, 0))
             .to_lowercase()
@@ -1542,7 +1639,13 @@ mod tests {
 
     #[test]
     fn build_pr_text_is_honest_and_notes_self_repair() {
-        let (title, body) = build_pr_text("F-1", &vr(HealVerdict::Fixed, 403, 200), "app.js: ...", 2, None);
+        let (title, body) = build_pr_text(
+            "F-1",
+            &vr(HealVerdict::Fixed, 403, 200),
+            "app.js: ...",
+            2,
+            None,
+        );
         assert!(title.contains("fixed"));
         assert!(title.contains("F-1"));
         assert!(body.contains("F-1"));

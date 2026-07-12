@@ -29,7 +29,9 @@ impl DeliveryChannel {
     #[must_use]
     pub fn from_id(s: &str) -> Self {
         match s.trim().to_ascii_lowercase().as_str() {
-            "github_direct_commit" | "direct_commit" | "commit" => DeliveryChannel::GithubDirectCommit,
+            "github_direct_commit" | "direct_commit" | "commit" => {
+                DeliveryChannel::GithubDirectCommit
+            }
             "diff_download" | "diff" | "patch_download" => DeliveryChannel::DiffDownload,
             "virtual_patch" | "waf" | "virtual" => DeliveryChannel::VirtualPatch,
             "gitlab_mr" | "gitlab" | "mr" => DeliveryChannel::GitlabMr,
@@ -102,7 +104,9 @@ pub fn safe_branch_suffix(finding_id: &str) -> String {
     // git forbids a refname component ending in ".lock" — strip it (repeatedly for ".lock.lock").
     while cleaned.to_ascii_lowercase().ends_with(".lock") {
         cleaned.truncate(cleaned.len() - ".lock".len());
-        cleaned = cleaned.trim_end_matches(|c| c == '-' || c == '.').to_string();
+        cleaned = cleaned
+            .trim_end_matches(|c| c == '-' || c == '.')
+            .to_string();
     }
     if cleaned.is_empty() {
         "finding".to_string()
@@ -120,7 +124,8 @@ pub fn render_virtual_patch(finding_id: &str, title: &str, detection_signature: 
     let rule_msg = title.replace('"', "'");
     let sig_block = if sig.is_empty() {
         "# No detection signature was available for this finding — craft a rule that matches the\n\
-         # exploit request captured in the PoC before deploying.".to_string()
+         # exploit request captured in the PoC before deploying."
+            .to_string()
     } else {
         format!("# Detection signature:\n# {}", sig.replace('\n', "\n# "))
     };
@@ -165,15 +170,39 @@ mod tests {
 
     #[test]
     fn channel_from_id_aliases_and_default() {
-        assert_eq!(DeliveryChannel::from_id("WAF"), DeliveryChannel::VirtualPatch);
-        assert_eq!(DeliveryChannel::from_id("commit"), DeliveryChannel::GithubDirectCommit);
-        assert_eq!(DeliveryChannel::from_id("diff"), DeliveryChannel::DiffDownload);
-        assert_eq!(DeliveryChannel::from_id("gitlab"), DeliveryChannel::GitlabMr);
-        assert_eq!(DeliveryChannel::from_id("bitbucket"), DeliveryChannel::BitbucketPr);
-        assert_eq!(DeliveryChannel::from_id("ado"), DeliveryChannel::AzureReposPr);
-        assert_eq!(DeliveryChannel::from_id("azure"), DeliveryChannel::AzureReposPr);
+        assert_eq!(
+            DeliveryChannel::from_id("WAF"),
+            DeliveryChannel::VirtualPatch
+        );
+        assert_eq!(
+            DeliveryChannel::from_id("commit"),
+            DeliveryChannel::GithubDirectCommit
+        );
+        assert_eq!(
+            DeliveryChannel::from_id("diff"),
+            DeliveryChannel::DiffDownload
+        );
+        assert_eq!(
+            DeliveryChannel::from_id("gitlab"),
+            DeliveryChannel::GitlabMr
+        );
+        assert_eq!(
+            DeliveryChannel::from_id("bitbucket"),
+            DeliveryChannel::BitbucketPr
+        );
+        assert_eq!(
+            DeliveryChannel::from_id("ado"),
+            DeliveryChannel::AzureReposPr
+        );
+        assert_eq!(
+            DeliveryChannel::from_id("azure"),
+            DeliveryChannel::AzureReposPr
+        );
         // unknown ⇒ safe default
-        assert_eq!(DeliveryChannel::from_id("nonsense"), DeliveryChannel::GithubPr);
+        assert_eq!(
+            DeliveryChannel::from_id("nonsense"),
+            DeliveryChannel::GithubPr
+        );
         assert_eq!(DeliveryChannel::from_id(""), DeliveryChannel::GithubPr);
     }
 

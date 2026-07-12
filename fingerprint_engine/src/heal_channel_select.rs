@@ -108,7 +108,10 @@ pub fn select_channel(finding_text: &str, scm: Scm, has_repo_write: bool) -> Cha
         let ch = pr_channel_for(scm);
         return ChannelSelection {
             channel: ch.id().to_string(),
-            reason_en: format!("Deliver a code-level fix as a pull request on {}.", scm.label()),
+            reason_en: format!(
+                "Deliver a code-level fix as a pull request on {}.",
+                scm.label()
+            ),
             reason_he: format!("מסירת תיקון ברמת הקוד כ-Pull Request ב-{}.", scm.label()),
         };
     }
@@ -130,7 +133,8 @@ pub fn select_channel(finding_text: &str, scm: Scm, has_repo_write: bool) -> Cha
     }
     ChannelSelection {
         channel: DeliveryChannel::DiffDownload.id().to_string(),
-        reason_en: "No repository write access — download the verified diff to apply it manually.".to_string(),
+        reason_en: "No repository write access — download the verified diff to apply it manually."
+            .to_string(),
         reason_he: "אין הרשאת כתיבה למאגר — הורד את ה-diff המאומת כדי להחילו ידנית.".to_string(),
     }
 }
@@ -158,7 +162,9 @@ mod tests {
         assert!(!waf_mitigable("Insecure deserialization gadget chain"));
         assert!(!waf_mitigable("Weak password policy"));
         // Must not false-match benign engineering text (bare "injection" removed).
-        assert!(!waf_mitigable("Dependency injection container misconfiguration"));
+        assert!(!waf_mitigable(
+            "Dependency injection container misconfiguration"
+        ));
         // Short acronyms match whole-word only — "sqli" must not fire inside "sqlite".
         assert!(!waf_mitigable("SQLite database file world-readable"));
         assert!(waf_mitigable("SQLi in the search parameter"));
@@ -166,12 +172,27 @@ mod tests {
 
     #[test]
     fn writable_repo_picks_matching_pr_channel() {
-        assert_eq!(select_channel("anything", Scm::GitHub, true).channel, "github_pr");
-        assert_eq!(select_channel("anything", Scm::GitLab, true).channel, "gitlab_mr");
-        assert_eq!(select_channel("anything", Scm::Bitbucket, true).channel, "bitbucket_pr");
-        assert_eq!(select_channel("anything", Scm::Azure, true).channel, "azure_repos_pr");
+        assert_eq!(
+            select_channel("anything", Scm::GitHub, true).channel,
+            "github_pr"
+        );
+        assert_eq!(
+            select_channel("anything", Scm::GitLab, true).channel,
+            "gitlab_mr"
+        );
+        assert_eq!(
+            select_channel("anything", Scm::Bitbucket, true).channel,
+            "bitbucket_pr"
+        );
+        assert_eq!(
+            select_channel("anything", Scm::Azure, true).channel,
+            "azure_repos_pr"
+        );
         // Unknown SCM but writable → safe downloadable diff (never mis-route to a GitHub PR).
-        assert_eq!(select_channel("anything", Scm::Unknown, true).channel, "diff_download");
+        assert_eq!(
+            select_channel("anything", Scm::Unknown, true).channel,
+            "diff_download"
+        );
     }
 
     #[test]

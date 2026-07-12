@@ -74,11 +74,21 @@ connect that channel (credentials/config needed) and how to apply the fix throug
 /// the `channels` array. Content is factual and channel-specific.
 #[must_use]
 pub fn default_channel_howtos() -> Vec<ChannelHowTo> {
-    let mk = |ch: DeliveryChannel, connect_he: &str, connect_en: &str, apply_he: &str, apply_en: &str| {
+    let mk = |ch: DeliveryChannel,
+              connect_he: &str,
+              connect_en: &str,
+              apply_he: &str,
+              apply_en: &str| {
         ChannelHowTo {
             channel: ch.id().to_string(),
-            connect: Bilingual { he: connect_he.to_string(), en: connect_en.to_string() },
-            apply: Bilingual { he: apply_he.to_string(), en: apply_en.to_string() },
+            connect: Bilingual {
+                he: connect_he.to_string(),
+                en: connect_en.to_string(),
+            },
+            apply: Bilingual {
+                he: apply_he.to_string(),
+                en: apply_en.to_string(),
+            },
         }
     };
     vec![

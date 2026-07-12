@@ -261,9 +261,8 @@ fn render_channels(input: &HealReportInput<'_>) -> String {
     }
     let mut ordered: Vec<&crate::remediation_brief::ChannelHowTo> = brief.channels.iter().collect();
     ordered.sort_by_key(|c| if c.channel == input.channel { 0 } else { 1 });
-    let mut out = String::from(
-        "<h2>How to apply <span class=\"he\" dir=\"rtl\">איך ליישם</span></h2>",
-    );
+    let mut out =
+        String::from("<h2>How to apply <span class=\"he\" dir=\"rtl\">איך ליישם</span></h2>");
     for c in ordered {
         let used = c.channel == input.channel;
         out.push_str(&format!(
@@ -409,10 +408,17 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
         vs = meta_row("Verification status", input.verification_status),
         vd = meta_row("Verdict", input.verdict),
         att = meta_row("Attempts", &input.attempts.to_string()),
-        br = input.branch_name.map(|b| meta_row("Branch", b)).unwrap_or_default(),
+        br = input
+            .branch_name
+            .map(|b| meta_row("Branch", b))
+            .unwrap_or_default(),
         pr = pr_cell,
         dg = meta_row("Attestation digest", input.digest),
-        alg = if input.attestation_enabled { meta_row("Attestation alg", "HMAC-SHA256") } else { String::new() },
+        alg = if input.attestation_enabled {
+            meta_row("Attestation alg", "HMAC-SHA256")
+        } else {
+            String::new()
+        },
         gen = meta_row("Generated", input.generated_at),
     );
 
@@ -469,13 +475,24 @@ pub fn render_heal_report_html(input: &HealReportInput<'_>) -> String {
         style = STYLE,
         fid = esc(input.finding_id),
         sev = sev_color,
-        sev_label = esc(if input.severity.is_empty() { "UNSPECIFIED" } else { input.severity }),
+        sev_label = esc(if input.severity.is_empty() {
+            "UNSPECIFIED"
+        } else {
+            input.severity
+        }),
         vc = vcolor,
-        vd = esc(if input.verdict.is_empty() { "pending" } else { input.verdict }),
+        vd = esc(if input.verdict.is_empty() {
+            "pending"
+        } else {
+            input.verdict
+        }),
         cwe = if input.cwe.trim().is_empty() {
             String::new()
         } else {
-            format!("<span class=\"badge\" style=\"background:#334155\">{}</span>", esc(input.cwe))
+            format!(
+                "<span class=\"badge\" style=\"background:#334155\">{}</span>",
+                esc(input.cwe)
+            )
         },
         receipt = render_receipt(input),
         governance = render_governance(input),
@@ -494,7 +511,10 @@ mod tests {
     use crate::remediation_brief::ChannelHowTo;
 
     fn bi(en: &str, he: &str) -> Bilingual {
-        Bilingual { en: en.to_string(), he: he.to_string() }
+        Bilingual {
+            en: en.to_string(),
+            he: he.to_string(),
+        }
     }
 
     fn sample_brief() -> RemediationBrief {

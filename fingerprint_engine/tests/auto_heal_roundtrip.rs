@@ -31,7 +31,11 @@ fn tool_present(bin: &str) -> bool {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let _ = StdCommand::new("git").arg("-C").arg(repo).args(args).output();
+    let _ = StdCommand::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output();
 }
 
 // ─────────────────────────────── (A) git patch/collect ───────────────────────────────
@@ -45,8 +49,13 @@ async fn git_patch_apply_and_collect_multifile() {
     let dir = tempfile::tempdir().expect("tempdir");
     let repo = dir.path();
     if StdCommand::new("git")
-        .arg("-C").arg(repo).arg("init").arg("-q")
-        .output().map(|o| !o.status.success()).unwrap_or(true)
+        .arg("-C")
+        .arg(repo)
+        .arg("init")
+        .arg("-q")
+        .output()
+        .map(|o| !o.status.success())
+        .unwrap_or(true)
     {
         eprintln!("SKIP: git init failed");
         return;
@@ -58,7 +67,11 @@ async fn git_patch_apply_and_collect_multifile() {
     std::fs::create_dir_all(repo.join("src")).unwrap();
     std::fs::create_dir_all(repo.join("legacy")).unwrap();
     std::fs::write(repo.join("src/app.js"), "const x = eval(req.body);\n").unwrap();
-    std::fs::write(repo.join("src/util.js"), "module.exports = { clamp: (n) => Math.max(0, n) };\n").unwrap();
+    std::fs::write(
+        repo.join("src/util.js"),
+        "module.exports = { clamp: (n) => Math.max(0, n) };\n",
+    )
+    .unwrap();
     std::fs::write(repo.join("legacy/old.js"), "// deprecated shim\n").unwrap();
     std::fs::write(repo.join("README.md"), "# demo\n").unwrap();
     git(repo, &["add", "-A"]);
@@ -115,7 +128,11 @@ async fn git_patch_apply_and_collect_multifile() {
     // README is untouched → never captured.
     assert!(!map.contains_key("README.md"));
     // A hard delete is reported (not committed via the blob-tree path).
-    assert!(deleted.iter().any(|p| p == "legacy/old.js"), "deleted: {:?}", deleted);
+    assert!(
+        deleted.iter().any(|p| p == "legacy/old.js"),
+        "deleted: {:?}",
+        deleted
+    );
 }
 
 #[tokio::test]
@@ -126,7 +143,15 @@ async fn git_collect_errors_on_no_change() {
     }
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
-    if StdCommand::new("git").arg("-C").arg(repo).arg("init").arg("-q").output().map(|o| !o.status.success()).unwrap_or(true) {
+    if StdCommand::new("git")
+        .arg("-C")
+        .arg(repo)
+        .arg("init")
+        .arg("-q")
+        .output()
+        .map(|o| !o.status.success())
+        .unwrap_or(true)
+    {
         return;
     }
     git(repo, &["config", "user.email", "t@t.io"]);
@@ -157,7 +182,11 @@ async fn spawn_probe_server(mode: Arc<AtomicU8>) -> u16 {
             let req = String::from_utf8_lossy(&buf[..n]);
             let path = req.split_whitespace().nth(1).unwrap_or("/");
             let (code, reason, body): (u16, &str, &str) = if path.starts_with("/health") {
-                if m == 3 { (503, "Service Unavailable", "down") } else { (200, "OK", "ok") }
+                if m == 3 {
+                    (503, "Service Unavailable", "down")
+                } else {
+                    (200, "OK", "ok")
+                }
             } else {
                 match m {
                     0 => (200, "OK", "pwned"),
@@ -198,7 +227,10 @@ async fn probe_verdict_fixed() {
     let (h, _) = http_probe(Method::GET, &health, &HeaderMap::new(), None).await;
     assert_eq!(after, 403);
     assert_eq!(h, 200);
-    assert_eq!(classify_verdict(true, after, (200..400).contains(&h)), HealVerdict::Fixed);
+    assert_eq!(
+        classify_verdict(true, after, (200..400).contains(&h)),
+        HealVerdict::Fixed
+    );
 }
 
 #[tokio::test]
@@ -211,7 +243,10 @@ async fn probe_verdict_still_vulnerable() {
     let (after, _) = http_probe(Method::GET, &exploit, &HeaderMap::new(), None).await;
     assert!((200..300).contains(&baseline));
     assert_eq!(after, 200);
-    assert_eq!(classify_verdict(true, after, true), HealVerdict::StillVulnerable);
+    assert_eq!(
+        classify_verdict(true, after, true),
+        HealVerdict::StillVulnerable
+    );
 }
 
 #[tokio::test]
@@ -243,7 +278,10 @@ async fn probe_verdict_broke_app_health_down() {
     let (h, _) = http_probe(Method::GET, &health, &HeaderMap::new(), None).await;
     assert_eq!(after, 403);
     assert_eq!(h, 503);
-    assert_eq!(classify_verdict(true, after, (200..400).contains(&h)), HealVerdict::BrokeApp);
+    assert_eq!(
+        classify_verdict(true, after, (200..400).contains(&h)),
+        HealVerdict::BrokeApp
+    );
 }
 
 #[tokio::test]
@@ -293,12 +331,14 @@ fn parse_curl_request_roundtrips() {
     assert!(b2.is_none());
 
     let (m3, _u3, h3, b3) =
-        parse_curl_request("curl --request PUT --header X-Token:xyz --data payload=1 https://h/p").unwrap();
+        parse_curl_request("curl --request PUT --header X-Token:xyz --data payload=1 https://h/p")
+            .unwrap();
     assert_eq!(m3, Method::PUT);
     assert_eq!(h3.get("x-token").unwrap(), "xyz");
     assert_eq!(b3.as_deref(), Some(&b"payload=1"[..]));
 
-    let (m4, u4, _h4, _b4) = parse_curl_request("curl -k -X DELETE https://h:9000/item/42").unwrap();
+    let (m4, u4, _h4, _b4) =
+        parse_curl_request("curl -k -X DELETE https://h:9000/item/42").unwrap();
     assert_eq!(m4, Method::DELETE);
     assert_eq!(u4, "https://h:9000/item/42");
 
@@ -352,9 +392,16 @@ async fn docker_full_roundtrip_verify_patch_ephemeral() {
     git(&work, &["commit", "-q", "-m", "base"]);
     let bare = dir.path().join("bare.git");
     let _ = StdCommand::new("git")
-        .arg("clone").arg("--bare").arg("-q").arg(&work).arg(&bare)
+        .arg("clone")
+        .arg("--bare")
+        .arg("-q")
+        .arg(&work)
+        .arg(&bare)
         .output();
-    std::env::set_var("WEISSMAN_VERIFY_CLONE_URL_OVERRIDE", format!("file://{}", bare.display()));
+    std::env::set_var(
+        "WEISSMAN_VERIFY_CLONE_URL_OVERRIDE",
+        format!("file://{}", bare.display()),
+    );
 
     let patch = std::env::var("WEISSMAN_IT_DOCKER_PATCH").unwrap_or_default();
     let poc = std::env::var("WEISSMAN_IT_DOCKER_POC")
@@ -373,9 +420,9 @@ async fn docker_full_roundtrip_verify_patch_ephemeral() {
         &patch,
         &poc,
         &health,
-        Some(fingerprint_engine::verification_sandbox::StepSink::Memory(Arc::new(
-            tokio::sync::Mutex::new(Vec::new()),
-        ))),
+        Some(fingerprint_engine::verification_sandbox::StepSink::Memory(
+            Arc::new(tokio::sync::Mutex::new(Vec::new())),
+        )),
     )
     .await;
     std::env::remove_var("WEISSMAN_VERIFY_CLONE_URL_OVERRIDE");

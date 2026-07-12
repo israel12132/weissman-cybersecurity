@@ -125,7 +125,11 @@ async fn send_with_retry(
                     tokio::time::sleep(backoff(attempt)).await;
                     continue;
                 }
-                return Err(format!("Bitbucket API {}: {}", status, body.chars().take(400).collect::<String>()));
+                return Err(format!(
+                    "Bitbucket API {}: {}",
+                    status,
+                    body.chars().take(400).collect::<String>()
+                ));
             }
             Err(e) => {
                 if idempotent && attempt < MAX_ATTEMPTS {
@@ -140,9 +144,16 @@ async fn send_with_retry(
 
 async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
     let status = resp.status();
-    let text = resp.text().await.map_err(|e| format!("{ctx}: read body: {e}"))?;
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("{ctx}: read body: {e}"))?;
     if !status.is_success() {
-        return Err(format!("{ctx}: Bitbucket {} {}", status, text.chars().take(400).collect::<String>()));
+        return Err(format!(
+            "{ctx}: Bitbucket {} {}",
+            status,
+            text.chars().take(400).collect::<String>()
+        ));
     }
     serde_json::from_str(&text).map_err(|e| format!("{ctx}: invalid JSON: {e}"))
 }
@@ -180,7 +191,12 @@ pub struct BitbucketPrOutcome {
 }
 
 fn err(branch_name: String, msg: impl Into<String>) -> BitbucketPrOutcome {
-    BitbucketPrOutcome { branch_name, pr_url: None, pr_id: None, error: Some(msg.into()) }
+    BitbucketPrOutcome {
+        branch_name,
+        pr_url: None,
+        pr_id: None,
+        error: Some(msg.into()),
+    }
 }
 
 /// Create a heal branch, commit `files` in one commit (`/src`), then open a Pull Request.
@@ -198,7 +214,10 @@ pub async fn create_branch_commit_and_pr(
         crate::heal_channels::safe_branch_suffix(finding_id)
     );
     let Some((ws, repo)) = split_workspace_repo(repo_slug) else {
-        return err(branch_name, "invalid Bitbucket slug (expected workspace/repo)");
+        return err(
+            branch_name,
+            "invalid Bitbucket slug (expected workspace/repo)",
+        );
     };
     if files.is_empty() {
         return err(branch_name, "no files to commit");
@@ -248,7 +267,11 @@ pub async fn create_branch_commit_and_pr(
     }
 
     // Open the pull request.
-    let pr_url = format!("{API_BASE}/repositories/{}/{}/pullrequests", pct(&ws), pct(&repo));
+    let pr_url = format!(
+        "{API_BASE}/repositories/{}/{}/pullrequests",
+        pct(&ws),
+        pct(&repo)
+    );
     let pr_body = serde_json::json!({
         "title": title,
         "description": description,
@@ -283,13 +306,9 @@ pub async fn create_branch_commit_and_pr(
 }
 
 /// Decline an auto-opened Bitbucket PR (revert).
-pub async fn decline_pull_request(
-    token: &str,
-    repo_slug: &str,
-    pr_id: i64,
-) -> Result<(), String> {
-    let (ws, repo) = split_workspace_repo(repo_slug)
-        .ok_or_else(|| "invalid Bitbucket slug".to_string())?;
+pub async fn decline_pull_request(token: &str, repo_slug: &str, pr_id: i64) -> Result<(), String> {
+    let (ws, repo) =
+        split_workspace_repo(repo_slug).ok_or_else(|| "invalid Bitbucket slug".to_string())?;
     let url = format!(
         "{API_BASE}/repositories/{}/{}/pullrequests/{pr_id}/decline",
         pct(&ws),
@@ -311,8 +330,14 @@ mod tests {
 
     #[test]
     fn slug_split() {
-        assert_eq!(split_workspace_repo("acme/api"), Some(("acme".into(), "api".into())));
-        assert_eq!(split_workspace_repo("/acme/api/"), Some(("acme".into(), "api".into())));
+        assert_eq!(
+            split_workspace_repo("acme/api"),
+            Some(("acme".into(), "api".into()))
+        );
+        assert_eq!(
+            split_workspace_repo("/acme/api/"),
+            Some(("acme".into(), "api".into()))
+        );
         assert_eq!(split_workspace_repo("noslash"), None);
         assert_eq!(split_workspace_repo(""), None);
         // A 3-part slug is rejected, not silently mis-parsed into ("ws","proj/repo").

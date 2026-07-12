@@ -36,7 +36,10 @@ pub fn v4_base(host: &str) -> String {
     if h.is_empty() || h.eq_ignore_ascii_case("gitlab.com") {
         return "https://gitlab.com/api/v4".to_string();
     }
-    if let Some(rest) = h.strip_prefix("https://").or_else(|| h.strip_prefix("http://")) {
+    if let Some(rest) = h
+        .strip_prefix("https://")
+        .or_else(|| h.strip_prefix("http://"))
+    {
         return format!("https://{}/api/v4", rest.trim_end_matches('/'));
     }
     format!("https://{}/api/v4", h)
@@ -44,10 +47,7 @@ pub fn v4_base(host: &str) -> String {
 
 /// URL-encode a project path (`owner/repo` → `owner%2Frepo`) for the `:id` path segment.
 fn enc_project(project_path: &str) -> String {
-    project_path
-        .trim()
-        .trim_matches('/')
-        .replace('/', "%2F")
+    project_path.trim().trim_matches('/').replace('/', "%2F")
 }
 
 fn backoff(attempt: u32) -> Duration {
@@ -125,9 +125,16 @@ async fn send_with_retry(
 
 async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
     let status = resp.status();
-    let text = resp.text().await.map_err(|e| format!("{ctx}: read body: {e}"))?;
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("{ctx}: read body: {e}"))?;
     if !status.is_success() {
-        return Err(format!("{ctx}: GitLab {} {}", status, text.chars().take(400).collect::<String>()));
+        return Err(format!(
+            "{ctx}: GitLab {} {}",
+            status,
+            text.chars().take(400).collect::<String>()
+        ));
     }
     serde_json::from_str(&text).map_err(|e| format!("{ctx}: invalid JSON: {e}"))
 }
@@ -136,7 +143,13 @@ async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
 /// (exists), `Some(false)` (a definitive 404 → absent), or `None` (indeterminate after retrying
 /// transient failures) — the caller must NOT guess an action on `None`, since a wrong `create`/`update`
 /// gets the whole atomic commit rejected. (Parity with the Azure/Bitbucket clients.)
-async fn file_state(api_base: &str, project: &str, path: &str, git_ref: &str, token: &str) -> Option<bool> {
+async fn file_state(
+    api_base: &str,
+    project: &str,
+    path: &str,
+    git_ref: &str,
+    token: &str,
+) -> Option<bool> {
     let url = format!(
         "{}/projects/{}/repository/files/{}?ref={}",
         api_base,
@@ -147,7 +160,12 @@ async fn file_state(api_base: &str, project: &str, path: &str, git_ref: &str, to
     let mut attempt = 0u32;
     loop {
         attempt += 1;
-        match gitlab_client().get(&url).header("PRIVATE-TOKEN", token).send().await {
+        match gitlab_client()
+            .get(&url)
+            .header("PRIVATE-TOKEN", token)
+            .send()
+            .await
+        {
             Ok(r) => {
                 let status = r.status();
                 if status.is_success() {
@@ -328,7 +346,10 @@ pub async fn close_merge_request(
 ) -> Result<(), String> {
     let api_base = v4_base(gitlab_host);
     let project = enc_project(project_path);
-    let url = format!("{}/projects/{}/merge_requests/{}", api_base, project, mr_iid);
+    let url = format!(
+        "{}/projects/{}/merge_requests/{}",
+        api_base, project, mr_iid
+    );
     let resp = send_with_retry(true, || {
         gitlab_client()
             .put(&url)
@@ -348,7 +369,10 @@ mod tests {
     fn v4_base_variants() {
         assert_eq!(v4_base(""), "https://gitlab.com/api/v4");
         assert_eq!(v4_base("gitlab.com"), "https://gitlab.com/api/v4");
-        assert_eq!(v4_base("gitlab.example.com"), "https://gitlab.example.com/api/v4");
+        assert_eq!(
+            v4_base("gitlab.example.com"),
+            "https://gitlab.example.com/api/v4"
+        );
         assert_eq!(v4_base("https://gl.corp.io/"), "https://gl.corp.io/api/v4");
     }
 

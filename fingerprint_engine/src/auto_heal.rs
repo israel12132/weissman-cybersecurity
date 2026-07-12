@@ -559,7 +559,10 @@ pub async fn merge_pull_request(
 ) -> Result<bool, String> {
     let client = github_client();
     let auth = format!("Bearer {}", token);
-    let merge_url = format!("{}/repos/{}/pulls/{}/merge", GITHUB_API, repo_slug, pr_number);
+    let merge_url = format!(
+        "{}/repos/{}/pulls/{}/merge",
+        GITHUB_API, repo_slug, pr_number
+    );
     let resp = github_send_with_retry(|| {
         client
             .put(&merge_url)
@@ -648,14 +651,26 @@ pub async fn create_branch_and_pr(
     }
     // Legacy / skip-sandbox path: the patch is committed as an advisory file and NOT proven,
     // so the PR text must not claim verification.
-    let title = format!("[Weissman CNAPP] Advisory remediation (sandbox skipped): {}", finding_id);
+    let title = format!(
+        "[Weissman CNAPP] Advisory remediation (sandbox skipped): {}",
+        finding_id
+    );
     let advisory_body = format!(
         "⚠️ Advisory patch for finding `{}`. The ephemeral-Docker verification was **skipped** \
          (`WEISSMAN_AUTOHEAL_SKIP_SANDBOX`), so this patch is **not proven** and is committed as an \
          advisory artifact rather than an applied fix. Review carefully before merging.",
         finding_id
     );
-    match open_pull_request(token, repo_slug, base_branch, &c.branch_name, &title, &advisory_body).await {
+    match open_pull_request(
+        token,
+        repo_slug,
+        base_branch,
+        &c.branch_name,
+        &title,
+        &advisory_body,
+    )
+    .await
+    {
         Ok((pr_url, pr_number)) => HealRequestResult {
             branch_name: c.branch_name,
             pr_url,

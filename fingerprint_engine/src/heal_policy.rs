@@ -141,7 +141,13 @@ impl HealPolicy {
     }
 
     /// Convenience: evaluate this policy against a heal outcome.
-    pub fn decide(&self, verdict: &str, severity: &str, attested: bool, attempts: i64) -> PolicyDecision {
+    pub fn decide(
+        &self,
+        verdict: &str,
+        severity: &str,
+        attested: bool,
+        attempts: i64,
+    ) -> PolicyDecision {
         evaluate_policy(self, verdict, severity, attested, attempts)
     }
 }
@@ -182,7 +188,8 @@ pub fn evaluate_policy(
     }
 
     // Verified fix: decide auto-merge eligibility against the risk envelope.
-    let sev_ok = sev_rank(severity) > 0 && sev_rank(severity) <= sev_rank(&p.auto_merge_max_severity);
+    let sev_ok =
+        sev_rank(severity) > 0 && sev_rank(severity) <= sev_rank(&p.auto_merge_max_severity);
     let attest_ok = attested || !p.require_attestation_for_merge;
     let attempts_ok = attempts <= p.max_attempts_for_merge;
 
@@ -257,7 +264,10 @@ mod tests {
     #[test]
     fn non_fixed_verdicts_hold() {
         for v in ["still_vulnerable", "inconclusive", "pending", ""] {
-            assert_eq!(evaluate_policy(&strict(), v, "low", true, 1).disposition, "hold");
+            assert_eq!(
+                evaluate_policy(&strict(), v, "low", true, 1).disposition,
+                "hold"
+            );
         }
     }
 
@@ -296,7 +306,10 @@ mod tests {
             max_attempts_for_merge: 10,
             allow_broke_app_delivery: false,
         };
-        assert_eq!(evaluate_policy(&p, "fixed", "high", false, 5).disposition, "auto_merge");
+        assert_eq!(
+            evaluate_policy(&p, "fixed", "high", false, 5).disposition,
+            "auto_merge"
+        );
     }
 
     #[test]
@@ -312,7 +325,11 @@ mod tests {
         // Wrong disposition, wrong channel, or missing attestation each block it.
         assert!(!should_auto_merge("open_for_review", "github_pr", true));
         assert!(!should_auto_merge("auto_merge", "gitlab_mr", true));
-        assert!(!should_auto_merge("auto_merge", "github_direct_commit", true));
+        assert!(!should_auto_merge(
+            "auto_merge",
+            "github_direct_commit",
+            true
+        ));
         assert!(!should_auto_merge("auto_merge", "github_pr", false));
         assert!(!should_auto_merge("block", "github_pr", true));
     }

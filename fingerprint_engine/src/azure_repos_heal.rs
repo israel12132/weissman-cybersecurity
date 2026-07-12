@@ -42,7 +42,11 @@ pub fn split_org_project_repo(slug: &str) -> Option<(String, String, String)> {
     if parts.len() < 3 {
         return None;
     }
-    Some((parts[0].to_string(), parts[1].to_string(), parts[2].to_string()))
+    Some((
+        parts[0].to_string(),
+        parts[1].to_string(),
+        parts[2].to_string(),
+    ))
 }
 
 /// HTTP Basic header for a PAT (empty username).
@@ -55,7 +59,11 @@ pub fn basic_auth_header(pat: &str) -> String {
 /// `https://dev.azure.com/{org}/{project}` base for the Git REST endpoints.
 #[must_use]
 pub fn org_base(org: &str, project: &str) -> String {
-    format!("https://dev.azure.com/{}/{}", pct(org.trim()), pct(project.trim()))
+    format!(
+        "https://dev.azure.com/{}/{}",
+        pct(org.trim()),
+        pct(project.trim())
+    )
 }
 
 /// Percent-encode a single URL path/query value (everything but RFC 3986 unreserved), so a branch,
@@ -117,7 +125,11 @@ async fn send_with_retry(
                     tokio::time::sleep(backoff(attempt)).await;
                     continue;
                 }
-                return Err(format!("Azure DevOps API {}: {}", status, body.chars().take(400).collect::<String>()));
+                return Err(format!(
+                    "Azure DevOps API {}: {}",
+                    status,
+                    body.chars().take(400).collect::<String>()
+                ));
             }
             Err(e) => {
                 if idempotent && attempt < MAX_ATTEMPTS {
@@ -132,9 +144,16 @@ async fn send_with_retry(
 
 async fn json_body(resp: Response, ctx: &str) -> Result<Value, String> {
     let status = resp.status();
-    let text = resp.text().await.map_err(|e| format!("{ctx}: read body: {e}"))?;
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("{ctx}: read body: {e}"))?;
     if !status.is_success() {
-        return Err(format!("{ctx}: Azure DevOps {} {}", status, text.chars().take(400).collect::<String>()));
+        return Err(format!(
+            "{ctx}: Azure DevOps {} {}",
+            status,
+            text.chars().take(400).collect::<String>()
+        ));
     }
     serde_json::from_str(&text).map_err(|e| format!("{ctx}: invalid JSON: {e}"))
 }
@@ -146,7 +165,12 @@ async fn base_ref_object_id(base_url: &str, repo: &str, base: &str, auth: &str) 
         pct(repo),
         pct(base),
     );
-    let resp = ado_client().get(&url).header("Authorization", auth).send().await.ok()?;
+    let resp = ado_client()
+        .get(&url)
+        .header("Authorization", auth)
+        .send()
+        .await
+        .ok()?;
     if !resp.status().is_success() {
         return None;
     }
@@ -157,7 +181,10 @@ async fn base_ref_object_id(base_url: &str, repo: &str, base: &str, auth: &str) 
     let want = format!("refs/heads/{base}");
     j.get("value")
         .and_then(|v| v.as_array())
-        .and_then(|arr| arr.iter().find(|r| r.get("name").and_then(|n| n.as_str()) == Some(want.as_str())))
+        .and_then(|arr| {
+            arr.iter()
+                .find(|r| r.get("name").and_then(|n| n.as_str()) == Some(want.as_str()))
+        })
         .and_then(|r| r.get("objectId"))
         .and_then(|o| o.as_str())
         .map(String::from)
@@ -167,7 +194,13 @@ async fn base_ref_object_id(base_url: &str, repo: &str, base: &str, auth: &str) 
 /// `Some(false)` (a definitive 404 → absent), or `None` (indeterminate after retrying transient
 /// failures) — the caller must NOT guess a change type on `None`, since a wrong `add`/`edit` gets the
 /// whole push rejected.
-async fn file_state(base_url: &str, repo: &str, path: &str, base: &str, auth: &str) -> Option<bool> {
+async fn file_state(
+    base_url: &str,
+    repo: &str,
+    path: &str,
+    base: &str,
+    auth: &str,
+) -> Option<bool> {
     let url = format!(
         "{base_url}/_apis/git/repositories/{}/items?path={}&versionDescriptor.version={}&api-version={API_VER}",
         pct(repo),
@@ -177,7 +210,12 @@ async fn file_state(base_url: &str, repo: &str, path: &str, base: &str, auth: &s
     let mut attempt = 0u32;
     loop {
         attempt += 1;
-        match ado_client().get(&url).header("Authorization", auth).send().await {
+        match ado_client()
+            .get(&url)
+            .header("Authorization", auth)
+            .send()
+            .await
+        {
             Ok(r) => {
                 let status = r.status();
                 if status.is_success() {
@@ -212,7 +250,12 @@ pub struct AzurePrOutcome {
 }
 
 fn err(branch_name: String, msg: impl Into<String>) -> AzurePrOutcome {
-    AzurePrOutcome { branch_name, pr_url: None, pr_id: None, error: Some(msg.into()) }
+    AzurePrOutcome {
+        branch_name,
+        pr_url: None,
+        pr_id: None,
+        error: Some(msg.into()),
+    }
 }
 
 /// Push `files` as one commit on a new heal branch, then open a Pull Request.
@@ -230,7 +273,10 @@ pub async fn create_push_and_pr(
         crate::heal_channels::safe_branch_suffix(finding_id)
     );
     let Some((org, project, repo)) = split_org_project_repo(repo_slug) else {
-        return err(branch_name, "invalid Azure DevOps slug (expected org/project/repo)");
+        return err(
+            branch_name,
+            "invalid Azure DevOps slug (expected org/project/repo)",
+        );
     };
     if files.is_empty() {
         return err(branch_name, "no files to commit");
@@ -247,7 +293,10 @@ pub async fn create_push_and_pr(
 
     // The push must supply the current base head as oldObjectId.
     let Some(old_object_id) = base_ref_object_id(&base_url, &repo, base_branch, &auth).await else {
-        return err(branch_name, format!("could not resolve base branch head for '{base_branch}'"));
+        return err(
+            branch_name,
+            format!("could not resolve base branch head for '{base_branch}'"),
+        );
     };
 
     // Build the change set (add vs edit per file).
@@ -320,10 +369,13 @@ pub async fn create_push_and_pr(
         Ok(resp) => match json_body(resp, "open PR").await {
             Ok(j) => {
                 let pr_id = j.get("pullRequestId").and_then(|v| v.as_i64());
-                let pr_url = pr_id.map(|id| {
-                    format!("{base_url}/_git/{repo}/pullrequest/{id}")
-                });
-                AzurePrOutcome { branch_name, pr_url, pr_id, error: None }
+                let pr_url = pr_id.map(|id| format!("{base_url}/_git/{repo}/pullrequest/{id}"));
+                AzurePrOutcome {
+                    branch_name,
+                    pr_url,
+                    pr_id,
+                    error: None,
+                }
             }
             Err(e) => err(branch_name, e),
         },
@@ -332,11 +384,7 @@ pub async fn create_push_and_pr(
 }
 
 /// Abandon an auto-opened Azure Repos PR (revert).
-pub async fn abandon_pull_request(
-    pat: &str,
-    repo_slug: &str,
-    pr_id: i64,
-) -> Result<(), String> {
+pub async fn abandon_pull_request(pat: &str, repo_slug: &str, pr_id: i64) -> Result<(), String> {
     let (org, project, repo) =
         split_org_project_repo(repo_slug).ok_or_else(|| "invalid Azure DevOps slug".to_string())?;
     let base_url = org_base(&org, &project);

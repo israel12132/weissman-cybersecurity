@@ -126,8 +126,14 @@ mod tests {
         let b = heal_digest("F1", "fixed", 200, 403, "curl x", &files(), 100);
         assert_eq!(a, b);
         // order of changed files must not matter
-        let two_a = vec![("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())];
-        let two_b = vec![("b".to_string(), "2".to_string()), ("a".to_string(), "1".to_string())];
+        let two_a = vec![
+            ("a".to_string(), "1".to_string()),
+            ("b".to_string(), "2".to_string()),
+        ];
+        let two_b = vec![
+            ("b".to_string(), "2".to_string()),
+            ("a".to_string(), "1".to_string()),
+        ];
         assert_eq!(
             heal_digest("F", "fixed", 200, 403, "p", &two_a, 1),
             heal_digest("F", "fixed", 200, 403, "p", &two_b, 1)
@@ -137,11 +143,26 @@ mod tests {
     #[test]
     fn digest_changes_when_any_field_changes() {
         let base = heal_digest("F1", "fixed", 200, 403, "curl x", &files(), 100);
-        assert_ne!(base, heal_digest("F2", "fixed", 200, 403, "curl x", &files(), 100));
-        assert_ne!(base, heal_digest("F1", "broke_app", 200, 403, "curl x", &files(), 100));
-        assert_ne!(base, heal_digest("F1", "fixed", 200, 200, "curl x", &files(), 100));
-        assert_ne!(base, heal_digest("F1", "fixed", 200, 403, "curl y", &files(), 100));
-        assert_ne!(base, heal_digest("F1", "fixed", 200, 403, "curl x", &files(), 101));
+        assert_ne!(
+            base,
+            heal_digest("F2", "fixed", 200, 403, "curl x", &files(), 100)
+        );
+        assert_ne!(
+            base,
+            heal_digest("F1", "broke_app", 200, 403, "curl x", &files(), 100)
+        );
+        assert_ne!(
+            base,
+            heal_digest("F1", "fixed", 200, 200, "curl x", &files(), 100)
+        );
+        assert_ne!(
+            base,
+            heal_digest("F1", "fixed", 200, 403, "curl y", &files(), 100)
+        );
+        assert_ne!(
+            base,
+            heal_digest("F1", "fixed", 200, 403, "curl x", &files(), 101)
+        );
     }
 
     #[test]

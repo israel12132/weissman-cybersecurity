@@ -342,7 +342,11 @@ pub fn spawn_pool_metrics_loop(
                     }
                 }
                 metrics::gauge!("weissman_heal_total_requests").set(total as f64);
-                let rate = if total > 0 { fixed as f64 / total as f64 } else { 0.0 };
+                let rate = if total > 0 {
+                    fixed as f64 / total as f64
+                } else {
+                    0.0
+                };
                 metrics::gauge!("weissman_heal_success_rate").set(rate);
             }
         }

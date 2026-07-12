@@ -84,7 +84,8 @@ fn check(
 
 /// Turn raw signals into a scored, bilingual readiness report.
 pub fn evaluate_readiness(s: &ReadinessSignals) -> ReadinessReport {
-    let checks = vec![
+    let checks =
+        vec![
         check(
             "llm",
             s.llm_configured,
@@ -177,7 +178,11 @@ pub fn evaluate_readiness(s: &ReadinessSignals) -> ReadinessReport {
         ),
     ];
 
-    let score: u32 = checks.iter().filter(|c| c.ok).map(|c| c.weight as u32).sum();
+    let score: u32 = checks
+        .iter()
+        .filter(|c| c.ok)
+        .map(|c| c.weight as u32)
+        .sum();
     let score = score.min(100) as u8;
     let ready = checks.iter().filter(|c| c.required).all(|c| c.ok);
     let all_ok = checks.iter().all(|c| c.ok);
@@ -230,7 +235,10 @@ mod tests {
         assert_eq!(r.score, 100);
         assert!(r.summary_en.contains("Fully armed"));
         // Every check ok => no fix guidance is emitted.
-        assert!(r.checks.iter().all(|c| c.ok && c.fix_en.is_empty() && c.fix_he.is_empty()));
+        assert!(r
+            .checks
+            .iter()
+            .all(|c| c.ok && c.fix_en.is_empty() && c.fix_he.is_empty()));
     }
 
     #[test]
@@ -293,9 +301,21 @@ mod tests {
     fn every_check_has_both_languages() {
         let r = evaluate_readiness(&ReadinessSignals::default());
         for c in &r.checks {
-            assert!(!c.label_en.is_empty() && !c.label_he.is_empty(), "label {}", c.key);
-            assert!(!c.detail_en.is_empty() && !c.detail_he.is_empty(), "detail {}", c.key);
-            assert!(!c.fix_en.is_empty() && !c.fix_he.is_empty(), "fix {}", c.key);
+            assert!(
+                !c.label_en.is_empty() && !c.label_he.is_empty(),
+                "label {}",
+                c.key
+            );
+            assert!(
+                !c.detail_en.is_empty() && !c.detail_he.is_empty(),
+                "detail {}",
+                c.key
+            );
+            assert!(
+                !c.fix_en.is_empty() && !c.fix_he.is_empty(),
+                "fix {}",
+                c.key
+            );
         }
     }
 }

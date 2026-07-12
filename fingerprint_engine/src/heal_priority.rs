@@ -77,7 +77,14 @@ pub fn classify_high_impact(text: &str) -> bool {
 /// True when the text suggests an internet-facing / externally exposed asset.
 pub fn classify_internet_facing(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
-    const NEEDLES: [&str; 6] = ["internet", "external", "public-facing", "publicly", "exposed", "perimeter"];
+    const NEEDLES: [&str; 6] = [
+        "internet",
+        "external",
+        "public-facing",
+        "publicly",
+        "exposed",
+        "perimeter",
+    ];
     NEEDLES.iter().any(|n| t.contains(n))
 }
 
@@ -133,7 +140,11 @@ pub fn score_priority(i: &PriorityInputs) -> PriorityScore {
         "P3"
     };
 
-    let sev_en = if sev.is_empty() { "unspecified".to_string() } else { sev.clone() };
+    let sev_en = if sev.is_empty() {
+        "unspecified".to_string()
+    } else {
+        sev.clone()
+    };
     let reason_en = if en.is_empty() {
         format!("{tier} · {sev_en} severity.")
     } else {
@@ -145,7 +156,13 @@ pub fn score_priority(i: &PriorityInputs) -> PriorityScore {
         format!("{tier} · חומרה {sev_en} — {}.", he.join(", "))
     };
 
-    PriorityScore { score, tier: tier.to_string(), reason_en, reason_he, factors }
+    PriorityScore {
+        score,
+        tier: tier.to_string(),
+        reason_en,
+        reason_he,
+        factors,
+    }
 }
 
 #[cfg(test)]
@@ -153,7 +170,10 @@ mod tests {
     use super::*;
 
     fn inp(sev: &str) -> PriorityInputs {
-        PriorityInputs { severity: sev.into(), ..Default::default() }
+        PriorityInputs {
+            severity: sev.into(),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -202,19 +222,33 @@ mod tests {
     #[test]
     fn tier_thresholds() {
         // medium(18)+poc(25) = 43 -> P2
-        let p = PriorityInputs { severity: "medium".into(), has_poc: true, ..Default::default() };
+        let p = PriorityInputs {
+            severity: "medium".into(),
+            has_poc: true,
+            ..Default::default()
+        };
         let s = score_priority(&p);
         assert_eq!(s.score, 43);
         assert_eq!(s.tier, "P2");
         // high(32)+poc(25)+internet(15) = 72 -> P1
-        let p = PriorityInputs { severity: "high".into(), has_poc: true, internet_facing: true, ..Default::default() };
+        let p = PriorityInputs {
+            severity: "high".into(),
+            has_poc: true,
+            internet_facing: true,
+            ..Default::default()
+        };
         assert_eq!(score_priority(&p).tier, "P1");
     }
 
     #[test]
     fn age_bump_is_capped_at_five() {
         let base = score_priority(&inp("low")).score; // 8
-        let aged = score_priority(&PriorityInputs { severity: "low".into(), age_days: 90, ..Default::default() }).score;
+        let aged = score_priority(&PriorityInputs {
+            severity: "low".into(),
+            age_days: 90,
+            ..Default::default()
+        })
+        .score;
         assert_eq!(aged - base, 5);
     }
 
@@ -225,15 +259,21 @@ mod tests {
         assert!(classify_high_impact("Authentication bypass on admin"));
         assert!(!classify_high_impact("Missing security header"));
         // Must not false-match benign engineering text.
-        assert!(!classify_high_impact("Refactor to constructor dependency injection"));
+        assert!(!classify_high_impact(
+            "Refactor to constructor dependency injection"
+        ));
         // Short acronyms match whole-word only — "rce" must not fire inside "source".
-        assert!(!classify_high_impact("Exposed source map in production build"));
+        assert!(!classify_high_impact(
+            "Exposed source map in production build"
+        ));
         assert!(classify_high_impact("RCE in the upload handler"));
     }
 
     #[test]
     fn internet_facing_classifier() {
-        assert!(classify_internet_facing("External, internet-facing login portal"));
+        assert!(classify_internet_facing(
+            "External, internet-facing login portal"
+        ));
         assert!(classify_internet_facing("Publicly exposed API"));
         assert!(!classify_internet_facing("Internal admin tool"));
     }

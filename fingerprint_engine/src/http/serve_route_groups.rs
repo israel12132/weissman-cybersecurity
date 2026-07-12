@@ -21,10 +21,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/findings/:id/status",
             patch(api_findings_update_status),
         )
-        .route(
-            "/api/findings/:id/verify",
-            post(api_findings_verify_live),
-        )
+        .route("/api/findings/:id/verify", post(api_findings_verify_live))
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
@@ -571,7 +568,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/deception/triggered", post(api_deception_triggered))
         .route("/api/deception/aws-events", post(api_deception_aws_events))
-        .route("/api/integrations/slack/interactivity", post(api_slack_interactivity))
+        .route(
+            "/api/integrations/slack/interactivity",
+            post(api_slack_interactivity),
+        )
         .route("/api/v1/alerts/aws-canary", post(api_v1_alerts_aws_canary))
         .route(
             "/api/clients/:id/deception/deploy-cloud",
@@ -580,9 +580,18 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/heal-verify/:job_id/steps", get(api_heal_verify_steps))
         .route("/api/heal-verify/:job_id", get(api_heal_verify_status))
         .route("/api/heal-verify/:job_id/patch", get(api_heal_verify_patch))
-        .route("/api/heal-verify/:job_id/attestation", get(api_heal_verify_attestation))
-        .route("/api/heal-verify/:job_id/report", get(api_heal_verify_report))
-        .route("/api/heal-verify/:job_id/report.json", get(api_heal_verify_report_json))
+        .route(
+            "/api/heal-verify/:job_id/attestation",
+            get(api_heal_verify_attestation),
+        )
+        .route(
+            "/api/heal-verify/:job_id/report",
+            get(api_heal_verify_report),
+        )
+        .route(
+            "/api/heal-verify/:job_id/report.json",
+            get(api_heal_verify_report_json),
+        )
         .route("/api/heal-verify/:job_id/sarif", get(api_heal_verify_sarif))
         .route("/api/heal-readiness", get(api_heal_readiness))
         .route("/api/clients/:id/heal-trends", get(api_heal_trends))

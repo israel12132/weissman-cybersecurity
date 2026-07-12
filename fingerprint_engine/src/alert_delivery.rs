@@ -596,7 +596,13 @@ async fn heal_finding_title(
 }
 
 /// Plain (non-interactive) Block Kit summary for a terminal heal outcome.
-fn heal_summary_blocks(finding_id: &str, title: &str, verdict: &str, pr_url: Option<&str>, ok: bool) -> Value {
+fn heal_summary_blocks(
+    finding_id: &str,
+    title: &str,
+    verdict: &str,
+    pr_url: Option<&str>,
+    ok: bool,
+) -> Value {
     let icon = if ok { "✅" } else { "⚠️" };
     let mut summary = format!("*{title}*\nFinding `{finding_id}` · sandbox verdict: `{verdict}`");
     if let Some(url) = pr_url.filter(|u| !u.trim().is_empty()) {
@@ -623,7 +629,10 @@ async fn post_slack_web_api(client: &Client, bot_token: &str, payload: &Value) -
             let body: Value = resp.json().await.unwrap_or_else(|_| json!({}));
             let ok = status.is_success() && body.get("ok").and_then(Value::as_bool) == Some(true);
             if !ok {
-                let err = body.get("error").and_then(Value::as_str).unwrap_or("unknown");
+                let err = body
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
                 tracing::warn!(
                     target: "alert_delivery", %status, error = err,
                     "slack chat.postMessage failed"
@@ -684,7 +693,12 @@ pub async fn post_heal_slack(
         };
         let dismiss_value = approve_value.clone();
         crate::slack_interactivity::build_heal_approval_blocks(
-            finding_id, title, verdict, pr_url, &approve_value, &dismiss_value,
+            finding_id,
+            title,
+            verdict,
+            pr_url,
+            &approve_value,
+            &dismiss_value,
         )
     } else {
         heal_summary_blocks(finding_id, title, verdict, pr_url, ok)

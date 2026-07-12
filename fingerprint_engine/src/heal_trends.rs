@@ -67,8 +67,16 @@ pub fn compute_trends(rows: &[(String, String, i64)]) -> TrendReport {
             day,
             total: t,
             fixed: f,
-            success_rate: if t > 0 { round2(f as f64 / t as f64) } else { 0.0 },
-            avg_attempts: if t > 0 { round2(asum as f64 / t as f64) } else { 0.0 },
+            success_rate: if t > 0 {
+                round2(f as f64 / t as f64)
+            } else {
+                0.0
+            },
+            avg_attempts: if t > 0 {
+                round2(asum as f64 / t as f64)
+            } else {
+                0.0
+            },
         })
         .collect();
 
@@ -87,8 +95,16 @@ pub fn compute_trends(rows: &[(String, String, i64)]) -> TrendReport {
         days,
         total,
         fixed,
-        success_rate: if total > 0 { round2(fixed as f64 / total as f64) } else { 0.0 },
-        avg_attempts: if total > 0 { round2(attempts_sum as f64 / total as f64) } else { 0.0 },
+        success_rate: if total > 0 {
+            round2(fixed as f64 / total as f64)
+        } else {
+            0.0
+        },
+        avg_attempts: if total > 0 {
+            round2(attempts_sum as f64 / total as f64)
+        } else {
+            0.0
+        },
         attempts_histogram: hist.into_iter().collect(),
         best_day,
     }
@@ -142,7 +158,10 @@ mod tests {
             ("2026-07-01".into(), "fixed".into(), 1),
         ];
         // Both days tie at 2; the earliest chronological day must win (documented contract).
-        assert_eq!(compute_trends(&rows).best_day.as_deref(), Some("2026-07-01"));
+        assert_eq!(
+            compute_trends(&rows).best_day.as_deref(),
+            Some("2026-07-01")
+        );
     }
 
     #[test]

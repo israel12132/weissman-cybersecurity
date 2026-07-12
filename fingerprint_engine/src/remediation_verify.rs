@@ -107,8 +107,14 @@ pub async fn run_verification(
             .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
             .unwrap_or(true)
     {
-        crate::alert_delivery::notify_regression(pool, tenant_id, original_finding_id, engine, target)
-            .await;
+        crate::alert_delivery::notify_regression(
+            pool,
+            tenant_id,
+            original_finding_id,
+            engine,
+            target,
+        )
+        .await;
     }
     Ok(outcome)
 }

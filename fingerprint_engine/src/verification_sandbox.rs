@@ -332,12 +332,19 @@ async fn git_clone_shallow(
     // Provider-aware token clone URL: GitHub uses `x-access-token`, GitLab uses `oauth2`.
     let host = {
         let h = git_host.trim();
-        if h.is_empty() { "github.com" } else { h }
+        if h.is_empty() {
+            "github.com"
+        } else {
+            h
+        }
     };
     let url = if host.contains("gitlab") {
         format!("https://oauth2:{}@{}/{}.git", token, host, repo_slug)
     } else {
-        format!("https://x-access-token:{}@{}/{}.git", token, host, repo_slug)
+        format!(
+            "https://x-access-token:{}@{}/{}.git",
+            token, host, repo_slug
+        )
     };
     // Testability / self-hosted escape hatch: clone from an explicit URL (e.g. file:///…) instead
     // of the token-derived URL, so the full pipeline can run against a local bare repo with no
@@ -408,7 +415,9 @@ pub async fn apply_unified_patch(repo_dir: &Path, patch_file: &Path) -> Result<S
 ///
 /// Returns `Err` when the patch produced no capturable changes (so the job fails loudly
 /// instead of opening an empty PR) or when the change set blows past the guardrails.
-pub async fn collect_changed_files(repo_dir: &Path) -> Result<(Vec<(String, String)>, Vec<String>), String> {
+pub async fn collect_changed_files(
+    repo_dir: &Path,
+) -> Result<(Vec<(String, String)>, Vec<String>), String> {
     // Stage everything so `diff --cached` reports adds, mods, renames and deletes uniformly.
     let add = Command::new("git")
         .arg("-C")
@@ -588,7 +597,9 @@ async fn run_tests_in_container(docker: &Docker, id: &str, cmd: &[String]) -> (b
 
     let mut output = String::new();
     match docker.start_exec(&exec.id, None).await {
-        Ok(StartExecResults::Attached { output: mut out, .. }) => {
+        Ok(StartExecResults::Attached {
+            output: mut out, ..
+        }) => {
             while let Some(chunk) = out.next().await {
                 if let Ok(msg) = chunk {
                     output.push_str(&msg.to_string());
@@ -696,7 +707,8 @@ pub async fn verify_patch_ephemeral_docker(
         Some(format!("Cloning {}/{}", repo_slug, base_branch))
     );
 
-    if let Err(e) = git_clone_shallow(repo_slug, base_branch, git_token, git_host, &repo_dir).await {
+    if let Err(e) = git_clone_shallow(repo_slug, base_branch, git_token, git_host, &repo_dir).await
+    {
         return fail(&sink, e).await;
     }
 
@@ -934,15 +946,24 @@ pub async fn verify_patch_ephemeral_docker(
             format!("http://127.0.0.1:{}/", host_bind_port),
         ),
     };
-    let (health_status, _health_body) =
-        http_probe(health_method, &health_url, &reqwest::header::HeaderMap::new(), None).await;
+    let (health_status, _health_body) = http_probe(
+        health_method,
+        &health_url,
+        &reqwest::header::HeaderMap::new(),
+        None,
+    )
+    .await;
     let health_after_ok = (200..400).contains(&health_status);
     step!(
         "health_after_patch",
         Some(format!("HTTP {} on {}", health_status, health_url))
     );
 
-    let app_up = if require_health() { health_after_ok } else { true };
+    let app_up = if require_health() {
+        health_after_ok
+    } else {
+        true
+    };
     let baseline_proven = baseline_was_vulnerable || !require_baseline_success();
     let mut verdict = classify_verdict(baseline_proven, after_status, app_up);
     let exploit_neutralized = !(200..=299).contains(&after_status);
@@ -954,7 +975,10 @@ pub async fn verify_patch_ephemeral_docker(
     let mut test_output = String::new();
     if verdict == HealVerdict::Fixed && run_tests_enabled() {
         if let Some(cmd) = detect_test_command(&repo_dir) {
-            step!("regression_tests", Some(format!("running: {}", cmd.join(" "))));
+            step!(
+                "regression_tests",
+                Some(format!("running: {}", cmd.join(" ")))
+            );
             let (passed, out) = run_tests_in_container(&docker, &id, &cmd).await;
             tests_ran = true;
             tests_passed = passed;
@@ -1146,13 +1170,22 @@ mod tests {
 
     #[test]
     fn verdict_still_vulnerable_when_2xx() {
-        assert_eq!(classify_verdict(true, 200, true), HealVerdict::StillVulnerable);
-        assert_eq!(classify_verdict(true, 299, true), HealVerdict::StillVulnerable);
+        assert_eq!(
+            classify_verdict(true, 200, true),
+            HealVerdict::StillVulnerable
+        );
+        assert_eq!(
+            classify_verdict(true, 299, true),
+            HealVerdict::StillVulnerable
+        );
     }
 
     #[test]
     fn verdict_inconclusive_when_baseline_unproven() {
-        assert_eq!(classify_verdict(false, 403, true), HealVerdict::Inconclusive);
+        assert_eq!(
+            classify_verdict(false, 403, true),
+            HealVerdict::Inconclusive
+        );
     }
 
     #[test]
@@ -1241,7 +1274,10 @@ mod tests {
             map.get("app.js").map(String::as_str),
             Some("const x = JSON.parse(req.body);\n")
         );
-        assert_eq!(map.get("SECURITY.md").map(String::as_str), Some("hardened\n"));
+        assert_eq!(
+            map.get("SECURITY.md").map(String::as_str),
+            Some("hardened\n")
+        );
     }
 
     #[tokio::test]

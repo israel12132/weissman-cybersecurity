@@ -113,7 +113,11 @@ pub fn to_sarif(d: &HealReportData) -> Value {
         // No repo files changed (e.g. a virtual-patch / WAF rule): anchor the result to a logical
         // location so it still surfaces in code scanning rather than emitting an empty locations array.
         let name = if d.finding_id.trim().is_empty() {
-            if d.channel.trim().is_empty() { "auto-heal".to_string() } else { d.channel.clone() }
+            if d.channel.trim().is_empty() {
+                "auto-heal".to_string()
+            } else {
+                d.channel.clone()
+            }
         } else {
             d.finding_id.clone()
         };
@@ -184,11 +188,14 @@ pub fn to_sarif(d: &HealReportData) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::remediation_brief::{Bilingual, RemediationBrief};
     use crate::heal_policy::PolicyDecision;
+    use crate::remediation_brief::{Bilingual, RemediationBrief};
 
     fn bi(en: &str, he: &str) -> Bilingual {
-        Bilingual { en: en.to_string(), he: he.to_string() }
+        Bilingual {
+            en: en.to_string(),
+            he: he.to_string(),
+        }
     }
 
     fn data() -> HealReportData {
@@ -261,16 +268,28 @@ mod tests {
         assert_eq!(s["version"], "2.1.0");
         assert_eq!(s["runs"][0]["tool"]["driver"]["name"], "Weissman Auto-Heal");
         assert_eq!(s["runs"][0]["tool"]["driver"]["rules"][0]["id"], "CWE-89");
-        assert_eq!(s["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["security-severity"], "8.0");
-        assert_eq!(s["runs"][0]["tool"]["driver"]["rules"][0]["helpUri"], "https://github.com/o/r/pull/7");
+        assert_eq!(
+            s["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["security-severity"],
+            "8.0"
+        );
+        assert_eq!(
+            s["runs"][0]["tool"]["driver"]["rules"][0]["helpUri"],
+            "https://github.com/o/r/pull/7"
+        );
         let res = &s["runs"][0]["results"][0];
         assert_eq!(res["ruleId"], "CWE-89");
         assert_eq!(res["level"], "error");
         assert_eq!(res["partialFingerprints"]["weissmanFindingId"], "F-1");
         assert_eq!(res["properties"]["attested"], true);
-        assert_eq!(res["properties"]["governance"]["disposition"], "open_for_review");
+        assert_eq!(
+            res["properties"]["governance"]["disposition"],
+            "open_for_review"
+        );
         assert_eq!(res["properties"]["he"]["problem"], "הזרקת SQL בהתחברות.");
-        assert_eq!(res["locations"][0]["physicalLocation"]["artifactLocation"]["uri"], "src/x.rs");
+        assert_eq!(
+            res["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+            "src/x.rs"
+        );
     }
 
     #[test]
@@ -291,9 +310,14 @@ mod tests {
         d.cwe = String::new();
         d.brief = None;
         let s = to_sarif(&d);
-        assert!(s["runs"][0]["tool"]["driver"]["rules"][0].get("helpUri").is_none());
+        assert!(s["runs"][0]["tool"]["driver"]["rules"][0]
+            .get("helpUri")
+            .is_none());
         // Falls back to a stable rule id and the finding title.
-        assert_eq!(s["runs"][0]["tool"]["driver"]["rules"][0]["id"], "weissman-auto-heal");
+        assert_eq!(
+            s["runs"][0]["tool"]["driver"]["rules"][0]["id"],
+            "weissman-auto-heal"
+        );
         assert_eq!(s["runs"][0]["results"][0]["ruleId"], "weissman-auto-heal");
     }
 
@@ -312,6 +336,8 @@ mod tests {
         let mut d = data();
         d.pr_url = Some("javascript:alert(1)".into());
         let s = to_sarif(&d);
-        assert!(s["runs"][0]["tool"]["driver"]["rules"][0].get("helpUri").is_none());
+        assert!(s["runs"][0]["tool"]["driver"]["rules"][0]
+            .get("helpUri")
+            .is_none());
     }
 }

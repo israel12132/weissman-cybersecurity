@@ -16,7 +16,12 @@ const ACTION_DOMAIN: &str = "weissman-slack-heal-action-v1|";
 /// Verify a Slack request signature (`v0=<hex>`) over `v0:{timestamp}:{body}` with the app signing
 /// secret. Pure HMAC check — the caller separately enforces timestamp freshness.
 #[must_use]
-pub fn verify_slack_signature(signing_secret: &str, timestamp: &str, body: &[u8], signature: &str) -> bool {
+pub fn verify_slack_signature(
+    signing_secret: &str,
+    timestamp: &str,
+    body: &[u8],
+    signature: &str,
+) -> bool {
     if signing_secret.is_empty() || timestamp.is_empty() {
         return false;
     }
@@ -42,7 +47,8 @@ fn action_digest(tenant_id: i64, client_id: i64, finding_id: &str) -> String {
 /// Returns `None` when attestation is disabled (no key) — Slack approval requires a signing key.
 #[must_use]
 pub fn sign_action_value(tenant_id: i64, client_id: i64, finding_id: &str) -> Option<String> {
-    let receipt = crate::finding_attestation::attest(&action_digest(tenant_id, client_id, finding_id))?;
+    let receipt =
+        crate::finding_attestation::attest(&action_digest(tenant_id, client_id, finding_id))?;
     Some(format!("{tenant_id}:{client_id}:{finding_id}:{receipt}"))
 }
 
@@ -57,7 +63,10 @@ pub fn verify_action_value(value: &str) -> Option<(i64, i64, String)> {
     if finding_id.is_empty() || receipt.is_empty() {
         return None;
     }
-    if crate::finding_attestation::verify(&action_digest(tenant_id, client_id, &finding_id), receipt) {
+    if crate::finding_attestation::verify(
+        &action_digest(tenant_id, client_id, &finding_id),
+        receipt,
+    ) {
         Some((tenant_id, client_id, finding_id))
     } else {
         None
@@ -181,9 +190,18 @@ mod tests {
 
     #[test]
     fn action_from_id() {
-        assert_eq!(SlackHealAction::from_action_id("heal_approve"), SlackHealAction::Approve);
-        assert_eq!(SlackHealAction::from_action_id("heal_dismiss"), SlackHealAction::Dismiss);
-        assert_eq!(SlackHealAction::from_action_id("something_else"), SlackHealAction::Unknown);
+        assert_eq!(
+            SlackHealAction::from_action_id("heal_approve"),
+            SlackHealAction::Approve
+        );
+        assert_eq!(
+            SlackHealAction::from_action_id("heal_dismiss"),
+            SlackHealAction::Dismiss
+        );
+        assert_eq!(
+            SlackHealAction::from_action_id("something_else"),
+            SlackHealAction::Unknown
+        );
     }
 
     #[test]
@@ -200,7 +218,8 @@ mod tests {
 
     #[test]
     fn build_blocks_has_buttons_and_pr() {
-        let b = build_heal_approval_blocks("F-1", "SQLi", "fixed", Some("https://x/pr/1"), "av", "dv");
+        let b =
+            build_heal_approval_blocks("F-1", "SQLi", "fixed", Some("https://x/pr/1"), "av", "dv");
         let s = b.to_string();
         assert!(s.contains("heal_approve"));
         assert!(s.contains("heal_dismiss"));
