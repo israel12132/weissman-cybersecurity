@@ -356,9 +356,23 @@ impl StealthQueue {
         // depth — via an RAII guard so a cancelled (dropped) admission future
         // still decrements the gauge instead of leaking it.
         let wait = WaitGuard::new(&self.0.waiting);
-        let target = target_sem.acquire_owned().await.ok();
-        let global = Arc::clone(&self.0.global).acquire_owned().await.ok();
+        let target = target_sem.acquire_owned().await;
+        let global = Arc::clone(&self.0.global).acquire_owned().await;
         drop(wait); // admitted — no longer queued (pace/jitter below is in-flight)
+
+        // These semaphores live for the process lifetime and are never closed,
+        // so `acquire_owned` can only fail on a broken invariant. That path is
+        // unreachable by construction — but if it ever happened, silently
+        // returning empty permits would disable the DoS/WAF throttling floor.
+        // Make it LOUD (error log + dedicated counter) rather than a silent
+        // fail-open, so the condition is impossible to miss in production.
+        if target.is_err() || global.is_err() {
+            tracing::error!(
+                target: "stealth_queue",
+                "stealth semaphore closed unexpectedly — traffic-shaping floor bypassed for one admission"
+            );
+            metrics::counter!("weissman_stealth_semaphore_closed_total").increment(1);
+        }
 
         self.0.admitted_total.fetch_add(1, Ordering::Relaxed);
         metrics::counter!("weissman_stealth_acquire_total").increment(1);
@@ -367,8 +381,8 @@ impl StealthQueue {
         self.jitter().await;
 
         StealthPermit {
-            _target: target,
-            _global: global,
+            _target: target.ok(),
+            _global: global.ok(),
         }
     }
 

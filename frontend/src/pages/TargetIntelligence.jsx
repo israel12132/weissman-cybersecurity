@@ -61,13 +61,13 @@ export default function TargetIntelligence() {
 
   const analyze = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
-    const t = target.trim()
-    if (!t) return
+    const tgt = target.trim()
+    if (!tgt) return
     setLoading(true)
     setError('')
     setData(null)
     try {
-      const qs = `target=${encodeURIComponent(t)}${enrich ? '&enrich=1' : ''}`
+      const qs = `target=${encodeURIComponent(tgt)}${enrich ? '&enrich=1' : ''}`
       const r = await apiFetch(`/api/intel/target-profile?${qs}`)
       if (!r.ok) {
         const j = await r.json().catch(() => ({}))

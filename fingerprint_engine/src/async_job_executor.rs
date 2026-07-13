@@ -861,8 +861,15 @@ async fn execute_job_unscoped(
             let mut target_profile = crate::target_profile::TargetProfile::classify(&target);
             // Active DNS enrichment (once per job): verify what the host actually
             // resolves to — catches hostnames that map into private/internal
-            // space that the passive, string-only tier cannot see.
-            let _ = target_profile.enrich_dns().await;
+            // space that the passive, string-only tier cannot see. Bounded so a
+            // slow/hostile resolver can't stall the whole scan (matches the 3s
+            // cap on the `/api/intel/target-profile?enrich=1` handler); on
+            // timeout we simply keep the passive profile.
+            let _ = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                target_profile.enrich_dns(),
+            )
+            .await;
             let selection = target_profile.select(&ordered_engines);
             {
                 let summary = selection
