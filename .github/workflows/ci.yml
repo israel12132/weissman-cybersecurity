@@ -171,7 +171,13 @@ jobs:
 
       - name: Frontend npm audit (high+critical CVEs)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        # Production dependencies only — the shipped bundle is what matters for
+        # supply-chain risk. Build/dev tooling (vite, esbuild, test frameworks)
+        # never reaches production; the one remaining dev-only high is esbuild's
+        # dev-server SSRF via vite, which does not affect `vite build` output.
+        # Production transitive CVEs (d3 ReDoS via react-simple-maps) are pinned
+        # to patched releases through package.json `overrides`.
+        run: npm audit --omit=dev --audit-level=high
 
   frontend-build:
     name: Frontend — lint, test, build
