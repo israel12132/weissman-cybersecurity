@@ -319,7 +319,9 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
                 params.push(f.value.clone());
                 where_parts.push(format!("{} {} ${}", f.column, sql_op, params.len()));
             }
-            _ => unreachable!(),
+            // Self-defending: if a new operator is ever added to ALLOWED_OPS without a match arm
+            // here, reject the query instead of panicking the request.
+            other => return Err(format!("unsupported query operator '{other}'")),
         }
     }
 

@@ -16,6 +16,8 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       # Spread replicas across nodes (and zones when available) so a single node/AZ loss
@@ -48,6 +50,11 @@ spec:
           #   image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend@sha256:<DIGEST>
           image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend:latest
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8000
           resources:
@@ -116,8 +123,10 @@ spec:
             - name: WEISSMAN_MIGRATIONS_DIR
               value: "/srv/migrations"
           readinessProbe:
+            # Dependency-aware: 503 when Postgres/Redis are unreachable so traffic is
+            # withheld from a replica that can't serve. Liveness stays on /api/health.
             httpGet:
-              path: /api/health
+              path: /api/ready
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -127,11 +136,6 @@ spec:
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 20
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
           volumeMounts:
             - name: tmp
               mountPath: /tmp

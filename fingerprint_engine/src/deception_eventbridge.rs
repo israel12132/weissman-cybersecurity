@@ -130,16 +130,16 @@ pub async fn handle_aws_canary_eventbridge(
                 .await;
             let _ = tx.commit().await;
             triggered += 1;
-            let _ = telemetry_broadcast_tx.send(
+            let _ = telemetry_broadcast_tx.send(crate::http::tenant_stream::stamp_value(
+                tid,
                 serde_json::json!({
                     "event": "deception_triggered",
                     "severity": "critical",
                     "client_id": cid.to_string(),
                     "asset_id": aid,
                     "message": format!("Canary AWS key {} observed via {} (EventBridge forwarder)", ak, source_tag)
-                })
-                .to_string(),
-            );
+                }),
+            ));
         }
     }
     if triggered > 0 {

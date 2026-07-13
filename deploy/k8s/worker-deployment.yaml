@@ -13,11 +13,23 @@ spec:
       labels:
         app: weissman-worker
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: worker
           image: your-registry/weissman-backend:latest
           imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/weissman-worker"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: 200m
@@ -62,3 +74,9 @@ spec:
                 - "pgrep -x weissman-worker || test -d /proc/1 && grep -q weissman-worker /proc/1/comm"
             initialDelaySeconds: 30
             periodSeconds: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

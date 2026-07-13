@@ -143,6 +143,403 @@ async fn api_battlespace_shadow_preview(
     }
 }
 
+// ─── Global remediation priority ("fix-first" program over all live findings) ───
+async fn api_remediation_priority_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::remediation_priority::load_and_rank(
+        &state.app_pool,
+        auth.tenant_id,
+        client_id,
+        limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Portfolio (fleet-wide) posture across all clients in the tenant ───
+async fn api_portfolio_posture(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let max_clients: i64 = q
+        .get("max_clients")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(200)
+        .clamp(1, 500);
+    let per_client_limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::portfolio_posture::load_portfolio(
+        &state.app_pool,
+        auth.tenant_id,
+        max_clients,
+        per_client_limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Portfolio (fleet-wide) ATT&CK exposure across all clients in the tenant ───
+async fn api_portfolio_attack_exposure(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let max_clients: i64 = q
+        .get("max_clients")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(200)
+        .clamp(1, 500);
+    let per_client_limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::attack_exposure::load_portfolio_exposure(
+        &state.app_pool,
+        auth.tenant_id,
+        max_clients,
+        per_client_limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Complete arsenal inventory (every production engine + authoritative metadata) ───
+async fn api_arsenal_catalog() -> Response {
+    (StatusCode::OK, Json(crate::arsenal_catalog::summary())).into_response()
+}
+
+// ─── Arsenal integrity / de-duplication audit (distinct engines vs duplicate aliases) ───
+async fn api_arsenal_integrity() -> Response {
+    (StatusCode::OK, Json(crate::arsenal_integrity::audit_json())).into_response()
+}
+
+// ─── Stealth batch deploy ("run all" → backend drips the batch like a human red-team) ───
+async fn api_arsenal_deploy(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    let client_id = body.get("client_id").and_then(|v| v.as_i64()).unwrap_or(0);
+    let target = body
+        .get("target")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let mut engines: Vec<String> = body
+        .get("engines")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    engines.dedup();
+    if client_id <= 0 || target.is_empty() || engines.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": "client_id, target and engines are required" })),
+        )
+            .into_response();
+    }
+    // Hard cap on a single batch (the drip, not a burst, is what keeps us under the WAF radar).
+    engines.truncate(500);
+
+    let st = body.get("stealth").cloned().unwrap_or_else(|| json!({}));
+    let num = |k: &str, d: u64| st.get(k).and_then(|v| v.as_u64()).unwrap_or(d);
+    let plan = crate::stealth_scheduler::StealthPlan {
+        max_concurrent: num("max_concurrent", 10) as usize,
+        jitter_min_ms: num("jitter_min_ms", 250),
+        jitter_max_ms: num("jitter_max_ms", 1500),
+        base_gap_ms: num("base_gap_ms", 300),
+    }
+    .sanitized();
+
+    // Deterministic-per-batch seed from the target + size (no wall-clock dependency needed).
+    let seed = target
+        .bytes()
+        .fold(0u64, |a, b| a.wrapping_mul(131).wrapping_add(b as u64))
+        .wrapping_add(engines.len() as u64);
+    let batch_id = format!("arsenal-{}-{}-{}", auth.tenant_id, client_id, seed);
+    let mut sched = crate::stealth_scheduler::schedule(engines.len(), &plan, seed);
+    // Fire in true global time order (lanes interleave), so the drip is smooth.
+    sched.sort_by_key(|d| d.delay_ms);
+    let engines_queued = engines.len();
+    let summary = crate::stealth_scheduler::plan_summary(engines_queued, &plan, seed);
+
+    // Detach the drip: sleep to each dispatch's offset, then enqueue that engine's scan job with its
+    // rotated identity. Returns immediately; the operation unfolds server-side under cover.
+    let pool = state.app_pool.clone();
+    let tenant_id = auth.tenant_id;
+    let batch_id_task = batch_id.clone();
+    tokio::spawn(async move {
+        let mut elapsed = 0u64;
+        for d in &sched {
+            let wait = d.delay_ms.saturating_sub(elapsed);
+            if wait > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(wait)).await;
+                elapsed = d.delay_ms;
+            }
+            let payload = crate::stealth_scheduler::job_payload(
+                &engines[d.index],
+                &target,
+                client_id,
+                &batch_id_task,
+                d,
+            );
+            let _ = crate::async_jobs::enqueue(&pool, tenant_id, "command_center_engine", payload, None)
+                .await;
+        }
+    });
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "ok": true,
+            "batch_id": batch_id,
+            "engines_queued": engines_queued,
+            "plan": summary,
+        })),
+    )
+        .into_response()
+}
+
+// ─── Stealth dispatch plan preview (how a batch drips out under concurrency/jitter) ───
+async fn api_arsenal_deploy_plan(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    fn num(q: &std::collections::HashMap<String, String>, k: &str, d: u64) -> u64 {
+        q.get(k).and_then(|s| s.parse::<u64>().ok()).unwrap_or(d)
+    }
+    let count = num(&q, "count", 50).clamp(1, 2000) as usize;
+    let plan = crate::stealth_scheduler::StealthPlan {
+        max_concurrent: num(&q, "max_concurrent", 10) as usize,
+        jitter_min_ms: num(&q, "jitter_min_ms", 250),
+        jitter_max_ms: num(&q, "jitter_max_ms", 1500),
+        base_gap_ms: num(&q, "base_gap_ms", 300),
+    };
+    // Deterministic preview seed derived from the request shape.
+    let seed = (count as u64).wrapping_mul(0x9E37_79B9).wrapping_add(plan.max_concurrent as u64);
+    let summary = crate::stealth_scheduler::plan_summary(count, &plan, seed);
+    (StatusCode::OK, Json(summary)).into_response()
+}
+
+// ─── Arsenal recommendation (client exposure crossed against the engine arsenal) ───
+async fn api_arsenal_recommendation_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::arsenal_intel::load_and_analyze(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Backlog-aging analytics (open findings bucketed by age x severity) ───
+async fn api_finding_aging_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::finding_aging::load_and_aggregate(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Unified executive summary (posture + projection + forecast + top actions, one query) ───
+async fn api_executive_summary_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::executive_summary::load_summary(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Proactive SLA breach forecast (cumulative breaches by horizon) ───
+async fn api_sla_forecast_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::sla_forecast::load_and_forecast(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Per-client compliance-framework posture (crosswalk rolled up over findings) ───
+async fn api_compliance_posture_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::compliance_posture::load_and_aggregate(
+        &state.app_pool,
+        auth.tenant_id,
+        client_id,
+        limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Board-level security posture score (distilled from the fix-first program) ───
+async fn api_posture_score_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::posture_score::load_and_score(&state.app_pool, auth.tenant_id, client_id, limit)
+        .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+// ─── Live per-client MITRE ATT&CK exposure (technique ranking + tactic rollup) ───
+async fn api_attack_exposure_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+    match crate::attack_exposure::load_and_aggregate(
+        &state.app_pool,
+        auth.tenant_id,
+        client_id,
+        limit,
+    )
+    .await
+    {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 // ─── Unified threat analysis (planner + correlation + NDR + ITDR over live findings) ───
 async fn api_threat_analysis_for_client(
     State(state): State<Arc<AppState>>,

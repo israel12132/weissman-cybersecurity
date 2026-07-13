@@ -847,8 +847,8 @@ pub async fn store_finding_for_task(
             "engine": engine,
             "source": "agent",
             "agent_task_id": task_id,
-        })
-        .to_string();
+        });
+        let msg = crate::http::tenant_stream::stamp_value(tenant_id, msg);
         crate::telemetry_bus::publish_bus("telemetry", &msg).await;
     }
     Ok(())

@@ -333,6 +333,20 @@ pub fn catalog() -> &'static [Technique] {
     COVERAGE
 }
 
+/// Look up a technique's curated metadata by ATT&CK id. Tries an exact match first, then falls
+/// back to the base technique id (so a finding reporting `T1059` still resolves against a curated
+/// sub-technique like `T1059.008`). Returns `None` for ids not in the catalog.
+#[must_use]
+pub fn lookup(id: &str) -> Option<&'static Technique> {
+    if let Some(t) = COVERAGE.iter().find(|t| t.id == id) {
+        return Some(t);
+    }
+    let base = id.split('.').next().unwrap_or(id);
+    COVERAGE
+        .iter()
+        .find(|t| t.id.split('.').next() == Some(base))
+}
+
 /// `(tactic, technique_count)` rollup in canonical tactic order (covered tactics only).
 #[must_use]
 pub fn tactic_rollup() -> Vec<(&'static str, usize)> {
