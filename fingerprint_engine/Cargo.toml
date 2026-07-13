@@ -32,7 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-ipnetwork = "0.20"
+ipnetwork = "0.21"
 urlencoding = "2.1"
 rand = "0.10"
 # Full-stack server: live API + dashboard, no dummy
