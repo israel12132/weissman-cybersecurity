@@ -231,6 +231,12 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::POST, "/api/auth/saml/acs", RouteGate::Always),
     (Method::GET, "/api/auth/saml/begin", RouteGate::Always),
     (Method::POST, "/api/deception/aws-events", RouteGate::Always),
+    // Slack interactivity callback — authenticated by Slack's request signature, not a JWT.
+    (
+        Method::POST,
+        "/api/integrations/slack/interactivity",
+        RouteGate::Always,
+    ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
@@ -1145,6 +1151,31 @@ struct AutoHealBody {
     image: Option<String>,
     container_port: Option<u16>,
     poc_exploit: Option<String>,
+    /// Delivery channel id: github_pr (default) | github_direct_commit | diff_download | virtual_patch.
+    channel: Option<String>,
+    /// Optional curl for the post-patch health/control probe; empty ⇒ GET the app root.
+    health_check_curl: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct HealRevertBody {
+    finding_id: String,
+    git_token: Option<String>,
+    repo_slug: Option<String>,
+    channel: Option<String>,
+    gitlab_host: Option<String>,
+    #[serde(default)]
+    delete_branch: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct HealBatchBody {
+    finding_ids: Vec<String>,
+    git_token: Option<String>,
+    repo_slug: Option<String>,
+    base_branch: Option<String>,
+    channel: Option<String>,
+    health_check_curl: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1687,6 +1718,7 @@ mod public_route_guard_tests {
             (Method::POST, "/api/auth/saml/acs"),
             (Method::GET, "/api/auth/saml/begin"),
             (Method::POST, "/api/deception/aws-events"),
+            (Method::POST, "/api/integrations/slack/interactivity"),
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
             (Method::POST, "/api/v1/alerts/aws-canary"),

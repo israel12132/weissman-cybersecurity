@@ -89,6 +89,7 @@ import {
   NetworkProtocols,
   SocialEngineering,
   RemediationHub,
+  RemediationAnalytics,
   EngineManagementConsole,
   EngineReliability,
   SystemConfiguration,
@@ -263,6 +264,7 @@ export default function TacticalApp() {
           <Route path="network-protocols" element={<NetworkProtocols />} />
           <Route path="social-engineering" element={<SocialEngineering />} />
           <Route path="remediation" element={<RemediationHub />} />
+          <Route path="remediation-analytics" element={<RemediationAnalytics />} />
           <Route path="engine-management" element={<EngineManagementConsole />} />
           <Route path="system-config" element={<SystemConfiguration />} />
           <Route path="metrics" element={<MetricsDashboard />} />

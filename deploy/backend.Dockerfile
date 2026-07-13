@@ -36,8 +36,10 @@ RUN cargo build -p weissman-server -p weissman-worker -p weissman-agent \
     --release --locked
 
 FROM debian:bookworm-slim AS runtime
+# git + patch are runtime deps of the auto-heal verification sandbox: it shells out
+# to `git clone`/`git diff` (to capture the applied fix) and `patch` (to apply the diff).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 postgresql-client xmlsec1 libhwloc15 libudev1 curl procps \
+    ca-certificates libssl3 postgresql-client xmlsec1 libhwloc15 libudev1 curl procps git patch \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -r -s /bin/false -u 65532 weissman \
     && mkdir -p /srv/bin/agents/linux-x86_64-gnu /srv/bin/agents/linux-aarch64-gnu
