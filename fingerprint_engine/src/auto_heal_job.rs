@@ -589,7 +589,7 @@ pub async fn run_auto_heal_job(
         .filter(|n: &u32| *n >= 1 && *n <= 6)
         .unwrap_or(1);
 
-    let (mut vr, mut attempt): (crate::verification_sandbox::VerificationResult, u32) =
+    let mut vr: crate::verification_sandbox::VerificationResult =
         if tournament_size >= 2 {
             let (t, d, s) =
                 load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await;
@@ -729,7 +729,9 @@ pub async fn run_auto_heal_job(
             )
             .await;
             patch_text = best_patch;
-            (best_vr, candidate_count)
+            // NOTE: `candidate_count` is reported in the `tournament_winner` step above only. It
+            // must NOT seed the sequential self-repair counter or the persisted attempt count.
+            best_vr
         } else {
             let vr0 = verify_patch_ephemeral_docker(
                 &docker_socket,
@@ -745,8 +747,14 @@ pub async fn run_auto_heal_job(
                 Some(step_sink.clone()),
             )
             .await;
-            (vr0, 1)
+            vr0
         };
+
+    // Sequential self-repair counter, independent of tournament size: the initial verification
+    // (tournament winner or single verify) is attempt 1. This lets self-repair run after a
+    // tournament winner that isn't yet Fixed, and keeps the persisted `attempts` (and the
+    // merge-policy `max_attempts_for_merge` check) reflecting real repair rounds — not candidates.
+    let mut attempt: u32 = 1;
 
     while !vr.verified && attempt < max_attempts {
         let reason = failure_reason(&vr);

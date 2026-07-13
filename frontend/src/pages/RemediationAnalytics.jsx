@@ -31,6 +31,11 @@ export default function RemediationAnalytics() {
   const [healStats, setHealStats] = useState(null)
   const [heals, setHeals] = useState([])
   const [loading, setLoading] = useState(true)
+  // Separate loading flag for the per-client heal-stats fan-out so the "no runs yet" empty state
+  // doesn't flash before those requests resolve.
+  const [statsLoading, setStatsLoading] = useState(true)
+  // True when at least one per-client telemetry request failed (totals shown are then partial).
+  const [partial, setPartial] = useState(false)
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
@@ -50,22 +55,32 @@ export default function RemediationAnalytics() {
   useEffect(() => { load() }, [load])
 
   // Distinct client_ids — same derivation as RemediationHub
-  const clientIds = useMemo(
-    () => [...new Set(findings.map((f) => f.client_id).filter(Boolean))].slice(0, 25),
+  const CLIENT_CAP = 25
+  const allClientIds = useMemo(
+    () => [...new Set(findings.map((f) => f.client_id).filter(Boolean))],
     [findings],
   )
+  const clientIds = useMemo(() => allClientIds.slice(0, CLIENT_CAP), [allClientIds])
+  // The findings feed is capped (limit=2000) and we aggregate at most CLIENT_CAP clients, so this
+  // page is an explicitly bounded sample — surfaced to the user — not a guaranteed all-client rollup.
+  const bounded = allClientIds.length > CLIENT_CAP || findings.length >= 2000
 
   // Aggregate heal-stats — identical reducer to RemediationHub
   useEffect(() => {
-    if (!clientIds.length) { setHealStats(null); return undefined }
+    if (!clientIds.length) { setHealStats(null); setStatsLoading(false); setPartial(false); return undefined }
     let cancelled = false
-    Promise.all(
+    setStatsLoading(true)
+    // allSettled (not all): a failed client query must surface as a partial-data warning rather than
+    // silently reading as low activity / "no runs yet".
+    Promise.allSettled(
       clientIds.map((id) =>
-        apiFetch(`/api/clients/${id}/heal-stats`).then((r) => (r.ok ? r.json() : null)).catch(() => null)),
-    ).then((list) => {
+        apiFetch(`/api/clients/${id}/heal-stats`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))),
+    ).then((results) => {
       if (cancelled) return
+      setPartial(results.some((x) => x.status === 'rejected'))
+      const list = results.filter((x) => x.status === 'fulfilled' && x.value).map((x) => x.value)
       const channelMap = {}
-      const agg = list.filter(Boolean).reduce(
+      const agg = list.reduce(
         (a, s) => {
           for (const c of s.by_channel || []) channelMap[c.channel] = (channelMap[c.channel] || 0) + (c.count || 0)
           return {
@@ -84,6 +99,7 @@ export default function RemediationAnalytics() {
         .map(([channel, count]) => ({ channel, count }))
         .sort((x, y) => y.count - x.count)
       setHealStats(agg.total > 0 ? agg : null)
+      setStatsLoading(false)
     })
     return () => { cancelled = true }
   }, [clientIds])
@@ -139,7 +155,16 @@ export default function RemediationAnalytics() {
           </div>
         )}
 
-        {loading ? (
+        {(bounded || partial) && !loading && !statsLoading && (
+          <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            {partial
+              ? t('pages.remediationAnalytics.partial', { defaultValue: 'Some client telemetry could not be loaded — the totals below are partial.' })
+              : t('pages.remediationAnalytics.bounded', { defaultValue: 'Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client.' })}
+          </div>
+        )}
+
+        {loading || statsLoading ? (
           <SkeletonTable rows={4} cols={3} />
         ) : healStats ? (
           <RemediationAnalyticsPanel stats={healStats} />

@@ -34,10 +34,15 @@ jobs:
     steps:
       - name: Resolve job id
         id: job
+        env:
+          REQUESTED_JOB_ID: ${{ github.event.inputs.job_id || github.event.client_payload.job_id }}
         run: |
-          JOB_ID="${{ github.event.inputs.job_id || github.event.client_payload.job_id }}"
+          JOB_ID="$REQUESTED_JOB_ID"
           if [ -z "$JOB_ID" ]; then
             echo "::error::no job_id provided (workflow input or client_payload.job_id)"; exit 1
+          fi
+          if ! printf '%s' "$JOB_ID" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+            echo "::error::job_id must be a UUID"; exit 1
           fi
           echo "id=$JOB_ID" >> "$GITHUB_OUTPUT"
 

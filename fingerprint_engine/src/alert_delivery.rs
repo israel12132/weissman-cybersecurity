@@ -522,11 +522,13 @@ pub async fn notify_regression(
         "text": text,
     });
     let mut delivered = false;
+    // Sign the regression signal like completion events, so a receiver can authenticate a webhook
+    // that may trigger automated re-remediation.
     if let Some(url) = config.alert_webhook_url.as_deref() {
-        delivered |= post_json(&client, url, &payload).await;
+        delivered |= post_json_signed(&client, url, &payload).await;
     }
     if let Some(url) = config.slack_webhook_url.as_deref() {
-        delivered |= post_json(&client, url, &payload).await;
+        delivered |= post_json_signed(&client, url, &payload).await;
     }
     if let Some(key) = resolve_pagerduty_key(&config) {
         let pd = json!({

@@ -32,9 +32,27 @@ impl Scm {
 }
 
 /// Infer the SCM from a host or repo URL. Unknown when nothing matches.
+///
+/// The input may be a bare host or a full URL. We first reduce it to its bare host *authority* —
+/// stripping scheme, userinfo, port, and any path/query/fragment — before matching, so a hostile
+/// path segment (e.g. `https://git.evil.example/path/github`) can't be mistaken for the SCM. A
+/// substring match on the authority is deliberately retained so self-managed hosts still classify
+/// (e.g. `gitlab.example.com` → GitLab).
 #[must_use]
 pub fn scm_from_host(host: &str) -> Scm {
-    let h = host.to_ascii_lowercase();
+    let lower = host.trim().to_ascii_lowercase();
+    let after_scheme = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"))
+        .unwrap_or(lower.as_str());
+    // Authority is everything before the first path/query/fragment separator.
+    let authority = after_scheme
+        .split(|c| c == '/' || c == '?' || c == '#')
+        .next()
+        .unwrap_or("");
+    // Drop userinfo (`user@`) and port (`:443`).
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    let h = host_port.split(':').next().unwrap_or(host_port);
     if h.contains("github") {
         Scm::GitHub
     } else if h.contains("gitlab") {
@@ -150,6 +168,14 @@ mod tests {
         assert_eq!(scm_from_host("bitbucket.org"), Scm::Bitbucket);
         assert_eq!(scm_from_host("dev.azure.com/org"), Scm::Azure);
         assert_eq!(scm_from_host("git.corp.internal"), Scm::Unknown);
+        // A hostile path segment must NOT be mistaken for the SCM — only the authority is matched.
+        assert_eq!(
+            scm_from_host("https://git.evil.example/path/github"),
+            Scm::Unknown
+        );
+        assert_eq!(scm_from_host("git.evil.example/gitlab/x"), Scm::Unknown);
+        // Scheme, userinfo, and port are stripped before matching.
+        assert_eq!(scm_from_host("https://user@github.com:443"), Scm::GitHub);
     }
 
     #[test]

@@ -1426,17 +1426,20 @@
       "success": "Success",
       "avg_attempts": "Avg attempts",
       "volume": "Daily volume",
-      "success_rate": "Success rate"
+      "success_rate": "Success rate",
+      "aria_chart": "daily heal volume and success rate"
     },
     "remediationAnalytics": {
       "title": "Remediation Analytics",
-      "subtitle": "Auto-heal outcomes aggregated across every active client",
+      "subtitle": "Auto-heal outcomes aggregated across active clients",
       "badge": "ANALYTICS",
       "intro": "Live auto-heal telemetry from GET /api/clients/:id/heal-stats and /heal-requests.",
       "open_hub": "Remediation Hub →",
       "recent_heals": "Recent heals",
       "empty_title": "No auto-heal runs yet.",
-      "empty_hint": "Trigger a heal from the Remediation Hub to populate analytics."
+      "empty_hint": "Trigger a heal from the Remediation Hub to populate analytics.",
+      "partial": "Some client telemetry could not be loaded — the totals below are partial.",
+      "bounded": "Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client."
     },
     "remediationHub": {
       "title": "Remediation Hub",

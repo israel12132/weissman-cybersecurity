@@ -39,7 +39,9 @@ pub fn split_org_project_repo(slug: &str) -> Option<(String, String, String)> {
         .split('/')
         .filter(|s| !s.trim().is_empty())
         .collect();
-    if parts.len() < 3 {
+    // Contract: exactly `org/project/repo`. Reject anything with extra segments so a stray
+    // `org/project/repo/extra` can't silently resolve to the wrong repo (the extra was ignored).
+    if parts.len() != 3 {
         return None;
     }
     Some((
@@ -420,6 +422,9 @@ mod tests {
         );
         assert_eq!(split_org_project_repo("a/b"), None);
         assert_eq!(split_org_project_repo(""), None);
+        // Exactly three segments required: extra segments must be rejected, not silently dropped
+        // (otherwise `org/project/repo/extra` could target the wrong repo).
+        assert_eq!(split_org_project_repo("org/project/repo/extra"), None);
     }
 
     #[test]

@@ -120,7 +120,7 @@ async fn api_heal_verify_status(
            ORDER BY id DESC LIMIT 1"#,
     )
     .bind(auth.tenant_id)
-    .bind(&job_id)
+    .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
     .ok()
@@ -230,9 +230,13 @@ async fn api_heal_verify_attestation(
     Extension(auth): Extension<AuthContext>,
     Path(job_id): Path<String>,
 ) -> Response {
-    if uuid::Uuid::parse_str(job_id.trim()).is_err() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid job_id"}))).into_response();
-    }
+    let job_uuid = match uuid::Uuid::parse_str(job_id.trim()) {
+        Ok(u) => u,
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid job_id"})))
+                .into_response()
+        }
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
     };
@@ -244,7 +248,7 @@ async fn api_heal_verify_attestation(
            ORDER BY id DESC LIMIT 1"#,
     )
     .bind(auth.tenant_id)
-    .bind(&job_id)
+    .bind(job_uuid.to_string())
     .fetch_optional(&mut *tx)
     .await
     .ok()
