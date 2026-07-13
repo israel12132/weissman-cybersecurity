@@ -62,3 +62,6 @@ reports/
 
 # Company legal details (copy from deploy/company.details.example.json)
 deploy/company.details.json
+
+# Stale member lock — the workspace build uses the root Cargo.lock (see deploy/*.Dockerfile).
+fingerprint_engine/Cargo.lock

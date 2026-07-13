@@ -1,0 +1,52 @@
+# gitleaks configuration — secret scanning gate (CI: security-scan job runs
+#   gitleaks detect --no-git --redact --exit-code 1 --source .
+# which auto-loads this file from the repo root).
+#
+# Start from gitleaks' full default rule set, then allow the *example* secrets
+# that are intrinsic to a security product and are NOT real credentials:
+#
+#   1. The offensive / detection engines (fingerprint_engine/src) carry example
+#      tokens as their own test corpora — a secret-detection engine must contain
+#      realistic-looking fixtures (AWS-style access-key IDs, Google-OAuth-style
+#      tokens, GitHub-PAT-style strings, PEM key headers) so its detectors and
+#      redactors can be unit tested. Real runtime secrets are read from env /
+#      Vault (see ceo/vault.rs, scan_payload_redaction.rs), never hardcoded here.
+#
+#   2. Three frontend surfaces render *demo* misconfigurations and input
+#      placeholders for the operator (the canonical AWS-docs example key, GitHub
+#      token placeholders, OpenSSH private-key input placeholders). These are
+#      illustrative, not credentials.
+#
+# gitleaks stays fully active everywhere else (deploy/, backend/, crates/,
+# scripts/, config, .env*, the rest of frontend/) — the places a real secret
+# would actually leak. Semgrep's p/secrets rules also remain active on the
+# engine source, so a genuine hardcoded token there is still caught.
+
+title = "Weissman gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example/fixture secrets in the security engines' test corpora, the IaC/secret-scanner demo UI, and CI/E2E test fixtures (non-real placeholders; real secrets come from env/Vault)."
+paths = [
+    '''fingerprint_engine/src/.*\.(rs|inc)$''',
+    '''frontend/src/pages/IacSecurityCenter\.jsx$''',
+    '''frontend/src/pages/SovereignDefenseMatrix\.jsx$''',
+    '''frontend/src/lib/engineParamDefsExplicit\.js$''',
+    # Generated vitest coverage report + production bundle — embed the
+    # (already-allowlisted) source, so they inherit the same illustrative demo
+    # placeholders. dist/ is a build artifact, not committed.
+    '''frontend/coverage/''',
+    '''frontend/dist/''',
+    # Playwright saved login state — JWTs signed with the CI-only test secret,
+    # scoped to a test tenant; worthless outside CI.
+    '''frontend/tests-e2e/\.auth/''',
+]
+regexes = [
+    # `key = 'enable_rfc3161_signing'` is a config FLAG NAME, not a credential —
+    # the generic-api-key heuristic mis-fires on the `key = '...'` shape.
+    '''enable_rfc3161_signing''',
+    # Literal CI test env secret in the nightly-e2e workflow (not a real secret).
+    '''nightly-e2e-secret-min-32-chars''',
+]

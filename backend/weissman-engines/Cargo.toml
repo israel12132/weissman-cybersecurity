@@ -1,5 +1,6 @@
 [package]
 name = "weissman-engines"
+publish = false  # first-party proprietary crate — never published to crates.io
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.91"
@@ -17,7 +18,7 @@ rand = "0.10"
 urlencoding = "2"
 regex = "1"
 metrics = "0.24"
-quick-xml = "0.31"
+quick-xml = "0.41"
 hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"

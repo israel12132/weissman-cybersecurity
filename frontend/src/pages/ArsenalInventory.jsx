@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Boxes, Search, Play, Loader2, CheckCircle2, XCircle, Rocket } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
-import { launchEngineScan } from '../lib/launchEngineScan'
+import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import { parseFirstDomain } from './ArsenalConsole'
 
 /**
@@ -74,6 +74,7 @@ const STATUS_TONE = { queued: 'text-emerald-300', running: 'text-cyan-300', fail
 
 export default function ArsenalInventory({ clientId }) {
   const { t } = useTranslation()
+  const launch = useLaunchEngineScan(clientId)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -149,12 +150,12 @@ export default function ArsenalInventory({ clientId }) {
     if (clientId == null || runStatus[engineId] === 'running') return
     setRunStatus((s) => ({ ...s, [engineId]: 'running' }))
     try {
-      const res = await launchEngineScan({ engineId, clientId, target })
+      const res = await launch({ engineId, clientId, target })
       setRunStatus((s) => ({ ...s, [engineId]: res.ok ? 'queued' : 'failed' }))
     } catch {
       setRunStatus((s) => ({ ...s, [engineId]: 'failed' }))
     }
-  }, [clientId, target, runStatus])
+  }, [clientId, target, runStatus, launch])
 
   if (loading) return null
   if (error || engines.length === 0) return null

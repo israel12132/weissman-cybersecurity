@@ -2759,7 +2759,7 @@ mod tests {
     #[test]
     fn config_reads_credentials_and_toggles() {
         let c = cfg_from(json!({
-            "gcp_access_token": "ya29.test",
+            "gcp_access_token": "ya29.test", // nosemgrep
             "gcp_project_id": "demo-proj",
             "check_gke": false,
             "intensity": "aggressive",
@@ -2774,7 +2774,7 @@ mod tests {
 
     #[test]
     fn service_account_key_parsed_from_string() {
-        let key = json!({"type":"service_account","client_email":"x@y.iam.gserviceaccount.com","private_key":"PEM"});
+        let key = json!({"type":"service_account","client_email":"x@y.iam.gserviceaccount.com","private_key":"PEM"}); // nosemgrep
         let c = cfg_from(json!({ "gcp_service_account_key": key.to_string() }));
         assert!(c.service_account_key.is_some());
         assert!(c.credentialed_ready());
