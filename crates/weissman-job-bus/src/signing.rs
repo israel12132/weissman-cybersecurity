@@ -3,7 +3,7 @@
 use crate::error::JobBusError;
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -118,7 +118,7 @@ pub fn sign_job_envelope(
     payload: &Value,
 ) -> Result<SignedJobEnvelope, JobBusError> {
     let mut nonce_bytes = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    rand::rng().fill_bytes(&mut nonce_bytes);
     let nonce = hex::encode(nonce_bytes);
     let issued_at = Utc::now().timestamp();
     let bytes = signing_bytes(

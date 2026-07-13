@@ -39,7 +39,7 @@ hex = "0.4"
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }
-rand = "0.8"
+rand = "0.10"
 
 # JWT verification (only used to sanity-check the enrollment token client-side).
 jsonwebtoken = { version = "9", default-features = false }

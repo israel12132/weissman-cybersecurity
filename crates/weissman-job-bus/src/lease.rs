@@ -1,7 +1,7 @@
 //! Distributed job lease (Redlock-style single-Redis with cryptographic claim token).
 
 use crate::error::JobBusError;
-use rand::RngCore;
+use rand::Rng;
 use redis::AsyncCommands;
 use uuid::Uuid;
 
@@ -9,7 +9,7 @@ const LEASE_PREFIX: &str = "weissman:job:lease:";
 
 pub fn new_claim_token() -> String {
     let mut bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 

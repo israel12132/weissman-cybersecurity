@@ -6742,7 +6742,7 @@ dependencies = [
  "hex",
  "hostname",
  "jsonwebtoken",
- "rand 0.8.6",
+ "rand 0.10.1",
  "reqwest",
  "serde",
  "serde_json",
@@ -6838,7 +6838,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hmac 0.12.1",
- "rand 0.8.6",
+ "rand 0.10.1",
  "redis",
  "serde",
  "serde_json",
