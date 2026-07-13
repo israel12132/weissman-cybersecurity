@@ -36,7 +36,7 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -46,7 +46,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
+        uses: dtolnay/rust-toolchain@1.100.0
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -136,7 +136,7 @@ jobs:
     name: Fuzz fuzz_core (nightly, time-boxed)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install nightly toolchain + cargo-fuzz
         run: |
           rustup toolchain install nightly --profile minimal --component llvm-tools-preview
@@ -149,7 +149,7 @@ jobs:
         run: cargo +nightly fuzz run analyze -- -max_total_time=120 -rss_limit_mb=4096
       - name: Upload crash artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-artifacts
           path: fuzz_core/fuzz/artifacts/
@@ -159,7 +159,7 @@ jobs:
     name: Backup PITR restore-verify (self-contained)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Prove a pg_basebackup can actually be RESTORED, not just that files exist. Fully
       # self-contained: create a source cluster, back it up with the image's own
