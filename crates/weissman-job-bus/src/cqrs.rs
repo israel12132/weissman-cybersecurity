@@ -51,11 +51,14 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
         JobEventKind::ExploitFired => Ok(()),
         JobEventKind::JobCompleted => {
             let result = event.payload.get("result").cloned().unwrap_or(Value::Null);
+            // Status guard: only a job still `running` may transition to `completed`.
+            // Without it, a late completion from a superseded/orphaned worker could resurrect
+            // or overwrite a job another worker already re-ran (or that already failed/died).
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'completed', result_json = $2,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
-                   WHERE id = $1"#,
+                   WHERE id = $1 AND status = 'running'"#,
             )
             .bind(event.job_id)
             .bind(sqlx::types::Json(result))
@@ -87,11 +90,17 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                 .get("error")
                 .and_then(Value::as_str)
                 .unwrap_or("unknown");
+            // Exponential backoff by attempt (5s, 10s, 20s … capped at 1h), matching the
+            // legacy `fail_job` path. A fixed 5s retry in the zero-trust path caused a retry
+            // storm for a persistently failing job.
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'pending', last_error = $2,
                        locked_until = NULL, worker_id = NULL,
-                       run_after = now() + interval '5 seconds', updated_at = now()
+                       run_after = now()
+                           + (LEAST(3600, 5 * POWER(2, LEAST(GREATEST(attempt_count, 0), 10)))::int
+                              * interval '1 second'),
+                       updated_at = now()
                    WHERE id = $1"#,
             )
             .bind(event.job_id)

@@ -146,6 +146,20 @@ else
   bad "DR doc missing RTO/RPO"
 fi
 [[ -x scripts/backup_pitr_setup.sh ]] && ok "PITR setup script" || bad "PITR setup script"
+[[ -x scripts/backup_restore_verify.sh ]] && ok "PITR restore-verify script" || bad "PITR restore-verify script (recoverability unproven)"
+# Existence of a backup is not recoverability — require a recent successful restore drill.
+RV_MARKER="${WEISSMAN_PITR_BASE_DIR:-/var/backups/weissman/base}/.last_restore_verify_ok"
+if [[ -f "$RV_MARKER" ]]; then
+  RV_TS="$(cat "$RV_MARKER" 2>/dev/null || echo 0)"
+  RV_AGE=$(( $(date -u +%s) - ${RV_TS:-0} ))
+  if [[ "$RV_AGE" -lt 172800 ]]; then
+    ok "restore verified within 48h ($((RV_AGE/3600))h ago)"
+  else
+    bad "last restore-verify is stale ($((RV_AGE/86400))d ago) — run scripts/backup_restore_verify.sh"
+  fi
+else
+  note "no restore-verify marker yet — run scripts/backup_restore_verify.sh nightly"
+fi
 
 section "Secrets hygiene (local .env)"
 if [[ -f .env ]]; then

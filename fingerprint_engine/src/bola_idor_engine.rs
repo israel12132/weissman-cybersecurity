@@ -88,7 +88,7 @@ async fn default_client() -> reqwest::Client {
 
 async fn make_client_async(stealth: Option<&stealth_engine::StealthConfig>) -> reqwest::Client {
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     match stealth {
         Some(s) => stealth_engine::build_client(s, TIMEOUT_SECS),
@@ -290,7 +290,7 @@ async fn request_with_context(
     ctx: Option<&AuthContext>,
 ) -> Option<(u16, String)> {
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let m = method.to_ascii_lowercase();
     let req_base = match m.as_str() {
@@ -693,7 +693,7 @@ async fn probe_fallback_bola_paths(
 
     let login_url = format!("{}/rest/user/login", base.trim_end_matches('/'));
     if let Some(s) = stealth_arc.as_deref() {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let post_req = apply_stealth_headers(
         client
@@ -962,7 +962,7 @@ async fn run_bola_idor_result_with_paths_inner(
     let mut spec: Option<Value> = None;
     for path in SPEC_PATHS {
         if let Some(s) = stealth_ref {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
         }
         let url = format!("{}{}", base, path);
         let req = apply_stealth_headers(client.get(&url), stealth_ref);

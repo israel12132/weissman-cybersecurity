@@ -98,6 +98,15 @@ async fn risk_upsert_edge(
     Ok(())
 }
 
+/// Graph weight for a finding node: its own EPSS/KEV-aware `effective_risk` (0..10) mapped to the
+/// 0..100 node scale, falling back to the flat finding base when a finding has no computed risk.
+fn finding_base_score(effective_risk: Option<f64>) -> i32 {
+    match effective_risk {
+        Some(eff) => ((eff * 10.0).round() as i32).clamp(0, 100),
+        None => base_risk_score(NODE_FINDING),
+    }
+}
+
 fn base_risk_score(node_type: &str) -> i32 {
     match node_type {
         NODE_FINDING => 92,
@@ -118,13 +127,31 @@ async fn recompute_risk_scores_and_chokes(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<(), sqlx::Error> {
-    let nodes: Vec<(i64, String)> = sqlx::query_as(
-        "SELECT id, node_type FROM risk_graph_nodes WHERE tenant_id = $1 AND client_id = $2",
+    let nodes: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, node_type, external_id FROM risk_graph_nodes WHERE tenant_id = $1 AND client_id = $2",
     )
     .bind(tenant_id)
     .bind(client_id)
     .fetch_all(&mut **tx)
     .await?;
+
+    // Per-finding effective_risk (0..10, EPSS/KEV-adjusted at persist time). A finding node's
+    // graph weight must track the REAL risk of that finding — a known-exploited KEV finding and a
+    // theoretical low-severity one must not both land on the flat NODE_FINDING base. We key by
+    // `finding_id`, which finding nodes carry in `external_id`.
+    let eff_rows: Vec<(String, Option<f64>)> = sqlx::query_as(
+        "SELECT finding_id, effective_risk FROM vulnerabilities \
+         WHERE client_id = $1 AND finding_id IS NOT NULL",
+    )
+    .bind(client_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let mut effective_by_finding: HashMap<String, f64> = HashMap::new();
+    for (fid, eff) in eff_rows {
+        if let Some(v) = eff {
+            effective_by_finding.insert(fid, v);
+        }
+    }
 
     let edges: Vec<(i64, i64, String)> = sqlx::query_as(
         "SELECT from_node_id, to_node_id, edge_type FROM risk_graph_edges WHERE tenant_id = $1 AND client_id = $2",
@@ -151,8 +178,19 @@ async fn recompute_risk_scores_and_chokes(
         .unwrap_or(0)
         .max(3);
 
-    for (nid, nt) in &nodes {
-        let mut score = base_risk_score(nt.as_str());
+    for (nid, nt, ext) in &nodes {
+        // Findings start from their own effective_risk when we have it (0..10 → 0..100), so the
+        // graph inherits the EPSS/KEV-aware ranking instead of a flat per-type constant. Fall back
+        // to the type base only when a finding has no computed risk yet.
+        let mut score = if nt.as_str() == NODE_FINDING {
+            let eff = ext
+                .as_deref()
+                .and_then(|fid| effective_by_finding.get(fid))
+                .copied();
+            finding_base_score(eff)
+        } else {
+            base_risk_score(nt.as_str())
+        };
         let ts = types.get(nid).cloned().unwrap_or_default();
 
         if nt.as_str() == NODE_ASSET {
@@ -840,4 +878,30 @@ pub async fn export_risk_graph_json(
             "notes": "Paths are undirected shortest walks from OPEN finding nodes toward crown-jewel classes (asset, cloud, k8s, OT)."
         }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finding_score_tracks_effective_risk() {
+        // A known-exploited KEV finding (effective_risk ~9.5) must outrank a theoretical one (~2.0).
+        assert_eq!(finding_base_score(Some(9.5)), 95);
+        assert_eq!(finding_base_score(Some(2.0)), 20);
+        assert!(finding_base_score(Some(9.5)) > finding_base_score(Some(2.0)));
+    }
+
+    #[test]
+    fn finding_score_falls_back_when_unranked() {
+        // No computed risk yet → flat finding base, never 0 (an un-triaged finding is not "safe").
+        assert_eq!(finding_base_score(None), base_risk_score(NODE_FINDING));
+    }
+
+    #[test]
+    fn finding_score_is_clamped() {
+        // Defensive: a malformed/out-of-range effective_risk can never blow past the node scale.
+        assert_eq!(finding_base_score(Some(50.0)), 100);
+        assert_eq!(finding_base_score(Some(-3.0)), 0);
+    }
 }

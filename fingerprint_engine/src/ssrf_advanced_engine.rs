@@ -2635,14 +2635,18 @@ pub async fn run_ssrf_advanced_result_ctx(target: &str, ctx: &EngineRunContext) 
                     && !looks_like_reflection(&p.body, &probe.payload);
                 if differential {
                     let title = format!(
-                        "SSRF: differential server-side fetch via {}",
+                        "SSRF: differential server-side fetch via {} (unconfirmed)",
                         probe.point_label
                     );
                     if !seen_titles.insert(title.clone()) {
                         continue;
                     }
-                    posture.record("high", &title);
-                    posture.arbitrary_fetch = true;
+                    // Secondary/heuristic signal only: a status-or-size differential can also be
+                    // produced by the mere PRESENCE of the injected parameter (validation error,
+                    // personalized page, 302→login) without any server-side fetch. Report as
+                    // medium posture; the OAST-canary path above remains the high/critical
+                    // confirmation. Don't assert arbitrary_fetch on this unconfirmed signal.
+                    posture.record("medium", &title);
                     if capable_param.is_none() {
                         capable_param = param_name(&probe.point_label);
                     }

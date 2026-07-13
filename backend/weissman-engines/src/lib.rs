@@ -2,6 +2,19 @@
 //!
 //! Use [`CyberEngine`] implementations from [`factory::phase2_cyber_engines`] or call
 //! module functions directly with a [`ScanContext`] built by the orchestrator.
+//!
+//! ## Status: the [`CyberEngine`] trait system is RETIRED (not the whole crate)
+//!
+//! This crate began as a `CyberEngine`-trait engine framework, but that migration was not
+//! completed: production dispatches all **563** engines through `fingerprint_engine`'s
+//! `engine_dispatch` match, not through [`CyberEngine`]. Only OSINT + the two fuzzers are
+//! wired as trait engines ([`factory::phase2_cyber_engines`]), so treat the trait/`factory`
+//! surface as **frozen/legacy** — do not add new engines here; add them to
+//! `fingerprint_engine::engine_dispatch` and `PRODUCTION_ENGINE_IDS`.
+//!
+//! What remains **live and load-bearing** are the shared building blocks that the monolith
+//! depends on: [`stealth`] (Ghost Network jitter/headers), [`osint`], [`fuzzer`], and the
+//! LLM plumbing ([`openai_chat`], [`llm_json_repair`], [`llm_sanitize`], [`llm_handshake`]).
 
 #![forbid(unsafe_code)]
 // LLM/OpenAPI call surfaces intentionally carry many parameters; keep explicit for auditability.

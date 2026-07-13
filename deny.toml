@@ -45,10 +45,13 @@ expression = "MIT AND ISC AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [bans]
+# Duplicate major versions are common in large trees; surface them without failing the build.
 multiple-versions = "warn"
+# A wildcard version requirement is a real supply-chain smell (pulls anything).
 wildcards = "warn"
 
 [sources]
+# Only crates.io — reject any unknown registry or git source (typosquat / unvetted origin).
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]

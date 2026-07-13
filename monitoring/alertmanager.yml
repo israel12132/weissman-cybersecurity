@@ -12,6 +12,14 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    # Dead-man's switch: forward the always-firing Watchdog to an external heartbeat
+    # monitor on a tight cadence. Its absence (not its presence) is the alarm.
+    - match:
+        alertname: Watchdog
+      receiver: 'watchdog-heartbeat'
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
     - match:
         severity: critical
       receiver: 'critical-alerts'
@@ -31,10 +39,22 @@ receivers:
         title: '[CRITICAL] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
         send_resolved: true
-    # Uncomment and configure for PagerDuty:
-    # pagerduty_configs:
-    #   - routing_key: '${PAGERDUTY_ROUTING_KEY}'
-    #     description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    # PagerDuty paging for critical alerts. PAGERDUTY_ROUTING_KEY is substituted at
+    # deploy time (same envsubst pattern as SLACK_WEBHOOK_URL); leave it unset to run
+    # Slack-only.
+    pagerduty_configs:
+      - routing_key: '${PAGERDUTY_ROUTING_KEY}'
+        description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        severity: 'critical'
+        send_resolved: true
+
+  - name: 'watchdog-heartbeat'
+    # Point WATCHDOG_HEARTBEAT_URL at an external dead-man's-switch endpoint
+    # (healthchecks.io, Dead Man's Snitch, or a PagerDuty heartbeat integration).
+    # The endpoint must alarm when it STOPS receiving this ping.
+    webhook_configs:
+      - url: '${WATCHDOG_HEARTBEAT_URL}'
+        send_resolved: false
 
   - name: 'warning-alerts'
     slack_configs:

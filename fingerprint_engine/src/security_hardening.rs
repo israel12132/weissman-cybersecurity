@@ -455,7 +455,9 @@ pub async fn enforce_execution_scope_pin(
         return Err(format!("failed to re-resolve target host '{target_host}'"));
     }
     if !current_ips.iter().all(|ip| fresh_ips.contains(ip)) {
-        return Err("validated_scope pin mismatch: current resolution outside fresh DNS set".to_string());
+        return Err(
+            "validated_scope pin mismatch: current resolution outside fresh DNS set".to_string(),
+        );
     }
     if fresh_ips.is_disjoint(&pinned_ips) {
         return Err(

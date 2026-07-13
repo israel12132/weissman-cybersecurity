@@ -549,7 +549,10 @@ pub async fn run_ss7_signaling_probe_result(t: &str) -> EngineResult {
     }
     EngineResult::ok(
         findings.clone(),
-        format!("ss7_signaling_probe: {} live telco surface signal(s)", findings.len()),
+        format!(
+            "ss7_signaling_probe: {} live telco surface signal(s)",
+            findings.len()
+        ),
     )
 }
 cli_wrapper!(run_ss7_signaling_probe, run_ss7_signaling_probe_result);

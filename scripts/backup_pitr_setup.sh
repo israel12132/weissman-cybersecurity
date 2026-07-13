@@ -10,7 +10,8 @@
 #   export WEISSMAN_PITR_BASE_DIR=/var/backups/weissman/base
 #   ./scripts/backup_pitr_setup.sh init     # enable WAL archive settings (superuser)
 #   ./scripts/backup_pitr_setup.sh base       # pg_basebackup snapshot
-#   ./scripts/backup_pitr_setup.sh verify   # list archives + latest base
+#   ./scripts/backup_pitr_setup.sh verify         # list archives + latest base (existence only)
+#   ./scripts/backup_pitr_setup.sh verify-restore # actually RESTORE the latest base and prove it
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -74,9 +75,10 @@ case "$CMD" in
   init) init_archive ;;
   base) base_backup ;;
   verify) verify ;;
+  verify-restore) exec "$ROOT/scripts/backup_restore_verify.sh" ;;
   prune) prune ;;
   *)
-    echo "usage: $0 {init|base|verify|prune}" >&2
+    echo "usage: $0 {init|base|verify|verify-restore|prune}" >&2
     exit 1
     ;;
 esac

@@ -49,18 +49,29 @@ fn env_u64(key: &str, default: u64) -> u64 {
 }
 
 fn swarm_hmac_secret() -> Option<Vec<u8>> {
-    env::var("WEISSMAN_SOVEREIGN_SWARM_HMAC_SECRET")
+    if let Some(dedicated) = env::var("WEISSMAN_SOVEREIGN_SWARM_HMAC_SECRET")
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .map(|s| s.into_bytes())
-        .or_else(|| {
-            env::var("WEISSMAN_JWT_SECRET")
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .map(|s| s.into_bytes())
-        })
+    {
+        return Some(dedicated);
+    }
+    // Fallback to the JWT secret keeps the swarm C2 signing working, but reusing it breaks
+    // key separation — warn once so operators set a dedicated key.
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| {
+        tracing::warn!(
+            target: "sovereign_c2",
+            "WEISSMAN_SOVEREIGN_SWARM_HMAC_SECRET not set — falling back to WEISSMAN_JWT_SECRET. \
+             Set a dedicated key to isolate swarm C2 signing from auth tokens."
+        );
+    });
+    env::var("WEISSMAN_JWT_SECRET")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.into_bytes())
 }
 
 fn sign_port_hint(port: u16, issued_unix: u64, secret: &[u8]) -> Result<String, String> {
@@ -117,7 +128,11 @@ fn spawn_swarm_consumer(
         while let Some(cmd) = rx.recv().await {
             let payload = serde_json::to_string(&cmd).unwrap_or_else(|_| "{}".to_string());
             tracing::debug!(target: "sovereign_c2", swarm_cmd = %payload);
-            let _ = telemetry.send(payload);
+            // Platform-wide C2 signals (port hints, honeytoken rotation) — not tenant-specific.
+            let _ = telemetry.send(crate::http::tenant_stream::stamp(
+                crate::http::tenant_stream::SYSTEM_TENANT,
+                &payload,
+            ));
         }
     });
 }

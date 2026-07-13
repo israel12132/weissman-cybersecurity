@@ -129,7 +129,7 @@ pub async fn run_llm_path_fuzz_result_multi(
 
     let c_in = match st_ref {
         Some(s) => {
-            stealth::apply_jitter(s);
+            stealth::apply_jitter(s).await;
             stealth::build_client(s, TARGET_TIMEOUT_SECS)
         }
         None => client_insecure_default().await,
@@ -220,7 +220,7 @@ pub async fn run_llm_path_fuzz_result_multi(
             let st = st_owned.clone();
             tasks.push(async move {
                 if let Some(ref s) = st {
-                    stealth::apply_jitter(s);
+                    stealth::apply_jitter(s).await;
                 }
                 let sep = if url.contains('?') { "&" } else { "?" };
                 let encoded = urlencoding::encode(&payload);

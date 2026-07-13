@@ -206,7 +206,59 @@ fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Opt
     }
 }
 
-/// Auth middleware: allow only POST /api/login; all other /api/* require valid JWT.
+/// Whether an unauthenticated route is always public or only reachable outside production.
+#[derive(Clone, Copy)]
+enum RouteGate {
+    Always,
+    /// Public only when NOT running in production (interactive API docs / OpenAPI JSON).
+    NonProdOnly,
+}
+
+/// Declarative allow-list of routes reachable WITHOUT authentication. This replaces a
+/// hand-maintained chain of `if path == "…" && method == …` blocks inside `auth_guard`,
+/// where a single typo or omission silently changed the security posture. Adding a public
+/// route means adding one row here, and `public_route_guard_tests` assert the table stays
+/// honest. (Login + MFA-verify are matched separately by `is_account_lockout_post`, which
+/// intentionally spans several paths.)
+static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
+    (Method::GET, "/api/health", RouteGate::Always),
+    (Method::POST, "/api/logout", RouteGate::Always),
+    (Method::POST, "/api/auth/refresh", RouteGate::Always),
+    (Method::POST, "/api/onboarding/register", RouteGate::Always),
+    (Method::POST, "/api/webhooks/paddle", RouteGate::Always),
+    (Method::GET, "/api/auth/oidc/begin", RouteGate::Always),
+    (Method::GET, "/api/auth/oidc/callback", RouteGate::Always),
+    (Method::POST, "/api/auth/saml/acs", RouteGate::Always),
+    (Method::GET, "/api/auth/saml/begin", RouteGate::Always),
+    (Method::POST, "/api/deception/aws-events", RouteGate::Always),
+    // Slack interactivity callback — authenticated by Slack's request signature, not a JWT.
+    (
+        Method::POST,
+        "/api/integrations/slack/interactivity",
+        RouteGate::Always,
+    ),
+    (Method::POST, "/api/auth/signup", RouteGate::Always),
+    (Method::GET, "/api/auth/verify", RouteGate::Always),
+    (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
+    (Method::POST, "/api/agents/enroll", RouteGate::Always),
+    (Method::GET, "/api/openapi.json", RouteGate::NonProdOnly),
+    (Method::GET, "/api/docs", RouteGate::NonProdOnly),
+    (Method::GET, "/api/docs/", RouteGate::NonProdOnly),
+];
+
+/// True when `(method, path)` is an exact match on the unauthenticated allow-list.
+fn is_public_route(method: &Method, path: &str) -> bool {
+    PUBLIC_ROUTES.iter().any(|(m, p, gate)| {
+        m == method
+            && *p == path
+            && match gate {
+                RouteGate::Always => true,
+                RouteGate::NonProdOnly => !weissman_core::tls_policy::is_production_environment(),
+            }
+    })
+}
+
+/// Auth middleware: allow only the declared public routes; all other /api/* require valid JWT.
 async fn auth_guard(
     State(state): State<Arc<AppState>>,
     mut request: Request<Body>,
@@ -214,64 +266,12 @@ async fn auth_guard(
 ) -> Response {
     let path = request.uri().path();
     let method = request.method();
-    if path == "/api/health" && method == Method::GET {
-        return next.run(request).await;
-    }
     // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
     if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;
     }
-    if path == "/api/logout" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/refresh" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/onboarding/register" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/webhooks/paddle" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/oidc/begin" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/oidc/callback" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/saml/acs" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/saml/begin" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/deception/aws-events" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/integrations/slack/interactivity" && method == Method::POST {
-        // Slack interactivity callback — authenticated by Slack's request signature, not a JWT.
-        return next.run(request).await;
-    }
-    if path == "/api/openapi.json" && method == Method::GET {
-        if !weissman_core::tls_policy::is_production_environment() {
-            return next.run(request).await;
-        }
-    }
-    if (path == "/api/docs" || path == "/api/docs/") && method == Method::GET {
-        if !weissman_core::tls_policy::is_production_environment() {
-            return next.run(request).await;
-        }
-    }
-    if path == "/api/auth/signup" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/verify" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/agents/enroll" && method == Method::POST {
+    // Everything else reachable without a JWT is declared once in PUBLIC_ROUTES.
+    if is_public_route(method, path) {
         return next.run(request).await;
     }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
@@ -906,9 +906,12 @@ async fn handle_ws_command_center(
             }
             telemetry_msg = rx.recv() => {
                 if let Ok(raw) = telemetry_msg {
-                    if let Some(normalized) = normalize_cc_event(&raw) {
-                        if socket.send(Message::Text(normalized)).await.is_err() {
-                            break;
+                    // Tenant isolation: only forward events stamped for this socket's tenant.
+                    if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                        if let Some(normalized) = normalize_cc_event(&scoped) {
+                            if socket.send(Message::Text(normalized)).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }
@@ -1102,14 +1105,6 @@ struct CouncilDebateBody {
 struct PipelineStateQuery {
     run_id: i64,
     client_id: String,
-}
-
-/// Legacy shape for POST /api/system/configs: `[{ "key", "value" }]`. The handler also accepts `{ "configs": { ... } }`.
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct SystemConfigBody {
-    key: String,
-    value: String,
 }
 
 #[derive(Deserialize)]
@@ -1402,6 +1397,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
                 }
             }
         });
+        crate::audit_log::spawn_audit_checkpoint_worker(app_pool.clone(), auth_pool.clone());
         tokio::spawn(crate::payload_sync_worker::run_worker_loop(
             app_pool.clone(),
             intel_pool.clone(),
@@ -1700,4 +1696,48 @@ async fn shutdown_signal() {
         () = terminate => {},
     }
     eprintln!("[Weissman] Shutdown signal received — draining connections…");
+}
+
+#[cfg(test)]
+mod public_route_guard_tests {
+    use super::{is_public_route, Method};
+
+    /// Every route that was historically reachable without auth must still be public.
+    /// (Only the `Always` entries are asserted here so the test is env-independent; the
+    /// `NonProdOnly` docs routes depend on `is_production_environment()`.)
+    #[test]
+    fn public_routes_cover_historical_allowlist() {
+        let expected: &[(Method, &str)] = &[
+            (Method::GET, "/api/health"),
+            (Method::POST, "/api/logout"),
+            (Method::POST, "/api/auth/refresh"),
+            (Method::POST, "/api/onboarding/register"),
+            (Method::POST, "/api/webhooks/paddle"),
+            (Method::GET, "/api/auth/oidc/begin"),
+            (Method::GET, "/api/auth/oidc/callback"),
+            (Method::POST, "/api/auth/saml/acs"),
+            (Method::GET, "/api/auth/saml/begin"),
+            (Method::POST, "/api/deception/aws-events"),
+            (Method::POST, "/api/integrations/slack/interactivity"),
+            (Method::POST, "/api/auth/signup"),
+            (Method::GET, "/api/auth/verify"),
+            (Method::POST, "/api/v1/alerts/aws-canary"),
+            (Method::POST, "/api/agents/enroll"),
+        ];
+        for (m, p) in expected {
+            assert!(is_public_route(m, p), "expected {m} {p} to be public");
+        }
+    }
+
+    /// Protected routes must never be public, and a public path with the wrong method
+    /// must not slip through.
+    #[test]
+    fn protected_routes_are_not_public() {
+        assert!(!is_public_route(&Method::GET, "/api/findings"));
+        assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
+        assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
+        // Correct public path but wrong method is not public.
+        assert!(!is_public_route(&Method::GET, "/api/logout"));
+        assert!(!is_public_route(&Method::POST, "/api/health"));
+    }
 }

@@ -42,6 +42,20 @@ pub(crate) use weissman_core::{
 
 const MAX_CLIENT_WEB_TARGETS: usize = 64;
 
+tokio::task_local! {
+    /// Tenant id for the currently executing orchestrator cycle. Set by
+    /// [`run_cycle_for_tenant`]; read by the `broadcast_*` helpers so every live
+    /// telemetry payload is stamped for its tenant (subscribers drop cross-tenant events).
+    static CYCLE_TENANT: i64;
+}
+
+/// Tenant id of the in-flight cycle, or `SYSTEM_TENANT` if called outside a cycle scope.
+fn current_cycle_tenant() -> i64 {
+    CYCLE_TENANT
+        .try_with(|t| *t)
+        .unwrap_or(crate::http::tenant_stream::SYSTEM_TENANT)
+}
+
 /// Persist findings through the evidence gate and emit live telemetry + critical alerts.
 async fn persist_and_notify_findings(
     app_pool: Arc<PgPool>,
@@ -292,7 +306,10 @@ fn broadcast_engine_progress(
         if let Some(cid) = client_id {
             obj["client_id"] = serde_json::Value::String(cid.to_string());
         }
-        let _ = t.send(obj.to_string());
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     let mut p = serde_json::json!({ "engine": engine, "message": message });
     if let Some(cid) = client_id {
@@ -314,7 +331,10 @@ fn broadcast_new_target(
             "client_id": client_id,
             "host": host
         });
-        let _ = t.send(obj.to_string());
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     war_mirror_emit(
         war,
@@ -347,7 +367,10 @@ pub(crate) fn broadcast_finding_created(
             "poc_exploit": poc_exploit,
             "poc_sealed": poc_sealed
         });
-        let _ = t.send(obj.to_string());
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     war_mirror_emit(
         war,
@@ -379,7 +402,10 @@ fn broadcast_harvested_token(
             "role_name": role_name,
             "context_id": context_id,
         });
-        let _ = t.send(obj.to_string());
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     war_mirror_emit(
         war,
@@ -411,7 +437,10 @@ fn broadcast_engine_error(
         if let Some(cid) = client_id {
             obj["client_id"] = serde_json::Value::String(cid.to_string());
         }
-        let _ = t.send(obj.to_string());
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     let mut p = serde_json::json!({
         "engine": engine,
@@ -445,7 +474,10 @@ fn broadcast_pipeline_stage(
             "stage_label": label,
             "status": status,
         });
-        let _ = t.send(obj.to_string());
+        let _ = t.send(crate::http::tenant_stream::stamp(
+            current_cycle_tenant(),
+            &obj.to_string(),
+        ));
     }
     let label = dag_pipeline::STAGE_LABELS
         .get(stage as usize)
@@ -1099,8 +1131,25 @@ pub async fn run_cycle_async(
     }
 }
 
-/// Per-tenant cycle: tenant-scoped tx + RLS; commit before engine `.await`, then `begin_tenant_tx` again.
+/// Per-tenant cycle wrapper: binds `CYCLE_TENANT` so live telemetry emitted anywhere
+/// inside the cycle is stamped for `tenant_id` (tenant-isolated SSE/WS).
 async fn run_cycle_for_tenant(
+    app_pool: Arc<PgPool>,
+    intel_pool: Arc<PgPool>,
+    tenant_id: i64,
+    telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
+    war_mirror: Option<WarRoomMirror>,
+) -> Result<(), sqlx::Error> {
+    CYCLE_TENANT
+        .scope(
+            tenant_id,
+            run_cycle_for_tenant_inner(app_pool, intel_pool, tenant_id, telemetry_tx, war_mirror),
+        )
+        .await
+}
+
+/// Per-tenant cycle: tenant-scoped tx + RLS; commit before engine `.await`, then `begin_tenant_tx` again.
+async fn run_cycle_for_tenant_inner(
     app_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
     tenant_id: i64,
@@ -1499,7 +1548,7 @@ async fn run_cycle_for_tenant(
         let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
         let mut cross_job_params = serde_json::json!({});
         for source in client_engines.clone() {
-            stealth_engine::apply_behavioral_jitter();
+            stealth_engine::apply_behavioral_jitter().await;
             let label = engine_display_label(source.as_str());
             broadcast_engine_progress(
                 telemetry_tx.as_ref(),

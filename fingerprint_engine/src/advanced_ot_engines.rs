@@ -642,7 +642,10 @@ pub async fn run_coap_attack_result(t: &str) -> EngineResult {
         )
         .await
     } else {
-        EngineResult::ok(findings.clone(), format!("coap_attack: {} signal(s)", findings.len()))
+        EngineResult::ok(
+            findings.clone(),
+            format!("coap_attack: {} signal(s)", findings.len()),
+        )
     }
 }
 cli_wrapper!(run_coap_attack, run_coap_attack_result);

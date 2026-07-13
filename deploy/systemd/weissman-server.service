@@ -34,9 +34,34 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=weissman-server
 
-# Hardening (adjust if you hit permission errors)
+# --- Hardening (adjust if you hit permission errors) ---
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+StateDirectory=weissman
+# ProtectSystem=strict makes / read-only — grant the paths the service must write.
+ReadWritePaths=/opt/weissman/app /var/lib/weissman
 
 [Install]
 WantedBy=weissman.target multi-user.target

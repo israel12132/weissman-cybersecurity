@@ -31,19 +31,59 @@ pub fn normalize_url(target: &str) -> String {
     }
 }
 
+/// Extract the host from a target URL/authority. Used by the RoE whitelist and scope checks,
+/// so it must never return a host that *widens* a match: userinfo is stripped (the real host is
+/// after the last `@`, not before it — otherwise `http://approved.com@evil.com/` would look
+/// like `approved.com`) and IPv6 literals keep their brackets rather than splitting on `:`.
 #[must_use]
 pub fn extract_host(target: &str) -> String {
-    target
+    let after_scheme = target
         .trim()
         .trim_start_matches("https://")
-        .trim_start_matches("http://")
-        .split('/')
-        .next()
-        .unwrap_or(target)
-        .split(':')
-        .next()
-        .unwrap_or(target)
-        .to_string()
+        .trim_start_matches("http://");
+    let authority = after_scheme.split('/').next().unwrap_or(after_scheme);
+    // Strip userinfo (`user:pass@host`) — the authority host is after the LAST '@'.
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    // IPv6 literal `[::1]:port` — return the bracketed address without splitting on ':'.
+    if let Some(rest) = host_port.strip_prefix('[') {
+        if let Some(end) = rest.find(']') {
+            return format!("[{}]", &rest[..end]);
+        }
+    }
+    host_port.split(':').next().unwrap_or(host_port).to_string()
+}
+
+#[cfg(test)]
+mod extract_host_tests {
+    use super::extract_host;
+
+    #[test]
+    fn strips_scheme_path_and_port() {
+        assert_eq!(
+            extract_host("https://grid.example.com/status"),
+            "grid.example.com"
+        );
+        assert_eq!(
+            extract_host("http://grid.example.com:8443/"),
+            "grid.example.com"
+        );
+        assert_eq!(extract_host("grid.example.com"), "grid.example.com");
+    }
+
+    #[test]
+    fn userinfo_cannot_impersonate_an_approved_host() {
+        // The real host is evil.com; the extractor must NOT return the userinfo label.
+        assert_eq!(
+            extract_host("http://approved.example.com@evil.com/x"),
+            "evil.com"
+        );
+    }
+
+    #[test]
+    fn ipv6_literal_keeps_brackets_not_a_stray_bracket() {
+        assert_eq!(extract_host("http://[::1]:8080/"), "[::1]");
+        assert_eq!(extract_host("https://[2001:db8::1]/api"), "[2001:db8::1]");
+    }
 }
 
 pub async fn http_client() -> Client {

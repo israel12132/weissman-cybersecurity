@@ -44,10 +44,14 @@
 23. [מחסנית הטכנולוגיה](#23-מחסנית-הטכנולוגיה)
 24. [היקף הנדסי (במספרים)](#24-היקף-הנדסי-במספרים)
 25. [סטטוס כן והערות מפת-דרכים](#25-סטטוס-כן-והערות-מפת-דרכים)
+26. [ציות, תקנים ויישור רגולטורי](#26-ציות-תקנים-ויישור-רגולטורי)
+27. [הבטחת איכות, חוסן תפעולי ותגובה](#27-הבטחת-איכות-חוסן-תפעולי-ותגובה)
 - [נספח א' — קטלוג המנועים המלא (303 מנועים קנוניים)](#נספח-א--קטלוג-המנועים-המלא-303-מנועים-קנוניים)
 - [נספח ב' — מצאי טבלאות מסד-הנתונים המלא (88 טבלאות)](#נספח-ב--מצאי-טבלאות-מסד-הנתונים-המלא-88-טבלאות)
 - [נספח ג' — מצאי נקודות-הקצה (API) המלא](#נספח-ג--מצאי-נקודות-הקצה-api-המלא)
 - [נספח ד' — מצאי עמודי מרכז-הפיקוד המלא](#נספח-ד--מצאי-עמודי-מרכז-הפיקוד-המלא)
+- [נספח ה' — מטריצת יישור רגולטורי בין־תחומי](#נספח-ה--מטריצת-יישור-רגולטורי-בין־תחומי)
+- [נספח ו' — קטלוג בקרות אבטחה ומקורות ראיה](#נספח-ו--קטלוג-בקרות-אבטחה-ומקורות-ראיה)
 
 ---
 
@@ -514,6 +518,79 @@ do   [ ...actions ]
 
 ---
 
+## 26. ציות, תקנים ויישור רגולטורי
+
+עמדת הציות של הפלטפורמה בנויה על אותה אינווריאנטת־שלמות כמו שאר המערכת: הבקרות **ממומשות בקוד, נמדדות בזמן־אמת, וניתנות למעקב עד לקובץ־המקור**. מנוע הציות (`compliance_engine.rs`) ממפה כל ממצא חי לפקדי המסגרת הרלוונטית ומחשב עמדת־ציות מדידה — אחוז הפקדים הממופים שאינם מופרים כרגע. התיאורים להלן משקפים **יישור ומיפוי בקרות**; אין הם מהווים דוח הסמכה של צד שלישי. סטטוס הסמכות (למשל SOC 2 Type II / ISO 27001) מוצהר על־ידי הישות המפעילה ומבקריה החיצוניים.
+
+### 26.1 מיפוי מסגרות בזמן־אמת (מובנה במוצר)
+
+מנוע הציות מחשב לכל מסגרת שלושה מדדים — `total_mapped_controls`, `violated_controls`, `compliance_percent` — וניתן להפיק דוח PDF ייעודי לכל מסגרת (`/api/compliance/frameworks/{id}/report`). המסגרות הממופות מובנות במוצר:
+
+| מסגרת | גוף · גרסה | תחומי ליבה שהפלטפורמה נוגעת בהם |
+|---|---|---|
+| **SOC 2** | AICPA TSC (2017, נק׳-מיקוד 2022) | בקרת גישה (CC6), תפעול וזיהוי (CC7), ניהול שינויים (CC8), סודיות, זמינות |
+| **ISO/IEC 27001:2022** | ISO/IEC · 93 בקרות Annex A | מודיעין איומים, ניטור, בקרת גישה, קריפטוגרפיה, פיתוח מאובטח |
+| **NIST CSF 2.0** | NIST (2024) · 6 פונקציות | Identify (ASM), Detect (EDR/UEBA), Respond (SOAR), Govern |
+| **NIST SP 800-53 Rev 5** | NIST · 20 משפחות בקרה | AC, AU, SI, RA-5 (סריקה), CA-8 (פנטסט), SR (שרשרת-אספקה) |
+| **PCI DSS 4.0.1** | PCI SSC (חובה מ־3/2025) | Req 6/7/8/10/11 — פיתוח, גישה+MFA, לוגים, סריקה+פנטסט |
+| **GDPR** | EU 2016/679 | Art. 28/30/32/33/35 — מעבד נתונים |
+| **NIS 2** | Directive (EU) 2022/2555 | 10 אמצעי Art. 21, דיווח 24/72 שעות |
+| **HIPAA Security Rule** | HHS OCR · 45 CFR 164 | Access, Audit, Integrity, Transmission (כ־Business Associate) |
+| **FedRAMP / CMMC 2.0** | GSA / DoD · מבוסס 800-53 | שווקים פדרליים (ATO ע"י 3PAO / C3PAO) |
+| **IEC 62443** | IEC · OT/ICS | מנועי OT/ICS/IoT ובדיקות פרוטוקול תעשייתי |
+| **CSA CCM v4 / CAIQ** | Cloud Security Alliance · 197 פקדים | IAM, TVM, IVS, LOG, שרשרת-אספקה |
+| **CIS Controls v8.1** | CIS · 18 בקרות | הקשחה, מצאי נכסים, ניהול פגיעויות |
+
+### 26.2 מטריצת יישור מסגרות ותקנים
+
+| מסגרת / תקן | גוף · גרסה | יישור הפלטפורמה | סוג הבטחה |
+|---|---|---|---|
+| SOC 2 Type II | AICPA · TSC 2017/2022 | בקרות גישה, תפעול, שינויים, סודיות/זמינות — ראיות דרך שער־הביקורת | הסמכה עצמאית (רו"ח) — מוצהרת ע"י הישות המפעילה |
+| ISO/IEC 27001:2022 (+27017/27018/27701/42001) | ISO/IEC | ISMS; בקרות Annex A ממופות ונבדקות; 42001 לניהול AI | תעודה ע"י גוף מוסמך |
+| NIST CSF 2.0 · 800-53 r5 · SSDF 800-218 | NIST | Govern→Recover; ASM=Identify, EDR/UEBA=Detect, SOAR=Respond | ייחוס עצמי / מיפוי |
+| PCI DSS 4.0.1 | PCI SSC | סריקת פגיעויות ופנטסט (Req 11) הם ליבת המוצר | RoC (QSA) / SAQ |
+| HIPAA Security Rule | HHS OCR | Access/Audit/Integrity/Transmission + BAA | התחייבות רגולטורית |
+| FedRAMP · CMMC 2.0 · FIPS 140-3 · Common Criteria | GSA/DoD/NIST/NIAP | יישור ל־800-53 לשווקים פדרליים | הסמכה עצמאית (3PAO/CMVP/NIAP) |
+| CSA STAR / CAIQ v4.1 | CSA | בנק תשובות SIG/CAIQ מתוחזק (`SIG_CAIQ_PREP_QA.md`) | Level 1 עצמי / Level 2 מבוקר |
+| OWASP ASVS 5.0 · Top 10:2025 · API Top 10 | OWASP | הפלטפורמה עצמה בודקת יעדים כנגד סיכונים אלה | ייחוס |
+| MITRE ATT&CK · D3FEND | MITRE | אמולציית איומים ו־kill-chain ממופים ל־ATT&CK | ייחוס |
+| SLSA v1.0 · SBOM (CISA/NTIA) · cargo-deny | OpenSSF / CISA | SBOM diffing, PR חתום, שער תלויות | ייחוס |
+| FIRST CVSS 4.0 · EPSS | FIRST | תיעדוף KEV→EPSS→CVSS מובנה בכל ממצא | מובנה |
+| ISO/IEC 29147 · 30111 · RFC 9116 | ISO/IEC · IETF | מדיניות גילוי אחראי (`security.txt` · security@) | מדיניות |
+
+### 26.3 הגנת מידע, פרטיות והעברות
+
+- **GDPR (מעבד נתונים).** יישור ל־Art. 28 (הסכם עיבוד — DPA, מוטמע בהפניה ב־`/dpa.html`), Art. 30 (רישום פעילויות), Art. 32 (אמצעים טכניים — הצפנה, סודיות/שלמות/זמינות/חוסן), Art. 33 (המעבד מודיע למחזיק "ללא דיחוי"), Art. 35 (סיוע ל־DPIA).
+- **העברות בין־לאומיות.** SCCs מודול 2 (Controller-to-Processor, החלטה (EU) 2021/914) ל־EEA/בריטניה/שווייץ; מסגרת EU–US DPF כאשר ישימה, עם SCCs כרשת־ביטחון.
+- **מיקום נתונים.** `WEISSMAN_REGION` + `region_manager.should_process_tenant` אוכפים אזור לכל־דייר. SaaS: EU-West (אירלנד) כברירת־מחדל; Enterprise: US-East / AU-East; **אירוח־עצמי: הנתונים לעולם אינם עוזבים את תשתית הלקוח.**
+- **שימור.** מחלקות נתונים עם TTL נפרד (7 / 30 / 14 / 30 ימים); דגימות UEBA נמחקות מעל 14 יום; מחיקה/החזרה בסיום השירות.
+- **ישראל (בסיס הבית).** יישור לתקנות הגנת הפרטיות (אבטחת מידע) התשע"ז-2017 — רמות הבקרה המדורגות, תיעוד אירועי אבטחה, והסכם מעבד (תקנה 15); ולתיקון 13 לחוק הגנת הפרטיות (בתוקף אוגוסט 2025) — מינוי DPO היכן שנדרש ודיווח לרשות להגנת הפרטיות. הפלטפורמה עצמה מספקת את סקר־הסיכונים ומבחן־החדירה הנדרשים (ברמה הגבוהה — אחת ל־18 חודשים לפחות).
+
+### 26.4 מודל אחריות משותפת
+
+| תחום | Weissman (SaaS) | הלקוח |
+|---|---|---|
+| אבטחה פיזית ושכבת־מארח | ✓ (ספק ענן מנוהל) | — |
+| טלאים ותחזוקת הפלטפורמה | ✓ | — |
+| בידוד רב־דיירי (RLS) | ✓ (נאכף במסד) | — |
+| זהות ופדרציה (SSO/MFA) | ✓ (תשתית) | מדיניות + ניהול משתמשים |
+| הרשאת תחום־סריקה | אכיפת bound | דומיינים/IP מאושרים |
+| סיווג נתונים ותיוג נכסים | מנגנון | ערכים לכל־לקוח |
+| אירוח־עצמי | תוכנה + עדכונים | תשתית, גיבוי, רשת, מיקום |
+
+---
+
+## 27. הבטחת איכות, חוסן תפעולי ותגובה
+
+- **זמינות ו־SLA.** יעד זמינות חודשי **99.9%**; זיכויי־שירות מדורגים (10% / 25%) בהחמצה; עמוד־סטטוס ציבורי `/status` (בריאות Redis, ריצה אחרונה, טריות הזנות).
+- **תגובה לאירועים.** תיעדוף מיידי לאירועים בעלי־השלכת־אבטחה; **יעד תגובה ראשונית ≤ 4 שעות־עסקים** לאירועי־ייצור קריטיים; סקירת פוסט־אירוע עם שורש־סיבה ופעולות מתקנות; יישור ל־NIST SP 800-61. יעדי הודעת־הפרה: GDPR 72 שעות (מחזיק) / "ללא דיחוי" (מעבד), הרשות להגנת הפרטיות (ישראל), ומקביליהם בכל תחום־שיפוט.
+- **המשכיות והתאוששות.** גיבויים אוטומטיים (שימור 30 יום), זמינות־גבוהה עם בחירת־מנהיג; יעדי RTO/RPO מוגדרים בהסכם החתום.
+- **ביקורת וראיות.** שער־ביקורת מלא **G1–G7** (`full_audit_gate.sh`, יציאה 0); מחולל חבילת־ראיות לביקורת (hash של SBOM + מיפוי NIST/SOC 2); שער־CI לחיווט מנועים (0 no_path).
+- **פיתוח מאובטח ושרשרת אספקה.** ליבת Rust בטוחת־זיכרון (`unsafe` אסור בכל הקרייט למעט חריג יחיד מתועד); יישור ל־NIST SSDF (SP 800-218); שער `cargo-deny` (רישוי/פגיעויות); SBOM; אימות PR חתום בצינור הריפוי־העצמי; מגירת־מיגרציות עם checksums SHA-384 שמסרבת לעלות בעת סטייה.
+- **ניהול פגיעויות וגילוי אחראי.** תיעדוף KEV→EPSS→CVSS×ביטחון; מדיניות גילוי אחראי (ISO/IEC 29147 · 30111 · RFC 9116) בכתובת security@weissman-cybersecurity.com.
+
+---
+
 ## נספח א' — קטלוג המנועים המלא (303 מנועים קנוניים)
 
 הרישום המלא והמסודר של מימושי-המנועים הקנוניים (`FULL_ENGINE_REGISTRY_ORDER` ב-`backend/weissman-core/src/models/engine.rs`), מקובץ לפי תחום. אלה בנוסף ל-~226 כינויים אנכיים/קטלוגיים שמתמפים למימושים אלה, ליצירת 500+ המזהים המוצגים במוצר.
@@ -613,6 +690,51 @@ do   [ ...actions ]
 `AdminManagement`, `AgentManagement`, `AIAnalysisEngine`, `AlertRulesEngine`, `AskWeissman`, `AstFuzzingStudio`, `AuditLog`, `BaselineAndDrift`, `Billing`, `BusinessEngineProfile`, `CeoCommandCenter`, `CeoVault`, `ClientDetail`, `ClientEngagements`, `ClientEvidenceVault`, `ClientNew`, `ClientSaasIdpDiscovery`, `Clients`, `CloudControlTower`, `ComplianceFrameworks`, `ContainmentRulesBuilder`, `CouncilHitlQueue`, `DarkWebMonitor`, `DigitalTwinSimulator`, `DomainDiscovery`, `EngineClientCatalog`, `EngineDetail`, `EngineManagementConsole`, `EngineMatrix`, `ExploitResearchLab`, `FeedbackLoopVerification`, `FindingsCommandCenter`, `IdentityContextManager`, `IncidentResponseCenter`, `IntegrationManager`, `JobsDashboard`, `KillChainOrchestrator`, `MetricsDashboard`, `MobileSecurity`, `NetworkIntelligence`, `NetworkProtocols`, `NexusSovereignSwarm`, `OastDashboard`, `OobVerification`, `OsintEngineProfile`, `OtIcsSecurity`, `PlaybookBuilder`, `PqcRadar`, `RateLimitAnalytics`, `RemediationHub`, `RiskGraphVisualization`, `RoeApprovals`, `SBOMBrowser`, `ScanScheduler`, `SocialEngineering`, `SsoDashboard`, `StatusPage`, `StrategicEngineProgram`, `SupplyChainHub`, `SystemConfiguration`, `TemplateEngineWorkbench`, `ThreatAnalysisCenter`, `ThreatEmulation`, `ThreatHuntingWorkbench`, `ThreatIntelHub`, `TopTierEngineHub`, `TopTierEngineProfile`, `VulnIntelDashboard`
 
 (בתוספת רכיבים משותפים: ~29 רכיבי cockpit, 7 ויזואליזציות war-room, 10 רכיבי CEO-בלבד, וספריית רכיבי-UI בסיסיים.)
+
+---
+
+## נספח ה' — מטריצת יישור רגולטורי בין־תחומי
+
+יישור הפלטפורמה מול המשטרים הרגולטוריים המרכזיים בשווקי הסייבר הפעילים בעולם (סטטוס נכון ל־2025–2026). "יישור" = מיפוי בקרות ותמיכה תפעולית; הסמכות פורמליות מוצהרות ע"י הישות המפעילה.
+
+| תחום שיפוט | מכשירים רגולטוריים (גוף · סטטוס) | יישור הפלטפורמה |
+|---|---|---|
+| **ארה"ב** | SOC 2 (AICPA) · NIST CSF 2.0 / 800-53 r5 · FedRAMP Rev 5 / 20x · CMMC 2.0 (DFARS 11/2025) · HIPAA · PCI DSS 4.0.1 · SOX ITGC | בקרות ממופות ל־800-53/TSC; סריקה+פנטסט מובנים; ראיות אוטומטיות |
+| **האיחוד האירופי** | GDPR 2016/679 · NIS2 2022/2555 · DORA 2022/2554 (מ־1/2025) · CRA 2024/2847 (דיווח 9/2026) · ISO 27001:2022 | מעבד לפי Art. 28/32; אמצעי NIS2 Art. 21; SBOM+טיפול־פגיעויות ל־CRA; ברירת־מחדל EU-West |
+| **בריטניה** | UK GDPR + DPA 2018 + DUAA 2025 (2/2026) · NCSC CAF v4.0 · Cyber Essentials/Plus | מקביל ל־GDPR; יישור עקרונות CAF (זיהוי/הגנה/גילוי/תגובה) |
+| **ישראל** (בסיס הבית) | חוק הגנת הפרטיות + תיקון 13 (8/2025) · תקנות אבטחת מידע 2017 · INCD — תורת ההגנה (ICDM 2.0) · ת"י ISO 27001 · בנק ישראל הוראה 364 | בקרות מדורגות + הסכם מעבד (תק' 15); דיווח לרשות; יישור ICDM/NIST־CSF; פנטסט ≤18 ח' |
+| **סינגפור** | PDPA · Cybersecurity Act 2024 (10/2025) · CCoP for CII | אבטחת מעבד + דיווח הפרה; תמיכת CII ודיווח שרשרת־אספקה |
+| **אוסטרליה** | Privacy Act (תיקון 2024) · Essential Eight · ISM / IRAP | יישור Essential Eight; בקרות ל־IRAP בשוק הממשלתי |
+| **יפן** | APPI · ISMAP | חובות מעבד + דיווח; יישור קטלוג ISMAP לענן ממשלתי |
+| **הודו** | DPDP Act 2023 + Rules 2025 (11/2025) | אמצעי אבטחה סבירים + תמיכת דיווח־הפרה; DPIA/לוקליזציה ל־SDF |
+| **איחוד האמירויות** | PDPL 2021 · NESA IAS · NCA | יישור NESA/NCA לתשתיות קריטיות; בקרות העברה |
+| **ערב הסעודית** | PDPL + Data Transfer · NCA ECC-2:2024 · SAMA CSF | מיפוי ECC-2 מדורג; בקרות פיננסיות SAMA; לוקליזציה |
+| **קנדה** | PIPEDA · Quebec Law 25 | הגנות מידתיות; תמיכה בהערכות־העברה (PIA) של Law 25 |
+| **ברזיל** | LGPD 13.709/2018 · SCCs (חובה מ־8/2025) | בקרות מעבד + SCCs להעברות; תמיכת דיווח |
+
+## נספח ו' — קטלוג בקרות אבטחה ומקורות ראיה
+
+כל בקרה ניתנת למעקב עד למודול בקוד־המקור (מתוך `SECURITY_AND_COMPLIANCE.md` · `SIG_CAIQ_PREP_QA.md`).
+
+| תחום בקרה | מימוש | ראיה בקוד |
+|---|---|---|
+| בידוד רב־דיירי | Row-Level Security נאכף, `tenant_id NOT NULL` על 80+ טבלאות | `crates/weissman-db/src/lib.rs` |
+| שובל ביקורת | `audit_logs` append-only לכל כתיבה מאומתת | `fingerprint_engine/src/audit_log.rs` |
+| RBAC | 5 דרגות + `is_superadmin`, middleware | `rbac.rs` · `http/ceo_rbac.rs` |
+| MFA | TOTP, אכיפה לכל־דייר | `auth_mfa.rs` |
+| SSO | OIDC (PKCE) + SAML (חתום, JIT) | `oidc_auth.rs` · `saml_auth.rs` |
+| סיסמאות · JWT | bcrypt cost-12, ≥12 תווים; JWT ≥48 תווים | `security_startup.rs` |
+| קריאה־בלבד NL→SQL | תפקיד `weissman_ro`, allow-list, timeouts | `nl_query.rs` |
+| קריפטוגרפיה | TLS 1.2+ נאכף, HMAC-SHA256, השוואות זמן־קבוע | `weissman_core::tls_policy` · `cicd_interceptor.rs` |
+| הצפנה במנוחה | LUKS/KMS; סודות ב־Vault Transit/Fernet | `database_encryption.py` |
+| אימות תחום־סריקה | דחיית מחוץ־לתחום ו־IP פרטי | `security_hardening.rs` · `scan_routing.rs` |
+| הגבלת־קצב | middleware לכל־דייר; מכסת AI (50/יום) | `http/tenant_scan_limit.rs` |
+| שימור נתונים | TTL לכל מחלקה; ניקוי UEBA | `data_retention.rs` |
+| שלמות מודיעין | KEV (6ש') · EPSS — לעולם לא מזויף | `intel_kev.rs` · `intel_epss.rs` |
+| דיכוי FP | שקלול בייסיאני + השתקה אוטומטית | `fp_feedback.rs` |
+| בטיחות מיגרציות | checksums SHA-384, סירוב־עלייה בסטייה | `no_tx_migrations.rs` |
+| שער־ביקורת | G1–G7, יציאה 0 | `scripts/full_audit_gate.sh` |
+| חבילת־ראיות | SBOM hash + מיפוי מסגרות | `scripts/generate_audit_evidence_pack.sh` |
 
 ---
 

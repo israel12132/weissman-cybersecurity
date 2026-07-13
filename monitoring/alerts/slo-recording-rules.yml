@@ -1,0 +1,124 @@
+# SLO recording rules + multi-window multi-burn-rate alerts for the 99.9% availability
+# objective declared in SLA_AND_STATUS.md. An "error" is an HTTP 5xx served by the
+# weissman-backend job. Metric names match fingerprint_engine/src/observability.rs
+# (http_requests_total) — the same source the application-alerts.yml rules use.
+#
+# Error budget for a 99.9% SLO = 0.1% (0.001). The burn-rate thresholds below are
+# multiples of that budget using the Google SRE multi-window method: a page fires only
+# when BOTH a long and a short window are burning above the threshold, which catches
+# fast outages quickly while suppressing single-spike flapping.
+
+groups:
+  - name: slo_availability_recording
+    interval: 30s
+    rules:
+      # 5xx-to-total request ratio over each burn-rate window. clamp_min avoids a
+      # divide-by-zero (0/0 -> NaN) when there is no traffic in the window.
+      - record: slo:http_request_errors:ratio_rate5m
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[5m])), 1e-9)
+      - record: slo:http_request_errors:ratio_rate30m
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[30m]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[30m])), 1e-9)
+      - record: slo:http_request_errors:ratio_rate1h
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[1h]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[1h])), 1e-9)
+      - record: slo:http_request_errors:ratio_rate2h
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[2h]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[2h])), 1e-9)
+      - record: slo:http_request_errors:ratio_rate6h
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[6h]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[6h])), 1e-9)
+      - record: slo:http_request_errors:ratio_rate1d
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[1d]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[1d])), 1e-9)
+      - record: slo:http_request_errors:ratio_rate3d
+        expr: |
+          sum(rate(http_requests_total{job="weissman-backend",status=~"5.."}[3d]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="weissman-backend"}[3d])), 1e-9)
+
+  - name: slo_availability_burnrate
+    rules:
+      # Fast burn: 14.4x for 1h consumes ~2% of the 30-day error budget in one hour.
+      - alert: SLOErrorBudgetBurnFast
+        expr: |
+          slo:http_request_errors:ratio_rate1h > (14.4 * 0.001)
+          and
+          slo:http_request_errors:ratio_rate5m > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "SLO fast burn — 99.9% availability budget"
+          description: "5xx ratio {{ $value | humanizePercentage }} is burning the error budget >14.4x (≈2% of the monthly budget per hour). Page and investigate."
+
+      # Medium burn: 6x for 6h consumes ~5% of the budget in six hours.
+      - alert: SLOErrorBudgetBurnMedium
+        expr: |
+          slo:http_request_errors:ratio_rate6h > (6 * 0.001)
+          and
+          slo:http_request_errors:ratio_rate30m > (6 * 0.001)
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+        annotations:
+          summary: "SLO medium burn — 99.9% availability budget"
+          description: "5xx ratio {{ $value | humanizePercentage }} is burning the error budget >6x over 6h. Page and investigate."
+
+      # Slow burn: 3x for 1d — ticket, not a page.
+      - alert: SLOErrorBudgetBurnSlow
+        expr: |
+          slo:http_request_errors:ratio_rate1d > (3 * 0.001)
+          and
+          slo:http_request_errors:ratio_rate2h > (3 * 0.001)
+        for: 15m
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "SLO slow burn — 99.9% availability budget"
+          description: "5xx ratio {{ $value | humanizePercentage }} is burning the error budget >3x over 1d. Open a ticket before the budget is exhausted."
+
+      # Trickle burn: 1x for 3d — long-tail budget erosion.
+      - alert: SLOErrorBudgetBurnTrickle
+        expr: |
+          slo:http_request_errors:ratio_rate3d > (1 * 0.001)
+          and
+          slo:http_request_errors:ratio_rate6h > (1 * 0.001)
+        for: 1h
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "SLO trickle burn — 99.9% availability budget"
+          description: "5xx ratio {{ $value | humanizePercentage }} has burned above 1x for 3 days — the monthly budget is eroding. Review reliability backlog."
+
+  - name: monitoring_deadmanswitch
+    rules:
+      # Dead-man's switch: always firing. Route it to an external heartbeat monitor
+      # (healthchecks.io / Dead Man's Snitch / PagerDuty heartbeat). If this alert stops
+      # arriving there, Prometheus, Alertmanager, or the route to the pager is broken —
+      # i.e. the ABSENCE of this alert is the signal, unlike every other alert here.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+          category: monitoring
+        annotations:
+          summary: "Alerting pipeline heartbeat (dead-man's switch)"
+          description: "This alert is always firing. An external monitor must expect it on a fixed cadence; its disappearance means the alerting pipeline itself is down."

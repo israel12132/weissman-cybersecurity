@@ -151,7 +151,7 @@ async fn send_payload_to_target(
     stealth: Option<&stealth_engine::StealthConfig>,
 ) -> (u16, String) {
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let bodies: Vec<Value> = vec![
         serde_json::json!({ "message": payload }),

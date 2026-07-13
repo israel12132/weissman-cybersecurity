@@ -492,7 +492,7 @@ pub async fn run_zero_day_radar(
         };
         for (client_id, base) in targets.to_vec() {
             if let Some(s) = stealth {
-                stealth_engine::apply_jitter(s);
+                stealth_engine::apply_jitter(s).await;
             }
             if execute_probe(base.as_str(), &probe, &client, stealth).await {
                 let finding = serde_json::json!({

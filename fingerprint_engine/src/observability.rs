@@ -58,10 +58,22 @@ fn build_otel_layer(
         .map_err(|e| eprintln!("[Weissman][otel] exporter build failed: {e}"))
         .ok()?;
 
+    // Distinguish server vs worker (and env) in the trace backend. Each component sets
+    // WEISSMAN_SERVICE_NAME (e.g. weissman-server / weissman-worker); defaults to "weissman".
+    let service_name = std::env::var("WEISSMAN_SERVICE_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "weissman".to_string());
+    let deployment_env = std::env::var("WEISSMAN_ENV")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "dev".to_string());
     let provider = opentelemetry_sdk::trace::TracerProvider::builder()
         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_resource(opentelemetry_sdk::Resource::new(vec![
-            opentelemetry::KeyValue::new("service.name", "weissman"),
+            opentelemetry::KeyValue::new("service.name", service_name),
+            opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+            opentelemetry::KeyValue::new("deployment.environment", deployment_env),
         ]))
         .build();
     let tracer = provider.tracer("weissman");
@@ -349,6 +361,26 @@ pub fn spawn_pool_metrics_loop(
                 };
                 metrics::gauge!("weissman_heal_success_rate").set(rate);
             }
+
+            // Dependency-health gauges (up=1 / down=0) — a first-class signal for
+            // SLO / error-budget alerting instead of inferring outages from request errors.
+            let pg_up = sqlx::query_scalar::<_, i32>("SELECT 1")
+                .fetch_one(app_pool.as_ref())
+                .await
+                .is_ok();
+            metrics::gauge!("weissman_dependency_up", "dep" => "postgres").set(if pg_up {
+                1.0
+            } else {
+                0.0
+            });
+            if crate::http::rate_limit_redis::distributed_state_required() {
+                let redis_up = crate::http::rate_limit_redis::ping_ok().await;
+                metrics::gauge!("weissman_dependency_up", "dep" => "redis").set(if redis_up {
+                    1.0
+                } else {
+                    0.0
+                });
+            }
         }
     });
 }
@@ -468,7 +500,7 @@ fn emit_critical_edge_region_alert(
             "region_nodes": total,
             "blast_radius_km": blast_radius_km,
         });
-        let _ = tx.send(j.to_string());
+        let _ = tx.send(crate::http::tenant_stream::stamp_value(tenant_id, j));
     }
 }
 

@@ -234,21 +234,7 @@
     <button type="button" id="cookie-ok" class="cta" style="font-size:.7rem;padding:.45rem 1rem">Accept</button>
   </div>
 
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear()
-    // Cookie banner — show once, store consent for 1 year.
-    (function () {
-      var key = 'weissman_cookie_consent_v1'
-      try {
-        if (!localStorage.getItem(key)) {
-          document.getElementById('cookie-banner').classList.remove('hidden')
-        }
-        document.getElementById('cookie-ok').addEventListener('click', function () {
-          localStorage.setItem(key, '' + Date.now())
-          document.getElementById('cookie-banner').classList.add('hidden')
-        })
-      } catch (_) {}
-    })()
-  </script>
+  <script src="/js/year.js" defer></script>
+  <script src="/js/cookie-banner.js" defer></script>
 </body>
 </html>

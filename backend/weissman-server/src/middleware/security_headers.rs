@@ -34,8 +34,15 @@ pub fn apply(router: Router) -> Router {
         ))
         .layer(SetResponseHeaderLayer::overriding(
             HeaderName::from_static("content-security-policy"),
+            // This server can serve the built SPA (frontend/dist), so the CSP must match what the
+            // SPA needs or the app silently breaks under it:
+            //   * script-src adds 'wasm-unsafe-eval' — the SPA loads WebAssembly (AST-cap /
+            //     provenance); without it WASM instantiation is blocked. Narrower than
+            //     'unsafe-eval'. No 'unsafe-inline' — Vite emits no inline scripts.
+            //   * style-src adds 'unsafe-inline' — framer-motion sets per-frame inline styles and
+            //     the SPA uses many static inline style attributes; neither is hashable.
             HeaderValue::from_static(
-                "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests",
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests",
             ),
         ))
 }

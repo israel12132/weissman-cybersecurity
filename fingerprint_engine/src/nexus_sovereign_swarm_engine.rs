@@ -990,7 +990,10 @@ async fn nssi_emit(ctx: &EngineRunContext, event: &str, detail: Value) {
         "client_id": ctx.client_id,
         "ts": ts,
     });
-    let msg = envelope.to_string();
+    let tid = ctx
+        .tenant_id
+        .unwrap_or(crate::http::tenant_stream::SYSTEM_TENANT);
+    let msg = crate::http::tenant_stream::stamp_value(tid, envelope);
     if let Some(tx) = ctx.swarm_broadcast.as_ref() {
         let _ = tx.send(msg.clone());
     }
@@ -2047,19 +2050,30 @@ fn assign_agents_cycle(
     count: u32,
     id_offset: u32,
 ) -> Vec<AgentTask> {
-    let mut tasks = Vec::with_capacity(count as usize);
     if surface.is_empty() || archetypes.is_empty() || count == 0 {
-        return tasks;
+        return Vec::new();
     }
-    for i in 0..count {
-        let (base, path) = &surface[i as usize % surface.len()];
-        let archetype = archetypes[i as usize % archetypes.len()].clone();
-        tasks.push(AgentTask {
-            agent_id: id_offset + i + 1,
-            archetype,
-            url: format!("{}{}", base, path),
-            path: path.clone(),
-        });
+    // Cap the wave at the number of DISTINCT (url, archetype) probes. Beyond that a higher
+    // agent_count only re-issues identical requests over the same handful of URLs — an
+    // operator-driven amplification of the target plus a memory blow-up from spawning tens
+    // of thousands of duplicate futures. We emit each unique probe once, in surface order.
+    let unique_combos = surface.len().saturating_mul(archetypes.len());
+    let effective = (count as usize).min(unique_combos);
+    let mut tasks = Vec::with_capacity(effective);
+    let mut produced = 0usize;
+    'outer: for (base, path) in surface {
+        for archetype in archetypes {
+            if produced >= effective {
+                break 'outer;
+            }
+            tasks.push(AgentTask {
+                agent_id: id_offset + produced as u32 + 1,
+                archetype: archetype.clone(),
+                url: format!("{}{}", base, path),
+                path: path.clone(),
+            });
+            produced += 1;
+        }
     }
     tasks
 }
@@ -2884,7 +2898,9 @@ fn heuristic_oracle_synthesis(
         .unwrap_or("none");
     let auth_open = brief.get("auth_open").and_then(Value::as_u64).unwrap_or(0);
     let siq = compute_swarm_iq(
-        agents_deployed.max(config.agent_count),
+        // Report the agents actually deployed, not the requested agent_count — padding
+        // SwarmIQ with the requested count overstates real coverage (live-only truth).
+        agents_deployed,
         raw_signals.len(),
         emergent.len(),
         endpoint_agents,

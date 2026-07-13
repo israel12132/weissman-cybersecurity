@@ -1,0 +1,11 @@
+# blackbox_exporter modules for synthetic HTTP probing (external-perspective uptime).
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      fail_if_ssl: false
+      preferred_ip_protocol: ip4

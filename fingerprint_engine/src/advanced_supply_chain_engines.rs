@@ -5,7 +5,9 @@
 //! manifest is published. If no public match is found, we emit no finding.
 
 use crate::engine_dispatch::EngineRunContext;
-use crate::engine_probes::{empty_ok, extract_host, finding, http_client, http_get, normalize_url, tcp_open, tcp_scan};
+use crate::engine_probes::{
+    empty_ok, extract_host, finding, http_client, http_get, normalize_url, tcp_open, tcp_scan,
+};
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
 
@@ -29,7 +31,11 @@ async fn registry_probe(
     }
     let pkg = t.trim().trim_start_matches('@');
     let host_hint = extract_host(t);
-    let org_token = host_hint.split('.').next().unwrap_or("").to_ascii_lowercase();
+    let org_token = host_hint
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let url = registry_url.replace("{}", &urlencoding::encode(pkg));
@@ -65,7 +71,10 @@ async fn registry_probe(
                 severity = "medium";
                 notes.push_str(" Registry metadata flags deprecation or security hold.");
             }
-            if body_low.contains("bitcoin") || body_low.contains("wallet") || body_low.contains("mnemonic") {
+            if body_low.contains("bitcoin")
+                || body_low.contains("wallet")
+                || body_low.contains("mnemonic")
+            {
                 severity = "critical";
                 notes.push_str(" Registry README/metadata references crypto wallet strings — review for malicious package.");
             }

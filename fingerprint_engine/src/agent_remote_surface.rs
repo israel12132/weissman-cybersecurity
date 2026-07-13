@@ -74,7 +74,9 @@ pub async fn run_remote_surface_probe(
         "log_tampering_engine" => probe_log_tampering_surface(engine_id, target).await,
         "timestomping" => probe_timestomping_surface(engine_id, target).await,
         "anti_debug_evasion" => probe_anti_debug_surface(engine_id, target).await,
-        "rootkit_surface_probe" | "rootkit_simulation" => probe_rootkit_surface(engine_id, target).await,
+        "rootkit_surface_probe" | "rootkit_simulation" => {
+            probe_rootkit_surface(engine_id, target).await
+        }
         "memory_forensics_evasion" => probe_memory_forensics_surface(engine_id, target).await,
         "usb_enumeration" => probe_usb_policy_surface(engine_id, target).await,
         "dns_tunneling_c2" => probe_dns_tunneling_surface(engine_id, target).await,

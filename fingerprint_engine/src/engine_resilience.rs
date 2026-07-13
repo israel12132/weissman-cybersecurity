@@ -38,6 +38,10 @@ pub struct EngineExecTelemetry {
     /// True when the engine only succeeded after more than one attempt.
     pub recovered: bool,
     pub error: Option<String>,
+    /// Classification of the last failure (`waf`|`timeout`|`dns`|`conn_reset`|`generic`),
+    /// or `None` when the first attempt succeeded cleanly. Lets the operator / next
+    /// scheduler pass react to *why* an engine struggled, not just that it did.
+    pub failure_class: Option<String>,
 }
 
 impl EngineExecTelemetry {
@@ -49,6 +53,7 @@ impl EngineExecTelemetry {
             "status": self.status,
             "recovered": self.recovered,
             "error": self.error,
+            "failure_class": self.failure_class,
         })
     }
 }
@@ -57,6 +62,106 @@ impl EngineExecTelemetry {
 /// (`ok` with empty findings) must NOT be retried.
 pub fn should_retry_status(status: &str) -> bool {
     status.eq_ignore_ascii_case("error")
+}
+
+/// Upper bound on how far an attempt timeout can be widened after repeated timeouts, so a
+/// genuinely hung target can't stall the pipeline indefinitely.
+const MAX_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Why an attempt failed. The retry loop uses this to *escalate* rather than blindly re-run
+/// the same request against a string-permuted target (the previous behaviour).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureClass {
+    /// WAF / rate-limit / edge block (403/429/503, Cloudflare, captcha, "blocked").
+    Waf,
+    /// Attempt exceeded its wall-clock budget.
+    Timeout,
+    /// DNS resolution failure (host may only differ by scheme/`www` variant).
+    Dns,
+    /// TCP reset / refused / broken pipe.
+    ConnReset,
+    /// Anything else.
+    Generic,
+}
+
+impl FailureClass {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FailureClass::Waf => "waf",
+            FailureClass::Timeout => "timeout",
+            FailureClass::Dns => "dns",
+            FailureClass::ConnReset => "conn_reset",
+            FailureClass::Generic => "generic",
+        }
+    }
+}
+
+/// Passed to each retry attempt so the engine can *act* on why the previous attempt failed
+/// rather than blindly re-running. `force_ghost_network` is set after a WAF/rate-limit block
+/// so the next attempt turns on the Ghost Network (identity morphing + jitter + proxy swarm).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EscalationHint {
+    pub attempt: u32,
+    pub force_ghost_network: bool,
+}
+
+/// Classify a failed attempt from its status + message. Mirrors the heuristics in
+/// `stealth::is_waf_or_rate_limit` for the WAF case so both layers agree on what a block is.
+pub fn classify_failure(status: &str, message: &str) -> FailureClass {
+    if status.eq_ignore_ascii_case("timeout") {
+        return FailureClass::Timeout;
+    }
+    let m = message.to_ascii_lowercase();
+    if m.contains("403")
+        || m.contains("429")
+        || m.contains("503")
+        || m.contains("rate limit")
+        || m.contains("rate-limit")
+        || m.contains("too many requests")
+        || m.contains("forbidden")
+        || m.contains("blocked")
+        || m.contains("cloudflare")
+        || m.contains("captcha")
+        || m.contains("access denied")
+        || m.contains("web application firewall")
+        || m.contains("waf")
+    {
+        return FailureClass::Waf;
+    }
+    if m.contains("dns")
+        || m.contains("name resolution")
+        || m.contains("no such host")
+        || m.contains("failed to lookup")
+        || m.contains("name or service not known")
+    {
+        return FailureClass::Dns;
+    }
+    if m.contains("connection reset")
+        || m.contains("connection refused")
+        || m.contains("reset by peer")
+        || m.contains("broken pipe")
+    {
+        return FailureClass::ConnReset;
+    }
+    FailureClass::Generic
+}
+
+/// Escalate retry behaviour based on *why* the last attempt failed, instead of re-running the
+/// same request against a string-permuted target. Widens the per-attempt budget on timeouts and
+/// records WAF blocks; the WAF case ALSO flips [`EscalationHint::force_ghost_network`] for the
+/// next attempt (applied by the caller's closure via `engine_dispatch::apply_ghost_escalation`).
+fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
+    match class {
+        FailureClass::Timeout => {
+            *current_timeout = current_timeout.saturating_mul(2).min(MAX_ATTEMPT_TIMEOUT);
+        }
+        FailureClass::Waf => {
+            metrics::counter!("weissman_engine_waf_block_total").increment(1);
+        }
+        // Dns is already addressed by the scheme/`www` target variants; ConnReset/Generic
+        // fall through to the next strategy unchanged.
+        FailureClass::Dns | FailureClass::ConnReset | FailureClass::Generic => {}
+    }
 }
 
 fn add_variant(out: &mut Vec<String>, s: String) {
@@ -104,9 +209,10 @@ fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
 
 /// Run an engine with panic isolation, per-attempt timeout, and adaptive multi-strategy retry.
 ///
-/// `run(variant)` produces the engine future for a given target variant; it is invoked once per
-/// strategy until one returns a non-error result (success, including a clean empty result) or all
-/// strategies are exhausted. Never panics or times out the caller.
+/// `run(variant, hint)` produces the engine future for a given target variant; it is invoked
+/// once per strategy until one returns a non-error result (success, including a clean empty
+/// result) or all strategies are exhausted. `hint` lets the caller escalate evasion after a
+/// WAF/rate-limit block (see [`EscalationHint`]). Never panics or times out the caller.
 pub async fn run_with_resilience<F, Fut>(
     engine_id: &str,
     target: &str,
@@ -114,7 +220,7 @@ pub async fn run_with_resilience<F, Fut>(
     mut run: F,
 ) -> (EngineResult, EngineExecTelemetry)
 where
-    F: FnMut(String) -> Fut,
+    F: FnMut(String, EscalationHint) -> Fut,
     Fut: Future<Output = EngineResult> + Send,
 {
     let strategies = target_strategies(target);
@@ -122,16 +228,28 @@ where
     let mut attempts: u32 = 0;
     let mut last_error: Option<String> = None;
     let mut last_status = String::from("error");
+    let mut last_class: Option<FailureClass> = None;
+    // Adaptive per-attempt budget: repeated timeouts widen it (up to a cap) instead of
+    // hammering the same too-short deadline against a slow-but-alive target.
+    let mut current_timeout = attempt_timeout;
 
     for variant in &strategies {
         attempts += 1;
         metrics::counter!("weissman_engine_attempt_total").increment(1);
-        let fut = run(variant.clone());
-        match tokio::time::timeout(attempt_timeout, AssertUnwindSafe(fut).catch_unwind()).await {
+        // After a WAF/rate-limit block, tell the next attempt to go stealthy.
+        let hint = EscalationHint {
+            attempt: attempts,
+            force_ghost_network: matches!(last_class, Some(FailureClass::Waf)),
+        };
+        let fut = run(variant.clone(), hint);
+        match tokio::time::timeout(current_timeout, AssertUnwindSafe(fut).catch_unwind()).await {
             Ok(Ok(result)) => {
                 if should_retry_status(&result.status) {
+                    let class = classify_failure(&result.status, &result.message);
+                    escalate_for(class, &mut current_timeout);
                     last_error = Some(result.message.clone());
                     last_status = String::from("error");
+                    last_class = Some(class);
                     continue;
                 }
                 let telem = EngineExecTelemetry {
@@ -142,6 +260,7 @@ where
                     status: String::from("ok"),
                     recovered: attempts > 1,
                     error: None,
+                    failure_class: last_class.map(|c| c.as_str().to_string()),
                 };
                 if telem.recovered {
                     metrics::counter!("weissman_engine_recovered_total").increment(1);
@@ -149,17 +268,23 @@ where
                 return (result, telem);
             }
             Ok(Err(payload)) => {
-                last_error = Some(panic_message(payload));
+                let msg = panic_message(payload);
+                let class = classify_failure("panic", &msg);
+                escalate_for(class, &mut current_timeout);
+                last_error = Some(msg);
                 last_status = String::from("panic");
+                last_class = Some(class);
                 metrics::counter!("weissman_engine_panic_total").increment(1);
                 continue;
             }
             Err(_) => {
                 last_error = Some(format!(
                     "attempt timed out after {}ms",
-                    attempt_timeout.as_millis()
+                    current_timeout.as_millis()
                 ));
                 last_status = String::from("timeout");
+                last_class = Some(FailureClass::Timeout);
+                escalate_for(FailureClass::Timeout, &mut current_timeout);
                 metrics::counter!("weissman_engine_timeout_total").increment(1);
                 continue;
             }
@@ -175,6 +300,7 @@ where
         status: last_status,
         recovered: false,
         error: Some(err.clone()),
+        failure_class: last_class.map(|c| c.as_str().to_string()),
     };
     metrics::counter!("weissman_engine_failed_total").increment(1);
     (
@@ -223,7 +349,7 @@ mod tests {
             "flaky",
             "https://example.com",
             Duration::from_secs(2),
-            move |_variant| {
+            move |_variant, _hint| {
                 let n = c.fetch_add(1, Ordering::SeqCst);
                 async move {
                     if n == 0 {
@@ -245,12 +371,16 @@ mod tests {
     async fn empty_ok_is_success_and_not_retried() {
         let calls = Arc::new(AtomicU32::new(0));
         let c = calls.clone();
-        let (result, telem) =
-            run_with_resilience("quiet", "example.com", Duration::from_secs(2), move |_v| {
+        let (result, telem) = run_with_resilience(
+            "quiet",
+            "example.com",
+            Duration::from_secs(2),
+            move |_v, _hint| {
                 c.fetch_add(1, Ordering::SeqCst);
                 async move { EngineResult::ok(vec![], "no live signal observed") }
-            })
-            .await;
+            },
+        )
+        .await;
         assert_eq!(result.status, "ok");
         assert_eq!(telem.attempts, 1);
         assert!(!telem.recovered);
@@ -263,7 +393,7 @@ mod tests {
             "panicky",
             "example.com",
             Duration::from_secs(2),
-            move |_v| async move {
+            move |_v, _hint| async move {
                 panic!("engine blew up");
                 #[allow(unreachable_code)]
                 EngineResult::ok(vec![], "")
@@ -282,7 +412,7 @@ mod tests {
             "hung",
             "example.com",
             Duration::from_millis(40),
-            move |_v| async move {
+            move |_v, _hint| async move {
                 tokio::time::sleep(Duration::from_secs(5)).await;
                 EngineResult::ok(vec![], "")
             },
@@ -290,5 +420,91 @@ mod tests {
         .await;
         assert_eq!(result.status, "error");
         assert_eq!(telem.status, "timeout");
+    }
+
+    #[test]
+    fn classify_failure_maps_signals() {
+        assert_eq!(classify_failure("timeout", ""), FailureClass::Timeout);
+        assert_eq!(
+            classify_failure("error", "HTTP 403 Forbidden"),
+            FailureClass::Waf
+        );
+        assert_eq!(
+            classify_failure("error", "429 Too Many Requests"),
+            FailureClass::Waf
+        );
+        assert_eq!(
+            classify_failure("error", "request blocked by Cloudflare"),
+            FailureClass::Waf
+        );
+        assert_eq!(
+            classify_failure("error", "dns error: no such host"),
+            FailureClass::Dns
+        );
+        assert_eq!(
+            classify_failure("error", "connection reset by peer"),
+            FailureClass::ConnReset
+        );
+        assert_eq!(
+            classify_failure("error", "something unexpected"),
+            FailureClass::Generic
+        );
+    }
+
+    #[test]
+    fn timeout_escalation_widens_and_caps_budget() {
+        let mut t = Duration::from_secs(45);
+        escalate_for(FailureClass::Timeout, &mut t);
+        assert_eq!(t, Duration::from_secs(90));
+        for _ in 0..10 {
+            escalate_for(FailureClass::Timeout, &mut t);
+        }
+        assert_eq!(t, MAX_ATTEMPT_TIMEOUT, "timeout budget must be capped");
+        // A WAF block records a counter but does not widen the budget.
+        let mut t2 = Duration::from_secs(45);
+        escalate_for(FailureClass::Waf, &mut t2);
+        assert_eq!(t2, Duration::from_secs(45));
+    }
+
+    #[tokio::test]
+    async fn failure_class_surfaced_in_telemetry() {
+        let (result, telem) = run_with_resilience(
+            "blocked",
+            "example.com",
+            Duration::from_secs(2),
+            move |_v, _hint| async move { EngineResult::error("HTTP 403 blocked by WAF") },
+        )
+        .await;
+        assert_eq!(result.status, "error");
+        assert_eq!(telem.failure_class.as_deref(), Some("waf"));
+    }
+
+    #[tokio::test]
+    async fn waf_block_forces_ghost_network_on_next_attempt() {
+        let hints: Arc<std::sync::Mutex<Vec<bool>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let h = hints.clone();
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let _ = run_with_resilience(
+            "wafed",
+            "https://example.com",
+            Duration::from_secs(2),
+            move |_v, hint| {
+                h.lock().unwrap().push(hint.force_ghost_network);
+                let n = c.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    if n == 0 {
+                        EngineResult::error("HTTP 403 blocked by WAF")
+                    } else {
+                        EngineResult::ok(vec![], "ok")
+                    }
+                }
+            },
+        )
+        .await;
+        let recorded = hints.lock().unwrap().clone();
+        // First attempt: no prior failure. Second attempt (after the WAF block): ghost network.
+        assert_eq!(recorded.first(), Some(&false));
+        assert_eq!(recorded.get(1), Some(&true));
     }
 }

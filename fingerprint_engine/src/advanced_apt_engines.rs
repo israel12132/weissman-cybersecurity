@@ -258,6 +258,43 @@ fn actor_finding(
     f
 }
 
+/// Attach quantitative, actor-specific intelligence to a surface finding so each of the
+/// actor engines produces distinct, prioritized analysis rather than the same probe under a
+/// different name. The confidence is weighted by how central this surface is to *this
+/// actor's* documented playbook (its rank in `profile.surfaces`), whether the weakness is on
+/// the CISA KEV list, and the surface severity — so two actors sharing a surface score it
+/// differently.
+fn annotate_actor_intel(f: &mut Value, profile: &ActorProfile, surface: &EdgeSurface) {
+    let Some(obj) = f.as_object_mut() else { return };
+    let rank = profile
+        .surfaces
+        .iter()
+        .position(|s| std::ptr::eq(*s, surface))
+        .unwrap_or(profile.surfaces.len());
+    let primary = rank == 0;
+    let kev = surface.cve.contains("KEV");
+    let sev_weight: u32 = match surface.severity {
+        "critical" => 40,
+        "high" => 30,
+        "medium" => 18,
+        _ => 10,
+    };
+    let rank_weight: u32 = if primary {
+        24
+    } else {
+        18u32.saturating_sub((rank as u32).saturating_mul(3))
+    };
+    let confidence = (sev_weight + if kev { 35 } else { 10 } + rank_weight).min(99);
+    obj.insert("actor_confidence".to_string(), json!(confidence));
+    obj.insert("kev_listed".to_string(), json!(kev));
+    obj.insert("actor_playbook_rank".to_string(), json!(rank + 1));
+    obj.insert(
+        "actor_playbook_size".to_string(),
+        json!(profile.surfaces.len()),
+    );
+    obj.insert("actor_primary_ttp".to_string(), json!(primary));
+}
+
 fn surface_http_finding(
     profile: &ActorProfile,
     surface: &EdgeSurface,
@@ -269,7 +306,7 @@ fn surface_http_finding(
         "{} is internet-exposed at {} (HTTP {}; confirmed by token '{}'). {} is publicly documented to gain initial access through this software [{}]. Restrict the surface to a VPN/allow-list and apply the relevant patch.",
         surface.name, probe.final_url, probe.status, matched, profile.actor, surface.cve
     );
-    actor_finding(
+    let mut f = actor_finding(
         profile,
         &format!(
             "{}: exposed initial-access surface — {}",
@@ -281,7 +318,9 @@ fn surface_http_finding(
         target,
         Some(&probe.final_url),
         surface.cve,
-    )
+    );
+    annotate_actor_intel(&mut f, profile, surface);
+    f
 }
 
 fn surface_port_finding(
@@ -295,7 +334,7 @@ fn surface_port_finding(
         "{}/tcp is open on {} — {} is reachable from the probe. {} leverages this service for initial access [{}]. Remove direct internet exposure; require VPN + MFA.",
         port, host, surface.name, profile.actor, surface.cve
     );
-    actor_finding(
+    let mut f = actor_finding(
         profile,
         &format!(
             "{}: exposed service — {} ({}/tcp)",
@@ -307,7 +346,9 @@ fn surface_port_finding(
         target,
         None,
         surface.cve,
-    )
+    );
+    annotate_actor_intel(&mut f, profile, surface);
+    f
 }
 
 // ── Perimeter hygiene (relevant to nation-state phishing / watering-hole) ──────

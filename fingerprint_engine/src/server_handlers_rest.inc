@@ -1,15 +1,46 @@
+/// Timeout-bounded `SELECT 1`. A wedged DB must fail the probe fast (well under the probe
+/// window) instead of blocking up to the pool acquire timeout and starving connections.
+async fn db_ping_ok(pool: &sqlx::PgPool) -> bool {
+    matches!(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(pool),
+        )
+        .await,
+        Ok(Ok(_))
+    )
+}
+
+/// Dependency-aware readiness. Returns 503 when a hard dependency (Postgres, plus Redis when
+/// distributed state is required) is unreachable, so a load balancer stops routing to a replica
+/// that can't serve. Kept SEPARATE from `/api/health` (liveness = process up) on purpose: making
+/// the liveness path 503 on an external-DB outage would trigger pod-restart storms that can't fix
+/// an external dependency.
+async fn api_ready(State(state): State<Arc<AppState>>) -> Response {
+    let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
+    let redis_required = crate::http::rate_limit_redis::distributed_state_required();
+    let redis_ok = !redis_required || crate::http::rate_limit_redis::ping_ok().await;
+    let ready = postgres_ok && redis_ok;
+    let status = if ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (
+        status,
+        Json(json!({
+            "ready": ready,
+            "postgres_ok": postgres_ok,
+            "redis_ok": redis_ok,
+            "redis_required": redis_required,
+        })),
+    )
+        .into_response()
+}
+
 async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let uptime_secs = state.started_at.elapsed().as_secs();
-    let postgres_ok = match sqlx::query_scalar::<_, i32>("SELECT 1")
-        .fetch_one(state.app_pool.as_ref())
-        .await
-    {
-        Ok(_) => true,
-        Err(e) => {
-            tracing::warn!(target: "api_health", error = %e, "app_pool SELECT 1 failed");
-            false
-        }
-    };
+    let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
     let scanning_enabled = crate::orchestrator::is_scanning_active();
     let scan_in_progress = crate::orchestrator::scan_in_progress();
     let active_tenant_cycles = crate::orchestrator::active_tenant_scan_count();
@@ -1438,37 +1469,60 @@ async fn api_scan(
     }
 }
 
-async fn ws_timing(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_timing(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() { break; }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
+            }
         }
     })
 }
 
-async fn ws_ai_redteam(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_ai_redteam(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() { break; }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
+            }
         }
     })
 }
 
-async fn ws_threat_intel(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_threat_intel(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.radar_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() { break; }
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() { break; }
+            }
         }
     })
 }
 
 async fn api_telemetry_stream(
     State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    let viewer_tid = auth.tenant_id;
     let want_job: Option<String> = q
         .get("job_id")
         .map(|s| s.trim().to_string())
@@ -1476,6 +1530,10 @@ async fn api_telemetry_stream(
     let filter_job = want_job.clone();
     let rx = state.telemetry_broadcast_tx.subscribe();
     let stream = crate::http::sse_bridge::bridge_broadcast(rx, move |payload: &str| {
+        // Tenant isolation: drop events not stamped for this viewer's tenant.
+        if crate::http::tenant_stream::visible_to(payload, viewer_tid).is_none() {
+            return false;
+        }
         if let Some(ref want) = filter_job {
             let matches = serde_json::from_str::<serde_json::Value>(payload)
                 .ok()

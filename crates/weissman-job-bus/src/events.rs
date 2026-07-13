@@ -10,6 +10,8 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 pub const REDIS_STREAM_KEY: &str = "weissman:jobs:events";
+/// Approximate cap on retained Redis stream entries (Postgres is the durable source of truth).
+pub const REDIS_STREAM_MAXLEN: i64 = 50_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -99,6 +101,27 @@ pub async fn append_event(
     kind: JobEventKind,
     payload: Value,
 ) -> Result<JobEventRecord, JobBusError> {
+    // Serialize appends per job inside one transaction. Two concurrent producers
+    // (e.g. a heartbeat's `lease_extended` racing `job_completed`) would otherwise read the
+    // same `prev_hash` and insert sibling events, silently forking the tamper-evident chain.
+    // A per-job advisory xact lock makes read-prev-hash + insert atomic against each other.
+    let mut tx = pool.begin().await?;
+
+    // Set tenant GUC for RLS enforcement (defense-in-depth: consistent with scoped callers).
+    // Without this, an unscoped pool bypasses RLS. The INSERT below still stamped tenant_id,
+    // but a crafted payload could circumvent the WHERE filter if RLS were the only gate.
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, true)")
+        .bind(tenant_id)
+        .execute(&mut *tx)
+        .await?;
+
+    if !job_id.is_nil() {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+            .bind(job_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+    }
+
     let prev_hash: Option<String> = if job_id.is_nil() {
         None
     } else {
@@ -107,7 +130,7 @@ pub async fn append_event(
                WHERE job_id = $1 ORDER BY seq DESC LIMIT 1"#,
         )
         .bind(job_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await?
     };
 
@@ -134,10 +157,11 @@ pub async fn append_event(
     .bind(occurred_at)
     .bind(&event_hash)
     .bind(&prev_hash)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
     let seq: i64 = row.try_get("seq")?;
+    tx.commit().await?;
 
     Ok(JobEventRecord {
         seq,
@@ -166,7 +190,13 @@ pub async fn xadd_event(redis: &redis::aio::ConnectionManager, record: &JobEvent
     let mut conn = redis.clone();
     let payload_str = serde_json::to_string(&record.payload).unwrap_or_else(|_| "{}".into());
     let mut cmd = redis::cmd("XADD");
-    cmd.arg(REDIS_STREAM_KEY).arg("*");
+    // MAXLEN ~ N: approximate capped trim so the Redis stream (best-effort fan-out; Postgres
+    // is source of truth) can't grow without bound and OOM the shared Redis.
+    cmd.arg(REDIS_STREAM_KEY)
+        .arg("MAXLEN")
+        .arg("~")
+        .arg(REDIS_STREAM_MAXLEN)
+        .arg("*");
     cmd.arg("seq").arg(record.seq.to_string());
     cmd.arg("job_id").arg(record.job_id.to_string());
     cmd.arg("tenant_id").arg(record.tenant_id.to_string());
