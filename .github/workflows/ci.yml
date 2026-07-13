@@ -127,7 +127,7 @@ jobs:
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: fs
           scan-ref: .
@@ -137,7 +137,7 @@ jobs:
           format: table
 
       - name: Generate SBOM (CycloneDX via Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: fs
           scan-ref: .
@@ -308,7 +308,7 @@ jobs:
         # actual runtime image (base OS packages baked into weissman-backend:stable).
         # ignore-unfixed keeps it actionable — only CRITICAL/HIGH with an available fix
         # fail the build (then bump the base image; Dependabot 'docker' helps here).
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: image
           image-ref: weissman-backend:stable
@@ -602,7 +602,7 @@ jobs:
           push-to-registry: true
 
       - name: Generate image SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: image
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
