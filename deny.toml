@@ -7,13 +7,20 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# Only fail on unmaintained crates we could actually act on (workspace/direct);
+# the transitive unmaintained crates (stdweb/rusttype/stb_truetype/encoding/lzw
+# via genpdf→printpdf PDF export, rustls-pemfile via rustls) have no safe upgrade
+# and are pinned upstream — surfaced as warnings, tracked with the genpdf migration.
+unmaintained = "workspace"
 # Transitive advisories with no upstream fix yet — mirror of the documented
 # cargo-audit ignores in ci.yml. Re-review on every dependency bump.
 ignore = [
     "RUSTSEC-2023-0071", # rsa (Marvin timing) via openidconnect (OIDC) — no fixed release
     "RUSTSEC-2026-0098", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
-    "RUSTSEC-2026-0099",
-    "RUSTSEC-2026-0104",
+    "RUSTSEC-2026-0099", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
+    "RUSTSEC-2026-0104", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
+    "RUSTSEC-2026-0187", # lopdf parse-DoS via genpdf->printpdf — we generate, never parse untrusted PDFs
+    "RUSTSEC-2026-0049", # rustls-webpki CRL matching via tokio-tungstenite 0.21 — CRL revocation not used
 ]
 
 [licenses]
@@ -34,6 +41,8 @@ allow = [
     "Unicode-DFS-2016",
     "CC0-1.0",
     "OpenSSL",
+    "0BSD", # BSD Zero Clause (public-domain-equivalent, OSI-approved) — via quoted_printable→lettre
+    "CDLA-Permissive-2.0", # permissive data license on the Mozilla CA-root bundle — via webpki-roots→sqlx
 ]
 confidence-threshold = 0.9
 # First-party crates carry no SPDX license field (proprietary); do not fail on them.

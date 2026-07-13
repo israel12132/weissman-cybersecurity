@@ -8,10 +8,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const engineRs = fs.readFileSync(
-  path.join(root, 'fingerprint_engine/src/cloud_posture_engine.rs'),
-  'utf8',
-)
+// cloud_posture_engine was refactored from a single .rs file into a module
+// directory (mod.rs + inc/*.inc.rs). Read and concatenate every .rs in the
+// module so the parity checks below see all const / dispatch / summary symbols.
+const engineDir = path.join(root, 'fingerprint_engine/src/cloud_posture_engine')
+const readRs = (dir) =>
+  fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) return readRs(full)
+    return e.name.endsWith('.rs') ? [fs.readFileSync(full, 'utf8')] : []
+  })
+const engineRs = readRs(engineDir).join('\n')
 const uiJsx = fs.readFileSync(
   path.join(root, 'frontend/src/pages/CloudPostureCommandCenter.jsx'),
   'utf8',
@@ -21,7 +28,7 @@ const planesMatch = engineRs.match(
   /pub const CNAPP_SERVICE_PLANES: &\[&str\] = &\[([\s\S]*?)\];/,
 )
 if (!planesMatch) {
-  console.error('FAIL: CNAPP_SERVICE_PLANES not found in cloud_posture_engine.rs')
+  console.error('FAIL: CNAPP_SERVICE_PLANES not found in cloud_posture_engine module')
   process.exit(1)
 }
 const planes = [...planesMatch[1].matchAll(/"([^"]+)"/g)].map((m) => m[1])

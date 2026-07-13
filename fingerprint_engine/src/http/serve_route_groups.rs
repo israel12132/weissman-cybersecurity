@@ -522,9 +522,16 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/auto-heal", post(api_auto_heal))
         .route(
+            "/api/clients/:id/findings/:finding_id/brief",
+            get(api_finding_brief).post(api_finding_brief),
+        )
+        .route(
             "/api/clients/:id/heal-requests",
             get(api_heal_requests_list),
         )
+        .route("/api/clients/:id/heal-stats", get(api_heal_stats))
+        .route("/api/clients/:id/heal-revert", post(api_heal_revert))
+        .route("/api/clients/:id/heal-batch", post(api_heal_batch))
         .route("/api/clients/:id/deception", get(api_deception_list))
         .route(
             "/api/clients/:id/deception/generate",
@@ -621,12 +628,38 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/deception/triggered", post(api_deception_triggered))
         .route("/api/deception/aws-events", post(api_deception_aws_events))
+        .route(
+            "/api/integrations/slack/interactivity",
+            post(api_slack_interactivity),
+        )
         .route("/api/v1/alerts/aws-canary", post(api_v1_alerts_aws_canary))
         .route(
             "/api/clients/:id/deception/deploy-cloud",
             post(api_deception_deploy_cloud),
         )
         .route("/api/heal-verify/:job_id/steps", get(api_heal_verify_steps))
+        .route("/api/heal-verify/:job_id", get(api_heal_verify_status))
+        .route("/api/heal-verify/:job_id/patch", get(api_heal_verify_patch))
+        .route(
+            "/api/heal-verify/:job_id/attestation",
+            get(api_heal_verify_attestation),
+        )
+        .route(
+            "/api/heal-verify/:job_id/report",
+            get(api_heal_verify_report),
+        )
+        .route(
+            "/api/heal-verify/:job_id/report.json",
+            get(api_heal_verify_report_json),
+        )
+        .route("/api/heal-verify/:job_id/sarif", get(api_heal_verify_sarif))
+        .route("/api/heal-readiness", get(api_heal_readiness))
+        .route("/api/clients/:id/heal-trends", get(api_heal_trends))
+        .route("/api/clients/:id/heal-priorities", get(api_heal_priorities))
+        .route(
+            "/api/clients/:id/findings/:finding_id/channel-suggestion",
+            get(api_channel_suggestion),
+        )
         .route("/api/clients/:id/swarm/run", post(api_swarm_run))
         .route("/api/swarm/events", get(api_swarm_events))
         .route("/api/threat-ingest/run", post(api_threat_ingest_run))

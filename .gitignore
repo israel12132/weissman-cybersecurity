@@ -69,3 +69,6 @@ dump.rdb
 
 # Playwright storage-state (regenerated each run; never commit session tokens)
 **/tests-e2e/.auth/
+
+# Stale member lock — the workspace build uses the root Cargo.lock (see deploy/*.Dockerfile).
+fingerprint_engine/Cargo.lock

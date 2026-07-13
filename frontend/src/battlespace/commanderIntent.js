@@ -24,8 +24,10 @@ export function findPerimeterNodes(nodes) {
     .map((n) => String(n.id))
 }
 
-/** BFS from multiple seeds to target — returns all nodes on any shortest-layer path union. */
-export function nodesReachableToTarget(seeds, targetId, adj) {
+/** BFS from multiple seeds to target — returns all nodes on any shortest-layer path union.
+ * `allNodes` (optional) is the full node list used for the "target unreachable"
+ * fallback so isolated nodes (no edges, absent from `adj`) are still included. */
+export function nodesReachableToTarget(seeds, targetId, adj, allNodes = []) {
   const target = String(targetId)
   const relevant = new Set([target])
   if (!adj.size || !target) return relevant
@@ -59,10 +61,13 @@ export function nodesReachableToTarget(seeds, targetId, adj) {
     }
   }
 
-  // Target unreachable from any seed → we can't narrow the subgraph, so treat
-  // every node known to the graph as relevant (no masking). `adj` keys are the
-  // canonical string ids built in buildAdjacency().
-  if (!dist.has(target)) return new Set(adj.keys())
+  // Target unreachable from any seed → fall back to the whole graph. Prefer the
+  // full node list (includes isolated nodes with no edges); fall back to the
+  // adjacency keys if no node list was supplied.
+  if (!dist.has(target)) {
+    const all = (allNodes || []).map((n) => String(n.id))
+    return all.length ? new Set(all) : new Set(adj.keys())
+  }
 
   const targetDist = dist.get(target)
   relevant.add(target)
@@ -125,7 +130,7 @@ export function computeIntentMask(focusId, nodes, edges, attackPaths) {
   const adj = buildAdjacency(edges)
   const perimeter = findPerimeterNodes(nodes)
   const { nodeIds: pathNodes, edgeKeys: pathEdgeKeys } = pathsThroughNode(focusId, attackPaths)
-  const bfsNodes = nodesReachableToTarget(perimeter, focusId, adj)
+  const bfsNodes = nodesReachableToTarget(perimeter, focusId, adj, nodes)
 
   const relevantNodes = new Set([...bfsNodes, ...pathNodes, String(focusId)])
   const relevantEdges = new Set()

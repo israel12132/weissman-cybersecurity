@@ -1,0 +1,70 @@
+# Weissman Auto-Heal → GitHub code scanning
+#
+# Ready-to-use workflow: pull the SARIF proof for a completed auto-heal from the Weissman API and
+# upload it to GitHub code scanning (the "Security" tab). Copy this file into your repository at
+# `.github/workflows/upload-heal-sarif.yml` and set the two secrets below.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   WEISSMAN_BASE_URL   e.g. https://weissman.example.com   (no trailing slash)
+#   WEISSMAN_API_TOKEN  a bearer token with access to the heal-verify endpoints
+#
+# Trigger it from the Actions tab ("Run workflow") with the heal job id, or wire the
+# `repository_dispatch` trigger below to fire automatically when a heal completes.
+name: Upload auto-heal SARIF
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Auto-heal job id (UUID) to fetch the SARIF for"
+        required: true
+        type: string
+  # Optional: have your Weissman webhook POST a repository_dispatch with
+  # client_payload.job_id to fire this automatically on heal completion.
+  repository_dispatch:
+    types: [weissman_heal_completed]
+
+permissions:
+  contents: read
+  security-events: write   # required by upload-sarif
+
+jobs:
+  upload-sarif:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve job id
+        id: job
+        env:
+          REQUESTED_JOB_ID: ${{ github.event.inputs.job_id || github.event.client_payload.job_id }}
+        run: |
+          JOB_ID="$REQUESTED_JOB_ID"
+          if [ -z "$JOB_ID" ]; then
+            echo "::error::no job_id provided (workflow input or client_payload.job_id)"; exit 1
+          fi
+          if ! printf '%s' "$JOB_ID" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+            echo "::error::job_id must be a UUID"; exit 1
+          fi
+          echo "id=$JOB_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch SARIF from Weissman
+        env:
+          BASE_URL: ${{ secrets.WEISSMAN_BASE_URL }}
+          API_TOKEN: ${{ secrets.WEISSMAN_API_TOKEN }}
+          JOB_ID: ${{ steps.job.outputs.id }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -w '%{http_code}' -o heal.sarif \
+            -H "Authorization: Bearer ${API_TOKEN}" \
+            -H "Accept: application/sarif+json" \
+            "${BASE_URL}/api/heal-verify/${JOB_ID}/sarif")
+          if [ "$code" != "200" ]; then
+            echo "::error::SARIF fetch failed (HTTP $code)"; cat heal.sarif || true; exit 1
+          fi
+          # Sanity-check it parses and is SARIF 2.1.0.
+          python3 -c "import json,sys; d=json.load(open('heal.sarif')); assert d.get('version')=='2.1.0', d.get('version'); print('runs:', len(d.get('runs',[])))"
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: heal.sarif
+          category: weissman-auto-heal

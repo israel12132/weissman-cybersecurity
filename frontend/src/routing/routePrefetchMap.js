@@ -30,6 +30,7 @@ const EXACT = {
   '/dark-web': () => import(/* webpackChunkName: "page-dark-web" */ '../pages/DarkWebMonitor'),
   '/jobs': () => import(/* webpackChunkName: "page-jobs" */ '../pages/JobsDashboard'),
   '/remediation': () => import(/* webpackChunkName: "page-remediation" */ '../pages/RemediationHub'),
+  '/remediation-analytics': () => import(/* webpackChunkName: "page-remediation-analytics" */ '../pages/RemediationAnalytics'),
   '/incident-response': () => import(/* webpackChunkName: "page-incident" */ '../pages/IncidentResponseCenter'),
   '/agents': () => import(/* webpackChunkName: "page-agents" */ '../pages/AgentManagement'),
   '/domain-discovery': () => import(/* webpackChunkName: "page-domain-discovery" */ '../pages/DomainDiscovery'),

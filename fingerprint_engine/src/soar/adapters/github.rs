@@ -129,15 +129,34 @@ impl OpenPullRequestAdapter for GithubPrAdapter {
         })
     }
 
+    /// Confirm a PR exists for this heal job.
+    ///
+    /// The authoritative, DB-backed closed-loop check for `open_pr` runs in
+    /// `soar::worker::verify_heal_job` (it inspects `auto_heal_job_specs.status == 'completed'`),
+    /// which the SOAR worker calls directly for the `pr_exists` probe. This adapter method is the
+    /// fallback used when only the outcome payload is available (no pool): it confirms a PR iff the
+    /// payload carries a concrete PR reference (`pr_url` / `pr_number` / `html_url`). It never
+    /// fabricates a positive result — absence of a reference is an honest "cannot confirm".
     async fn verify_pr(
         &self,
         external_ref: &str,
-        _payload: &serde_json::Value,
+        payload: &serde_json::Value,
     ) -> Result<bool, AdapterError> {
-        let Ok(_spec_id) = Uuid::parse_str(external_ref) else {
+        if Uuid::parse_str(external_ref).is_err() {
             return Ok(false);
-        };
-        Ok(false)
+        }
+        let has_pr_ref = payload
+            .get("pr_url")
+            .and_then(|v| v.as_str())
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+            || payload
+                .get("html_url")
+                .and_then(|v| v.as_str())
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+            || payload.get("pr_number").and_then(|v| v.as_i64()).is_some();
+        Ok(has_pr_ref)
     }
 
     fn revert_steps(&self, outcome: &AdapterOutcome) -> Vec<RevertStep> {

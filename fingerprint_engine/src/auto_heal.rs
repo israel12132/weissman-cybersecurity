@@ -512,22 +512,25 @@ pub async fn create_branch_and_commit_only(
     }
 }
 
-/// Open GitHub PR after sandbox verification succeeded.
+/// Open a GitHub PR with a caller-supplied title + body. The title/body are built from the
+/// real `VerificationResult` (see `auto_heal_job`) so the PR never over-claims: it states the
+/// actual verdict, health, exploit before/after codes, and the files that changed.
 pub async fn open_pull_request(
     token: &str,
     repo_slug: &str,
     base_branch: &str,
     head_branch: &str,
-    finding_id: &str,
+    title: &str,
+    body: &str,
 ) -> Result<(Option<String>, Option<i64>), String> {
     let client = github_client();
     let auth = format!("Bearer {}", token);
     let pr_url_post = format!("{}/repos/{}/pulls", GITHUB_API, repo_slug);
     let pr_body = serde_json::json!({
-        "title": format!("[Weissman CNAPP] Auto-Heal (200% verified): {}", finding_id),
+        "title": title,
         "head": head_branch,
         "base": base_branch,
-        "body": "Autonomous remediation verified in ephemeral Docker: exploit re-run no longer succeeds. Please review and merge."
+        "body": body,
     });
 
     let pr_resp = github_send_with_retry(|| {
@@ -544,6 +547,77 @@ pub async fn open_pull_request(
         p.get("html_url").and_then(|u| u.as_str()).map(String::from),
         p.get("number").and_then(|n| n.as_i64()),
     ))
+}
+
+/// Merge an auto-opened remediation PR (policy-driven auto-merge). Best-effort: returns `Ok(true)`
+/// only when GitHub confirms `merged: true`. Uses the squash method for a clean single commit.
+pub async fn merge_pull_request(
+    token: &str,
+    repo_slug: &str,
+    pr_number: i64,
+    commit_title: &str,
+) -> Result<bool, String> {
+    let client = github_client();
+    let auth = format!("Bearer {}", token);
+    let merge_url = format!(
+        "{}/repos/{}/pulls/{}/merge",
+        GITHUB_API, repo_slug, pr_number
+    );
+    let resp = github_send_with_retry(|| {
+        client
+            .put(&merge_url)
+            .header("Authorization", &auth)
+            .header("Accept", "application/vnd.github+json")
+            .json(&serde_json::json!({ "merge_method": "squash", "commit_title": commit_title }))
+    })
+    .await?;
+    let status = resp.status();
+    let bytes = resp.bytes().await.unwrap_or_default();
+    let merged = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .ok()
+        .and_then(|v| v.get("merged").and_then(|m| m.as_bool()))
+        .unwrap_or(false);
+    Ok(status.is_success() && merged)
+}
+
+/// Close an auto-opened remediation PR (revert). Optionally deletes the heal branch.
+pub async fn close_pull_request(
+    token: &str,
+    repo_slug: &str,
+    pr_number: i64,
+    delete_branch: Option<&str>,
+) -> Result<(), String> {
+    let client = github_client();
+    let auth = format!("Bearer {}", token);
+    let patch_url = format!("{}/repos/{}/pulls/{}", GITHUB_API, repo_slug, pr_number);
+    let resp = github_send_with_retry(|| {
+        client
+            .patch(&patch_url)
+            .header("Authorization", &auth)
+            .header("Accept", "application/vnd.github+json")
+            .json(&serde_json::json!({ "state": "closed" }))
+    })
+    .await?;
+    let _ = resp.bytes().await;
+
+    if let Some(branch) = delete_branch.filter(|b| !b.trim().is_empty()) {
+        let del_url = format!(
+            "{}/repos/{}/git/refs/heads/{}",
+            GITHUB_API, repo_slug, branch
+        );
+        // Best-effort branch cleanup — a failure here doesn't fail the revert.
+        if let Ok(r) = github_send_with_retry(|| {
+            client
+                .delete(&del_url)
+                .header("Authorization", &auth)
+                .header("Accept", "application/vnd.github+json")
+        })
+        .await
+        {
+            let _ = r.bytes().await;
+        }
+    }
+    Ok(())
 }
 
 /// Create a branch and PR from a single file (legacy); PR opened immediately after commit.
@@ -575,7 +649,28 @@ pub async fn create_branch_and_pr(
             error: Some(e),
         };
     }
-    match open_pull_request(token, repo_slug, base_branch, &c.branch_name, finding_id).await {
+    // Legacy / skip-sandbox path: the patch is committed as an advisory file and NOT proven,
+    // so the PR text must not claim verification.
+    let title = format!(
+        "[Weissman CNAPP] Advisory remediation (sandbox skipped): {}",
+        finding_id
+    );
+    let advisory_body = format!(
+        "⚠️ Advisory patch for finding `{}`. The ephemeral-Docker verification was **skipped** \
+         (`WEISSMAN_AUTOHEAL_SKIP_SANDBOX`), so this patch is **not proven** and is committed as an \
+         advisory artifact rather than an applied fix. Review carefully before merging.",
+        finding_id
+    );
+    match open_pull_request(
+        token,
+        repo_slug,
+        base_branch,
+        &c.branch_name,
+        &title,
+        &advisory_body,
+    )
+    .await
+    {
         Ok((pr_url, pr_number)) => HealRequestResult {
             branch_name: c.branch_name,
             pr_url,

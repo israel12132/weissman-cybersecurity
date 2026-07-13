@@ -1,0 +1,15 @@
+# Semgrep ignore patterns (gitignore syntax).
+#
+# The deprecated, non-production Python layer is excluded from the SAST gate.
+# Production runtime is Rust-only (weissman-server, weissman-worker,
+# fingerprint_engine); legacy/python-src is scheduled for removal (see
+# legacy/README.md). Its only SAST findings are false positives — e.g.
+# vault_client.py logs the *key identifier* (`key`, `role`), never the secret
+# value, which the logger-credential-leak heuristic can't distinguish. Gating
+# active development on dead-code false positives is not useful; the Rust
+# production code is still fully scanned.
+#
+# Root-level src/ and tests/ are symlinks into legacy/, so exclude those too.
+legacy/
+/src/
+/tests/

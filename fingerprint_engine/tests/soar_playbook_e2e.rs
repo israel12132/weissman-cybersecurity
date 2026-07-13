@@ -14,11 +14,12 @@ use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 
 fn require_test_database_url() -> String {
+    // DB-backed E2E: runs only where a test database is provided — local dev, or a
+    // CI job that sets TEST_DATABASE_URL (the engine-wiring job; see ci.yml). The
+    // lint/audit job runs `cargo test --workspace` with no database, so skip there
+    // instead of hard-failing the whole suite.
     match std::env::var("TEST_DATABASE_URL") {
         Ok(u) if !u.trim().is_empty() => u,
-        _ if std::env::var("CI").is_ok() => {
-            panic!("TEST_DATABASE_URL must be set in CI for SOAR playbook E2E");
-        }
         _ => {
             eprintln!("SKIP soar_playbook_e2e: TEST_DATABASE_URL not set");
             String::new()
@@ -57,12 +58,11 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .await
     {
         Ok(p) => p,
-        Err(e) if std::env::var("CI").is_ok() => {
-            panic!("connect TEST_DATABASE_URL in CI: {e}");
-        }
         Err(e) => {
-            eprintln!("SKIP soar_playbook_e2e: database unavailable: {e}");
-            return;
+            // We only get here when TEST_DATABASE_URL was provided, so a failed
+            // connection is a real infra/migration problem, not a skip condition —
+            // fail loudly so the DB-enabled CI job can't go green without running.
+            panic!("connect TEST_DATABASE_URL failed: {e}");
         }
     };
 

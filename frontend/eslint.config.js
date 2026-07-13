@@ -142,4 +142,16 @@ export default [
     files: ['src/**/*.test.{js,jsx}', 'src/**/*.spec.{js,jsx}', 'src/test/**'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
+  // Service workers under public/ run in the ServiceWorker global scope
+  // (self, caches, fetch, clients, …) — not the window scope.
+  {
+    files: ['public/**/*.js'],
+    languageOptions: { globals: { ...globals.serviceworker, ...globals.browser } },
+  },
+  // Vite plugins under plugins/ run in Node (the top-level `*.mjs` block does not
+  // match nested paths in flat config).
+  {
+    files: ['plugins/**/*.{js,mjs,cjs}'],
+    languageOptions: { sourceType: 'module', globals: { ...globals.node } },
+  },
 ]

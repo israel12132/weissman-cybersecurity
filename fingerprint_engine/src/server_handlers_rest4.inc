@@ -1478,6 +1478,12 @@ async fn api_auto_heal(
         .clone()
         .unwrap_or_else(|| "node:20-bookworm".to_string());
     let container_port = body.container_port.unwrap_or(3000);
+    // Canonicalize the requested delivery channel (unknown ⇒ safe default github_pr).
+    let channel = crate::heal_channels::DeliveryChannel::from_id(
+        body.channel.as_deref().unwrap_or("github_pr"),
+    )
+    .id();
+    let health_check_curl = body.health_check_curl.as_deref().unwrap_or("");
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
@@ -1486,8 +1492,8 @@ async fn api_auto_heal(
         r#"INSERT INTO auto_heal_job_specs (
             id, tenant_id, user_id, client_id, vuln_id, finding_id,
             git_token, repo_slug, base_branch, patch_text, poc_curl,
-            docker_socket, image, container_port, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending')"#,
+            docker_socket, image, container_port, channel, health_check_curl, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'pending')"#,
     )
     .bind(spec_id)
     .bind(auth.tenant_id)
@@ -1503,6 +1509,8 @@ async fn api_auto_heal(
     .bind(&docker_socket)
     .bind(&image)
     .bind(container_port as i32)
+    .bind(channel)
+    .bind(health_check_curl)
     .execute(&mut *tx)
     .await;
     if ins.is_err() {
@@ -1555,6 +1563,485 @@ async fn api_auto_heal(
     }
 }
 
+/// `GET|POST /api/clients/:id/findings/:finding_id/brief` — get-or-generate the bilingual
+/// (he/en) remediation brief for a finding. Cached in `vulnerabilities.remediation_brief`.
+/// `?refresh=1` (or any POST) regenerates. Returns the brief plus the patch/PoC the UI renders.
+async fn api_finding_brief(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    method: axum::http::Method,
+    Path((id, finding_id)): Path<(i64, String)>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(detail) = crate::security_hardening::validate_finding_id_token(&finding_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid finding_id", "detail": detail})),
+        )
+            .into_response();
+    }
+    let force = method == axum::http::Method::POST
+        || params.get("refresh").map(|v| v == "1" || v == "true").unwrap_or(false);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT id, title, COALESCE(description,'') AS description, severity,
+                  COALESCE(generated_patch,'') AS generated_patch,
+                  COALESCE(poc_exploit,'') AS poc_exploit,
+                  remediation_brief
+           FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1"#,
+    )
+    .bind(id)
+    .bind(&finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "finding not found"}))).into_response();
+    };
+    let title: String = r.try_get("title").unwrap_or_default();
+    let description: String = r.try_get("description").unwrap_or_default();
+    let severity: String = r.try_get("severity").unwrap_or_default();
+    let generated_patch: String = r.try_get("generated_patch").unwrap_or_default();
+    let poc_exploit: String = r.try_get("poc_exploit").unwrap_or_default();
+    let cached: Option<Value> = r.try_get::<Option<Value>, _>("remediation_brief").ok().flatten();
+
+    // Serve the cache unless a refresh was requested.
+    if !force {
+        if let Some(b) = cached.filter(|v| !v.is_null()) {
+            return (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "cached": true,
+                    "brief": b,
+                    "generated_patch": generated_patch,
+                    "poc_exploit": poc_exploit,
+                    "has_patch": !generated_patch.trim().is_empty(),
+                })),
+            )
+                .into_response();
+        }
+    }
+
+    let cfg = match crate::council::CouncilConfig::load(&state.app_pool, auth.tenant_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "llm config unavailable", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let brief = match crate::remediation_brief::generate_remediation_brief(
+        &cfg,
+        auth.tenant_id,
+        &title,
+        &description,
+        &severity,
+        "",
+        &generated_patch,
+        "",
+    )
+    .await
+    {
+        Ok(b) => b,
+        Err(e) => {
+            // Fail soft: surface the error but do not 500 — the finding is still usable.
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"ok": false, "error": "brief_generation_failed", "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let brief_json = serde_json::to_value(&brief).unwrap_or(Value::Null);
+
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let _ = sqlx::query(
+            "UPDATE vulnerabilities SET remediation_brief = $3 WHERE client_id = $1 AND finding_id = $2",
+        )
+        .bind(id)
+        .bind(&finding_id)
+        .bind(&brief_json)
+        .execute(&mut *tx)
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "cached": false,
+            "brief": brief_json,
+            "generated_patch": generated_patch,
+            "poc_exploit": poc_exploit,
+            "has_patch": !generated_patch.trim().is_empty(),
+        })),
+    )
+        .into_response()
+}
+
+/// `GET /api/clients/:id/heal-stats` — aggregate auto-heal analytics for a client: total runs,
+/// verdict distribution, success rate, attempt stats, attested count, and per-channel breakdown.
+async fn api_heal_stats(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let agg = sqlx::query(
+        r#"SELECT
+             count(*)::bigint AS total,
+             count(*) FILTER (WHERE verdict = 'fixed')::bigint AS fixed,
+             count(*) FILTER (WHERE verdict = 'broke_app')::bigint AS broke_app,
+             count(*) FILTER (WHERE verdict = 'still_vulnerable')::bigint AS still_vulnerable,
+             count(*) FILTER (WHERE verification_status LIKE 'verified_%')::bigint AS delivered,
+             count(*) FILTER (WHERE verification_receipt IS NOT NULL AND verification_receipt <> '')::bigint AS attested,
+             COALESCE(round(avg(attempts)::numeric, 2), 1)::float8 AS avg_attempts,
+             COALESCE(max(attempts), 1)::bigint AS max_attempts
+           FROM heal_requests WHERE client_id = $1"#,
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let channels = sqlx::query(
+        "SELECT COALESCE(channel,'unknown') AS channel, count(*)::bigint AS n FROM heal_requests WHERE client_id = $1 GROUP BY 1 ORDER BY 2 DESC",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default();
+    let _ = tx.commit().await;
+
+    let (total, fixed) = agg
+        .as_ref()
+        .map(|r| {
+            (
+                r.try_get::<i64, _>("total").unwrap_or(0),
+                r.try_get::<i64, _>("fixed").unwrap_or(0),
+            )
+        })
+        .unwrap_or((0, 0));
+    let success_rate = if total > 0 {
+        (fixed as f64 / total as f64 * 1000.0).round() / 1000.0
+    } else {
+        0.0
+    };
+    let by_channel: Vec<Value> = channels
+        .into_iter()
+        .map(|r| {
+            json!({
+                "channel": r.try_get::<String, _>("channel").unwrap_or_default(),
+                "count": r.try_get::<i64, _>("n").unwrap_or(0),
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "total": total,
+            "fixed": fixed,
+            "broke_app": agg.as_ref().and_then(|r| r.try_get::<i64,_>("broke_app").ok()).unwrap_or(0),
+            "still_vulnerable": agg.as_ref().and_then(|r| r.try_get::<i64,_>("still_vulnerable").ok()).unwrap_or(0),
+            "delivered": agg.as_ref().and_then(|r| r.try_get::<i64,_>("delivered").ok()).unwrap_or(0),
+            "attested": agg.as_ref().and_then(|r| r.try_get::<i64,_>("attested").ok()).unwrap_or(0),
+            "avg_attempts": agg.as_ref().and_then(|r| r.try_get::<f64,_>("avg_attempts").ok()).unwrap_or(1.0),
+            "max_attempts": agg.as_ref().and_then(|r| r.try_get::<i64,_>("max_attempts").ok()).unwrap_or(1),
+            "success_rate": success_rate,
+            "by_channel": by_channel,
+        })),
+    )
+        .into_response()
+}
+
+/// `POST /api/clients/:id/heal-revert` — close an auto-opened remediation PR/MR (undo). Requires
+/// operator + destructive dual-authorization; the git token is supplied in the request (it is
+/// cleared from the spec after the original run).
+async fn api_heal_revert(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<HealRevertBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        return r;
+    }
+    if let Err(detail) = crate::security_hardening::validate_finding_id_token(&body.finding_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid finding_id", "detail": detail})),
+        )
+            .into_response();
+    }
+    let token = body.git_token.as_deref().unwrap_or("").trim().to_string();
+    let repo = body.repo_slug.as_deref().unwrap_or("").trim().to_string();
+    if token.is_empty() || repo.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "git_token and repo_slug required"})),
+        )
+            .into_response();
+    }
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB"}))).into_response();
+    };
+    let row = sqlx::query(
+        r#"SELECT pr_number, COALESCE(branch_name,'') AS branch_name, COALESCE(channel,'github_pr') AS channel
+           FROM heal_requests
+           WHERE client_id = $1 AND finding_id = $2
+             AND verification_status IN ('verified_pr_opened','verified_mr_opened')
+             AND pr_number IS NOT NULL
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(id)
+    .bind(&body.finding_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+
+    let Some(r) = row else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "no open heal PR/MR to revert"}))).into_response();
+    };
+    let pr_number: i64 = r.try_get::<Option<i32>, _>("pr_number").ok().flatten().map(|n| n as i64).unwrap_or(0);
+    let branch: String = r.try_get("branch_name").unwrap_or_default();
+    let stored_channel: String = r.try_get("channel").unwrap_or_else(|_| "github_pr".into());
+    let channel = crate::heal_channels::DeliveryChannel::from_id(
+        body.channel.as_deref().unwrap_or(&stored_channel),
+    );
+
+    let result = match channel {
+        crate::heal_channels::DeliveryChannel::GitlabMr => {
+            let host = body.gitlab_host.as_deref().unwrap_or("gitlab.com");
+            crate::gitlab_heal::close_merge_request(&token, host, &repo, pr_number).await
+        }
+        crate::heal_channels::DeliveryChannel::BitbucketPr => {
+            crate::bitbucket_heal::decline_pull_request(&token, &repo, pr_number).await
+        }
+        crate::heal_channels::DeliveryChannel::AzureReposPr => {
+            crate::azure_repos_heal::abandon_pull_request(&token, &repo, pr_number).await
+        }
+        _ => {
+            let del = if body.delete_branch.unwrap_or(false) && !branch.is_empty() {
+                Some(branch.as_str())
+            } else {
+                None
+            };
+            crate::auto_heal::close_pull_request(&token, &repo, pr_number, del).await
+        }
+    };
+
+    let ip = extract_client_ip(&headers, addr);
+    let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    match result {
+        Ok(()) => {
+            if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+                let _ = sqlx::query(
+                    r#"INSERT INTO heal_requests (tenant_id, client_id, finding_id, branch_name, pr_number, verification_status, verification_job_id, channel)
+                       VALUES ($1, $2, $3, $4, $5, 'reverted', '', $6)"#,
+                )
+                .bind(auth.tenant_id)
+                .bind(id)
+                .bind(&body.finding_id)
+                .bind(&branch)
+                .bind(pr_number as i32)
+                .bind(channel.id())
+                .execute(&mut *tx)
+                .await;
+                let _ = audit_log::insert_audit(
+                    &mut tx,
+                    auth.tenant_id,
+                    Some(auth.user_id),
+                    &actor,
+                    "heal_reverted",
+                    &format!("finding={} repo={} pr={} channel={}", body.finding_id, repo, pr_number, channel.id()),
+                    &ip,
+                )
+                .await;
+                let _ = tx.commit().await;
+            }
+            (StatusCode::OK, Json(json!({"ok": true, "reverted": true, "pr_number": pr_number, "channel": channel.id()}))).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"ok": false, "error": "revert_failed", "detail": e})),
+        )
+            .into_response(),
+    }
+}
+
+/// `POST /api/clients/:id/heal-batch` — enqueue verified auto-heals for many findings at once
+/// (e.g. a whole remediation family). Operator + destructive dual-authorization required. Findings
+/// without a generated patch are skipped. Bounded to 50 findings per call.
+async fn api_heal_batch(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+    Json(body): Json<HealBatchBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        return r;
+    }
+    let token = body.git_token.as_deref().unwrap_or("").trim();
+    let repo = body.repo_slug.as_deref().unwrap_or("").trim();
+    if token.is_empty() || repo.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "git_token and repo_slug required"}))).into_response();
+    }
+    if let Err(detail) = crate::security_hardening::validate_github_repo_slug(repo) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid repo_slug", "detail": detail}))).into_response();
+    }
+    let base = body.base_branch.as_deref().unwrap_or("main");
+    if let Err(detail) = crate::security_hardening::validate_git_branch_name(base) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid base_branch", "detail": detail}))).into_response();
+    }
+    let channel = crate::heal_channels::DeliveryChannel::from_id(body.channel.as_deref().unwrap_or("github_pr")).id();
+    let health = body.health_check_curl.as_deref().unwrap_or("");
+
+    // Dedup + cap the requested findings.
+    let mut seen = std::collections::HashSet::new();
+    let ids: Vec<String> = body
+        .finding_ids
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && seen.insert(s.clone()))
+        .take(50)
+        .collect();
+
+    let mut results: Vec<Value> = Vec::new();
+    let mut enqueued = 0i64;
+    let mut skipped = 0i64;
+    for fid in ids {
+        if crate::security_hardening::validate_finding_id_token(&fid).is_err() {
+            results.push(json!({"finding_id": fid, "status": "invalid_finding_id"}));
+            skipped += 1;
+            continue;
+        }
+        let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+            results.push(json!({"finding_id": fid, "status": "db_error"}));
+            skipped += 1;
+            continue;
+        };
+        let row = sqlx::query(
+            "SELECT id, COALESCE(generated_patch,'') AS generated_patch, COALESCE(poc_exploit,'') AS poc_exploit FROM vulnerabilities WHERE client_id = $1 AND finding_id = $2 LIMIT 1",
+        )
+        .bind(id)
+        .bind(&fid)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        let Some(r) = row else {
+            let _ = tx.rollback().await;
+            results.push(json!({"finding_id": fid, "status": "not_found"}));
+            skipped += 1;
+            continue;
+        };
+        let vuln_id: i64 = r.try_get("id").unwrap_or(0);
+        let patch: String = r.try_get::<String, _>("generated_patch").unwrap_or_default();
+        let poc: String = r.try_get::<String, _>("poc_exploit").unwrap_or_default();
+        if patch.trim().is_empty() || crate::security_hardening::validate_remediation_patch(&patch).is_err() {
+            let _ = tx.rollback().await;
+            results.push(json!({"finding_id": fid, "status": "no_valid_patch"}));
+            skipped += 1;
+            continue;
+        }
+        let spec_id = uuid::Uuid::new_v4();
+        let ins = sqlx::query(
+            r#"INSERT INTO auto_heal_job_specs (
+                id, tenant_id, user_id, client_id, vuln_id, finding_id,
+                git_token, repo_slug, base_branch, patch_text, poc_curl, channel, health_check_curl, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending')"#,
+        )
+        .bind(spec_id)
+        .bind(auth.tenant_id)
+        .bind(auth.user_id)
+        .bind(id)
+        .bind(vuln_id)
+        .bind(&fid)
+        .bind(token)
+        .bind(repo)
+        .bind(base)
+        .bind(&patch)
+        .bind(&poc)
+        .bind(channel)
+        .bind(health)
+        .execute(&mut *tx)
+        .await;
+        if ins.is_err() {
+            let _ = tx.rollback().await;
+            results.push(json!({"finding_id": fid, "status": "insert_failed"}));
+            skipped += 1;
+            continue;
+        }
+        let _ = tx.commit().await;
+        match db::job_queue::enqueue_with_max_attempts(
+            state.app_pool.as_ref(),
+            auth.tenant_id,
+            "auto_heal",
+            json!({ "spec_id": spec_id.to_string() }),
+            None,
+            5,
+        )
+        .await
+        {
+            Ok(_) => {
+                results.push(json!({"finding_id": fid, "status": "queued", "job_id": spec_id.to_string()}));
+                enqueued += 1;
+            }
+            Err(e) => {
+                results.push(json!({"finding_id": fid, "status": "enqueue_failed", "detail": e.to_string()}));
+                skipped += 1;
+            }
+        }
+    }
+
+    let ip = extract_client_ip(&headers, addr);
+    let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &actor,
+            "destructive_heal_batch",
+            &format!("client_id={} repo={} enqueued={} skipped={}", id, repo, enqueued, skipped),
+            &ip,
+        )
+        .await;
+        let _ = tx.commit().await;
+    }
+
+    (StatusCode::ACCEPTED, Json(json!({"ok": true, "enqueued": enqueued, "skipped": skipped, "results": results}))).into_response()
+}
+
 async fn api_heal_requests_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1564,7 +2051,10 @@ async fn api_heal_requests_list(
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
     };
     let rows = sqlx::query(
-        r#"SELECT id, finding_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, created_at FROM heal_requests WHERE client_id = $1 ORDER BY id DESC"#,
+        r#"SELECT id, finding_id, branch_name, pr_url, pr_number, diff_summary, verification_status, verification_job_id, created_at,
+                  COALESCE(verdict,'') AS verdict, COALESCE(channel,'') AS channel, COALESCE(attempts,1) AS attempts,
+                  (COALESCE(verification_receipt,'') <> '') AS attested
+           FROM heal_requests WHERE client_id = $1 ORDER BY id DESC"#,
     )
     .bind(id)
     .fetch_all(&mut *tx)
@@ -1583,6 +2073,10 @@ async fn api_heal_requests_list(
                 "diff_summary": r.try_get::<Option<String>,_>("diff_summary").ok().flatten(),
                 "verification_status": r.try_get::<String,_>("verification_status").unwrap_or_default(),
                 "verification_job_id": r.try_get::<String,_>("verification_job_id").unwrap_or_default(),
+                "verdict": r.try_get::<String,_>("verdict").unwrap_or_default(),
+                "channel": r.try_get::<String,_>("channel").unwrap_or_default(),
+                "attempts": r.try_get::<i32,_>("attempts").unwrap_or(1),
+                "attested": r.try_get::<bool,_>("attested").unwrap_or(false),
                 "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
             })
         })
