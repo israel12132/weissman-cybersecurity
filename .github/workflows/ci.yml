@@ -86,12 +86,23 @@ jobs:
         #   RUSTSEC-2026-0098/0099/0104  time 0.2.x — via genpdf→lopdf/printpdf (PDF
         #                      reports). genpdf 0.2.0 is the latest/unmaintained;
         #                      fixing requires migrating off genpdf.
+        #   RUSTSEC-2026-0187  lopdf (stack overflow on deeply-nested PDF *parsing*)
+        #                      — via genpdf→printpdf→lopdf 0.26, pinned by genpdf.
+        #                      We GENERATE PDFs, never parse untrusted ones, so the
+        #                      parser DoS is out of our surface. Tracked with genpdf.
+        #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
+        #                      point) — via tokio-tungstenite 0.21 → rustls 0.22.
+        #                      We don't configure CRL revocation on WS/TLS clients,
+        #                      so the CRL-matching bug is out of our surface. Tracked
+        #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
         run: |
           cargo audit \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2026-0098 \
             --ignore RUSTSEC-2026-0099 \
-            --ignore RUSTSEC-2026-0104
+            --ignore RUSTSEC-2026-0104 \
+            --ignore RUSTSEC-2026-0187 \
+            --ignore RUSTSEC-2026-0049
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
@@ -127,7 +138,7 @@ jobs:
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: fs
           scan-ref: .
@@ -137,7 +148,7 @@ jobs:
           format: table
 
       - name: Generate SBOM (CycloneDX via Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: fs
           scan-ref: .
@@ -302,7 +313,7 @@ jobs:
         # actual runtime image (base OS packages baked into weissman-backend:stable).
         # ignore-unfixed keeps it actionable — only CRITICAL/HIGH with an available fix
         # fail the build (then bump the base image; Dependabot 'docker' helps here).
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: image
           image-ref: weissman-backend:stable
@@ -578,7 +589,7 @@ jobs:
           push-to-registry: true
 
       - name: Generate image SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: image
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}

@@ -1,5 +1,6 @@
 [package]
 name = "weissman-ui-provenance"
+publish = false  # first-party proprietary crate — never published to crates.io
 version = "0.1.0"
 edition = "2021"
 description = "Cryptographic UI provenance — shared between backend signing and browser WASM verification"

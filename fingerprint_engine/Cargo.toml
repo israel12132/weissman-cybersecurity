@@ -1,5 +1,6 @@
 [package]
 name = "fingerprint_engine"
+publish = false  # first-party proprietary crate — never published to crates.io
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.91.1"
@@ -46,7 +47,7 @@ url = "2.5"
 # target-intelligence classifier (target_profile.rs).
 idna = "1"
 uuid = { version = "1", features = ["v4"] }
-quick-xml = "0.31"
+quick-xml = "0.41"
 flate2 = "1"
 bcrypt = "0.16"
 chrono = "0.4"

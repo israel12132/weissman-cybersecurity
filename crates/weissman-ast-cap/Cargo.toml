@@ -1,5 +1,6 @@
 [package]
 name = "weissman-ast-cap"
+publish = false  # first-party proprietary crate — never published to crates.io
 version = "0.1.0"
 edition = "2021"
 description = "WASM AST mutation capping — replaces heavy JS string processing in AstTreeViewer"

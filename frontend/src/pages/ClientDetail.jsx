@@ -91,6 +91,36 @@ export default function ClientDetail() {
     }
   }
 
+  // Derived findings + workbench must run unconditionally (Rules of Hooks), so
+  // they live above the loading/error/not-found early returns and null-guard on
+  // `client` (which is null until the fetch resolves).
+  const listFindings = useMemo(() => {
+    if (!client) return []
+    let doms = []
+    try {
+      const parsed =
+        typeof client.domains === 'string' ? JSON.parse(client.domains) : client.domains
+      doms = Array.isArray(parsed) ? parsed : []
+    } catch {
+      doms = []
+    }
+    return [
+      {
+        id: client.id,
+        severity: 'info',
+        title: client.name,
+        type: 'client',
+        description: client.contact_email || '',
+        resource: doms.join(', '),
+      },
+    ]
+  }, [client])
+
+  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+    csvPrefix: 'weissman-client-detail',
+    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
+  })
+
   if (loading) {
     return (
       <PageShell title={t('client_detail.title')} subtitle={t('client_detail.loading')}>
@@ -168,20 +198,6 @@ export default function ClientDetail() {
 
   const navBtnClass =
     'px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all whitespace-nowrap'
-
-  const listFindings = useMemo(() => [{
-    id: client.id,
-    severity: 'info',
-    title: client.name,
-    type: 'client',
-    description: client.contact_email || '',
-    resource: domains.join(', '),
-  }], [client, domains])
-
-  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
-    csvPrefix: 'weissman-client-detail',
-    haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
-  })
 
   return (
     <PageShell

@@ -1,5 +1,6 @@
 [package]
 name = "fuzz_core"
+publish = false  # first-party proprietary crate — never published to crates.io
 version = "0.1.0"
 edition = "2021"
 description = "Pure mutation + anomaly scoring for HTTP fuzzing (native + wasm32-unknown-unknown)"

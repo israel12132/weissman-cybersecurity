@@ -369,7 +369,7 @@ export default function RiskSuperpositionCollapse() {
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
       const d = await r.json().catch(() => null)
-      if (!ok || !d) return
+      if (!r.ok || !d) return
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed') {
         const raw = d.result_json || d.result || {}

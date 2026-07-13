@@ -1,5 +1,6 @@
 [package]
 name = "weissman-fleet-shaping"
+publish = false  # first-party proprietary crate — never published to crates.io
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.91"

@@ -59,7 +59,9 @@ export function nodesReachableToTarget(seeds, targetId, adj) {
     }
   }
 
-  if (!dist.has(target)) return new Set(nodes.map((n) => String(n.id)))
+  // Target unreachable from any seed → fall back to the whole graph (every node
+  // id in the adjacency map). `nodes` isn't in scope here; `adj` is the graph.
+  if (!dist.has(target)) return new Set(adj.keys())
 
   const targetDist = dist.get(target)
   relevant.add(target)

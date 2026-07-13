@@ -326,51 +326,6 @@ export default function SystemCore() {
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
 
-  function saveOastConfig() {
-    setSaving(true)
-    setError('')
-    const configs = {
-      oast_listener_url: oastListenerUrl.trim(),
-      oast_domain: oastDomain.trim(),
-    }
-    const key = oastApiKey.trim()
-    if (key && key !== '••••••••') configs.oast_api_key = key
-    apiFetch(`/api/system/configs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ configs }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
-      .then(() => setSaving(false))
-      .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
-  }
-
-  async function testOastConnection() {
-    setOastTesting(true)
-    setOastTestResult(null)
-    try {
-      const body = { listener_url: oastListenerUrl.trim() }
-      const k = oastApiKey.trim()
-      if (k && k !== '••••••••') body.api_key = k
-      const r = await apiFetch('/api/onboarding/oast-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const d = await r.json().catch(() => ({}))
-      setOastTestResult(r.ok ? { ok: true, msg: d.url || 'OK' } : { ok: false, msg: d.detail || `HTTP ${r.status}` })
-    } catch (e) {
-      setOastTestResult({ ok: false, msg: e.message })
-    } finally {
-      setOastTesting(false)
-    }
-  }
-
-  function handleAiEntitlementToggle(enabled) {
-    setAiHeavyEntitled(enabled)
-    saveConfig('ai_heavy_entitled', enabled ? 'true' : 'false')
-  }
-
   function saveSemanticConfig() {
     setSaving(true)
     setError('')

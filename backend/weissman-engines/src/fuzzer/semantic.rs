@@ -374,7 +374,7 @@ fn basic_xml_wire_ok(s: &str) -> bool {
         return false;
     }
     let mut r = Reader::from_str(t);
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     let mut saw_element = false;
     for _ in 0..8192 {
         match r.read_event() {
