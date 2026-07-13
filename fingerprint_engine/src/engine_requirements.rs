@@ -3,11 +3,13 @@
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 static REQUIREMENTS_JSON: &str = include_str!("../../shared/engine_requirements.json");
 
 static CATALOG: OnceLock<Value> = OnceLock::new();
+static TAXONOMY: OnceLock<HashMap<String, EngineTaxon>> = OnceLock::new();
 
 fn catalog_cached() -> &'static Value {
     CATALOG.get_or_init(|| {
@@ -16,6 +18,76 @@ fn catalog_cached() -> &'static Value {
             json!({"error": "requirements catalog unavailable"})
         })
     })
+}
+
+/// Authoritative per-engine taxonomy row derived from the embedded catalog's
+/// `engines` map. `group` is one of the 15 canonical groups (recon, web,
+/// network, cloud, ot, crypto, ai, apt, stealth, supply_chain, data, malware,
+/// mobile, social, defense); `kind` is `real_probe` | `agent_required` |
+/// `special`.
+#[derive(Debug, Clone)]
+pub struct EngineTaxon {
+    pub id: String,
+    pub group: String,
+    pub kind: String,
+    pub label: String,
+}
+
+fn taxonomy() -> &'static HashMap<String, EngineTaxon> {
+    TAXONOMY.get_or_init(|| {
+        let mut map = HashMap::new();
+        if let Some(engines) = catalog_cached().get("engines").and_then(Value::as_object) {
+            for (id, def) in engines {
+                let group = def
+                    .get("group")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let kind = def
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .unwrap_or("real_probe")
+                    .to_string();
+                let label = def
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .unwrap_or(id.as_str())
+                    .to_string();
+                map.insert(
+                    id.clone(),
+                    EngineTaxon {
+                        id: id.clone(),
+                        group,
+                        kind,
+                        label,
+                    },
+                );
+            }
+        }
+        map
+    })
+}
+
+/// Full taxonomy row for an engine id, resolving legacy aliases to the
+/// canonical id first so callers can pass either form.
+pub fn engine_taxon(id: &str) -> Option<&'static EngineTaxon> {
+    let t = taxonomy();
+    if let Some(row) = t.get(id) {
+        return Some(row);
+    }
+    let canonical = weissman_core::models::engine::resolve_engine_id(id);
+    t.get(canonical)
+}
+
+/// Authoritative group for an engine id (alias-resolving), if known.
+pub fn engine_group(id: &str) -> Option<&'static str> {
+    engine_taxon(id).map(|t| t.group.as_str())
+}
+
+/// Authoritative kind (`real_probe` | `agent_required` | `special`) for an
+/// engine id (alias-resolving), if known.
+pub fn engine_kind(id: &str) -> Option<&'static str> {
+    engine_taxon(id).map(|t| t.kind.as_str())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -235,6 +307,17 @@ mod tests {
     fn catalog_loads() {
         let c = catalog_json();
         assert!(c["production_engine_count"].as_u64().unwrap_or(0) > 400);
+    }
+
+    #[test]
+    fn taxonomy_resolves_group_and_kind() {
+        // Known production engines carry their authoritative group + kind.
+        assert_eq!(engine_group("osint"), Some("recon"));
+        assert_eq!(engine_group("bola_idor"), Some("web"));
+        assert_eq!(engine_group("scada_ics"), Some("ot"));
+        assert_eq!(engine_kind("osint"), Some("real_probe"));
+        // Unknown ids resolve to nothing rather than panicking.
+        assert_eq!(engine_group("definitely_not_an_engine"), None);
     }
 
     #[test]

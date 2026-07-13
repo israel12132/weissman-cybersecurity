@@ -84,6 +84,8 @@ export const ReportHistory = React.lazy(() => import('../pages/ReportHistory.jsx
 export const ExecutiveOverview = React.lazy(() => import('../pages/ExecutiveOverview.jsx'))
 export const AgentManagement = React.lazy(() => import('../pages/AgentManagement'))
 export const DarkWebMonitor = React.lazy(() => import('../pages/DarkWebMonitor'))
+export const TargetIntelligence = React.lazy(() => import('../pages/TargetIntelligence'))
+export const StealthOperations = React.lazy(() => import('../pages/StealthOperations'))
 export const ThreatHuntingWorkbench = React.lazy(() => import('../pages/ThreatHuntingWorkbench'))
 export const ThreatAnalysisCenter = React.lazy(() => import('../pages/ThreatAnalysisCenter'))
 export const EngineClientCatalog = React.lazy(() => import('../pages/EngineClientCatalog'))

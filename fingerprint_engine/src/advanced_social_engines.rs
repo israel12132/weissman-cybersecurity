@@ -2,8 +2,8 @@
 //! No phishing payloads are sent; we audit email auth, login pages, and OIDC discovery.
 
 use crate::engine_probes::{
-    dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value, http_client,
-    http_get, normalize_url,
+    dns_a, dns_mx, dns_txt, empty_ok, extract_host, finding_with_probe_depth, header_value,
+    http_client, http_get, normalize_url, tcp_open, tcp_probe_response, udp_probe_response,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -133,10 +133,9 @@ async fn oauth_misconfig_hints(t: &str, engine_id: &str, mitre: &str) -> Vec<Val
     findings
 }
 
-async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
-    if t.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+/// Email-authentication posture (SPF / DMARC / DKIM) + OAuth/OIDC misconfig
+/// hints. Returns findings for composition into channel-specific engines.
+async fn email_auth_findings(t: &str, engine_id: &str, mitre: &str) -> Vec<Value> {
     let host = extract_host(t);
     let txt = dns_txt(&host).await;
     let dmarc_host = format!("_dmarc.{}", host);
@@ -201,20 +200,237 @@ async fn email_auth_audit(t: &str, engine_id: &str, mitre: &str) -> EngineResult
         ));
     }
     findings.extend(oauth_misconfig_hints(t, engine_id, mitre).await);
+    findings
+}
+
+// ── VoIP / SIP surface (vishing infrastructure) ─────────────────────────────
+
+/// A minimal, read-only SIP OPTIONS ping (the SIP equivalent of an ICMP echo).
+fn sip_options_probe(host: &str) -> Vec<u8> {
+    format!(
+        "OPTIONS sip:{h} SIP/2.0\r\n\
+         Via: SIP/2.0/UDP {h}:5060;branch=z9hG4bK-weissman\r\n\
+         Max-Forwards: 70\r\n\
+         To: <sip:{h}>\r\n\
+         From: <sip:probe@{h}>;tag=weissman\r\n\
+         Call-ID: weissman-probe@{h}\r\n\
+         CSeq: 1 OPTIONS\r\n\
+         Contact: <sip:probe@{h}>\r\n\
+         Content-Length: 0\r\n\r\n",
+        h = host
+    )
+    .into_bytes()
+}
+
+/// True if a raw response looks like a SIP endpoint answering.
+fn is_sip_response(resp: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&resp[..resp.len().min(256)]).to_ascii_lowercase();
+    head.contains("sip/2.0")
+}
+
+/// Probe for an exposed VoIP/PBX (SIP) — the infrastructure that makes caller-ID
+/// spoofing / vishing possible. UDP 5060, then TCP 5060, then TLS 5061.
+async fn voip_sip_surface(host: &str, engine_id: &str, mitre: &str, target: &str) -> Vec<Value> {
+    let mut findings = Vec::new();
+    let probe = sip_options_probe(host);
+    let mut confirmed = false;
+    if let Some(resp) = udp_probe_response(host, 5060, &probe).await {
+        if is_sip_response(&resp) {
+            confirmed = true;
+            findings.push(social_finding(
+                engine_id,
+                "Exposed SIP/VoIP service (UDP 5060)",
+                "high",
+                mitre,
+                &format!("{host}:5060/udp answered a SIP OPTIONS probe — an exposed PBX/SIP trunk enables caller-ID spoofing and vishing / toll-fraud abuse."),
+                target,
+            ));
+        }
+    }
+    if !confirmed {
+        if let Some(resp) = tcp_probe_response(host, 5060, &probe).await {
+            if is_sip_response(&resp) {
+                confirmed = true;
+                findings.push(social_finding(
+                    engine_id,
+                    "Exposed SIP/VoIP service (TCP 5060)",
+                    "high",
+                    mitre,
+                    &format!("{host}:5060/tcp answered a SIP OPTIONS probe — exposed VoIP signalling reachable for vishing infrastructure abuse."),
+                    target,
+                ));
+            }
+        }
+    }
+    if !confirmed && tcp_open(host, 5061).await {
+        findings.push(social_finding(
+            engine_id,
+            "SIP-TLS port open (5061)",
+            "medium",
+            mitre,
+            &format!("{host}:5061/tcp is open (SIP-TLS candidate) — confirm VoIP exposure and vishing / toll-fraud risk."),
+            target,
+        ));
+    }
+    findings
+}
+
+// ── SMS gateway surface (smishing infrastructure) ───────────────────────────
+
+/// True if an HTTP body/path looks like a third-party SMS-send API surface.
+fn is_sms_api_surface(path: &str, body_lower: &str) -> bool {
+    let p = path.to_ascii_lowercase();
+    p.contains("sms")
+        || p.contains("message")
+        || body_lower.contains("twilio")
+        || body_lower.contains("messagebird")
+        || body_lower.contains("vonage")
+        || body_lower.contains("nexmo")
+}
+
+/// Probe for an exposed SMS gateway (SMPP 2775) or SMS-send HTTP API — the
+/// infrastructure abused to blast spoofed smishing messages.
+async fn sms_gateway_surface(
+    host: &str,
+    base: &str,
+    engine_id: &str,
+    mitre: &str,
+    target: &str,
+) -> Vec<Value> {
+    let mut findings = Vec::new();
+    // SMPP (Short Message Peer-to-Peer) default port.
+    if tcp_open(host, 2775).await {
+        findings.push(social_finding(
+            engine_id,
+            "SMPP SMS-gateway port open (2775)",
+            "high",
+            mitre,
+            &format!("{host}:2775/tcp (SMPP) is reachable — an exposed SMS gateway can be abused to send spoofed smishing messages at scale."),
+            target,
+        ));
+    }
+    let client = http_client().await;
+    for path in [
+        "/api/sms",
+        "/api/sms/send",
+        "/sms/send",
+        "/api/messages",
+        "/webhook/sms",
+    ] {
+        let url = format!("{}{}", base.trim_end_matches('/'), path);
+        if let Some(p) = http_get(&client, &url).await {
+            // A POST-only send endpoint typically answers 405/401/400 (not 404)
+            // to a GET; that plus the sms-named path is a real surface signal.
+            if p.status != 0
+                && p.status != 404
+                && (matches!(p.status, 400 | 401 | 403 | 405)
+                    || is_sms_api_surface(path, &p.body.to_ascii_lowercase()))
+            {
+                findings.push(social_finding(
+                    engine_id,
+                    "SMS-send API surface reachable",
+                    "medium",
+                    mitre,
+                    &format!("{} (HTTP {}) exposes an SMS-send API surface — verify authentication and rate-limits to prevent smishing abuse.", p.final_url, p.status),
+                    target,
+                ));
+                break;
+            }
+        }
+    }
+    findings
+}
+
+// ── Look-alike domain surface (BEC / impersonation infrastructure) ──────────
+
+/// Generate common look-alike variants of a registrable domain (character
+/// doubling, deletion, hyphen insertion, and digit/letter homoglyph swaps).
+/// Pure + bounded so it is unit-testable and cheap.
+fn lookalike_variants(domain: &str) -> Vec<String> {
+    let Some((label, tld)) = domain.split_once('.') else {
+        return Vec::new();
+    };
+    if label.len() < 3 {
+        return Vec::new();
+    }
+    let chars: Vec<char> = label.chars().collect();
+    let mid = chars.len() / 2;
+    let mut candidates: Vec<String> = Vec::new();
+    // Doubled first character.
+    candidates.push(format!("{}{}", chars[0], label));
+    // Single-character deletion at the middle.
+    candidates.push(
+        chars
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != mid)
+            .map(|(_, c)| *c)
+            .collect(),
+    );
+    // Hyphen inserted in the middle (common BEC trick: "my-company"). Split on a
+    // char boundary, not a byte index.
+    let a: String = chars[..mid].iter().collect();
+    let b: String = chars[mid..].iter().collect();
+    candidates.push(format!("{a}-{b}"));
+    // Homoglyph swaps (o↔0, l↔1, i↔1, e↔3).
+    for (from, to) in [('o', '0'), ('l', '1'), ('i', '1'), ('e', '3')] {
+        if label.contains(from) {
+            candidates.push(label.replacen(from, &to.to_string(), 1));
+        }
+    }
+    // De-duplicate and drop the identity, then attach the TLD.
+    let mut out: Vec<String> = Vec::new();
+    for c in candidates {
+        if c != label && !out.contains(&c) {
+            out.push(c);
+        }
+    }
+    out.into_iter()
+        .map(|l| format!("{l}.{tld}"))
+        .take(6)
+        .collect()
+}
+
+/// Resolve a few look-alike variants; registered/live ones are candidate BEC
+/// (business-email-compromise) impersonation infrastructure.
+async fn lookalike_domain_surface(
+    domain: &str,
+    engine_id: &str,
+    mitre: &str,
+    target: &str,
+) -> Vec<Value> {
+    let mut findings = Vec::new();
+    for variant in lookalike_variants(domain) {
+        if !dns_a(&variant).await.is_empty() {
+            findings.push(social_finding(
+                engine_id,
+                "Registered look-alike domain resolves",
+                "high",
+                mitre,
+                &format!("Look-alike of {domain} → {variant} resolves to a live host — candidate BEC / exec-impersonation infrastructure. Confirm ownership and monitor for spoofed-sender abuse."),
+                target,
+            ));
+        }
+    }
+    findings
+}
+
+fn build_social_result(
+    engine_id: &str,
+    target: &str,
+    findings: Vec<Value>,
+    label: &str,
+) -> EngineResult {
     if findings.is_empty() {
-        empty_ok(engine_id, t)
+        empty_ok(engine_id, target)
     } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("{}: {}", engine_id, findings.len()),
-        )
+        let n = findings.len();
+        EngineResult::ok(findings, format!("{engine_id}: {n} {label}"))
     }
 }
 
-async fn phishing_login_surface(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
-    if t.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
+/// Public login / credential-harvest surface (the spear-phishing payload target).
+async fn phishing_login_findings(t: &str, engine_id: &str, mitre: &str) -> Vec<Value> {
     let client = http_client().await;
     let base = normalize_url(t);
     let mut findings: Vec<Value> = Vec::new();
@@ -258,28 +474,61 @@ async fn phishing_login_surface(t: &str, engine_id: &str, mitre: &str) -> Engine
             }
         }
     }
-    if findings.is_empty() {
-        empty_ok(engine_id, t)
-    } else {
-        EngineResult::ok(
-            findings.clone(),
-            format!("{}: {}", engine_id, findings.len()),
-        )
+    findings
+}
+
+/// Thin wrapper kept for callers that want the login surface as a standalone
+/// engine result (e.g. `linkedin_phishing`).
+async fn phishing_login_surface(t: &str, engine_id: &str, mitre: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
     }
+    let findings = phishing_login_findings(t, engine_id, mitre).await;
+    build_social_result(engine_id, t, findings, "login surface signal(s)")
 }
 
 pub async fn run_spear_phishing_engine_result(t: &str) -> EngineResult {
-    email_auth_audit(t, "spear_phishing_engine", "T1566.001").await
+    // Spear phishing arrives by email; the payload target is a credential-harvest
+    // login page. Assess both the email-auth posture and the public login surface.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let mut findings = email_auth_findings(t, "spear_phishing_engine", "T1566.001").await;
+    findings.extend(phishing_login_findings(t, "spear_phishing_engine", "T1566.001").await);
+    build_social_result(
+        "spear_phishing_engine",
+        t,
+        findings,
+        "spear-phishing surface signal(s)",
+    )
 }
 cli_wrapper!(run_spear_phishing_engine, run_spear_phishing_engine_result);
 
 pub async fn run_vishing_engine_result(t: &str) -> EngineResult {
-    email_auth_audit(t, "vishing_engine", "T1566.004").await
+    // Voice phishing rides on VoIP/PBX infrastructure — probe SIP, not email.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let findings = voip_sip_surface(&host, "vishing_engine", "T1566.004", t).await;
+    build_social_result("vishing_engine", t, findings, "VoIP/SIP exposure signal(s)")
 }
 cli_wrapper!(run_vishing_engine, run_vishing_engine_result);
 
 pub async fn run_smishing_engine_result(t: &str) -> EngineResult {
-    email_auth_audit(t, "smishing_engine", "T1566.004").await
+    // SMS phishing rides on SMS gateways (SMPP) / SMS-send APIs — probe those.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let base = normalize_url(t);
+    let findings = sms_gateway_surface(&host, &base, "smishing_engine", "T1566.004", t).await;
+    build_social_result(
+        "smishing_engine",
+        t,
+        findings,
+        "SMS-gateway exposure signal(s)",
+    )
 }
 cli_wrapper!(run_smishing_engine, run_smishing_engine_result);
 
@@ -328,7 +577,21 @@ pub async fn run_deepfake_voice_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_deepfake_voice_engine, run_deepfake_voice_engine_result);
 
 pub async fn run_business_email_compromise_result(t: &str) -> EngineResult {
-    email_auth_audit(t, "business_email_compromise", "T1566.001").await
+    // BEC impersonates trusted senders via registered look-alike domains and
+    // exploits unenforced DMARC. Assess email-auth posture + live look-alikes.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings = email_auth_findings(t, "business_email_compromise", "T1566.001").await;
+    findings
+        .extend(lookalike_domain_surface(&host, "business_email_compromise", "T1566.001", t).await);
+    build_social_result(
+        "business_email_compromise",
+        t,
+        findings,
+        "BEC exposure signal(s)",
+    )
 }
 cli_wrapper!(
     run_business_email_compromise,
@@ -437,7 +700,20 @@ pub async fn run_linkedin_phishing_result(t: &str) -> EngineResult {
 cli_wrapper!(run_linkedin_phishing, run_linkedin_phishing_result);
 
 pub async fn run_callback_phishing_result(t: &str) -> EngineResult {
-    email_auth_audit(t, "callback_phishing", "T1566.001").await
+    // Callback / TOAD (telephone-oriented attack delivery) pairs an email lure
+    // with a phone callback number — assess the email posture AND the VoIP surface.
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let mut findings = email_auth_findings(t, "callback_phishing", "T1566.001").await;
+    findings.extend(voip_sip_surface(&host, "callback_phishing", "T1566.001", t).await);
+    build_social_result(
+        "callback_phishing",
+        t,
+        findings,
+        "callback-phishing surface signal(s)",
+    )
 }
 cli_wrapper!(run_callback_phishing, run_callback_phishing_result);
 
@@ -458,3 +734,43 @@ cli_wrapper!(
     run_typosquatting_phishing,
     run_typosquatting_phishing_result
 );
+
+#[cfg(test)]
+mod social_channel_tests {
+    use super::{is_sip_response, is_sms_api_surface, lookalike_variants};
+
+    #[test]
+    fn sip_response_detected() {
+        assert!(is_sip_response(b"SIP/2.0 200 OK\r\nVia: ..."));
+        assert!(is_sip_response(b"sip/2.0 486 Busy Here"));
+        assert!(!is_sip_response(b"HTTP/1.1 200 OK"));
+        assert!(!is_sip_response(b""));
+    }
+
+    #[test]
+    fn sms_api_surface_detected() {
+        assert!(is_sms_api_surface("/api/sms/send", ""));
+        assert!(is_sms_api_surface("/api/messages", ""));
+        assert!(is_sms_api_surface("/webhook/x", "powered by twilio"));
+        assert!(!is_sms_api_surface("/login", "welcome"));
+    }
+
+    #[test]
+    fn lookalike_variants_are_plausible_and_bounded() {
+        let v = lookalike_variants("example.com");
+        assert!(!v.is_empty() && v.len() <= 6);
+        // Every variant keeps the TLD and differs from the original label.
+        assert!(v.iter().all(|d| d.ends_with(".com") && d != "example.com"));
+        // A homoglyph swap fires for letters present in the label (example has
+        // 'e' and 'l', so expect a '3' or '1' variant).
+        assert!(v.iter().any(|d| d.contains('3') || d.contains('1')));
+        // The o->0 homoglyph fires only when the label contains an 'o'.
+        let vo = lookalike_variants("proton.com");
+        assert!(
+            vo.iter().any(|d| d.contains('0')),
+            "o->0 homoglyph expected"
+        );
+        // Too-short labels produce nothing (avoids noise).
+        assert!(lookalike_variants("ab.com").is_empty());
+    }
+}

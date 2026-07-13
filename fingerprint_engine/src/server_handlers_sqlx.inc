@@ -1094,6 +1094,107 @@ async fn api_engines_requirements() -> Response {
     (StatusCode::OK, Json(crate::engine_requirements::catalog_json())).into_response()
 }
 
+/// Target-intelligence profile (what / where / who / why) + taxonomy-backed,
+/// explainable engine selection for a target string. By default a pure
+/// string+catalog classification — no network, no tenant data. With `?enrich=1`
+/// (alias `?resolve=1`) it also performs one bounded A/AAAA lookup to
+/// network-verify the seed: resolved IPs, private-space detection, and CDN /
+/// hosting attribution from the edge IP. JWT-gated (not in PUBLIC_ROUTES).
+async fn api_intel_target_profile(
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let target = q
+        .get("target")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    if target.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "target query parameter required" })),
+        )
+            .into_response();
+    }
+    let mut profile = crate::target_profile::TargetProfile::classify(&target);
+    // Opt-in active DNS enrichment, bounded so a slow/hostile resolver can't
+    // stall the request. Off by default keeps this a fast, no-network classifier.
+    let want_enrich = q
+        .get("enrich")
+        .or_else(|| q.get("resolve"))
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"));
+    let resolved = if want_enrich {
+        matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(3), profile.enrich_dns()).await,
+            Ok(true)
+        )
+    } else {
+        false
+    };
+    let engines: Vec<String> = weissman_core::models::engine::production_engine_ids()
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    let selection = profile.select(&engines);
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "target": target,
+            "resolved": resolved,
+            "profile": profile.to_json(),
+            "selection": selection.to_json(40),
+        })),
+    )
+        .into_response()
+}
+
+/// Smart Stealth Queue live telemetry — the effective concurrency caps + pacing
+/// (set at deploy time via `WEISSMAN_STEALTH_*`), plus real-time load: in-flight
+/// requests, queue depth, cumulative admissions, per-host load, and the rotating
+/// identity pool sizes. Read-only by design: a safety-critical rate limiter that
+/// shapes outbound Red-Team traffic is tuned via env at deploy, never weakened
+/// from the browser. Requires auth (not in `PUBLIC_ROUTES`) but no tenant scope —
+/// the queue is a process-global admission gateway.
+async fn api_stealth_status() -> Response {
+    (
+        StatusCode::OK,
+        Json(crate::stealth_queue::status().to_json()),
+    )
+        .into_response()
+}
+
+/// Tune the Smart Stealth Queue's live *pacing* (cadence): jitter bounds + the
+/// per-host minimum interval. Values are clamped server-side to a sane ceiling
+/// and `jitter_min ≤ jitter_max` is enforced. The concurrency caps and the
+/// disable kill-switch are deliberately NOT tunable here — they are the env-only
+/// protection floor, so this endpoint can only adjust cadence *within* the
+/// enforced envelope, never lower the DoS/WAF protection. Mutating + RBAC-gated
+/// (operator+), and the applied values are audit-logged. Returns fresh status.
+async fn api_stealth_config(
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    let cur = crate::stealth_queue::status();
+    // Absent fields keep their current value (partial update).
+    let field = |k: &str, dflt: u64| -> u64 {
+        body.get(k).and_then(serde_json::Value::as_u64).unwrap_or(dflt)
+    };
+    let jmin = field("jitter_min_ms", cur.jitter_min_ms);
+    let jmax = field("jitter_max_ms", cur.jitter_max_ms);
+    let interval = field("min_interval_ms", cur.min_interval_ms);
+    let (lo, hi, iv) = crate::stealth_queue::reconfigure_pacing(jmin, jmax, interval);
+    tracing::info!(
+        target: "stealth_config",
+        user_id = auth.user_id,
+        tenant_id = auth.tenant_id,
+        role = %auth.role,
+        jitter_min_ms = lo,
+        jitter_max_ms = hi,
+        min_interval_ms = iv,
+        "stealth pacing reconfigured"
+    );
+    metrics::counter!("weissman_stealth_reconfigure_total").increment(1);
+    (StatusCode::OK, Json(crate::stealth_queue::status().to_json())).into_response()
+}
+
 /// Tenant-level prerequisites (LLM, OAST, AI entitlement) for onboarding wizard.
 async fn api_onboarding_tenant_status(
     State(state): State<Arc<AppState>>,

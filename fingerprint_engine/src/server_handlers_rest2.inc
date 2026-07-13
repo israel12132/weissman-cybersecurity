@@ -823,6 +823,51 @@ async fn api_openapi_spec() -> Response {
                     "responses": { "200": { "description": "Mirror health" } }
                 }
             },
+            "/api/intel/target-profile": {
+                "get": {
+                    "summary": "Deterministic target classification + taxonomy-backed engine selection",
+                    "description": "Classifies a target string (URL / host / IP / host:port) into what it is (asset class, facets), where it lives (registrable domain, public suffix, hosting/network class, IDN/homograph), and why it matters (sensitivity, confidence, evidence), then returns the ranked, explainable engine set the platform would prioritise for it. Pure string+catalog classification — no network traffic, no tenant data.",
+                    "tags": ["Intel"],
+                    "parameters": [
+                        { "name": "target", "in": "query", "required": true, "schema": { "type": "string" }, "description": "URL, hostname, IP, or host:port to profile" },
+                        { "name": "enrich", "in": "query", "required": false, "schema": { "type": "boolean" }, "description": "Opt-in: perform one bounded A/AAAA lookup to network-verify the seed (resolved IPs, private-space detection, CDN/hosting attribution). Off by default." }
+                    ],
+                    "responses": {
+                        "200": { "description": "{ target, resolved, profile, selection } — profile carries asset_class/sensitivity/confidence/provenance/facets; selection carries focus[] + ranked[] with per-engine score/group/reason. `resolved` is true when active DNS enrichment succeeded" },
+                        "400": { "description": "target query parameter required" }
+                    }
+                }
+            },
+            "/api/stealth/status": {
+                "get": {
+                    "summary": "Smart Stealth Queue live telemetry (caps + real-time load)",
+                    "description": "Read-only snapshot of the outbound-traffic admission gateway: effective per-target/global concurrency caps, jitter and pacing, plus live load — global in-flight, queue depth, cumulative admissions, per-host load, and rotating-identity pool sizes. Concurrency caps + the disable flag are env-only (the protection floor); pacing is runtime-tunable via POST /api/stealth/config.",
+                    "tags": ["Intel"],
+                    "responses": { "200": { "description": "{ disabled, config{…,env_keys}, live{global_in_flight,waiting,admitted_total,active_hosts[]}, identity{…} }" } }
+                }
+            },
+            "/api/stealth/config": {
+                "post": {
+                    "summary": "Tune Smart Stealth Queue live pacing (operator+)",
+                    "description": "Adjust the cadence params — jitter_min_ms, jitter_max_ms, min_interval_ms — at runtime. Server-clamped to a sane ceiling with jitter_min ≤ jitter_max enforced; omitted fields keep their current value. Only cadence is tunable: concurrency caps and the disable kill-switch are env-only, so this can never lower the DoS/WAF protection floor. RBAC: operator+. Changes are audit-logged. Returns fresh status.",
+                    "tags": ["Intel"],
+                    "requestBody": {
+                        "required": false,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "properties": {
+                                "jitter_min_ms":   { "type": "integer", "minimum": 0, "maximum": 60000 },
+                                "jitter_max_ms":   { "type": "integer", "minimum": 0, "maximum": 60000 },
+                                "min_interval_ms": { "type": "integer", "minimum": 0, "maximum": 60000 }
+                            }
+                        } } }
+                    },
+                    "responses": {
+                        "200": { "description": "Applied — fresh status snapshot" },
+                        "403": { "description": "RBAC: operator role required" }
+                    }
+                }
+            },
             "/api/intel/suppressions": {
                 "get": {
                     "summary": "List active auto-suppression rules (3-FP threshold)",
