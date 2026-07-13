@@ -1,4 +1,3 @@
-import React from 'react'
 import CeoIntegratedCommandDeck from '../ceo/CeoIntegratedCommandDeck'
 
 export default function CeoMissionControlTab() {

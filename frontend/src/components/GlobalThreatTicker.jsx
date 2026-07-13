@@ -32,8 +32,8 @@ export default function GlobalThreatTicker({ scoreData, intelCount = 0, topology
           {t('battlespace.edges')}: <LiveCounter value={edges} className="text-violet-400" />
         </span>
       )}
-      <span className="font-mono text-xs text-slate-400 tracking-wider">
-        {t(`${NS}.intel`)}: <LiveCounter value={intelCount} className="text-slate-300" />
+      <span className="font-mono text-xs text-[var(--text-tertiary)] tracking-wider">
+        {t(`${NS}.intel`)}: <LiveCounter value={intelCount} className="text-[var(--text-secondary)]" />
       </span>
     </div>
   )

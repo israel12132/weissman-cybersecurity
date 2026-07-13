@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Shield, Plus, Trash2, Edit, Play, AlertTriangle, Check } from 'lucide-react';
 import PageShell from './PageShell'
@@ -6,9 +7,11 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
-import { confirmDialog } from '../utils/confirmDialog'
-import { useToast } from '../components/ui/Toaster'
+import { confirmDialog } from '../utils/confirmDialog';
+
+
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 export default function ContainmentRulesBuilder() {
   const { t } = useTranslation();
@@ -55,7 +58,7 @@ export default function ContainmentRulesBuilder() {
   };
 
   const deleteRule = async (ruleId) => {
-    if (!confirm(t('pages.containmentRulesBuilder.delete_confirm'))) return;
+    if (!(await confirmDialog(t('pages.containmentRulesBuilder.delete_confirm')))) return;
     if (clientId == null) return;
 
     try {
@@ -75,7 +78,7 @@ export default function ContainmentRulesBuilder() {
       case 'block':
         return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -130,9 +133,9 @@ export default function ContainmentRulesBuilder() {
     >
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.containmentRulesBuilder.total_rules')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.containmentRulesBuilder.total_rules')}</span>
               <Shield className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -164,17 +167,17 @@ export default function ContainmentRulesBuilder() {
         </div>
 
         <div className="flex justify-end">
-          <button
+          <Button variant="unstyled"
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.containmentRulesBuilder.create_rule')}
-          </button>
+          </Button>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 space-y-3">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Shield className="w-4 h-4 text-cyan-400" />
               {t('pages.containmentRulesBuilder.rules_heading')}
@@ -188,35 +191,35 @@ export default function ContainmentRulesBuilder() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               {t('pages.containmentRulesBuilder.loading')}
             </div>
           ) : rules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               {t('pages.containmentRulesBuilder.empty')}
             </div>
           ) : visibleRules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {visibleRules.map((rule) => (
                 <div
                   key={rule.id}
-                  className="p-4 hover:bg-white/5 transition-colors"
+                  className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => toggleRule(rule.id, rule.enabled)}
                         className={`p-2 rounded-lg border transition-colors ${
                           rule.enabled
                             ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                            : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                            : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)] border-[var(--border-strong)]/30'
                         }`}
                       >
                         {rule.enabled ? <Play className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                      </button>
+                      </Button>
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -235,7 +238,7 @@ export default function ContainmentRulesBuilder() {
                           )}
                         </div>
 
-                        <p className="text-xs text-gray-400 mb-3">{rule.description}</p>
+                        <p className="text-xs text-[var(--text-tertiary)] mb-3">{rule.description}</p>
 
                         <div className="flex flex-wrap gap-2 mb-2">
                           {rule.trigger_on?.severity && (
@@ -255,7 +258,7 @@ export default function ContainmentRulesBuilder() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                           {rule.triggered_count !== undefined && (
                             <span>{t('pages.containmentRulesBuilder.triggered_times', { count: rule.triggered_count })}</span>
                           )}
@@ -270,18 +273,18 @@ export default function ContainmentRulesBuilder() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => setEditModal(rule)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => deleteRule(rule.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -297,13 +300,13 @@ export default function ContainmentRulesBuilder() {
                 <AlertTriangle className="w-4 h-4 text-red-400" />
                 {t('pages.containmentRulesBuilder.emergency_title')}
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-[var(--text-tertiary)]">
                 {t('pages.containmentRulesBuilder.emergency_body')}
               </p>
             </div>
-            <button className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
+            <Button variant="unstyled" className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
               {t('pages.containmentRulesBuilder.kill_switch')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -328,6 +331,8 @@ export default function ContainmentRulesBuilder() {
 }
 
 function RuleModal({ rule, clientId, onClose, onSave }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, true)
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: rule?.name || '',
@@ -357,35 +362,38 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
+    <div
+      className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {rule ? t('pages.containmentRulesBuilder.edit_rule') : t('pages.containmentRulesBuilder.create_containment_rule')}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <Button variant="unstyled" onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.rule_name')}</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder={t('pages.containmentRulesBuilder.rule_name_placeholder')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">{t('pages.containmentRulesBuilder.action')}</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('pages.containmentRulesBuilder.action')}</label>
             <select
               value={formData.action}
               onChange={(e) => setFormData({ ...formData, action: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="isolate">{t('pages.containmentRulesBuilder.action_isolate')}</option>
               <option value="quarantine">{t('pages.containmentRulesBuilder.action_quarantine')}</option>
@@ -395,7 +403,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
                 type="checkbox"
                 checked={formData.auto_trigger}
@@ -408,19 +416,19 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             {t('common.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50"
           >
             {saving ? t('pages.containmentRulesBuilder.saving') : rule ? t('pages.containmentRulesBuilder.save_changes') : t('pages.containmentRulesBuilder.create_rule')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

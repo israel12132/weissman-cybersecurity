@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 // Command Center GUI for the `bgp_dns_hijacking` engine (DNS & BGP Hijack-Resistance).
 // Every control maps 1:1 to a real engine parameter read from the scan body via ArsenalConfig.
@@ -74,7 +75,7 @@ const PLANE_STYLE = {
   healthy: { bd: 'border-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-300' },
   degraded: { bd: 'border-amber-500/40', bg: 'bg-amber-500/10', text: 'text-amber-300' },
   compromised: { bd: 'border-rose-500/40', bg: 'bg-rose-500/10', text: 'text-rose-300' },
-  unknown: { bd: 'border-white/10', bg: 'bg-white/5', text: 'text-white/40' },
+  unknown: { bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', text: 'text-[var(--text-muted)]' },
 }
 
 const POSTURE_DIMS = [
@@ -132,7 +133,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 function gradeFromScore(score) {
@@ -160,25 +161,25 @@ function EvidenceView({ evidence }) {
   const checks = Array.isArray(evidence.checks) ? evidence.checks : []
   const scalars = Object.entries(evidence).filter(([k]) => k !== 'checks')
   return (
-    <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-3 space-y-2">
+    <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-3 space-y-2">
       {scalars.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
           {scalars.map(([k, v]) => (
             <div key={k} className="flex items-start gap-2 text-[11px] font-mono">
-              <span className="text-white/35 shrink-0">{k}</span>
-              <span className="text-white/70 break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+              <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+              <span className="text-[var(--text-secondary)] break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
       )}
       {checks.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/5">
+        <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
-              <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '·'}</span>
-              <span className="text-white/60">{c.name}</span>
-              <span className="text-white/30">—</span>
-              <span className="text-white/45 break-all">{typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>
+              <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '·'}</span>
+              <span className="text-[var(--text-tertiary)]">{c.name}</span>
+              <span className="text-[var(--text-disabled)]">—</span>
+              <span className="text-[var(--text-muted)] break-all">{typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>
             </div>
           ))}
         </div>
@@ -194,22 +195,22 @@ function FindingCard({ f }) {
   const controls = Array.isArray(f.controls) ? f.controls : []
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
-            {typeof f.confidence === 'number' && <span className="text-[10px] font-mono text-white/30">· conf {(f.confidence * 100).toFixed(0)}%</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
+            {typeof f.confidence === 'number' && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· conf {(f.confidence * 100).toFixed(0)}%</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             {f.remediation && (
               <div className="mt-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
                 <div className="text-[10px] font-mono uppercase text-emerald-400/70 mb-1">Remediation</div>
@@ -219,7 +220,7 @@ function FindingCard({ f }) {
             {controls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {controls.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/10">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -240,7 +241,7 @@ function Scorecard({ summary, t }) {
   const planes = summary.threat_planes || ev.threat_planes || {}
   const roadmap = Array.isArray(summary.roadmap) ? summary.roadmap : (summary.roadmap ? [summary.roadmap] : [])
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex items-center gap-5">
           <div className="relative w-28 h-28 shrink-0">
@@ -250,26 +251,26 @@ function Scorecard({ summary, t }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-3xl font-bold" style={{ color }}>{score}</span>
-              <span className="text-[10px] font-mono text-white/40">/ 100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t('pages.dnsDomainPosture.hijack_resistance', 'Hijack-Resistance')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.dnsDomainPosture.hijack_resistance', 'Hijack-Resistance')}</div>
             <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
-            <div className="text-[11px] font-mono text-white/40 mt-1">{summary.domain || summary.value || summary.target}</div>
+            <div className="text-[11px] font-mono text-[var(--text-muted)] mt-1">{summary.domain || summary.value || summary.target}</div>
             {summary.engine_version && <div className="text-[9px] font-mono text-cyan-500/50 mt-0.5">engine v{summary.engine_version}</div>}
           </div>
         </div>
         <div className="flex-1 space-y-4">
           {planes && typeof planes === 'object' && Object.keys(planes).length > 0 && (
             <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.dnsDomainPosture.threat_planes', 'Threat planes')}</div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.dnsDomainPosture.threat_planes', 'Threat planes')}</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {Object.entries(planes).map(([name, data]) => {
                   const st = PLANE_STYLE[(data?.status || 'unknown').toLowerCase()] || PLANE_STYLE.unknown
                   return (
                     <div key={name} className={`rounded-lg border px-2 py-2 ${st.bd} ${st.bg}`}>
-                      <div className="text-[9px] font-mono uppercase text-white/35">{name.replace('_', '/')}</div>
+                      <div className="text-[9px] font-mono uppercase text-[var(--text-muted)]">{name.replace('_', '/')}</div>
                       <div className={`text-[11px] font-mono font-semibold ${st.text}`}>{data?.status || 'unknown'}</div>
                     </div>
                   )
@@ -278,7 +279,7 @@ function Scorecard({ summary, t }) {
             </div>
           )}
           <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.dnsDomainPosture.posture_dimensions', 'Posture dimensions')}</div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.dnsDomainPosture.posture_dimensions', 'Posture dimensions')}</div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
             {POSTURE_DIMS.map((d) => {
               const raw = ev[d.key]
@@ -288,7 +289,7 @@ function Scorecard({ summary, t }) {
               return (
                 <div key={d.key} className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 ${ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
                   <span className={ok ? 'text-emerald-400' : 'text-rose-400'}>{ok ? '✓' : '✕'}</span>
-                  <span className="text-[10px] font-mono text-white/60">{d.label}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{d.label}</span>
                 </div>
               )
             })}
@@ -302,18 +303,18 @@ function Scorecard({ summary, t }) {
         </div>
       )}
       {summary.incident_bundle && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.dnsDomainPosture.incident_bundle', 'SOC incident bundle')}</div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.dnsDomainPosture.incident_bundle', 'SOC incident bundle')}</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] font-mono">
             {Array.isArray(summary.incident_bundle.mitre_techniques) && summary.incident_bundle.mitre_techniques.length > 0 && (
               <div>
-                <span className="text-white/35">MITRE: </span>
+                <span className="text-[var(--text-muted)]">MITRE: </span>
                 <span className="text-cyan-300/80">{summary.incident_bundle.mitre_techniques.join(', ')}</span>
               </div>
             )}
             {Array.isArray(summary.incident_bundle.priority_actions) && summary.incident_bundle.priority_actions.length > 0 && (
               <div>
-                <span className="text-white/35">{t('pages.dnsDomainPosture.first_actions', 'First actions')}: </span>
+                <span className="text-[var(--text-muted)]">{t('pages.dnsDomainPosture.first_actions', 'First actions')}: </span>
                 <span className="text-amber-200/80">{summary.incident_bundle.priority_actions.slice(0, 3).join(' → ')}</span>
               </div>
             )}
@@ -321,31 +322,31 @@ function Scorecard({ summary, t }) {
         </div>
       )}
       {summary.discovery_graph && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.dnsDomainPosture.discovery_graph', 'Autonomous discovery graph')}</div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.dnsDomainPosture.discovery_graph', 'Autonomous discovery graph')}</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
             {Array.isArray(summary.discovery_graph.signals) && summary.discovery_graph.signals.length > 0 && (
-              <div><span className="text-white/35">Signals: </span><span className="text-emerald-300/80">{summary.discovery_graph.signals.join(', ')}</span></div>
+              <div><span className="text-[var(--text-muted)]">Signals: </span><span className="text-emerald-300/80">{summary.discovery_graph.signals.join(', ')}</span></div>
             )}
             {Array.isArray(summary.discovery_graph.auto_enabled) && (
-              <div><span className="text-white/35">Auto-enabled: </span><span className="text-cyan-300/70">{summary.discovery_graph.auto_enabled.length} probes</span></div>
+              <div><span className="text-[var(--text-muted)]">Auto-enabled: </span><span className="text-cyan-300/70">{summary.discovery_graph.auto_enabled.length} probes</span></div>
             )}
             {typeof summary.discovery_graph.discovered_hosts_total === 'number' && summary.discovery_graph.discovered_hosts_total > 0 && (
-              <div><span className="text-white/35">Discovered hosts: </span><span className="text-white/60">{summary.discovery_graph.discovered_hosts_total}</span></div>
+              <div><span className="text-[var(--text-muted)]">Discovered hosts: </span><span className="text-[var(--text-tertiary)]">{summary.discovery_graph.discovered_hosts_total}</span></div>
             )}
             {Array.isArray(summary.discovery_graph.discovered_hosts_sample) && summary.discovery_graph.discovered_hosts_sample.length > 0 && (
-              <div className="sm:col-span-2"><span className="text-white/35">Sample: </span><span className="text-white/50 break-all">{summary.discovery_graph.discovered_hosts_sample.slice(0, 6).join(', ')}</span></div>
+              <div className="sm:col-span-2"><span className="text-[var(--text-muted)]">Sample: </span><span className="text-[var(--text-tertiary)] break-all">{summary.discovery_graph.discovered_hosts_sample.slice(0, 6).join(', ')}</span></div>
             )}
             {summary.autonomous_mode != null && (
-              <div><span className="text-white/35">Autonomous: </span><span className="text-white/60">{summary.autonomous_mode ? 'on' : 'off'}</span></div>
+              <div><span className="text-[var(--text-muted)]">Autonomous: </span><span className="text-[var(--text-tertiary)]">{summary.autonomous_mode ? 'on' : 'off'}</span></div>
             )}
           </div>
         </div>
       )}
       {summary.coverage_audit && (
-        <div className="mt-4 pt-4 border-t border-white/5">
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.dnsDomainPosture.coverage_audit', 'Probe coverage audit (v8)')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.dnsDomainPosture.coverage_audit', 'Probe coverage audit (v8)')}</div>
             {summary.coverage_audit.coverage_complete != null && (
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${summary.coverage_audit.coverage_complete ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
                 {summary.coverage_audit.coverage_complete ? t('pages.dnsDomainPosture.coverage_complete', 'Full coverage') : t('pages.dnsDomainPosture.coverage_partial', 'Partial')}
@@ -354,27 +355,27 @@ function Scorecard({ summary, t }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono mb-3">
             {typeof summary.coverage_audit.enabled_count === 'number' && (
-              <div><span className="text-white/35">{t('pages.dnsDomainPosture.coverage_enabled', 'Enabled')}: </span><span className="text-white/70">{summary.coverage_audit.enabled_count}</span></div>
+              <div><span className="text-[var(--text-muted)]">{t('pages.dnsDomainPosture.coverage_enabled', 'Enabled')}: </span><span className="text-[var(--text-secondary)]">{summary.coverage_audit.enabled_count}</span></div>
             )}
             {typeof summary.coverage_audit.executed_count === 'number' && (
-              <div><span className="text-white/35">{t('pages.dnsDomainPosture.coverage_executed', 'Executed')}: </span><span className="text-white/70">{summary.coverage_audit.executed_count}</span></div>
+              <div><span className="text-[var(--text-muted)]">{t('pages.dnsDomainPosture.coverage_executed', 'Executed')}: </span><span className="text-[var(--text-secondary)]">{summary.coverage_audit.executed_count}</span></div>
             )}
             {typeof summary.coverage_audit.passed_count === 'number' && (
-              <div><span className="text-white/35">{t('pages.dnsDomainPosture.coverage_passed', 'Passed')}: </span><span className="text-emerald-300/80">{summary.coverage_audit.passed_count}</span></div>
+              <div><span className="text-[var(--text-muted)]">{t('pages.dnsDomainPosture.coverage_passed', 'Passed')}: </span><span className="text-emerald-300/80">{summary.coverage_audit.passed_count}</span></div>
             )}
             {typeof summary.coverage_audit.failed_count === 'number' && (
-              <div><span className="text-white/35">{t('pages.dnsDomainPosture.coverage_failed', 'Failed')}: </span><span className="text-rose-300/80">{summary.coverage_audit.failed_count}</span></div>
+              <div><span className="text-[var(--text-muted)]">{t('pages.dnsDomainPosture.coverage_failed', 'Failed')}: </span><span className="text-rose-300/80">{summary.coverage_audit.failed_count}</span></div>
             )}
           </div>
           {Array.isArray(summary.coverage_audit.probes) && summary.coverage_audit.probes.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-lg border border-white/5 bg-black/20 p-2 space-y-0.5">
+            <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-1)] p-2 space-y-0.5">
               {summary.coverage_audit.probes.filter((p) => p.enabled).map((p) => (
                 <div key={p.id} className="flex items-center justify-between gap-2 text-[10px] font-mono">
-                  <span className="text-white/50 truncate">{p.id}</span>
+                  <span className="text-[var(--text-tertiary)] truncate">{p.id}</span>
                   <span className={
                     p.status === 'pass' ? 'text-emerald-400' :
                     p.status === 'fail' ? 'text-rose-400' :
-                    p.status === 'skipped' ? 'text-amber-400' : 'text-white/30'
+                    p.status === 'skipped' ? 'text-amber-400' : 'text-[var(--text-disabled)]'
                   }>{p.status}</span>
                 </div>
               ))}
@@ -383,11 +384,11 @@ function Scorecard({ summary, t }) {
         </div>
       )}
       {roadmap.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.dnsDomainPosture.hardening_roadmap', 'Hardening roadmap')}</div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.dnsDomainPosture.hardening_roadmap', 'Hardening roadmap')}</div>
           <ol className="space-y-1">
             {roadmap.map((r, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-white/60">
+              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
                 <span className="text-cyan-400">{i + 1}.</span>{r}
               </li>
             ))}
@@ -557,49 +558,49 @@ export default function DnsDomainPosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-cyan-500/30 text-cyan-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.dnsDomainPosture.client', 'Client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.dnsDomainPosture.client', 'Client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]">
               <option value="">{t('pages.dnsDomainPosture.select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.dnsDomainPosture.target_domain', 'Target domain')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.dnsDomainPosture.target_domain', 'Target domain')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #22d3ee' : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-cyan-500/40 text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.dnsDomainPosture.scanning', '⟳ Scanning…') : t('pages.dnsDomainPosture.run_scan', '▶ Run Posture Scan')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.dnsDomainPosture.hide_params', '▾ Parameters') : t('pages.dnsDomainPosture.show_params', '▸ Parameters')}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.dnsDomainPosture.probe_categories', 'Probe categories')}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.dnsDomainPosture.probe_categories', 'Probe categories')}</div>
                   <div className="grid grid-cols-1 gap-1.5">
                     {TOGGLES.map((tg) => (
-                      <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                      <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                         <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-cyan-500" />
                         {tg.label}
                       </label>
@@ -608,58 +609,63 @@ export default function DnsDomainPosture() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.expected_asns', 'Expected origin ASNs')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.expected_asns', 'Expected origin ASNs')}</label>
                     <input type="text" value={expectedAsns} onChange={(e) => setExpectedAsns(e.target.value)} placeholder="AS13335, AS15169"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.expected_a_ips', 'Expected A IPs (allow-list)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.expected_a_ips', 'Expected A IPs (allow-list)')}</label>
                     <input type="text" value={expectedAips} onChange={(e) => setExpectedAips(e.target.value)} placeholder="203.0.113.10, 203.0.113.11"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.expected_countries', 'Expected countries (ISO-2, geo check)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.expected_countries', 'Expected countries (ISO-2, geo check)')}</label>
                     <input type="text" value={expectedCountries} onChange={(e) => setExpectedCountries(e.target.value)} placeholder="US, IL"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.subdomains', 'Static subdomain wordlist (optional)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.subdomains', 'Static subdomain wordlist (optional)')}</label>
                     <input type="text" value={subdomains} onChange={(e) => setSubdomains(e.target.value)} placeholder="www, api — only when static wordlist enabled"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.max_ct_hosts', 'Max CT hosts to discover')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.max_ct_hosts', 'Max CT hosts to discover')}</label>
                     <input type="number" min="8" max="128" step="8" value={maxCtHosts} onChange={(e) => setMaxCtHosts(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.ripe_base', 'RIPEstat base URL')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.ripe_base', 'RIPEstat base URL')}</label>
                     <input type="text" value={ripeBase} onChange={(e) => setRipeBase(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.timeout_ms', 'Timeout (ms)')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.timeout_ms', 'Timeout (ms)')}</label>
                       <input type="number" min="1000" max="30000" step="500" value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.concurrency', 'Concurrency')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.concurrency', 'Concurrency')}</label>
                       <input type="number" min="1" max="16" step="1" value={concurrency} onChange={(e) => setConcurrency(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.low_ttl_threshold', 'Low-TTL threshold (s)')}</label>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.low_ttl_threshold', 'Low-TTL threshold (s)')}</label>
                       <input type="number" min="30" max="86400" step="30" value={lowTtlThreshold} onChange={(e) => setLowTtlThreshold(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.resolver_timing_factor', 'Resolver timing factor (×)')}</label>
+                      <input type="number" min="2" max="10" step="1" value={resolverTimingFactor} onChange={(e) => setResolverTimingFactor(e.target.value)}
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.dnsDomainPosture.resolvers', 'Custom resolvers (name=DoH-URL per line)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.dnsDomainPosture.resolvers', 'Custom resolvers (name=DoH-URL per line)')}</label>
                     <textarea rows={3} value={resolversText} onChange={(e) => setResolversText(e.target.value)} placeholder={'cloudflare=https://cloudflare-dns.com/dns-query\ngoogle=https://dns.google/resolve'}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-cyan-500/40 resize-y" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 resize-y" />
                   </div>
                 </div>
               </div>
@@ -667,7 +673,7 @@ export default function DnsDomainPosture() {
           )}
         </AnimatePresence>
 
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{t('pages.dnsDomainPosture.last_completed', 'Last completed: {{time}}', { time: lastRun })}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.dnsDomainPosture.last_completed', 'Last completed: {{time}}', { time: lastRun })}</p>}
       </div>
 
       {!clientId && (

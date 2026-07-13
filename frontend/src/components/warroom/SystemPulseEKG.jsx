@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts'
@@ -110,7 +110,7 @@ export default function SystemPulseEKG() {
           </motion.span>
         )}
         {!targetUrl && !probePending && (
-          <span className="text-[10px] font-mono text-slate-500">{t(`${NS}.noDomain`)}</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t(`${NS}.noDomain`)}</span>
         )}
         {showUnreachable && (
           <span className="text-[10px] font-mono text-amber-400/95" title={t(`${NS}.unreachableTitle`)}>
@@ -128,7 +128,7 @@ export default function SystemPulseEKG() {
         )}
       </div>
       <ResponsiveContainer width="100%" height={44}>
-        <LineChart data={data} margin={{ top: 2, right: 4, left: 4, bottom: 0 }}>
+        <LineChart accessibilityLayer data={data} margin={{ top: 2, right: 4, left: 4, bottom: 0 }}>
           <XAxis dataKey="index" hide />
           <YAxis domain={[0, 'auto']} hide />
           <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />

@@ -1,13 +1,14 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Download } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import { SkeletonBar } from '../components/ui/Skeleton'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import Button from '../components/ui/Button'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -114,10 +115,10 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className={`rounded-xl bg-black/40 backdrop-blur-md border p-4 transition-all duration-200 hover:shadow-[0_0_20px_rgba(0,0,0,0.3)] ${
+      className={`rounded-xl bg-[var(--bg-2)] backdrop-blur-md border p-4 transition-all duration-200 hover:shadow-[0_0_20px_rgba(0,0,0,0.3)] ${
         selected
           ? 'border-cyan-500/50 bg-cyan-950/20'
-          : 'border-white/10 hover:border-white/20'
+          : 'border-[var(--border-default)] hover:border-[var(--border-strong)]'
       }`}
     >
       {/* Header */}
@@ -127,7 +128,7 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
             type="checkbox"
             checked={selected}
             onChange={() => onSelect(domain.domain)}
-            className="w-4 h-4 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40"
+            className="w-4 h-4 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500 focus:ring-cyan-500/40"
           />
           <span className="text-sm font-semibold text-white truncate">{domain.domain}</span>
         </div>
@@ -139,7 +140,7 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
         <StageBadge stage={domain.stage} />
         <ConfidenceBadge confidence={domain.confidence} />
         {domain.http_status && (
-          <span className="text-[10px] font-mono text-white/40">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">
             HTTP {domain.http_status}
           </span>
         )}
@@ -148,8 +149,8 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
       {/* IPs */}
       {domain.ip_addresses && domain.ip_addresses.length > 0 && (
         <div className="mb-2">
-          <span className="text-[10px] font-mono text-white/40">{t('pages.domainDiscovery.ips')} </span>
-          <span className="text-[10px] font-mono text-white/60">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.domainDiscovery.ips')} </span>
+          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
             {domain.ip_addresses.slice(0, 3).join(', ')}
             {domain.ip_addresses.length > 3 && t('pages.domainDiscovery.more_ips', { count: domain.ip_addresses.length - 3 })}
           </span>
@@ -158,20 +159,20 @@ function DomainCard({ domain, selected, onSelect, onScanClick }) {
 
       {/* Title */}
       {domain.title && (
-        <p className="text-[11px] text-white/50 leading-relaxed line-clamp-2 mb-3">
+        <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed line-clamp-2 mb-3">
           {domain.title}
         </p>
       )}
 
       {/* Action button */}
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => onScanClick(domain.domain)}
         disabled={!domain.live}
         className="w-full px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase tracking-wide border border-cyan-500/30 text-cyan-300/70 hover:bg-cyan-950/40 hover:text-cyan-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         {t('pages.domainDiscovery.add_to_scan')}
-      </button>
+      </Button>
     </motion.div>
   )
 }
@@ -182,22 +183,22 @@ function StatsBar({ result, selectedCount }) {
   const { t } = useTranslation()
   if (!result) return null
   return (
-    <div className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-black/40 border border-white/10">
+    <div className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)]">
       <div className="flex flex-col">
         <span className="text-2xl font-bold text-white">{result.total_discovered}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.total_discovered')}</span>
+        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.domainDiscovery.total_discovered')}</span>
       </div>
       <div className="flex flex-col">
         <span className="text-2xl font-bold text-green-400">{result.live_domains}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.live_domains')}</span>
+        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.domainDiscovery.live_domains')}</span>
       </div>
       <div className="flex flex-col">
         <span className="text-2xl font-bold text-cyan-400">{selectedCount}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.selected')}</span>
+        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.domainDiscovery.selected')}</span>
       </div>
       <div className="flex flex-col">
-        <span className="text-lg font-semibold text-white/70">{result.stages_completed?.length || 0}</span>
-        <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.domainDiscovery.stages')}</span>
+        <span className="text-lg font-semibold text-[var(--text-secondary)]">{result.stages_completed?.length || 0}</span>
+        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.domainDiscovery.stages')}</span>
       </div>
     </div>
   )
@@ -377,32 +378,32 @@ export default function DomainDiscovery() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100"
+      className="min-h-[100dvh] text-[var(--text-secondary)]"
       style={{
-        background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
+        background: 'var(--shell-bg)',
       }}
     >
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/" className="text-white/40 hover:text-white/70 text-xs font-mono transition-colors">
+            <Link to="/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono transition-colors">
               {t('pages.domainDiscovery.dashboard')}
             </Link>
-            <span className="text-white/20 text-xs">|</span>
+            <span className="text-[var(--text-disabled)] text-xs">|</span>
             <h1 className="text-sm font-bold tracking-tight text-white">{t('pages.domainDiscovery.title')}</h1>
-            <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
+            <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">
               {t('pages.domainDiscovery.tagline')}
             </span>
           </div>
 
           {/* Client selector */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-mono text-white/40">{t('pages.domainDiscovery.client')}</span>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.domainDiscovery.client')}</span>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             >
               <option value="">{t('pages.domainDiscovery.select_client')}</option>
               {clients.map((c) => (
@@ -431,7 +432,7 @@ export default function DomainDiscovery() {
             className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
               toast.sev === 'error'
                 ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-                : 'bg-black/80 border-cyan-500/30 text-cyan-200'
+                : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >
             {toast.msg}
@@ -445,7 +446,7 @@ export default function DomainDiscovery() {
           engineId="discovery_engine"
         />
         {lastSync && (
-          <p className="text-[10px] font-mono text-white/35 -mt-4">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] -mt-4">
             {t('weissmanFindings.last_updated', { time: lastSync.toLocaleString() })}
           </p>
         )}
@@ -454,12 +455,12 @@ export default function DomainDiscovery() {
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-4"
+          className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 space-y-4"
         >
-          <h2 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.domainDiscovery.config_heading')}</h2>
+          <h2 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.domainDiscovery.config_heading')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
                 {t('pages.domainDiscovery.target_label')}
               </label>
               <input
@@ -467,11 +468,11 @@ export default function DomainDiscovery() {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={t('pages.domainDiscovery.target_placeholder')}
-                className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
                 {t('pages.domainDiscovery.company_optional')}
               </label>
               <input
@@ -479,21 +480,21 @@ export default function DomainDiscovery() {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 placeholder={t('pages.domainDiscovery.company_placeholder')}
-                className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
             <div className="flex items-end">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={handleDiscover}
                 disabled={loading || !target.trim()}
                 className="w-full px-5 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {loading ? t('pages.domainDiscovery.discovering') : t('pages.domainDiscovery.discover')}
-              </button>
+              </Button>
             </div>
           </div>
-          <p className="text-[11px] text-white/40">
+          <p className="text-[11px] text-[var(--text-muted)]">
             {t('pages.domainDiscovery.stages_hint')}
           </p>
         </motion.section>
@@ -520,19 +521,20 @@ export default function DomainDiscovery() {
               {/* Filters */}
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
                   <input
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    aria-label={t('pages.domainDiscovery.search_placeholder')}
                     placeholder={t('pages.domainDiscovery.search_placeholder')}
-                    className="bg-black/60 border border-white/10 rounded-lg pl-8 pr-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40 w-44"
+                    className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-8 pr-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 w-44"
                   />
                 </div>
                 <select
                   value={filterStage}
                   onChange={(e) => setFilterStage(e.target.value)}
-                  className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+                  className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
                 >
                   <option value="all">{t('pages.domainDiscovery.filter_all_stages')}</option>
                   {uniqueStages.map((s) => (
@@ -542,20 +544,20 @@ export default function DomainDiscovery() {
                 <select
                   value={filterLive}
                   onChange={(e) => setFilterLive(e.target.value)}
-                  className="bg-black/60 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+                  className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
                 >
                   <option value="all">{t('pages.domainDiscovery.filter_all_status')}</option>
                   <option value="live">{t('pages.domainDiscovery.filter_live_only')}</option>
                   <option value="offline">{t('pages.domainDiscovery.filter_offline_only')}</option>
                 </select>
-                <span className="text-[10px] font-mono text-white/40">
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">
                   {t('pages.domainDiscovery.shown', { count: filteredDomains.length })}
                 </span>
               </div>
 
               {/* Selection actions */}
               <div className="flex items-center gap-2">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => exportDomainsCsv(filteredDomains)}
                   disabled={filteredDomains.length === 0}
@@ -563,29 +565,29 @@ export default function DomainDiscovery() {
                 >
                   <Download className="w-3.5 h-3.5" />
                   {t('pages.domainDiscovery.export_csv')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleSelectAll}
-                  className="px-3 py-1 rounded-lg text-[11px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
+                  className="px-3 py-1 rounded-lg text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('pages.domainDiscovery.select_all_count', { count: filteredDomains.length })}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleSelectNone}
-                  className="px-3 py-1 rounded-lg text-[11px] font-mono border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
+                  className="px-3 py-1 rounded-lg text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('pages.domainDiscovery.deselect_all')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={handleScanAll}
                   disabled={scanAllLoading || selectedDomains.size === 0 || !selectedClientId}
                   className="px-4 py-1.5 rounded-lg text-[11px] font-mono font-semibold bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {scanAllLoading ? t('pages.domainDiscovery.scanning') : t('pages.domainDiscovery.scan_all_selected', { count: selectedDomains.size })}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -606,7 +608,7 @@ export default function DomainDiscovery() {
 
             {filteredDomains.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-white/40 font-mono text-sm">{t('pages.domainDiscovery.no_filter_match')}</p>
+                <p className="text-[var(--text-muted)] font-mono text-sm">{t('pages.domainDiscovery.no_filter_match')}</p>
               </div>
             )}
           </>
@@ -616,8 +618,8 @@ export default function DomainDiscovery() {
         {!result && !loading && (
           <div className="text-center py-16">
             <div className="text-4xl mb-4">🌐</div>
-            <h3 className="text-lg font-semibold text-white/70 mb-2">{t('pages.domainDiscovery.empty_title')}</h3>
-            <p className="text-white/40 text-sm max-w-md mx-auto">
+            <h3 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('pages.domainDiscovery.empty_title')}</h3>
+            <p className="text-[var(--text-muted)] text-sm max-w-md mx-auto">
               {t('pages.domainDiscovery.empty_body')}
             </p>
           </div>

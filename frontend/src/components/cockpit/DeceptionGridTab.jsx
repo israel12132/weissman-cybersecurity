@@ -1,13 +1,14 @@
 /**
  * CNAPP Layer 4: Deception Grid — honeytokens, active cloud injection map, CRITICAL on trigger.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { ShieldAlert, Plus, MapPin, AlertTriangle, Key, Cloud, Loader2 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.deceptionGrid'
 
@@ -208,7 +209,7 @@ export default function DeceptionGridTab() {
             className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white placeholder-white/40 text-sm"
           />
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={deployCloud}
           disabled={deploying}
@@ -216,7 +217,7 @@ export default function DeceptionGridTab() {
         >
           {deploying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
           {deploying ? t(`${NS}.injecting`) : t(`${NS}.deployButton`)}
-        </button>
+        </Button>
         {deployMsg && (
           <p className={`mt-2 text-xs ${deployMsg.ok ? 'text-[#10b981]' : 'text-red-400'}`}>{deployMsg.text}</p>
         )}
@@ -255,7 +256,7 @@ export default function DeceptionGridTab() {
             </label>
           ))}
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={generate}
           disabled={generating}
@@ -263,15 +264,15 @@ export default function DeceptionGridTab() {
         >
           <Plus className="w-4 h-4" />
           {generating ? t(`${NS}.generating`) : t(`${NS}.generateTokens`)}
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
           <span className="text-sm font-medium text-white/90">{t(`${NS}.honeytokenInventory`)}</span>
-          <button type="button" onClick={fetchAssets} className="text-xs text-[#22d3ee] hover:underline">
+          <Button variant="unstyled" type="button" onClick={fetchAssets} className="text-xs text-[#22d3ee] hover:underline">
             {t(`${NS}.refresh`)}
-          </button>
+          </Button>
         </div>
         {loading ? (
           <div className="p-6 text-center text-white/50 text-sm">{t(`${NS}.loading`)}</div>
@@ -291,9 +292,14 @@ export default function DeceptionGridTab() {
                   <span className="text-xs font-medium text-white/90">
                     #{a.id} {a.asset_type}
                   </span>
+                  {a.simulation_mode && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {t(`${NS}.simulationBadge`)}
+                    </span>
+                  )}
                   {a.live_aws_canary && (
                     <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      {t(`${NS}.liveAwsBadge`, 'Live AWS')}
+                      {t(`${NS}.liveAwsBadge`)}
                     </span>
                   )}
                   {a.oast_monitoring && !a.live_aws_canary && (

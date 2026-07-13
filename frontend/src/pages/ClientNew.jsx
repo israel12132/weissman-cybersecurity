@@ -6,6 +6,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import ClientOnboardingWizard from '../components/clients/ClientOnboardingWizard'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 export default function ClientNew() {
   const { t } = useTranslation()
@@ -72,20 +73,21 @@ export default function ClientNew() {
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label={t('pages.clientNew.search_placeholder')}
           placeholder={t('pages.clientNew.search_placeholder')}
-          className="w-full max-w-md px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white placeholder-white/30"
+          className="w-full max-w-md px-3 py-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-[var(--text-muted)]"
         />
         <EvidenceNotice>{t('pages.clientOnboarding.evidence_notice')}</EvidenceNotice>
         <ClientOnboardingWizard onSubmit={handleSubmit} submitting={submitting} error={error} filterQuery={searchQuery} />
         <div className="text-center">
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => navigate('/clients')}
-            className="text-sm text-white/40 hover:text-white/70"
+            className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
             disabled={submitting}
           >
             {t('pages.clientNew.cancel')}
-          </button>
+          </Button>
         </div>
       </div>
     </PageShell>

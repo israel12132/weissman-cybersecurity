@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { useClient } from '../../context/ClientContext'
 import { X, Copy, Check } from 'lucide-react'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.tacticalFindingOverlay'
 
@@ -49,19 +50,19 @@ export default function TacticalFindingOverlay() {
         exit={{ opacity: 0, y: -10 }}
         className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-full max-w-xl px-4"
       >
-        <div className="rounded-xl border bg-slate-950/95 backdrop-blur-md shadow-2xl overflow-hidden border-white/10">
+        <div className="rounded-xl border bg-[var(--bg-0)]/95 backdrop-blur-md shadow-2xl overflow-hidden border-white/10">
           <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
             <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">
               {t(`${NS}.header`)}
             </span>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setLastFinding(null)}
-              className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-lg text-white/60 hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
               aria-label={t(`${NS}.dismiss`)}
             >
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex items-start gap-2 flex-wrap">
@@ -84,14 +85,14 @@ export default function TacticalFindingOverlay() {
                     {t(`${NS}.proofTitle`)}
                   </span>
                   {!pocSealed && (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={copyProof}
                       className="flex items-center gap-1 text-[10px] font-mono text-white/60 hover:text-[#22d3ee] transition-colors"
                     >
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                       {copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {pocSealed ? (

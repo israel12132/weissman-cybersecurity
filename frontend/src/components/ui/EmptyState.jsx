@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -9,6 +8,7 @@ import {
   Shield,
   ShieldOff,
 } from 'lucide-react'
+import Button from './Button'
 
 const ICON_MAP = {
   inbox: Inbox,
@@ -47,13 +47,13 @@ export default function EmptyState({
 
   return (
     <div
-      className={`flex flex-col items-center text-center rounded-2xl border border-white/[0.07] bg-[var(--card-bg)]/40 backdrop-blur-sm ${
+      className={`flex flex-col items-center text-center rounded-2xl border border-[var(--border-subtle)] bg-[var(--card-bg)]/40 backdrop-blur-sm ${
         compact ? 'py-8 px-5' : 'py-14 px-8'
       } ${className}`}
       role="status"
     >
       <div
-        className={`mb-4 flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] ${
+        className={`mb-4 flex items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] ${
           compact ? 'w-11 h-11' : 'w-14 h-14'
         }`}
         aria-hidden="true"
@@ -94,37 +94,37 @@ export default function EmptyState({
                 {cta.label}
               </Link>
             ) : (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={cta.onClick}
                 className="px-4 py-2 rounded-lg text-sm font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90 hover:bg-cyan-500/20 transition-colors"
               >
                 {cta.label}
-              </button>
+              </Button>
             ))}
           {secondary &&
             (secondary.to ? (
               <Link
                 to={secondary.to}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
               </Link>
             ) : secondary.href ? (
               <a
                 href={secondary.href}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
               </a>
             ) : (
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={secondary.onClick}
-                className="px-4 py-2 rounded-lg text-sm font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
               >
                 {secondary.label}
-              </button>
+              </Button>
             ))}
         </div>
       )}

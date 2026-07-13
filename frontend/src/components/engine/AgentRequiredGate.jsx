@@ -14,9 +14,9 @@ export default function AgentRequiredGate({ engineId, children, className = '' }
   // Remote probes (OSINT, ASM, etc.) must stay runnable without waiting on fleet status.
   if (loading && isAgentRequired) {
     return (
-      <div className={`rounded-2xl border border-white/[0.07] bg-white/[0.02] p-10 animate-pulse ${className}`}>
-        <div className="h-4 w-48 bg-white/10 rounded mb-3" />
-        <div className="h-3 w-full max-w-md bg-white/5 rounded" />
+      <div className={`rounded-2xl border border-[var(--border-subtle)] bg-[var(--row-hover-bg)] p-10 animate-pulse ${className}`}>
+        <div className="h-4 w-48 bg-[var(--row-hover-bg)] rounded mb-3" />
+        <div className="h-3 w-full max-w-md bg-[var(--row-hover-bg)] rounded" />
       </div>
     )
   }

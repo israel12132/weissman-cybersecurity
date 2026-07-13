@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CreditCard,
@@ -17,6 +17,7 @@ import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 
 const PLAN_TIERS = ['starter', 'professional', 'enterprise']
 
@@ -45,7 +46,7 @@ function statusBadgeClass(status) {
   if (s === 'past_due' || s === 'paused') {
     return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
   }
-  return 'bg-white/5 text-white/55 border-white/15'
+  return 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-strong)]'
 }
 
 function localeTag(language) {
@@ -223,13 +224,13 @@ export default function Billing() {
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-mono text-rose-200">{error}</p>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={loadUsage}
                 className="mt-2 text-[11px] font-mono uppercase tracking-widest text-rose-300/80 hover:text-rose-200"
               >
                 {t('common.retry')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -252,10 +253,10 @@ export default function Billing() {
 
         {!error && subscription && (
           <>
-            <section className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md p-5 sm:p-6">
+            <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-5 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
                     {t('pages.billing.current_plan')}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -268,7 +269,7 @@ export default function Billing() {
                       {subscriptionStatusLabel(subscription.status, t)}
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-white/45">
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-[var(--text-muted)]">
                     <span>{t('pages.billing.slug_label', { slug: subscription.plan_slug || '—' })}</span>
                     {subscription.current_period_end && (
                       <span>{t('pages.billing.renews_label', { date: formatPeriodEnd(subscription.current_period_end, i18n.language) })}</span>
@@ -281,7 +282,7 @@ export default function Billing() {
 
                 <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
                   {upgradeSlug ? (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={handleUpgrade}
                       disabled={checkoutLoading}
@@ -298,9 +299,9 @@ export default function Billing() {
                           <ArrowUpRight className="w-4 h-4" />
                         </>
                       )}
-                    </button>
+                    </Button>
                   ) : (
-                    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-mono text-white/50">
+                    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[11px] font-mono text-[var(--text-tertiary)]">
                       <Shield className="w-3.5 h-3.5" />
                       {t('pages.billing.highest_tier')}
                     </div>
@@ -390,20 +391,20 @@ function UsageMeter({ icon: Icon, label, used, max }) {
   const tone = usageTone(pct)
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[var(--card-bg)]/60 backdrop-blur-md p-5">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--card-bg)]/60 backdrop-blur-md p-5">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           <Icon className="w-4 h-4 text-cyan-400/80 shrink-0" strokeWidth={1.75} />
-          <span className="text-[11px] font-mono uppercase tracking-widest text-white/50 truncate">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-tertiary)] truncate">
             {label}
           </span>
         </div>
         <span className={`text-sm font-mono tabular-nums ${tone}`}>
           {used}
-          <span className="text-white/35"> / {max > 0 ? max : '—'}</span>
+          <span className="text-[var(--text-muted)]"> / {max > 0 ? max : '—'}</span>
         </span>
       </div>
-      <div className="h-2 rounded-full bg-black/40 overflow-hidden border border-white/5">
+      <div className="h-2 rounded-full bg-[var(--bg-2)] overflow-hidden border border-[var(--border-subtle)]">
         <div
           className={`h-full transition-all duration-500 ${
             pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-400' : 'bg-cyan-500'

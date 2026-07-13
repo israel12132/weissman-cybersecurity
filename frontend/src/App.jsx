@@ -16,6 +16,7 @@ import { apiUrl } from './lib/apiBase'
 import { useWeissmanSocket } from './hooks/useWeissmanSocket'
 import { useAuth } from './context/AuthContext'
 import LabForensicEvidence from './components/ui/LabForensicEvidence'
+import Button from './components/ui/Button'
 
 const HIGHLIGHT_DURATION_MS = 4000
 
@@ -74,7 +75,7 @@ export default function App() {
           ))}
           <span className="text-white/10" aria-hidden="true">|</span>
           <a href={apiUrl('/api/export/findings')} className="nav-link" download>{t('components.intelMap.export_csv')}</a>
-          <button type="button" onClick={() => logout()} className="nav-link nav-link-danger">{t('components.intelMap.logout')}</button>
+          <Button variant="unstyled" type="button" onClick={() => logout()} className="nav-link nav-link-danger">{t('components.intelMap.logout')}</Button>
         </nav>
       </header>
 

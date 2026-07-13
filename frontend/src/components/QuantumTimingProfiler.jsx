@@ -18,6 +18,7 @@ import {
 } from 'recharts'
 import { apiFetch } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const NS = 'components.tools.quantumTimingProfiler'
 
@@ -142,8 +143,8 @@ export default function QuantumTimingProfiler() {
   return (
     <StandaloneLabShell title={t(`${NS}.title`)} subtitle={t(`${NS}.subtitle`)}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
-            <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">
+          <div className="lg:col-span-2 rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-4">
+            <label className="block text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">
               {t(`${NS}.target_label`)}
             </label>
             <div className="flex gap-2">
@@ -152,19 +153,19 @@ export default function QuantumTimingProfiler() {
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={t(`${NS}.target_placeholder`)}
-                className="flex-1 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500/50"
+                className="flex-1 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] focus:ring-2 focus:ring-cyan-500/50"
                 disabled={running}
               />
-              <button
+              <Button variant="unstyled"
                 onClick={startScan}
                 disabled={running}
-                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 text-white font-medium text-sm"
+                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-[var(--bg-4)] text-white font-medium text-sm"
               >
                 {running ? t(`${NS}.scanning`) : t(`${NS}.start_scan`)}
-              </button>
+              </Button>
             </div>
             {clientId && (
-              <p className="mt-2 text-slate-500 text-xs">
+              <p className="mt-2 text-[var(--text-muted)] text-xs">
                 {t(`${NS}.client_id`, { id: clientId })}
                 {client?.name && ` ${t(`${NS}.client_name`, { name: client.name })}`}
               </p>
@@ -174,26 +175,26 @@ export default function QuantumTimingProfiler() {
             )}
           </div>
 
-          <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
-            <div className="text-slate-400 text-xs uppercase tracking-wider mb-2">
+          <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-4">
+            <div className="text-[var(--text-tertiary)] text-xs uppercase tracking-wider mb-2">
               {t(`${NS}.live_stats`)}
             </div>
             <div className="space-y-2 text-sm">
               {baselineMean != null && (
                 <div>
-                  <span className="text-slate-500">{t(`${NS}.baseline_mu`)}</span>{' '}
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.baseline_mu`)}</span>{' '}
                   <span className="text-cyan-400 font-mono">{baselineMean.toFixed(0)} μs</span>
                 </div>
               )}
               {baselineStd != null && baselineStd > 0 && (
                 <div>
-                  <span className="text-slate-500">{t(`${NS}.baseline_sigma`)}</span>{' '}
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.baseline_sigma`)}</span>{' '}
                   <span className="text-cyan-400 font-mono">{baselineStd.toFixed(0)} μs</span>
                 </div>
               )}
               {zScore != null && (
                 <div>
-                  <span className="text-slate-500">{t(`${NS}.z_score`)}</span>{' '}
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.z_score`)}</span>{' '}
                   <span className={zScore >= 3 ? 'text-red-400 font-bold' : 'text-amber-400 font-mono'}>
                     {zScore.toFixed(2)}
                   </span>
@@ -201,14 +202,14 @@ export default function QuantumTimingProfiler() {
               )}
               {confidencePct != null && (
                 <div>
-                  <span className="text-slate-500">{t(`${NS}.confidence`)}</span>{' '}
+                  <span className="text-[var(--text-muted)]">{t(`${NS}.confidence`)}</span>{' '}
                   <span className="text-emerald-400 font-mono">
                     {confidencePct.toFixed(1)}% {confidencePct >= 99 ? t(`${NS}.boolean_true`) : ''}
                   </span>
                 </div>
               )}
               {payloadUsed && (
-                <div className="text-slate-500 text-xs truncate" title={payloadUsed}>
+                <div className="text-[var(--text-muted)] text-xs truncate" title={payloadUsed}>
                   {t(`${NS}.payload_label`, { text: payloadUsed })}
                 </div>
               )}
@@ -216,7 +217,7 @@ export default function QuantumTimingProfiler() {
           </div>
         </div>
 
-        <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-4">
+        <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white">
               {t(`${NS}.oscilloscope_title`)}
@@ -229,6 +230,7 @@ export default function QuantumTimingProfiler() {
           <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
+                accessibilityLayer
                 data={chartPoints}
                 margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
               >
@@ -278,7 +280,7 @@ export default function QuantumTimingProfiler() {
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <p className="text-slate-500 text-xs mt-2">
+          <p className="text-[var(--text-muted)] text-xs mt-2">
             {t(`${NS}.footer`)}
           </p>
         </div>

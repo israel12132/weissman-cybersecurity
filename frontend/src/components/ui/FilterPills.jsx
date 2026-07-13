@@ -1,4 +1,4 @@
-import React from 'react'
+import Button from './Button'
 
 /**
  * Pill toggle bar for severity, status, KEV-only, etc.
@@ -9,14 +9,14 @@ export default function FilterPills({ pills = [], className = '', label }) {
   return (
     <div className={`space-y-2 ${className}`}>
       {label && (
-        <div className="text-[10px] font-mono uppercase tracking-widest text-white/35">{label}</div>
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{label}</div>
       )}
       <div className="flex flex-wrap gap-2">
         {pills.map((pill) => {
           const color = pill.color || '#22d3ee'
           const active = !!pill.active
           return (
-            <button
+            <Button variant="unstyled"
               key={pill.id}
               id={pill.id}
               type="button"
@@ -51,7 +51,7 @@ export default function FilterPills({ pills = [], className = '', label }) {
                   {pill.count}
                 </span>
               )}
-            </button>
+            </Button>
           )
         })}
       </div>

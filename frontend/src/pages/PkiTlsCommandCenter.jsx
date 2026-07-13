@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,9 +10,16 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
+import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 const ENGINE = 'pki_tls'
 const ACCENT = '#34d399'
+
+const PROTOCOL_VERSIONS = ['SSLv3', 'TLSv1.0', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3']
 
 const TOGGLES = [
   { key: 'check_protocols', label: 'Protocol matrix', hint: 'Force handshakes per SSL/TLS version', defaultVal: true },
@@ -49,7 +56,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 function gradeColor(g) {
@@ -57,7 +64,6 @@ function gradeColor(g) {
   return { 'A+': '#34d399', A: '#4ade80', B: '#a3e635', C: '#fbbf24', D: '#fb923c', E: '#f87171', F: '#ef4444', T: '#f472b6' }[base] || '#94a3b8'
 }
 
-function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
 
 
 function csvToArray(s) { return String(s || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) }
@@ -84,25 +90,25 @@ function EvidenceView({ evidence }) {
   const checks = Array.isArray(evidence.checks) ? evidence.checks : []
   const scalars = Object.entries(evidence).filter(([k]) => k !== 'checks')
   return (
-    <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-3 space-y-2">
+    <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-3 space-y-2">
       {scalars.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
           {scalars.map(([k, v]) => (
             <div key={k} className="flex items-start gap-2 text-[11px] font-mono">
-              <span className="text-white/35 shrink-0">{k}</span>
-              <span className="text-white/70 break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+              <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+              <span className="text-[var(--text-secondary)] break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
       )}
       {checks.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/5">
+        <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
-              <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '·'}</span>
-              <span className="text-white/60">{c.name}</span>
-              <span className="text-white/30">—</span>
-              <span className="text-white/45 break-all">{typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>
+              <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '·'}</span>
+              <span className="text-[var(--text-tertiary)]">{c.name}</span>
+              <span className="text-[var(--text-disabled)]">—</span>
+              <span className="text-[var(--text-muted)] break-all">{typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>
             </div>
           ))}
         </div>
@@ -117,22 +123,22 @@ function FindingCard({ f }) {
   const st = SEV_STYLE[sev] || SEV_STYLE.info
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
-            {typeof f.confidence === 'number' && <span className="text-[10px] font-mono text-white/30">· conf {(f.confidence * 100).toFixed(0)}%</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
+            {typeof f.confidence === 'number' && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· conf {(f.confidence * 100).toFixed(0)}%</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             {f.remediation && (
               <div className="mt-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
                 <div className="text-[10px] font-mono uppercase text-emerald-400/70 mb-1">Remediation</div>
@@ -143,6 +149,36 @@ function FindingCard({ f }) {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+function CategoryBreakdown({ findings }) {
+  const groups = useMemo(() => {
+    const counts = new Map()
+    for (const f of findings) {
+      const key = CATEGORY_META[inferCategory(f)] ? inferCategory(f) : 'other'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([key, count]) => ({ key, count, meta: CATEGORY_META[key] || CATEGORY_META.other }))
+      .sort((a, b) => a.meta.order - b.meta.order)
+  }, [findings])
+
+  if (!groups.length) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {groups.map(({ key, count, meta }) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono border"
+          style={{ color: meta.color, borderColor: `${meta.color}33`, background: `${meta.color}0f` }}
+        >
+          <span aria-hidden="true">{meta.icon}</span>
+          {meta.label}
+          <span className="px-1.5 py-0.5 rounded bg-[var(--scrim)] text-[var(--text-secondary)]">{count}</span>
+        </span>
+      ))}
     </div>
   )
 }
@@ -159,40 +195,37 @@ function ProtocolMatrix({ gradeFindings }) {
     }
     return out
   }, [gradeFindings])
+  return <ProtocolMatrixTable rows={rows} />
+}
+
+function ProtocolMatrixTable({ rows }) {
+  const columns = useMemo(() => [
+    columnHelper.accessor('port', {
+      header: 'Port',
+      cell: (ctx) => <span className="text-emerald-300">{ctx.getValue()}</span>,
+    }),
+    columnHelper.accessor('grade', {
+      header: 'Grade',
+      cell: (ctx) => <span style={{ color: gradeColor(ctx.getValue()) }}>{ctx.getValue()}</span>,
+    }),
+    ...PROTOCOL_VERSIONS.map((v) =>
+      columnHelper.accessor((row) => row.protos.find((x) => x.version === v)?.supported ?? false, {
+        id: v,
+        header: v,
+        cell: (ctx) => {
+          const ok = ctx.getValue()
+          return <span className={ok ? 'text-rose-400' : 'text-emerald-400/60'}>{ok ? '●' : '○'}</span>
+        },
+      }),
+    ),
+  ], [])
+
   if (!rows.length) return null
-  const versions = ['SSLv3', 'TLSv1.0', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3']
   return (
-    <div className="rounded-2xl bg-black/40 border border-white/10 p-5 mb-6">
-      <h3 className="text-sm font-mono text-white/70 uppercase tracking-wider mb-4">Protocol Matrix</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs font-mono">
-          <thead>
-            <tr className="text-white/40 border-b border-white/5">
-              <th className="text-left py-2 pr-4">Port</th>
-              <th className="text-left py-2 pr-4">Grade</th>
-              {versions.map((v) => <th key={v} className="text-center py-2 px-2">{v}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.port} className="border-b border-white/5">
-                <td className="py-2 pr-4 text-emerald-300">{r.port}</td>
-                <td className="py-2 pr-4" style={{ color: gradeColor(r.grade) }}>{r.grade}</td>
-                {versions.map((v) => {
-                  const p = r.protos.find((x) => x.version === v)
-                  const ok = p?.supported
-                  return (
-                    <td key={v} className="text-center py-2 px-2">
-                      <span className={ok ? 'text-rose-400' : 'text-emerald-400/60'}>{ok ? '●' : '○'}</span>
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-[10px] font-mono text-white/30 mt-3">● = negotiated (deprecated versions flagged separately) · ○ = not offered</p>
+    <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5 mb-6">
+      <h3 className="text-sm font-mono text-[var(--text-secondary)] uppercase tracking-wider mb-4">Protocol Matrix</h3>
+      <DataTable columns={columns} data={rows} animateRows={false} getRowId={(item) => item.port} />
+      <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">● = negotiated (deprecated versions flagged separately) · ○ = not offered</p>
     </div>
   )
 }
@@ -211,14 +244,14 @@ function CipherPanel({ gradeFindings }) {
   }, [gradeFindings])
   if (!ciphers.length) return null
   return (
-    <div className="rounded-2xl bg-black/40 border border-white/10 p-5 mb-6">
-      <h3 className="text-sm font-mono text-white/70 uppercase tracking-wider mb-3">Enumerated Cipher Suites</h3>
+    <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5 mb-6">
+      <h3 className="text-sm font-mono text-[var(--text-secondary)] uppercase tracking-wider mb-3">Enumerated Cipher Suites</h3>
       <div className="max-h-64 overflow-y-auto space-y-1">
         {ciphers.map((c, i) => (
-          <div key={i} className="flex items-center gap-2 text-[11px] font-mono py-1 border-b border-white/5">
-            <span className="text-white/30 w-10 shrink-0">:{c.port}</span>
-            <span className="text-white/80 flex-1 truncate">{c.name || c.iana}</span>
-            <span className="text-white/40">{c.bits}b</span>
+          <div key={i} className="flex items-center gap-2 text-[11px] font-mono py-1 border-b border-[var(--border-subtle)]">
+            <span className="text-[var(--text-disabled)] w-10 shrink-0">:{c.port}</span>
+            <span className="text-[var(--text-secondary)] flex-1 truncate">{c.name || c.iana}</span>
+            <span className="text-[var(--text-muted)]">{c.bits}b</span>
             {c.forward_secrecy && <span className="text-emerald-400/70 text-[10px]">PFS</span>}
             {Array.isArray(c.weaknesses) && c.weaknesses.length > 0 && (
               <span className="text-rose-400/80 text-[10px] truncate max-w-[120px]">{c.weaknesses[0]}</span>
@@ -239,7 +272,7 @@ function Scorecard({ summary, t }) {
   const st = SEV_STYLE[worst] || SEV_STYLE.info
   const compliance = summary.evidence?.compliance
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row lg:items-center gap-6">
         <div className="flex items-center gap-5">
           <div className="relative w-28 h-28 shrink-0">
@@ -249,11 +282,11 @@ function Scorecard({ summary, t }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-3xl font-bold" style={{ color }}>{score}</span>
-              <span className="text-[10px] font-mono text-white/40">/ 100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t('pages.pkiTlsPosture.tls_posture', 'TLS Posture')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.pkiTlsPosture.tls_posture', 'TLS Posture')}</div>
             <div className="text-4xl font-black leading-none" style={{ color }}>{grade}</div>
             <div className="mt-1.5">
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${st.bd} ${st.text}`}>
@@ -265,13 +298,13 @@ function Scorecard({ summary, t }) {
         {compliance && (
           <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className={`rounded-xl border p-3 ${compliance.pci_dss_tls12_plus ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
-              <div className="text-[10px] font-mono uppercase text-white/40 mb-1">PCI-DSS TLS</div>
+              <div className="text-[10px] font-mono uppercase text-[var(--text-muted)] mb-1">PCI-DSS TLS</div>
               <div className={`text-sm font-mono ${compliance.pci_dss_tls12_plus ? 'text-emerald-300' : 'text-rose-300'}`}>
                 {compliance.pci_dss_tls12_plus ? 'Compliant' : 'Violations detected'}
               </div>
             </div>
             <div className={`rounded-xl border p-3 ${compliance.nist_sp800_52_rev2 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
-              <div className="text-[10px] font-mono uppercase text-white/40 mb-1">NIST SP 800-52</div>
+              <div className="text-[10px] font-mono uppercase text-[var(--text-muted)] mb-1">NIST SP 800-52</div>
               <div className={`text-sm font-mono ${compliance.nist_sp800_52_rev2 ? 'text-emerald-300' : 'text-amber-300'}`}>
                 {compliance.nist_sp800_52_rev2 ? 'Aligned' : 'Gaps detected'}
               </div>
@@ -423,30 +456,30 @@ export default function PkiTlsCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-emerald-500/30 text-emerald-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-emerald-500/30 text-emerald-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.pkiTlsPosture.client', 'Client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.pkiTlsPosture.client', 'Client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40 min-w-[180px]">
               <option value="">{t('pages.pkiTlsPosture.select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.pkiTlsPosture.target', 'Target host / URL')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.pkiTlsPosture.target', 'Target host / URL')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="https://example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.pkiTlsPosture.intensity', 'Intensity')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.pkiTlsPosture.intensity', 'Intensity')}</label>
             <select value={intensity} onChange={(e) => setIntensity(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40">
               <option value="light">{t('pages.pkiTlsPosture.intensity_light', 'Light')}</option>
               <option value="normal">{t('pages.pkiTlsPosture.intensity_normal', 'Normal')}</option>
               <option value="aggressive">{t('pages.pkiTlsPosture.intensity_aggressive', 'Aggressive')}</option>
@@ -454,27 +487,27 @@ export default function PkiTlsCommandCenter() {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #34d399' : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.pkiTlsPosture.scanning', '⟳ Scanning…') : t('pages.pkiTlsPosture.run_scan', '▶ Run TLS Assessment')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.pkiTlsPosture.hide_params', '▾ Parameters') : t('pages.pkiTlsPosture.show_params', '▸ Parameters')}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.pkiTlsPosture.probe_categories', 'Probe categories')}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.pkiTlsPosture.probe_categories', 'Probe categories')}</div>
                   <div className="grid grid-cols-1 gap-1.5">
                     {TOGGLES.map((tg) => (
-                      <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                      <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                         <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-emerald-500" />
                         {tg.label}
                       </label>
@@ -483,54 +516,55 @@ export default function PkiTlsCommandCenter() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.pkiTlsPosture.ports', 'TLS ports')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.pkiTlsPosture.ports', 'TLS ports')}</label>
                     <input type="text" value={ports} onChange={(e) => setPorts(e.target.value)} placeholder="443,8443,993"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.pkiTlsPosture.sni', 'SNI override')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.pkiTlsPosture.sni', 'SNI override')}</label>
                     <input type="text" value={sni} onChange={(e) => setSni(e.target.value)} placeholder="api.example.com"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.pkiTlsPosture.starttls', 'STARTTLS')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.pkiTlsPosture.starttls', 'STARTTLS')}</label>
                     <select value={starttls} onChange={(e) => setStarttls(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40">
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40">
                       {['none', 'auto', 'smtp', 'imap', 'pop3', 'ftp'].map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.pkiTlsPosture.protocols', 'Protocols (blank = all)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.pkiTlsPosture.protocols', 'Protocols (blank = all)')}</label>
                     <input type="text" value={protocols} onChange={(e) => setProtocols(e.target.value)} placeholder="tls1.2,tls1.3"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.pkiTlsPosture.timeout_ms', 'Handshake timeout (ms)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.pkiTlsPosture.timeout_ms', 'Handshake timeout (ms)')}</label>
                     <input type="number" min={200} max={30000} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.pkiTlsPosture.cipher_limit', 'Cipher walk depth')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.pkiTlsPosture.cipher_limit', 'Cipher walk depth')}</label>
                     <input type="number" min={1} max={512} value={cipherLimit} onChange={(e) => setCipherLimit(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-emerald-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-emerald-500/40" />
                   </div>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{t('pages.pkiTlsPosture.last_completed', 'Last completed: {{time}}', { time: lastRun })}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.pkiTlsPosture.last_completed', 'Last completed: {{time}}', { time: lastRun })}</p>}
       </div>
 
       {!clientId && (
-        <p className="text-xs font-mono text-white/40 mb-6">{t('pages.pkiTlsPosture.select_client_warning', 'Select an in-scope client and target to run the TLS assessment.')}</p>
+        <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{t('pages.pkiTlsPosture.select_client_warning', 'Select an in-scope client and target to run the TLS assessment.')}</p>
       )}
 
       {findings.length > 0 && <Scorecard summary={summary} t={t} />}
       {findings.length > 0 && <ProtocolMatrix gradeFindings={gradeFindings} />}
       {findings.length > 0 && <CipherPanel gradeFindings={gradeFindings} />}
+      {detailFindings.length > 0 && <CategoryBreakdown findings={detailFindings} />}
 
       <WeissmanFindingsPanel
         findings={detailFindings}

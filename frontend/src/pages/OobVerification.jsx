@@ -1,14 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Radio, RefreshCw, Zap, ExternalLink } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import CopyButton from '../components/ui/CopyButton'
+import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 const PROBE_TYPE_KEYS = [
   { id: 'generic', key: 'probe_generic' },
@@ -124,7 +129,9 @@ export default function OobVerification() {
   })), [callbacks, probeType])
 
   const recentListFindings = useMemo(() => recentHits.map((c, i) => ({
-    id: c.id || `recent-${i}`,
+    // Always namespace so a callback that appears in BOTH lists (same c.id)
+    // can't share an id and leak between the two filtered views.
+    id: `recent-${c.id ?? i}`,
     severity: 'info',
     title: c.source_ip || c.channel || 'callback',
     type: c.probe_type || c.channel || 'callback',
@@ -151,8 +158,36 @@ export default function OobVerification() {
   const visibleRecentHits = useMemo(() => {
     if (!searchQuery.trim()) return recentHits
     const ids = new Set(filteredFindings.map((f) => String(f.id)))
-    return recentHits.filter((c, i) => ids.has(String(c.id || `recent-${i}`)))
+    return recentHits.filter((c, i) => ids.has(String(`recent-${c.id ?? i}`)))
   }, [recentHits, filteredFindings, searchQuery])
+
+  const recentHitsColumns = useMemo(() => [
+    columnHelper.accessor('timestamp', {
+      header: t('pages.oobVerification.col_time'),
+      cell: (ctx) => {
+        const ts = ctx.getValue()
+        return (
+          <span className="text-[var(--text-tertiary)] whitespace-nowrap">
+            {ts ? new Date(ts).toLocaleString() : '—'}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor('channel', {
+      header: t('pages.oobVerification.col_channel'),
+      cell: (ctx) => <span className="text-cyan-300/70">{ctx.getValue()}</span>,
+    }),
+    columnHelper.accessor('source_ip', {
+      header: t('pages.oobVerification.col_source'),
+      cell: (ctx) => <span className="text-[var(--text-tertiary)]">{ctx.getValue() || '—'}</span>,
+    }),
+    columnHelper.accessor('payload', {
+      header: t('pages.oobVerification.col_payload'),
+      cell: (ctx) => (
+        <span className="text-[var(--text-muted)] truncate max-w-xs block">{ctx.getValue() || '—'}</span>
+      ),
+    }),
+  ], [t])
 
   return (
     <PageShell
@@ -163,16 +198,16 @@ export default function OobVerification() {
       actions={(
         <div className="flex items-center gap-2">
           {probe?.token && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setAutoPoll((v) => !v)}
               className={`px-3 py-1.5 rounded-lg border text-xs font-mono ${
-                autoPoll ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-white/10 text-white/50'
+                autoPoll ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-[var(--border-default)] text-[var(--text-tertiary)]'
               }`}
             >
               <Radio className={`w-3 h-3 inline mr-1 ${autoPoll ? 'animate-pulse' : ''}`} />
               {autoPoll ? t('pages.oobVerification.auto_poll_on') : t('pages.oobVerification.auto_poll_off')}
-            </button>
+            </Button>
           )}
           <Link to="/oast" className="flex items-center gap-1 text-xs font-mono text-cyan-300/80 hover:text-cyan-200">
             <ExternalLink className="w-3.5 h-3.5" />
@@ -193,18 +228,18 @@ export default function OobVerification() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
             {error}
           </div>
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4">
             <div>
-              <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+              <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
                 {t('pages.oobVerification.mint_token')}
               </h3>
-              <p className="text-[11px] text-white/30 mt-1">{t('pages.oobVerification.mint_body')}</p>
+              <p className="text-[11px] text-[var(--text-disabled)] mt-1">{t('pages.oobVerification.mint_body')}</p>
             </div>
 
             <div className="space-y-3">
@@ -212,13 +247,13 @@ export default function OobVerification() {
                 value={targetUrl}
                 onChange={(e) => setTargetUrl(e.target.value)}
                 placeholder={t('pages.oobVerification.target_placeholder')}
-                className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <select
                   value={probeType}
                   onChange={(e) => setProbeType(e.target.value)}
-                  className="rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-cyan-500/40"
+                  className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
                 >
                   {PROBE_TYPE_KEYS.map((p) => (
                     <option key={p.id} value={p.id}>{t(`pages.oobVerification.${p.key}`)}</option>
@@ -228,11 +263,11 @@ export default function OobVerification() {
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder={t('pages.oobVerification.label_optional')}
-                  className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                  className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
                 />
               </div>
 
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={!canMint || minting}
                 onClick={mint}
@@ -240,28 +275,28 @@ export default function OobVerification() {
               >
                 <Zap className="w-3.5 h-3.5" />
                 {minting ? t('pages.oobVerification.minting') : t('pages.oobVerification.mint_oob')}
-              </button>
+              </Button>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4">
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+                <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
                   {t('pages.oobVerification.verification_heading')}
                 </h3>
-                <p className="text-[11px] text-white/30 mt-1">{t('pages.oobVerification.verification_body')}</p>
+                <p className="text-[11px] text-[var(--text-disabled)] mt-1">{t('pages.oobVerification.verification_body')}</p>
               </div>
               {probe?.token && (
-                <button
+                <Button variant="unstyled"
                   type="button"
                   disabled={polling}
                   onClick={poll}
-                  className="flex items-center gap-1 text-[10px] font-mono border border-white/10 text-white/50 hover:text-white px-2 py-1 rounded"
+                  className="flex items-center gap-1 text-[10px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] px-2 py-1 rounded"
                 >
                   <RefreshCw className={`w-3 h-3 ${polling ? 'animate-spin' : ''}`} />
                   {polling ? t('pages.oobVerification.polling') : t('pages.oobVerification.poll_btn')}
-                </button>
+                </Button>
               )}
             </div>
 
@@ -287,7 +322,7 @@ export default function OobVerification() {
                   />
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 space-y-3">
                   <FieldRow label={t('pages.oobVerification.token_label')} value={probe.token} copy />
                   <FieldRow label={t('pages.oobVerification.callback_domain')} value={probe.callback_domain || '—'} copy />
                   {probe.callback_url && (
@@ -321,7 +356,7 @@ export default function OobVerification() {
                       resultCount={visibleCallbacks.length}
                       totalCount={callbacks.length}
                     />
-                    <div className="text-[10px] font-mono uppercase text-white/40 mb-2">
+                    <div className="text-[10px] font-mono uppercase text-[var(--text-muted)] mb-2">
                       {t('pages.oobVerification.callbacks_for_token', { count: visibleCallbacks.length })}
                     </div>
                     {visibleCallbacks.length === 0 ? (
@@ -337,10 +372,10 @@ export default function OobVerification() {
                         <div key={cb.id} className="rounded-lg border border-emerald-500/20 bg-emerald-950/20 p-3 text-[11px] font-mono">
                           <div className="flex justify-between text-emerald-300/80 mb-1">
                             <span>{cb.channel} · {cb.probe_type}</span>
-                            <span className="text-white/40">{cb.timestamp ? new Date(cb.timestamp).toLocaleString() : ''}</span>
+                            <span className="text-[var(--text-muted)]">{cb.timestamp ? new Date(cb.timestamp).toLocaleString() : ''}</span>
                           </div>
-                          <div className="text-white/60 truncate">{cb.source_ip || '—'} · {cb.payload || cb.http_method || '—'}</div>
-                          {cb.user_agent && <div className="text-white/35 truncate mt-1">{cb.user_agent}</div>}
+                          <div className="text-[var(--text-tertiary)] truncate">{cb.source_ip || '—'} · {cb.payload || cb.http_method || '—'}</div>
+                          {cb.user_agent && <div className="text-[var(--text-muted)] truncate mt-1">{cb.user_agent}</div>}
                         </div>
                       ))}
                     </div>
@@ -348,14 +383,14 @@ export default function OobVerification() {
                   </div>
                 )}
 
-                <p className="text-[11px] text-white/35">{t('pages.oobVerification.report_note')}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">{t('pages.oobVerification.report_note')}</p>
               </div>
             )}
           </div>
         </div>
 
         {recentHits.length > 0 && (
-          <section className="rounded-2xl border border-white/10 bg-black/40 p-5">
+          <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
             <WeissmanListToolbar
               className="mb-4"
               searchQuery={searchQuery}
@@ -363,7 +398,7 @@ export default function OobVerification() {
               resultCount={visibleRecentHits.length}
               totalCount={recentHits.length}
             />
-            <h3 className="text-xs font-mono uppercase tracking-widest text-white/45 mb-4">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-[var(--text-muted)] mb-4">
               {t('pages.oobVerification.tenant_callbacks_heading')}
             </h3>
             {visibleRecentHits.length === 0 ? (
@@ -374,30 +409,13 @@ export default function OobVerification() {
                 compact
               />
             ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px] font-mono">
-                <thead>
-                  <tr className="text-left text-white/40 border-b border-white/10">
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_time')}</th>
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_channel')}</th>
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_source')}</th>
-                    <th className="py-2 pr-3">{t('pages.oobVerification.col_payload')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {visibleRecentHits.map((cb) => (
-                    <tr key={cb.id} className={cb.interaction_token === probe?.token ? 'bg-emerald-500/5' : ''}>
-                      <td className="py-2 pr-3 text-white/50 whitespace-nowrap">
-                        {cb.timestamp ? new Date(cb.timestamp).toLocaleString() : '—'}
-                      </td>
-                      <td className="py-2 pr-3 text-cyan-300/70">{cb.channel}</td>
-                      <td className="py-2 pr-3 text-white/55">{cb.source_ip || '—'}</td>
-                      <td className="py-2 pr-3 text-white/45 truncate max-w-xs">{cb.payload || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={recentHitsColumns}
+              data={visibleRecentHits}
+              animateRows={false}
+              getRowId={(cb) => cb.id}
+              getRowAccentColor={(cb) => (cb.interaction_token === probe?.token ? '#10b981' : undefined)}
+            />
             )}
           </section>
         )}
@@ -408,9 +426,9 @@ export default function OobVerification() {
 
 function StatBox({ label, value, confirmed }) {
   return (
-    <div className={`rounded-xl border p-3 text-center ${confirmed ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-white/10 bg-white/5'}`}>
-      <div className="text-[10px] font-mono uppercase text-white/40">{label}</div>
-      <div className={`text-sm font-bold mt-1 ${confirmed ? 'text-emerald-300' : 'text-white/60'}`}>{value}</div>
+    <div className={`rounded-xl border p-3 text-center ${confirmed ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-[var(--border-default)] bg-[var(--row-hover-bg)]'}`}>
+      <div className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{label}</div>
+      <div className={`text-sm font-bold mt-1 ${confirmed ? 'text-emerald-300' : 'text-[var(--text-tertiary)]'}`}>{value}</div>
     </div>
   )
 }
@@ -419,7 +437,7 @@ function FieldRow({ label, value, copy }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[10px] font-mono text-white/35">{label}</span>
+        <span className="text-[10px] font-mono text-[var(--text-muted)]">{label}</span>
         {copy && value && value !== '—' && <CopyButton value={value} />}
       </div>
       <div className="text-[11px] font-mono text-cyan-400/80 break-all">{value}</div>

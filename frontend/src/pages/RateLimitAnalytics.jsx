@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TrendingUp, Clock, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
+import { TrendingUp, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -11,6 +11,8 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import Button from '../components/ui/Button'
 
 /**
  * RateLimitAnalytics — live request-budget monitoring.
@@ -39,9 +41,9 @@ function UsageTile({ label, current, max, color }) {
   const pct = max > 0 ? Math.min((current / max) * 100, 100) : 0;
   const accent = utilColor(pct);
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-5">
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-5">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-white/45">{label}</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{label}</span>
         <span
           className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
           style={{ color: accent, borderColor: `${accent}40`, background: `${accent}12` }}
@@ -51,9 +53,9 @@ function UsageTile({ label, current, max, color }) {
       </div>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-bold tabular-nums" style={{ color }}>{current}</span>
-        <span className="text-sm text-white/35 font-mono">/ {max}</span>
+        <span className="text-sm text-[var(--text-muted)] font-mono">/ {max}</span>
       </div>
-      <div className="h-2 bg-white/5 rounded-full overflow-hidden mt-3">
+      <div className="h-2 bg-[var(--row-hover-bg)] rounded-full overflow-hidden mt-3">
         <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: accent }} />
       </div>
     </div>
@@ -83,9 +85,10 @@ export default function RateLimitAnalytics() {
   useEffect(() => {
     setLoading(true);
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 30000);
-    return () => clearInterval(interval);
   }, [fetchAnalytics]);
+
+  // Refresh every 30s, skipping ticks while the tab is hidden.
+  useVisiblePolling(fetchAnalytics, 30000);
 
   const TILE_COLORS = { scans: '#22d3ee', logins: '#fbbf24', api: '#34d399' };
   const history = data?.history ?? [];
@@ -128,20 +131,20 @@ export default function RateLimitAnalytics() {
 
   const actions = (
     <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg p-1">
+      <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
         {RANGES.map((range) => (
-          <button
+          <Button variant="unstyled"
             key={range}
             type="button"
             onClick={() => setTimeRange(range)}
             className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all ${
               timeRange === range
                 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-white/45 hover:text-white/80'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {t(`pages.rateLimitAnalytics.range_${range}`)}
-          </button>
+          </Button>
         ))}
       </div>
       <ShellScanActions
@@ -188,7 +191,7 @@ export default function RateLimitAnalytics() {
         )}
 
         {source && (
-          <div className="flex items-center gap-2 text-[10px] font-mono text-white/35">
+          <div className="flex items-center gap-2 text-[10px] font-mono text-[var(--text-muted)]">
             <span
               className={`w-1.5 h-1.5 rounded-full ${source === 'redis' ? 'bg-emerald-400' : 'bg-amber-400'}`}
             />
@@ -198,7 +201,7 @@ export default function RateLimitAnalytics() {
         )}
 
         {/* Usage over time */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-4 h-4 text-cyan-400" />
             <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.usage_history')}</h3>
@@ -207,7 +210,7 @@ export default function RateLimitAnalytics() {
             <SkeletonBar className="h-[300px] w-full" />
           ) : history.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={history}>
+              <AreaChart accessibilityLayer data={history}>
                 <defs>
                   <linearGradient id="colorScans" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
@@ -243,7 +246,7 @@ export default function RateLimitAnalytics() {
         </div>
 
         {/* Throttling violations */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-4 h-4 text-rose-400" />
             <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.violations_heading')}</h3>
@@ -261,7 +264,7 @@ export default function RateLimitAnalytics() {
                     <Clock className="w-4 h-4 text-rose-400 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-sm text-white truncate">{violation.endpoint || violation.type}</div>
-                      <div className="text-xs text-gray-400 font-mono">{violation.time}</div>
+                      <div className="text-xs text-[var(--text-tertiary)] font-mono">{violation.time}</div>
                     </div>
                   </div>
                   <div className="text-xs text-rose-300 font-mono shrink-0">
@@ -276,7 +279,7 @@ export default function RateLimitAnalytics() {
         </div>
 
         {/* Per-endpoint breakdown */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-4 h-4 text-cyan-400" />
             <h3 className="text-sm font-semibold text-white">{t('pages.rateLimitAnalytics.endpoints_heading')}</h3>
@@ -301,7 +304,7 @@ export default function RateLimitAnalytics() {
               />
             ) : (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={visibleEndpoints.slice(0, 10)} layout="vertical">
+              <BarChart accessibilityLayer data={visibleEndpoints.slice(0, 10)} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis type="number" stroke="#64748b" style={{ fontSize: '12px' }} />
                 <YAxis type="category" dataKey="endpoint" stroke="#64748b" style={{ fontSize: '12px' }} width={150} />

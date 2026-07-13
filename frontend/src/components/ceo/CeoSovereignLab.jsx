@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 export default function CeoSovereignLab() {
   const { t } = useTranslation()
@@ -60,30 +61,30 @@ export default function CeoSovereignLab() {
           <h2 className="text-sm font-semibold text-violet-100 uppercase tracking-widest">
             {t('components.ceo.sovereignLab.title')}
           </h2>
-          <p className="text-[10px] font-mono text-slate-500 mt-1">
+          <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">
             {t('components.ceo.sovereignLab.subtitle')}
           </p>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={load}
           className="text-xs font-mono px-3 py-1.5 rounded border border-violet-400/30 text-violet-200 hover:bg-violet-950/50"
         >
           {t('components.ceo.sovereignLab.refresh')}
-        </button>
+        </Button>
       </div>
       {toast && (
-        <div className="px-4 py-2 text-[11px] font-mono text-slate-300 border-b border-white/10 bg-black/30">
+        <div className="px-4 py-2 text-[11px] font-mono text-[var(--text-secondary)] border-b border-white/10 bg-black/30">
           {toast}
         </div>
       )}
       {loading && (
-        <p className="p-4 text-xs text-slate-500 font-mono">{t('components.ceo.sovereignLab.loading')}</p>
+        <p className="p-4 text-xs text-[var(--text-muted)] font-mono">{t('components.ceo.sovereignLab.loading')}</p>
       )}
       {err && <p className="p-4 text-xs text-red-400 font-mono">{err}</p>}
       <div className="overflow-x-auto max-h-[min(480px,55vh)] overflow-y-auto">
-        <table className="w-full text-left text-xs font-mono text-slate-300">
-          <thead className="sticky top-0 bg-slate-950/95 border-b border-white/10 text-[10px] uppercase text-slate-500">
+        <table className="w-full text-left text-xs font-mono text-[var(--text-secondary)]">
+          <thead className="sticky top-0 bg-[var(--bg-0)]/95 border-b border-white/10 text-[10px] uppercase text-[var(--text-muted)]">
             <tr>
               <th className="p-2 pl-4">{t('components.ceo.sovereignLab.colId')}</th>
               <th className="p-2">{t('components.ceo.sovereignLab.colTargetFp')}</th>
@@ -100,16 +101,16 @@ export default function CeoSovereignLab() {
                   {row.target_fingerprint}
                 </td>
                 <td className="p-2">{row.status}</td>
-                <td className="p-2 text-slate-500">{row.updated_at}</td>
+                <td className="p-2 text-[var(--text-muted)]">{row.updated_at}</td>
                 <td className="p-2 pr-4">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     disabled={busyId === row.id}
                     onClick={() => trigger(row.id)}
                     className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-violet-900/60 border border-violet-400/35 text-violet-100 disabled:opacity-40"
                   >
                     {busyId === row.id ? '…' : t('components.ceo.sovereignLab.triggerPreflight')}
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

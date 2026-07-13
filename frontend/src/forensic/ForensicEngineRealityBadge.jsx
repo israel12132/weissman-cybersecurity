@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { REALITY_KIND_META } from '../lib/realityKindMeta'
-import { mountForensicShadow, unmountForensicShadow, forensicBadgeHtml } from './forensicShadowHost'
+import { mountForensicShadow, unmountForensicShadow, forensicBadgeHtml, escapeHtml, escapeAttr } from './forensicShadowHost'
 import {
   fetchProvenanceVerifyKey,
   forensicWorkerRequest,
@@ -154,12 +154,12 @@ export default function ForensicEngineRealityBadge({
 
     if (kind === 'alias' && canonical) {
       parts.push(
-        `<span class="forensic-meta" title="Same engine as ${canonical}">= ${canonical}</span>`,
+        `<span class="forensic-meta" title="Same engine as ${escapeAttr(canonical)}">= ${escapeHtml(canonical)}</span>`,
       )
     }
 
     if (showCanonical && canonical && kind !== 'alias') {
-      parts.push(`<span class="forensic-meta" title="Canonical: ${canonical}">→ ${canonical}</span>`)
+      parts.push(`<span class="forensic-meta" title="Canonical: ${escapeAttr(canonical)}">→ ${escapeHtml(canonical)}</span>`)
     }
 
     if (forensic.state === 'verified') {

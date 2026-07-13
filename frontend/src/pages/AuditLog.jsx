@@ -1,22 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import {
   Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  BadgeCheck,
+  FileJson,
   Search,
   Shield,
+  ShieldAlert,
   User,
 } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import EmptyState from '../components/ui/EmptyState'
+import DataTable from '../components/ui/DataTable'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
-import { SkeletonTable } from '../components/ui/Skeleton'
+import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 const ACTION_PILLS = [
   { key: '', labelKey: 'audit.all_actions' },
@@ -83,7 +89,7 @@ function extractTarget(entry) {
 
 function ActionBadge({ action }) {
   const a = (action || '').toLowerCase()
-  let color = 'border-white/15 text-white/70 bg-white/5'
+  let color = 'border-[var(--border-strong)] text-[var(--text-secondary)] bg-[var(--row-hover-bg)]'
   if (a.includes('login') || a.includes('mfa')) color = 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
   if (a.includes('denied') || a.includes('reject') || a.includes('failed')) color = 'border-rose-500/40 text-rose-200 bg-rose-500/10'
   if (a.includes('created') || a.includes('updated')) color = 'border-emerald-500/40 text-emerald-200 bg-emerald-500/10'
@@ -124,17 +130,21 @@ function exportCsv(rows) {
 
 export default function AuditLog() {
   const { t, i18n } = useTranslation()
+  const { toast } = useToast()
   const [entries, setEntries] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [exportingFull, setExportingFull] = useState(false)
+  const [verifyHash, setVerifyHash] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState(null) // { verified, run_id, created_at } | { verified:false }
   const [actionFilter, setActionFilter] = useState('')
   const [actor, setActor] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [offset, setOffset] = useState(0)
   const [pageSize, setPageSize] = useState(50)
-  const [expandedId, setExpandedId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -157,6 +167,57 @@ export default function AuditLog() {
   }, [actionFilter, actor, offset, pageSize, t])
 
   useEffect(() => { load() }, [load])
+
+  // Full tamper-evident export — the whole audit chain (not just this page),
+  // via GET /api/audit/export. The packet carries the SHA-256 chain-integrity
+  // flag so an auditor can verify no entry was altered or removed.
+  const exportFull = useCallback(async () => {
+    setExportingFull(true)
+    try {
+      const r = await apiFetch('/api/audit/export?format=json&limit=50000')
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+      const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weissman-audit-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast[d.chain_intact ? 'success' : 'warning'](
+        d.chain_intact
+          ? t('audit.export_full_ok', { count: d.total ?? (d.entries?.length ?? 0) })
+          : t('audit.export_full_broken'),
+      )
+    } catch (e) {
+      toast.error(e.message || t('audit.export_full_failed'))
+    } finally {
+      setExportingFull(false)
+    }
+  }, [t, toast])
+
+  // Tamper-evidence verifier — resolve a report's audit_root_hash against the
+  // live ledger via GET /api/verify-audit/:hash. Proves a report artifact
+  // corresponds to a real, unaltered run (or exposes a forgery).
+  const verify = useCallback(async () => {
+    const h = verifyHash.trim()
+    if (!h) return
+    setVerifying(true)
+    setVerifyResult(null)
+    try {
+      const r = await apiFetch(`/api/verify-audit/${encodeURIComponent(h)}`)
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.verified) {
+        setVerifyResult({ verified: true, ...d })
+      } else {
+        setVerifyResult({ verified: false, error: d.error || `HTTP ${r.status}` })
+      }
+    } catch (e) {
+      setVerifyResult({ verified: false, error: e.message || t('audit.verify_error') })
+    } finally {
+      setVerifying(false)
+    }
+  }, [verifyHash, t])
 
   const filteredEntries = useMemo(() => {
     if (!dateFrom && !dateTo) return entries
@@ -203,10 +264,80 @@ export default function AuditLog() {
     return { shown: filteredEntries.length, denied }
   }, [filteredEntries])
 
+  // Audit rows stay in the server's chronological order — column sorting is left
+  // off so a single fetched page can't be reordered into a misleading sequence.
+  const columns = useMemo(() => [
+    columnHelper.accessor('created_at', {
+      id: 'when',
+      header: t('audit.col_when'),
+      size: 176,
+      enableSorting: false,
+      cell: ({ getValue }) => (
+        <span className="font-mono text-[var(--text-tertiary)] whitespace-nowrap text-[12px]">
+          {fmtTime(getValue(), i18n.language)}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('action', {
+      id: 'action',
+      header: t('audit.col_action'),
+      size: 160,
+      enableSorting: false,
+      cell: ({ getValue }) => <ActionBadge action={getValue()} />,
+    }),
+    columnHelper.accessor((e) => e.actor_email || `user#${e.user_id || '—'}`, {
+      id: 'actor',
+      header: t('audit.col_actor'),
+      size: 208,
+      enableSorting: false,
+      cell: ({ row, getValue }) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-[10px] text-cyan-300">
+            {(row.original.actor_email || '?')[0]?.toUpperCase()}
+          </span>
+          <span className="text-cyan-300/90 truncate max-w-[14rem] text-[12px]" title={row.original.actor_email}>
+            {getValue()}
+          </span>
+        </div>
+      ),
+    }),
+    columnHelper.accessor((e) => extractTarget(e), {
+      id: 'target',
+      header: t('audit.col_target'),
+      enableSorting: false,
+      cell: ({ getValue }) => (
+        <span className="text-[var(--text-tertiary)] font-mono truncate block max-w-[20rem] text-[12px]" title={getValue()}>
+          {getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('client_ip', {
+      id: 'ip',
+      header: t('audit.col_ip'),
+      size: 128,
+      enableSorting: false,
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-muted)] text-[12px]">{getValue() || '—'}</span>,
+    }),
+  ], [t, i18n.language])
+
+  const renderAuditDetail = useCallback((entry) => {
+    const { text, json } = parseDetails(entry.details)
+    return (
+      <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">
+          {t('audit.detail_payload')}
+        </div>
+        <pre className="text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-64 overflow-auto leading-relaxed">
+          {json ? JSON.stringify(json, null, 2) : (text || '—')}
+        </pre>
+      </div>
+    )
+  }, [t])
+
   return (
     <div
-      className="min-h-[100dvh] text-slate-100 p-4 sm:p-6"
-      style={{ background: 'radial-gradient(ellipse 100% 70% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%)' }}
+      className="min-h-[100dvh] text-[var(--text-secondary)] p-4 sm:p-6"
+      style={{ background: 'var(--shell-bg)' }}
     >
       <header className="max-w-7xl mx-auto mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -216,15 +347,27 @@ export default function AuditLog() {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{t('audit.title')}</h1>
-              <p className="text-sm text-white/55 mt-1 max-w-2xl">{t('audit.subtitle')}</p>
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl">{t('audit.subtitle')}</p>
             </div>
           </div>
-          <ShellScanActions
-            onRefresh={load}
-            onExport={() => exportCsv(filteredEntries)}
-            refreshLoading={loading}
-            exportDisabled={filteredEntries.length === 0}
-          />
+          <div className="flex items-center gap-2">
+            <Button variant="unstyled"
+              type="button"
+              onClick={exportFull}
+              disabled={exportingFull}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={t('audit.export_full_hint')}
+            >
+              <FileJson className={`w-4 h-4 ${exportingFull ? 'animate-pulse' : ''}`} />
+              {exportingFull ? t('audit.export_full_running') : t('audit.export_full')}
+            </Button>
+            <ShellScanActions
+              onRefresh={load}
+              onExport={() => exportCsv(filteredEntries)}
+              refreshLoading={loading}
+              exportDisabled={filteredEntries.length === 0}
+            />
+          </div>
         </div>
       </header>
 
@@ -248,19 +391,74 @@ export default function AuditLog() {
             className="col-span-2 lg:col-span-1"
           />
         </div>
+
+        {/* Tamper-evidence verifier — resolve a report's audit_root_hash */}
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <BadgeCheck className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-white">{t('audit.verify_title')}</h3>
+          </div>
+          <p className="text-xs text-[var(--text-tertiary)] mb-3 max-w-2xl">{t('audit.verify_subtitle')}</p>
+          <form
+            className="flex flex-col sm:flex-row gap-2"
+            onSubmit={(e) => { e.preventDefault(); verify() }}
+          >
+            <input
+              type="text"
+              value={verifyHash}
+              onChange={(e) => setVerifyHash(e.target.value)}
+              placeholder={t('audit.verify_placeholder')}
+              spellCheck={false}
+              className="flex-1 min-w-0 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500/40"
+            />
+            <Button variant="unstyled"
+              type="submit"
+              disabled={verifying || !verifyHash.trim()}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/90 text-black text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <BadgeCheck className={`w-4 h-4 ${verifying ? 'animate-pulse' : ''}`} />
+              {verifying ? t('audit.verify_running') : t('audit.verify_btn')}
+            </Button>
+          </form>
+
+          {verifyResult && (
+            verifyResult.verified ? (
+              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 text-emerald-300 text-sm font-semibold">
+                  <BadgeCheck className="w-4 h-4" />
+                  {t('audit.verify_ok')}
+                </div>
+                <div className="mt-1.5 text-[11px] font-mono text-emerald-200/80 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>{t('audit.verify_run', { id: verifyResult.run_id })}</span>
+                  {verifyResult.created_at && (
+                    <span>{t('audit.verify_created', { time: fmtTime(verifyResult.created_at, i18n.language) })}</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 text-rose-300 text-sm font-semibold">
+                  <ShieldAlert className="w-4 h-4" />
+                  {t('audit.verify_fail')}
+                </div>
+                <div className="mt-1 text-[11px] font-mono text-rose-200/70">{t('audit.verify_fail_hint')}</div>
+              </div>
+            )
+          )}
+        </div>
       </div>
 
-      <section className="max-w-7xl mx-auto rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md p-4 sm:p-5 mb-4 space-y-4">
+      <section className="max-w-7xl mx-auto rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-4 sm:p-5 mb-4 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-white/40">{t('audit.filters')}</span>
+          <span className="text-[11px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('audit.filters')}</span>
           {hasFilters && (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={clearFilters}
               className="text-[11px] font-mono text-cyan-400/80 hover:text-cyan-300"
             >
               {t('audit.clear_filters')}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -268,51 +466,52 @@ export default function AuditLog() {
           {ACTION_PILLS.map((pill) => {
             const active = actionFilter === pill.key
             return (
-              <button
+              <Button variant="unstyled"
                 key={pill.key || 'all'}
                 type="button"
                 onClick={() => { setActionFilter(pill.key); setOffset(0) }}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   active
                     ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
-                    : 'bg-white/5 text-white/55 border-white/10 hover:text-white/80 hover:border-white/20'
+                    : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                 }`}
               >
                 {t(pill.labelKey)}
-              </button>
+              </Button>
             )
           })}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_auto] gap-3">
           <label className="relative block">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => { setDateFrom(e.target.value); setOffset(0) }}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white/85 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
               aria-label={t('audit.date_from')}
             />
           </label>
           <label className="relative block">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="date"
               value={dateTo}
               onChange={(e) => { setDateTo(e.target.value); setOffset(0) }}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white/85 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
               aria-label={t('audit.date_to')}
             />
           </label>
           <label className="relative block">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="search"
+              aria-label={t('audit.actor_placeholder')}
               placeholder={t('audit.actor_placeholder')}
               value={actor}
               onChange={(e) => { setActor(e.target.value); setOffset(0) }}
-              className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-10 pr-3 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </label>
           <div className="flex gap-2">
@@ -321,19 +520,19 @@ export default function AuditLog() {
               { days: 7, label: t('audit.range_7d') },
               { days: 30, label: t('audit.range_30d') },
             ].map((r) => (
-              <button
+              <Button variant="unstyled"
                 key={r.days}
                 type="button"
                 onClick={() => setQuickRange(r.days)}
-                className="px-3 py-2.5 rounded-xl text-xs font-mono border border-white/10 text-white/50 hover:text-white hover:border-white/25 whitespace-nowrap"
+                className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] whitespace-nowrap"
               >
                 {r.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-[11px] font-mono text-white/40 pt-1 border-t border-white/5">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] pt-1 border-t border-[var(--border-subtle)]">
           <Search className="h-3.5 w-3.5" />
           <span>
             {t('audit.summary', {
@@ -346,127 +545,61 @@ export default function AuditLog() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md overflow-hidden">
+      <section className="max-w-7xl mx-auto space-y-3">
         {error && (
-          <div className="px-5 pt-4 text-sm text-rose-300 font-mono">{error}</div>
+          <div className="text-sm text-rose-300 font-mono">{error}</div>
         )}
-        {loading ? (
-          <div className="p-5">
-            <SkeletonTable rows={10} cols={5} />
-          </div>
-        ) : filteredEntries.length === 0 ? (
-          <div className="p-8">
-            <EmptyState
-              icon="📋"
-              title={t('audit.empty_title')}
-              body={t('audit.empty_body')}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="text-left text-[10px] font-mono uppercase tracking-wider text-white/40 border-b border-white/10 bg-white/[0.02]">
-                  <th className="py-3 px-4 w-10" />
-                  <th className="py-3 px-4 w-44">{t('audit.col_when')}</th>
-                  <th className="py-3 px-4 w-40">{t('audit.col_action')}</th>
-                  <th className="py-3 px-4 w-52">{t('audit.col_actor')}</th>
-                  <th className="py-3 px-4">{t('audit.col_target')}</th>
-                  <th className="py-3 px-4 w-32">{t('audit.col_ip')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {filteredEntries.map((e) => {
-                  const open = expandedId === e.id
-                  const { text, json } = parseDetails(e.details)
-                  return (
-                    <React.Fragment key={e.id}>
-                      <tr
-                        className={`align-top cursor-pointer transition-colors ${open ? 'bg-cyan-500/[0.04]' : 'hover:bg-white/[0.02]'}`}
-                        onClick={() => setExpandedId(open ? null : e.id)}
-                      >
-                        <td className="py-3 px-4 text-white/35">
-                          <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180 text-cyan-400' : ''}`} />
-                        </td>
-                        <td className="py-3 px-4 font-mono text-white/65 whitespace-nowrap">
-                          {fmtTime(e.created_at, i18n.language)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <ActionBadge action={e.action} />
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-[10px] text-cyan-300">
-                              {(e.actor_email || '?')[0]?.toUpperCase()}
-                            </span>
-                            <span className="text-cyan-300/90 truncate max-w-[14rem]" title={e.actor_email}>
-                              {e.actor_email || `user#${e.user_id || '—'}`}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-white/60 font-mono truncate max-w-[20rem]" title={extractTarget(e)}>
-                          {extractTarget(e)}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-white/40">{e.client_ip || '—'}</td>
-                      </tr>
-                      {open && (
-                        <tr className="bg-black/30">
-                          <td colSpan={6} className="px-4 pb-4 pt-0">
-                            <div className="rounded-xl border border-white/10 bg-black/50 p-4">
-                              <div className="text-[10px] font-mono uppercase tracking-widest text-white/35 mb-2">
-                                {t('audit.detail_payload')}
-                              </div>
-                              <pre className="text-[11px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words max-h-64 overflow-auto leading-relaxed">
-                                {json ? JSON.stringify(json, null, 2) : (text || '—')}
-                              </pre>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={filteredEntries}
+          loading={loading}
+          hidePagination
+          densityToggle
+          animateRows={false}
+          getRowId={(e) => e.id}
+          renderSubRow={renderAuditDetail}
+          getRowCanExpand={(row) => Boolean(row.original.details)}
+          expandLabel={t('audit.expand_payload')}
+          collapseLabel={t('audit.collapse_payload')}
+          emptyState={{ icon: '📋', title: t('audit.empty_title'), body: t('audit.empty_body') }}
+        />
 
         {total > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t border-white/10 bg-white/[0.02]">
-            <div className="flex items-center gap-3 text-[11px] font-mono text-white/45">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)]">
+            <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-muted)]">
               <span>{t('audit.rows_per_page')}</span>
               <select
                 value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setOffset(0) }}
-                className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-white/80 focus:outline-none focus:border-cyan-500/40"
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
               >
                 {PAGE_SIZES.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
               </select>
-              <span className="hidden sm:inline text-white/30">·</span>
+              <span className="hidden sm:inline text-[var(--text-disabled)]">·</span>
               <span>{t('audit.page_range', { start: rangeStart, end: rangeEnd, total })}</span>
             </div>
 
             <div className="flex items-center gap-1">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset(0)}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.first_page')}
               >
                 <ChevronsLeft className="h-4 w-4" />
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset <= 0}
                 onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.prev_page')}
               >
                 <ChevronLeft className="h-4 w-4" />
-              </button>
+              </Button>
 
               <div className="flex items-center gap-1 px-2">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -476,40 +609,40 @@ export default function AuditLog() {
                   else if (currentPage >= totalPages - 2) page = totalPages - 4 + i
                   else page = currentPage - 2 + i
                   return (
-                    <button
+                    <Button variant="unstyled"
                       key={page}
                       type="button"
                       onClick={() => setOffset((page - 1) * pageSize)}
                       className={`min-w-[2rem] h-8 rounded-lg text-xs font-mono border transition-all ${
                         page === currentPage
                           ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
-                          : 'border-white/10 text-white/50 hover:text-white hover:border-white/25'
+                          : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
                       }`}
                     >
                       {page}
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
 
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((o) => o + pageSize)}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.next_page')}
               >
                 <ChevronRight className="h-4 w-4" />
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 disabled={offset + pageSize >= total}
                 onClick={() => setOffset((totalPages - 1) * pageSize)}
-                className="p-2 rounded-lg border border-white/10 text-white/50 hover:text-white disabled:opacity-25 transition-colors"
+                className="p-2 rounded-lg border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-25 transition-colors"
                 aria-label={t('audit.last_page')}
               >
                 <ChevronsRight className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
         )}

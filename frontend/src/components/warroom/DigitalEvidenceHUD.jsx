@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import RuntimeExecutionFlow from '../cockpit/RuntimeExecutionFlow'
@@ -6,6 +6,7 @@ import { formatApiErrorFromBody } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import { apiFetch } from '../../lib/apiBase'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.digitalEvidenceHud'
 
@@ -45,9 +46,9 @@ function CopyableBlock({ label, value, disableCopy, awaitingText }) {
       <div className="flex items-center justify-between px-2 py-1 border-b border-white/10">
         <span className="text-[10px] uppercase tracking-wider text-white/50 font-mono">{label}</span>
         {!disableCopy && !isAwaiting && text.trim() ? (
-          <button type="button" onClick={copy} className="text-xs text-[#22d3ee] hover:text-[#67e8f9]">
+          <Button variant="unstyled" type="button" onClick={copy} className="text-xs text-[#22d3ee] hover:text-[#67e8f9]">
             {copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}
-          </button>
+          </Button>
         ) : null}
       </div>
       <pre
@@ -176,7 +177,7 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
           aria-hidden
         />
         <motion.div
-          className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-[#22d3ee]/40 bg-slate-950/98 shadow-2xl"
+          className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-[#22d3ee]/40 bg-[var(--bg-0)]/98 shadow-2xl"
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
@@ -196,14 +197,14 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                 />
               )}
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={onClose}
-              className="text-white/60 hover:text-white text-lg leading-none px-2 py-1"
+              className="text-white/60 hover:text-[var(--text-primary)] text-lg leading-none px-2 py-1"
               aria-label={t(`${NS}.close`)}
             >
               ×
-            </button>
+            </Button>
           </div>
 
           <div className="p-4 overflow-y-auto max-h-[calc(85vh-120px)]">
@@ -241,14 +242,14 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
                   </div>
                 ) : null}
                 {decryptErr ? <p className="text-sm text-red-400">{decryptErr}</p> : null}
-                <button
+                <Button variant="unstyled"
                   type="button"
                   disabled={decryptBusy}
                   onClick={decryptExploit}
                   className="w-full py-3 rounded-xl font-semibold text-sm border border-amber-500/60 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 disabled:opacity-50"
                 >
                   {decryptBusy ? t(`${NS}.decryptingBtn`) : t(`${NS}.decryptBtn`)}
-                </button>
+                </Button>
               </motion.div>
             )}
 

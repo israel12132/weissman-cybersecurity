@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Factory, Cpu, AlertTriangle, Activity, Zap, Shield, ShieldAlert,
-  ShieldCheck, Network,
+  ShieldCheck, Network, Fingerprint,
 } from 'lucide-react';
 import PageShell from './PageShell';
 import AgentRequiredGate from '../components/engine/AgentRequiredGate';
@@ -16,6 +16,7 @@ import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
+import Button from '../components/ui/Button'
 
 const FINDINGS_ACCENT = '#f97316';
 
@@ -64,7 +65,7 @@ function StatusBadge({ status, t }) {
     running: { label: t('pages.otIcsSecurity.status_running'), cls: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
     completed: { label: t('pages.otIcsSecurity.status_done'), cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
     error: { label: t('pages.otIcsSecurity.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
-    idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-gray-400 border-white/10 bg-white/5' },
+    idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-[var(--text-tertiary)] border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   };
   const { label, cls } = map[status] ?? map.idle;
   return (
@@ -132,7 +133,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
   return (
     <AgentRequiredGate engineId={engine.id} className="rounded-xl">
     <div
-      className="rounded-xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3 hover:border-white/20 transition-all"
+      className="rounded-xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3 hover:border-[var(--border-strong)] transition-all"
       onMouseEnter={onFocus}
       onFocus={onFocus}
     >
@@ -142,36 +143,36 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
             <h3 className="text-sm font-semibold text-white">{t(engine.labelKey)}</h3>
             <StatusBadge status={status} t={t} />
           </div>
-          <span className="text-[9px] font-mono text-white/30 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">
             {engine.id}
           </span>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleRun}
           disabled={status === 'running' || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-cyan-500/30 text-cyan-400/70 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {status === 'running' ? '⟳' : t('pages.otIcsSecurity.scan')}
-        </button>
+        </Button>
       </div>
-      <p className="text-[11px] text-white/45 leading-relaxed">{t(engine.descKey)}</p>
+      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t(engine.descKey)}</p>
       {lastRun && (
-        <p className="text-[10px] font-mono text-white/25">
+        <p className="text-[10px] font-mono text-[var(--text-disabled)]">
           {t('pages.otIcsSecurity.last_scan', { time: lastRun })}
         </p>
       )}
       {findings.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-white/5">
-          <p className="text-[10px] font-mono text-white/35">
+        <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+          <p className="text-[10px] font-mono text-[var(--text-muted)]">
             {t('pages.otIcsSecurity.findings_count', { count: findings.length })}
           </p>
           {findings.slice(0, 4).map((f, i) => (
-            <div key={f.id ?? i} className="text-[11px] font-mono text-white/60 bg-white/5 rounded px-2 py-1">
+            <div key={f.id ?? i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-[var(--row-hover-bg)] rounded px-2 py-1">
               <span className={`mr-2 uppercase text-[9px] ${
                 f.severity === 'critical' ? 'text-red-400' :
                 f.severity === 'high' ? 'text-orange-400' :
-                f.severity === 'medium' ? 'text-yellow-400' : 'text-gray-400'
+                f.severity === 'medium' ? 'text-yellow-400' : 'text-[var(--text-tertiary)]'
               }`}>
                 {f.severity ?? 'info'}
               </span>
@@ -195,7 +196,7 @@ function renderOtFinding(f, i) {
     info: '#64748b',
   }[sev] || '#64748b';
   return (
-    <div key={f.id ?? f.finding_id ?? i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-1">
+    <div key={f.id ?? f.finding_id ?? i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 space-y-1">
       <div className="flex items-start gap-2 flex-wrap">
         <span
           className="text-[9px] font-mono uppercase shrink-0 px-1.5 py-0.5 rounded border"
@@ -204,12 +205,12 @@ function renderOtFinding(f, i) {
           {sev}
         </span>
         {f._engine && (
-          <span className="text-[9px] font-mono text-white/35 uppercase">{f._engine}</span>
+          <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase">{f._engine}</span>
         )}
-        <span className="text-[12px] font-mono text-white/90 min-w-0 flex-1">{f.title ?? f.type ?? 'Finding'}</span>
+        <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0 flex-1">{f.title ?? f.type ?? 'Finding'}</span>
       </div>
       {f.description && (
-        <p className="text-[10px] font-mono text-white/45 leading-relaxed">{f.description}</p>
+        <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{f.description}</p>
       )}
     </div>
   );
@@ -229,6 +230,8 @@ export default function OtIcsSecurity() {
   const [lastJobId, setLastJobId] = useState(null);
   const [engineFindingsMap, setEngineFindingsMap] = useState({});
   const [toast, setToast] = useState(null);
+  const [fingerprints, setFingerprints] = useState([]);
+  const [fpLoading, setFpLoading] = useState(false);
 
   const fetchOtDevices = useCallback(async () => {
     try {
@@ -245,6 +248,30 @@ export default function OtIcsSecurity() {
       setLoading(false);
     }
   }, []);
+
+  // Per-client passive fingerprints — deeper forensic detail (vendor hint,
+  // confidence, raw protocol bytes) beyond the global device inventory.
+  // Wired to GET /api/clients/:id/ot-ics/fingerprints.
+  const fetchFingerprints = useCallback(async (cid) => {
+    if (cid == null || cid === '') {
+      setFingerprints([]);
+      return;
+    }
+    setFpLoading(true);
+    try {
+      const r = await apiFetch(`/api/clients/${encodeURIComponent(cid)}/ot-ics/fingerprints`);
+      const d = await r.json().catch(() => ({}));
+      setFingerprints(Array.isArray(d.fingerprints) ? d.fingerprints : []);
+    } catch {
+      setFingerprints([]);
+    } finally {
+      setFpLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFingerprints(selectedClientId);
+  }, [selectedClientId, fetchFingerprints]);
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now();
@@ -364,11 +391,11 @@ export default function OtIcsSecurity() {
       <div className="space-y-6">
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-white/40">{t('pages.otIcsSecurity.client_label')}</span>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.otIcsSecurity.client_label')}</span>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             >
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -384,10 +411,10 @@ export default function OtIcsSecurity() {
             { key: 'kpi_findings', value: kpis.findings, color: '#fb923c', Icon: AlertTriangle },
             { key: 'kpi_severe', value: kpis.severe, color: '#f43f5e', Icon: ShieldAlert },
           ].map(({ key, value, color, Icon }) => (
-            <div key={key} className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-4">
+            <div key={key} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
                     {t(`pages.otIcsSecurity.${key}`)}
                   </div>
                   <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>
@@ -404,7 +431,7 @@ export default function OtIcsSecurity() {
           <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.sev === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-              : 'bg-black/80 border-cyan-500/30 text-cyan-300'
+              : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'
           }`}>
             {toast.msg}
           </div>
@@ -417,9 +444,9 @@ export default function OtIcsSecurity() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {deviceTypes.map(({ type, count, icon: Icon, color, labelKey }) => (
-              <div key={type} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+              <div key={type} className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">{t(labelKey)}</span>
+                  <span className="text-sm text-[var(--text-tertiary)]">{t(labelKey)}</span>
                   <Icon className="w-4 h-4" style={{ color }} />
                 </div>
                 <div className="text-2xl font-bold text-white">{count}</div>
@@ -427,6 +454,64 @@ export default function OtIcsSecurity() {
             ))}
           </div>
         </div>
+
+        {selectedClientId != null && (fpLoading || fingerprints.length > 0) && (
+          <div>
+            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+              <Fingerprint className="w-4 h-4 text-cyan-400" />
+              {t('pages.otIcsSecurity.fingerprints_heading')}
+              {!fpLoading && (
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">({fingerprints.length})</span>
+              )}
+            </h3>
+            <p className="text-[11px] text-[var(--text-muted)] mb-3">{t('pages.otIcsSecurity.fingerprints_hint')}</p>
+            {fpLoading ? (
+              <SkeletonTable rows={3} cols={4} />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {fingerprints.map((fp) => {
+                  const conf = Math.max(0, Math.min(1, Number(fp.confidence) || 0));
+                  const confPct = Math.round(conf * 100);
+                  const confColor = conf >= 0.75 ? '#4ade80' : conf >= 0.4 ? '#facc15' : '#fb923c';
+                  return (
+                    <div key={fp.id} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <code className="text-[12px] font-mono text-[var(--text-primary)]">
+                          {fp.host || '—'}:{fp.port || 0}
+                        </code>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-300/85 uppercase tracking-wider">
+                          {fp.protocol || t('pages.otIcsSecurity.fp_unknown_protocol')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] shrink-0">
+                          {t('pages.otIcsSecurity.fp_vendor')}
+                        </span>
+                        <span className="text-[12px] text-[var(--text-secondary)] truncate">
+                          {fp.vendor_hint || t('pages.otIcsSecurity.fp_unknown_vendor')}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
+                          <span className="uppercase tracking-widest">{t('pages.otIcsSecurity.fp_confidence')}</span>
+                          <span style={{ color: confColor }}>{confPct}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-[var(--border-strong)] overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${confPct}%`, background: confColor }} />
+                        </div>
+                      </div>
+                      {fp.raw_excerpt_hex && (
+                        <code className="ltr-only block text-[10px] font-mono text-[var(--text-tertiary)] bg-[var(--bg-3)] rounded-lg px-2 py-1.5 truncate" title={fp.raw_excerpt_hex}>
+                          {fp.raw_excerpt_hex}
+                        </code>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
@@ -451,7 +536,7 @@ export default function OtIcsSecurity() {
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
             <Network className="w-4 h-4 text-cyan-400" />
             {t('pages.otIcsSecurity.protocols_heading')}
@@ -483,7 +568,7 @@ export default function OtIcsSecurity() {
                         <Icon className="w-4 h-4" style={{ color: meta.color }} />
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-[var(--text-tertiary)]">
                           {t('pages.otIcsSecurity.devices_count', { count: p.count ?? 0 })}
                         </span>
                         <span
@@ -500,8 +585,8 @@ export default function OtIcsSecurity() {
           )}
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Factory className="w-4 h-4 text-cyan-400" />
               {t('pages.otIcsSecurity.devices_heading')}
@@ -522,9 +607,9 @@ export default function OtIcsSecurity() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {filteredDevices.map((device) => (
-                <div key={device.id} className="p-4 hover:bg-white/5 transition-colors">
+                <div key={device.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -544,7 +629,7 @@ export default function OtIcsSecurity() {
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-tertiary)]">
                         <span>{t('pages.otIcsSecurity.ip_label')} {device.ip ?? device.host ?? t('pages.otIcsSecurity.unknown')}</span>
                         {device.port > 0 && (
                           <>
@@ -598,7 +683,7 @@ export default function OtIcsSecurity() {
             <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="text-sm font-semibold text-white mb-1">{t('pages.otIcsSecurity.notice_title')}</h3>
-              <p className="text-xs text-gray-400 leading-relaxed">{t('pages.otIcsSecurity.notice_body')}</p>
+              <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{t('pages.otIcsSecurity.notice_body')}</p>
             </div>
           </div>
         </div>

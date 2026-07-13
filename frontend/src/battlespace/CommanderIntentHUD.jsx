@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Crosshair, Ghost, Shield } from 'lucide-react'
+import Button from '../components/ui/Button'
 
 export default function CommanderIntentHUD({
   focusNode,
@@ -36,7 +37,7 @@ export default function CommanderIntentHUD({
               </p>
             )}
             <div className="flex flex-wrap gap-2 mt-3">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={onWargame}
                 disabled={wargaming}
@@ -44,14 +45,14 @@ export default function CommanderIntentHUD({
               >
                 <Ghost className="w-3.5 h-3.5" />
                 {t('battlespace.shadow_wargame')}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={onClearFocus}
                 className="px-2.5 py-1 rounded-lg border border-white/15 text-[10px] font-mono text-white/55 hover:text-white/85"
               >
                 {t('battlespace.clear_focus')}
-              </button>
+              </Button>
             </div>
           </>
         ) : (

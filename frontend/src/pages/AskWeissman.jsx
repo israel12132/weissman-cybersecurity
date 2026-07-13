@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Trash2 } from 'lucide-react'
@@ -8,6 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { formatApiErrorFromBody } from '../lib/apiError'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 
 const SAMPLE_KEYS = ['sample_q1', 'sample_q2', 'sample_q3', 'sample_q4', 'sample_q5']
 
@@ -63,7 +64,7 @@ function StatusBadge({ ok, error, t }) {
     )
   }
   return (
-    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-white/15 bg-white/10 text-white/60">
+    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]">
       {t('ask_weissman.status_pending')}
     </span>
   )
@@ -95,12 +96,7 @@ export default function AskWeissman() {
     resource: turn.sql || '',
   })), [completedTurns])
 
-  const {
-    searchQuery,
-    setSearchQuery,
-    filteredFindings,
-    exportCsv: exportTranscriptWorkbench,
-  } = useFindingsWorkbench(transcriptFindings, {
+  const { searchQuery, setSearchQuery, filteredFindings } = useFindingsWorkbench(transcriptFindings, {
     csvPrefix: 'weissman-ask-transcript',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
@@ -179,16 +175,13 @@ export default function AskWeissman() {
     <main
       id="main-content"
       tabIndex={-1}
-      className="min-h-[100dvh] text-slate-100 p-5 lg:p-6 flex flex-col outline-none"
-      style={{
-        background:
-          'radial-gradient(ellipse 120% 80% at 50% 0%, #111827 0%, #09090b 50%, #030712 100%)',
-      }}
+      className="min-h-[100dvh] text-[var(--text-secondary)] p-5 lg:p-6 flex flex-col outline-none"
+      style={{ background: 'var(--shell-bg)' }}
     >
       <header className="mb-4 flex items-end justify-between gap-3 flex-wrap shrink-0">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{t('ask_weissman.title')}</h1>
-          <p className="text-xs text-white/55 mt-1">
+          <p className="text-xs text-[var(--text-tertiary)] mt-1">
             {t('ask_weissman.subtitle_full')}
           </p>
         </div>
@@ -198,16 +191,16 @@ export default function AskWeissman() {
             onExport={() => exportTranscriptCsv(history)}
             exportDisabled={completedTurns.length === 0}
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={clearHistory}
             disabled={history.length === 0}
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded border border-white/15 text-white/60 hover:border-rose-500/40 hover:text-rose-200 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:border-rose-500/40 hover:text-rose-200 disabled:opacity-40"
           >
             <Trash2 className="w-3.5 h-3.5" />
             {t('pages.askWeissman.clear_history')}
-          </button>
-          <Link to="/" className="text-[11px] font-mono text-white/45 hover:text-white/80 weissman-flip-x">
+          </Button>
+          <Link to="/" className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] weissman-flip-x">
             {t('ask_weissman.back_cockpit')}
           </Link>
         </div>
@@ -228,27 +221,27 @@ export default function AskWeissman() {
 
       <div className="flex flex-wrap gap-1.5 mb-3 shrink-0" role="group" aria-label={t('ask_weissman.sample_prompts')}>
         {sampleQuestions.map((s) => (
-          <button
+          <Button variant="unstyled"
             type="button"
             key={s}
             onClick={() => setQuestion(s)}
-            className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/60 hover:border-cyan-500/40 hover:text-cyan-200"
+            className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:border-cyan-500/40 hover:text-cyan-200"
           >
             &ldquo;{s}&rdquo;
-          </button>
+          </Button>
         ))}
       </div>
 
       <div
         ref={transcriptRef}
-        className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-4 space-y-4"
+        className="flex-1 overflow-y-auto rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-4 space-y-4"
       >
         {visibleHistory.length === 0 && history.length > 0 ? (
-          <div className="text-center text-[11px] font-mono text-white/35 py-12">
+          <div className="text-center text-[11px] font-mono text-[var(--text-muted)] py-12">
             {t('weissmanFindings.filtered_title')}
           </div>
         ) : visibleHistory.length === 0 ? (
-          <div className="text-center text-[11px] font-mono text-white/35 py-12">
+          <div className="text-center text-[11px] font-mono text-[var(--text-muted)] py-12">
             {t('ask_weissman.empty_state')}
           </div>
         ) : null}
@@ -256,11 +249,11 @@ export default function AskWeissman() {
           <div key={i}>
             <div className="flex items-start gap-2 mb-2">
               <span className="text-[10px] font-mono text-cyan-300 mt-0.5 weissman-flip-x">{t('ask_weissman.you_label')}</span>
-              <p className="text-[13px] text-white/90 leading-snug flex-1">{turn.q}</p>
+              <p className="text-[13px] text-[var(--text-primary)] leading-snug flex-1">{turn.q}</p>
             </div>
 
             {turn.pending ? (
-              <div className="ms-6 text-[11px] font-mono text-white/45">
+              <div className="ms-6 text-[11px] font-mono text-[var(--text-muted)]">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse me-2" />
                 {t('ask_weissman.planning')}
               </div>
@@ -269,12 +262,12 @@ export default function AskWeissman() {
                 <div className="flex items-center gap-2">
                   <StatusBadge ok={turn.ok} error={turn.error} t={t} />
                   {turn.elapsed_ms != null && (
-                    <span className="text-[10px] font-mono text-white/40 number-cell">
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] number-cell">
                       {turn.elapsed_ms}ms
                     </span>
                   )}
                   {turn.row_count != null && !turn.error && (
-                    <span className="text-[10px] font-mono text-white/55">
+                    <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
                       {t('ask_weissman.rows', { count: turn.row_count })}
                     </span>
                   )}
@@ -285,18 +278,18 @@ export default function AskWeissman() {
                 ) : (
                   <>
                     {turn.plan && (
-                      <details className="rounded border border-white/10 bg-black/40" open>
+                      <details className="rounded border border-[var(--border-default)] bg-[var(--bg-2)]" open>
                         <summary className="cursor-pointer text-[10px] font-mono text-violet-300/80 px-2 py-1 hover:text-violet-200">
                           {t('pages.askWeissman.plan_label')} ▾
                         </summary>
-                        <pre className="text-[10px] font-mono text-white/70 p-2 overflow-x-auto whitespace-pre-wrap">
+                        <pre className="text-[10px] font-mono text-[var(--text-secondary)] p-2 overflow-x-auto whitespace-pre-wrap">
                           {typeof turn.plan === 'string' ? turn.plan : JSON.stringify(turn.plan, null, 2)}
                         </pre>
                       </details>
                     )}
 
                     {turn.sql && (
-                      <details className="rounded border border-white/10 bg-black/40">
+                      <details className="rounded border border-[var(--border-default)] bg-[var(--bg-2)]">
                         <summary className="cursor-pointer text-[10px] font-mono text-cyan-300/70 px-2 py-1 hover:text-cyan-200">
                           {t('ask_weissman.compiled_sql')} ▾
                         </summary>
@@ -307,12 +300,12 @@ export default function AskWeissman() {
                     )}
 
                     {turn.rows && turn.rows.length > 0 ? (
-                      <div className="rounded border border-white/10 bg-black/30 overflow-x-auto custom-scroll">
+                      <div className="rounded border border-[var(--border-default)] bg-[var(--table-surface)] overflow-x-auto custom-scroll">
                         <table className="min-w-full text-[11px] font-mono data-grid">
                           <thead>
-                            <tr className="text-white/50">
+                            <tr className="text-[var(--text-tertiary)]">
                               {Object.keys(turn.rows[0]).map((k) => (
-                                <th key={k} className="px-2 py-1.5 font-normal border-b border-white/10">
+                                <th key={k} className="px-2 py-1.5 font-normal border-b border-[var(--border-default)]">
                                   {k}
                                 </th>
                               ))}
@@ -320,7 +313,7 @@ export default function AskWeissman() {
                           </thead>
                           <tbody>
                             {turn.rows.slice(0, 50).map((row, ri) => (
-                              <tr key={ri} className="text-white/80 hover:bg-white/[0.03]">
+                              <tr key={ri} className="text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)]">
                                 {Object.values(row).map((v, ci) => (
                                   <td key={ci} className="px-2 py-1 border-b border-white/[0.04] whitespace-nowrap number-cell">
                                     {fmtCell(v)}
@@ -331,13 +324,13 @@ export default function AskWeissman() {
                           </tbody>
                         </table>
                         {turn.rows.length > 50 && (
-                          <p className="text-center text-[10px] font-mono text-white/35 py-1.5 border-t border-white/10">
+                          <p className="text-center text-[10px] font-mono text-[var(--text-muted)] py-1.5 border-t border-[var(--border-default)]">
                             {t('ask_weissman.showing_rows', { total: turn.row_count })}
                           </p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-[11px] font-mono text-white/45">
+                      <p className="text-[11px] font-mono text-[var(--text-muted)]">
                         {t('ask_weissman.no_rows')}
                       </p>
                     )}
@@ -359,16 +352,16 @@ export default function AskWeissman() {
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={t('ask_weissman.placeholder')}
           aria-label={t('ask_weissman.placeholder')}
-          className="flex-1 bg-black/40 border border-white/15 rounded-lg px-3 py-2 text-[13px] text-white/90 focus:outline-none focus:border-cyan-500/40"
+          className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
           autoFocus
         />
-        <button
+        <Button variant="unstyled"
           type="submit"
           disabled={loading || !question.trim()}
           className="px-4 py-2 rounded-lg text-[12px] font-mono uppercase tracking-widest border border-cyan-500/40 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-40 weissman-flip-x"
         >
           {loading ? t('ask_weissman.asking') : t('ask_weissman.ask_button')}
-        </button>
+        </Button>
       </form>
     </main>
   )

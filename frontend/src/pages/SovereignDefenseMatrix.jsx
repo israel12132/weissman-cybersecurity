@@ -1,7 +1,8 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +12,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINES = {
   chronos: 'chronos',
@@ -48,26 +50,26 @@ const DEFAULT_PARAMS = {
 
 function TabButton({ active, label, onClick }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       className={`px-4 py-2 text-xs font-mono uppercase tracking-wider rounded-lg border transition-colors ${
         active
           ? 'border-cyan-400/60 bg-cyan-950/40 text-cyan-200'
-          : 'border-white/10 text-white/50 hover:border-white/25 hover:text-white/80'
+          : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]'
       }`}
     >
       {label}
-    </button>
+    </Button>
   )
 }
 
 function MetricCard({ label, value, sub, color = 'text-cyan-300' }) {
   return (
-    <div className="px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-center">
+    <div className="px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-center">
       <p className={`text-2xl font-mono font-bold ${color}`}>{value}</p>
-      <p className="text-[10px] text-white/40 uppercase mt-1">{label}</p>
-      {sub && <p className="text-[10px] text-white/30 mt-0.5 font-mono">{sub}</p>}
+      <p className="text-[10px] text-[var(--text-muted)] uppercase mt-1">{label}</p>
+      {sub && <p className="text-[10px] text-[var(--text-disabled)] mt-0.5 font-mono">{sub}</p>}
     </div>
   )
 }
@@ -157,9 +159,9 @@ export default function SovereignDefenseMatrix() {
 
   useEffect(() => {
     loadDashboard()
-    const iv = setInterval(loadDashboard, 3000)
-    return () => clearInterval(iv)
   }, [loadDashboard])
+  // Hidden-tab-aware: no 3s dashboard refetch while the tab is in the background.
+  useVisiblePolling(loadDashboard, 3000)
 
   const runEngine = useCallback(async (isAuto = false) => {
     if (!clientId || !target.trim()) {
@@ -196,10 +198,11 @@ export default function SovereignDefenseMatrix() {
 
   useEffect(() => {
     if (!jobId || !runState.running) return undefined
+    let cancelled = false
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
       const d = await r.json().catch(() => null)
-      if (!r.ok || !d) return
+      if (cancelled || !r.ok || !d) return
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed') {
         const raw = d.result_json || d.result || {}
@@ -211,7 +214,8 @@ export default function SovereignDefenseMatrix() {
         setRunState({ running: false, msg: d.error || status })
       }
     }, 2500)
-    return () => clearInterval(iv)
+    // No setState from a tick that resolves after unmount / after `running` flips.
+    return () => { cancelled = true; clearInterval(iv) }
   }, [jobId, runState.running, loadDashboard, t])
 
   const rotateLiquid = async () => {
@@ -301,20 +305,20 @@ export default function SovereignDefenseMatrix() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div className="xl:col-span-4 space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-cyan-950/25 to-black/40 p-4 space-y-4">
+          <div className="rounded-2xl border border-[var(--border-default)] bg-gradient-to-b from-cyan-950/25 to-black/40 p-4 space-y-4">
             <h3 className="text-sm font-semibold text-white">{t('pages.sovereignDefense.controls')}</h3>
 
-            <label className="flex items-center gap-2 text-[11px] text-white/75 cursor-pointer">
+            <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)] cursor-pointer">
               <input type="checkbox" checked={autoRun} onChange={(e) => setAutoRun(e.target.checked)} />
               {t('pages.sovereignDefense.auto_run_label')}
             </label>
 
-            <label className="block text-[11px] font-mono text-white/60">
+            <label className="block text-[11px] font-mono text-[var(--text-tertiary)]">
               {t('pages.sovereignDefense.client')}
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
               >
                 <option value="">{t('pages.sovereignDefense.select_client')}</option>
                 {clients.map((c) => (
@@ -323,13 +327,13 @@ export default function SovereignDefenseMatrix() {
               </select>
             </label>
 
-            <label className="block text-[11px] font-mono text-white/60">
+            <label className="block text-[11px] font-mono text-[var(--text-tertiary)]">
               {t('pages.sovereignDefense.target')}
               <input
                 type="url"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-black/50 border border-white/15 px-3 py-2 text-sm font-mono text-white"
+                className="mt-1 w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm font-mono text-white"
               />
             </label>
 
@@ -340,61 +344,61 @@ export default function SovereignDefenseMatrix() {
             <AnimatePresence mode="wait">
               {tab === 'chronos' && (
                 <motion.div key="chronos-params" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-                  <label className="block text-[11px] text-white/60">
+                  <label className="block text-[11px] text-[var(--text-tertiary)]">
                     {t('pages.sovereignDefense.chronos_sample_interval')}
                     <input type="number" value={params.chronos.sample_interval_ms}
                       onChange={(e) => setP('chronos', 'sample_interval_ms', e.target.value)}
-                      className="mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1.5 text-xs text-white" />
+                      className="mt-1 w-full rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs text-white" />
                   </label>
-                  <label className="block text-[11px] text-white/60">
+                  <label className="block text-[11px] text-[var(--text-tertiary)]">
                     {t('pages.sovereignDefense.chronos_observation_window')}
                     <input type="number" value={params.chronos.observation_window_ms}
                       onChange={(e) => setP('chronos', 'observation_window_ms', e.target.value)}
-                      className="mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1.5 text-xs text-white" />
+                      className="mt-1 w-full rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs text-white" />
                   </label>
                   <div className="rounded-xl border border-violet-500/20 bg-violet-950/15 p-3 space-y-2">
                     <div className="text-[10px] font-mono uppercase text-violet-300/80">
                       {t('pages.sovereignDefense.ebpf_ssh_title')}
                     </div>
-                    <label className="block text-[11px] text-white/55">
+                    <label className="block text-[11px] text-[var(--text-tertiary)]">
                       {t('pages.sovereignDefense.ebpf_ssh_host')}
                       <input type="text" value={params.chronos.ebpf_ssh_host}
                         onChange={(e) => setP('chronos', 'ebpf_ssh_host', e.target.value)}
-                        className="mt-0.5 w-full rounded bg-black/40 border border-white/10 px-2 py-1.5 text-xs font-mono" />
+                        className="mt-0.5 w-full rounded bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs font-mono" />
                     </label>
                     <div className="grid grid-cols-2 gap-2">
-                      <label className="block text-[11px] text-white/55">
+                      <label className="block text-[11px] text-[var(--text-tertiary)]">
                         {t('pages.sovereignDefense.ebpf_ssh_user')}
                         <input type="text" value={params.chronos.ebpf_ssh_user}
                           onChange={(e) => setP('chronos', 'ebpf_ssh_user', e.target.value)}
-                          className="mt-0.5 w-full rounded bg-black/40 border border-white/10 px-2 py-1.5 text-xs" />
+                          className="mt-0.5 w-full rounded bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs" />
                       </label>
-                      <label className="block text-[11px] text-white/55">
+                      <label className="block text-[11px] text-[var(--text-tertiary)]">
                         {t('pages.sovereignDefense.ebpf_ssh_port')}
                         <input type="number" value={params.chronos.ebpf_ssh_port}
                           onChange={(e) => setP('chronos', 'ebpf_ssh_port', e.target.value)}
-                          className="mt-0.5 w-full rounded bg-black/40 border border-white/10 px-2 py-1.5 text-xs" />
+                          className="mt-0.5 w-full rounded bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs" />
                       </label>
                     </div>
-                    <label className="block text-[11px] text-white/55">
+                    <label className="block text-[11px] text-[var(--text-tertiary)]">
                       {t('pages.sovereignDefense.ebpf_ssh_key_pem')}
                       <textarea rows={3} value={params.chronos.ebpf_ssh_key_pem}
                         onChange={(e) => setP('chronos', 'ebpf_ssh_key_pem', e.target.value)}
                         placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                        className="mt-0.5 w-full rounded bg-black/50 border border-white/10 px-2 py-1.5 text-[10px] font-mono text-emerald-200/80" />
+                        className="mt-0.5 w-full rounded bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1.5 text-[10px] font-mono text-emerald-200/80" />
                     </label>
-                    <label className="block text-[11px] text-white/45">
+                    <label className="block text-[11px] text-[var(--text-muted)]">
                       {t('pages.sovereignDefense.ebpf_ssh_key_path')}
                       <input type="text" value={params.chronos.ebpf_ssh_key_path}
                         onChange={(e) => setP('chronos', 'ebpf_ssh_key_path', e.target.value)}
-                        className="mt-0.5 w-full rounded bg-black/40 border border-white/10 px-2 py-1.5 text-xs font-mono" />
+                        className="mt-0.5 w-full rounded bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs font-mono" />
                     </label>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-white/70">
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <input type="checkbox" checked={params.chronos.auto_freeze} onChange={(e) => setP('chronos', 'auto_freeze', e.target.checked)} />
                     {t('pages.sovereignDefense.auto_freeze')}
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-white/70">
+                  <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                     <input type="checkbox" checked={params.chronos.deploy_ebpf} onChange={(e) => setP('chronos', 'deploy_ebpf', e.target.checked)} />
                     {t('pages.sovereignDefense.deploy_ebpf')}
                   </label>
@@ -403,38 +407,38 @@ export default function SovereignDefenseMatrix() {
               {tab === 'liquid' && (
                 <motion.div key="liquid-params" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
                   {['rotation_step_secs', 'port_pool_min', 'port_pool_max'].map((k) => (
-                    <label key={k} className="block text-[10px] font-mono text-white/50">
+                    <label key={k} className="block text-[10px] font-mono text-[var(--text-tertiary)]">
                       {k}
                       <input
                         type="number"
                         value={params.liquid[k]}
                         onChange={(e) => setP('liquid', k, e.target.value)}
-                        className="mt-0.5 w-full rounded bg-black/40 border border-white/10 px-2 py-1.5 text-xs"
+                        className="mt-0.5 w-full rounded bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs"
                       />
                     </label>
                   ))}
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={rotateLiquid}
                     className="w-full mt-2 py-2 rounded-lg border border-cyan-500/40 text-cyan-200 text-xs font-mono hover:bg-cyan-500/10"
                   >
                     {t('pages.sovereignDefense.force_rotate')}
-                  </button>
+                  </Button>
                 </motion.div>
               )}
               {tab === 'cognitive' && (
                 <motion.div key="cognitive-params" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-                  <label className="block text-[10px] font-mono text-white/50">
+                  <label className="block text-[10px] font-mono text-[var(--text-tertiary)]">
                     min_bot_score
                     <input type="range" min="0.1" max="0.95" step="0.05" value={params.cognitive.min_bot_score}
                       onChange={(e) => setP('cognitive', 'min_bot_score', e.target.value)} className="w-full" />
                     <span className="text-cyan-300">{params.cognitive.min_bot_score}</span>
                   </label>
-                  <label className="block text-[10px] font-mono text-white/50">
+                  <label className="block text-[10px] font-mono text-[var(--text-tertiary)]">
                     poison_variants
                     <textarea rows={2} value={params.cognitive.poison_variants}
                       onChange={(e) => setP('cognitive', 'poison_variants', e.target.value)}
-                      className="mt-0.5 w-full rounded bg-black/40 border border-white/10 px-2 py-1.5 text-xs font-mono" />
+                      className="mt-0.5 w-full rounded bg-[var(--bg-2)] border border-[var(--border-default)] px-2 py-1.5 text-xs font-mono" />
                   </label>
                 </motion.div>
               )}
@@ -442,27 +446,27 @@ export default function SovereignDefenseMatrix() {
           </div>
 
           {liquid && (
-            <div className="rounded-xl border border-cyan-500/20 bg-black/30 p-3 font-mono text-[10px] text-cyan-200/80 space-y-1">
-              <p className="text-white/40 uppercase">{t('pages.sovereignDefense.routing_token')}</p>
+            <div className="rounded-xl border border-cyan-500/20 bg-[var(--table-surface)] p-3 font-mono text-[10px] text-cyan-200/80 space-y-1">
+              <p className="text-[var(--text-muted)] uppercase">{t('pages.sovereignDefense.routing_token')}</p>
               <p className="text-lg text-cyan-300">{liquid.routing_code}</p>
               <p>{liquid.internal_ip}:{liquid.internal_port}</p>
-              <p className="text-white/35">{liquid.service_fingerprint}</p>
-              <p className="text-white/25">{t('pages.sovereignDefense.epoch_expires', { t: liquid.expires_at })}</p>
+              <p className="text-[var(--text-muted)]">{liquid.service_fingerprint}</p>
+              <p className="text-[var(--text-disabled)]">{t('pages.sovereignDefense.epoch_expires', { t: liquid.expires_at })}</p>
             </div>
           )}
 
-          <Link to="/agents" className="block text-center text-[11px] font-mono text-white/40 hover:text-cyan-400">
+          <Link to="/agents" className="block text-center text-[11px] font-mono text-[var(--text-muted)] hover:text-cyan-400">
             {t('pages.sovereignDefense.agent_link')}
           </Link>
         </div>
 
         <div className="xl:col-span-8 space-y-6">
           {tab === 'chronos' && chronosEvents.length > 0 && (
-            <div className="rounded-2xl border border-violet-500/20 bg-black/30 p-4 max-h-56 overflow-auto">
+            <div className="rounded-2xl border border-violet-500/20 bg-[var(--table-surface)] p-4 max-h-56 overflow-auto">
               <h3 className="text-sm font-semibold text-violet-200 mb-2">{t('pages.sovereignDefense.chronos_feed')}</h3>
               {chronosEvents.slice(0, 15).map((e) => (
-                <div key={e.id} className="text-[11px] font-mono py-1 border-b border-white/5 flex justify-between">
-                  <span className="text-white/70">{e.event_type} · {e.process_name || '—'}</span>
+                <div key={e.id} className="text-[11px] font-mono py-1 border-b border-[var(--border-subtle)] flex justify-between">
+                  <span className="text-[var(--text-secondary)]">{e.event_type} · {e.process_name || '—'}</span>
                   <span className="text-violet-300">{e.action_taken || ''}</span>
                 </div>
               ))}
@@ -471,21 +475,21 @@ export default function SovereignDefenseMatrix() {
 
           {tab === 'cognitive' && (
             <div className="grid md:grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-amber-500/20 bg-black/30 p-4 max-h-64 overflow-auto">
+              <div className="rounded-2xl border border-amber-500/20 bg-[var(--table-surface)] p-4 max-h-64 overflow-auto">
                 <h3 className="text-sm font-semibold text-amber-200 mb-2">{t('pages.sovereignDefense.poison_lib')}</h3>
                 {poisonLib.map((p) => (
-                  <div key={p.id} className="text-[10px] font-mono py-2 border-b border-white/5">
+                  <div key={p.id} className="text-[10px] font-mono py-2 border-b border-[var(--border-subtle)]">
                     <span className="text-amber-300">{p.variant}</span>
-                    <span className="text-white/30 ml-2">{p.id}</span>
+                    <span className="text-[var(--text-disabled)] ml-2">{p.id}</span>
                   </div>
                 ))}
               </div>
-              <div className="rounded-2xl border border-amber-500/20 bg-black/30 p-4 max-h-64 overflow-auto">
+              <div className="rounded-2xl border border-amber-500/20 bg-[var(--table-surface)] p-4 max-h-64 overflow-auto">
                 <h3 className="text-sm font-semibold text-amber-200 mb-2">{t('pages.sovereignDefense.cognitive_feed')}</h3>
                 {cognitiveSessions.slice(0, 12).map((s) => (
-                  <div key={s.id} className="text-[10px] font-mono py-1 border-b border-white/5 flex justify-between">
+                  <div key={s.id} className="text-[10px] font-mono py-1 border-b border-[var(--border-subtle)] flex justify-between">
                     <span>{Math.round((s.bot_score || 0) * 100)}% · {s.poison_variant}</span>
-                    <span className="text-white/35">{s.response_status}</span>
+                    <span className="text-[var(--text-muted)]">{s.response_status}</span>
                   </div>
                 ))}
               </div>

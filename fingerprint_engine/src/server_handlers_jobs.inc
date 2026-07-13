@@ -126,7 +126,7 @@ async fn api_async_job_status(
             tracing::error!(target: "async_jobs", error = %e, "get_job_for_tenant failed");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "database_error", "detail": e.to_string()})),
+                Json(json!({"error": "database_error", "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }
@@ -177,7 +177,7 @@ async fn api_async_job_status(
             tracing::error!(target: "async_jobs", error = %e, "poe_jobs lookup failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "database_error", "detail": e.to_string()})),
+                Json(json!({"error": "database_error", "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

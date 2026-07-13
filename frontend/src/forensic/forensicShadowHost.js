@@ -123,8 +123,8 @@ export function forensicBadgeHtml({ label, tone, detail = '' }) {
 /**
  * @param {string} s
  */
-function escapeHtml(s) {
-  return s
+export function escapeHtml(s) {
+  return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -134,6 +134,6 @@ function escapeHtml(s) {
 /**
  * @param {string} s
  */
-function escapeAttr(s) {
+export function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, '&#39;')
 }

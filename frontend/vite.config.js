@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import forensicRouteCompliancePlugin from './plugins/vite-forensic-route-compliance.mjs'
+import cspPlugin from './plugins/vite-csp.mjs'
 
 const VENDOR_REACT = ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler']
 const VENDOR_I18N = ['i18next', 'react-i18next', 'i18next-browser-languagedetector']
@@ -50,7 +51,7 @@ function manualChunkForId(id) {
 
 export default defineConfig({
   base: '/command-center/',
-  plugins: [forensicRouteCompliancePlugin(), react()],
+  plugins: [forensicRouteCompliancePlugin(), react(), cspPlugin()],
   worker: { format: 'es' },
   build: {
     target: 'es2020',

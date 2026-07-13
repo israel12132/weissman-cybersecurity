@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'mtls_grpc'
 const ACCENT = '#8b5cf6'
@@ -85,14 +86,42 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]' },
 }
 
 function gradeColor(g) {
   return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c', F: '#ef4444' }[g] || '#94a3b8'
 }
 
-function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
+function CategoryBreakdown({ findings }) {
+  const groups = useMemo(() => {
+    const counts = new Map()
+    for (const f of findings) {
+      const key = CATEGORY_META[f?.category] ? f.category : 'other'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([key, count]) => ({ key, count, meta: CATEGORY_META[key] || CATEGORY_META.other }))
+      .sort((a, b) => a.meta.order - b.meta.order)
+  }, [findings])
+
+  if (!groups.length) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {groups.map(({ key, count, meta }) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono border"
+          style={{ color: meta.color, borderColor: `${meta.color}33`, background: `${meta.color}0f` }}
+        >
+          <span aria-hidden="true">{meta.icon}</span>
+          {meta.label}
+          <span className="px-1.5 py-0.5 rounded bg-[var(--scrim)] text-[var(--text-secondary)]">{count}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
 
 
 function isSummary(f) {
@@ -114,11 +143,11 @@ function EvidenceView({ evidence }) {
   const entries = Object.entries(evidence).filter(([k]) => k !== 'checks')
   if (!entries.length) return null
   return (
-    <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-3">
+    <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
         {entries.map(([k, v]) => (
-          <div key={k} className="text-[10px] font-mono text-white/45 truncate">
-            <span className="text-white/25">{k}: </span>
+          <div key={k} className="text-[10px] font-mono text-[var(--text-muted)] truncate">
+            <span className="text-[var(--text-disabled)]">{k}: </span>
             {typeof v === 'object' ? JSON.stringify(v).slice(0, 120) : String(v)}
           </div>
         ))}
@@ -135,11 +164,11 @@ function FindingCard({ f }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={`text-sm font-mono font-medium ${st.text}`}>{f.title || f.type}</div>
-          {f.mitre_attack && <div className="text-[10px] font-mono text-white/30 mt-0.5">MITRE {f.mitre_attack}</div>}
+          {f.mitre_attack && <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-0.5">MITRE {f.mitre_attack}</div>}
         </div>
         <span className={`shrink-0 text-[10px] font-mono uppercase px-2 py-0.5 rounded ${st.text}`}>{sev}</span>
       </div>
-      {f.description && <p className="text-xs font-mono text-white/55 mt-2 leading-relaxed">{f.description}</p>}
+      {f.description && <p className="text-xs font-mono text-[var(--text-tertiary)] mt-2 leading-relaxed">{f.description}</p>}
       <EvidenceView evidence={f.evidence} />
     </div>
   )
@@ -167,21 +196,21 @@ function Scorecard({ score, grade, dimensions, t }) {
     <div className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-6 mb-6">
       <div className="flex flex-wrap items-center gap-8 mb-4">
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.transportSecurity.score', 'Transport posture')}</div>
-          <div className="text-4xl font-mono font-bold text-white mt-1">{score}<span className="text-lg text-white/40">/100</span></div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.score', 'Transport posture')}</div>
+          <div className="text-4xl font-mono font-bold text-white mt-1">{score}<span className="text-lg text-[var(--text-muted)]">/100</span></div>
         </div>
         {grade && (
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.transportSecurity.grade', 'Grade')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.grade', 'Grade')}</div>
             <div className="text-4xl font-mono font-bold mt-1" style={{ color: gradeColor(grade) }}>{grade}</div>
           </div>
         )}
       </div>
       {dimensions && typeof dimensions === 'object' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-white/10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-[var(--border-default)]">
           {Object.entries(dimensions).map(([k, v]) => (
-            <div key={k} className="rounded-lg bg-black/30 border border-white/5 px-3 py-2">
-              <div className="text-[9px] font-mono uppercase text-white/35 truncate">{DIM_LABELS[k] || k}</div>
+            <div key={k} className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] px-3 py-2">
+              <div className="text-[9px] font-mono uppercase text-[var(--text-muted)] truncate">{DIM_LABELS[k] || k}</div>
               <div className="text-lg font-mono font-semibold mt-0.5" style={{ color: gradeColor(v >= 90 ? 'A' : v >= 75 ? 'B' : v >= 60 ? 'C' : 'D') }}>{v}</div>
             </div>
           ))}
@@ -342,37 +371,37 @@ export default function TransportSecurityCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-violet-500/30 text-violet-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-violet-500/30 text-violet-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.transportSecurity.client', 'Client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.client', 'Client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono min-w-[180px]">
               <option value="">{t('pages.transportSecurity.select_client_opt', '— Select —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.transportSecurity.target', 'Target')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.target', 'Target')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="https://api.example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.transportSecurity.profile', 'Profile')}</label>
-            <select value={profile} onChange={(e) => setProfile(e.target.value)} className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono">
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.profile', 'Profile')}</label>
+            <select value={profile} onChange={(e) => setProfile(e.target.value)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono">
               {['full', 'tls_only', 'headers_only', 'quick', 'grpc_only', 'grpc_deep', 'mtls_audit', 'api_hardening'].map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.transportSecurity.intensity', 'Intensity')}</label>
-            <select value={intensity} onChange={(e) => setIntensity(e.target.value)} className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono">
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.transportSecurity.intensity', 'Intensity')}</label>
+            <select value={intensity} onChange={(e) => setIntensity(e.target.value)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono">
               <option value="light">light</option>
               <option value="normal">normal</option>
               <option value="aggressive">aggressive</option>
@@ -380,24 +409,24 @@ export default function TransportSecurityCommandCenter() {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
             {status === 'running' ? '⟳ Scanning…' : '▶ Run Transport Scan'}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)]">
             {showParams ? '▾ Params' : '▸ Params'}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="grid grid-cols-1 gap-1.5 max-h-[420px] overflow-y-auto pr-1">
                   {PROBE_TOGGLES.map((tg) => (
-                    <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                    <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                       <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-violet-500" />
                       {tg.label}
                     </label>
@@ -405,35 +434,36 @@ export default function TransportSecurityCommandCenter() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-mono text-white/40 block mb-1">TLS ports</label>
-                    <input value={ports} onChange={(e) => setPorts(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">TLS ports</label>
+                    <input value={ports} onChange={(e) => setPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-white/40 block mb-1">gRPC ports</label>
-                    <input value={grpcPorts} onChange={(e) => setGrpcPorts(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">gRPC ports</label>
+                    <input value={grpcPorts} onChange={(e) => setGrpcPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-white/40 block mb-1">SNI override</label>
-                    <input value={sni} onChange={(e) => setSni(e.target.value)} placeholder="api.example.com" className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">SNI override</label>
+                    <input value={sni} onChange={(e) => setSni(e.target.value)} placeholder="api.example.com" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                 </div>
                   <div>
-                    <label className="text-[10px] font-mono text-white/40 block mb-1">Custom gRPC paths</label>
-                    <input value={grpcPaths} onChange={(e) => setGrpcPaths(e.target.value)} placeholder="/my.Service/Method" className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Custom gRPC paths</label>
+                    <input value={grpcPaths} onChange={(e) => setGrpcPaths(e.target.value)} placeholder="/my.Service/Method" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-white/40 block mb-1">Timeout (ms)</label>
+                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Timeout (ms)</label>
                   <input type="number" min={400} max={30000} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                    className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                    className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">Last: {lastRun}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">Last: {lastRun}</p>}
       </div>
 
       {findings.length > 0 && <Scorecard score={score} grade={grade} dimensions={dimensions} t={t} />}
+      {detailFindings.length > 0 && <CategoryBreakdown findings={detailFindings} />}
 
       <WeissmanFindingsPanel
         findings={detailFindings}

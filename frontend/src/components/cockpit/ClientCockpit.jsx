@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
@@ -27,6 +27,8 @@ import CockpitTabErrorBoundary from './CockpitTabErrorBoundary'
 const CeoMissionControlTab = lazy(() => import('./CeoMissionControlTab'))
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
 import { apiFetch } from '../../lib/apiBase'
+import { useToast } from '../ui/Toaster'
+import Button from '../ui/Button'
 
 const TAB_DEFS = [
   { id: 'overview', labelKey: 'overview', Component: OverviewTab },
@@ -65,6 +67,7 @@ function targetUrlFromClient(client) {
 
 export default function ClientCockpit({ ceoIntegrated = false }) {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [neuralWrapRef, neuralSize] = useContainerChartSize(120)
   const { selectedClient, selectedClientId, refreshClients, setPoeJobId } = useClient()
   const [activeTab, setActiveTab] = useState(() =>
@@ -135,7 +138,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       const r = await apiFetch(`/api/reports/executive${q}`)
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        window.alert(err.detail || err.error || t('components.cockpit.board_failed'))
+        toast.error(err.detail || err.error || t('components.cockpit.board_failed'))
         return
       }
       const blob = await r.blob()
@@ -155,7 +158,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       a.remove()
       URL.revokeObjectURL(url)
     } catch {
-      window.alert(t('components.cockpit.board_network_error'))
+      toast.error(t('components.cockpit.board_network_error'))
     }
     setBoardReportLoading(false)
   }
@@ -204,10 +207,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       )
     }
     return (
-      <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-black/15 backdrop-blur-sm overflow-auto border-s border-white/[0.04]">
-        <div className="text-center px-6 py-8 rounded-xl bg-[#080c14]/60 backdrop-blur-md border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <p className="text-sm font-medium text-white/90 mb-1 tracking-wide">{t('components.cockpit.no_client')}</p>
-          <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-mono">{t('components.cockpit.select_sidebar')}</p>
+      <main className="flex-1 flex items-center justify-center min-h-0 min-w-0 w-full px-4 bg-[var(--bg-0)]/15 backdrop-blur-sm overflow-auto border-s border-[var(--border-subtle)]">
+        <div className="text-center px-6 py-8 rounded-xl bg-[var(--bg-1)]/60 backdrop-blur-md border border-[var(--border-default)] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <p className="text-sm font-medium text-[var(--text-primary)] mb-1 tracking-wide">{t('components.cockpit.no_client')}</p>
+          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-[0.2em] font-mono">{t('components.cockpit.select_sidebar')}</p>
         </div>
       </main>
     )
@@ -268,7 +271,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
                   })
                 : t('components.cockpit.health_empty')}
             </span>
-            <button
+            <Button variant="unstyled"
               id="cockpit-safe-mode-toggle"
               type="button"
               disabled={safeSaving}
@@ -280,10 +283,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               } disabled:opacity-50`}
             >
               {safeMode ? t('components.cockpit.safe_mode_on') : t('components.cockpit.safe_mode_off')}
-            </button>
+            </Button>
           </div>
           <div className="flex flex-wrap items-stretch sm:items-center gap-2 shrink-0">
-            <button
+            <Button variant="unstyled"
               id="cockpit-board-report-btn"
               type="button"
               onClick={downloadBoardReport}
@@ -291,8 +294,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-[10px] sm:text-xs uppercase tracking-wider border border-white/20 bg-white/5 text-white/85 hover:bg-white/10 hover:border-white/30 disabled:opacity-50"
             >
               {boardReportLoading ? t('components.cockpit.board_report_loading') : t('components.cockpit.board_report')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="cockpit-engage-scan-btn"
               type="button"
               onClick={runFullScan}
@@ -300,14 +303,14 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm tracking-wide transition-all border border-[#22d3ee]/50 bg-[#22d3ee]/10 text-[#22d3ee] hover:bg-[#22d3ee]/20 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {engageLoading ? t('components.cockpit.engaging') : t('components.cockpit.engage')}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Tab nav */}
         <nav className="flex gap-0 px-3 sm:px-6 border-t border-white/[0.06] overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
           {tabs.map((tab) => (
-            <button
+            <Button variant="unstyled"
               id={`cockpit-tab-${tab.id}`}
               key={tab.id}
               type="button"
@@ -319,7 +322,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
               }`}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </nav>
       </header>
@@ -327,36 +330,36 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       {/* War Room: Satellite Map + Neural Web */}
       <div className="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 px-3 sm:px-4 py-2.5 border-b border-white/[0.06] relative z-10 w-full max-w-full min-w-0">
         <motion.div
-          className="lg:col-span-4 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-slate-950/90 w-full max-w-full min-w-0"
+          className="lg:col-span-4 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-[var(--bg-0)]/90 w-full max-w-full min-w-0"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
           {showWarRoomVisuals ? (
-            <CockpitTabErrorBoundary tabId="warroom-map" tabLabel={t('components.cockpitWidgets.satelliteDroneMap.title', { defaultValue: 'Satellite map' })}>
-              <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
+            <CockpitTabErrorBoundary tabId="warroom-map" tabLabel={t('components.cockpitWidgets.satelliteDroneMap.title')}>
+              <Suspense fallback={<div className="h-full w-full bg-[var(--bg-0)]/80" />}>
                 <SatelliteDroneMap />
               </Suspense>
             </CockpitTabErrorBoundary>
           ) : (
-            <div className="h-full w-full bg-slate-950/80" />
+            <div className="h-full w-full bg-[var(--bg-0)]/80" />
           )}
         </motion.div>
         <motion.div
           ref={neuralWrapRef}
-          className="lg:col-span-8 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-slate-950/80 flex items-center justify-center w-full max-w-full min-w-0"
+          className="lg:col-span-8 h-36 sm:h-40 lg:h-52 rounded-xl overflow-hidden border border-white/10 bg-[var(--bg-0)]/80 flex items-center justify-center w-full max-w-full min-w-0"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.05 }}
         >
           {showWarRoomVisuals ? (
-            <CockpitTabErrorBoundary tabId="warroom-neural" tabLabel={t('components.neuralEngineWeb.title', { defaultValue: 'Neural engine web' })}>
-              <Suspense fallback={<div className="h-full w-full bg-slate-950/80" />}>
+            <CockpitTabErrorBoundary tabId="warroom-neural" tabLabel={t('components.neuralEngineWeb.title')}>
+              <Suspense fallback={<div className="h-full w-full bg-[var(--bg-0)]/80" />}>
                 <NeuralEngineWeb width={neuralSize.width} height={neuralSize.height} />
               </Suspense>
             </CockpitTabErrorBoundary>
           ) : (
-            <div className="h-full w-full bg-slate-950/80" />
+            <div className="h-full w-full bg-[var(--bg-0)]/80" />
           )}
         </motion.div>
       </div>
@@ -372,8 +375,8 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
       {/* System Pulse EKG */}
       <div className="shrink-0 px-4 py-2.5 border-t border-white/[0.06] relative z-10">
-        <CockpitTabErrorBoundary tabId="warroom-ekg" tabLabel={t('components.cockpitWidgets.systemPulseEkg.title', { defaultValue: 'System pulse' })}>
-          <Suspense fallback={<div className="h-16 w-full bg-slate-950/70 rounded-lg" />}>
+        <CockpitTabErrorBoundary tabId="warroom-ekg" tabLabel={t('components.cockpitWidgets.systemPulseEkg.title')}>
+          <Suspense fallback={<div className="h-16 w-full bg-[var(--bg-0)]/70 rounded-lg" />}>
             <SystemPulseEKG />
           </Suspense>
         </CockpitTabErrorBoundary>

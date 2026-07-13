@@ -51,7 +51,6 @@ export function forensicRouteCompliancePlugin(options = {}) {
           `[forensic-route-compliance] ${violations.length} engine route violation(s) — build aborted:\n${report}\n\nFix: use PageShell (auto-injects ForensicEngineRealityBadge) and register ROUTE_EVIDENCE in src/lib/routeEvidence.js`,
         )
       } else {
-        // eslint-disable-next-line no-console
         console.log(
           `[forensic-route-compliance] ✓ all engine hub routes pass forensic evidence enforcement`,
         )

@@ -63,5 +63,12 @@ reports/
 # Company legal details (copy from deploy/company.details.example.json)
 deploy/company.details.json
 
+# Redis snapshot artifacts (written by a local/e2e redis-server into the CWD)
+dump.rdb
+*.rdb
+
+# Playwright storage-state (regenerated each run; never commit session tokens)
+**/tests-e2e/.auth/
+
 # Stale member lock — the workspace build uses the root Cargo.lock (see deploy/*.Dockerfile).
 fingerprint_engine/Cargo.lock

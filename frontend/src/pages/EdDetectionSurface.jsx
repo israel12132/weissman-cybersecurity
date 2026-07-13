@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'edr_evasion'
 const ACCENT = '#a855f7'
@@ -42,7 +43,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]' },
 }
 
 function scoreColor(score) {
@@ -69,15 +70,15 @@ function extractScore(findings) {
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-all text-left">
+    <Button variant="unstyled" type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-all text-left">
       <span className="min-w-0">
-        <span className="block text-[12px] font-mono text-white/85 truncate">{label}</span>
-        {hint && <span className="block text-[10px] font-mono text-white/35 truncate">{hint}</span>}
+        <span className="block text-[12px] font-mono text-[var(--text-primary)] truncate">{label}</span>
+        {hint && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{hint}</span>}
       </span>
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-violet-500/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -87,17 +88,17 @@ function FindingCard({ f }) {
   const style = SEV_STYLE[sev] || SEV_STYLE.info
   return (
     <div className={`rounded-xl border ${style.bd} ${style.bg} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-white/5">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)]">
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${style.text} ${style.bd}`}>{sev}</span>
-        <span className="min-w-0 flex-1 text-[12px] font-mono text-white/90">{f.title || f.type}</span>
-        <span className="text-white/30 text-xs">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="min-w-0 flex-1 text-[12px] font-mono text-[var(--text-primary)]">{f.title || f.type}</span>
+        <span className="text-[var(--text-disabled)] text-xs">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
-            <p className="text-[11px] font-mono text-white/55 leading-relaxed">{f.description}</p>
+            <p className="text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>
             {f.evidence && (
-              <pre className="mt-2 text-[10px] font-mono text-white/40 overflow-x-auto bg-black/40 rounded p-2">{JSON.stringify(f.evidence, null, 2)}</pre>
+              <pre className="mt-2 text-[10px] font-mono text-[var(--text-muted)] overflow-x-auto bg-[var(--bg-2)] rounded p-2">{JSON.stringify(f.evidence, null, 2)}</pre>
             )}
           </motion.div>
         )}
@@ -219,35 +220,35 @@ export default function EdDetectionSurface() {
       )}
     >
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono text-white/80">
+        <select value={selectedClientId ?? ''} onChange={(e) => setSelectedClientId(e.target.value || null)} className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-secondary)]">
           <option value="">{t('pages.edDetection.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t('pages.edDetection.target_placeholder')} className="flex-1 min-w-[200px] bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono text-white/85" />
-        <button type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
+        <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t('pages.edDetection.target_placeholder')} className="flex-1 min-w-[200px] bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--text-primary)]" />
+        <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !selectedClientId} className="px-5 py-2 rounded-xl font-mono text-sm border border-violet-500/40 text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40">
           {scanning ? t('pages.edDetection.scanning') : t('pages.edDetection.run_scan')}
-        </button>
-        {jobStatus && <span className="text-[10px] font-mono text-white/40">{jobStatus}</span>}
+        </Button>
+        {jobStatus && <span className="text-[10px] font-mono text-[var(--text-muted)]">{jobStatus}</span>}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 border border-white/10 p-5 space-y-4 max-h-[85vh] overflow-y-auto">
-          <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.edDetection.control_panel')}</h3>
-          <select value={params.intensity} onChange={(e) => setParam('intensity', e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80">
+        <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+          <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.edDetection.control_panel')}</h3>
+          <select value={params.intensity} onChange={(e) => setParam('intensity', e.target.value)} className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]">
             <option value="light">{t('pages.edDetection.intensity_light')}</option>
             <option value="normal">{t('pages.edDetection.intensity_normal')}</option>
             <option value="aggressive">{t('pages.edDetection.intensity_aggressive')}</option>
           </select>
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-[10px] font-mono text-white/40">{t('pages.edDetection.ua_limit')}
-              <input type="number" min={4} max={80} value={params.ua_matrix_limit} onChange={(e) => setParam('ua_matrix_limit', Number(e.target.value))} className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1 text-[11px] font-mono text-white/80" />
+            <label className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.edDetection.ua_limit')}
+              <input type="number" min={4} max={80} value={params.ua_matrix_limit} onChange={(e) => setParam('ua_matrix_limit', Number(e.target.value))} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
             </label>
-            <label className="text-[10px] font-mono text-white/40">{t('pages.edDetection.rate_burst')}
-              <input type="number" min={3} max={40} value={params.rate_burst_count} onChange={(e) => setParam('rate_burst_count', Number(e.target.value))} className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1 text-[11px] font-mono text-white/80" />
+            <label className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.edDetection.rate_burst')}
+              <input type="number" min={3} max={40} value={params.rate_burst_count} onChange={(e) => setParam('rate_burst_count', Number(e.target.value))} className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
             </label>
           </div>
-          <input type="text" value={params.extra_paths} onChange={(e) => setParam('extra_paths', e.target.value)} placeholder="/admin,/internal" className="w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80" />
-          <div className="space-y-2 pt-2 border-t border-white/5">
+          <input type="text" value={params.extra_paths} onChange={(e) => setParam('extra_paths', e.target.value)} placeholder="/admin,/internal" className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)]" />
+          <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
             {PROBE_TOGGLES.map((tog) => (
               <Toggle key={tog.key} label={tog.label} hint={tog.hint} checked={Boolean(params[tog.key])} onChange={(v) => setParam(tog.key, v)} />
             ))}
@@ -255,13 +256,13 @@ export default function EdDetectionSurface() {
         </motion.section>
 
         <div className="xl:col-span-2 space-y-6">
-          <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 border border-white/10 p-6 flex flex-wrap items-center gap-8">
+          <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 flex flex-wrap items-center gap-8">
             <div className="text-center min-w-[120px]">
-              <p className="text-[10px] font-mono text-white/40 uppercase mb-2">{t('pages.edDetection.resilience_score')}</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-2">{t('pages.edDetection.resilience_score')}</p>
               <p className="text-5xl font-bold font-mono" style={{ color: scoreColor(score ?? 0) }}>{score ?? '—'}</p>
-              <p className="text-[10px] font-mono text-white/35 mt-1">{t('pages.edDetection.score_hint')}</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{t('pages.edDetection.score_hint')}</p>
             </div>
-            <div className="flex-1 min-w-[200px] text-[11px] font-mono text-white/50 leading-relaxed">{t('pages.edDetection.score_explainer')}</div>
+            <div className="flex-1 min-w-[200px] text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{t('pages.edDetection.score_explainer')}</div>
           </motion.section>
 
           <WeissmanFindingsPanel

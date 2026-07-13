@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
 import { Plug, Check, AlertTriangle, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
@@ -8,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 /**
  * IntegrationManager - Third-party integrations hub
@@ -34,6 +36,7 @@ export default function IntegrationManager() {
   const [testingConnection, setTestingConnection] = useState(null);
   const [dryRunTests, setDryRunTests] = useState(true);
   const [addModal, setAddModal] = useState(false);
+  const [configureTarget, setConfigureTarget] = useState(null);
 
   const availableIntegrations = [
     { id: 'aws_ec2', name: 'AWS EC2 Isolate', category: 'SOAR', icon: '☁️', color: 'orange', fields: ['region', 'forensic_source_cidr'] },
@@ -137,7 +140,7 @@ export default function IntegrationManager() {
       case 'pending':
         return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -181,9 +184,9 @@ export default function IntegrationManager() {
         )}
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Total Integrations</span>
+              <span className="text-sm text-[var(--text-tertiary)]">Total Integrations</span>
               <Plug className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -216,22 +219,22 @@ export default function IntegrationManager() {
 
         {/* Add Integration Button */}
         <div className="flex justify-end items-center gap-4">
-          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-xs text-[var(--text-tertiary)] cursor-pointer">
             <input
               type="checkbox"
               checked={dryRunTests}
               onChange={(e) => setDryRunTests(e.target.checked)}
-              className="rounded border-white/20"
+              className="rounded border-[var(--border-strong)]"
             />
             Dry-run SOAR tests (recommended)
           </label>
-          <button
+          <Button variant="unstyled"
             onClick={() => setAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.integrationManager.add_integration')}
-          </button>
+          </Button>
         </div>
 
         {/* Active Integrations */}
@@ -255,7 +258,7 @@ export default function IntegrationManager() {
             return (
               <div
                 key={integration.id}
-                className="p-4 rounded-lg border border-white/10 bg-black/30 hover:bg-white/5 transition-colors"
+                className="p-4 rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] hover:bg-[var(--row-hover-bg)] transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -276,11 +279,11 @@ export default function IntegrationManager() {
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-400 mb-3">
+                      <p className="text-xs text-[var(--text-tertiary)] mb-3">
                         {integration.description || 'No description'}
                       </p>
 
-                      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                      <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] flex-wrap">
                         {integration.endpoint && (
                           <span className="flex items-center gap-1">
                             Endpoint: <span className="font-mono">{integration.endpoint}</span>
@@ -291,7 +294,7 @@ export default function IntegrationManager() {
                             Endpoint: <span className="font-mono">{integration.config.endpoint}</span>
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400">
+                        <span className="px-2 py-0.5 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]">
                           Manual sync · test connection to verify
                         </span>
                         {integration.last_test && (
@@ -305,7 +308,7 @@ export default function IntegrationManager() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => testConnection(integration.id)}
                       disabled={testingConnection === integration.id}
@@ -317,21 +320,23 @@ export default function IntegrationManager() {
                         }`}
                       />
                       Test
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="unstyled"
                       type="button"
-                      onClick={() => {}}
-                      className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                      onClick={() => setConfigureTarget(integration)}
+                      title={t('pages.integrationManager.configure')}
+                      aria-label={t('pages.integrationManager.configure')}
+                      className="p-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => deleteIntegration(integration.id)}
                       className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -340,23 +345,23 @@ export default function IntegrationManager() {
         />
 
         {/* Available Integrations */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4">Available Integrations</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {availableIntegrations
               .filter((ai) => !integrations.find((i) => i.id === ai.id || i.type === ai.id))
               .map((integration) => (
-                <button
+                <Button variant="unstyled"
                   key={integration.id}
                   onClick={() => setAddModal(integration)}
-                  className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+                  className="flex items-center gap-3 p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
                 >
                   <span className="text-2xl">{integration.icon}</span>
                   <div>
                     <div className="text-sm font-medium text-white">{integration.name}</div>
-                    <div className="text-xs text-gray-400">{integration.category}</div>
+                    <div className="text-xs text-[var(--text-tertiary)]">{integration.category}</div>
                   </div>
-                </button>
+                </Button>
               ))}
           </div>
         </div>
@@ -377,6 +382,28 @@ export default function IntegrationManager() {
           }}
         />
       )}
+
+      {/* Configure existing integration modal */}
+      {configureTarget && (
+        <AddIntegrationModal
+          integration={
+            availableIntegrations.find(
+              (ai) => ai.id === (configureTarget.type || configureTarget.id)
+            ) || null
+          }
+          existing={configureTarget}
+          onClose={() => setConfigureTarget(null)}
+          onSave={(saved) => {
+            if (saved?.integrations) {
+              setIntegrations(saved.integrations);
+            } else {
+              fetchIntegrations();
+            }
+            setConfigureTarget(null);
+            toast.success(t('pages.integrationManager.configure_success'));
+          }}
+        />
+      )}
     </PageShell>
   );
 }
@@ -384,13 +411,23 @@ export default function IntegrationManager() {
 /**
  * Add Integration Modal
  */
-function AddIntegrationModal({ integration, onClose, onSave }) {
+function AddIntegrationModal({ integration, existing = null, onClose, onSave }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, true)
   const { t } = useTranslation();
-  const providerFields = integration?.fields || ['endpoint', 'api_key', 'webhook_url'];
-  const initialConfig = Object.fromEntries(providerFields.map((f) => [f, '']));
+  const isEdit = Boolean(existing);
+  // In edit mode, prefer the keys already stored on the integration so the
+  // form matches what the backend persisted; fall back to the catalog fields.
+  const existingConfigKeys = existing?.config ? Object.keys(existing.config) : [];
+  const providerFields =
+    (existingConfigKeys.length ? existingConfigKeys : integration?.fields) ||
+    ['endpoint', 'api_key', 'webhook_url'];
+  const initialConfig = Object.fromEntries(
+    providerFields.map((f) => [f, existing?.config?.[f] ?? ''])
+  );
   const [formData, setFormData] = useState({
-    type: integration?.id || '',
-    name: integration?.name || '',
+    type: existing?.type || existing?.id || integration?.id || '',
+    name: existing?.name || integration?.name || '',
     config: initialConfig,
   });
   const [saving, setSaving] = useState(false);
@@ -403,61 +440,75 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
       const payload = {
         id: formData.type,
         name: formData.name,
-        category: integration?.category || 'Custom',
+        category: existing?.category || integration?.category || 'Custom',
         config: formData.config,
       };
       const result = await api.post('/api/integrations', payload);
       onSave(result);
     } catch (error) {
-      console.error('Failed to add integration:', error);
-      setSaveResult({ status: 'error', message: error?.message || 'Failed to add integration.' });
+      console.error(isEdit ? 'Failed to update integration:' : 'Failed to add integration:', error);
+      setSaveResult({
+        status: 'error',
+        message:
+          error?.message ||
+          (isEdit
+            ? t('pages.integrationManager.configure_failed')
+            : 'Failed to add integration.'),
+      });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-xl max-w-lg w-full p-6">
+    <div
+      className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={isEdit ? 'Configure integration' : 'Add integration'} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-lg w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">{t('pages.integrationManager.add_integration_modal')}</h3>
-          <button
+          <h3 className="text-lg font-bold text-white">
+            {isEdit
+              ? t('pages.integrationManager.configure_modal_title', { name: formData.name || formData.type })
+              : t('pages.integrationManager.add_integration_modal')}
+          </h3>
+          <Button variant="unstyled"
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Integration Type
             </label>
             <input
               type="text"
               value={formData.type}
               disabled
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Name
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Production Splunk"
             />
           </div>
 
           {providerFields.map((field) => (
             <div key={field}>
-              <label className="block text-sm font-medium text-gray-300 mb-2 capitalize">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2 capitalize">
                 {field.replace(/_/g, ' ')}
               </label>
               <input
@@ -469,7 +520,7 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
                     config: { ...formData.config, [field]: e.target.value },
                   })
                 }
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>
           ))}
@@ -486,19 +537,25 @@ function AddIntegrationModal({ integration, onClose, onSave }) {
         )}
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)]/20 text-[var(--text-secondary)] border border-[var(--border-strong)]/30 rounded-lg text-sm font-medium hover:bg-[var(--border-strong)]/30 transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name || !formData.type}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? t('pages.integrationManager.adding') : t('pages.integrationManager.add_integration')}
-          </button>
+            {saving
+              ? isEdit
+                ? t('pages.integrationManager.saving')
+                : t('pages.integrationManager.adding')
+              : isEdit
+                ? t('pages.integrationManager.save_changes')
+                : t('pages.integrationManager.add_integration')}
+          </Button>
         </div>
       </div>
     </div>

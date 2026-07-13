@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
-import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, Play, Pause, Plus, Trash2, Edit } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -8,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 /**
  * ScanScheduler - Automated scan scheduling and management
@@ -150,9 +152,9 @@ export default function ScanScheduler() {
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.scanScheduler.total_schedules')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.scanScheduler.total_schedules')}</span>
               <Calendar className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>
@@ -166,12 +168,12 @@ export default function ScanScheduler() {
             <div className="text-2xl font-bold text-green-400">{stats.active}</div>
           </div>
 
-          <div className="bg-gray-500/10 backdrop-blur-md border border-gray-500/30 rounded-xl p-4">
+          <div className="bg-[var(--border-default)] backdrop-blur-md border border-[var(--border-strong)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.scanScheduler.paused')}</span>
-              <Pause className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.scanScheduler.paused')}</span>
+              <Pause className="w-4 h-4 text-[var(--text-tertiary)]" />
             </div>
-            <div className="text-2xl font-bold text-gray-400">{stats.paused}</div>
+            <div className="text-2xl font-bold text-[var(--text-tertiary)]">{stats.paused}</div>
           </div>
 
           <div className="bg-purple-500/10 backdrop-blur-md border border-purple-500/30 rounded-xl p-4">
@@ -187,34 +189,34 @@ export default function ScanScheduler() {
 
         {/* Controls */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+          <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'active', 'paused'].map((f) => (
-              <button
+              <Button variant="unstyled"
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   filter === f
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {t(`pages.scanScheduler.filter_${f}`)}
-              </button>
+              </Button>
             ))}
           </div>
 
-          <button
+          <Button variant="unstyled"
             onClick={() => setCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg font-medium hover:bg-cyan-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t('pages.scanScheduler.create_schedule')}
-          </button>
+          </Button>
         </div>
 
         {/* Schedules List */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 space-y-3">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)] space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-cyan-400" />
               {t('pages.scanScheduler.schedules_heading', { count: filteredSchedules.length })}
@@ -228,31 +230,31 @@ export default function ScanScheduler() {
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-[var(--text-muted)]">
               <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto mb-3" />
               Loading schedules...
             </div>
           ) : filteredSchedules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No schedules found. Click "Create Schedule" to get started.
+            <div className="p-8 text-center text-[var(--text-muted)]">
+              No schedules found. Click &quot;Create Schedule&quot; to get started.
             </div>
           ) : visibleSchedules.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {visibleSchedules.map((schedule) => (
                 <div
                   key={schedule.id}
-                  className="p-4 hover:bg-white/5 transition-colors"
+                  className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => toggleSchedule(schedule.id, schedule.enabled)}
                         className={`p-2 rounded-lg border transition-colors ${
                           schedule.enabled
                             ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                            : 'bg-gray-500/20 text-gray-400 border-gray-500/30 hover:bg-gray-500/30'
+                            : 'bg-[var(--border-strong)] text-[var(--text-tertiary)] border-[var(--border-strong)] hover:bg-[var(--border-strong)]'
                         }`}
                       >
                         {schedule.enabled ? (
@@ -260,7 +262,7 @@ export default function ScanScheduler() {
                         ) : (
                           <Pause className="w-4 h-4" />
                         )}
-                      </button>
+                      </Button>
 
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -269,7 +271,7 @@ export default function ScanScheduler() {
                             className={`px-2 py-1 rounded text-xs font-medium ${
                               schedule.enabled
                                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                                : 'bg-[var(--border-strong)] text-[var(--text-tertiary)] border border-[var(--border-strong)]'
                             }`}
                           >
                             {schedule.enabled ? 'Active' : 'Paused'}
@@ -281,10 +283,10 @@ export default function ScanScheduler() {
                           )}
                         </div>
 
-                        <p className="text-xs text-gray-400 mb-3">{schedule.description}</p>
+                        <p className="text-xs text-[var(--text-tertiary)] mb-3">{schedule.description}</p>
 
                         {/* Schedule Details */}
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                        <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] mb-2">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {schedule.cron || schedule.frequency}
@@ -304,7 +306,7 @@ export default function ScanScheduler() {
                         </div>
 
                         {/* Next/Last Run */}
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                           {schedule.next_run && (
                             <span className="text-cyan-400">
                               Next: {new Date(schedule.next_run).toLocaleString()}
@@ -327,26 +329,26 @@ export default function ScanScheduler() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         onClick={() => runNow(schedule.id)}
                         disabled={!schedule.enabled}
                         className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play className="w-3 h-3" />
                         Run Now
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => setEditModal(schedule)}
                         className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/30 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         onClick={() => deleteSchedule(schedule.id)}
                         className="p-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -359,7 +361,7 @@ export default function ScanScheduler() {
         <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-md border border-cyan-500/30 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-3">Quick Templates</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <button
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'daily',
@@ -368,12 +370,12 @@ export default function ScanScheduler() {
                   time: '02:00',
                 })
               }
-              className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Daily Scan</div>
-              <div className="text-xs text-gray-400">Run comprehensive scan every day at 2 AM</div>
-            </button>
-            <button
+              <div className="text-xs text-[var(--text-tertiary)]">Run comprehensive scan every day at 2 AM</div>
+            </Button>
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'weekly',
@@ -382,23 +384,23 @@ export default function ScanScheduler() {
                   day: 'sunday',
                 })
               }
-              className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Weekly Scan</div>
-              <div className="text-xs text-gray-400">Deep scan every Sunday</div>
-            </button>
-            <button
+              <div className="text-xs text-[var(--text-tertiary)]">Deep scan every Sunday</div>
+            </Button>
+            <Button variant="unstyled"
               onClick={() =>
                 setCreateModal({
                   template: 'custom',
                   name: 'Custom Schedule',
                 })
               }
-              className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-left"
+              className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"
             >
               <div className="text-sm font-medium text-white mb-1">Custom Cron</div>
-              <div className="text-xs text-gray-400">Advanced cron expression</div>
-            </button>
+              <div className="text-xs text-[var(--text-tertiary)]">Advanced cron expression</div>
+            </Button>
           </div>
         </div>
       </div>
@@ -427,6 +429,8 @@ export default function ScanScheduler() {
  * Schedule Create/Edit Modal
  */
 function ScheduleModal({ schedule, template, onClose, onSave }) {
+  const dialogRef = useRef(null)
+  useFocusTrap(dialogRef, true)
   const [clients, setClients] = useState([]);
   const [formData, setFormData] = useState({
     name: schedule?.name || template?.name || '',
@@ -478,50 +482,54 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-xl max-w-2xl w-full p-6">
+    <div
+      className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+    >
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={schedule ? 'Edit scan schedule' : 'Create scan schedule'} className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-xl max-w-2xl w-full p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white">
             {schedule ? 'Edit Schedule' : 'Create Scan Schedule'}
           </h3>
-          <button
+          <Button variant="unstyled"
+            aria-label="Close"
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Schedule Name</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Schedule Name</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Daily production scan"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
             <input
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               placeholder="Run full security scan daily"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Frequency</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Frequency</label>
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               >
                 <option value="hourly">Hourly</option>
                 <option value="daily">Daily</option>
@@ -532,13 +540,13 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Status</label>
               <select
                 value={formData.enabled ? 'enabled' : 'disabled'}
                 onChange={(e) =>
                   setFormData({ ...formData, enabled: e.target.value === 'enabled' })
                 }
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               >
                 <option value="enabled">Enabled</option>
                 <option value="disabled">Disabled</option>
@@ -548,24 +556,24 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
           {formData.type === 'custom' && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                 Cron Expression
               </label>
               <input
                 type="text"
                 value={formData.cron}
                 onChange={(e) => setFormData({ ...formData, cron: e.target.value })}
-                className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 placeholder="0 2 * * *"
               />
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-[var(--text-muted)] mt-1">
                 Example: 0 2 * * * (runs daily at 2:00 AM)
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Target Client
             </label>
             <select
@@ -573,7 +581,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
               onChange={(e) =>
                 setFormData({ ...formData, client_id: e.target.value, target_client: '' })
               }
-              className="w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="">All clients (manual run requires a client)</option>
               {clients.map((client) => (
@@ -592,19 +600,19 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button variant="unstyled"
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-500/20 text-gray-300 border border-gray-500/30 rounded-lg text-sm font-medium hover:bg-gray-500/30 transition-colors"
+            className="flex-1 px-4 py-2 bg-[var(--border-strong)] text-[var(--text-secondary)] border border-[var(--border-strong)] rounded-lg text-sm font-medium hover:bg-[var(--border-strong)] transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             onClick={handleSave}
             disabled={saving || !formData.name}
             className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : schedule ? 'Save Changes' : 'Create Schedule'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

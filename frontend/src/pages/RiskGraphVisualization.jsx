@@ -10,6 +10,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 const NS = 'pages.riskGraphVisualization';
 
@@ -172,6 +173,7 @@ export default function RiskGraphVisualization() {
   const [layout, setLayout] = useState('force');
   const canvasRef = useRef(null);
   const positionsRef = useRef([]);
+  const layoutSigRef = useRef('');
 
   useEffect(() => {
     if (clientLoading) return;
@@ -209,7 +211,7 @@ export default function RiskGraphVisualization() {
     resource: n.is_choke_point ? 'choke_point' : '',
   })), [graphData.nodes])
 
-  const { exportCsv, filteredFindings, searchQuery, setSearchQuery } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings, searchQuery, setSearchQuery } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-risk-graph',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
@@ -283,8 +285,19 @@ export default function RiskGraphVisualization() {
 
     if (!searchFilteredNodes.length) return;
 
-    const nodePositions = computeForceLayout(searchFilteredNodes, searchFilteredEdges, width, height, layout);
-    positionsRef.current = nodePositions;
+    // Cache positions by their real inputs so re-renders driven only by
+    // selection (selectedNode) reuse the layout instead of re-seeding the
+    // force simulation with fresh Math.random() — which made the graph
+    // visibly teleport on every node click.
+    const layoutSig = `${layout}|${width}x${height}|${searchFilteredNodes.map((n) => n.id).join(',')}|${searchFilteredEdges.length}`;
+    let nodePositions;
+    if (layoutSigRef.current === layoutSig && positionsRef.current.length) {
+      nodePositions = positionsRef.current;
+    } else {
+      nodePositions = computeForceLayout(searchFilteredNodes, searchFilteredEdges, width, height, layout);
+      positionsRef.current = nodePositions;
+      layoutSigRef.current = layoutSig;
+    }
     const posById = new Map(nodePositions.map((n) => [String(n.id), n]));
 
     searchFilteredEdges.forEach((edge) => {
@@ -380,17 +393,48 @@ export default function RiskGraphVisualization() {
     if (clientId) fetchGraphData(clientId)
   }
 
+  // Full server-side graph export — the complete nodes+edges+metadata JSON
+  // (richer than the client-side node CSV), for interchange / offline analysis.
+  // Wired to GET /api/clients/:id/risk-graph/export.
+  const exportGraphJson = async () => {
+    if (clientId == null) return
+    try {
+      const data = await api.get(`/api/clients/${clientId}/risk-graph/export`)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `weissman-risk-graph-client${clientId}-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Risk-graph JSON export failed:', e)
+    }
+  }
+
   return (
     <PageShell
       title={t(`${NS}.title`)}
       icon={<GitBranch />}
       actions={(
-        <ShellScanActions
-          onRefresh={reloadGraph}
-          onExport={() => exportNodesCsv(graphData.nodes)}
-          refreshLoading={loading}
-          exportDisabled={!filteredFindings.length}
-        />
+        <div className="flex items-center gap-2">
+          <Button variant="unstyled"
+            type="button"
+            onClick={exportGraphJson}
+            disabled={clientId == null || !graphData.nodes.length}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-200 text-xs font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={t(`${NS}.export_json_hint`)}
+          >
+            <Download className="w-4 h-4" />
+            {t(`${NS}.export_json`)}
+          </Button>
+          <ShellScanActions
+            onRefresh={reloadGraph}
+            onExport={() => exportNodesCsv(graphData.nodes)}
+            refreshLoading={loading}
+            exportDisabled={!filteredFindings.length}
+          />
+        </div>
       )}
     >
       <div className="space-y-6">
@@ -401,30 +445,30 @@ export default function RiskGraphVisualization() {
         ) : (
         <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.riskGraphVisualization.total_assets')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.total_assets')}</span>
               <Target className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.totalAssets}</div>
           </div>
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.riskGraphVisualization.critical_paths')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.critical_paths')}</span>
               <GitBranch className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400">{stats.criticalPaths}</div>
           </div>
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.riskGraphVisualization.high_risk_assets')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.high_risk_assets')}</span>
               <AlertTriangle className="w-4 h-4 text-orange-400" />
             </div>
             <div className="text-2xl font-bold text-orange-400">{stats.highRisk}</div>
           </div>
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.riskGraphVisualization.avg_risk_score')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.riskGraphVisualization.avg_risk_score')}</span>
               <Shield className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-white">{stats.avgRiskScore}</div>
@@ -442,26 +486,26 @@ export default function RiskGraphVisualization() {
                 className="flex-1 min-w-[280px]"
               />
             )}
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1">
+            <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1">
               {['all', 'critical', 'high', 'medium', 'low'].map((f) => (
-                <button
+                <Button variant="unstyled"
                   key={f}
                   type="button"
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                     filter === f
                       ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                   }`}
                 >
                   {t(FILTER_KEYS[f])}
-                </button>
+                </Button>
               ))}
             </div>
             <select
               value={layout}
               onChange={(e) => setLayout(e.target.value)}
-              className="px-3 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             >
               <option value="force">{t('pages.riskGraphVisualization.layout_force')}</option>
               <option value="hierarchical">{t('pages.riskGraphVisualization.layout_hierarchical')}</option>
@@ -469,7 +513,7 @@ export default function RiskGraphVisualization() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportNodesCsv(graphData.nodes)}
               disabled={graphData.nodes.length === 0}
@@ -477,41 +521,41 @@ export default function RiskGraphVisualization() {
             >
               <Download className="w-4 h-4" />
               {t(`${NS}.export_csv`)}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportGraph('png')}
               className="flex items-center gap-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm font-medium hover:bg-cyan-500/30 transition-colors"
             >
               <Download className="w-4 h-4" />
               {t('pages.riskGraphVisualization.export_png')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => setSelectedNode(null)}
-              className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/10 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] transition-colors"
             >
               <Maximize2 className="w-4 h-4" />
               {t('pages.riskGraphVisualization.reset_view')}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Dijkstra attack paths — internet_exposed → crown_jewel (EPSS/CVSS weighted) */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
               {t(`${NS}.attack_paths_heading`)}
             </h3>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={recomputeAttackPaths}
               disabled={pathsLoading || clientId == null}
               className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
             >
               {pathsLoading ? t(`${NS}.loading`) : t(`${NS}.recompute_paths`)}
-            </button>
+            </Button>
           </div>
           {pathsLoading && !attackPaths ? (
             <div className="space-y-2">
@@ -519,31 +563,31 @@ export default function RiskGraphVisualization() {
               <SkeletonBar className="h-12 w-5/6" />
             </div>
           ) : !attackPaths?.paths?.length ? (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-[var(--text-muted)]">
               {t(`${NS}.no_attack_paths`)}
             </p>
           ) : (
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {attackPaths.paths.slice(0, 8).map((path, idx) => (
-                <div key={idx} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                <div key={idx} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3">
+                  <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)] mb-1">
                     <span>{t(`${NS}.path_label`, { num: idx + 1, hops: path.hops })}</span>
                     <span className="text-red-300 font-mono">
                       {t(`${NS}.path_risk`, { value: path.risk?.toFixed?.(1) ?? path.risk })}
                     </span>
                   </div>
-                  <p className="text-[11px] font-mono text-white/70 line-clamp-2">
+                  <p className="text-[11px] font-mono text-[var(--text-secondary)] line-clamp-2">
                     {(path.steps || []).map((s) => s.label || s.graph_key).filter(Boolean).join(' → ')}
                   </p>
                 </div>
               ))}
               {attackPaths.choke_points?.length > 0 && (
-                <div className="pt-2 border-t border-white/10">
+                <div className="pt-2 border-t border-[var(--border-default)]">
                   <p className="text-[10px] uppercase tracking-wider text-amber-400/80 mb-2">
                     {t(`${NS}.choke_points`)}
                   </p>
                   {attackPaths.choke_points.slice(0, 5).map((cp) => (
-                    <div key={cp.node_id} className="text-[11px] text-white/60 flex justify-between gap-2 py-0.5">
+                    <div key={cp.node_id} className="text-[11px] text-[var(--text-tertiary)] flex justify-between gap-2 py-0.5">
                       <span className="truncate">{cp.label || cp.graph_key}</span>
                       <span className="text-amber-300 shrink-0">{t(`${NS}.path_coverage`, { pct: cp.coverage_pct })}</span>
                     </div>
@@ -555,8 +599,8 @@ export default function RiskGraphVisualization() {
         </div>
 
         <div className="grid lg:grid-cols-[1fr_320px] gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-white/10">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-[var(--border-default)]">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <GitBranch className="w-4 h-4 text-cyan-400" />
                 {t('pages.riskGraphVisualization.graph_heading')}
@@ -593,46 +637,46 @@ export default function RiskGraphVisualization() {
             </div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-5 min-h-[200px]">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-5 min-h-[200px]">
             <h3 className="text-sm font-semibold text-white mb-4">{t('pages.riskGraphVisualization.node_detail')}</h3>
             {!selectedNode ? (
-              <p className="text-xs text-gray-500">{t('pages.riskGraphVisualization.node_hint')}</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('pages.riskGraphVisualization.node_hint')}</p>
             ) : (
               <div className="space-y-4">
                 <div>
                   <h4 className="text-base font-bold text-white">{selectedNode.name}</h4>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">
                     {selectedNode.description || meta.description || meta.summary || t('pages.riskGraphVisualization.no_description')}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-xs text-gray-400 block">{t('pages.riskGraphVisualization.risk_score')}</span>
+                    <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.risk_score')}</span>
                     <span className="text-lg font-bold text-white">{selectedNode.risk_score ?? 0}</span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-400 block">{t('pages.riskGraphVisualization.severity')}</span>
+                    <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.severity')}</span>
                     <span className="text-lg font-bold" style={{ color: getSeverityColor(selectedNode.severity) }}>
                       {severityLabel(selectedNode.severity, t)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-400 block">{t('pages.riskGraphVisualization.type')}</span>
+                    <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.type')}</span>
                     <span className="text-white">{selectedNode.node_type || '—'}</span>
                   </div>
                   <div>
-                    <span className="text-xs text-gray-400 block">{t('pages.riskGraphVisualization.choke_point')}</span>
+                    <span className="text-xs text-[var(--text-tertiary)] block">{t('pages.riskGraphVisualization.choke_point')}</span>
                     <span className="text-white">{selectedNode.is_choke_point ? t('common.yes') : t('common.no')}</span>
                   </div>
                 </div>
                 {(selectedNode.finding_id || meta.finding_id || meta.vulnerability_id) && (
                   <div className="rounded-lg bg-cyan-500/5 border border-cyan-500/20 p-3">
                     <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/70 mb-1">{t('pages.riskGraphVisualization.linked_finding')}</div>
-                    <div className="text-xs font-mono text-white/80">
+                    <div className="text-xs font-mono text-[var(--text-secondary)]">
                       {t('pages.riskGraphVisualization.id_label', { id: selectedNode.finding_id || meta.finding_id || meta.vulnerability_id })}
                     </div>
-                    {meta.title && <div className="text-xs text-white/60 mt-1">{meta.title}</div>}
-                    {meta.mitre && <div className="text-[10px] font-mono text-white/40 mt-1">{t('pages.riskGraphVisualization.mitre_label', { mitre: meta.mitre })}</div>}
+                    {meta.title && <div className="text-xs text-[var(--text-tertiary)] mt-1">{meta.title}</div>}
+                    {meta.mitre && <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{t('pages.riskGraphVisualization.mitre_label', { mitre: meta.mitre })}</div>}
                   </div>
                 )}
               </div>
@@ -640,17 +684,17 @@ export default function RiskGraphVisualization() {
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4">{t('pages.riskGraphVisualization.legend')}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(SEVERITY_COLORS).map(([sev, color]) => (
               <div key={sev} className="flex items-center gap-3">
                 <div className="w-4 h-4 rounded-full" style={{ background: color }} />
-                <span className="text-sm text-gray-300">{t(`${NS}.risk_label`, { severity: severityLabel(sev, t) })}</span>
+                <span className="text-sm text-[var(--text-secondary)]">{t(`${NS}.risk_label`, { severity: severityLabel(sev, t) })}</span>
               </div>
             ))}
           </div>
-          <div className="mt-4 text-xs text-gray-500">
+          <div className="mt-4 text-xs text-[var(--text-muted)]">
             {t(`${NS}.legend_hint`)}
           </div>
         </div>

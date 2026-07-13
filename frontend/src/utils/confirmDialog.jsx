@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AlertTriangle, HelpCircle, ShieldAlert, Trash2 } from 'lucide-react'
+import Button from '../components/ui/Button'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 /**
  * Promise-based confirm / prompt dialogs that match the Command Center's
@@ -39,7 +41,7 @@ const VARIANT_STYLES = {
   },
   neutral: {
     icon: HelpCircle,
-    iconWrap: 'bg-white/10 text-gray-200 ring-1 ring-white/15',
+    iconWrap: 'bg-white/10 text-[var(--text-secondary)] ring-1 ring-white/15',
     confirmBtn:
       'bg-white/90 hover:bg-white text-black shadow-lg focus-visible:ring-white/60',
   },
@@ -97,7 +99,14 @@ function DialogShell({
   const [value, setValue] = useState(defaultValue ?? '')
   const inputRef = useRef(null)
   const confirmRef = useRef(null)
+  const dialogRef = useRef(null)
   const settledRef = useRef(false)
+  const uid = useId()
+  const msgId = `${uid}-msg`
+  const inputId = `${uid}-input`
+  const errId = `${uid}-err`
+  const [reqError, setReqError] = useState(false)
+  useFocusTrap(dialogRef, true)
   const rtl = isRtl()
   const style = VARIANT_STYLES[variant] || VARIANT_STYLES.neutral
   const Icon = style.icon
@@ -119,6 +128,7 @@ function DialogShell({
     if (kind === 'prompt') {
       const v = value.trim()
       if (required && !v) {
+        setReqError(true)
         inputRef.current?.focus()
         return
       }
@@ -172,9 +182,11 @@ function DialogShell({
       ].join(' ')}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-describedby={message ? msgId : undefined}
         className={[
           'w-full max-w-md overflow-hidden rounded-2xl border border-white/10',
           'bg-[#0c1018]/95 shadow-2xl shadow-black/60',
@@ -189,7 +201,7 @@ function DialogShell({
           <div className="min-w-0 flex-1 pt-0.5">
             <h2 className="text-base font-semibold text-white">{title}</h2>
             {message ? (
-              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-gray-300">{message}</p>
+              <p id={msgId} className="mt-1 whitespace-pre-line text-sm leading-relaxed text-[var(--text-secondary)]">{message}</p>
             ) : null}
           </div>
         </div>
@@ -197,50 +209,63 @@ function DialogShell({
         {kind === 'prompt' ? (
           <div className="px-5 pb-2">
             {label ? (
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+              <label htmlFor={inputId} className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]">
                 {label}
               </label>
             ) : null}
             {multiline ? (
               <textarea
                 ref={inputRef}
+                id={inputId}
+                aria-required={required || undefined}
+                aria-invalid={reqError || undefined}
+                aria-describedby={[message ? msgId : null, reqError ? errId : null].filter(Boolean).join(' ') || undefined}
                 value={value}
                 rows={4}
                 placeholder={placeholder}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); if (reqError) setReqError(false) }}
                 className="w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/30"
               />
             ) : (
               <input
                 ref={inputRef}
+                id={inputId}
+                aria-required={required || undefined}
+                aria-invalid={reqError || undefined}
+                aria-describedby={[message ? msgId : null, reqError ? errId : null].filter(Boolean).join(' ') || undefined}
                 type={inputType || 'text'}
                 value={value}
                 placeholder={placeholder}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); if (reqError) setReqError(false) }}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/30"
               />
             )}
+            {reqError ? (
+              <p id={errId} role="alert" className="mt-1.5 text-xs text-rose-400">
+                {rtl ? 'שדה חובה' : 'This field is required.'}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
         <div className="flex items-center justify-end gap-2.5 px-5 py-4">
           {kind !== 'alert' ? (
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={cancel}
-              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-300 outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/30"
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-[var(--text-secondary)] outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/30"
             >
               {cancelLabel}
-            </button>
+            </Button>
           ) : null}
-          <button
+          <Button variant="unstyled"
             ref={confirmRef}
             type="button"
             onClick={confirm}
             className={`rounded-lg px-4 py-2 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 ${style.confirmBtn}`}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

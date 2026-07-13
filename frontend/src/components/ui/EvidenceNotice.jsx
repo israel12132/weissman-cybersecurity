@@ -1,4 +1,3 @@
-import React from 'react'
 
 /**
  * Standard cyan banner citing live API data sources — no simulated telemetry.

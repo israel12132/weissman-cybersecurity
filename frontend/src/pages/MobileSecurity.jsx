@@ -12,6 +12,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const MOBILE_ENGINE = 'mobile_attack'
 const SEVERITY_KEYS = ['critical', 'high', 'medium', 'low', 'info']
@@ -219,11 +220,11 @@ export default function MobileSecurity() {
       <div className="space-y-6">
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-white/40">{t('pages.mobileSecurity.client_label')}</span>
+            <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.mobileSecurity.client_label')}</span>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             >
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -231,7 +232,7 @@ export default function MobileSecurity() {
         )}
 
         {scanError && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono flex items-center gap-2">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             {scanError}
           </div>
@@ -245,10 +246,10 @@ export default function MobileSecurity() {
             { key: 'stat_android', value: apps.filter((a) => a.platform === 'android').length, color: '#34d399', Icon: Shield },
             { key: 'stat_findings', value: findings.length, color: '#fb923c', Icon: AlertTriangle },
           ].map(({ key, value, color, Icon }) => (
-            <div key={key} className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-4">
+            <div key={key} className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
                     {t(`pages.mobileSecurity.${key}`)}
                   </div>
                   <div className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>
@@ -280,36 +281,36 @@ export default function MobileSecurity() {
         {/* Search and platform filter */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('pages.mobileSecurity.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-sm text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
             {['all', 'ios', 'android'].map((f) => (
-              <button
+              <Button variant="unstyled"
                 key={f}
                 type="button"
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   filter === f
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                    : 'text-white/45 hover:text-white/80'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {t(`pages.mobileSecurity.filter_${f}`)}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
         {/* Apps list */}
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Smartphone className="w-4 h-4 text-cyan-400" />
               {t('pages.mobileSecurity.apps_heading')}
@@ -328,9 +329,9 @@ export default function MobileSecurity() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {filteredApps.map((app) => (
-                <div key={app.id} className="p-4 hover:bg-white/5 transition-colors">
+                <div key={app.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1.5 flex-wrap">
@@ -340,7 +341,7 @@ export default function MobileSecurity() {
                               ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
                               : app.platform === 'android'
                                 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                : 'bg-white/5 text-white/50 border-white/10'
+                                : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border-[var(--border-default)]'
                           }`}
                         >
                           <Smartphone className="w-3 h-3" />
@@ -351,7 +352,7 @@ export default function MobileSecurity() {
                         </h4>
                         {app.max_severity && <SeverityBadge severity={app.max_severity} t={t} />}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-white/40 font-mono flex-wrap">
+                      <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] font-mono flex-wrap">
                         <span className="truncate">{t('pages.mobileSecurity.package_label')} {app.package_id || '—'}</span>
                         <span>•</span>
                         <span>{t('pages.mobileSecurity.findings_count_badge', { count: app.findings_count ?? 0 })}</span>
@@ -359,7 +360,7 @@ export default function MobileSecurity() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => handleScan(app)}
                         disabled={!selectedClientId || (scanningAppId === app.id && Boolean(pendingJobId))}
@@ -367,10 +368,10 @@ export default function MobileSecurity() {
                       >
                         {scanningAppId === app.id && pendingJobId && <Loader2 className="w-3 h-3 animate-spin" />}
                         {scanningAppId === app.id && pendingJobId ? t('pages.mobileSecurity.scanning') : t('pages.mobileSecurity.scan_now')}
-                      </button>
+                      </Button>
                       <Link
                         to={`/findings?q=${encodeURIComponent(app.package_id || app.name || '')}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-white/60 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 hover:text-white/90 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] rounded-lg text-xs font-medium hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)] transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         {t('pages.mobileSecurity.view_findings')}
@@ -402,11 +403,11 @@ export default function MobileSecurity() {
           showEmptyReady={!loading && platformFindings.length === 0}
           emptyReadyTitle={t('pages.mobileSecurity.findings_empty_title')}
           renderFinding={(f) => (
-            <div key={f.id} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 flex items-start gap-3">
+            <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 flex items-start gap-3">
               <SeverityBadge severity={f.severity} t={t} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-white/85 truncate">{f.title || '—'}</p>
-                <p className="text-[10px] text-white/35 font-mono mt-0.5">
+                <p className="text-sm text-[var(--text-primary)] truncate">{f.title || '—'}</p>
+                <p className="text-[10px] text-[var(--text-muted)] font-mono mt-0.5">
                   {(f.platform || 'unknown')} · {f.status || 'open'}
                 </p>
               </div>

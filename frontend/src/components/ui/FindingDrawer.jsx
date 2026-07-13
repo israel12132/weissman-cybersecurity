@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import useFocusTrap from '../../hooks/useFocusTrap'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, X } from 'lucide-react'
 import SeverityBadge, { getSeverityMeta } from './SeverityBadge'
@@ -7,7 +8,7 @@ import KevEpssBadge from './KevEpssBadge'
 import CopyButton from './CopyButton'
 import SupplyChainGraph from './SupplyChainGraph'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
-import useFocusTrap from '../../hooks/useFocusTrap'
+import Button from './Button'
 
 const REACH_META = {
   client_runtime: { color: '#fb7185', key: 'client_runtime' },
@@ -40,13 +41,13 @@ function DependencyPathChain({ path }) {
           ? 'border-rose-500/40 text-rose-200 bg-rose-500/10'
           : isFirst
             ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'
-            : 'border-white/15 text-white/70'
+            : 'border-[var(--border-strong)] text-[var(--text-secondary)]'
         return (
           <React.Fragment key={`${node}-${i}`}>
             <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ltr-only ${cls}`}>
               {node}
             </span>
-            {!isLast && <span className="text-white/30 text-xs">→</span>}
+            {!isLast && <span className="text-[var(--text-disabled)] text-xs">→</span>}
           </React.Fragment>
         )
       })}
@@ -57,7 +58,7 @@ function DependencyPathChain({ path }) {
 function Section({ title, children, className = '' }) {
   return (
     <section className={className}>
-      <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-[0.18em] mb-2.5">
+      <h3 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-[0.18em] mb-2.5">
         {title}
       </h3>
       {children}
@@ -69,12 +70,12 @@ function MetaRow({ label, value, copyable = false }) {
   if (value == null || value === '') return null
   const text = String(value)
   return (
-    <div className="flex items-start gap-3 py-1.5 border-b border-white/[0.04] last:border-0">
-      <dt className="shrink-0 w-28 text-[10px] font-mono text-white/35 uppercase tracking-wide pt-0.5">
+    <div className="flex items-start gap-3 py-1.5 border-b border-[var(--border-subtle)] last:border-0">
+      <dt className="shrink-0 w-28 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide pt-0.5">
         {label}
       </dt>
       <dd className="flex-1 min-w-0 flex items-start gap-2">
-        <span className="text-[12px] text-white/78 break-all font-mono ltr-only flex-1">
+        <span className="text-[12px] text-[var(--text-secondary)] break-all font-mono ltr-only flex-1">
           {text}
         </span>
         {copyable && <CopyButton value={text} size="sm" />}
@@ -88,9 +89,9 @@ function EvidenceBlock({ title, content, copyable = true, evidenceLabel, copyLab
   const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2)
   return (
     <Section title={title}>
-      <div className="relative rounded-xl border border-white/[0.08] bg-black/50 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.06] bg-white/[0.02]">
-          <span className="text-[9px] font-mono uppercase tracking-wider text-white/35">
+      <div className="relative rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border-subtle)] bg-[var(--row-hover-bg)]">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-muted)]">
             {evidenceLabel}
           </span>
           {copyable && <CopyButton value={text} size="md" label={copyLabel} />}
@@ -119,10 +120,11 @@ export default function FindingDrawer({
   const { t } = useTranslation()
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [activeTab, setActiveTab] = useState('evidence')
-  const drawerRef = useRef(null)
+  const dialogRef = useRef(null)
+  const tabRefs = useRef([])
 
   // Keep Tab focus inside the modal drawer while it's open (a11y: role="dialog" aria-modal).
-  useFocusTrap(drawerRef, Boolean(finding))
+  useFocusTrap(dialogRef, Boolean(finding))
 
   const drawerTabs = useMemo(
     () => [
@@ -135,6 +137,19 @@ export default function FindingDrawer({
     ],
     [],
   )
+
+  const onTabKeyDown = (e, index) => {
+    const last = drawerTabs.length - 1
+    let next = null
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = index === last ? 0 : index + 1
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = index === 0 ? last : index - 1
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = last
+    if (next === null) return
+    e.preventDefault()
+    setActiveTab(drawerTabs[next].id)
+    tabRefs.current[next]?.focus()
+  }
 
   const defaultStatusOptions = useMemo(
     () => [
@@ -243,26 +258,26 @@ export default function FindingDrawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[9000] bg-black/65 backdrop-blur-sm border-0 cursor-default"
+            className="fixed inset-0 z-[9000] bg-[var(--bg-3)] backdrop-blur-sm border-0 cursor-default"
             onClick={onClose}
             aria-label={t('components.findingDrawer.closeDrawer')}
           />
 
           <motion.aside
             key="drawer"
-            ref={drawerRef}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 300 }}
-            className="fixed inset-y-0 right-0 z-[9001] w-full max-w-xl flex flex-col border-s border-white/10 bg-[#0a0f18]/97 backdrop-blur-xl shadow-2xl"
+            className="fixed inset-y-0 right-0 z-[9001] w-full max-w-xl flex flex-col border-s border-[var(--border-default)] bg-[var(--bg-elevated)] backdrop-blur-xl shadow-2xl"
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="finding-drawer-title"
           >
             {/* Header */}
             <div
-              className="shrink-0 px-5 py-4 border-b border-white/10"
+              className="shrink-0 px-5 py-4 border-b border-[var(--border-default)]"
               style={{ borderBottomColor: `${meta.color}25` }}
             >
               <div className="flex items-start justify-between gap-3">
@@ -271,7 +286,7 @@ export default function FindingDrawer({
                     <SeverityBadge severity={finding.severity} size="md" showDot />
                     <KevEpssBadge kev={kev} epss={epss} compact />
                     {priorityScore != null && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/60">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">
                         Priority {Number(priorityScore).toFixed(1)}
                       </span>
                     )}
@@ -306,7 +321,7 @@ export default function FindingDrawer({
 
                   {(subtitle || finding.target) && (
                     <div className="flex items-center gap-2 min-w-0">
-                      <p className="text-[11px] font-mono text-white/45 truncate ltr-only flex-1">
+                      <p className="text-[11px] font-mono text-[var(--text-muted)] truncate ltr-only flex-1">
                         {subtitle ?? finding.target}
                       </p>
                       {(finding.target || cve) && (
@@ -343,28 +358,29 @@ export default function FindingDrawer({
                   )}
                 </div>
 
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={onClose}
-                  className="shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white/90 hover:bg-white/5 transition-colors"
+                  className="shrink-0 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)] transition-colors"
                   aria-label={t('components.findingDrawer.close')}
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </Button>
               </div>
 
               {/* Action bar */}
-              <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-white/[0.06]">
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-[var(--border-subtle)]">
                   {onStatusUpdate && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-white/35 uppercase tracking-wide">
+                      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">
                         {t('components.findingDrawer.status')}
                       </span>
                       <select
                         value={finding.status || 'OPEN'}
                         onChange={handleStatusChange}
                         disabled={statusUpdating}
-                        className="bg-black/60 border border-white/15 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white/75 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
+                        aria-label={t('components.findingDrawer.status')}
+                        className="bg-[var(--scrim)] border border-[var(--border-strong)] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
                       >
                         {resolvedStatusOptions.map((s) => (
                           <option key={s.value} value={s.value}>
@@ -383,46 +399,65 @@ export default function FindingDrawer({
                     variant="primary"
                   />
                   {actions.map((action) => (
-                    <button
+                    <Button variant="unstyled"
                       key={action.label}
                       type="button"
                       onClick={action.onClick}
                       className={
                         action.variant === 'primary'
                           ? 'px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/35 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20'
-                          : 'px-3 py-1.5 rounded-lg text-[11px] font-mono border border-white/10 text-white/55 hover:text-white/85 hover:border-white/25'
+                          : 'px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]'
                       }
                     >
                       {action.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
             </div>
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6 custom-scroll text-sm">
-              <div className="flex flex-wrap gap-1 border-b border-white/[0.06] pb-3 -mt-1">
-                {drawerTabs.map((tab) => (
-                  <button
+              <div
+                role="tablist"
+                aria-label={t('components.findingDrawer.detailTabs')}
+                className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)] pb-3 -mt-1"
+              >
+                {drawerTabs.map((tab, index) => (
+                  <Button variant="unstyled"
                     key={tab.id}
+                    ref={(el) => { tabRefs.current[index] = el }}
                     type="button"
+                    role="tab"
+                    id={`finding-tab-${tab.id}`}
+                    aria-selected={activeTab === tab.id}
+                    aria-controls="finding-tabpanel"
+                    tabIndex={activeTab === tab.id ? 0 : -1}
                     onClick={() => setActiveTab(tab.id)}
+                    onKeyDown={(e) => onTabKeyDown(e, index)}
                     className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-md border transition-colors ${
                       activeTab === tab.id
                         ? 'border-cyan-500/40 text-cyan-200 bg-cyan-500/10'
-                        : 'border-white/10 text-white/40 hover:text-white/70'
+                        : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                     }`}
                   >
                     {tab.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
+
+              <div
+                role="tabpanel"
+                id="finding-tabpanel"
+                aria-labelledby={`finding-tab-${activeTab}`}
+                tabIndex={0}
+                className="space-y-6 focus:outline-none"
+              >
 
               {activeTab === 'evidence' && (
               <>
               {finding.description && (
                 <Section title={t('components.findingDrawer.description')}>
-                  <p className="text-[13px] text-white/72 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
                     {finding.description}
                   </p>
                 </Section>
@@ -430,7 +465,7 @@ export default function FindingDrawer({
 
               {finding.remediation && (
                 <Section title={t('components.findingDrawer.remediation')}>
-                  <p className="text-[13px] text-white/72 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
                     {finding.remediation}
                   </p>
                 </Section>
@@ -511,7 +546,7 @@ export default function FindingDrawer({
                               <ExternalLink className="w-3 h-3 shrink-0" />
                             </a>
                           ) : (
-                            <span className="text-white/60 break-all">{u}</span>
+                            <span className="text-[var(--text-tertiary)] break-all">{u}</span>
                           )}
                         </li>
                       )
@@ -564,7 +599,7 @@ export default function FindingDrawer({
 
                     {Array.isArray(scPath) && scPath.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+                        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">
                           {t('components.findingDrawer.supplyChain.dependencyPath')}
                         </p>
                         <DependencyPathChain path={scPath} />
@@ -573,7 +608,7 @@ export default function FindingDrawer({
 
                     {Array.isArray(scOsvIds) && scOsvIds.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+                        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">
                           {t('components.findingDrawer.supplyChain.advisories')}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
@@ -601,7 +636,7 @@ export default function FindingDrawer({
                     {Array.isArray(scOsvSummaries) && scOsvSummaries.length > 0 && (
                       <ul className="space-y-1">
                         {scOsvSummaries.slice(0, 12).map((s, i) => (
-                          <li key={i} className="text-[12px] text-white/65 leading-snug">
+                          <li key={i} className="text-[12px] text-[var(--text-tertiary)] leading-snug">
                             • {String(s)}
                           </li>
                         ))}
@@ -623,7 +658,7 @@ export default function FindingDrawer({
 
                     {(Array.isArray(scComponents) || Array.isArray(scEdges)) && (
                       <div className="space-y-2">
-                        <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+                        <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">
                           {t('components.findingDrawer.supplyChain.dependencyGraph')}
                         </p>
                         <SupplyChainGraph
@@ -671,7 +706,7 @@ export default function FindingDrawer({
 
               {activeTab === 'remediation' && (
                 <Section title={t('components.findingDrawer.remediation')}>
-                  <p className="text-[13px] text-white/72 whitespace-pre-wrap">
+                  <p className="text-[13px] text-[var(--text-secondary)] whitespace-pre-wrap">
                     {finding.remediation || finding.raw?.remediation || t('components.findingDrawer.noRemediation')}
                   </p>
                 </Section>
@@ -681,7 +716,7 @@ export default function FindingDrawer({
                 <Section title="SOAR / Playbook">
                   <MetaRow label="Engine" value={finding.source ?? finding.engine} />
                   <MetaRow label="Playbook hint" value={finding.raw?.playbook_id ?? finding.playbook_id} />
-                  <p className="text-[11px] text-white/45 mt-2">
+                  <p className="text-[11px] text-[var(--text-muted)] mt-2">
                     Fire from Playbooks hub or POST /api/playbooks/fire with this finding id.
                   </p>
                 </Section>
@@ -690,7 +725,7 @@ export default function FindingDrawer({
               {activeTab === 'compliance' && (
                 <Section title={t('components.findingDrawer.complianceImpact')}>
                   {compliance.length === 0 ? (
-                    <p className="text-white/45 text-[12px]">No compliance tags on this finding.</p>
+                    <p className="text-[var(--text-muted)] text-[12px]">No compliance tags on this finding.</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {compliance.map((tag, i) => (
@@ -717,6 +752,7 @@ export default function FindingDrawer({
                   />
                 </Section>
               )}
+              </div>
             </div>
           </motion.aside>
         </>

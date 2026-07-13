@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  Activity, TrendingUp, AlertTriangle, CheckCircle, RefreshCw, Search, Cpu,
-} from 'lucide-react';
+import { Activity, TrendingUp, AlertTriangle, CheckCircle, Search, Cpu } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts';
@@ -13,6 +11,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid, SkeletonTable } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
+import Button from '../components/ui/Button'
 
 const SEV_COLORS = {
   critical: '#ef4444',
@@ -137,7 +136,7 @@ export default function BaselineAndDrift() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
             {error}
           </div>
         )}
@@ -179,20 +178,20 @@ export default function BaselineAndDrift() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg p-1">
+          <div className="flex items-center gap-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
             {['24h', '7d', '30d'].map((range) => (
-              <button
+              <Button variant="unstyled"
                 key={range}
                 type="button"
                 onClick={() => setTimeRange(range)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   timeRange === range
                     ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {t(`pages.baselineAndDrift.range_${range}`)}
-              </button>
+              </Button>
             ))}
           </div>
           <Link
@@ -207,7 +206,7 @@ export default function BaselineAndDrift() {
           <ChartPanel title={t('pages.baselineAndDrift.drift_over_time')} icon={<TrendingUp className="w-4 h-4 text-cyan-400" />}>
             {driftData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={driftData}>
+                <LineChart accessibilityLayer data={driftData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                   <XAxis dataKey="time" stroke="#64748b" style={{ fontSize: '11px' }} />
                   <YAxis stroke="#64748b" style={{ fontSize: '11px' }} domain={[0, 100]} />
@@ -223,7 +222,7 @@ export default function BaselineAndDrift() {
           <ChartPanel title={t('pages.baselineAndDrift.anomaly_volume')} icon={<AlertTriangle className="w-4 h-4 text-orange-400" />}>
             {driftData.some((d) => d.anomalies > 0) ? (
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={driftData}>
+                <BarChart accessibilityLayer data={driftData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                   <XAxis dataKey="time" stroke="#64748b" style={{ fontSize: '11px' }} />
                   <YAxis stroke="#64748b" style={{ fontSize: '11px' }} allowDecimals={false} />
@@ -239,33 +238,34 @@ export default function BaselineAndDrift() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label={t('pages.baselineAndDrift.search_placeholder')}
               placeholder={t('pages.baselineAndDrift.search_placeholder')}
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-black/40 border border-white/10 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/40"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/40"
             />
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             {['all', 'critical', 'high', 'medium', 'low'].map((s) => (
-              <button
+              <Button variant="unstyled"
                 key={s}
                 type="button"
                 onClick={() => setSeverityFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-mono uppercase ${
-                  severityFilter === s ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-white/45'
+                  severityFilter === s ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-[var(--text-muted)]'
                 }`}
               >
                 {s === 'all' ? t('pages.baselineAndDrift.filter_all') : `${s} (${severityCounts[s] || 0})`}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-400" />
               {t('pages.baselineAndDrift.anomalies_heading', { count: filteredAnomalies.length })}
@@ -284,12 +284,12 @@ export default function BaselineAndDrift() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5 max-h-[480px] overflow-y-auto">
+            <div className="divide-y divide-[var(--border-subtle)] max-h-[480px] overflow-y-auto">
               {filteredAnomalies.map((anomaly) => {
                 const sev = (anomaly.severity || 'medium').toLowerCase();
                 const sevColor = SEV_COLORS[sev] || SEV_COLORS.info;
                 return (
-                  <div key={anomaly.id} className="p-4 hover:bg-white/5 transition-colors">
+                  <div key={anomaly.id} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -302,14 +302,14 @@ export default function BaselineAndDrift() {
                               {anomaly.severity}
                             </span>
                           )}
-                          <span className="text-[10px] font-mono text-white/35">
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">
                             {t('pages.baselineAndDrift.score_label', { score: anomaly.score ?? '—' })}
                           </span>
                         </div>
                         {anomaly.description && (
-                          <p className="text-xs text-gray-400 mb-2">{anomaly.description}</p>
+                          <p className="text-xs text-[var(--text-tertiary)] mb-2">{anomaly.description}</p>
                         )}
-                        <div className="flex flex-wrap gap-3 text-[10px] font-mono text-white/40">
+                        <div className="flex flex-wrap gap-3 text-[10px] font-mono text-[var(--text-muted)]">
                           {anomaly.agent_id && (
                             <span>{t('pages.baselineAndDrift.agent_label')}: {anomaly.agent_id}</span>
                           )}
@@ -340,7 +340,7 @@ export default function BaselineAndDrift() {
               <AlertTriangle className="w-5 h-5 text-yellow-400" />
               <h3 className="text-sm font-semibold text-white">{t('pages.baselineAndDrift.no_baseline_title')}</h3>
             </div>
-            <p className="text-sm text-gray-300 mb-3">{t('pages.baselineAndDrift.no_baseline_body')}</p>
+            <p className="text-sm text-[var(--text-secondary)] mb-3">{t('pages.baselineAndDrift.no_baseline_body')}</p>
             <Link to="/agents" className="inline-flex px-4 py-2 bg-yellow-500/20 text-yellow-200 rounded-lg text-sm font-medium border border-yellow-500/30 hover:bg-yellow-500/30">
               {t('pages.baselineAndDrift.deploy_agents')}
             </Link>
@@ -352,22 +352,22 @@ export default function BaselineAndDrift() {
 }
 
 function StatCard({ label, value, sub, icon, valueClass, variant, small }) {
-  const bg = variant === 'danger' ? 'bg-red-500/10 border-red-500/30' : 'bg-black/40 border-white/10';
+  const bg = variant === 'danger' ? 'bg-red-500/10 border-red-500/30' : 'bg-[var(--bg-2)] border-[var(--border-default)]';
   return (
     <div className={`backdrop-blur-md border rounded-xl p-4 ${bg}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-400">{label}</span>
+        <span className="text-sm text-[var(--text-tertiary)]">{label}</span>
         {icon}
       </div>
       <div className={`font-bold text-white ${small ? 'text-sm' : 'text-2xl'} ${valueClass || ''}`}>{value}</div>
-      {sub && <div className="text-[10px] text-white/35 mt-1 font-mono">{sub}</div>}
+      {sub && <div className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">{sub}</div>}
     </div>
   );
 }
 
 function ChartPanel({ title, icon, children }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         {icon}
         <h3 className="text-sm font-semibold text-white">{title}</h3>
@@ -379,7 +379,7 @@ function ChartPanel({ title, icon, children }) {
 
 function EmptyChart({ message }) {
   return (
-    <div className="h-[240px] flex items-center justify-center text-gray-500 text-sm">
+    <div className="h-[240px] flex items-center justify-center text-[var(--text-muted)] text-sm">
       {message}
     </div>
   );

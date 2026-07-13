@@ -1,5 +1,5 @@
 import { firstClientTarget } from '../lib/clientTarget'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
@@ -10,7 +10,7 @@ import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import EvidenceNotice from '../components/ui/EvidenceNotice'
+
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { buildScanPayload, normalizeIntegrations } from '../lib/engineClientPrefill'
@@ -19,6 +19,7 @@ import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
+import Button from '../components/ui/Button'
 
 const TARGET_REQUIRED_IDS = new Set(['osint', 'asm', 'k8s_container', 'scada_ics', 'semantic_ai_fuzz', 'ai_adversarial_redteam'])
 
@@ -44,7 +45,7 @@ for (const row of strategicEnginesNeedingDedicatedPage()) {
 
 function JsonView({ value }) {
   return (
-    <pre className="rounded-xl border border-white/10 bg-black/70 p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
+    <pre className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-3 text-[12px] text-emerald-300 overflow-auto font-mono">
       {JSON.stringify(value, null, 2)}
     </pre>
   )
@@ -134,17 +135,18 @@ export default function BusinessEngineProfile() {
 
   useEffect(() => {
     if (!activeJobId) return undefined
+    let cancelled = false
     const iv = setInterval(async () => {
       const r = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`)
       const d = await r.json().catch(() => null)
-      if (!r.ok || !d) return
+      if (cancelled || !r.ok || !d) return
       setLiveJob(d)
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
         setRunState((prev) => ({ ...prev, running: false }))
       }
     }, 2000)
-    return () => clearInterval(iv)
+    return () => { cancelled = true; clearInterval(iv) }
   }, [activeJobId])
 
   const effectivePayload = useMemo(() => {
@@ -282,7 +284,7 @@ export default function BusinessEngineProfile() {
 
   if (!def) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#030712] text-slate-300 p-8">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[var(--bg-0)] text-[var(--text-tertiary)] p-8">
         <div className="text-red-400 mb-3">{t('pages.businessEngineProfile.not_configured', { engineId })}</div>
         <Link to="/engines/strategic" className="text-cyan-400 hover:underline">{t('pages.businessEngineProfile.open_strategic')}</Link>
       </div>
@@ -290,13 +292,13 @@ export default function BusinessEngineProfile() {
   }
 
   return (
-    <div className="min-h-[100dvh] text-slate-100" style={{ background: 'radial-gradient(ellipse 120% 78% at 50% 0%, #1f2937 0%, #020617 55%, #000 100%)' }}>
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/55 backdrop-blur-md">
+    <div className="min-h-[100dvh] text-[var(--text-secondary)]" style={{ background: 'var(--shell-bg)' }}>
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/engines/strategic" className="text-white/40 hover:text-white/70 text-xs font-mono">{t('pages.businessEngineProfile.back_strategic')}</Link>
-          <span className="text-white/20 text-xs">|</span>
+          <Link to="/engines/strategic" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xs font-mono">{t('pages.businessEngineProfile.back_strategic')}</Link>
+          <span className="text-[var(--text-disabled)] text-xs">|</span>
           <Link to={`/engines/${engineId}`} className="text-cyan-400/80 hover:text-cyan-300 text-xs font-mono">{t('pages.businessEngineProfile.engine_detail')}</Link>
-          <span className="text-white/20 text-xs">|</span>
+          <span className="text-[var(--text-disabled)] text-xs">|</span>
           <h1 className="text-sm font-bold tracking-tight text-white">{title}</h1>
           <div className="ms-auto">
             <ShellScanActions
@@ -322,23 +324,23 @@ export default function BusinessEngineProfile() {
           <ExecutiveWidget label={t('pages.businessEngineProfile.kpi_failed')} value={kpi.failed.toLocaleString()} accent="#f87171" />
         </div>
 
-        <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
+        <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded border border-white/20 text-[11px] font-mono text-white/70">{engineId}</span>
+            <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] text-[11px] font-mono text-[var(--text-secondary)]">{engineId}</span>
             {reg?.mitre && <span className="px-2 py-0.5 rounded border border-cyan-500/30 text-[11px] font-mono text-cyan-300">MITRE {reg.mitre}</span>}
             <span className="px-2 py-0.5 rounded border border-emerald-500/30 text-[11px] font-mono text-emerald-300">{t('pages.businessEngineProfile.dedicated_badge')}</span>
           </div>
           <p className="text-lg font-semibold text-white">{mission}</p>
-          <p className="text-sm text-white/60">{t('pages.businessEngineProfile.ops_desc')}</p>
+          <p className="text-sm text-[var(--text-tertiary)]">{t('pages.businessEngineProfile.ops_desc')}</p>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
+        <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.businessEngineProfile.run_heading')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             >
               <option value="">{t('pages.businessEngineProfile.select_client')}</option>
               {clients.map((c) => (
@@ -349,16 +351,16 @@ export default function BusinessEngineProfile() {
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder={def.requiresTarget ? t('pages.businessEngineProfile.target_required_placeholder') : t('pages.businessEngineProfile.target_optional_placeholder')}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={queueRun}
               disabled={runState.running}
               className="rounded-lg px-3 py-2 text-sm font-mono border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50"
             >
               {runState.running ? t('pages.businessEngineProfile.running') : t('pages.businessEngineProfile.queue_scan')}
-            </button>
+            </Button>
           </div>
           {paramSchema.length > 0 && (
             <EngineScanParamsPanel
@@ -371,22 +373,22 @@ export default function BusinessEngineProfile() {
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</button>
-            <button type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</button>
-            <span className="text-xs font-mono text-white/55">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
+            <Button variant="unstyled" type="button" onClick={exportJson} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">{t('pages.businessEngineProfile.export_json')}</Button>
+            <Button variant="unstyled" type="button" onClick={exportPdf} className="rounded-lg px-3 py-1.5 text-xs font-mono border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">{t('pages.businessEngineProfile.export_pdf')}</Button>
+            <span className="text-xs font-mono text-[var(--text-tertiary)]">{runState.msg || t('pages.businessEngineProfile.ready')}</span>
           </div>
           {liveJob && (
-            <div className="text-xs font-mono text-white/65 rounded-lg border border-white/10 bg-black/45 p-2">
+            <div className="text-xs font-mono text-[var(--text-tertiary)] rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
               {t('pages.businessEngineProfile.live_job_status', { jobId: liveJob.id || activeJobId, status: liveJob.status || '-' })}
             </div>
           )}
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4 h-[280px]">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.job_status_dist')}</h3>
             <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={statusData}>
+              <BarChart accessibilityLayer data={statusData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
                 <XAxis dataKey="name" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" allowDecimals={false} />
@@ -395,10 +397,10 @@ export default function BusinessEngineProfile() {
               </BarChart>
             </ResponsiveContainer>
           </article>
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4 h-[280px]">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 h-[280px]">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.findings_trend')}</h3>
             <ResponsiveContainer width="100%" height="90%">
-              <LineChart data={findingsData}>
+              <LineChart accessibilityLayer data={findingsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
                 <XAxis dataKey="run" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" allowDecimals={false} />
@@ -419,39 +421,39 @@ export default function BusinessEngineProfile() {
         />
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.recent_jobs')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {visibleJobs.map((j) => (
-                <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-white/10 bg-black/45 p-2 text-white/70 font-mono">
+                <div key={`${j.job_id}-${j.created_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)] font-mono">
                   <div>{j.created_at || '-'} | {j.status || '-'} | findings={j.findings_count || 0}</div>
-                  <div className="text-white/45">kind={j.kind || '-'} source={j.source || '-'}</div>
+                  <div className="text-[var(--text-muted)]">kind={j.kind || '-'} source={j.source || '-'}</div>
                 </div>
               ))}
-              {!jobs.length && <div className="text-xs text-white/45">{t('pages.businessEngineProfile.no_jobs')}</div>}
+              {!jobs.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_jobs')}</div>}
               {jobs.length > 0 && !visibleJobs.length && searchQuery.trim() && (
-                <div className="text-xs text-white/45">{t('weissmanFindings.filtered_title')}</div>
+                <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
             </div>
           </article>
-          <article className="rounded-xl border border-white/10 bg-black/40 p-4">
+          <article className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
             <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.live_findings')}</h3>
             <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
               {visibleFindings.map((f) => (
-                <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-white/10 bg-black/45 p-2 text-white/70">
+                <div key={`${f.id}-${f.discovered_at}`} className="text-xs rounded border border-[var(--border-default)] bg-[var(--table-surface)] p-2 text-[var(--text-secondary)]">
                   <div className="font-medium text-white">{f.title || t('pages.businessEngineProfile.finding_fallback')}</div>
-                  <div className="font-mono text-white/45">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
+                  <div className="font-mono text-[var(--text-muted)]">{f.discovered_at || '-'} | {f.severity || '-'} | {f.source || '-'}</div>
                 </div>
               ))}
-              {!findings.length && <div className="text-xs text-white/45">{t('pages.businessEngineProfile.no_findings')}</div>}
+              {!findings.length && <div className="text-xs text-[var(--text-muted)]">{t('pages.businessEngineProfile.no_findings')}</div>}
               {findings.length > 0 && !visibleFindings.length && searchQuery.trim() && (
-                <div className="text-xs text-white/45">{t('weissmanFindings.filtered_title')}</div>
+                <div className="text-xs text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
               )}
             </div>
           </article>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-black/40 p-4">
+        <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
           <h3 className="text-sm font-semibold text-white mb-2">{t('pages.businessEngineProfile.effective_payload')}</h3>
           <JsonView value={effectivePayload} />
         </section>

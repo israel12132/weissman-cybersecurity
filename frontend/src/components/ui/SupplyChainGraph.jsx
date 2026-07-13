@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 
 /**
  * Renders the reconstructed dependency graph from a supply-chain inventory finding.
@@ -120,10 +120,10 @@ export default function SupplyChainGraph({
       <div className="flex flex-wrap gap-1.5">
         {summary && (
           <>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/65">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">
               {summary.nodes ?? 0} {tr('nodes', 'nodes')}
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/65">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">
               {summary.edges ?? 0} {tr('edges', 'edges')}
             </span>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 text-amber-300/90">
@@ -148,7 +148,7 @@ export default function SupplyChainGraph({
 
       {/* SVG node-link diagram */}
       {hasGraph && (
-        <div className="rounded-xl border border-white/[0.08] bg-black/40 overflow-auto custom-scroll max-h-[420px]">
+        <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] overflow-auto custom-scroll max-h-[420px]">
           <svg
             width={model.width}
             height={model.height}
@@ -241,7 +241,7 @@ export default function SupplyChainGraph({
 
       {/* Truncation note */}
       {Object.entries(model.shown).some(([, s]) => s.total > s.visible) && (
-        <p className="text-[10px] font-mono text-white/35">
+        <p className="text-[10px] font-mono text-[var(--text-muted)]">
           {tr('graphTruncated', 'Graph truncated for display')} —{' '}
           {TIERS.filter((tier) => model.shown[tier]?.total > model.shown[tier]?.visible)
             .map((tier) => `${tr(tier, tier)} ${model.shown[tier].visible}/${model.shown[tier].total}`)

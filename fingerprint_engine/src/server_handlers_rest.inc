@@ -790,7 +790,7 @@ async fn api_clients_create(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "ok": false,
-                    "detail": format!("Database error while creating client: {e}"),
+                    "detail": scrub_internal_error(&e),
                 })),
             )
                 .into_response();
@@ -1362,7 +1362,7 @@ async fn api_scan_run_all(
             tracing::error!(target: "async_jobs", error = %e, "enqueue tenant_full_scan failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -1462,7 +1462,7 @@ async fn api_scan(
             tracing::error!(target: "async_jobs", error = %e, job_kind = %job_kind, "enqueue scan job failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"detail": format!("enqueue failed: {}", e)})),
+                Json(json!({"detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -1589,10 +1589,19 @@ async fn api_latency_probe(axum::extract::Json(body): axum::extract::Json<Latenc
         },
     };
     let url = parsed.as_str();
+    // SSRF guard: block non-http(s), cloud-metadata, *.internal and loopback probe targets — `url` is
+    // fully attacker-controlled. Redirects are disabled below so a 3xx can't bounce into the internal network.
+    if let Err(e) = crate::security_hardening::validate_poe_target_url(url) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "latency_ms": null, "error": format!("blocked: {e}") })),
+        )
+            .into_response();
+    }
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
         .user_agent("Weissman-CommandCenter/1.0 (latency-probe)")
-        .redirect(reqwest::redirect::Policy::limited(10))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
     {
         Ok(c) => c,
@@ -1856,7 +1865,7 @@ async fn api_scan_all_engines(
             tracing::error!(target: "async_jobs", error = %e, "enqueue scan_all_engines failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -1968,7 +1977,7 @@ async fn api_scan_discovered_domains(
             tracing::error!(target: "async_jobs", error = %e, "enqueue scan_discovered_domains failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

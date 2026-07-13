@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,11 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import DataTable from '../components/ui/DataTable'
+import { createColumnHelper } from '@tanstack/react-table'
+import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 // Command Center GUI for the `cache_poisoning` engine (Web Cache Poisoning & Deception Posture).
 // Every control maps 1:1 to a real engine parameter read from the scan body via ArsenalConfig.
@@ -105,48 +110,60 @@ const SEV_MATRIX_COLORS = {
   info: '#64748b',
 }
 
+const SEV_MATRIX_ORDER = ['critical', 'high', 'medium', 'low', 'info']
+
 function RiskMatrix({ matrix, t }) {
-  if (!matrix || typeof matrix !== 'object' || Object.keys(matrix).length === 0) return null
-  const cats = Object.keys(matrix).sort()
-  const sevs = ['critical', 'high', 'medium', 'low', 'info']
+  const data = useMemo(() => {
+    if (!matrix || typeof matrix !== 'object') return []
+    return Object.keys(matrix).sort().map((cat) => {
+      const row = matrix[cat] || {}
+      const meta = CATEGORY_META[cat] || CATEGORY_META.other
+      return {
+        cat,
+        icon: meta.icon,
+        label: meta.label,
+        critical: Number(row.critical || 0),
+        high: Number(row.high || 0),
+        medium: Number(row.medium || 0),
+        low: Number(row.low || 0),
+        info: Number(row.info || 0),
+      }
+    })
+  }, [matrix])
+
+  const columns = useMemo(() => [
+    columnHelper.accessor((r) => r.label, {
+      id: 'category',
+      header: t('pages.webCachePosture.category', 'Category'),
+      cell: (ctx) => (
+        <span className="text-[var(--text-tertiary)] whitespace-nowrap">{ctx.row.original.icon} {ctx.row.original.label}</span>
+      ),
+    }),
+    ...SEV_MATRIX_ORDER.map((s) => columnHelper.accessor((r) => r[s], {
+      id: s,
+      header: s.slice(0, 4),
+      cell: (ctx) => {
+        const n = ctx.row.original[s]
+        return n > 0 ? (
+          <span className="inline-block min-w-[1.25rem] px-1 rounded font-bold text-center" style={{ backgroundColor: `${SEV_MATRIX_COLORS[s]}22`, color: SEV_MATRIX_COLORS[s] }}>{n}</span>
+        ) : (
+          <span className="text-[var(--text-disabled)]">·</span>
+        )
+      },
+    })),
+  ], [t])
+
+  if (data.length === 0) return null
+
   return (
-    <div className="mt-4 pt-4 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.webCachePosture.risk_matrix', 'Risk matrix (category × severity)')}</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[10px] font-mono border-collapse">
-          <thead>
-            <tr>
-              <th className="text-left text-white/30 pb-1 pr-2">{t('pages.webCachePosture.category', 'Category')}</th>
-              {sevs.map((s) => (
-                <th key={s} className="text-center text-white/30 pb-1 px-1 uppercase">{s.slice(0, 4)}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {cats.map((cat) => {
-              const row = matrix[cat] || {}
-              const meta = CATEGORY_META[cat] || CATEGORY_META.other
-              return (
-                <tr key={cat} className="border-t border-white/5">
-                  <td className="py-1 pr-2 text-white/60 whitespace-nowrap">{meta.icon} {meta.label}</td>
-                  {sevs.map((s) => {
-                    const n = Number(row[s] || 0)
-                    return (
-                      <td key={s} className="text-center py-1 px-1">
-                        {n > 0 ? (
-                          <span className="inline-block min-w-[1.25rem] px-1 rounded font-bold" style={{ backgroundColor: `${SEV_MATRIX_COLORS[s]}22`, color: SEV_MATRIX_COLORS[s] }}>{n}</span>
-                        ) : (
-                          <span className="text-white/15">·</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.webCachePosture.risk_matrix', 'Risk matrix (category × severity)')}</div>
+      <DataTable
+        columns={columns}
+        data={data}
+        animateRows={false}
+        getRowId={(item) => item.cat}
+      />
     </div>
   )
 }
@@ -154,7 +171,7 @@ function RiskMatrix({ matrix, t }) {
 function CdnPlaybook({ playbook, t }) {
   if (!playbook || !Array.isArray(playbook.steps) || playbook.steps.length === 0) return null
   return (
-    <div className="mt-4 pt-4 border-t border-white/5">
+    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
       <div className="flex items-center gap-2 mb-2">
         <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/80">{t('pages.webCachePosture.cdn_playbook', 'CDN hardening playbook')}</div>
         {playbook.vendor && (
@@ -163,7 +180,7 @@ function CdnPlaybook({ playbook, t }) {
       </div>
       <ol className="space-y-1.5">
         {playbook.steps.map((step, i) => (
-          <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-white/65 leading-relaxed">
+          <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">
             <span className="text-cyan-400 shrink-0">{i + 1}.</span>
             <span>{step}</span>
           </li>
@@ -176,7 +193,7 @@ function CdnPlaybook({ playbook, t }) {
 function TopPrimitives({ items, t }) {
   if (!Array.isArray(items) || items.length === 0) return null
   return (
-    <div className="mt-4 pt-4 border-t border-white/5">
+    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
       <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400/80 mb-2">{t('pages.webCachePosture.top_primitives', 'Top primitives (triage)')}</div>
       <ol className="space-y-1.5">
         {items.map((p, i) => (
@@ -184,13 +201,13 @@ function TopPrimitives({ items, t }) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-mono text-rose-300">{i + 1}.</span>
               <span className="text-[10px] font-mono uppercase text-rose-300/80">{p.severity}</span>
-              {p.exposure && <span className="text-[10px] font-mono text-white/35">· {p.exposure}</span>}
+              {p.exposure && <span className="text-[10px] font-mono text-[var(--text-muted)]">· {p.exposure}</span>}
               {typeof p.confidence === 'number' && (
-                <span className="text-[10px] font-mono text-white/35">· {(p.confidence * 100).toFixed(0)}%</span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">· {(p.confidence * 100).toFixed(0)}%</span>
               )}
             </div>
-            <div className="text-xs text-white/85 font-medium mt-0.5">{p.title}</div>
-            {p.url && <div className="text-[10px] font-mono text-white/40 mt-0.5 truncate">{p.url}</div>}
+            <div className="text-xs text-[var(--text-primary)] font-medium mt-0.5">{p.title}</div>
+            {p.url && <div className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5 truncate">{p.url}</div>}
           </li>
         ))}
       </ol>
@@ -205,10 +222,10 @@ function ComplianceMap({ map, t }) {
   const mitre = Array.isArray(map.mitre_attack) ? map.mitre_attack : []
   if (cwe.length === 0 && owasp.length === 0 && mitre.length === 0) return null
   return (
-    <div className="mt-4 pt-4 border-t border-white/5">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.webCachePosture.compliance_map', 'Compliance mapping')}</div>
+    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.webCachePosture.compliance_map', 'Compliance mapping')}</div>
       <div className="flex flex-wrap gap-3 text-[10px] font-mono">
-        {mitre.map((m) => <span key={m} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-white/55">{m}</span>)}
+        {mitre.map((m) => <span key={m} className="px-2 py-0.5 rounded bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">{m}</span>)}
         {cwe.map((c) => <span key={c} className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-amber-200/80">{c}</span>)}
         {owasp.map((o) => <span key={o} className="px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/25 text-sky-200/80">{o}</span>)}
       </div>
@@ -223,7 +240,7 @@ function CoverageManifest({ manifest, t }) {
   const enabled = manifest.probes_enabled ?? 0
   const total = manifest.probe_categories_total ?? 0
   return (
-    <div className="mt-4 pt-4 border-t border-white/5">
+    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/80">{t('pages.webCachePosture.coverage_manifest', 'Competitive coverage')}</div>
         <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${complete ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' : 'border-amber-500/40 text-amber-300 bg-amber-500/10'}`}>
@@ -234,7 +251,7 @@ function CoverageManifest({ manifest, t }) {
             {t('pages.webCachePosture.sealed', 'SEALED')}
           </span>
         )}
-        {manifest.engine_version && <span className="text-[10px] font-mono text-white/30">{manifest.engine_version}</span>}
+        {manifest.engine_version && <span className="text-[10px] font-mono text-[var(--text-disabled)]">{manifest.engine_version}</span>}
       </div>
       {dims.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -250,7 +267,7 @@ function CoverageManifest({ manifest, t }) {
 function DefenseControls({ controls, t }) {
   if (!controls || !Array.isArray(controls.controls_required) || controls.controls_required.length === 0) return null
   return (
-    <div className="mt-4 pt-4 border-t border-white/5">
+    <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
       <div className="flex items-center gap-2 mb-2">
         <div className="text-[10px] font-mono uppercase tracking-wider text-violet-400/80">{t('pages.webCachePosture.defense_controls', 'Required defense controls')}</div>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-violet-500/30 text-violet-300/80 bg-violet-500/5">{controls.control_count ?? controls.controls_required.length}</span>
@@ -269,11 +286,10 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
-function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
 function csvToArray(s) { return String(s || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) }
 function isSummary(f) { return f && (f.category === 'posture_summary' || f.summary === true || typeof f.posture_score === 'number') }
 
@@ -282,25 +298,25 @@ function EvidenceView({ evidence }) {
   const checks = Array.isArray(evidence.checks) ? evidence.checks : []
   const scalars = Object.entries(evidence).filter(([k]) => k !== 'checks')
   return (
-    <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-3 space-y-2">
+    <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-3 space-y-2">
       {scalars.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
           {scalars.map(([k, v]) => (
             <div key={k} className="flex items-start gap-2 text-[11px] font-mono">
-              <span className="text-white/35 shrink-0">{k}</span>
-              <span className="text-white/70 break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+              <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+              <span className="text-[var(--text-secondary)] break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
       )}
       {checks.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/5">
+        <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
-              <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '·'}</span>
-              <span className="text-white/60">{c.name}</span>
-              <span className="text-white/30">—</span>
-              <span className="text-white/45 break-all">{typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>
+              <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '·'}</span>
+              <span className="text-[var(--text-tertiary)]">{c.name}</span>
+              <span className="text-[var(--text-disabled)]">—</span>
+              <span className="text-[var(--text-muted)] break-all">{typeof c.detail === 'object' ? JSON.stringify(c.detail) : String(c.detail)}</span>
             </div>
           ))}
         </div>
@@ -316,23 +332,23 @@ function FindingCard({ f }) {
   const controls = Array.isArray(f.controls) ? f.controls : []
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.exposure && <span className="text-[10px] font-mono text-white/30">· {f.exposure}</span>}
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
-            {typeof f.confidence === 'number' && <span className="text-[10px] font-mono text-white/30">· conf {(f.confidence * 100).toFixed(0)}%</span>}
+            {f.exposure && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.exposure}</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
+            {typeof f.confidence === 'number' && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· conf {(f.confidence * 100).toFixed(0)}%</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             {f.remediation && (
               <div className="mt-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
                 <div className="text-[10px] font-mono uppercase text-emerald-400/70 mb-1">Remediation</div>
@@ -342,7 +358,7 @@ function FindingCard({ f }) {
             {controls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {controls.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/10">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -388,7 +404,7 @@ function Scorecard({ summary, t }) {
   const detectedVendor = summary.detected_cdn_vendor ?? ev.detected_cdn_vendor
   const sevCounts = [['critical', bd.critical || 0], ['high', bd.high || 0], ['medium', bd.medium || 0], ['low', bd.low || 0]]
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex items-center gap-5 shrink-0">
           <div className="relative w-28 h-28 shrink-0">
@@ -398,14 +414,14 @@ function Scorecard({ summary, t }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-3xl font-bold" style={{ color }}>{score}</span>
-              <span className="text-[10px] font-mono text-white/40">/ 100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t('pages.webCachePosture.cache_hardening', 'Cache Hardening')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.webCachePosture.cache_hardening', 'Cache Hardening')}</div>
             <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${cached ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-white/10 text-white/40'}`}>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${cached ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>
                 {cached ? t('pages.webCachePosture.shared_cache_yes', 'Shared cache detected') : t('pages.webCachePosture.shared_cache_no', 'No shared cache observed')}
               </span>
               {typeof exploitIdx === 'number' && exploitIdx > 0 && (
@@ -443,7 +459,7 @@ function Scorecard({ summary, t }) {
         </div>
         <div className="flex-1 space-y-4">
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.webCachePosture.posture_dimensions', 'Posture dimensions')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.webCachePosture.posture_dimensions', 'Posture dimensions')}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {POSTURE_DIMS.map((d) => {
                 const raw = dims[d.key]
@@ -453,12 +469,12 @@ function Scorecard({ summary, t }) {
                 const warn = n >= 60 && n < 80
                 const barColor = ok ? '#34d399' : warn ? '#fbbf24' : '#fb7185'
                 return (
-                  <div key={d.key} className="rounded-lg border border-white/5 bg-black/30 px-2.5 py-2">
+                  <div key={d.key} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-2.5 py-2">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-[10px] font-mono text-white/60">{d.label}</span>
+                      <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{d.label}</span>
                       <span className="text-[10px] font-mono font-bold" style={{ color: barColor }}>{n}</span>
                     </div>
-                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-1 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${n}%`, backgroundColor: barColor }} />
                     </div>
                   </div>
@@ -472,7 +488,7 @@ function Scorecard({ summary, t }) {
             return (
               <div key={sev} className={`rounded-xl border ${st.bd} ${st.bg} px-3 py-2`}>
                 <div className={`text-2xl font-bold ${st.text}`}>{n}</div>
-                <div className="text-[10px] font-mono uppercase text-white/40">{sev}</div>
+                <div className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{sev}</div>
               </div>
             )
           })}
@@ -480,50 +496,50 @@ function Scorecard({ summary, t }) {
         </div>
       </div>
       {attackChains.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
           <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400/80 mb-2">{t('pages.webCachePosture.attack_chains', 'Attack chains (confirmed primitives)')}</div>
           <div className="space-y-2">
             {attackChains.map((c) => (
               <div key={c.id || c.title} className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-mono uppercase text-rose-300">{c.severity}</span>
-                  {c.mitre && <span className="text-[10px] font-mono text-white/30">· {c.mitre}</span>}
+                  {c.mitre && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {c.mitre}</span>}
                 </div>
-                <div className="text-xs font-medium text-white/90 mt-0.5">{c.title}</div>
-                <p className="text-[11px] text-white/55 mt-1 leading-relaxed">{c.description}</p>
+                <div className="text-xs font-medium text-[var(--text-primary)] mt-0.5">{c.title}</div>
+                <p className="text-[11px] text-[var(--text-tertiary)] mt-1 leading-relaxed">{c.description}</p>
               </div>
             ))}
           </div>
         </div>
       )}
       {probeManifest && (
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-mono text-white/40">{t('pages.webCachePosture.probes_run', 'Probes enabled:')}</span>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.webCachePosture.probes_run', 'Probes enabled:')}</span>
           <span className="text-[10px] font-mono text-cyan-300/80">{probeManifest.probes_enabled ?? (Array.isArray(probeManifest.probes) ? probeManifest.probes.length : 0)}</span>
           {probeManifest.engine_version && (
-            <span className="text-[10px] font-mono text-white/25">· {probeManifest.engine_version}</span>
+            <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {probeManifest.engine_version}</span>
           )}
           {scanTelemetry && (
             <>
-              <span className="text-[10px] font-mono text-white/25">·</span>
-              <span className="text-[10px] font-mono text-white/45">{scanTelemetry.http_requests ?? 0} HTTP</span>
-              <span className="text-[10px] font-mono text-white/45">{scanTelemetry.paths_tested ?? 0} paths</span>
+              <span className="text-[10px] font-mono text-[var(--text-disabled)]">·</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{scanTelemetry.http_requests ?? 0} HTTP</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">{scanTelemetry.paths_tested ?? 0} paths</span>
               {scanTelemetry.scan_duration_ms != null && (
-                <span className="text-[10px] font-mono text-white/45">{scanTelemetry.scan_duration_ms}ms</span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">{scanTelemetry.scan_duration_ms}ms</span>
               )}
               {scanTelemetry.path_concurrency != null && (
-                <span className="text-[10px] font-mono text-white/45">{scanTelemetry.path_concurrency} path×</span>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">{scanTelemetry.path_concurrency} path×</span>
               )}
             </>
           )}
         </div>
       )}
       {roadmap.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.webCachePosture.hardening_roadmap', 'Hardening roadmap')}</div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.webCachePosture.hardening_roadmap', 'Hardening roadmap')}</div>
           <ol className="space-y-1">
             {roadmap.map((r, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-white/60">
+              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
                 <span className="text-rose-400">{i + 1}.</span>{r}
               </li>
             ))}
@@ -537,10 +553,10 @@ function Scorecard({ summary, t }) {
       <ComplianceMap map={complianceMap} t={t} />
       <CoverageManifest manifest={coverageManifest} t={t} />
       {cats.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-mono text-white/40">{t('pages.webCachePosture.weak_areas', 'Weak areas:')}</span>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.webCachePosture.weak_areas', 'Weak areas:')}</span>
           {cats.map((c) => (
-            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60">
+            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">
               {(CATEGORY_META[c] || CATEGORY_META.other).icon} {(CATEGORY_META[c] || CATEGORY_META.other).label}
             </span>
           ))}
@@ -698,30 +714,30 @@ export default function WebCachePosture() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-rose-500/30 text-rose-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-rose-500/30 text-rose-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.webCachePosture.client', 'Client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.webCachePosture.client', 'Client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-rose-500/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40 min-w-[180px]">
               <option value="">{t('pages.webCachePosture.select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.webCachePosture.target_url', 'Target URL')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.webCachePosture.target_url', 'Target URL')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="https://example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.webCachePosture.intensity', 'Intensity')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.webCachePosture.intensity', 'Intensity')}</label>
             <select value={intensity} onChange={(e) => setIntensity(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-rose-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40">
               <option value="light">{t('pages.webCachePosture.intensity_light', 'Light')}</option>
               <option value="normal">{t('pages.webCachePosture.intensity_normal', 'Normal')}</option>
               <option value="aggressive">{t('pages.webCachePosture.intensity_aggressive', 'Aggressive')}</option>
@@ -729,32 +745,32 @@ export default function WebCachePosture() {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? '0 0 6px #fb7185' : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-rose-500/40 text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.webCachePosture.scanning', '⟳ Scanning…') : t('pages.webCachePosture.run_scan', '▶ Run Posture Scan')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.webCachePosture.hide_params', '▾ Parameters') : t('pages.webCachePosture.show_params', '▸ Parameters')}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.webCachePosture.probe_categories', 'Probe categories')}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.webCachePosture.probe_categories', 'Probe categories')}</div>
                   <div className="grid grid-cols-1 gap-1.5">
                     {TOGGLES.map((tg) => (
-                      <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                      <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                         <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-rose-500" />
                         {tg.label}
                       </label>
                     ))}
-                    <label className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer mt-1">
+                    <label className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer mt-1">
                       <input type="checkbox" checked={includeInfo} onChange={(e) => setIncludeInfo(e.target.checked)} className="accent-rose-500" />
                       {t('pages.webCachePosture.include_info', 'Include informational findings')}
                     </label>
@@ -762,51 +778,51 @@ export default function WebCachePosture() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.paths', 'Paths to test')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.paths', 'Paths to test')}</label>
                     <input type="text" value={paths} onChange={(e) => setPaths(e.target.value)} placeholder="/ , /account , /search"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.extra_headers', 'Extra unkeyed headers')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.extra_headers', 'Extra unkeyed headers')}</label>
                     <input type="text" value={extraHeaders} onChange={(e) => setExtraHeaders(e.target.value)} placeholder="X-Forwarded-Host, X-Custom-Host"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.canary_domain', 'Canary poison domain')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.canary_domain', 'Canary poison domain')}</label>
                     <input type="text" value={canaryDomain} onChange={(e) => setCanaryDomain(e.target.value)} placeholder="poison.example"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.query_param', 'Query unkeyed param name')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.query_param', 'Query unkeyed param name')}</label>
                     <input type="text" value={queryParam} onChange={(e) => setQueryParam(e.target.value)} placeholder="wzqp"
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.deception_exts', 'Cache-deception extensions')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.deception_exts', 'Cache-deception extensions')}</label>
                     <input type="text" value={deceptionExts} onChange={(e) => setDeceptionExts(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.timeout_ms', 'Per-probe timeout (ms)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.timeout_ms', 'Per-probe timeout (ms)')}</label>
                     <input type="number" min="1000" max="30000" step="500" value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.path_concurrency', 'Parallel path fan-out')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.path_concurrency', 'Parallel path fan-out')}</label>
                     <input type="number" min="1" max="4" step="1" value={pathConcurrency} onChange={(e) => setPathConcurrency(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.max_paths', 'Max paths (0=auto)')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.max_paths', 'Max paths (0=auto)')}</label>
                     <input type="number" min="0" max="16" step="1" value={maxPaths} onChange={(e) => setMaxPaths(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{t('pages.webCachePosture.concurrency', 'Header probe concurrency')}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{t('pages.webCachePosture.concurrency', 'Header probe concurrency')}</label>
                     <input type="number" min="1" max="16" step="1" value={concurrency} onChange={(e) => setConcurrency(e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white/80 font-mono focus:outline-none focus:border-rose-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-rose-500/40" />
                   </div>
                 </div>
               </div>
@@ -814,7 +830,7 @@ export default function WebCachePosture() {
           )}
         </AnimatePresence>
 
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{t('pages.webCachePosture.last_completed', 'Last completed: {{time}}', { time: lastRun })}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.webCachePosture.last_completed', 'Last completed: {{time}}', { time: lastRun })}</p>}
       </div>
 
       {!clientId && (

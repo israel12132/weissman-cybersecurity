@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import PageShell from './PageShell'
@@ -12,14 +12,15 @@ import { apiFetch } from '../lib/apiBase'
 import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
 import { useClient } from '../context/ClientContext'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.templateEngineWorkbench'
 
 function CodeBlock({ label, value }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/50 p-4">
-      {label && <div className="text-[10px] font-mono text-white/30 mb-2">{label}</div>}
-      <pre className="text-[11px] leading-relaxed text-white/70 font-mono whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] p-4">
+      {label && <div className="text-[10px] font-mono text-[var(--text-disabled)] mb-2">{label}</div>}
+      <pre className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-mono whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
         {value}
       </pre>
     </div>
@@ -183,21 +184,21 @@ function TemplateEngineWorkbenchBody() {
               totalCount={listFindings.length}
             />
           )}
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
               {t(`${NS}.runner`)}
             </h3>
             <input
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               placeholder={t(`${NS}.target_placeholder`)}
-              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-blue-500/40"
+              className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-blue-500/40"
             />
             <div className="flex items-center gap-3 flex-wrap">
               <select
                 value={selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
-                className="rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[12px] text-white/70 focus:outline-none focus:border-blue-500/40"
+                className="rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40"
               >
                 {visibleTemplates.map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
@@ -207,14 +208,14 @@ function TemplateEngineWorkbenchBody() {
                 )}
                 {templates.length === 0 && <option value="http_baseline">http_baseline</option>}
               </select>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 disabled={!canRun || running || loadingYaml}
                 onClick={run}
                 className="px-4 py-2 rounded-xl border border-blue-500/30 text-blue-300/70 text-[12px] font-mono uppercase hover:bg-blue-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {running ? `⟳ ${t(`${NS}.running`)}` : `▶ ${t(`${NS}.run`)}`}
-              </button>
+              </Button>
             </div>
             {error && (
               <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-[11px] text-rose-200">
@@ -223,12 +224,12 @@ function TemplateEngineWorkbenchBody() {
             )}
           </div>
 
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+              <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
                 {t(`${NS}.template_yaml`)}
               </h3>
-              <span className="text-[10px] font-mono text-white/25">
+              <span className="text-[10px] font-mono text-[var(--text-disabled)]">
                 {loadingYaml ? t(`${NS}.loading`) : t(`${NS}.editable`)}
               </span>
             </div>
@@ -243,28 +244,28 @@ function TemplateEngineWorkbenchBody() {
                 value={yaml}
                 onChange={(e) => setYaml(e.target.value)}
                 rows={18}
-                className="w-full rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-[11px] text-white/70 font-mono focus:outline-none focus:border-blue-500/40"
+                className="w-full rounded-xl bg-[var(--scrim)] border border-[var(--border-default)] px-3 py-2 text-[11px] text-[var(--text-secondary)] font-mono focus:outline-none focus:border-blue-500/40"
               />
             )}
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-3">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">
+          <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-3">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">
               {t(`${NS}.result`)}
             </h3>
             {!runResult ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-[11px] font-mono text-white/25">
+              <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4">
+                <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {t(`${NS}.result_empty`)}
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                    <div className="text-[10px] font-mono text-white/40 uppercase">{t(`${NS}.result_status`)}</div>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
+                    <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_status`)}</div>
                     <div className="flex items-center justify-center gap-1 mt-1">
                       {runResult?.verification?.verified ? (
                         <>
@@ -273,29 +274,29 @@ function TemplateEngineWorkbenchBody() {
                         </>
                       ) : (
                         <>
-                          <XCircle className="w-4 h-4 text-white/40" />
-                          <span className="text-[11px] font-mono text-white/40">{t(`${NS}.not_verified`)}</span>
+                          <XCircle className="w-4 h-4 text-[var(--text-muted)]" />
+                          <span className="text-[11px] font-mono text-[var(--text-muted)]">{t(`${NS}.not_verified`)}</span>
                         </>
                       )}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                    <div className="text-[10px] font-mono text-white/40 uppercase">{t(`${NS}.result_matched`)}</div>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
+                    <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_matched`)}</div>
                     <div className="text-lg font-semibold mt-1" style={{ color: runResult?.matched ? '#4ade80' : '#f87171' }}>
                       {runResult?.matched ? t(`${NS}.result_matched_yes`) : t(`${NS}.result_matched_no`)}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                    <div className="text-[10px] font-mono text-white/40 uppercase">{t(`${NS}.result_steps`)}</div>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3 text-center">
+                    <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t(`${NS}.result_steps`)}</div>
                     <div className="text-lg font-semibold text-white mt-1">{stepCount}</div>
-                    <div className="text-[10px] font-mono text-white/35">
+                    <div className="text-[10px] font-mono text-[var(--text-muted)]">
                       {t(`${NS}.steps_matched`, { matched: matchedSteps, total: stepCount })}
                     </div>
                   </div>
                 </div>
 
                 {runResult?.verification?.message && (
-                  <div className="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white/60 font-mono">
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-3)] px-3 py-2 text-[11px] text-[var(--text-tertiary)] font-mono">
                     {String(runResult.verification.message)}
                   </div>
                 )}
@@ -312,15 +313,15 @@ function TemplateEngineWorkbenchBody() {
                     ) : visibleRunSteps.map((step) => (
                       <div
                         key={step.id}
-                        className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 flex items-center justify-between gap-3"
+                        className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 flex items-center justify-between gap-3"
                       >
-                        <span className="text-[11px] font-mono text-white/70">{t(`${NS}.step_label`, { id: step.id })}</span>
+                        <span className="text-[11px] font-mono text-[var(--text-secondary)]">{t(`${NS}.step_label`, { id: step.id })}</span>
                         <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                          step.matched ? 'border-green-500/30 text-green-400 bg-green-900/10' : 'border-white/10 text-white/30'
+                          step.matched ? 'border-green-500/30 text-green-400 bg-green-900/10' : 'border-[var(--border-default)] text-[var(--text-disabled)]'
                         }`}>
                           {step.matched ? t(`${NS}.step_matched`) : t(`${NS}.step_no_match`)}
                         </span>
-                        <span className="text-[10px] font-mono text-white/30 shrink-0">
+                        <span className="text-[10px] font-mono text-[var(--text-disabled)] shrink-0">
                           {t(`${NS}.duration_ms`, { ms: step.duration_ms ?? 0 })}
                         </span>
                       </div>

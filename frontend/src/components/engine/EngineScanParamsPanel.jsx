@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { getCommandCenterRoute } from '../../lib/engineParamDefs.js'
+import Button from '../ui/Button'
 
 const CREDENTIAL_PATTERN = /aws_|gcp_|azure_|github|token|password|oauth|secret|pem|ssh|oast|llm_|auth_header|cookies|external_id|bearer|api_key/i
 const ADVANCED_PATTERN = /timeout|concurrency|max_|threshold|decay|planner|halflife|expansion|corroboration|belief|fusion|variants|rotation|pool/i
@@ -21,9 +22,9 @@ function groupParams(schema) {
 }
 
 export function EngineParamField({ def, value, onChange, disabled }) {
-  const base = 'bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50'
+  const base = 'bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50'
   const label = (
-    <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">
+    <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
       {def.label}
       {def.type === 'password' && (
         <span className="ml-1 text-amber-400/80 normal-case tracking-normal" title="Stored securely; masked values are not overwritten">
@@ -78,17 +79,17 @@ function ParamSection({ title, defs, values, onChange, disabled, defaultOpen = t
   const [open, setOpen] = useState(defaultOpen)
   if (!defs.length) return null
   return (
-    <div className="rounded-lg border border-white/10 bg-black/25 overflow-hidden">
-      <button
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((s) => !s)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left text-[10px] font-mono uppercase tracking-widest text-white/45 hover:bg-white/5"
+        className="w-full flex items-center justify-between px-3 py-2 text-left text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)]"
       >
         <span>{title}</span>
-        <span className="text-white/30">{open ? '−' : '+'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)]">{open ? '−' : '+'}</span>
+      </Button>
       {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-3 pb-3 border-t border-white/5 pt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-3 pb-3 border-t border-[var(--border-subtle)] pt-3">
           {defs.map((def) => (
             <EngineParamField
               key={def.key}
@@ -136,16 +137,16 @@ export default function EngineScanParamsPanel({
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest flex items-center gap-2">
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-2">
         {collapsible && (
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="p-0.5 rounded hover:bg-white/10 text-white/50"
+            className="p-0.5 rounded hover:bg-[var(--row-hover-bg)] text-[var(--text-tertiary)]"
             aria-expanded={!collapsed}
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
-          </button>
+          </Button>
         )}
         {t('components.engineScanParams.title')}
         {' · '}
@@ -175,7 +176,7 @@ export default function EngineScanParamsPanel({
   )
 
   return (
-    <div className={`space-y-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 ${className}`}>
+    <div className={`space-y-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-1)] px-4 py-3 ${className}`}>
       {header}
       {(!collapsible || !collapsed) && (
         <>
@@ -221,7 +222,7 @@ export default function EngineScanParamsPanel({
       )}
 
       {clientId && groups.credentials.length > 0 && (
-        <p className="text-[10px] text-white/35 font-mono leading-relaxed">
+        <p className="text-[10px] text-[var(--text-muted)] font-mono leading-relaxed">
           {t('components.engineScanParams.secrets_hint')}
         </p>
       )}

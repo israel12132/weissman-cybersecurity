@@ -2,11 +2,11 @@
  * AI Analysis Engine — live patterns from `/api/soc/ai-patterns` with
  * `/api/findings/clusters` and `/api/findings` fallbacks. No fabricated intel.
  */
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { RefreshCw, Search, Download } from 'lucide-react'
+import { Search } from 'lucide-react';
 import { apiFetch } from '../lib/apiBase'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -14,6 +14,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton from '../components/ui/CopyButton'
+import Button from '../components/ui/Button'
 
 const CATEGORY_ICONS = {
   cloud_attacks: { color: '#06b6d4', icon: '☁️' },
@@ -366,7 +367,7 @@ export default function AIAnalysisEngine() {
     description: p.description || '',
   })), [filtered])
 
-  const { exportCsv: exportWorkbenchCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-ai-patterns',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description}`,
   })
@@ -391,7 +392,7 @@ export default function AIAnalysisEngine() {
       </div>
 
       {lastUpdated && (
-        <p className="text-[11px] font-mono text-white/40 mb-6">
+        <p className="text-[11px] font-mono text-[var(--text-muted)] mb-6">
           {t('pages.aiAnalysisEngine.last_updated', { time: lastUpdated.toLocaleTimeString(i18n.language) })}
         </p>
       )}
@@ -416,9 +417,9 @@ export default function AIAnalysisEngine() {
               { label: t('pages.aiAnalysisEngine.kpi_correlations'), value: correlations.length, color: '#f97316' },
               { label: t('pages.aiAnalysisEngine.kpi_critical'), value: criticalCount, color: '#ef4444' },
             ].map((kpi) => (
-              <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+              <div key={kpi.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 text-center">
                 <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-                <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
+                <div className="text-[11px] text-[var(--text-tertiary)] mt-1">{kpi.label}</div>
               </div>
             ))}
           </div>
@@ -428,18 +429,18 @@ export default function AIAnalysisEngine() {
               { id: 'patterns', label: t('pages.aiAnalysisEngine.tab_patterns') },
               { id: 'correlations', label: t('pages.aiAnalysisEngine.tab_correlations') },
             ].map((tab) => (
-              <button
+              <Button variant="unstyled"
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? 'bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/40'
-                    : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10'
+                    : 'bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] hover:bg-[var(--row-hover-bg)]'
                 }`}
               >
                 {tab.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -447,20 +448,21 @@ export default function AIAnalysisEngine() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="space-y-3">
                 <div className="relative mb-3">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)]" />
                   <input
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    aria-label={t('pages.aiAnalysisEngine.search_placeholder')}
                     placeholder={t('pages.aiAnalysisEngine.search_placeholder')}
-                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-10 pr-3 py-2 text-xs text-white/80 focus:outline-none focus:border-violet-500/40"
+                    className="w-full bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40"
                   />
                 </div>
                 <div className="flex items-center gap-2">
                   <select
                     value={filterCategory}
                     onChange={(e) => setFilterCategory(e.target.value)}
-                    className="flex-1 text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-white/60 focus:outline-none"
+                    className="flex-1 text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-tertiary)] focus:outline-none"
                   >
                     <option value="all">{t('pages.aiAnalysisEngine.filter_all_categories')}</option>
                     {categories.map((k) => (
@@ -470,7 +472,7 @@ export default function AIAnalysisEngine() {
                   <select
                     value={filterSeverity}
                     onChange={(e) => setFilterSeverity(e.target.value)}
-                    className="flex-1 text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-white/60 focus:outline-none"
+                    className="flex-1 text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[var(--text-tertiary)] focus:outline-none"
                   >
                     <option value="all">{t('pages.aiAnalysisEngine.filter_all_severity')}</option>
                     {['critical', 'high', 'medium', 'low', 'info'].map((s) => (
@@ -504,7 +506,7 @@ export default function AIAnalysisEngine() {
                       className={`w-full text-left rounded-2xl border p-4 transition-all ${
                         selectedPattern?.id === pattern.id
                           ? 'border-[#a78bfa]/50 bg-[#a78bfa]/10'
-                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                          : 'border-[var(--border-default)] bg-[var(--row-hover-bg)] hover:bg-[var(--row-hover-bg)]'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
@@ -520,9 +522,9 @@ export default function AIAnalysisEngine() {
                         </span>
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-[11px] text-white/40">{categoryLabel(pattern.category)}</span>
+                        <span className="text-[11px] text-[var(--text-muted)]">{categoryLabel(pattern.category)}</span>
                         <div className="flex items-center gap-1">
-                          <div className="w-16 bg-white/10 rounded-full h-1">
+                          <div className="w-16 bg-[var(--row-hover-bg)] rounded-full h-1">
                             <div className="h-1 rounded-full bg-emerald-500" style={{ width: `${pattern.confidence * 100}%` }} />
                           </div>
                           <span className="text-[10px] font-mono text-emerald-400">{Math.round(pattern.confidence * 100)}%</span>
@@ -541,7 +543,7 @@ export default function AIAnalysisEngine() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="rounded-2xl border border-white/15 bg-white/5 p-6 space-y-5"
+                      className="rounded-2xl border border-[var(--border-strong)] bg-[var(--row-hover-bg)] p-6 space-y-5"
                     >
                       {(() => {
                         const sm = SEVERITY_COLORS[selectedPattern.severity] ?? SEVERITY_COLORS.medium
@@ -563,7 +565,7 @@ export default function AIAnalysisEngine() {
                                     style={{ color: cm.color, borderColor: `${cm.color}40`, backgroundColor: `${cm.color}10` }}>
                                     {categoryLabel(selectedPattern.category)}
                                   </span>
-                                  <span className="text-[10px] font-mono text-white/40 flex items-center gap-1">
+                                  <span className="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-1">
                                     {selectedPattern.id}
                                     <CopyButton value={selectedPattern.id} />
                                   </span>
@@ -576,77 +578,77 @@ export default function AIAnalysisEngine() {
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <div className="text-2xl font-bold text-emerald-400">{Math.round(selectedPattern.confidence * 100)}%</div>
-                                <div className="text-[10px] text-white/40">{t('pages.aiAnalysisEngine.confidence')}</div>
+                                <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.confidence')}</div>
                               </div>
                             </div>
 
-                            <p className="text-sm text-white/70 leading-relaxed">{selectedPattern.description}</p>
+                            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{selectedPattern.description}</p>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
-                                <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.aiAnalysisEngine.affected_systems')}</div>
+                                <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.aiAnalysisEngine.affected_systems')}</div>
                                 <div className="flex flex-wrap gap-1">
                                   {selectedPattern.affectedSystems.length > 0 ? selectedPattern.affectedSystems.map((s) => (
-                                    <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">{s}</span>
-                                  )) : <span className="text-[11px] text-white/40">—</span>}
+                                    <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-secondary)] border border-[var(--border-default)]">{s}</span>
+                                  )) : <span className="text-[11px] text-[var(--text-muted)]">—</span>}
                                 </div>
                               </div>
                               <div>
-                                <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.aiAnalysisEngine.mitre_techniques')}</div>
+                                <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.aiAnalysisEngine.mitre_techniques')}</div>
                                 <div className="flex flex-wrap gap-1">
                                   {selectedPattern.mitreTechniques.length > 0 ? selectedPattern.mitreTechniques.map((tech) => (
                                     <span key={tech} className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-500/30">{tech}</span>
-                                  )) : <span className="text-[11px] text-white/40">{t('pages.aiAnalysisEngine.mitre_not_mapped')}</span>}
+                                  )) : <span className="text-[11px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.mitre_not_mapped')}</span>}
                                 </div>
                               </div>
                             </div>
 
                             <div>
-                              <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.aiAnalysisEngine.indicators')}</div>
+                              <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.aiAnalysisEngine.indicators')}</div>
                               {selectedPattern.indicators.length > 0 ? (
                                 <ul className="space-y-1">
                                   {selectedPattern.indicators.map((ioc, i) => (
-                                    <li key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                    <li key={i} className="text-xs text-[var(--text-secondary)] flex items-start gap-2">
                                       <span className="text-amber-400 mt-0.5 flex-shrink-0">◆</span>
                                       {ioc}
                                     </li>
                                   ))}
                                 </ul>
                               ) : (
-                                <p className="text-xs text-white/40">{t('pages.aiAnalysisEngine.no_indicators')}</p>
+                                <p className="text-xs text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.no_indicators')}</p>
                               )}
                             </div>
 
                             {(selectedPattern.maxEpss != null || selectedPattern.maxCvss != null || selectedPattern.memberCount > 1) && (
                               <div className="grid grid-cols-3 gap-3 text-center">
                                 {selectedPattern.maxEpss != null && (
-                                  <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                                  <div className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                                     <div className="text-sm font-mono text-cyan-300">{(selectedPattern.maxEpss * 100).toFixed(1)}%</div>
-                                    <div className="text-[10px] text-white/40">{t('pages.aiAnalysisEngine.max_epss')}</div>
+                                    <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.max_epss')}</div>
                                   </div>
                                 )}
                                 {selectedPattern.maxCvss != null && (
-                                  <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                                  <div className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                                     <div className="text-sm font-mono text-orange-300">{Number(selectedPattern.maxCvss).toFixed(1)}</div>
-                                    <div className="text-[10px] text-white/40">{t('pages.aiAnalysisEngine.max_cvss')}</div>
+                                    <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.max_cvss')}</div>
                                   </div>
                                 )}
-                                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                                <div className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                                   <div className="text-sm font-mono text-violet-300">{selectedPattern.memberCount}</div>
-                                  <div className="text-[10px] text-white/40">{t('pages.aiAnalysisEngine.correlated_signals')}</div>
+                                  <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.correlated_signals')}</div>
                                 </div>
                               </div>
                             )}
 
                             <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4">
                               <div className="text-[10px] uppercase tracking-widest text-emerald-400/70 mb-2">{t('pages.aiAnalysisEngine.remediation')}</div>
-                              <p className="text-xs text-white/70 leading-relaxed">
+                              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
                                 {selectedPattern.remediation || t('pages.aiAnalysisEngine.no_remediation')}
                               </p>
                             </div>
 
                             {selectedPattern.lastSeen && (
-                              <div className="text-[11px] text-white/35 font-mono">
+                              <div className="text-[11px] text-[var(--text-muted)] font-mono">
                                 {t('pages.aiAnalysisEngine.last_seen', { time: selectedPattern.lastSeen.slice(0, 19).replace('T', ' ') })}
                                 {selectedPattern.status && ` · ${t('pages.aiAnalysisEngine.status_label', { status: selectedPattern.status })}`}
                               </div>
@@ -660,10 +662,10 @@ export default function AIAnalysisEngine() {
                       key="empty"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="rounded-2xl border border-dashed border-white/10 bg-white/3 p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]"
+                      className="rounded-2xl border border-dashed border-[var(--border-default)] bg-white/3 p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]"
                     >
                       <div className="text-4xl mb-4">🤖</div>
-                      <div className="text-sm text-white/40">{t('pages.aiAnalysisEngine.select_pattern')}</div>
+                      <div className="text-sm text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.select_pattern')}</div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -673,7 +675,7 @@ export default function AIAnalysisEngine() {
 
           {activeTab === 'correlations' && (
             <div className="space-y-4">
-              <p className="text-sm text-white/50 mb-4">{t('pages.aiAnalysisEngine.correlations_intro')}</p>
+              <p className="text-sm text-[var(--text-tertiary)] mb-4">{t('pages.aiAnalysisEngine.correlations_intro')}</p>
 
               {!loading && correlations.length === 0 && (
                 <EmptyState
@@ -688,7 +690,7 @@ export default function AIAnalysisEngine() {
                   key={corr.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                  className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5"
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
@@ -697,25 +699,25 @@ export default function AIAnalysisEngine() {
                         {corr.patternIds.map((pid) => {
                           const p = patterns.find((x) => x.id === pid)
                           return p ? (
-                            <button
+                            <Button variant="unstyled"
                               key={pid}
                               type="button"
                               onClick={() => { setActiveTab('patterns'); setSelectedPattern(p) }}
                               className="text-[10px] px-2 py-0.5 rounded bg-violet-500/20 text-violet-200 border border-violet-500/30 hover:bg-violet-500/30"
                             >
                               {p.name}
-                            </button>
+                            </Button>
                           ) : null
                         })}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-lg font-bold text-emerald-400">{Math.round(corr.confidence * 100)}%</div>
-                      <div className="text-[10px] text-white/40">{t('pages.aiAnalysisEngine.confidence')}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{t('pages.aiAnalysisEngine.confidence')}</div>
                     </div>
                   </div>
-                  <p className="text-xs text-white/60 leading-relaxed mb-3">{corrDescription(corr)}</p>
-                  <div className="flex items-center justify-between text-[11px] text-white/40">
+                  <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mb-3">{corrDescription(corr)}</p>
+                  <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
                     <span>
                       {t('pages.aiAnalysisEngine.risk_multiplier')}{' '}
                       <span className="text-orange-400 font-mono">×{corr.riskMultiplier}</span>

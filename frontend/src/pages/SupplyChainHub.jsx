@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useHubEngineFocus } from '../hooks/useLaunchEngineScan'
 import { Link } from 'react-router-dom'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
@@ -12,6 +12,7 @@ import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ACCENT = '#84cc16'
 
@@ -28,7 +29,7 @@ const SEVERITY_COLORS = {
   high: { bg: 'bg-orange-950/30', border: 'border-orange-500/30', text: 'text-orange-300' },
   medium: { bg: 'bg-amber-950/30', border: 'border-amber-500/30', text: 'text-amber-300' },
   low: { bg: 'bg-blue-950/30', border: 'border-blue-500/30', text: 'text-blue-300' },
-  info: { bg: 'bg-white/5', border: 'border-white/10', text: 'text-white/60' },
+  info: { bg: 'bg-[var(--row-hover-bg)]', border: 'border-[var(--border-default)]', text: 'text-[var(--text-tertiary)]' },
 }
 
 function sevClass(s) {
@@ -45,16 +46,16 @@ function FindingCard({ finding, t }) {
         </span>
         <div className="flex items-center gap-1.5">
           {finding.reachability && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/15 text-white/50">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">
               {finding.reachability}
             </span>
           )}
-          <span className="text-[10px] font-mono text-white/30">{finding.engine ?? ''}</span>
+          <span className="text-[10px] font-mono text-[var(--text-disabled)]">{finding.engine ?? ''}</span>
         </div>
       </div>
-      <p className="text-sm font-medium text-white/90">{finding.title ?? finding.type ?? t('pages.supplyChainHub.finding_fallback')}</p>
+      <p className="text-sm font-medium text-[var(--text-primary)]">{finding.title ?? finding.type ?? t('pages.supplyChainHub.finding_fallback')}</p>
       {finding.target && (
-        <p className="text-[11px] font-mono text-white/40 truncate">{finding.target}</p>
+        <p className="text-[11px] font-mono text-[var(--text-muted)] truncate">{finding.target}</p>
       )}
     </div>
   )
@@ -108,34 +109,34 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
   return (
     <AgentRequiredGate engineId={engineId} className="rounded-2xl">
     <div
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4"
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4"
       onMouseEnter={onFocus}
       onFocus={onFocus}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-white">{label}</h3>
-          <p className="text-[11px] text-white/40 mt-0.5">{description}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{description}</p>
           {engineId === 'cicd_pipeline' && (
             <Link to="/cicd-security" className="inline-block mt-2 text-[10px] font-mono text-lime-400/80 hover:text-lime-300 border border-lime-500/25 rounded-lg px-2 py-1 transition-colors">
               {t('pages.supplyChainHub.open_command_center', 'Open CI/CD Command Center →')}
             </Link>
           )}
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleRun}
           disabled={running || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#84cc16]/30 text-[#84cc16]/70 hover:bg-[#84cc16]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {running ? t('pages.supplyChainHub.running') : t('pages.supplyChainHub.run')}
-        </button>
+        </Button>
       </div>
       {lastRun && (
-        <p className="text-[10px] font-mono text-white/30">{t('pages.supplyChainHub.last_run', { time: lastRun })}</p>
+        <p className="text-[10px] font-mono text-[var(--text-disabled)]">{t('pages.supplyChainHub.last_run', { time: lastRun })}</p>
       )}
       {findings.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-white/5">
+        <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
           {findings.slice(0, 5).map((f, i) => <FindingCard key={i} finding={f} t={t} />)}
         </div>
       )}
@@ -145,8 +146,8 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
         )
         if (!inv) return null
         return (
-          <div className="pt-3 border-t border-white/5 space-y-2">
-            <p className="text-[10px] font-mono text-white/40 uppercase tracking-wide">
+          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+            <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">
               {t('components.findingDrawer.supplyChain.dependencyGraph')}
             </p>
             <SupplyChainGraph
@@ -247,11 +248,11 @@ export default function SupplyChainHub() {
       )}
     >
       <div className="flex items-center gap-2 mb-6">
-        <span className="text-[11px] font-mono text-white/40">{t('pages.supplyChainHub.client_label')}</span>
+        <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.supplyChainHub.client_label')}</span>
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#84cc16]/40"
+          className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#84cc16]/40"
         >
           <option value="">{t('pages.supplyChainHub.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -259,7 +260,7 @@ export default function SupplyChainHub() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#84cc16]/30 text-[#84cc16]'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#84cc16]/30 text-[#84cc16]'}`}>
           {toast.msg}
         </div>
       )}

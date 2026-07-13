@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
+import DataTable from '../components/ui/DataTable'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
@@ -16,6 +18,9 @@ import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
+import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 const MAX_LINES = 500
 const ENGINE_ID = 'osint'
@@ -41,10 +46,10 @@ function Terminal({ lines }) {
   return (
     <div
       ref={ref}
-      className="h-72 overflow-auto rounded-xl bg-black/80 border border-white/5 p-3 font-mono text-[11px] leading-relaxed"
+      className="h-72 overflow-auto rounded-xl bg-[var(--bg-1)] border border-[var(--border-subtle)] p-3 font-mono text-[11px] leading-relaxed"
     >
       {lines.length === 0 ? (
-        <span className="text-white/20">{t('pages.osintEngineProfile.terminal_idle')}</span>
+        <span className="text-[var(--text-disabled)]">{t('pages.osintEngineProfile.terminal_idle')}</span>
       ) : (
         lines.map((line, i) => (
           <div
@@ -188,6 +193,44 @@ export default function OsintEngineProfile() {
     return findings.filter((f) => ids.has(String(f.id)))
   }, [findings, filteredFindings, searchQuery])
 
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor((f) => f.severity, {
+        id: 'severity',
+        header: () => t('pages.osintEngineProfile.col_severity'),
+        cell: (info) => info.row.original.severity || '—',
+      }),
+      columnHelper.accessor((f) => f.title, {
+        id: 'title',
+        header: () => t('pages.osintEngineProfile.col_title'),
+        cell: (info) => (
+          <span className="text-[var(--text-primary)]">{info.row.original.title || '—'}</span>
+        ),
+      }),
+      columnHelper.accessor((f) => f.type || f.asset_type, {
+        id: 'type',
+        header: () => t('pages.osintEngineProfile.col_type'),
+        cell: (info) => {
+          const f = info.row.original
+          return f.type || f.asset_type || '—'
+        },
+      }),
+      columnHelper.accessor((f) => f.discovered_at, {
+        id: 'discovered',
+        header: () => t('pages.osintEngineProfile.col_discovered'),
+        cell: (info) => {
+          const { discovered_at: discoveredAt } = info.row.original
+          return (
+            <span className="text-[var(--text-tertiary)]">
+              {discoveredAt ? new Date(discoveredAt).toLocaleString() : '—'}
+            </span>
+          )
+        },
+      }),
+    ],
+    [t],
+  )
+
   const handleRun = useCallback(async () => {
     if (!selectedClientId) {
       showToast('error', t('pages.osintEngineProfile.select_client_first'))
@@ -287,7 +330,7 @@ export default function OsintEngineProfile() {
           className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${
             toast.severity === 'error'
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-200'
-              : 'bg-black/80 border-cyan-500/30 text-cyan-200'
+              : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
           }`}
         >
           {toast.message}
@@ -331,25 +374,25 @@ export default function OsintEngineProfile() {
 
       <section className="grid xl:grid-cols-[1.3fr_1fr] gap-6">
         <div className="space-y-6">
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6 space-y-3">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-2xl font-bold text-white">OSINT</h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/40 bg-cyan-500/10 text-cyan-300">{ENGINE_ID}</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/15 text-white/50">MITRE T1589</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-strong)] text-[var(--text-tertiary)]">MITRE T1589</span>
             </div>
-            <p className="text-sm text-white/70 leading-relaxed">
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
               {t('pages.osintEngineProfile.description')}
             </p>
             <div className="flex flex-wrap gap-2 text-[11px] font-mono">
-              <Link to="/engines" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors">{t('pages.osintEngineProfile.link_engine_matrix')}</Link>
-              <Link to="/engine-catalog" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-emerald-300 hover:border-emerald-500/40 transition-colors">{t('pages.osintEngineProfile.link_catalog')}</Link>
-              <Link to="/threat-intel" className="px-2 py-1 rounded border border-white/10 text-white/60 hover:text-purple-300 hover:border-purple-500/40 transition-colors">{t('pages.osintEngineProfile.link_threat_intel')}</Link>
+              <Link to="/engines" className="px-2 py-1 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-cyan-300 hover:border-cyan-500/40 transition-colors">{t('pages.osintEngineProfile.link_engine_matrix')}</Link>
+              <Link to="/engine-catalog" className="px-2 py-1 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-emerald-300 hover:border-emerald-500/40 transition-colors">{t('pages.osintEngineProfile.link_catalog')}</Link>
+              <Link to="/threat-intel" className="px-2 py-1 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-purple-300 hover:border-purple-500/40 transition-colors">{t('pages.osintEngineProfile.link_threat_intel')}</Link>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.capabilities_heading')}</h3>
-            <ul className="space-y-2 text-sm text-white/70">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.capabilities_heading')}</h3>
+            <ul className="space-y-2 text-sm text-[var(--text-secondary)]">
               {capabilities.map((capability) => (
                 <li key={capability} className="flex items-start gap-2">
                   <span className="text-cyan-300">•</span>
@@ -359,11 +402,11 @@ export default function OsintEngineProfile() {
             </ul>
           </div>
 
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.output_schema')}</h3>
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest mb-4">{t('pages.osintEngineProfile.output_schema')}</h3>
             <div className="flex flex-wrap gap-2">
               {OSINT_OUTPUT_FIELDS.map((field) => (
-                <span key={field} className="px-2 py-1 rounded border border-white/10 bg-white/5 text-[11px] font-mono text-white/65">
+                <span key={field} className="px-2 py-1 rounded border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[11px] font-mono text-[var(--text-tertiary)]">
                   {field}
                 </span>
               ))}
@@ -372,31 +415,31 @@ export default function OsintEngineProfile() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6 space-y-4">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.osintEngineProfile.run_heading')}</h3>
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-4">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.osintEngineProfile.run_heading')}</h3>
             <div>
-              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.client_label')}</label>
+              <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.client_label')}</label>
               <select
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
               >
                 <option value="">{t('pages.osintEngineProfile.select_client')}</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <div className="text-[10px] text-white/35 font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>
+              <div className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>
             </div>
             <div>
-              <label className="block text-[11px] font-mono text-white/50 uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.target_label')}</label>
+              <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.target_label')}</label>
               <input
                 type="text"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder={t('pages.osintEngineProfile.target_placeholder')}
                 disabled={running}
-                className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
+                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50"
               />
             </div>
             <EngineScanParamsPanel
@@ -409,25 +452,25 @@ export default function OsintEngineProfile() {
               compact
               maxVisible={8}
             />
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleRun}
               disabled={running}
               className="px-4 py-2 rounded-xl font-mono text-sm font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {running ? t('pages.osintEngineProfile.running') : t('pages.osintEngineProfile.run_btn')}
-            </button>
+            </Button>
           </div>
 
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6 space-y-3">
-            <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest">{t('pages.osintEngineProfile.live_telemetry')}</h3>
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-3">
+            <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.osintEngineProfile.live_telemetry')}</h3>
             <Terminal lines={lines} />
           </div>
         </div>
       </section>
 
       {findings.length > 0 && (
-        <section className="mt-6 rounded-2xl bg-black/40 border border-white/10 p-6 space-y-4">
+        <section className="mt-6 rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6 space-y-4">
           <WeissmanListToolbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -442,28 +485,12 @@ export default function OsintEngineProfile() {
               compact
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs font-mono text-white/70">
-                <thead>
-                  <tr className="text-white/40 border-b border-white/10">
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_severity')}</th>
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_title')}</th>
-                    <th className="text-left py-2 pr-3">{t('pages.osintEngineProfile.col_type')}</th>
-                    <th className="text-left py-2">{t('pages.osintEngineProfile.col_discovered')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleFindings.map((f) => (
-                    <tr key={f.id} className="border-b border-white/5">
-                      <td className="py-2 pr-3">{f.severity || '—'}</td>
-                      <td className="py-2 pr-3 text-white/85">{f.title || '—'}</td>
-                      <td className="py-2 pr-3">{f.type || f.asset_type || '—'}</td>
-                      <td className="py-2 text-white/50">{f.discovered_at ? new Date(f.discovered_at).toLocaleString() : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={columns}
+              data={visibleFindings}
+              getRowId={(f) => f.id}
+              animateRows={false}
+            />
           )}
         </section>
       )}

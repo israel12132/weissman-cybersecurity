@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.targetScopePanel'
 
@@ -33,7 +34,7 @@ function CopyableTag({ value }) {
       tabIndex={0}
       onClick={copy}
       onKeyDown={(e) => e.key === 'Enter' && copy()}
-      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-black/40 text-white/80 font-mono text-xs cursor-pointer hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-all"
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-0)]/40 text-[var(--text-secondary)] font-mono text-xs cursor-pointer hover:border-[#22d3ee]/50 hover:text-[#22d3ee] transition-all"
     >
       <span className="truncate max-w-[140px]">{value}</span>
       <span className="text-[10px] shrink-0">{copied ? t(`${NS}.copied`) : t(`${NS}.copy`)}</span>
@@ -72,17 +73,17 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
       return null
     }
     return (
-      <aside className="hidden lg:flex w-full lg:w-72 lg:max-w-[18rem] shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-black/40 backdrop-blur-md flex-col items-center justify-center p-6 text-white/50">
+      <aside className="hidden lg:flex w-full lg:w-72 lg:max-w-[18rem] shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--border-default)] bg-[var(--bg-0)]/40 backdrop-blur-md flex-col items-center justify-center p-6 text-[var(--text-tertiary)]">
         <p className="text-sm">{t(`${NS}.selectClient`)}</p>
       </aside>
     )
   }
 
   return (
-    <aside className="w-full max-w-full lg:w-72 lg:max-w-[18rem] shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-black/40 backdrop-blur-md overflow-y-auto overflow-x-hidden flex flex-col max-h-[min(36vh,280px)] lg:max-h-none lg:h-full">
-      <div className="p-4 border-b border-white/10">
-        <h2 className="text-xs uppercase tracking-[0.2em] text-white/50 font-medium">{t(`${NS}.title`)}</h2>
-        <p className="text-sm font-medium text-white mt-1 truncate">{selectedClient.name}</p>
+    <aside className="w-full max-w-full lg:w-72 lg:max-w-[18rem] shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--border-default)] bg-[var(--bg-0)]/40 backdrop-blur-md overflow-y-auto overflow-x-hidden flex flex-col max-h-[min(36vh,280px)] lg:max-h-none lg:h-full">
+      <div className="p-4 border-b border-[var(--border-default)]">
+        <h2 className="text-xs uppercase tracking-[0.2em] text-[var(--text-tertiary)] font-medium">{t(`${NS}.title`)}</h2>
+        <p className="text-sm font-medium text-[var(--text-primary)] mt-1 truncate">{selectedClient.name}</p>
       </div>
 
       <div className="p-4 space-y-4">
@@ -90,30 +91,30 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
           <div className="flex items-center justify-between gap-2">
             <div>
               <h3 className="text-[10px] uppercase tracking-widest text-amber-200/80 font-medium">{t(`${NS}.otTitle`)}</h3>
-              <p className="text-[10px] text-white/45 mt-1 leading-snug">
+              <p className="text-[10px] text-[var(--text-tertiary)] mt-1 leading-snug">
                 {t(`${NS}.otDescription`)}
               </p>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               disabled={configLoading}
               role="switch"
               aria-checked={!!clientConfig.industrial_ot_enabled}
               onClick={() => patchConfig(selectedClientId, { industrial_ot_enabled: !clientConfig.industrial_ot_enabled })}
-              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${clientConfig.industrial_ot_enabled ? 'bg-amber-500/80' : 'bg-white/15'} ${configLoading ? 'opacity-50' : ''}`}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${clientConfig.industrial_ot_enabled ? 'bg-amber-500/80' : 'bg-[var(--border-strong)]'} ${configLoading ? 'opacity-50' : ''}`}
             >
               <span
-                className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${clientConfig.industrial_ot_enabled ? 'translate-x-5' : ''}`}
+                className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-[var(--text-primary)] shadow transition-transform ${clientConfig.industrial_ot_enabled ? 'translate-x-5' : ''}`}
               />
-            </button>
+            </Button>
           </div>
         </section>
 
         <section>
-          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">{t(`${NS}.domainsIps`)}</h3>
+          <h3 className="text-[10px] uppercase tracking-widest text-[var(--text-tertiary)] font-medium mb-2">{t(`${NS}.domainsIps`)}</h3>
           <div className="flex flex-wrap gap-2">
             {domains.length === 0 && ipRanges.length === 0 ? (
-              <span className="text-xs text-white/40">{t(`${NS}.noneConfigured`)}</span>
+              <span className="text-xs text-[var(--text-muted)]">{t(`${NS}.noneConfigured`)}</span>
             ) : (
               <>
                 {domains.map((d) => (
@@ -128,15 +129,15 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
         </section>
 
         <section>
-          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">{t(`${NS}.techStack`)}</h3>
+          <h3 className="text-[10px] uppercase tracking-widest text-[var(--text-tertiary)] font-medium mb-2">{t(`${NS}.techStack`)}</h3>
           <div className="flex flex-wrap gap-2">
             {techStack.length === 0 ? (
-              <span className="text-xs text-white/40">{t(`${NS}.techStackEmpty`)}</span>
+              <span className="text-xs text-[var(--text-muted)]">{t(`${NS}.techStackEmpty`)}</span>
             ) : (
               techStack.map((tech) => (
                 <span
                   key={tech}
-                  className="px-2 py-1 rounded-lg border border-white/10 bg-black/40 text-white/70 font-mono text-xs"
+                  className="px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-0)]/40 text-[var(--text-secondary)] font-mono text-xs"
                 >
                   {tech}
                 </span>
@@ -146,9 +147,9 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
         </section>
 
         <section>
-          <h3 className="text-[10px] uppercase tracking-widest text-white/50 font-medium mb-2">{t(`${NS}.zeroDayTitle`)}</h3>
+          <h3 className="text-[10px] uppercase tracking-widest text-[var(--text-tertiary)] font-medium mb-2">{t(`${NS}.zeroDayTitle`)}</h3>
           {loading ? (
-            <p className="text-xs text-white/40">{t(`${NS}.loading`)}</p>
+            <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.loading`)}</p>
           ) : zeroDayFindings.length === 0 ? (
             <p className="text-xs text-[#4ade80]/90">{t(`${NS}.noZeroDay`)}</p>
           ) : (
@@ -160,12 +161,12 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
                 >
                   <span className="font-medium">{f.title || t(`${NS}.findingFallback`)}</span>
                   {f.severity && (
-                    <span className="ml-1 text-[10px] text-white/50">({f.severity})</span>
+                    <span className="ml-1 text-[10px] text-[var(--text-tertiary)]">({f.severity})</span>
                   )}
                 </li>
               ))}
               {zeroDayFindings.length > 10 && (
-                <li className="text-[10px] text-white/40">{t(`${NS}.moreCount`, { count: zeroDayFindings.length - 10 })}</li>
+                <li className="text-[10px] text-[var(--text-muted)]">{t(`${NS}.moreCount`, { count: zeroDayFindings.length - 10 })}</li>
               )}
             </ul>
           )}

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { RefreshCw, Search, Download, ShieldCheck } from 'lucide-react'
+import { Search, ShieldCheck } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
+import Button from '../components/ui/Button'
 
 const STATUS_COLORS = {
   PENDING_APPROVAL: 'text-amber-400 border-amber-400/30 bg-amber-900/10',
@@ -67,7 +68,7 @@ function exportQueueCsv(items) {
 
 function StatusBadge({ status }) {
   const { t } = useTranslation()
-  const cls = STATUS_COLORS[status] ?? 'text-white/40 border-white/10'
+  const cls = STATUS_COLORS[status] ?? 'text-[var(--text-muted)] border-[var(--border-default)]'
   const label = t(statusI18nKey(status), { defaultValue: status?.replace(/_/g, ' ') })
   return (
     <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${cls}`}>
@@ -78,12 +79,12 @@ function StatusBadge({ status }) {
 
 function ChainSteps({ steps }) {
   if (!Array.isArray(steps) || steps.length === 0) {
-    return <span className="text-white/30 text-[11px]">—</span>
+    return <span className="text-[var(--text-disabled)] text-[11px]">—</span>
   }
   return (
     <ol className="list-decimal list-inside space-y-0.5">
       {steps.map((s, i) => (
-        <li key={i} className="text-[11px] text-white/60 leading-relaxed">{s}</li>
+        <li key={i} className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{s}</li>
       ))}
     </ol>
   )
@@ -95,7 +96,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
   const [note, setNote] = useState('')
   const isPending = item.status === 'PENDING_APPROVAL'
   const sevKey = (item.estimated_severity || '').toLowerCase()
-  const severityClass = SEV_COLORS[sevKey] ?? 'text-white/50'
+  const severityClass = SEV_COLORS[sevKey] ?? 'text-[var(--text-tertiary)]'
   const severityLabel = t(`pages.councilHitlQueue.sev_${sevKey}`, {
     defaultValue: item.estimated_severity,
   })
@@ -106,30 +107,30 @@ function HitlItem({ item, onApprove, onReject, loading }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4"
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4"
     >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-mono text-white/30">#{item.id}</span>
+            <span className="text-[11px] font-mono text-[var(--text-disabled)]">#{item.id}</span>
             <StatusBadge status={item.status} />
             <span className={`text-[11px] font-semibold uppercase ${severityClass}`}>
               {severityLabel}
             </span>
           </div>
           <p className="text-sm font-medium text-white truncate max-w-lg">{item.target_brief}</p>
-          <p className="text-[10px] font-mono text-white/25">
+          <p className="text-[10px] font-mono text-[var(--text-disabled)]">
             {item.proposed_at ? new Date(item.proposed_at).toLocaleString() : ''}
             {item.client_id ? t('pages.councilHitlQueue.client_suffix', { id: item.client_id }) : ''}
           </p>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={() => setExpanded(v => !v)}
-          className="shrink-0 text-[11px] font-mono text-white/40 hover:text-white/70 transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20"
+          className="shrink-0 text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors px-3 py-1.5 rounded-lg border border-[var(--border-default)] hover:border-[var(--border-strong)]"
         >
           {expanded ? t('pages.councilHitlQueue.collapse') : t('pages.councilHitlQueue.details')}
-        </button>
+        </Button>
       </div>
 
       <AnimatePresence>
@@ -141,16 +142,16 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             className="overflow-hidden space-y-4"
           >
             <div>
-              <p className="text-[10px] font-mono text-white/30 uppercase mb-1">{t('pages.councilHitlQueue.chain_steps')}</p>
-              <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase mb-1">{t('pages.councilHitlQueue.chain_steps')}</p>
+              <div className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3">
                 <ChainSteps steps={item.chain_steps} />
               </div>
             </div>
 
             {item.payload_preview && (
               <div>
-                <p className="text-[10px] font-mono text-white/30 uppercase mb-1">{t('pages.councilHitlQueue.payload_preview')}</p>
-                <pre className="rounded-xl bg-white/5 border border-white/10 p-3 text-[11px] font-mono text-cyan-300/70 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase mb-1">{t('pages.councilHitlQueue.payload_preview')}</p>
+                <pre className="rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] p-3 text-[11px] font-mono text-cyan-300/70 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
                   {item.payload_preview}
                 </pre>
               </div>
@@ -158,8 +159,8 @@ function HitlItem({ item, onApprove, onReject, loading }) {
 
             {item.rationale && (
               <div>
-                <p className="text-[10px] font-mono text-white/30 uppercase mb-1">{t('pages.councilHitlQueue.rationale')}</p>
-                <p className="text-[11px] text-white/55 leading-relaxed">{item.rationale}</p>
+                <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase mb-1">{t('pages.councilHitlQueue.rationale')}</p>
+                <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{item.rationale}</p>
               </div>
             )}
 
@@ -170,7 +171,7 @@ function HitlItem({ item, onApprove, onReject, loading }) {
               </p>
             )}
             {item.review_note && (
-              <p className="text-[11px] text-white/40 italic">{t('pages.councilHitlQueue.review_note', { note: item.review_note })}</p>
+              <p className="text-[11px] text-[var(--text-muted)] italic">{t('pages.councilHitlQueue.review_note', { note: item.review_note })}</p>
             )}
           </motion.div>
         )}
@@ -183,24 +184,24 @@ function HitlItem({ item, onApprove, onReject, loading }) {
             placeholder={t('pages.councilHitlQueue.operator_note')}
             value={note}
             onChange={e => setNote(e.target.value)}
-            className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-1.5 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+            className="flex-1 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-1.5 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             disabled={loading}
             onClick={() => onApprove(item.id, note)}
             className="px-4 py-1.5 rounded-xl text-[12px] font-semibold font-mono uppercase border border-green-500/40 text-green-400 hover:bg-green-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {t('pages.councilHitlQueue.approve_fire')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             disabled={loading}
             onClick={() => onReject(item.id, note)}
             className="px-4 py-1.5 rounded-xl text-[12px] font-semibold font-mono uppercase border border-rose-500/40 text-rose-400 hover:bg-rose-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {t('pages.councilHitlQueue.reject')}
-          </button>
+          </Button>
         </div>
       )}
     </motion.div>
@@ -291,7 +292,7 @@ export default function CouncilHitlQueue() {
     resource: String(item.client_id ?? ''),
   })), [filteredItems])
 
-  const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {
+  const { filteredFindings } = useFindingsWorkbench(listFindings, {
     csvPrefix: 'weissman-hitl-queue',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
@@ -322,7 +323,7 @@ export default function CouncilHitlQueue() {
           <span className="text-green-400 mt-0.5">🔒</span>
           <div>
             <p className="text-[12px] font-semibold text-green-300">{t('pages.councilHitlQueue.safety_title')}</p>
-            <p className="text-[11px] text-white/40 mt-0.5">
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
               {t('pages.councilHitlQueue.safety_body')}
             </p>
           </div>
@@ -330,30 +331,30 @@ export default function CouncilHitlQueue() {
 
         <div className="flex gap-1 flex-wrap items-center">
           {STATUS_TABS.map(tab => (
-            <button
+            <Button variant="unstyled"
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 rounded-xl text-[11px] font-mono uppercase border transition-all ${
                 activeTab === tab
                   ? 'bg-cyan-900/20 border-cyan-500/40 text-cyan-300'
-                  : 'border-white/10 text-white/40 hover:border-white/20 hover:text-white/60'
+                  : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-tertiary)]'
               }`}
             >
               {t(`pages.councilHitlQueue.${TAB_I18N[tab]}`)}
-            </button>
+            </Button>
           ))}
         </div>
 
         <div className="relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('pages.councilHitlQueue.search_placeholder')}
             aria-label={t('pages.councilHitlQueue.search_placeholder')}
-            className="w-full rounded-xl bg-white/5 border border-white/10 ps-10 pe-3 py-2 text-[12px] text-white/70 placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+            className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] ps-10 pe-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
           />
         </div>
 

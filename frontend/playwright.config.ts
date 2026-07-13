@@ -11,6 +11,12 @@ const UI_DEV_BASE = (process.env.PLAYWRIGHT_UI_DEV === '1' ? 'http://127.0.0.1:5
 const IS_LIVE = process.env.PLAYWRIGHT_LIVE === '1'
 const AUTH_FILE = path.join(__dirname, 'tests-e2e', '.auth', 'admin.json')
 
+// Escape hatch for sandboxes where the pinned Playwright browser build differs
+// from the pre-installed one: point at an explicit Chromium executable. Unset in
+// CI, so default browser resolution is unchanged there.
+const PW_EXECUTABLE_PATH = process.env.PW_EXECUTABLE_PATH || undefined
+const launchOptions = PW_EXECUTABLE_PATH ? { executablePath: PW_EXECUTABLE_PATH } : undefined
+
 /**
  * Two projects:
  *  - chromium-mock: Vite dev server + API mocks (fast UI smoke)
@@ -33,11 +39,12 @@ export default defineConfig({
           use: {
             baseURL: UI_DEV_BASE,
             ...devices['Desktop Chrome'],
+            launchOptions,
           },
         },
         {
           name: 'chromium-live',
-          testMatch: /live-(journey|ui-crawl)\.spec\.ts/,
+          testMatch: /live-(journey|ui-crawl|feature)\.spec\.ts/,
           dependencies: ['live-setup'],
           use: {
             baseURL: UI_DEV_BASE,
@@ -46,19 +53,21 @@ export default defineConfig({
             screenshot: 'only-on-failure',
             video: 'retain-on-failure',
             ...devices['Desktop Chrome'],
+            launchOptions,
           },
         },
       ]
     : [
         {
           name: 'chromium-mock',
-          testIgnore: /live-journey\.spec\.ts/,
+          testIgnore: /live-(journey|feature)\.spec\.ts/,
           use: {
             baseURL: MOCK_BASE,
             trace: 'on-first-retry',
             screenshot: 'only-on-failure',
             video: 'retain-on-failure',
             ...devices['Desktop Chrome'],
+            launchOptions,
           },
         },
       ],

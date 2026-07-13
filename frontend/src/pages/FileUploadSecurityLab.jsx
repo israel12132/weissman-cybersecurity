@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'file_upload'
 const ACCENT = '#f97316'
@@ -205,7 +206,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 const ATTACK_REFERENCE = [
@@ -223,7 +224,6 @@ const ATTACK_REFERENCE = [
 ]
 
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
-function sevValue(s) { return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0 }
 function csvToArray(s) { return String(s || '').split(/[\n,]+/).map((x) => x.trim()).filter(Boolean) }
 function isSummary(f) { return f && (f.category === 'posture_summary' || f.summary === true || typeof f.posture_score === 'number') }
 
@@ -232,23 +232,23 @@ function EvidenceView({ evidence }) {
   const checks = Array.isArray(evidence.checks) ? evidence.checks : []
   const scalars = Object.entries(evidence).filter(([k]) => k !== 'checks')
   return (
-    <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-3 space-y-2">
+    <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-3 space-y-2">
       {scalars.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
           {scalars.map(([k, v]) => (
             <div key={k} className="flex items-start gap-2 text-[11px] font-mono">
-              <span className="text-white/35 shrink-0">{k}</span>
-              <span className="text-white/70 break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+              <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+              <span className="text-[var(--text-secondary)] break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
       )}
       {checks.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/5">
+        <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
-              <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '·'}</span>
-              <span className="text-white/60">{c.name}</span>
+              <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '·'}</span>
+              <span className="text-[var(--text-tertiary)]">{c.name}</span>
             </div>
           ))}
         </div>
@@ -264,21 +264,21 @@ function FindingCard({ f }) {
   const controls = Array.isArray(f.controls) ? f.controls : []
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             {f.remediation && (
               <div className="mt-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-2.5">
                 <div className="text-[10px] font-mono uppercase text-emerald-400/70 mb-1">Remediation</div>
@@ -288,7 +288,7 @@ function FindingCard({ f }) {
             {controls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {controls.map((c) => (
-                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/50 border border-white/10">{c}</span>
+                  <span key={c} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)]">{c}</span>
                 ))}
               </div>
             )}
@@ -306,7 +306,6 @@ function Scorecard({ summary, t }) {
   const grade = summary.grade ?? summary.evidence?.grade ?? 'A'
   const color = gradeColor(grade)
   const ev = summary.evidence || {}
-  const bd = ev.severity_breakdown || {}
   const cats = summary.weak_categories || ev.weak_categories || []
   const dims = summary.posture_dimensions || ev.posture_dimensions || {}
   const paths = summary.attack_paths || ev.attack_paths || []
@@ -321,7 +320,7 @@ function Scorecard({ summary, t }) {
   const remediationUrgency = summary.remediation_urgency ?? ev.remediation_urgency
   const tierColor = { Catastrophic: '#ef4444', Severe: '#fb923c', Elevated: '#fbbf24', Moderate: '#38bdf8', Low: '#34d399' }[enterpriseTier] || '#94a3b8'
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 mb-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex items-center gap-5 shrink-0">
           <div className="relative w-28 h-28 shrink-0">
@@ -331,14 +330,14 @@ function Scorecard({ summary, t }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-3xl font-bold" style={{ color }}>{score}</span>
-              <span className="text-[10px] font-mono text-white/40">/ 100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t('pages.fileUploadLab.upload_posture', 'Upload Posture')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.fileUploadLab.upload_posture', 'Upload Posture')}</div>
             <div className="text-5xl font-black leading-none" style={{ color }}>{grade}</div>
             {endpoints != null && (
-              <div className="mt-1.5 text-[10px] font-mono text-white/40">{endpoints} endpoint(s) probed</div>
+              <div className="mt-1.5 text-[10px] font-mono text-[var(--text-muted)]">{endpoints} endpoint(s) probed</div>
             )}
             {blast != null && (
               <div className="mt-1 text-[10px] font-mono text-rose-300/90">Blast radius: {blast}/100</div>
@@ -363,7 +362,7 @@ function Scorecard({ summary, t }) {
         </div>
         <div className="flex-1 space-y-4">
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.fileUploadLab.posture_dimensions', 'Posture dimensions')}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.posture_dimensions', 'Posture dimensions')}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {POSTURE_DIMS.map((d) => {
                 const raw = dims[d.key]
@@ -371,12 +370,12 @@ function Scorecard({ summary, t }) {
                 const n = Number(raw)
                 const barColor = n >= 80 ? '#34d399' : n >= 60 ? '#fbbf24' : '#fb7185'
                 return (
-                  <div key={d.key} className="rounded-lg border border-white/5 bg-black/30 px-2.5 py-2">
+                  <div key={d.key} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-2.5 py-2">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-[10px] font-mono text-white/60">{d.label}</span>
+                      <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{d.label}</span>
                       <span className="text-[10px] font-mono font-bold" style={{ color: barColor }}>{n}</span>
                     </div>
-                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-1 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${n}%`, backgroundColor: barColor }} />
                     </div>
                   </div>
@@ -387,14 +386,14 @@ function Scorecard({ summary, t }) {
         </div>
       </div>
       {paths.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.fileUploadLab.attack_paths', 'Attack paths')}</div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.attack_paths', 'Attack paths')}</div>
           <div className="space-y-2">
             {paths.map((p, i) => (
               <div key={i} className="rounded-lg border border-orange-500/20 bg-orange-500/5 px-3 py-2">
                 <div className="text-[11px] font-mono text-orange-300 font-bold">{p.title}</div>
                 {Array.isArray(p.stages) && (
-                  <div className="text-[10px] font-mono text-white/45 mt-1">{p.stages.join(' → ')}</div>
+                  <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{p.stages.join(' → ')}</div>
                 )}
               </div>
             ))}
@@ -406,26 +405,26 @@ function Scorecard({ summary, t }) {
           <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400/80 mb-2">{t('pages.fileUploadLab.toxic_combinations', 'Toxic combinations')}</div>
           <div className="space-y-2">
             {toxic.map((tx, i) => (
-              <div key={i} className="rounded-lg border border-rose-500/30 bg-rose-950/20 px-3 py-2">
+              <div role="alert" key={i} className="rounded-lg border border-rose-500/30 bg-rose-950/20 px-3 py-2">
                 <div className="text-[11px] font-mono text-rose-300 font-bold">{tx.name}</div>
-                <div className="text-[10px] font-mono text-white/50 mt-1">{tx.rationale}</div>
+                <div className="text-[10px] font-mono text-[var(--text-tertiary)] mt-1">{tx.rationale}</div>
               </div>
             ))}
           </div>
         </div>
       )}
       {coverage && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.fileUploadLab.probe_coverage', 'Probe coverage manifest')}</div>
-          <pre className="text-[10px] font-mono text-white/45 bg-black/40 rounded-lg p-3 overflow-x-auto max-h-40">{JSON.stringify(coverage, null, 2)}</pre>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.probe_coverage', 'Probe coverage manifest')}</div>
+          <pre className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-2)] rounded-lg p-3 overflow-x-auto max-h-40">{JSON.stringify(coverage, null, 2)}</pre>
         </div>
       )}
       {roadmap.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{t('pages.fileUploadLab.hardening_roadmap', 'Hardening roadmap')}</div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.hardening_roadmap', 'Hardening roadmap')}</div>
           <ol className="space-y-1">
             {roadmap.map((r, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-white/60">
+              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
                 <span className="text-orange-400">{i + 1}.</span>{r}
               </li>
             ))}
@@ -433,10 +432,10 @@ function Scorecard({ summary, t }) {
         </div>
       )}
       {cats.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-mono text-white/40">{t('pages.fileUploadLab.weak_areas', 'Weak areas:')}</span>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.fileUploadLab.weak_areas', 'Weak areas:')}</span>
           {cats.map((c) => (
-            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60">
+            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)]">
               {(CATEGORY_META[c] || CATEGORY_META.other).icon} {(CATEGORY_META[c] || CATEGORY_META.other).label}
             </span>
           ))}
@@ -600,67 +599,67 @@ export default function FileUploadSecurityLab() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-orange-500/30 text-orange-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-orange-500/30 text-orange-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.fileUploadLab.client', 'Client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.fileUploadLab.client', 'Client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40 min-w-[180px]">
               <option value="">{t('pages.fileUploadLab.select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.fileUploadLab.target_url', 'Target URL')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.fileUploadLab.target_url', 'Target URL')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="https://example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.fileUploadLab.intensity', 'Intensity')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.fileUploadLab.intensity', 'Intensity')}</label>
             <select value={intensity} onChange={(e) => setIntensity(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40">
               <option value="light">{t('pages.fileUploadLab.intensity_light', 'Light')}</option>
               <option value="normal">{t('pages.fileUploadLab.intensity_normal', 'Normal')}</option>
               <option value="aggressive">{t('pages.fileUploadLab.intensity_aggressive', 'Aggressive')}</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.fileUploadLab.stack_pack', 'Platform pack')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.fileUploadLab.stack_pack', 'Platform pack')}</label>
             <select value={stackPack} onChange={(e) => setStackPack(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-orange-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-orange-500/40">
               {STACK_PACKS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}{lastRun ? ` · ${lastRun}` : ''}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}{lastRun ? ` · ${lastRun}` : ''}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             {status === 'running' ? t('pages.fileUploadLab.scanning', '⟳ Scanning…') : t('pages.fileUploadLab.run_scan', '▶ Run Upload Scan')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-all">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-all">
             {showParams ? t('pages.fileUploadLab.hide_params', '▾ Parameters') : t('pages.fileUploadLab.show_params', '▸ Parameters')}
-          </button>
+          </Button>
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">{t('pages.fileUploadLab.bypass_matrix', 'Bypass matrix')}</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.bypass_matrix', 'Bypass matrix')}</p>
                   {TOGGLES.map((tg) => (
-                    <label key={tg.key} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10">
+                    <label key={tg.key} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--row-hover-bg)]">
                       <span className="min-w-0">
-                        <span className="block text-[11px] font-mono text-white/80">{tg.label}</span>
-                        <span className="block text-[10px] font-mono text-white/35 truncate">{tg.hint}</span>
+                        <span className="block text-[11px] font-mono text-[var(--text-secondary)]">{tg.label}</span>
+                        <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate">{tg.hint}</span>
                       </span>
                       <input type="checkbox" checked={toggles[tg.key]} onChange={(e) => setToggles((prev) => ({ ...prev, [tg.key]: e.target.checked }))} className="accent-orange-500 shrink-0" />
                     </label>
@@ -668,65 +667,65 @@ export default function FileUploadSecurityLab() {
                 </div>
                 <div className="space-y-3">
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.upload_paths', 'Upload paths')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.upload_paths', 'Upload paths')}</span>
                     <textarea value={uploadPaths} onChange={(e) => setUploadPaths(e.target.value)} rows={5}
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40 resize-y" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40 resize-y" />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.field_names', 'Field names')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.field_names', 'Field names')}</span>
                     <input value={fieldNames} onChange={(e) => setFieldNames(e.target.value)}
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40" />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.extra_endpoints', 'Extra endpoints')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.extra_endpoints', 'Extra endpoints')}</span>
                     <textarea value={extraEndpoints} onChange={(e) => setExtraEndpoints(e.target.value)} rows={2} placeholder="https://example.com/custom/upload"
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40 resize-y" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40 resize-y" />
                   </label>
                 </div>
                 <div className="space-y-3">
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.auth_cookie', 'Session cookie')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.auth_cookie', 'Session cookie')}</span>
                     <input value={authCookie} onChange={(e) => setAuthCookie(e.target.value)} placeholder="session=..."
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40" />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.auth_header', 'Authorization header')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.auth_header', 'Authorization header')}</span>
                     <input value={authHeader} onChange={(e) => setAuthHeader(e.target.value)} placeholder="Bearer ..."
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40" />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.canary_token', 'Canary token')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.canary_token', 'Canary token')}</span>
                     <input value={canaryToken} onChange={(e) => setCanaryToken(e.target.value)} placeholder="WZUPLOAD9137BENIGN"
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40" />
                   </label>
                   <label className="block">
-                    <span className="text-[10px] font-mono uppercase text-white/40">{t('pages.fileUploadLab.oast_host', 'OAST callback host (optional)')}</span>
+                    <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">{t('pages.fileUploadLab.oast_host', 'OAST callback host (optional)')}</span>
                     <input value={oastHost} onChange={(e) => setOastHost(e.target.value)} placeholder="your-id.oast.example.com"
-                      className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1.5 text-[11px] font-mono text-white/80 focus:outline-none focus:border-orange-500/40" />
+                      className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1.5 text-[11px] font-mono text-[var(--text-secondary)] focus:outline-none focus:border-orange-500/40" />
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <label className="block">
-                      <span className="text-[10px] font-mono uppercase text-white/40">Timeout ms</span>
+                      <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">Timeout ms</span>
                       <input type="number" value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                        className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1 text-[11px] font-mono text-white/80" />
+                        className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] font-mono uppercase text-white/40">Concurrency</span>
+                      <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">Concurrency</span>
                       <input type="number" value={concurrency} onChange={(e) => setConcurrency(e.target.value)}
-                        className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1 text-[11px] font-mono text-white/80" />
+                        className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] font-mono uppercase text-white/40">Max endpoints</span>
+                      <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">Max endpoints</span>
                       <input type="number" value={maxEndpoints} onChange={(e) => setMaxEndpoints(e.target.value)}
-                        className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1 text-[11px] font-mono text-white/80" />
+                        className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] font-mono uppercase text-white/40">Max combos</span>
+                      <span className="text-[10px] font-mono uppercase text-[var(--text-muted)]">Max combos</span>
                       <input type="number" value={maxCombos} onChange={(e) => setMaxCombos(e.target.value)}
-                        className="mt-1 w-full bg-black/50 border border-white/10 rounded-md px-2 py-1 text-[11px] font-mono text-white/80" />
+                        className="mt-1 w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-md px-2 py-1 text-[11px] font-mono text-[var(--text-secondary)]" />
                     </label>
                   </div>
-                  <label className="flex items-center gap-2 text-[11px] font-mono text-white/60 cursor-pointer">
+                  <label className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-tertiary)] cursor-pointer">
                     <input type="checkbox" checked={includeInfo} onChange={(e) => setIncludeInfo(e.target.checked)} className="accent-orange-500" />
                     {t('pages.fileUploadLab.include_info', 'Include info-level discovery findings')}
                   </label>
@@ -738,13 +737,13 @@ export default function FileUploadSecurityLab() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-        <div className="lg:col-span-1 rounded-2xl bg-black/30 border border-white/10 p-4">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">{t('pages.fileUploadLab.attack_reference', 'Attack reference')}</p>
+        <div className="lg:col-span-1 rounded-2xl bg-[var(--table-surface)] border border-[var(--border-default)] p-4">
+          <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t('pages.fileUploadLab.attack_reference', 'Attack reference')}</p>
           <div className="space-y-2">
             {ATTACK_REFERENCE.map((a) => (
-              <div key={a.id} className="rounded-lg border border-white/5 bg-black/30 px-2.5 py-2">
+              <div key={a.id} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--table-surface)] px-2.5 py-2">
                 <div className="text-[10px] font-mono text-orange-300">{a.id}</div>
-                <div className="text-[10px] font-mono text-white/50 mt-0.5">{a.desc}</div>
+                <div className="text-[10px] font-mono text-[var(--text-tertiary)] mt-0.5">{a.desc}</div>
               </div>
             ))}
           </div>

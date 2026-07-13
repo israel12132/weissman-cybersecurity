@@ -5,7 +5,7 @@
  * @deprecated Import ToastViewport from '../ui/Toaster' for new code; this wrapper
  * remains for TelemetryContext consumers inside Cockpit.
  */
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { useTelemetry } from '../../context/TelemetryContext'
 import { ToastViewport, severityToVariant } from '../ui/Toaster'
 

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useEngineC2Control } from '../EngineC2Boundary'
+import Button from '../../components/ui/Button'
 
 export default function KillSwitchBar({ className = '' }) {
   const { t } = useTranslation()
@@ -25,22 +26,22 @@ export default function KillSwitchBar({ className = '' }) {
           <span className="text-[11px] font-mono text-rose-300">
             {t('engineC2.killed')} — {killReason}
           </span>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={resetKill}
             className="ml-auto px-3 py-1 rounded-lg border border-white/15 text-[10px] font-mono uppercase text-white/70 hover:bg-white/5"
           >
             {t('engineC2.reset_kill')}
-          </button>
+          </Button>
         </>
       ) : (
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={() => triggerKill('operator_emergency_stop')}
           className="ml-auto px-4 py-1.5 rounded-lg border border-rose-500/40 bg-rose-900/30 text-[10px] font-mono uppercase text-rose-200 hover:bg-rose-900/50 transition-colors"
         >
           {t('engineC2.emergency_stop')}
-        </button>
+        </Button>
       )}
     </div>
   )

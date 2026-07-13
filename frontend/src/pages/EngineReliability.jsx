@@ -8,7 +8,9 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import EngineRealityBadge, { REALITY_KIND_META, EngineRealitySummary } from '../components/EngineRealityBadge'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
+import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { api } from '../utils/apiFetch'
+import Button from '../components/ui/Button'
 
 const KIND_FILTERS = ['all', 'real_probe', 'alias', 'agent_required', 'special']
 
@@ -39,9 +41,9 @@ function severityFromRow(r) {
 
 function StatCard({ label, value, tone, icon, hint }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4" title={hint}>
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4" title={hint}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
         {icon}
       </div>
       <div className="text-2xl font-bold" style={tone ? { color: tone } : { color: '#fff' }}>
@@ -77,10 +79,8 @@ export default function EngineReliability() {
     loadTelem()
   }, [loadTelem])
 
-  useEffect(() => {
-    const id = setInterval(loadTelem, 8000)
-    return () => clearInterval(id)
-  }, [loadTelem])
+  // Refresh telemetry every 8s, skipping ticks while the tab is hidden.
+  useVisiblePolling(loadTelem, 8000)
 
   const refreshAll = useCallback(() => {
     refreshCaps()
@@ -167,7 +167,7 @@ export default function EngineReliability() {
     >
       <div className="space-y-6">
         <div className="space-y-2 max-w-2xl">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-[var(--text-tertiary)]">
             {t('pages.engineReliability.subtitle', { })}
           </p>
           <EngineRealitySummary compact />
@@ -181,7 +181,7 @@ export default function EngineReliability() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={8} />
           </div>
         ) : (
@@ -241,8 +241,8 @@ export default function EngineReliability() {
             )}
 
             {Object.keys(legend).length > 0 && (
-              <details className="bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-xs text-gray-400">
-                <summary className="cursor-pointer font-mono uppercase tracking-wider text-gray-500 select-none">
+              <details className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-lg px-4 py-3 text-xs text-[var(--text-tertiary)]">
+                <summary className="cursor-pointer font-mono uppercase tracking-wider text-[var(--text-muted)] select-none">
                   {t('pages.engineReliability.legend')}
                 </summary>
                 <ul className="mt-3 space-y-1.5 font-mono">
@@ -257,25 +257,25 @@ export default function EngineReliability() {
             )}
 
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-lg p-1">
+              <div className="flex items-center gap-1.5 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg p-1">
                 {KIND_FILTERS.map((k) => (
-                  <button
+                  <Button variant="unstyled"
                     key={k}
                     type="button"
                     onClick={() => setKindFilter(k)}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
                       kindFilter === k
                         ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                        : 'text-gray-400 hover:text-white'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     {k === 'all'
                       ? t('pages.engineReliability.all')
                       : (REALITY_KIND_META[k]?.label ?? k)}
-                  </button>
+                  </Button>
                 ))}
               </div>
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-[var(--text-tertiary)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={onlyRuns}
@@ -284,7 +284,7 @@ export default function EngineReliability() {
                 />
                 {t('pages.engineReliability.only_runs')}
               </label>
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-[var(--text-tertiary)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={onlyRemote}
@@ -293,7 +293,7 @@ export default function EngineReliability() {
                 />
                 {t('pages.engineReliability.only_remote')}
               </label>
-              <span className="text-[11px] font-mono text-gray-500 ml-auto">
+              <span className="text-[11px] font-mono text-[var(--text-muted)] ml-auto">
                 {rows.length} {t('pages.engineReliability.shown')}
                 {telemLoading && !telem ? ' · telemetry…' : ''}
               </span>
@@ -317,12 +317,12 @@ export default function EngineReliability() {
                 if (!r) return null
                 const h = r.health
                 return (
-                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-black/30 px-4 py-2.5 hover:bg-white/[0.03]">
+                  <div key={r.id} className="rounded-lg border border-white/[0.06] bg-[var(--table-surface)] px-4 py-2.5 hover:bg-[var(--row-hover-bg)]">
                     <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                      <div className="min-w-[180px] flex-1 font-mono text-white/85 text-xs">
+                      <div className="min-w-[180px] flex-1 font-mono text-[var(--text-primary)] text-xs">
                         {r.id}
                         {r.canonical && (
-                          <span className="text-gray-500"> → {r.canonical}</span>
+                          <span className="text-[var(--text-muted)]"> → {r.canonical}</span>
                         )}
                       </div>
                       <div className="shrink-0">
@@ -335,7 +335,7 @@ export default function EngineReliability() {
                           <WifiOff className="w-3.5 h-3.5 text-amber-500/80 inline-block" title="Agent required" />
                         )}
                       </div>
-                      <div className="font-mono text-xs text-white/70 text-right w-12">{h?.total_runs ?? '—'}</div>
+                      <div className="font-mono text-xs text-[var(--text-secondary)] text-right w-12">{h?.total_runs ?? '—'}</div>
                       <div className="font-mono text-xs text-right w-12" style={{ color: h?.recovered_runs ? '#34d399' : '#6b7280' }}>
                         {h?.recovered_runs ?? '—'}
                       </div>
@@ -350,13 +350,13 @@ export default function EngineReliability() {
                                 className="inline-block w-2 h-2 rounded-full shrink-0"
                                 style={{ backgroundColor: statusColor(h.last_status) }}
                               />
-                              <span className="text-xs text-white/60">{h.last_status}</span>
-                              <span className="text-[10px] font-mono text-gray-500">
+                              <span className="text-xs text-[var(--text-tertiary)]">{h.last_status}</span>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
                                 {h.last_attempts}× · {h.last_elapsed_ms}ms
                               </span>
                             </span>
                             {h.last_strategy && (
-                              <span className="text-[10px] font-mono text-gray-600 truncate max-w-[220px]" title={h.last_strategy}>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[220px]" title={h.last_strategy}>
                                 {h.last_strategy}
                               </span>
                             )}
@@ -365,10 +365,10 @@ export default function EngineReliability() {
                                 {h.last_error}
                               </span>
                             )}
-                            <span className="text-[9px] font-mono text-gray-600">{formatTs(h.updated_ts)}</span>
+                            <span className="text-[9px] font-mono text-[var(--text-muted)]">{formatTs(h.updated_ts)}</span>
                           </div>
                         ) : (
-                          <span className="text-xs text-gray-600">{t('pages.engineReliability.never_run')}</span>
+                          <span className="text-xs text-[var(--text-muted)]">{t('pages.engineReliability.never_run')}</span>
                         )}
                       </div>
                     </div>

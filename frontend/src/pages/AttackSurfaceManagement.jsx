@@ -1,7 +1,8 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -9,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'asm'
 const ACCENT = '#22d3ee'
@@ -16,33 +18,33 @@ const ACCENT = '#22d3ee'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SEVERITY_META = {
-  critical: { color: '#ef4444', label: 'Critical' },
-  high: { color: '#f97316', label: 'High' },
-  medium: { color: '#f59e0b', label: 'Medium' },
-  low: { color: '#22d3ee', label: 'Low' },
-  info: { color: '#6b7280', label: 'Info' },
+  critical: { color: '#ef4444', labelKey: 'pages.attackSurfaceManagement.severity_critical' },
+  high: { color: '#f97316', labelKey: 'pages.attackSurfaceManagement.severity_high' },
+  medium: { color: '#f59e0b', labelKey: 'pages.attackSurfaceManagement.severity_medium' },
+  low: { color: '#22d3ee', labelKey: 'pages.attackSurfaceManagement.severity_low' },
+  info: { color: '#6b7280', labelKey: 'pages.attackSurfaceManagement.severity_info' },
 }
 
 const ASSET_META = {
-  inventory: { icon: '🗂', label: 'Asset Inventory' },
-  dns: { icon: '🧭', label: 'DNS Intelligence' },
-  email_posture: { icon: '✉️', label: 'Email Spoofing' },
-  port: { icon: '🔌', label: 'Service Exposure' },
-  banner: { icon: '📡', label: 'Service Banners' },
-  http_posture: { icon: '🌐', label: 'HTTP Posture' },
-  tls_posture: { icon: '🔒', label: 'TLS / Certificates' },
-  cloud_footprint: { icon: '☁️', label: 'Cloud Footprint' },
-  fingerprint: { icon: '🧬', label: 'Technology Stack' },
-  cloud_hunter: { icon: '🎯', label: 'Subdomain Takeover' },
-  shadow_it: { icon: '👻', label: 'Shadow IT' },
-  attack_path: { icon: '⛓', label: 'Attack Path' },
-  wellknown: { icon: '📋', label: 'Well-Known URIs' },
-  rdap: { icon: '🏛', label: 'RDAP / Registration' },
-  asn: { icon: '🛰', label: 'ASN Attribution' },
-  cors: { icon: '🔀', label: 'CORS Policy' },
-  sensitive_path: { icon: '🚨', label: 'Sensitive Paths' },
-  robots: { icon: '🤖', label: 'robots.txt Intel' },
-  report: { icon: '📊', label: 'Summary' },
+  inventory: { icon: '🗂', labelKey: 'pages.attackSurfaceManagement.asset_inventory' },
+  dns: { icon: '🧭', labelKey: 'pages.attackSurfaceManagement.asset_dns' },
+  email_posture: { icon: '✉️', labelKey: 'pages.attackSurfaceManagement.asset_email_posture' },
+  port: { icon: '🔌', labelKey: 'pages.attackSurfaceManagement.asset_port' },
+  banner: { icon: '📡', labelKey: 'pages.attackSurfaceManagement.asset_banner' },
+  http_posture: { icon: '🌐', labelKey: 'pages.attackSurfaceManagement.asset_http_posture' },
+  tls_posture: { icon: '🔒', labelKey: 'pages.attackSurfaceManagement.asset_tls_posture' },
+  cloud_footprint: { icon: '☁️', labelKey: 'pages.attackSurfaceManagement.asset_cloud_footprint' },
+  fingerprint: { icon: '🧬', labelKey: 'pages.attackSurfaceManagement.asset_fingerprint' },
+  cloud_hunter: { icon: '🎯', labelKey: 'pages.attackSurfaceManagement.asset_cloud_hunter' },
+  shadow_it: { icon: '👻', labelKey: 'pages.attackSurfaceManagement.asset_shadow_it' },
+  attack_path: { icon: '⛓', labelKey: 'pages.attackSurfaceManagement.asset_attack_path' },
+  wellknown: { icon: '📋', labelKey: 'pages.attackSurfaceManagement.asset_wellknown' },
+  rdap: { icon: '🏛', labelKey: 'pages.attackSurfaceManagement.asset_rdap' },
+  asn: { icon: '🛰', labelKey: 'pages.attackSurfaceManagement.asset_asn' },
+  cors: { icon: '🔀', labelKey: 'pages.attackSurfaceManagement.asset_cors' },
+  sensitive_path: { icon: '🚨', labelKey: 'pages.attackSurfaceManagement.asset_sensitive_path' },
+  robots: { icon: '🤖', labelKey: 'pages.attackSurfaceManagement.asset_robots' },
+  report: { icon: '📊', labelKey: 'pages.attackSurfaceManagement.asset_report' },
 }
 
 // All knobs map 1:1 to EngineRunContext::job_params keys read by asm_engine::run_asm_result_ctx.
@@ -77,25 +79,25 @@ const DEFAULT_PARAMS = {
 }
 
 const TOGGLES = [
-  { key: 'port_scan', label: 'Service / Port exposure', hint: 'TCP probe of exposed ports & services' },
-  { key: 'banner_grab', label: 'TCP service banners', hint: 'Post-connect banner reads (SSH, HTTP, DB protocols)' },
-  { key: 'subdomain_enum', label: 'Subdomain discovery', hint: 'Passive CT + active DNS brute-force' },
-  { key: 'dns_intel', label: 'DNS & email posture', hint: 'A/AAAA/MX/NS/TXT + SPF/DMARC' },
-  { key: 'dkim_probe', label: 'DKIM selector discovery', hint: 'Live TXT lookups for common DKIM selectors' },
-  { key: 'dns_hardening', label: 'DNS hardening', hint: 'Wildcard DNS + CAA coverage gaps' },
-  { key: 'rdap_intel', label: 'RDAP registration intel', hint: 'Registrar, NS delegation, expiry/hold status' },
-  { key: 'ip_asn_enrichment', label: 'IP → ASN enrichment', hint: 'Team Cymru origin lookup for apex A records' },
-  { key: 'http_posture', label: 'HTTP security posture', hint: 'Security headers, disclosure, cookies' },
-  { key: 'cors_probe', label: 'CORS misconfiguration', hint: 'Reflective Origin / wildcard credential risks' },
-  { key: 'sensitive_path_probe', label: 'Sensitive path exposure', hint: 'Read-only probes for .env, backups, actuators' },
-  { key: 'robots_harvest', label: 'robots.txt intelligence', hint: 'Surfaces disallowed admin/backup paths' },
-  { key: 'cleartext_http_probe', label: 'Cleartext HTTP', hint: 'Detects HTTP without HTTPS upgrade' },
-  { key: 'wellknown_probe', label: 'Well-known URIs', hint: 'security.txt and RFC 9116 surfaces' },
-  { key: 'tls_posture', label: 'TLS / certificate posture', hint: 'Expiry, self-signed, weak protocols' },
-  { key: 'cloud_hunter', label: 'Subdomain takeover + storage', hint: 'Dangling CNAMEs, exposed buckets' },
-  { key: 'shadow_it_scan', label: 'Shadow IT detection', hint: 'dev/staging/admin/vpn host patterns' },
-  { key: 'tech_fingerprint', label: 'Technology fingerprint', hint: 'Detect frameworks & components' },
-  { key: 'attack_path_correlation', label: 'Attack path correlation', hint: 'Toxic combination synthesis (CORS+leaks, etc.)' },
+  { key: 'port_scan', labelKey: 'pages.attackSurfaceManagement.toggle_port_scan_label', hintKey: 'pages.attackSurfaceManagement.toggle_port_scan_hint' },
+  { key: 'banner_grab', labelKey: 'pages.attackSurfaceManagement.toggle_banner_grab_label', hintKey: 'pages.attackSurfaceManagement.toggle_banner_grab_hint' },
+  { key: 'subdomain_enum', labelKey: 'pages.attackSurfaceManagement.toggle_subdomain_enum_label', hintKey: 'pages.attackSurfaceManagement.toggle_subdomain_enum_hint' },
+  { key: 'dns_intel', labelKey: 'pages.attackSurfaceManagement.toggle_dns_intel_label', hintKey: 'pages.attackSurfaceManagement.toggle_dns_intel_hint' },
+  { key: 'dkim_probe', labelKey: 'pages.attackSurfaceManagement.toggle_dkim_probe_label', hintKey: 'pages.attackSurfaceManagement.toggle_dkim_probe_hint' },
+  { key: 'dns_hardening', labelKey: 'pages.attackSurfaceManagement.toggle_dns_hardening_label', hintKey: 'pages.attackSurfaceManagement.toggle_dns_hardening_hint' },
+  { key: 'rdap_intel', labelKey: 'pages.attackSurfaceManagement.toggle_rdap_intel_label', hintKey: 'pages.attackSurfaceManagement.toggle_rdap_intel_hint' },
+  { key: 'ip_asn_enrichment', labelKey: 'pages.attackSurfaceManagement.toggle_ip_asn_enrichment_label', hintKey: 'pages.attackSurfaceManagement.toggle_ip_asn_enrichment_hint' },
+  { key: 'http_posture', labelKey: 'pages.attackSurfaceManagement.toggle_http_posture_label', hintKey: 'pages.attackSurfaceManagement.toggle_http_posture_hint' },
+  { key: 'cors_probe', labelKey: 'pages.attackSurfaceManagement.toggle_cors_probe_label', hintKey: 'pages.attackSurfaceManagement.toggle_cors_probe_hint' },
+  { key: 'sensitive_path_probe', labelKey: 'pages.attackSurfaceManagement.toggle_sensitive_path_probe_label', hintKey: 'pages.attackSurfaceManagement.toggle_sensitive_path_probe_hint' },
+  { key: 'robots_harvest', labelKey: 'pages.attackSurfaceManagement.toggle_robots_harvest_label', hintKey: 'pages.attackSurfaceManagement.toggle_robots_harvest_hint' },
+  { key: 'cleartext_http_probe', labelKey: 'pages.attackSurfaceManagement.toggle_cleartext_http_probe_label', hintKey: 'pages.attackSurfaceManagement.toggle_cleartext_http_probe_hint' },
+  { key: 'wellknown_probe', labelKey: 'pages.attackSurfaceManagement.toggle_wellknown_probe_label', hintKey: 'pages.attackSurfaceManagement.toggle_wellknown_probe_hint' },
+  { key: 'tls_posture', labelKey: 'pages.attackSurfaceManagement.toggle_tls_posture_label', hintKey: 'pages.attackSurfaceManagement.toggle_tls_posture_hint' },
+  { key: 'cloud_hunter', labelKey: 'pages.attackSurfaceManagement.toggle_cloud_hunter_label', hintKey: 'pages.attackSurfaceManagement.toggle_cloud_hunter_hint' },
+  { key: 'shadow_it_scan', labelKey: 'pages.attackSurfaceManagement.toggle_shadow_it_scan_label', hintKey: 'pages.attackSurfaceManagement.toggle_shadow_it_scan_hint' },
+  { key: 'tech_fingerprint', labelKey: 'pages.attackSurfaceManagement.toggle_tech_fingerprint_label', hintKey: 'pages.attackSurfaceManagement.toggle_tech_fingerprint_hint' },
+  { key: 'attack_path_correlation', labelKey: 'pages.attackSurfaceManagement.toggle_attack_path_correlation_label', hintKey: 'pages.attackSurfaceManagement.toggle_attack_path_correlation_hint' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -113,18 +115,18 @@ function gradeColor(grade) {
 
 function Toggle({ checked, onChange, disabled }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       role="switch"
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative shrink-0 w-10 h-5 rounded-full transition-all duration-300 disabled:opacity-40 ${
-        checked ? 'bg-cyan-500/40 shadow-[inset_0_0_8px_rgba(34,211,238,0.3)]' : 'bg-black/60 border border-white/10'
+        checked ? 'bg-cyan-500/40 shadow-[inset_0_0_8px_rgba(34,211,238,0.3)]' : 'bg-[var(--scrim)] border border-[var(--border-default)]'
       }`}
     >
       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-300 ${checked ? 'left-[22px]' : 'left-0.5'}`} />
-    </button>
+    </Button>
   )
 }
 
@@ -134,9 +136,9 @@ function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
       <div className="absolute top-0 inset-x-0 h-px opacity-60" style={{ background: `linear-gradient(90deg, transparent, ${accent}60, transparent)` }} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 mb-1.5">{label}</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-1.5">{label}</p>
           <p className="text-2xl font-bold text-white tracking-tight truncate">{value}</p>
-          {sub && <p className="text-[10px] font-mono text-white/35 mt-1 truncate">{sub}</p>}
+          {sub && <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1 truncate">{sub}</p>}
         </div>
         {icon && <span className="text-lg opacity-70 shrink-0">{icon}</span>}
       </div>
@@ -145,28 +147,30 @@ function MetricCard({ label, value, sub, accent = '#22d3ee', icon }) {
 }
 
 function ScoreRing({ score, grade }) {
+  const { t } = useTranslation()
   const color = gradeColor(grade)
   const deg = Math.round((Math.max(0, Math.min(100, score)) / 100) * 360)
   return (
-    <div className="relative w-36 h-36 shrink-0" title={`Attack Surface Score ${score}/100`}>
+    <div className="relative w-36 h-36 shrink-0" title={t('pages.attackSurfaceManagement.score_ring_tooltip', { score })}>
       <div
         className="absolute inset-0 rounded-full"
         style={{ background: `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.06) ${deg}deg)` }}
       />
-      <div className="absolute inset-[10px] rounded-full bg-[#0a0f1c] border border-white/10 flex flex-col items-center justify-center">
+      <div className="absolute inset-[10px] rounded-full bg-[#0a0f1c] border border-[var(--border-default)] flex flex-col items-center justify-center">
         <span className="text-4xl font-black" style={{ color }}>{grade}</span>
-        <span className="text-[11px] font-mono text-white/55">{score}/100</span>
+        <span className="text-[11px] font-mono text-[var(--text-tertiary)]">{score}/100</span>
       </div>
     </div>
   )
 }
 
 function SeverityBar({ counts }) {
+  const { t } = useTranslation()
   const order = ['critical', 'high', 'medium', 'low', 'info']
   const total = order.reduce((a, k) => a + (counts?.[k] ?? 0), 0) || 1
   return (
     <div className="space-y-2 w-full">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-black/50">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-3)]">
         {order.map((k) => {
           const c = counts?.[k] ?? 0
           if (!c) return null
@@ -177,7 +181,7 @@ function SeverityBar({ counts }) {
         {order.map((k) => (
           <span key={k} className="text-[11px] font-mono flex items-center gap-1.5" style={{ color: SEVERITY_META[k].color }}>
             <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: SEVERITY_META[k].color }} />
-            {counts?.[k] ?? 0} {SEVERITY_META[k].label}
+            {counts?.[k] ?? 0} {t(SEVERITY_META[k].labelKey)}
           </span>
         ))}
       </div>
@@ -186,17 +190,18 @@ function SeverityBar({ counts }) {
 }
 
 function AttackPathPanel({ paths }) {
+  const { t } = useTranslation()
   if (!paths?.length) return null
   return (
     <div className="rounded-2xl border border-rose-500/25 bg-gradient-to-br from-rose-950/20 to-black/50 p-5">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300/70 mb-3">⛓ Correlated attack paths</p>
+      <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300/70 mb-3">⛓ {t('pages.attackSurfaceManagement.header_correlated_attack_paths')}</p>
       <div className="space-y-2">
         {paths.map((p, i) => {
           const sev = (p.severity || 'critical').toLowerCase()
           return (
-            <div key={i} className="rounded-xl border border-rose-500/20 bg-black/40 px-4 py-3">
+            <div key={i} className="rounded-xl border border-rose-500/20 bg-[var(--bg-2)] px-4 py-3">
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-white/95">{p.title}</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">{p.title}</p>
                 <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded border" style={{ color: severityColor(sev), borderColor: `${severityColor(sev)}50` }}>{sev}</span>
               </div>
               {p.value && <p className="text-[10px] font-mono text-rose-200/50 mt-1">{p.value}</p>}
@@ -209,17 +214,18 @@ function AttackPathPanel({ paths }) {
 }
 
 function RemediationPanel({ queue }) {
+  const { t } = useTranslation()
   if (!queue?.length) return null
   return (
-    <div className="rounded-2xl border border-emerald-500/20 bg-black/40 p-5">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-300/70 mb-3">→ Priority remediation queue</p>
+    <div className="rounded-2xl border border-emerald-500/20 bg-[var(--bg-2)] p-5">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-300/70 mb-3">→ {t('pages.attackSurfaceManagement.header_remediation_queue')}</p>
       <ol className="space-y-2">
         {queue.map((item, i) => (
           <li key={i} className="flex gap-3 text-[12px] font-mono">
             <span className="text-emerald-400/80 shrink-0 w-5">{i + 1}.</span>
             <div className="min-w-0">
-              <p className="text-white/85">{item.title}</p>
-              {item.remediation && <p className="text-white/45 text-[11px] mt-0.5">{item.remediation}</p>}
+              <p className="text-[var(--text-primary)]">{item.title}</p>
+              {item.remediation && <p className="text-[var(--text-muted)] text-[11px] mt-0.5">{item.remediation}</p>}
             </div>
             <span className="text-[9px] uppercase shrink-0 ml-auto" style={{ color: severityColor(item.severity) }}>{item.severity}</span>
           </li>
@@ -230,10 +236,11 @@ function RemediationPanel({ queue }) {
 }
 
 function SubdomainInventory({ hosts }) {
+  const { t } = useTranslation()
   if (!hosts?.length) return null
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-5">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">🗂 Subdomain inventory ({hosts.length})</p>
+    <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-5">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">🗂 {t('pages.attackSurfaceManagement.header_subdomain_inventory')} ({hosts.length})</p>
       <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
         {hosts.map((h) => (
           <span key={h} className="text-[10px] font-mono px-2 py-1 rounded-lg bg-cyan-500/[0.06] border border-cyan-500/15 text-cyan-200/80">{h}</span>
@@ -244,15 +251,18 @@ function SubdomainInventory({ hosts }) {
 }
 
 function FindingCard({ f }) {
+  const { t } = useTranslation()
   const sev = (f.severity || 'info').toLowerCase()
-  const asset = ASSET_META[f.asset] ?? { icon: '◆', label: f.asset || 'Finding' }
+  const assetMeta = ASSET_META[f.asset]
+  const assetIcon = assetMeta?.icon ?? '◆'
+  const assetLabel = assetMeta ? t(assetMeta.labelKey) : (f.asset || t('pages.attackSurfaceManagement.finding_default_label'))
   return (
-    <div className="rounded-xl bg-black/40 border border-white/10 p-3.5 space-y-2 hover:border-white/20 transition-colors">
+    <div className="rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] p-3.5 space-y-2 hover:border-[var(--border-strong)] transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 min-w-0">
-          <span className="text-base shrink-0 mt-0.5">{asset.icon}</span>
+          <span className="text-base shrink-0 mt-0.5">{assetIcon}</span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white/95 leading-snug">{f.title || f.value}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug">{f.title || f.value}</p>
             {f.value && f.value !== f.title && (
               <p className="text-[11px] font-mono text-cyan-300/60 truncate">{f.value}</p>
             )}
@@ -265,14 +275,14 @@ function FindingCard({ f }) {
           {sev}
         </span>
       </div>
-      {f.description && <p className="text-[11px] text-white/55 font-mono leading-relaxed">{f.description}</p>}
+      {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
       {f.remediation && (
         <p className="text-[11px] text-emerald-300/70 font-mono leading-relaxed">
-          <span className="text-emerald-400/90">→ Fix: </span>{f.remediation}
+          <span className="text-emerald-400/90">→ {t('pages.attackSurfaceManagement.finding_fix_label')}: </span>{f.remediation}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
-        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-white/40 border border-white/[0.06]">{asset.label}</span>
+        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] border border-white/[0.06]">{assetLabel}</span>
         {f.mitre_attack && (
           <a
             href={`https://attack.mitre.org/techniques/${String(f.mitre_attack).replace('.', '/')}`}
@@ -290,6 +300,7 @@ function FindingCard({ f }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AttackSurfaceManagement() {
+  const { t } = useTranslation()
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const { postScan } = useCommandCenterScan(selectedClientId)
@@ -375,8 +386,8 @@ export default function AttackSurfaceManagement() {
   })
 
   const handleRun = useCallback(async () => {
-    if (!selectedClientId) { showToast('error', 'Select a client first'); return }
-    if (!target.trim()) { showToast('error', 'Enter a target domain or IP'); return }
+    if (!selectedClientId) { showToast('error', t('pages.attackSurfaceManagement.toast_select_client')); return }
+    if (!target.trim()) { showToast('error', t('pages.attackSurfaceManagement.toast_enter_target')); return }
     setStatus('running')
     setFindings([])
     try {
@@ -388,17 +399,17 @@ export default function AttackSurfaceManagement() {
       const { ok, data: d, status } = await postScan(body)
       if (!ok) {
         setStatus('error')
-        showToast('error', d.detail || d.error || `Scan failed (${status})`)
+        showToast('error', d.detail || d.error || t('pages.attackSurfaceManagement.toast_scan_failed', { status }))
         return
       }
       const jid = d.job_id ?? ''
-      showToast('info', `Attack-surface scan queued (job ${jid})`)
+      showToast('info', t('pages.attackSurfaceManagement.toast_scan_queued', { jid }))
       if (jid) { setJobId(jid); setShowConfig(false) } else setStatus('error')
     } catch (e) {
       setStatus('error')
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
-  }, [selectedClientId, target, params, showToast])
+  }, [selectedClientId, target, params, showToast, t])
 
   const assetTypes = useMemo(() => {
     const s = new Set(issues.map((f) => f.asset).filter(Boolean))
@@ -427,23 +438,23 @@ export default function AttackSurfaceManagement() {
     a.download = `easm-${report.host || target || 'scan'}-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    showToast('info', 'Exported attack-surface report JSON')
-  }, [report, issues, target, showToast])
+    showToast('info', t('pages.attackSurfaceManagement.toast_exported'))
+  }, [report, issues, target, showToast, t])
 
   const statusBadge = {
-    idle: { c: '#6b7280', t: 'Idle' },
-    running: { c: '#22d3ee', t: 'Scanning…' },
-    completed: { c: '#22c55e', t: 'Completed' },
-    error: { c: '#ef4444', t: 'Error' },
+    idle: { c: '#6b7280', t: t('pages.attackSurfaceManagement.status_idle') },
+    running: { c: '#22d3ee', t: t('pages.attackSurfaceManagement.status_scanning') },
+    completed: { c: '#22c55e', t: t('pages.attackSurfaceManagement.status_completed') },
+    error: { c: '#ef4444', t: t('pages.attackSurfaceManagement.status_error') },
   }[status]
 
   return (
     <PageShell
       hideHubParams
-      title="Attack Surface Management"
+      title={t('pages.attackSurfaceManagement.page_title')}
       badge="EASM"
       badgeColor={ACCENT}
-      subtitle="Agentless external attack-surface discovery & continuous exposure scoring — assets, services, TLS/HTTP posture, cloud footprint, and takeover risk."
+      subtitle={t('pages.attackSurfaceManagement.page_subtitle')}
       actions={(
         <ShellScanActions
           onRefresh={handleRefresh}
@@ -460,7 +471,7 @@ export default function AttackSurfaceManagement() {
             key={toast.id}
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl backdrop-blur-md ${
-              toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/85 border-cyan-500/30 text-cyan-200'
+              toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'
             }`}
           >
             {toast.msg}
@@ -469,42 +480,42 @@ export default function AttackSurfaceManagement() {
       </AnimatePresence>
 
       {/* ── Control bar ─────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-4 mb-5">
+      <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-4 mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">Client</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_client')}</label>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
             >
-              <option value="">Select client…</option>
+              <option value="">{t('pages.attackSurfaceManagement.select_client_placeholder')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">Target domain / IP</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_target')}</label>
             <input
               type="text" value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder="example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setShowConfig((s) => !s)}
-            className="px-3 py-2 rounded-lg text-xs font-mono border border-white/12 text-white/55 hover:text-white/85 hover:border-white/25 transition-all"
+            className="px-3 py-2 rounded-lg text-xs font-mono border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
           >
-            {showConfig ? '▾ Hide config' : '▸ Scan config'}
-          </button>
-          <button
+            {showConfig ? `▾ ${t('pages.attackSurfaceManagement.btn_hide_config')}` : `▸ ${t('pages.attackSurfaceManagement.btn_scan_config')}`}
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={handleRun}
             disabled={status === 'running' || !selectedClientId}
             className="px-5 py-2 rounded-lg text-sm font-mono font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            {status === 'running' ? '⟳ Scanning…' : '▶ Map Attack Surface'}
-          </button>
+            {status === 'running' ? `⟳ ${t('pages.attackSurfaceManagement.btn_scanning')}` : `▶ ${t('pages.attackSurfaceManagement.btn_map_attack_surface')}`}
+          </Button>
           <span className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: statusBadge.c }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusBadge.c, boxShadow: status === 'running' ? `0 0 6px ${statusBadge.c}` : 'none' }} />
             {statusBadge.t}
@@ -520,54 +531,54 @@ export default function AttackSurfaceManagement() {
             >
               <div className="mt-4 pt-4 border-t border-white/[0.06] grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3 max-h-[520px] overflow-y-auto pr-1">
                 <div className="space-y-2.5">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/35">Modules</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.header_modules')}</p>
                   {TOGGLES.map((tg) => (
                     <div key={tg.key} className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[12px] text-white/80">{tg.label}</p>
-                        <p className="text-[10px] font-mono text-white/35">{tg.hint}</p>
+                        <p className="text-[12px] text-[var(--text-secondary)]">{t(tg.labelKey)}</p>
+                        <p className="text-[10px] font-mono text-[var(--text-muted)]">{t(tg.hintKey)}</p>
                       </div>
                       <Toggle checked={!!params[tg.key]} onChange={(v) => setParam(tg.key, v)} disabled={status === 'running'} />
                     </div>
                   ))}
                 </div>
                 <div className="space-y-3">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-white/35">Parameters</p>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.header_parameters')}</p>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Ports">
+                    <Field label={t('pages.attackSurfaceManagement.field_ports')}>
                       <input className={inputCls} value={params.ports} onChange={(e) => setParam('ports', e.target.value)}
                         placeholder="top | all | 80,443,8080-8090" />
                     </Field>
-                    <Field label="Subdomain sources">
+                    <Field label={t('pages.attackSurfaceManagement.field_subdomain_sources')}>
                       <select className={inputCls} value={params.subdomain_sources} onChange={(e) => setParam('subdomain_sources', e.target.value)}>
-                        <option value="both">Passive + Brute</option>
-                        <option value="passive">Passive (CT)</option>
-                        <option value="bruteforce">Brute-force</option>
+                        <option value="both">{t('pages.attackSurfaceManagement.opt_passive_brute')}</option>
+                        <option value="passive">{t('pages.attackSurfaceManagement.opt_passive_ct')}</option>
+                        <option value="bruteforce">{t('pages.attackSurfaceManagement.opt_bruteforce')}</option>
                       </select>
                     </Field>
-                    <Field label="Max subdomains">
+                    <Field label={t('pages.attackSurfaceManagement.field_max_subdomains')}>
                       <input type="number" className={inputCls} value={params.max_subdomains} min={0} max={500}
                         onChange={(e) => setParam('max_subdomains', Number(e.target.value))} />
                     </Field>
-                    <Field label="Severity threshold">
+                    <Field label={t('pages.attackSurfaceManagement.field_severity_threshold')}>
                       <select className={inputCls} value={params.severity_threshold} onChange={(e) => setParam('severity_threshold', e.target.value)}>
                         {['info', 'low', 'medium', 'high', 'critical'].map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </Field>
-                    <Field label="Port timeout (ms)">
+                    <Field label={t('pages.attackSurfaceManagement.field_port_timeout')}>
                       <input type="number" className={inputCls} value={params.port_timeout_ms} min={100} max={5000}
                         onChange={(e) => setParam('port_timeout_ms', Number(e.target.value))} />
                     </Field>
-                    <Field label="HTTP timeout (ms)">
+                    <Field label={t('pages.attackSurfaceManagement.field_http_timeout')}>
                       <input type="number" className={inputCls} value={params.http_timeout_ms} min={1000} max={30000}
                         onChange={(e) => setParam('http_timeout_ms', Number(e.target.value))} />
                     </Field>
-                    <Field label="Max findings">
+                    <Field label={t('pages.attackSurfaceManagement.field_max_findings')}>
                       <input type="number" className={inputCls} value={params.max_findings} min={1} max={5000}
                         onChange={(e) => setParam('max_findings', Number(e.target.value))} />
                     </Field>
                   </div>
-                  <Field label="Custom subdomain wordlist (optional, comma/newline)">
+                  <Field label={t('pages.attackSurfaceManagement.field_wordlist')}>
                     <textarea className={`${inputCls} resize-y`} rows={2} value={params.subdomain_wordlist}
                       onChange={(e) => setParam('subdomain_wordlist', e.target.value)}
                       placeholder="api, admin, staging, vpn, …" />
@@ -584,7 +595,7 @@ export default function AttackSurfaceManagement() {
         <div className="flex items-center justify-center py-20">
           <div className="text-center space-y-3">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
-            <p className="text-sm font-mono text-white/50">Discovering and probing the external attack surface…</p>
+            <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_running')}</p>
           </div>
         </div>
       )}
@@ -592,13 +603,13 @@ export default function AttackSurfaceManagement() {
       {report && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
           <div className="flex justify-end">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleExport}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-white/15 text-white/60 hover:text-white/90 hover:border-white/30 transition-all"
+              className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
             >
-              ↓ Export JSON
-            </button>
+              ↓ {t('pages.attackSurfaceManagement.btn_export_json')}
+            </Button>
           </div>
           {/* Hero */}
           <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] via-black/40 to-black/60 p-6">
@@ -606,8 +617,8 @@ export default function AttackSurfaceManagement() {
               <ScoreRing score={score ?? 0} grade={grade} />
               <div className="flex-1 w-full space-y-3">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Attack Surface Score — {report.host}</h2>
-                  <p className="text-[12px] text-white/50 font-mono">{report.description}</p>
+                  <h2 className="text-lg font-bold text-white">{t('pages.attackSurfaceManagement.hero_score_title')} — {report.host}</h2>
+                  <p className="text-[12px] text-[var(--text-tertiary)] font-mono">{report.description}</p>
                 </div>
                 <SeverityBar counts={severityCounts} />
               </div>
@@ -616,12 +627,12 @@ export default function AttackSurfaceManagement() {
 
           {/* Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            <MetricCard label="Subdomain assets" value={report.subdomain_count ?? 0} accent="#22d3ee" icon="🗂" />
-            <MetricCard label="Exposed services" value={report.exposed_services ?? 0} accent="#f97316" icon="🔌" />
-            <MetricCard label="Takeover risks" value={report.takeover_risks ?? 0} accent="#ef4444" icon="🎯" />
-            <MetricCard label="Attack paths" value={report.attack_paths ?? 0} accent="#f43f5e" icon="⛓" />
-            <MetricCard label="Shadow IT" value={report.shadow_it_signals ?? 0} accent="#a78bfa" icon="👻" />
-            <MetricCard label="Service banners" value={report.service_banners ?? 0} accent="#84cc16" icon="📡" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_subdomain_assets')} value={report.subdomain_count ?? 0} accent="#22d3ee" icon="🗂" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_exposed_services')} value={report.exposed_services ?? 0} accent="#f97316" icon="🔌" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_takeover_risks')} value={report.takeover_risks ?? 0} accent="#ef4444" icon="🎯" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_attack_paths')} value={report.attack_paths ?? 0} accent="#f43f5e" icon="⛓" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_shadow_it')} value={report.shadow_it_signals ?? 0} accent="#a78bfa" icon="👻" />
+            <MetricCard label={t('pages.attackSurfaceManagement.metric_service_banners')} value={report.service_banners ?? 0} accent="#84cc16" icon="📡" />
           </div>
 
           <AttackPathPanel paths={attackPaths} />
@@ -630,19 +641,21 @@ export default function AttackSurfaceManagement() {
 
           {/* Exposure by asset */}
           {Object.keys(exposureByAsset).length > 0 && (
-            <div className="rounded-2xl border border-white/[0.08] bg-black/40 p-5">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">Exposure by category</p>
+            <div className="rounded-2xl border border-white/[0.08] bg-[var(--bg-2)] p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{t('pages.attackSurfaceManagement.header_exposure_by_category')}</p>
               <div className="space-y-2">
                 {Object.entries(exposureByAsset).sort((a, b) => b[1] - a[1]).map(([asset, n]) => {
                   const max = Math.max(...Object.values(exposureByAsset))
-                  const meta = ASSET_META[asset] ?? { icon: '◆', label: asset }
+                  const meta = ASSET_META[asset]
+                  const metaIcon = meta?.icon ?? '◆'
+                  const metaLabel = meta ? t(meta.labelKey) : asset
                   return (
                     <div key={asset} className="flex items-center gap-3">
-                      <span className="text-[11px] font-mono text-white/60 w-44 shrink-0 truncate">{meta.icon} {meta.label}</span>
-                      <div className="flex-1 h-2 rounded-full bg-black/50 overflow-hidden">
+                      <span className="text-[11px] font-mono text-[var(--text-tertiary)] w-44 shrink-0 truncate">{metaIcon} {metaLabel}</span>
+                      <div className="flex-1 h-2 rounded-full bg-[var(--bg-3)] overflow-hidden">
                         <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${(n / max) * 100}%` }} />
                       </div>
-                      <span className="text-[11px] font-mono text-white/50 w-8 text-right">{n}</span>
+                      <span className="text-[11px] font-mono text-[var(--text-tertiary)] w-8 text-right">{n}</span>
                     </div>
                   )
                 })}
@@ -653,13 +666,13 @@ export default function AttackSurfaceManagement() {
           {assetTypes.length > 2 && (
             <div className="flex flex-wrap gap-1.5">
               {assetTypes.map((a) => (
-                <button key={a} type="button" onClick={() => setAssetFilter(a)}
+                <Button variant="unstyled" key={a} type="button" onClick={() => setAssetFilter(a)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all ${
-                    assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/[0.08] hover:text-white/70'
+                    assetFilter === a ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-[var(--text-muted)] border-white/[0.08] hover:text-[var(--text-secondary)]'
                   }`}
                 >
-                  {a === 'all' ? 'All categories' : `${ASSET_META[a]?.icon ?? '◆'} ${ASSET_META[a]?.label ?? a}`}
-                </button>
+                  {a === 'all' ? t('pages.attackSurfaceManagement.filter_all_categories') : `${ASSET_META[a]?.icon ?? '◆'} ${ASSET_META[a] ? t(ASSET_META[a].labelKey) : a}`}
+                </Button>
               ))}
             </div>
           )}
@@ -679,30 +692,30 @@ export default function AttackSurfaceManagement() {
             jobId={jobId || lastJobId}
             accent={ACCENT}
             showEmptyReady={status !== 'running' && issues.length === 0}
-            emptyReadyTitle="Select a client and map its external attack surface."
-            emptyReadyBody="Discovers internet-facing assets and scores exposure from real probes."
+            emptyReadyTitle={t('pages.attackSurfaceManagement.empty_ready_title')}
+            emptyReadyBody={t('pages.attackSurfaceManagement.empty_ready_body')}
             renderFinding={(f, i) => <FindingCard key={i} f={f} />}
           />
         </motion.div>
       )}
 
       {!report && status !== 'running' && (
-        <div className="rounded-2xl border border-white/[0.08] bg-black/30 px-6 py-16 text-center">
+        <div className="rounded-2xl border border-white/[0.08] bg-[var(--table-surface)] px-6 py-16 text-center">
           <p className="text-4xl mb-3">🛰️</p>
-          <p className="text-sm font-mono text-white/50">Select a client and map its external attack surface.</p>
-          <p className="text-[11px] font-mono text-white/30 mt-1">Discovers internet-facing assets and scores exposure the way Wiz, Cortex Xpanse & Defender EASM do — from real probes.</p>
+          <p className="text-sm font-mono text-[var(--text-tertiary)]">{t('pages.attackSurfaceManagement.empty_ready_title')}</p>
+          <p className="text-[11px] font-mono text-[var(--text-disabled)] mt-1">{t('pages.attackSurfaceManagement.empty_bottom_body')}</p>
         </div>
       )}
     </PageShell>
   )
 }
 
-const inputCls = 'w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] text-white/90 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40'
+const inputCls = 'w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40'
 
 function Field({ label, children }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{label}</label>
+      <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{label}</label>
       {children}
     </div>
   )

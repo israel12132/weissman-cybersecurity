@@ -1,6 +1,6 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'serverless_attack'
 const ACCENT = '#ec4899'
@@ -115,39 +116,39 @@ function buildScanBody(params, clientId, target) {
 function Section({ title, icon, accent = ACCENT, count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
-          <span>{icon}</span>{title}{count != null && <span className="text-white/30 normal-case tracking-normal">· {count}</span>}
+          <span>{icon}</span>{title}{count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors text-left">
+    <Button variant="unstyled" type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left">
       <span className="min-w-0">
-        <span className="block text-[11px] font-mono text-white/85">{label}</span>
-        {hint && <span className="block text-[9px] font-mono text-white/30">{hint}</span>}
+        <span className="block text-[11px] font-mono text-[var(--text-primary)]">{label}</span>
+        {hint && <span className="block text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
       </span>
       <span className={`shrink-0 w-8 h-4 rounded-full relative transition-colors ${checked ? 'bg-pink-500/60' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
 function Txt({ label, value, onChange, placeholder, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
-      {hint && <span className="text-[9px] font-mono text-white/25">{hint}</span>}
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+      {hint && <span className="text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
     </label>
   )
 }
@@ -155,10 +156,10 @@ function Txt({ label, value, onChange, placeholder, hint }) {
 function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40 resize-y" />
-      {hint && <span className="text-[9px] font-mono text-white/25">{hint}</span>}
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40 resize-y" />
+      {hint && <span className="text-[9px] font-mono text-[var(--text-disabled)]">{hint}</span>}
     </label>
   )
 }
@@ -166,13 +167,13 @@ function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
 function Segmented({ label, value, options, onChange }) {
   return (
     <div>
-      {label && <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1.5">{label}</p>}
-      <div className="flex rounded-lg bg-black/40 border border-white/10 p-0.5 gap-0.5">
+      {label && <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-1.5">{label}</p>}
+      <div className="flex rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-0.5 gap-0.5">
         {options.map((o) => (
-          <button key={o.value} type="button" onClick={() => onChange(o.value)}
-            className={`flex-1 px-2 py-1.5 rounded-md text-[10px] font-mono transition-all ${value === o.value ? 'bg-pink-500/20 text-pink-300 border border-pink-400/40' : 'text-white/45 hover:text-white/70 border border-transparent'}`}>
+          <Button variant="unstyled" key={o.value} type="button" onClick={() => onChange(o.value)}
+            className={`flex-1 px-2 py-1.5 rounded-md text-[10px] font-mono transition-all ${value === o.value ? 'bg-pink-500/20 text-pink-300 border border-pink-400/40' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] border border-transparent'}`}>
             {o.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -194,21 +195,21 @@ function FindingRow({ f }) {
   const conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) : null
   return (
     <div className={`rounded-xl border ${meta.border} ${meta.bg} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-white/5 transition-colors">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase shrink-0 ${meta.text} ${meta.border}`}>{sev}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[12px] font-mono text-white/90">{f.title || f.type}</span>
-          {!open && <span className="block text-[10px] font-mono text-white/40 truncate mt-0.5">{f.description}</span>}
+          <span className="block text-[12px] font-mono text-[var(--text-primary)]">{f.title || f.type}</span>
+          {!open && <span className="block text-[10px] font-mono text-[var(--text-muted)] truncate mt-0.5">{f.description}</span>}
         </span>
-        {conf !== null && <span className="text-[10px] font-mono text-white/35 shrink-0">{conf}%</span>}
-        <span className="text-white/30 text-xs shrink-0">{open ? '▾' : '▸'}</span>
-      </button>
+        {conf !== null && <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">{conf}%</span>}
+        <span className="text-[var(--text-disabled)] text-xs shrink-0">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-3">
-            <p className="text-[11px] font-mono text-white/55 leading-relaxed">{f.description}</p>
+            <p className="text-[11px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>
             {f.evidence && (
-              <pre className="mt-2 text-[10px] font-mono text-white/40 bg-black/40 rounded-lg p-2 overflow-x-auto max-h-48">
+              <pre className="mt-2 text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-2)] rounded-lg p-2 overflow-x-auto max-h-48">
                 {JSON.stringify(f.evidence, null, 2)}
               </pre>
             )}
@@ -237,6 +238,12 @@ export default function ServerlessSecurityCommandCenter() {
   const setField = useCallback((key, val) => setParams((p) => ({ ...p, [key]: val })), [])
   const setHeader = useCallback((i, field, val) => {
     setParams((p) => ({ ...p, extra_headers: p.extra_headers.map((h, idx) => (idx === i ? { ...h, [field]: val } : h)) }))
+  }, [])
+  const addHeader = useCallback(() => {
+    setParams((p) => ({ ...p, extra_headers: [...p.extra_headers, { name: '', value: '' }] }))
+  }, [])
+  const removeHeader = useCallback((i) => {
+    setParams((p) => ({ ...p, extra_headers: p.extra_headers.filter((_, idx) => idx !== i) }))
   }, [])
   const resetParams = useCallback(() => setParams({ ...DEFAULT_PARAMS, extra_headers: [{ name: 'Authorization', value: '' }] }), [])
 
@@ -368,14 +375,14 @@ export default function ServerlessSecurityCommandCenter() {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-pink-400/40 text-pink-300 bg-pink-500/10 uppercase tracking-widest">FaaS Security · λ</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">{paramCount} live parameters</span>
-                <span className="text-[10px] font-mono text-white/30">MITRE T1059 · T1190</span>
+                <span className="text-[10px] font-mono text-[var(--text-disabled)]">MITRE T1059 · T1190</span>
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label || 'Serverless Attack'}</h1>
-              <p className="text-sm text-white/50 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
                 {t('serverlessSec.hero_desc', 'Evidence-only remote assessment: platform fingerprinting, env leaks, CORS, IaC exposure, event injection — every finding backed by a real HTTP signal.')}
               </p>
             </div>
-            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">Engine Detail →</Link>
+            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
           </div>
         </motion.div>
 
@@ -384,13 +391,13 @@ export default function ServerlessSecurityCommandCenter() {
             <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-pink-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2"><span>🎛️</span> {t('serverlessSec.control', 'Serverless Control Column')}</h2>
-                <button type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-white/10 text-white/40 hover:text-white/70 transition-colors">{t('common.reset', 'Reset')}</button>
+                <Button variant="unstyled" type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">{t('common.reset', 'Reset')}</Button>
               </div>
 
               <Section title={t('common.target', 'Target Binding')} icon="🎯" accent="#22d3ee">
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-mono text-white/45 uppercase">{t('common.client', 'Client')}</span>
-                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40">
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('common.client', 'Client')}</span>
+                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-pink-400/40">
                     <option value="">—</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
                   </select>
@@ -425,6 +432,30 @@ export default function ServerlessSecurityCommandCenter() {
                 <Txt label="Max Requests" value={params.max_requests} onChange={(v) => setField('max_requests', v)} />
                 <Txt label="Bearer Token" value={params.bearer_token} onChange={(v) => setField('bearer_token', v)} placeholder="optional" />
                 <Txt label="User-Agent" value={params.user_agent} onChange={(v) => setField('user_agent', v)} placeholder="(default probe UA)" />
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('serverlessSec.extra_headers', 'Extra Headers')}</span>
+                    <Button variant="unstyled" type="button" onClick={addHeader}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-pink-300 hover:border-pink-500/40 transition-colors">
+                      + {t('serverlessSec.add_header', 'Add')}
+                    </Button>
+                  </div>
+                  {params.extra_headers.map((h, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <input value={h.name} onChange={(e) => setHeader(i, 'name', e.target.value)} placeholder={t('serverlessSec.header_name', 'Header')}
+                        aria-label={t('serverlessSec.header_name', 'Header')}
+                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+                      <input value={h.value} onChange={(e) => setHeader(i, 'value', e.target.value)} placeholder={t('serverlessSec.header_value', 'Value')}
+                        aria-label={t('serverlessSec.header_value', 'Value')}
+                        className="flex-1 min-w-0 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-2 py-1 text-[11px] text-white font-mono placeholder-white/20 focus:outline-none focus:border-pink-400/40" />
+                      <Button variant="unstyled" type="button" onClick={() => removeHeader(i)} aria-label={t('serverlessSec.remove_header', 'Remove header')}
+                        className="shrink-0 w-6 h-6 rounded border border-[var(--border-default)] text-[var(--text-muted)] hover:text-rose-300 hover:border-rose-500/40 transition-colors">×</Button>
+                    </div>
+                  ))}
+                  {params.extra_headers.length === 0 && (
+                    <p className="text-[9px] font-mono text-[var(--text-disabled)]">{t('serverlessSec.no_headers', 'No custom headers — Authorization/Bearer sent separately.')}</p>
+                  )}
+                </div>
               </Section>
 
               <Section title={t('serverlessSec.output', 'Output & Synthesis')} icon="📊" defaultOpen={false}>
@@ -434,24 +465,24 @@ export default function ServerlessSecurityCommandCenter() {
               </Section>
 
               <div className="flex gap-2 mt-3">
-                <button type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun()}
+                <Button variant="unstyled" type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun()}
                   className="flex-1 py-2.5 rounded-xl font-mono text-sm font-semibold bg-gradient-to-r from-pink-600 to-fuchsia-600 text-white disabled:opacity-40 hover:from-pink-500 hover:to-fuchsia-500 transition-all">
                   {running ? t('common.running', 'Running…') : t('serverlessSec.run', 'Run Serverless Scan')}
-                </button>
-                <button type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun({ dryRun: true })}
-                  className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-white/15 text-white/60 hover:text-white hover:border-white/30 disabled:opacity-40 transition-all">
+                </Button>
+                <Button variant="unstyled" type="button" disabled={running || !selectedClientId || !target.trim()} onClick={() => handleRun({ dryRun: true })}
+                  className="px-3 py-2.5 rounded-xl font-mono text-[11px] border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] disabled:opacity-40 transition-all">
                   Dry Run
-                </button>
+                </Button>
               </div>
             </div>
           </div>
 
           <div className="space-y-4">
             {metrics && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-pink-500/30 bg-black/40 p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl border border-pink-500/30 bg-[var(--bg-2)] p-4">
                 <h3 className="text-sm font-mono text-pink-300 uppercase tracking-widest mb-3">Posture Score</h3>
                 <div className="flex items-end gap-4">
-                  <span className="text-5xl font-bold text-white">{metrics.score}<span className="text-2xl text-white/40">/100</span></span>
+                  <span className="text-5xl font-bold text-white">{metrics.score}<span className="text-2xl text-[var(--text-muted)]">/100</span></span>
                   <span className="text-3xl font-mono text-pink-400 mb-1">Grade {metrics.grade}</span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">
@@ -463,9 +494,9 @@ export default function ServerlessSecurityCommandCenter() {
                     ['Admin open', metrics.unauthenticated_admin ? 'YES' : 'no'],
                     ['Cold start', metrics.cold_start_confirmed ? 'YES' : 'no'],
                   ].map(([k, v]) => (
-                    <div key={k} className="rounded-lg bg-white/5 border border-white/10 px-2 py-1.5">
-                      <span className="text-white/40 block">{k}</span>
-                      <span className="text-white/80">{String(v)}</span>
+                    <div key={k} className="rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-2 py-1.5">
+                      <span className="text-[var(--text-muted)] block">{k}</span>
+                      <span className="text-[var(--text-secondary)]">{String(v)}</span>
                     </div>
                   ))}
                 </div>
@@ -503,23 +534,23 @@ export default function ServerlessSecurityCommandCenter() {
               renderFinding={(f, i) => <FindingRow key={i} f={f} />}
             />
 
-            <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
-              <h3 className="text-sm font-mono text-white/60 uppercase tracking-widest mb-2">{t('serverlessSec.telemetry', 'Live Telemetry')}</h3>
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] p-4">
+              <h3 className="text-sm font-mono text-[var(--text-tertiary)] uppercase tracking-widest mb-2">{t('serverlessSec.telemetry', 'Live Telemetry')}</h3>
               <div className="h-48 overflow-y-auto font-mono text-[10px] text-emerald-400/80 space-y-0.5">
-                {lines.length === 0 && <span className="text-white/25">—</span>}
+                {lines.length === 0 && <span className="text-[var(--text-disabled)]">—</span>}
                 {lines.map((l, i) => <div key={i}>{l}</div>)}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-              <h3 className="text-sm font-mono text-white/60 uppercase tracking-widest mb-3">{t('serverlessSec.reference', 'Attack Reference')}</h3>
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4">
+              <h3 className="text-sm font-mono text-[var(--text-tertiary)] uppercase tracking-widest mb-3">{t('serverlessSec.reference', 'Attack Reference')}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {ATTACK_REFERENCE.map((r) => {
                   const m = SEV_META[r.sev] || SEV_META.info
                   return (
-                    <div key={r.id} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+                    <div key={r.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] px-3 py-2">
                       <span className={`text-[9px] font-mono uppercase ${m.text}`}>{r.sev}</span>
-                      <p className="text-[11px] font-mono text-white/60 mt-0.5">{r.desc}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-tertiary)] mt-0.5">{r.desc}</p>
                     </div>
                   )
                 })}

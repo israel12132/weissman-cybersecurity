@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react'
+import { forwardRef } from 'react'
 import { cn } from '../../lib/cn'
 
 const VARIANTS = {
@@ -98,6 +98,28 @@ const Button = forwardRef(function Button(
 ) {
   const isDisabled = disabled || loading
   const isPremium = variant === 'premium'
+  const isUnstyled = variant === 'unstyled'
+
+  // `unstyled` is a true passthrough: it applies ONLY the caller's className and
+  // renders children directly (no wrapper span, no base/variant/size classes),
+  // so an element migrated from a raw <button> renders byte-identically while
+  // still routing through the primitive (consistent ref/type/disabled handling).
+  // Icon+text+gap layouts are preserved exactly because children are not wrapped.
+  if (isUnstyled) {
+    return (
+      <button
+        ref={ref}
+        type={type}
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
+        className={className}
+        {...props}
+      >
+        {loading && <Spinner className="size-3.5 shrink-0" />}
+        {children}
+      </button>
+    )
+  }
 
   const content = (
     <>

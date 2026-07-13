@@ -1,6 +1,6 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
@@ -12,6 +12,7 @@ import { useEngineHistory } from '../hooks/useEngineHistory'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import KubernetesSecurityPanel from './KubernetesSecurityPanel'
+import Button from '../components/ui/Button'
 
 const CLOUD_TABS = [
   { id: 'aws', label: 'AWS', engine: 'aws_attack', color: '#f97316', icon: '☁' },
@@ -34,19 +35,19 @@ const ENGINE_DESCRIPTIONS = {
 
 function CloudTab({ tab, active, onClick }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={() => onClick(tab.id)}
       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-mono transition-all border ${
         active
           ? 'text-white border'
-          : 'text-white/40 border-white/10 hover:border-white/20 hover:text-white/60'
+          : 'text-[var(--text-muted)] border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-tertiary)]'
       }`}
       style={active ? { color: tab.color, borderColor: `${tab.color}50`, backgroundColor: `${tab.color}15` } : {}}
     >
       <span>{tab.icon}</span>
       <span>{tab.label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -101,17 +102,17 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl" style={{ color: tab.color }}>{tab.icon}</span>
               <div>
                 <h2 className="text-lg font-bold text-white">{t('pages.cloudControlTower.attack_surface', { label: tab.label })}</h2>
-                <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">{tab.engine}</span>
+                <span className="text-[10px] font-mono text-[var(--text-disabled)] uppercase tracking-widest">{tab.engine}</span>
               </div>
             </div>
-            <p className="text-sm text-white/50 leading-relaxed">
+            <p className="text-sm text-[var(--text-tertiary)] leading-relaxed">
               {ENGINE_DESCRIPTIONS[tab.engine] ?? t('pages.cloudControlTower.default_description')}
             </p>
           </div>
@@ -121,9 +122,9 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${tab.color}` : 'none' }}
               />
-              <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
             </div>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={handleRun}
               disabled={status === 'running' || !clientId}
@@ -131,12 +132,12 @@ function CloudEnginePanel({ tab, clientId, target, showToast, t, onFindingsUpdat
               style={{ borderColor: `${tab.color}40`, color: tab.color, backgroundColor: `${tab.color}10` }}
             >
               {status === 'running' ? t('pages.cloudControlTower.scanning') : t('pages.cloudControlTower.run_scan')}
-            </button>
+            </Button>
           </div>
         </div>
 
         {lastRun && (
-          <p className="text-[10px] font-mono text-white/25 mt-2">{t('pages.cloudControlTower.last_completed', { time: lastRun })}</p>
+          <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-2">{t('pages.cloudControlTower.last_completed', { time: lastRun })}</p>
         )}
       </div>
     </motion.div>
@@ -148,7 +149,8 @@ export default function CloudControlTower() {
   const [activeTab, setActiveTab] = useState('aws')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
-  const { postScan } = useCommandCenterScan(selectedClientId)
+  // Registers this client with the engine hub (side effect); this view has no scan button.
+  useCommandCenterScan(selectedClientId)
   const [toast, setToast] = useState(null)
   const [findingsByEngine, setFindingsByEngine] = useState({})
   const [engineStatus, setEngineStatus] = useState({})
@@ -231,11 +233,11 @@ export default function CloudControlTower() {
       )}
     >
       <div className="flex items-center gap-2 mb-6">
-        <span className="text-[11px] font-mono text-white/40">{t('pages.cloudControlTower.client_label')}</span>
+        <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.cloudControlTower.client_label')}</span>
         <select
           value={selectedClientId ?? ''}
           onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-blue-500/40"
+          className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-blue-500/40"
         >
           <option value="">{t('pages.cloudControlTower.select_client')}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -243,7 +245,7 @@ export default function CloudControlTower() {
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-blue-500/30 text-blue-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -256,8 +258,8 @@ export default function CloudControlTower() {
         <div className="flex items-center gap-3">
           <span className="text-2xl">🌐</span>
           <div>
-            <p className="text-sm font-semibold text-white/90">Attack Surface Management (EASM)</p>
-            <p className="text-[11px] font-mono text-white/45">Discover internet-facing assets & score external exposure — assets, services, TLS/HTTP, cloud footprint, takeover risk.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Attack Surface Management (EASM)</p>
+            <p className="text-[11px] font-mono text-[var(--text-muted)]">Discover internet-facing assets & score external exposure — assets, services, TLS/HTTP, cloud footprint, takeover risk.</p>
           </div>
         </div>
         <span className="text-[11px] font-mono text-cyan-300/80 group-hover:translate-x-0.5 transition-transform">Open →</span>
@@ -271,8 +273,8 @@ export default function CloudControlTower() {
         <div className="flex items-center gap-3">
           <span className="text-2xl">◈</span>
           <div>
-            <p className="text-sm font-semibold text-white/90">Cloud Posture Management (CSPM)</p>
-            <p className="text-[11px] font-mono text-white/45">Agentless AWS inventory via cross-account role — IAM, S3, EC2, RDS, Lambda, CloudTrail, compliance grades & toxic-combination attack paths.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Cloud Posture Management (CSPM)</p>
+            <p className="text-[11px] font-mono text-[var(--text-muted)]">Agentless AWS inventory via cross-account role — IAM, S3, EC2, RDS, Lambda, CloudTrail, compliance grades & toxic-combination attack paths.</p>
           </div>
         </div>
         <span className="text-[11px] font-mono text-orange-300/80 group-hover:translate-x-0.5 transition-transform">Open →</span>

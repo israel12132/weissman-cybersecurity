@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -25,6 +25,8 @@ import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { downloadBytes } from '../lib/pdfExport'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { confirmDialog } from '../utils/confirmDialog'
+import Button from '../components/ui/Button'
 import PlaybookGraph from '../components/PlaybookGraph'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
@@ -33,7 +35,7 @@ const SEV_COLORS = {
   high:     { bg: 'bg-orange-500/15', ring: 'ring-orange-500/40', text: 'text-orange-200' },
   medium:   { bg: 'bg-amber-500/15', ring: 'ring-amber-500/40', text: 'text-amber-200' },
   low:      { bg: 'bg-sky-500/15', ring: 'ring-sky-500/40', text: 'text-sky-200' },
-  info:     { bg: 'bg-zinc-500/15', ring: 'ring-zinc-400/40', text: 'text-zinc-300' },
+  info:     { bg: 'bg-[var(--border-strong)]/15', ring: 'ring-[var(--border-strong)]/40', text: 'text-[var(--text-secondary)]' },
 }
 
 const ACTION_KINDS = [
@@ -118,7 +120,7 @@ function JsonEditor({ value, onChange, error, label, invalidLabel }) {
   return (
     <div className="overflow-hidden rounded-xl ring-1 ring-white/[0.08] bg-[#0c0c0e]">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-white/45">
+        <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
           <FileJson className="h-3.5 w-3.5" />
           {label}
         </span>
@@ -152,17 +154,17 @@ function ToggleChip({ active, onClick, children, accent = 'cyan' }) {
     ? 'bg-amber-500/15 ring-amber-400/35 text-amber-200'
     : 'bg-cyan-500/15 ring-cyan-400/35 text-cyan-200'
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-[11px] font-medium ring-1 transition-all ${
         active
           ? activeCls
-          : 'bg-white/[0.03] ring-white/[0.08] text-white/45 hover:bg-white/[0.06] hover:text-white/70'
+          : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)]'
       }`}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -190,10 +192,10 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative rounded-xl bg-zinc-900/60 ring-1 ring-white/[0.08] transition-shadow hover:ring-white/[0.12] hover:shadow-lg hover:shadow-black/20"
+      className="group relative rounded-xl bg-[var(--bg-1)]/60 ring-1 ring-white/[0.08] transition-shadow hover:ring-white/[0.12] hover:shadow-lg hover:shadow-black/20"
     >
       <div className="flex items-stretch">
-        <div className="flex w-8 shrink-0 cursor-grab flex-col items-center justify-center border-e border-white/[0.06] text-white/20 transition-colors group-hover:text-white/40">
+        <div className="flex w-8 shrink-0 cursor-grab flex-col items-center justify-center border-e border-white/[0.06] text-[var(--text-disabled)] transition-colors group-hover:text-[var(--text-muted)]">
           <GripVertical className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1 p-3">
@@ -202,22 +204,22 @@ function ActionCard({ action, index, total, label, onMoveUp, onMoveDown, onRemov
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500/15 text-[11px] font-bold text-violet-300 ring-1 ring-violet-500/30">
                 {index + 1}
               </span>
-              <span className="text-[13px] font-medium text-white/90">{label || action.kind}</span>
-              <span className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-white/35">{action.kind}</span>
+              <span className="text-[13px] font-medium text-[var(--text-primary)]">{label || action.kind}</span>
+              <span className="rounded bg-[var(--row-hover-bg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">{action.kind}</span>
             </div>
             <div className="flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-              <button type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-white/40 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-20" aria-label={moveUpLabel}>
+              <Button variant="unstyled" type="button" onClick={onMoveUp} disabled={index === 0} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveUpLabel}>
                 <ChevronUp className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-white/40 hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-20" aria-label={moveDownLabel}>
+              </Button>
+              <Button variant="unstyled" type="button" onClick={onMoveDown} disabled={index >= total - 1} className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-secondary)] disabled:opacity-20" aria-label={moveDownLabel}>
                 <ChevronDown className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label={removeLabel}>
+              </Button>
+              <Button variant="unstyled" type="button" onClick={onRemove} className="rounded p-1 text-rose-400/70 hover:bg-rose-500/10 hover:text-rose-300" aria-label={removeLabel}>
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
-          <div className={`rounded-lg ring-1 ${jsonError ? 'ring-rose-500/40' : 'ring-white/[0.06]'} bg-black/40`}>
+          <div className={`rounded-lg ring-1 ${jsonError ? 'ring-rose-500/40' : 'ring-white/[0.06]'} bg-[var(--bg-2)]`}>
             <textarea
               value={paramsText}
               onChange={(e) => { setParamsText(e.target.value); setJsonError(false) }}
@@ -369,7 +371,7 @@ export default function PlaybookBuilder() {
 
   const remove = async () => {
     if (!selected) return
-    if (!window.confirm(t('playbooks.delete_confirm', { name: selected.name }))) return
+    if (!(await confirmDialog(t('playbooks.delete_confirm', { name: selected.name })))) return
     try {
       const r = await apiFetch(`/api/playbooks/${selected.id}`, { method: 'DELETE' })
       if (r.ok) {
@@ -509,7 +511,7 @@ export default function PlaybookBuilder() {
   }
 
   return (
-    <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] text-slate-100 outline-none">
+    <div id="main-content" tabIndex={-1} className="playbook-builder-root min-h-[100dvh] bg-[var(--bg-0)] text-[var(--text-secondary)] outline-none">
       {/* Header */}
       <header className="border-b border-white/[0.06] bg-[#09090b]/80 px-5 py-5 backdrop-blur-xl lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -520,11 +522,11 @@ export default function PlaybookBuilder() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight">{t('playbooks.title')}</h1>
-                <p className="mt-0.5 max-w-xl text-[12px] text-white/45">{t('playbooks.subtitle')}</p>
+                <p className="mt-0.5 max-w-xl text-[12px] text-[var(--text-muted)]">{t('playbooks.subtitle')}</p>
               </div>
             </div>
             {filterSummary && (
-              <p className="mt-2 ps-[52px] text-[11px] text-white/30">{filterSummary}</p>
+              <p className="mt-2 ps-[52px] text-[11px] text-[var(--text-disabled)]">{filterSummary}</p>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -534,24 +536,24 @@ export default function PlaybookBuilder() {
               refreshLoading={loading}
               exportDisabled={!list.length}
             />
-            <Link to="/" className="px-3 py-2 text-[12px] text-white/40 transition-colors hover:text-white/70">
+            <Link to="/" className="px-3 py-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">
               ← {t('nav.cockpit')}
             </Link>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={insertExample}
-              className="rounded-lg px-3 py-2 text-[12px] text-white/60 ring-1 ring-white/[0.1] transition-all hover:bg-white/[0.04] hover:text-white/85"
+              className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
             >
               {t('playbooks.insert_example')}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={startNew}
               className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600/80 to-cyan-600/70 px-4 py-2 text-[12px] font-medium text-white shadow-lg shadow-violet-500/10 transition-all hover:from-violet-500/90 hover:to-cyan-500/80"
             >
               <Plus className="h-4 w-4" />
               {t('playbooks.new_playbook')}
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -565,62 +567,63 @@ export default function PlaybookBuilder() {
         {/* Left — Library */}
         <aside className="border-b border-white/[0.06] bg-[#0a0a0c]/60 xl:border-b-0 xl:border-e">
           <div className="sticky top-0 p-4">
-            <h2 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">
+            <h2 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">
               <FileJson className="h-3.5 w-3.5" />
               {t('playbooks.library')}
             </h2>
             <div className="relative mb-3">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 pointer-events-none" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-disabled)] pointer-events-none" />
               <input
                 type="search"
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
+                aria-label={t('playbooks.library_search')}
                 placeholder={t('playbooks.library_search')}
-                className="w-full rounded-lg bg-black/40 pl-8 pr-3 py-2 text-[11px] text-white/80 ring-1 ring-white/[0.08] placeholder:text-white/30 focus:outline-none focus:ring-cyan-400/30"
+                className="w-full rounded-lg bg-[var(--bg-2)] pl-8 pr-3 py-2 text-[11px] text-[var(--text-secondary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
               />
             </div>
             {loadError && (
               <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300 ring-1 ring-rose-500/25">{loadError}</p>
             )}
             {loading ? (
-              <div className="flex items-center gap-2 py-8 text-[12px] text-white/40">
+              <div className="flex items-center gap-2 py-8 text-[12px] text-[var(--text-muted)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {t('common.loading')}
               </div>
             ) : list.length === 0 ? (
-              <p className="py-6 text-[12px] leading-relaxed text-white/40">{t('playbooks.no_playbooks')}</p>
+              <p className="py-6 text-[12px] leading-relaxed text-[var(--text-muted)]">{t('playbooks.no_playbooks')}</p>
             ) : filteredList.length === 0 ? (
-              <p className="py-6 text-[12px] leading-relaxed text-white/40">{t('playbooks.no_library_match')}</p>
+              <p className="py-6 text-[12px] leading-relaxed text-[var(--text-muted)]">{t('playbooks.no_library_match')}</p>
             ) : (
               <ul className="space-y-1 custom-scroll max-h-[calc(100dvh-180px)] overflow-y-auto">
                 {filteredList.map((pb) => {
                   const isActive = selected?.id === pb.id
                   return (
                     <li key={pb.id}>
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => startEdit(pb)}
                         className={`block w-full rounded-xl px-3 py-3 text-left transition-all ${
                           isActive
                             ? 'bg-gradient-to-r from-violet-500/15 to-cyan-500/10 ring-1 ring-violet-400/30 shadow-lg shadow-violet-500/5'
-                            : 'hover:bg-white/[0.04] ring-1 ring-transparent hover:ring-white/[0.06]'
+                            : 'hover:bg-[var(--row-hover-bg)] ring-1 ring-transparent hover:ring-white/[0.06]'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <span className="truncate text-[13px] font-medium text-white/90">{pb.name}</span>
+                          <span className="truncate text-[13px] font-medium text-[var(--text-primary)]">{pb.name}</span>
                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
                             pb.enabled
                               ? 'bg-emerald-500/12 text-emerald-300 ring-1 ring-emerald-500/30'
-                              : 'bg-white/[0.04] text-white/35 ring-1 ring-white/[0.08]'
+                              : 'bg-[var(--row-hover-bg)] text-[var(--text-muted)] ring-1 ring-white/[0.08]'
                           }`}>
                             {pb.enabled ? t('common.on') : t('common.off')}
                           </span>
                         </div>
-                        <div className="mt-1.5 flex items-center gap-2 text-[10px] text-white/35">
+                        <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
                           <span>{t('playbooks.runs_count', { count: pb.run_count || 0 })}</span>
                           <StatusPill status={pb.last_run_status} />
                         </div>
-                      </button>
+                      </Button>
                     </li>
                   )
                 })}
@@ -633,10 +636,10 @@ export default function PlaybookBuilder() {
         <main className="overflow-y-auto custom-scroll p-5 lg:p-6">
           {!draft ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] ring-1 ring-white/[0.08]">
-                <Zap className="h-7 w-7 text-white/25" />
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--row-hover-bg)] ring-1 ring-white/[0.08]">
+                <Zap className="h-7 w-7 text-[var(--text-disabled)]" />
               </div>
-              <p className="max-w-sm text-[14px] text-white/45">{t('playbooks.pick_playbook')}</p>
+              <p className="max-w-sm text-[14px] text-[var(--text-muted)]">{t('playbooks.pick_playbook')}</p>
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-6">
@@ -647,52 +650,52 @@ export default function PlaybookBuilder() {
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t('playbooks.name_placeholder')}
-                  className="w-full rounded-xl bg-zinc-900/60 px-4 py-3 text-[16px] font-semibold text-white/95 ring-1 ring-white/[0.08] placeholder:text-white/25 focus:outline-none focus:ring-violet-400/35"
+                  className="w-full rounded-xl bg-[var(--bg-1)]/60 px-4 py-3 text-[16px] font-semibold text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/35"
                 />
                 <textarea
                   value={draft.description}
                   onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
                   placeholder={t('playbooks.description_placeholder')}
                   rows={2}
-                  className="w-full resize-none rounded-xl bg-zinc-900/40 px-4 py-3 text-[13px] text-white/70 ring-1 ring-white/[0.06] placeholder:text-white/25 focus:outline-none focus:ring-violet-400/25"
+                  className="w-full resize-none rounded-xl bg-[var(--bg-1)]/40 px-4 py-3 text-[13px] text-[var(--text-secondary)] ring-1 ring-white/[0.06] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-violet-400/25"
                 />
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/[0.08]">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[var(--row-hover-bg)] px-3 py-1.5 ring-1 ring-white/[0.08]">
                   <input
                     type="checkbox"
                     checked={!!draft.enabled}
                     onChange={(e) => setDraft((d) => ({ ...d, enabled: e.target.checked }))}
-                    className="rounded border-white/30 bg-transparent text-violet-500 focus:ring-violet-500/30"
+                    className="rounded border-[var(--border-strong)] bg-transparent text-violet-500 focus:ring-violet-500/30"
                   />
-                  <span className="text-[12px] font-medium text-white/70">{t('playbooks.enabled_label')}</span>
+                  <span className="text-[12px] font-medium text-[var(--text-secondary)]">{t('playbooks.enabled_label')}</span>
                 </label>
               </div>
 
               {/* Trigger builder */}
-              <section className="rounded-2xl bg-zinc-900/40 p-5 ring-1 ring-white/[0.07]">
+              <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
                 <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-300/80">
                   <Zap className="h-3.5 w-3.5" />
                   {t('playbooks.when_conditions')}
                 </h3>
                 <div className="space-y-4">
                   <div>
-                    <p className="mb-2 text-[11px] text-white/40">{t('playbooks.severity_any')}</p>
+                    <p className="mb-2 text-[11px] text-[var(--text-muted)]">{t('playbooks.severity_any')}</p>
                     <div className="flex flex-wrap gap-2">
                       {SEVERITIES.map((s) => {
                         const active = (draft.trigger?.severity || []).includes(s)
                         const colors = SEV_COLORS[s]
                         return (
-                          <button
+                          <Button variant="unstyled"
                             type="button"
                             key={s}
                             onClick={() => toggleSev(s)}
                             className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider ring-1 transition-all ${
                               active
                                 ? `${colors.bg} ${colors.ring} ${colors.text}`
-                                : 'bg-white/[0.03] ring-white/[0.08] text-white/40 hover:text-white/65'
+                                : 'bg-[var(--row-hover-bg)] ring-white/[0.08] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
                             }`}
                           >
                             {t(`playbooks.severity.${s}`)}
-                          </button>
+                          </Button>
                         )
                       })}
                     </div>
@@ -714,7 +717,7 @@ export default function PlaybookBuilder() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-white/35">{t('playbooks.epss_min')}</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t('playbooks.epss_min')}</span>
                       <input
                         type="number"
                         min="0" max="1" step="0.05"
@@ -722,11 +725,11 @@ export default function PlaybookBuilder() {
                         onChange={(e) => updateTrigger({
                           epss_min: e.target.value === '' ? undefined : Number(e.target.value),
                         })}
-                        className="mt-1 block w-full rounded-lg bg-black/40 px-3 py-2 text-[13px] text-white/85 ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+                        className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
                       />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-white/35">{t('playbooks.cooldown')}</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t('playbooks.cooldown')}</span>
                       <input
                         type="number"
                         min="0" step="60"
@@ -734,7 +737,7 @@ export default function PlaybookBuilder() {
                         onChange={(e) => updateTrigger({
                           cooldown_seconds: e.target.value === '' ? undefined : Number(e.target.value),
                         })}
-                        className="mt-1 block w-full rounded-lg bg-black/40 px-3 py-2 text-[13px] text-white/85 ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
+                        className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[13px] text-[var(--text-primary)] ring-1 ring-white/[0.08] focus:outline-none focus:ring-cyan-400/30"
                       />
                     </label>
                   </div>
@@ -742,21 +745,21 @@ export default function PlaybookBuilder() {
               </section>
 
               {/* Actions */}
-              <section className="rounded-2xl bg-zinc-900/40 p-5 ring-1 ring-white/[0.07]">
+              <section className="rounded-2xl bg-[var(--bg-1)]/40 p-5 ring-1 ring-white/[0.07]">
                 <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-300/80">
                   <Play className="h-3.5 w-3.5" />
                   {t('playbooks.do_actions')}
                 </h3>
                 <div className="mb-4 flex flex-wrap gap-1.5">
                   {ACTION_KINDS.map((a) => (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       key={a.kind}
                       onClick={() => addAction(a.kind)}
-                      className="rounded-lg bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/55 ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
+                      className="rounded-lg bg-[var(--row-hover-bg)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] ring-1 ring-white/[0.08] transition-all hover:bg-cyan-500/10 hover:text-cyan-200 hover:ring-cyan-400/25"
                     >
                       + {t(a.labelKey)}
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 {(draft.actions || []).length > 0 && (
@@ -769,7 +772,7 @@ export default function PlaybookBuilder() {
                   </div>
                 )}
                 {(draft.actions || []).length === 0 ? (
-                  <p className="py-8 text-center text-[12px] text-white/35">{t('playbooks.no_actions')}</p>
+                  <p className="py-8 text-center text-[12px] text-[var(--text-muted)]">{t('playbooks.no_actions')}</p>
                 ) : (
                   <ul className="space-y-2">
                     {(draft.actions || []).map((a, i) => (
@@ -804,7 +807,7 @@ export default function PlaybookBuilder() {
 
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={save}
                   disabled={saving}
@@ -812,16 +815,16 @@ export default function PlaybookBuilder() {
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {saving ? t('playbooks.saving') : selected ? t('playbooks.save_changes') : t('playbooks.create_playbook')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={dryRun}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600/20 px-4 py-2 text-[12px] font-medium text-cyan-200 ring-1 ring-cyan-400/30 transition-all hover:bg-cyan-500/25"
                 >
                   <Play className="h-4 w-4" />
                   {t('playbooks.dry_run')}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   type="button"
                   onClick={exportPlaybookJson}
                   disabled={!draft}
@@ -829,16 +832,16 @@ export default function PlaybookBuilder() {
                 >
                   <Download className="h-4 w-4" />
                   {t('playbooks.export_json_playbook')}
-                </button>
+                </Button>
                 {selected && (
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={remove}
                     className="ms-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] text-rose-300 ring-1 ring-rose-500/25 transition-all hover:bg-rose-500/10"
                   >
                     <Trash2 className="h-4 w-4" />
                     {t('common.delete')}
-                  </button>
+                  </Button>
                 )}
                 {statusMsg && (
                   <span className={`flex items-center gap-1 text-[11px] ${
@@ -873,9 +876,9 @@ export default function PlaybookBuilder() {
                     </div>
                     <div className="p-4">
                       {fireResult.loading ? (
-                        <p className="text-[13px] text-white/50">{t('playbooks.firing')}</p>
+                        <p className="text-[13px] text-[var(--text-tertiary)]">{t('playbooks.firing')}</p>
                       ) : (
-                        <pre className="max-h-64 overflow-auto custom-scroll rounded-lg bg-black/40 p-4 font-mono text-[11px] leading-relaxed text-white/75 ring-1 ring-white/[0.06]">
+                        <pre className="max-h-64 overflow-auto custom-scroll rounded-lg bg-[var(--bg-2)] p-4 font-mono text-[11px] leading-relaxed text-[var(--text-secondary)] ring-1 ring-white/[0.06]">
                           {JSON.stringify(fireResult.results ?? fireResult, null, 2)}
                         </pre>
                       )}
@@ -890,14 +893,14 @@ export default function PlaybookBuilder() {
         {/* Right — History timeline */}
         <aside className="border-t border-white/[0.06] bg-[#0a0a0c]/60 xl:border-t-0 xl:border-s">
           <div className="sticky top-0 p-4">
-            <h2 className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/40">
+            <h2 className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">
               <History className="h-3.5 w-3.5" />
               {t('playbooks.run_history')}
             </h2>
             {!selected ? (
-              <p className="text-[12px] text-white/35">{t('playbooks.select_for_runs')}</p>
+              <p className="text-[12px] text-[var(--text-muted)]">{t('playbooks.select_for_runs')}</p>
             ) : runs.length === 0 ? (
-              <p className="text-[12px] text-white/35">{t('playbooks.no_runs')}</p>
+              <p className="text-[12px] text-[var(--text-muted)]">{t('playbooks.no_runs')}</p>
             ) : (
               <ol className="relative space-y-0 custom-scroll max-h-[calc(100dvh-140px)] overflow-y-auto ps-1">
                 {runs.map((r, idx) => (
@@ -905,20 +908,20 @@ export default function PlaybookBuilder() {
                     {idx < runs.length - 1 && (
                       <span className="absolute start-[9px] top-5 bottom-0 w-px bg-gradient-to-b from-white/15 to-transparent" />
                     )}
-                    <span className="absolute start-0 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-zinc-800 ring-2 ring-[#0a0a0c]">
-                      <Clock className="h-2.5 w-2.5 text-white/40" />
+                    <span className="absolute start-0 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--bg-3)] ring-2 ring-[#0a0a0c]">
+                      <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
                     </span>
-                    <div className="rounded-xl bg-zinc-900/50 p-3 ring-1 ring-white/[0.06] transition-colors hover:ring-white/[0.1]">
+                    <div className="rounded-xl bg-[var(--bg-1)]/50 p-3 ring-1 ring-white/[0.06] transition-colors hover:ring-white/[0.1]">
                       <div className="flex items-center justify-between gap-2">
-                        <time className="text-[10px] font-medium text-white/45">
+                        <time className="text-[10px] font-medium text-[var(--text-muted)]">
                           {r.triggered_at ? new Date(r.triggered_at).toLocaleString() : '—'}
                         </time>
                         <StatusPill status={r.status} />
                       </div>
-                      <p className="mt-1.5 truncate text-[12px] font-medium text-white/85">
+                      <p className="mt-1.5 truncate text-[12px] font-medium text-[var(--text-primary)]">
                         {r.trigger_event?.title || '—'}
                       </p>
-                      <p className="mt-1 text-[10px] text-white/35">
+                      <p className="mt-1 text-[10px] text-[var(--text-muted)]">
                         {t('playbooks.actions_ok', {
                           ok: r.actions_succeeded ?? 0,
                           total: r.actions_total ?? 0,

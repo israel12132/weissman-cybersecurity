@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useClientIntegrations } from '../../hooks/useClientIntegrations'
@@ -25,20 +24,20 @@ export default function EngineIntegrationsBar({
 
   return (
     <div
-      className={`rounded-xl border border-white/10 bg-gradient-to-r from-black/50 via-black/35 to-black/50 px-4 py-3 ${className}`}
+      className={`rounded-xl border border-[var(--border-default)] bg-gradient-to-r from-black/50 via-black/35 to-black/50 px-4 py-3 ${className}`}
       data-testid="engine-integrations-bar"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="shrink-0">
-            <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+            <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
               {t('components.engineIntegrations.title')}
             </div>
             <div className="flex items-baseline gap-2 mt-0.5">
               <span className="text-lg font-semibold tabular-nums" style={{ color: barColor }}>
                 {integrationsLoading ? '…' : `${pct}%`}
               </span>
-              <span className="text-[10px] font-mono text-white/35 truncate max-w-[200px]">
+              <span className="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[200px]">
                 {clientId
                   ? t('components.engineIntegrations.client', { id: clientId })
                   : t('components.engineIntegrations.no_client')}
@@ -46,7 +45,7 @@ export default function EngineIntegrationsBar({
             </div>
           </div>
           {!compact && (
-            <div className="hidden sm:block w-28 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="hidden sm:block w-28 h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{ width: `${pct}%`, backgroundColor: barColor }}
@@ -63,7 +62,7 @@ export default function EngineIntegrationsBar({
               className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                 chip.ok
                   ? 'border-emerald-500/40 text-emerald-300/90 bg-emerald-500/10'
-                  : 'border-white/15 text-white/40 bg-white/[0.03]'
+                  : 'border-[var(--border-strong)] text-[var(--text-muted)] bg-[var(--row-hover-bg)]'
               }`}
             >
               {chip.ok ? '✓' : '○'}

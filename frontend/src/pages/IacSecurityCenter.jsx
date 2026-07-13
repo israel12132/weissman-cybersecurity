@@ -4,15 +4,17 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Search, Download, RefreshCw } from 'lucide-react'
+import { Search } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import { isHttpUrl } from '../utils/safeUrl'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
 import { prefillParamsForEngine } from '../lib/engineClientPrefill'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'iac_misconfig'
 
@@ -898,28 +900,28 @@ function buildScanBody(params, clientId, target) {
 function Section({ title, icon, accent = '#22d3ee', count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+    <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
-          {count != null && <span className="text-white/30 normal-case tracking-normal">· {count}</span>}
+          {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
 function Hint({ children }) {
   if (!children) return null
-  return <span className="block text-[9px] font-mono text-white/25 mt-0.5 leading-snug">{children}</span>
+  return <span className="block text-[9px] font-mono text-[var(--text-disabled)] mt-0.5 leading-snug">{children}</span>
 }
 function Num({ label, value, onChange, min, max, step, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
-      <input type="number" min={min} max={max} step={step} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400/40" />
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
+      <input type="number" min={min} max={max} step={step} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -927,8 +929,8 @@ function Num({ label, value, onChange, min, max, step, hint }) {
 function Sel({ label, value, onChange, options, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
       <Hint>{hint}</Hint>
@@ -938,8 +940,8 @@ function Sel({ label, value, onChange, options, hint }) {
 function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-cyan-400/40" />
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-cyan-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -947,8 +949,8 @@ function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
 function Area({ label, value, onChange, placeholder, rows = 3, hint, mono = true }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
-      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white ${mono ? 'font-mono' : ''} placeholder-white/20 focus:outline-none focus:border-cyan-400/40 resize-y`} />
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
+      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white ${mono ? 'font-mono' : ''} placeholder-white/20 focus:outline-none focus:border-cyan-400/40 resize-y`} />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -957,12 +959,12 @@ function Toggle({ label, value, onChange, hint }) {
   return (
     <div className="flex items-start justify-between gap-3 py-0.5">
       <div className="min-w-0">
-        <span className="text-[11px] font-mono text-white/70">{label}</span>
+        <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
-      <button type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)} className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-cyan-500/40' : 'bg-black/60 border border-white/10'}`}>
+      <Button variant="unstyled" type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)} className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-cyan-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -973,9 +975,9 @@ function Chips({ options, selected, onToggle, render }) {
         const id = typeof o === 'string' ? o : o.id
         const on = selected.includes(id)
         return (
-          <button key={id} type="button" onClick={() => onToggle(id)} className={`text-[10px] font-mono px-2 py-1 rounded-md border transition-all ${on ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-200' : 'border-white/10 text-white/40 hover:text-white/70'}`}>
+          <Button variant="unstyled" key={id} type="button" onClick={() => onToggle(id)} className={`text-[10px] font-mono px-2 py-1 rounded-md border transition-all ${on ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-200' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
             {render ? render(o) : id}
-          </button>
+          </Button>
         )
       })}
     </div>
@@ -995,7 +997,7 @@ function ScoreGauge({ score, grade, blast }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{grade ?? '—'}</span>
-        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">risk {pct}</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">risk {pct}</span>
         {blast > 1 && <span className="text-[8px] font-mono text-rose-300/80 mt-0.5">×{blast.toFixed(2)} blast</span>}
       </div>
     </div>
@@ -1003,8 +1005,8 @@ function ScoreGauge({ score, grade, blast }) {
 }
 function MetricTile({ label, value, accent = '#22d3ee' }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">{label}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
       <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
     </div>
   )
@@ -1025,15 +1027,15 @@ function AttackPathCard({ chain }) {
         <div className="flex flex-wrap items-center gap-1">
           {mitre.map((m, i) => (
             <React.Fragment key={m}>
-              {i > 0 && <span className="text-white/25 text-[10px]">→</span>}
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-cyan-200/80">{m}</span>
+              {i > 0 && <span className="text-[var(--text-disabled)] text-[10px]">→</span>}
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-cyan-200/80">{m}</span>
             </React.Fragment>
           ))}
         </div>
       )}
       {Array.isArray(chain.matched_policies) && chain.matched_policies.length > 0 && (
-        <p className="text-[10px] font-mono text-white/45 leading-relaxed">
-          <span className="text-white/30">Correlated: </span>{chain.matched_policies.join(' · ')}
+        <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">
+          <span className="text-[var(--text-disabled)]">Correlated: </span>{chain.matched_policies.join(' · ')}
         </p>
       )}
       {chain.remediation && <p className="text-[11px] text-emerald-200/70 leading-relaxed">{chain.remediation}</p>}
@@ -1049,10 +1051,10 @@ function SeverityBars({ bySeverity }) {
         return (
           <div key={s} className="flex items-center gap-2">
             <span className="w-16 text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[s] }}>{s}</span>
-            <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+            <div className="flex-1 h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${(n / total) * 100}%`, background: SEV_COLOR[s] }} />
             </div>
-            <span className="w-8 text-right text-[11px] font-mono text-white/70">{n}</span>
+            <span className="w-8 text-right text-[11px] font-mono text-[var(--text-secondary)]">{n}</span>
           </div>
         )
       })}
@@ -1063,14 +1065,14 @@ function ComplianceCard({ pack }) {
   const failed = pack.controls_failed ?? 0
   const ok = pack.status === 'pass'
   return (
-    <div className="rounded-lg border bg-black/30 p-3" style={{ borderColor: ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)' }}>
+    <div className="rounded-lg border bg-[var(--table-surface)] p-3" style={{ borderColor: ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)' }}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-white">{pack.pack}</span>
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${ok ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>{ok ? 'PASS' : 'FAIL'}</span>
       </div>
-      <p className="text-[10px] font-mono text-white/40 mt-1">{failed} failed · {pack.controls_covered ?? 0} covered</p>
+      <p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{failed} failed · {pack.controls_covered ?? 0} covered</p>
       {Array.isArray(pack.failed_controls) && pack.failed_controls.length > 0 && (
-        <p className="text-[9px] font-mono text-white/30 mt-1 leading-snug break-words">{pack.failed_controls.slice(0, 6).join(', ')}{pack.failed_controls.length > 6 ? '…' : ''}</p>
+        <p className="text-[9px] font-mono text-[var(--text-disabled)] mt-1 leading-snug break-words">{pack.failed_controls.slice(0, 6).join(', ')}{pack.failed_controls.length > 6 ? '…' : ''}</p>
       )}
     </div>
   )
@@ -1082,11 +1084,11 @@ function FrameworkCoverage({ coverage }) {
     <div className="space-y-1.5">
       {rows.map((r) => (
         <div key={r.framework} className="flex items-center gap-2">
-          <span className="w-24 text-[10px] font-mono text-white/50 truncate">{r.framework}</span>
-          <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+          <span className="w-24 text-[10px] font-mono text-[var(--text-tertiary)] truncate">{r.framework}</span>
+          <div className="flex-1 h-2 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
             <div className="h-full rounded-full bg-violet-500/70" style={{ width: `${r.hit_rate_pct || 0}%` }} />
           </div>
-          <span className="text-[10px] font-mono text-white/45 w-20 text-right">{r.policies_triggered}/{r.policies_total}</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)] w-20 text-right">{r.policies_triggered}/{r.policies_total}</span>
         </div>
       ))}
     </div>
@@ -1099,12 +1101,12 @@ function PolicyCatalog({ catalog, query, onQuery }) {
   const triggered = filtered.filter((p) => p.triggered)
   return (
     <div className="space-y-2">
-      <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search policy id, title, framework…" className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white font-mono placeholder-white/25" />
-      <p className="text-[9px] font-mono text-white/35">{triggered.length} triggered · {filtered.length} shown · {list.length} total</p>
+      <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search policy id, title, framework…" className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/25" />
+      <p className="text-[9px] font-mono text-[var(--text-muted)]">{triggered.length} triggered · {filtered.length} shown · {list.length} total</p>
       <div className="max-h-52 overflow-auto space-y-1 pr-1">
         {filtered.slice(0, 120).map((p) => (
-          <div key={p.id} className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] font-mono ${p.triggered ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-white/[0.02] border border-white/5'}`}>
-            <span className="text-white/70 truncate">{p.id}</span>
+          <div key={p.id} className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-[10px] font-mono ${p.triggered ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-[var(--row-hover-bg)] border border-[var(--border-subtle)]'}`}>
+            <span className="text-[var(--text-secondary)] truncate">{p.id}</span>
             <span className="shrink-0 uppercase" style={{ color: SEV_COLOR[p.severity] || '#94a3b8' }}>{p.severity}</span>
           </div>
         ))}
@@ -1116,20 +1118,20 @@ function FindingCard({ f }) {
   const [open, setOpen] = useState(false)
   const sev = f.severity || 'info'
   return (
-    <div className="rounded-lg border border-white/10 bg-black/30 overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left px-3 py-2 hover:bg-white/[0.03] transition-colors">
+    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] overflow-hidden">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left px-3 py-2 hover:bg-[var(--row-hover-bg)] transition-colors">
         <div className="flex items-start gap-2">
           <span className="font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 uppercase" style={{ color: SEV_COLOR[sev], background: `${SEV_COLOR[sev]}1a` }}>{sev}</span>
           <span className="min-w-0 flex-1">
-            <span className="text-[12px] text-white/85 block leading-snug">{f.title}</span>
-            <span className="text-[10px] font-mono text-white/35 block truncate">{f.location || f.file} {f.resource ? `· ${f.resource}` : ''}</span>
+            <span className="text-[12px] text-[var(--text-primary)] block leading-snug">{f.title}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] block truncate">{f.location || f.file} {f.resource ? `· ${f.resource}` : ''}</span>
           </span>
-          <span className="text-white/30 text-xs">{open ? '−' : '+'}</span>
+          <span className="text-[var(--text-disabled)] text-xs">{open ? '−' : '+'}</span>
         </div>
-      </button>
+      </Button>
       {open && (
-        <div className="px-3 pb-3 space-y-2 border-t border-white/5 text-[11px]">
-          <p className="text-white/55 leading-relaxed mt-2">{f.description}</p>
+        <div className="px-3 pb-3 space-y-2 border-t border-[var(--border-subtle)] text-[11px]">
+          <p className="text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
           <div className="flex flex-wrap gap-1.5">
             {f.framework && <Badge>{f.framework}</Badge>}
             {f.provider && <Badge>{f.provider}</Badge>}
@@ -1139,20 +1141,20 @@ function FindingCard({ f }) {
           {f.remediation && (
             <div>
               <p className="text-[9px] font-mono uppercase text-emerald-400/70">Remediation</p>
-              <p className="text-white/60 leading-relaxed">{f.remediation}</p>
+              <p className="text-[var(--text-tertiary)] leading-relaxed">{f.remediation}</p>
             </div>
           )}
           {f.code_fix && (
-            <pre className="rounded-lg bg-black/60 border border-emerald-500/20 p-2 text-[10px] font-mono text-emerald-300/80 overflow-auto whitespace-pre-wrap">{f.code_fix}</pre>
+            <pre className="rounded-lg bg-[var(--scrim)] border border-emerald-500/20 p-2 text-[10px] font-mono text-emerald-300/80 overflow-auto whitespace-pre-wrap">{f.code_fix}</pre>
           )}
           {Array.isArray(f.compliance) && f.compliance.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {f.compliance.map((c) => <span key={c} className="text-[8px] font-mono px-1 py-0.5 rounded bg-white/5 text-white/40">{c}</span>)}
+              {f.compliance.map((c) => <span key={c} className="text-[8px] font-mono px-1 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)]">{c}</span>)}
             </div>
           )}
           {Array.isArray(f.references) && f.references.length > 0 && (
             <div className="flex flex-col gap-0.5">
-              {f.references.filter((r) => r.startsWith('http')).slice(0, 3).map((r) => (
+              {f.references.filter(isHttpUrl).slice(0, 3).map((r) => (
                 <a key={r} href={r} target="_blank" rel="noreferrer" className="text-[9px] font-mono text-cyan-400/60 hover:text-cyan-300 truncate">{r}</a>
               ))}
             </div>
@@ -1167,7 +1169,7 @@ function MitreRollup({ rows }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {rows.slice(0, 12).map((r) => (
-        <span key={r.technique} className="text-[9px] font-mono px-2 py-1 rounded border border-white/10 bg-black/30" style={{ color: SEV_COLOR[r.max_severity] || '#94a3b8' }}>
+        <span key={r.technique} className="text-[9px] font-mono px-2 py-1 rounded border border-[var(--border-default)] bg-[var(--table-surface)]" style={{ color: SEV_COLOR[r.max_severity] || '#94a3b8' }}>
           {r.technique} · {r.findings}
         </span>
       ))}
@@ -1180,7 +1182,7 @@ function ExecutiveBanner({ summary }) {
   return (
     <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/20 px-4 py-3">
       <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/70 mb-1">{summary?.gate_profile ? `Gate: ${summary.gate_profile}` : 'Executive Posture'}</p>
-      <p className="text-sm text-white/80 leading-relaxed">{ex.narrative}</p>
+      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{ex.narrative}</p>
     </div>
   )
 }
@@ -1188,11 +1190,11 @@ function RiskHeatmap({ heatmap }) {
   const rows = heatmap?.rows
   if (!Array.isArray(rows) || !rows.length) return null
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 p-4 overflow-x-auto">
-      <p className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">Risk Heatmap (framework × severity)</p>
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 overflow-x-auto">
+      <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">Risk Heatmap (framework × severity)</p>
       <table className="w-full text-[10px] font-mono">
         <thead>
-          <tr className="text-white/35">
+          <tr className="text-[var(--text-muted)]">
             <th className="text-left py-1 pr-2">Framework</th>
             {['critical', 'high', 'medium', 'low'].map((s) => <th key={s} className="px-2 py-1 uppercase" style={{ color: SEV_COLOR[s] }}>{s}</th>)}
             <th className="px-2 py-1">Σ</th>
@@ -1200,12 +1202,12 @@ function RiskHeatmap({ heatmap }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.framework} className="border-t border-white/5">
-              <td className="py-1 pr-2 text-white/70">{r.framework}</td>
+            <tr key={r.framework} className="border-t border-[var(--border-subtle)]">
+              <td className="py-1 pr-2 text-[var(--text-secondary)]">{r.framework}</td>
               {['critical', 'high', 'medium', 'low'].map((s) => (
                 <td key={s} className="px-2 py-1 text-center" style={{ background: r[s] ? `${SEV_COLOR[s]}18` : 'transparent', color: SEV_COLOR[s] }}>{r[s] || 0}</td>
               ))}
-              <td className="px-2 py-1 text-white/50 text-center">{r.total}</td>
+              <td className="px-2 py-1 text-[var(--text-tertiary)] text-center">{r.total}</td>
             </tr>
           ))}
         </tbody>
@@ -1220,11 +1222,11 @@ function CompliancePlaybooks({ playbooks }) {
       <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-300/80">Compliance Remediation Playbooks</p>
       <div className="max-h-52 overflow-auto space-y-2 pr-1">
         {playbooks.slice(0, 15).map((pb, i) => (
-          <div key={`${pb.control}-${i}`} className="rounded-lg border border-white/10 bg-black/30 p-2">
-            <p className="text-[10px] font-mono text-emerald-200/90">{pb.pack} · {pb.control} <span className="text-white/35">({pb.findings_linked} linked)</span></p>
+          <div key={`${pb.control}-${i}`} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
+            <p className="text-[10px] font-mono text-emerald-200/90">{pb.pack} · {pb.control} <span className="text-[var(--text-muted)]">({pb.findings_linked} linked)</span></p>
             <ul className="mt-1 space-y-0.5">
               {(pb.steps || []).slice(0, 3).map((step, j) => (
-                <li key={j} className="text-[9px] font-mono text-white/45 leading-snug">• {step}</li>
+                <li key={j} className="text-[9px] font-mono text-[var(--text-muted)] leading-snug">• {step}</li>
               ))}
             </ul>
           </div>
@@ -1238,7 +1240,7 @@ function InteractiveAttackGraph({ chains }) {
   const w = Math.min(720, chains.length * 200 + 80)
   const h = chains.length * 72 + 40
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-h-48 rounded-lg border border-white/10 bg-black/50" role="img" aria-label="Attack path graph">
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-h-48 rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)]" role="img" aria-label="Attack path graph">
       {chains.map((c, ci) => {
         const y = 24 + ci * 72
         const sev = c.severity || 'critical'
@@ -1295,9 +1297,9 @@ function CisScorecard({ scorecard }) {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {packs.map((p) => (
-          <div key={p.pack} className="rounded-lg border border-white/10 bg-black/30 p-2">
+          <div key={p.pack} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2">
             <p className="text-[10px] font-bold text-white">{p.pack}</p>
-            <p className="text-[9px] font-mono text-white/40">{p.pass_pct}% pass · {p.controls_failed} failed</p>
+            <p className="text-[9px] font-mono text-[var(--text-muted)]">{p.pass_pct}% pass · {p.controls_failed} failed</p>
           </div>
         ))}
       </div>
@@ -1314,7 +1316,7 @@ function HipaaReportPanel({ report }) {
           {report.phi_risk ? 'ePHI-risk' : 'BAA-ready'} · {report.pass_pct ?? 0}%
         </span>
       </div>
-      {report.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{report.narrative}</p>}
+      {report.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{report.narrative}</p>}
     </div>
   )
 }
@@ -1328,7 +1330,7 @@ function NistReportPanel({ report }) {
           {report.fedramp_ready ? 'FedRAMP-ready' : 'gaps'} · {report.pass_pct ?? 0}%
         </span>
       </div>
-      {report.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{report.narrative}</p>}
+      {report.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{report.narrative}</p>}
     </div>
   )
 }
@@ -1342,7 +1344,7 @@ function Iso27001ReportPanel({ report }) {
           {report.certification_ready ? 'cert-ready' : 'gaps'} · {report.pass_pct ?? 0}%
         </span>
       </div>
-      {report.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{report.narrative}</p>}
+      {report.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{report.narrative}</p>}
     </div>
   )
 }
@@ -1356,7 +1358,7 @@ function FedRampReportPanel({ report }) {
           {report.ato_ready ? 'ATO-ready' : 'ATO-risk'} · {report.pass_pct ?? 0}%
         </span>
       </div>
-      {report.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{report.narrative}</p>}
+      {report.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{report.narrative}</p>}
     </div>
   )
 }
@@ -1375,7 +1377,7 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
   const elevation = liveBlast.risk_elevation ?? 0
   const verification = liveBlast.verification_status || 'static_graph'
   return (
-    <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-3">
+    <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] font-mono uppercase tracking-widest text-rose-300/90">
           {t('iacSecurity.live_blast_panel_title', 'Sovereign Live Blast Engine')}
@@ -1384,17 +1386,17 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
           {t('iacSecurity.live_blast_risk', 'Live {{live}} / Static {{static}} (+{{elev}})', { live: realLiveRisk ?? '—', static: staticRisk ?? '—', elev: elevation })}
         </span>
       </div>
-      <p className="text-[9px] font-mono text-white/40">
+      <p className="text-[9px] font-mono text-[var(--text-muted)]">
         {t('iacSecurity.live_blast_verification', 'Verification')}: <span className="text-cyan-300/80">{verification}</span>
         {liveBlast.k8s_auth_source && <> · K8s: {liveBlast.k8s_auth_source}</>}
       </p>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px] font-mono">
-        <div className="rounded-lg border border-white/10 bg-black/30 p-2"><span className="text-white/40">{t('iacSecurity.live_blast_nodes', 'Graph nodes')}</span><p className="text-white font-bold">{graph.node_count ?? 0}</p></div>
-        <div className="rounded-lg border border-white/10 bg-black/30 p-2"><span className="text-white/40">{t('iacSecurity.live_blast_paths', 'Proven paths')}</span><p className="text-rose-300 font-bold">{liveBlast.proven_path_count ?? 0}</p></div>
-        <div className="rounded-lg border border-white/10 bg-black/30 p-2"><span className="text-white/40">{t('iacSecurity.live_blast_score', 'Blast score')}</span><p className="text-amber-300 font-bold">{blast.blast_score ?? 0}</p></div>
-        <div className="rounded-lg border border-white/10 bg-black/30 p-2"><span className="text-white/40">{t('iacSecurity.live_blast_live', 'Live confirmed')}</span><p className="text-emerald-300 font-bold">{liveBlast.live_confirmed_resources ?? status.confirmed ?? 0}</p></div>
-        <div className="rounded-lg border border-white/10 bg-black/30 p-2"><span className="text-white/40">{t('iacSecurity.live_blast_irsa', 'IRSA bridges')}</span><p className="text-violet-300 font-bold">{liveBlast.cross_plane_bridges ?? 0}</p></div>
-        <div className="rounded-lg border border-white/10 bg-black/30 p-2"><span className="text-white/40">{t('iacSecurity.live_blast_iam', 'IAM proofs')}</span><p className="text-cyan-300 font-bold">{proofs.length}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_nodes', 'Graph nodes')}</span><p className="text-white font-bold">{graph.node_count ?? 0}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_paths', 'Proven paths')}</span><p className="text-rose-300 font-bold">{liveBlast.proven_path_count ?? 0}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_score', 'Blast score')}</span><p className="text-amber-300 font-bold">{blast.blast_score ?? 0}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_live', 'Live confirmed')}</span><p className="text-emerald-300 font-bold">{liveBlast.live_confirmed_resources ?? status.confirmed ?? 0}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_irsa', 'IRSA bridges')}</span><p className="text-violet-300 font-bold">{liveBlast.cross_plane_bridges ?? 0}</p></div>
+        <div className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] p-2"><span className="text-[var(--text-muted)]">{t('iacSecurity.live_blast_iam', 'IAM proofs')}</span><p className="text-cyan-300 font-bold">{proofs.length}</p></div>
       </div>
       {(status.not_deployed > 0 || status.contradicts_iac > 0) && (
         <div className="rounded-lg border border-orange-500/25 bg-orange-950/20 px-3 py-2 text-[10px] font-mono text-orange-200/90">
@@ -1405,7 +1407,7 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
         <div className="space-y-1 max-h-28 overflow-auto">
           <p className="text-[9px] font-mono text-violet-300/80 uppercase">{t('iacSecurity.k8s_rbac_prove', 'K8s SubjectAccessReview')} ({rbac.length})</p>
           {rbac.slice(0, 5).map((p, i) => (
-            <p key={i} className="text-[9px] font-mono text-white/45 truncate">{p.subject} → {p.verb} {p.resource} ({p.allowed ? 'ALLOW' : 'DENY'})</p>
+            <p key={i} className="text-[9px] font-mono text-[var(--text-muted)] truncate">{p.subject} → {p.verb} {p.resource} ({p.allowed ? 'ALLOW' : 'DENY'})</p>
           ))}
         </div>
       )}
@@ -1413,7 +1415,7 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
         <div className="space-y-1 max-h-28 overflow-auto">
           <p className="text-[9px] font-mono text-emerald-300/80 uppercase">{t('iacSecurity.live_blast_reconcile', 'Live reconcile')} ({matches.length})</p>
           {matches.slice(0, 6).map((m, i) => (
-            <p key={i} className="text-[9px] font-mono text-white/45 truncate">{m.live_status}: {m.evidence}</p>
+            <p key={i} className="text-[9px] font-mono text-[var(--text-muted)] truncate">{m.live_status}: {m.evidence}</p>
           ))}
         </div>
       )}
@@ -1421,29 +1423,33 @@ function LiveBlastPanel({ liveBlast, realLiveRisk, staticRisk }) {
         <div className="rounded-lg border border-emerald-500/25 bg-emerald-950/20 px-3 py-2 space-y-1">
           <p className="text-[10px] font-mono text-emerald-300/90">{t('iacSecurity.autopilot', 'Auto-Pilot remediation')}: {liveBlast.autopilot.patch_count} patches</p>
           {(liveBlast.autopilot.patches || []).slice(0, 3).map((p, i) => (
-            <p key={i} className="text-[9px] font-mono text-white/40 truncate">{p.toxic_class}: {p.file}</p>
+            <p key={i} className="text-[9px] font-mono text-[var(--text-muted)] truncate">{p.toxic_class}: {p.file}</p>
           ))}
           {liveBlast.autopilot.pr_url && (
-            <a href={liveBlast.autopilot.pr_url} target="_blank" rel="noreferrer" className="text-[9px] font-mono text-cyan-300 underline">
-              {liveBlast.autopilot.pr_url}
-            </a>
+            isHttpUrl(liveBlast.autopilot.pr_url) ? (
+              <a href={liveBlast.autopilot.pr_url} target="_blank" rel="noreferrer" className="text-[9px] font-mono text-cyan-300 underline">
+                {liveBlast.autopilot.pr_url}
+              </a>
+            ) : (
+              <span className="text-[9px] font-mono text-[var(--text-muted)]">{liveBlast.autopilot.pr_url}</span>
+            )
           )}
         </div>
       )}
       {paths.slice(0, 3).map((p) => (
-        <div key={p.id} className="rounded-lg border border-white/10 bg-black/25 px-3 py-2">
-          <p className="text-[10px] font-bold text-white/80">{p.title}</p>
+        <div key={p.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2">
+          <p className="text-[10px] font-bold text-[var(--text-secondary)]">{p.title}</p>
           <p className="text-[9px] font-mono text-amber-300/70">{p.toxic_class}</p>
-          <p className="text-[9px] font-mono text-white/45 mt-1">{p.narrative}</p>
+          <p className="text-[9px] font-mono text-[var(--text-muted)] mt-1">{p.narrative}</p>
         </div>
       ))}
       {mermaid.length > 0 && (
         <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/10 px-3 py-2">
-          <button type="button" onClick={() => setShowMermaid((s) => !s)} className="text-[9px] font-mono text-cyan-300/80 hover:text-cyan-200">
+          <Button variant="unstyled" type="button" onClick={() => setShowMermaid((s) => !s)} className="text-[9px] font-mono text-cyan-300/80 hover:text-cyan-200">
             {showMermaid ? t('iacSecurity.live_blast_hide_mermaid', 'Hide mermaid') : t('iacSecurity.live_blast_show_mermaid', 'Show live path mermaid')}
-          </button>
+          </Button>
           {showMermaid && (
-            <pre className="text-[8px] font-mono text-white/50 mt-2 whitespace-pre-wrap max-h-32 overflow-auto">{mermaid.join('\n\n')}</pre>
+            <pre className="text-[8px] font-mono text-[var(--text-tertiary)] mt-2 whitespace-pre-wrap max-h-32 overflow-auto">{mermaid.join('\n\n')}</pre>
           )}
         </div>
       )}
@@ -1460,8 +1466,8 @@ function AuditPacketPanel({ packet }) {
           {packet.audit_ready ? 'AUDIT-READY' : 'GAPS'} · {packet.findings_total ?? 0} findings
         </span>
       </div>
-      {packet.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{packet.narrative}</p>}
-      <p className="text-[9px] font-mono text-white/35">SOC2 + PCI + HIPAA + NIST + ISO 27001 + FedRAMP + gate evidence — export below.</p>
+      {packet.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{packet.narrative}</p>}
+      <p className="text-[9px] font-mono text-[var(--text-muted)]">SOC2 + PCI + HIPAA + NIST + ISO 27001 + FedRAMP + gate evidence — export below.</p>
     </div>
   )
 }
@@ -1470,10 +1476,10 @@ function GateEvidencePanel({ evidence }) {
   return (
     <div className="rounded-2xl border border-cyan-500/25 bg-cyan-950/15 p-4 space-y-2">
       <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/80">Gate Audit Evidence</p>
-      <p className="text-[11px] text-white/55">
+      <p className="text-[11px] text-[var(--text-tertiary)]">
         {evidence.gate_passed ? 'PASS' : 'FAIL'} · {evidence.blocking_findings_count ?? 0} blocking findings · {evidence.blocking_chains_count ?? 0} blocking chains · {evidence.waivers_applied ?? 0} waivers
       </p>
-      <p className="text-[9px] font-mono text-white/35">Deterministic CC8/PCI evidence packet for auditors — export JSON below.</p>
+      <p className="text-[9px] font-mono text-[var(--text-muted)]">Deterministic CC8/PCI evidence packet for auditors — export JSON below.</p>
     </div>
   )
 }
@@ -1487,10 +1493,10 @@ function PciReportPanel({ report }) {
           {report.cde_ready ? 'CDE-ready' : 'CDE-risk'} · {report.pass_pct ?? 0}%
         </span>
       </div>
-      {report.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{report.narrative}</p>}
+      {report.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{report.narrative}</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-auto pr-1">
         {report.requirements.slice(0, 10).map((r) => (
-          <div key={r.requirement} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5">
+          <div key={r.requirement} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-2 py-1.5">
             <p className="text-[9px] font-mono text-rose-200/90">Req {r.requirement}</p>
             <p className={`text-[10px] font-mono mt-0.5 ${status === 'pass' ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
               {r.findings_linked ?? 0} · {status}
@@ -1507,12 +1513,12 @@ function SupplyChainPanel({ findings, count }) {
   return (
     <div className="rounded-2xl border border-amber-500/25 bg-amber-950/15 p-4 space-y-2">
       <p className="text-[10px] font-mono uppercase tracking-widest text-amber-300/80">Supply-Chain Correlation ({count ?? rows.length})</p>
-      <p className="text-[9px] font-mono text-white/40">Cross-file toxic combos: unpinned deps + secrets, mutable images across stack.</p>
+      <p className="text-[9px] font-mono text-[var(--text-muted)]">Cross-file toxic combos: unpinned deps + secrets, mutable images across stack.</p>
       <div className="space-y-1 max-h-36 overflow-auto pr-1">
         {rows.slice(0, 10).map((f, i) => (
-          <div key={`${f.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-black/30 border border-amber-500/15">
+          <div key={`${f.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-[var(--table-surface)] border border-amber-500/15">
             <span className="text-amber-200/90">{f.policy_id || f.title}</span>
-            <span className="text-white/35 block truncate">{f.observed || f.description}</span>
+            <span className="text-[var(--text-muted)] block truncate">{f.observed || f.description}</span>
           </div>
         ))}
       </div>
@@ -1530,11 +1536,11 @@ function Soc2ReportPanel({ report }) {
           {report.audit_ready ? 'audit-ready' : 'audit-risk'} · {report.pass_pct ?? 0}%
         </span>
       </div>
-      {report.narrative && <p className="text-[11px] text-white/55 leading-relaxed">{report.narrative}</p>}
+      {report.narrative && <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">{report.narrative}</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {families.slice(0, 9).map((f) => (
-          <div key={f.cc_family} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5">
-            <p className="text-[9px] font-mono text-indigo-200/90">{f.cc_family} <span className="text-white/35">{f.title}</span></p>
+          <div key={f.cc_family} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-2 py-1.5">
+            <p className="text-[9px] font-mono text-indigo-200/90">{f.cc_family} <span className="text-[var(--text-muted)]">{f.title}</span></p>
             <p className={`text-[10px] font-mono mt-0.5 ${f.status === 'pass' ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
               {f.findings_linked ?? 0} findings · {f.status}
             </p>
@@ -1550,12 +1556,12 @@ function ReconcilePanel({ findings, count }) {
   return (
     <div className="rounded-2xl border border-violet-500/25 bg-violet-950/15 p-4 space-y-2">
       <p className="text-[10px] font-mono uppercase tracking-widest text-violet-300/80">Plan ↔ Static Reconciliation ({count ?? rows.length})</p>
-      <p className="text-[9px] font-mono text-white/40 leading-snug">Detects when Terraform plan JSON and static HCL disagree — stale plans, module-expanded risk, or partial workspace scans.</p>
+      <p className="text-[9px] font-mono text-[var(--text-muted)] leading-snug">Detects when Terraform plan JSON and static HCL disagree — stale plans, module-expanded risk, or partial workspace scans.</p>
       <div className="space-y-1 max-h-36 overflow-auto pr-1">
         {rows.slice(0, 12).map((f, i) => (
-          <div key={`${f.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-black/30 border border-violet-500/15">
+          <div key={`${f.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-[var(--table-surface)] border border-violet-500/15">
             <span className="text-violet-200/90">{f.policy_id || f.title}</span>
-            <span className="text-white/35 block truncate">{f.observed || f.description}</span>
+            <span className="text-[var(--text-muted)] block truncate">{f.observed || f.description}</span>
           </div>
         ))}
       </div>
@@ -1570,9 +1576,9 @@ function DriftPanel({ findings, count }) {
       <p className="text-[10px] font-mono uppercase tracking-widest text-orange-300/80">Posture Drift ({count ?? drift.length})</p>
       <div className="space-y-1 max-h-36 overflow-auto pr-1">
         {drift.slice(0, 12).map((f, i) => (
-          <div key={`${f.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-black/30 border border-orange-500/15">
+          <div key={`${f.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-[var(--table-surface)] border border-orange-500/15">
             <span className="text-orange-200/90">{f.policy_id || f.title}</span>
-            <span className="text-white/35 block truncate">{f.observed || f.description}</span>
+            <span className="text-[var(--text-muted)] block truncate">{f.observed || f.description}</span>
           </div>
         ))}
       </div>
@@ -1586,16 +1592,16 @@ function AttackPathMermaid({ source, chains }) {
     <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/70">Attack Path Graph (Mermaid)</p>
-        <button type="button" onClick={() => setShowSrc((s) => !s)} className="text-[9px] font-mono text-white/40 hover:text-white/70">{showSrc ? 'hide source' : 'show mermaid'}</button>
+        <Button variant="unstyled" type="button" onClick={() => setShowSrc((s) => !s)} className="text-[9px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{showSrc ? 'hide source' : 'show mermaid'}</Button>
       </div>
       <div className="flex flex-wrap gap-2">
         {(chains || []).map((c) => (
-          <div key={c.id} className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-[9px] font-mono">
+          <div key={c.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-2 py-1.5 text-[9px] font-mono">
             <span className="text-rose-300/90 block">{c.id}</span>
-            <span className="text-white/50 flex flex-wrap items-center gap-0.5 mt-0.5">
+            <span className="text-[var(--text-tertiary)] flex flex-wrap items-center gap-0.5 mt-0.5">
               {(c.mitre_path || []).map((m, i) => (
                 <React.Fragment key={m}>
-                  {i > 0 && <span className="text-white/25">→</span>}
+                  {i > 0 && <span className="text-[var(--text-disabled)]">→</span>}
                   <span className="text-cyan-200/80">{m}</span>
                 </React.Fragment>
               ))}
@@ -1604,7 +1610,7 @@ function AttackPathMermaid({ source, chains }) {
         ))}
       </div>
       {showSrc && source && (
-        <pre className="rounded-lg bg-black/60 border border-white/10 p-2 text-[9px] font-mono text-emerald-300/70 overflow-auto whitespace-pre-wrap max-h-40">{source}</pre>
+        <pre className="rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2 text-[9px] font-mono text-emerald-300/70 overflow-auto whitespace-pre-wrap max-h-40">{source}</pre>
       )}
     </div>
   )
@@ -1616,10 +1622,10 @@ function WaiversPanel({ waivers }) {
       <p className="text-[10px] font-mono uppercase tracking-widest text-amber-300/80">Policy Waivers Applied ({waivers.length})</p>
       <div className="space-y-1 max-h-36 overflow-auto pr-1">
         {waivers.map((w, i) => (
-          <div key={`${w.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-black/30 border border-white/5">
+          <div key={`${w.policy_id}-${i}`} className="text-[10px] font-mono rounded px-2 py-1 bg-[var(--table-surface)] border border-[var(--border-subtle)]">
             <span className="text-amber-200/90">{w.policy_id}</span>
-            <span className="text-white/40"> · {w.file || w.resource}</span>
-            {w.reason && <span className="text-white/30 block">{w.reason}</span>}
+            <span className="text-[var(--text-muted)]"> · {w.file || w.resource}</span>
+            {w.reason && <span className="text-[var(--text-disabled)] block">{w.reason}</span>}
           </div>
         ))}
       </div>
@@ -1627,7 +1633,7 @@ function WaiversPanel({ waivers }) {
   )
 }
 function Badge({ children }) {
-  return <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-white/45 uppercase tracking-wide">{children}</span>
+  return <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-muted)] uppercase tracking-wide">{children}</span>
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -1925,12 +1931,12 @@ export default function IacSecurityCenter() {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-cyan-400/40 text-cyan-300 bg-cyan-500/10 uppercase tracking-widest">CNAPP · IaC Scanning</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">{paramCount} {t('iacSecurity.live_params', 'live parameters')}</span>
-                {summary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-white/15 text-white/50">{summary.policies_available} policies</span>}
+                {summary && <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[var(--border-strong)] text-[var(--text-tertiary)]">{summary.policies_available} policies</span>}
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label ? `${engine.label} — Security Center` : 'IaC Security Center'}</h1>
-              <p className="text-sm text-white/50 mt-1 max-w-2xl leading-relaxed">{t('iacSecurity.hero_desc', 'Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.')}</p>
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">{t('iacSecurity.hero_desc', 'Deterministic, agentless static analysis of your infrastructure code with deep policy coverage, secret detection, compliance posture and code-level remediation — inspired by Wiz, Checkov & tfsec.')}</p>
             </div>
-            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">Engine Detail →</Link>
+            <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">Engine Detail →</Link>
           </div>
         </motion.div>
 
@@ -1940,13 +1946,13 @@ export default function IacSecurityCenter() {
             <div className="rounded-2xl border border-cyan-500/25 bg-gradient-to-b from-cyan-950/30 to-black/50 p-3">
               <div className="flex items-center justify-between mb-2 px-1">
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2"><span>🎛️</span> {t('iacSecurity.control', 'Scan Control')}</h2>
-                <button type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-white/10 text-white/40 hover:text-white/70">{t('common.reset', 'Reset')}</button>
+                <Button variant="unstyled" type="button" onClick={resetParams} className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]">{t('common.reset', 'Reset')}</Button>
               </div>
 
               <Section title={t('iacSecurity.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{t('common.client', 'Client')}</span>
-                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
+                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
                     <option value="">—</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
                   </select>
@@ -1959,14 +1965,14 @@ export default function IacSecurityCenter() {
                   {MODES.map((m) => {
                     const on = params.scan_modes.includes(m.id)
                     return (
-                      <button key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-white/[0.06] border-cyan-400/50' : 'opacity-50 border-white/10 hover:opacity-90'}`}>
+                      <Button variant="unstyled" key={m.id} type="button" onClick={() => toggleIn('scan_modes', m.id)} className={`flex items-center gap-2 text-left w-full rounded-lg border px-2.5 py-1.5 transition-all ${on ? 'bg-[var(--row-hover-bg)] border-cyan-400/50' : 'opacity-50 border-[var(--border-default)] hover:opacity-90'}`}>
                         <span>{m.icon}</span>
                         <span className="min-w-0 flex-1">
                           <span className="text-xs font-semibold text-white block">{m.label}</span>
-                          <span className="text-[9px] text-white/40 block leading-tight">{m.desc}</span>
+                          <span className="text-[9px] text-[var(--text-muted)] block leading-tight">{m.desc}</span>
                         </span>
-                        <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-white/25'}`}>{on ? 'ON' : 'OFF'}</span>
-                      </button>
+                        <span className={`text-[9px] font-mono ${on ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}`}>{on ? 'ON' : 'OFF'}</span>
+                      </Button>
                     )
                   })}
                 </div>
@@ -1975,9 +1981,9 @@ export default function IacSecurityCenter() {
               {params.scan_modes.includes('static') && (
                 <Section title={t('iacSecurity.sec_static', 'Inline IaC')} icon="📝" accent="#a855f7" count={3}>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[9px] font-mono text-white/30 uppercase">{t('iacSecurity.load_sample', 'Load sample')}:</span>
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] uppercase">{t('iacSecurity.load_sample', 'Load sample')}:</span>
                     {Object.keys(SAMPLES).map((k) => (
-                      <button key={k} type="button" onClick={() => loadSample(k)} className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-white/10 text-cyan-300/70 hover:text-cyan-200 hover:border-cyan-400/40">{k}</button>
+                      <Button variant="unstyled" key={k} type="button" onClick={() => loadSample(k)} className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-default)] text-cyan-300/70 hover:text-cyan-200 hover:border-cyan-400/40">{k}</Button>
                     ))}
                   </div>
                   <Area label={t('iacSecurity.iac_content', 'IaC content')} value={params.iac_content} onChange={(v) => setField('iac_content', v)} rows={10} placeholder={'Paste Terraform / K8s / Dockerfile / CloudFormation / Compose / GH Actions / ARM…'} />
@@ -2054,27 +2060,27 @@ export default function IacSecurityCenter() {
               </Section>
 
               <Section title={t('iacSecurity.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">{showPreview ? t('iacSecurity.hide_json', 'hide JSON') : t('iacSecurity.show_json', 'show exact request JSON')}</button>
-                {showPreview && <pre className="max-h-60 overflow-auto rounded-lg bg-black/60 border border-white/10 p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">{JSON.stringify(previewBody, null, 2)}</pre>}
+                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200">{showPreview ? t('iacSecurity.hide_json', 'hide JSON') : t('iacSecurity.show_json', 'show exact request JSON')}</Button>
+                {showPreview && <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">{JSON.stringify(previewBody, null, 2)}</pre>}
               </Section>
 
-              <button type="button" onClick={handleRun} disabled={running || !canRun} className="mt-3 w-full py-3 rounded-xl font-mono text-sm uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: running ? 'rgba(34,211,238,0.5)' : 'rgba(34,211,238,0.6)', background: running ? 'rgba(34,211,238,0.12)' : 'rgba(34,211,238,0.22)', color: '#cffafe', boxShadow: running ? 'none' : '0 0 24px rgba(34,211,238,0.18)' }}>
+              <Button variant="unstyled" type="button" onClick={handleRun} disabled={running || !canRun} className="mt-3 w-full py-3 rounded-xl font-mono text-sm uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: running ? 'rgba(34,211,238,0.5)' : 'rgba(34,211,238,0.6)', background: running ? 'rgba(34,211,238,0.12)' : 'rgba(34,211,238,0.22)', color: '#cffafe', boxShadow: running ? 'none' : '0 0 24px rgba(34,211,238,0.18)' }}>
                 {running ? t('iacSecurity.scanning', 'Scanning…') : t('iacSecurity.scan', 'Run IaC Scan')}
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* ── Results theatre ── */}
           <div className="space-y-6 min-w-0">
             {running && !summary && (
-              <div className="rounded-2xl border border-cyan-500/20 bg-black/40 p-6 space-y-4">
+              <div className="rounded-2xl border border-cyan-500/20 bg-[var(--bg-2)] p-6 space-y-4">
                 <p className="text-[11px] font-mono text-cyan-300/80 animate-pulse">{t('iacSecurity.running_note', 'Analyzing infrastructure code…')}</p>
                 <SkeletonWidgetGrid count={4} />
                 <SkeletonBar className="h-24 w-full" />
               </div>
             )}
             {lastScanAt && (
-              <p className="text-[10px] font-mono text-white/35">
+              <p className="text-[10px] font-mono text-[var(--text-muted)]">
                 {t('iacSecurity.last_scan', 'Last scan')}: {new Date(lastScanAt).toLocaleString()}
               </p>
             )}
@@ -2089,8 +2095,8 @@ export default function IacSecurityCenter() {
               </div>
             )}
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-5 text-center">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">{t('iacSecurity.posture', 'Security Posture')}</p>
+              <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.posture', 'Security Posture')}</p>
                 <ScoreGauge score={summary?.risk_score} grade={summary?.grade} blast={summary?.blast_radius_multiplier ?? 1} />
                 {summary && (
                   <div className={`mt-3 inline-block text-[10px] font-mono px-2 py-1 rounded ${summary.gate?.passed ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'}`}>
@@ -2098,8 +2104,8 @@ export default function IacSecurityCenter() {
                   </div>
                 )}
               </div>
-              <div className="2xl:col-span-2 rounded-2xl border border-white/10 bg-black/40 p-5">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">{t('iacSecurity.severity_breakdown', 'Severity Breakdown')}</p>
+              <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.severity_breakdown', 'Severity Breakdown')}</p>
                 <SeverityBars bySeverity={summary?.by_severity} />
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
                   <MetricTile label="Findings" value={summary?.findings_total} accent="#ef4444" />
@@ -2118,7 +2124,7 @@ export default function IacSecurityCenter() {
               <div className="rounded-2xl border border-rose-500/25 bg-rose-950/20 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-rose-300/80">{t('iacSecurity.attack_paths', 'Attack Paths (toxic combinations)')}</p>
-                  <span className="text-[9px] font-mono text-white/35">{attackChains.length} {t('iacSecurity.chains_detected', 'chains from correlated policies')}</span>
+                  <span className="text-[9px] font-mono text-[var(--text-muted)]">{attackChains.length} {t('iacSecurity.chains_detected', 'chains from correlated policies')}</span>
                 </div>
                 <InteractiveAttackGraph chains={attackChains} />
                 <AttackPathMermaid source={summary?.attack_path_mermaid} chains={attackChains} />
@@ -2150,8 +2156,8 @@ export default function IacSecurityCenter() {
             {summary?.compliance_playbooks?.length > 0 && <CompliancePlaybooks playbooks={summary.compliance_playbooks} />}
 
             {summary?.framework_coverage && (
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">{t('iacSecurity.framework_coverage', 'Framework Policy Coverage')}</p>
+              <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.framework_coverage', 'Framework Policy Coverage')}</p>
                 <FrameworkCoverage coverage={summary.framework_coverage} />
               </div>
             )}
@@ -2161,11 +2167,11 @@ export default function IacSecurityCenter() {
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-300/80">{t('iacSecurity.remediation_queue', 'Prioritized Remediation Queue')}</p>
                 <div className="max-h-48 overflow-auto space-y-1 pr-1">
                   {remediationQueue.slice(0, 20).map((r, i) => (
-                    <div key={`${r.policy_id}-${i}`} className="flex items-start gap-2 text-[10px] font-mono rounded px-2 py-1 bg-black/30 border border-white/5">
-                      <span className="text-white/30 w-4">{i + 1}.</span>
+                    <div key={`${r.policy_id}-${i}`} className="flex items-start gap-2 text-[10px] font-mono rounded px-2 py-1 bg-[var(--table-surface)] border border-[var(--border-subtle)]">
+                      <span className="text-[var(--text-disabled)] w-4">{i + 1}.</span>
                       <span className="min-w-0 flex-1">
-                        <span className="text-white/75 block">{r.policy_id} {r.in_attack_chain ? '⚡' : ''}</span>
-                        <span className="text-white/35 truncate block">{r.file} · {r.resource}</span>
+                        <span className="text-[var(--text-secondary)] block">{r.policy_id} {r.in_attack_chain ? '⚡' : ''}</span>
+                        <span className="text-[var(--text-muted)] truncate block">{r.file} · {r.resource}</span>
                       </span>
                       <span className="uppercase shrink-0" style={{ color: SEV_COLOR[r.severity] }}>{r.severity}</span>
                     </div>
@@ -2175,22 +2181,22 @@ export default function IacSecurityCenter() {
             )}
 
             {policyCatalog.length > 0 && (
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">{t('iacSecurity.policy_catalog', 'Policy Catalog')}</p>
+              <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.policy_catalog', 'Policy Catalog')}</p>
                 <PolicyCatalog catalog={policyCatalog} query={policyQuery} onQuery={setPolicyQuery} />
               </div>
             )}
 
             {summary?.mitre_rollup?.length > 0 && (
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">{t('iacSecurity.mitre_rollup', 'MITRE ATT&CK Rollup')}</p>
+              <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.mitre_rollup', 'MITRE ATT&CK Rollup')}</p>
                 <MitreRollup rows={summary.mitre_rollup} />
               </div>
             )}
 
             {summary?.compliance && summary.compliance.length > 0 && (
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">{t('iacSecurity.compliance_posture', 'Compliance Posture')}</p>
+              <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">{t('iacSecurity.compliance_posture', 'Compliance Posture')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {summary.compliance.map((p) => <ComplianceCard key={p.pack} pack={p} />)}
                 </div>
@@ -2198,59 +2204,60 @@ export default function IacSecurityCenter() {
             )}
 
             {/* Telemetry */}
-            <div className="rounded-2xl border border-white/10 bg-black/60 overflow-hidden">
-              <div className="px-4 py-2 border-b border-white/5 text-[10px] font-mono text-white/40 uppercase tracking-widest">{t('iacSecurity.telemetry', 'Scan Telemetry')}</div>
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] overflow-hidden">
+              <div className="px-4 py-2 border-b border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('iacSecurity.telemetry', 'Scan Telemetry')}</div>
               <pre className="h-32 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">{lines.length ? lines.join('\n') : t('iacSecurity.awaiting', 'Awaiting scan…')}</pre>
             </div>
 
             {/* Findings */}
-            <div className="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
                   {shownFindings.length}/{policyFindings.length} {t('iacSecurity.findings', 'Findings')}
                 </p>
                 <div className="relative min-w-[200px] flex-1 max-w-xs">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-disabled)]" />
                   <input
                     type="search"
                     value={findingSearch}
                     onChange={(e) => setFindingSearch(e.target.value)}
+                    aria-label={t('iacSecurity.findings_search', 'Search policy, file, resource…')}
                     placeholder={t('iacSecurity.findings_search', 'Search policy, file, resource…')}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-black/50 border border-white/10 text-[11px] font-mono text-white/80 placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] text-[11px] font-mono text-[var(--text-secondary)] placeholder-white/25 focus:outline-none focus:border-cyan-500/40"
                   />
                 </div>
                 <div className="flex gap-1 items-center flex-wrap">
                   {summary && (
                     <>
-                      <button type="button" onClick={exportBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 text-emerald-300/80 hover:bg-emerald-500/10">
+                      <Button variant="unstyled" type="button" onClick={exportBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 text-emerald-300/80 hover:bg-emerald-500/10">
                         {t('iacSecurity.export_bundle', 'Export remediation bundle')}
-                      </button>
+                      </Button>
                       {summary.audit_packet && (
-                        <button type="button" onClick={exportAuditPacket} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
+                        <Button variant="unstyled" type="button" onClick={exportAuditPacket} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
                           {t('iacSecurity.export_audit_packet', 'Export audit packet')}
-                        </button>
+                        </Button>
                       )}
                       {summary.gate_evidence && (
-                        <button type="button" onClick={exportGateEvidence} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
+                        <Button variant="unstyled" type="button" onClick={exportGateEvidence} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
                           {t('iacSecurity.export_gate_evidence', 'Export gate evidence')}
-                        </button>
+                        </Button>
                       )}
                       {summary.fix_bundle?.fix_count > 0 && (
                         <>
-                          <button type="button" onClick={exportFixBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
+                          <Button variant="unstyled" type="button" onClick={exportFixBundle} className="text-[9px] font-mono px-2 py-0.5 rounded border border-violet-400/30 text-violet-300/80 hover:bg-violet-500/10">
                             {t('iacSecurity.export_fixes', 'Export fix bundle')} ({summary.fix_bundle.fix_count})
-                          </button>
+                          </Button>
                           {summary.fix_bundle?.shell_script && (
-                            <button type="button" onClick={exportShellScript} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
+                            <Button variant="unstyled" type="button" onClick={exportShellScript} className="text-[9px] font-mono px-2 py-0.5 rounded border border-cyan-400/30 text-cyan-300/80 hover:bg-cyan-500/10">
                               Export .sh script
-                            </button>
+                            </Button>
                           )}
                         </>
                       )}
                     </>
                   )}
                   {['all', ...SEVERITIES].map((s) => (
-                    <button key={s} type="button" onClick={() => setSevFilter(s)} className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${sevFilter === s ? 'border-cyan-400/50 text-cyan-200 bg-cyan-500/10' : 'border-white/10 text-white/40'}`}>{s}</button>
+                    <Button variant="unstyled" key={s} type="button" onClick={() => setSevFilter(s)} className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase ${sevFilter === s ? 'border-cyan-400/50 text-cyan-200 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>{s}</Button>
                   ))}
                 </div>
               </div>
@@ -2260,7 +2267,7 @@ export default function IacSecurityCenter() {
                     {shownFindings.slice(0, 300).map((f, i) => <FindingCard key={`${f.policy_id}-${i}`} f={f} />)}
                   </motion.div>
                 ) : (
-                  <p className="text-[11px] text-white/30 font-mono py-6 text-center">
+                  <p className="text-[11px] text-[var(--text-disabled)] font-mono py-6 text-center">
                     {running
                       ? t('iacSecurity.running_note', 'Analyzing infrastructure code…')
                       : findingSearch.trim()

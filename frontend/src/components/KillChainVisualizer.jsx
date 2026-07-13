@@ -28,10 +28,10 @@ export default function KillChainVisualizer() {
                   ? 'border-cyber-cyan bg-cyber-cyan/10 text-cyber-cyan shadow-[0_0_12px_rgba(0,243,255,0.3)]'
                   : isPast
                     ? 'border-cyber-cyan/40 bg-cyber-cyan/5 text-cyber-cyan/80'
-                    : 'border-white/10 bg-white/5 text-slate-500'
+                    : 'border-white/10 bg-white/5 text-[var(--text-muted)]'
               }`}
             >
-              <span className="tabular-nums text-slate-500 mr-2">0{i + 1}</span>
+              <span className="tabular-nums text-[var(--text-muted)] mr-2">0{i + 1}</span>
               {t(`${NS}.phases.${phase.id}`)}
               {isActive && <span className="ml-1 animate-pulse">▸</span>}
             </div>

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.complianceDashboard'
 
@@ -166,22 +167,22 @@ export default function ComplianceDashboardTab() {
           />
         </label>
         <div className="flex flex-wrap gap-3 pt-2">
-          <button
+          <Button variant="unstyled"
             type="button"
             disabled={saving}
             onClick={saveCloudIntegration}
             className="px-4 py-2 rounded-xl text-sm font-medium border border-[#22d3ee]/40 text-[#22d3ee] hover:bg-[#22d3ee]/10 disabled:opacity-50"
           >
             {saving ? t(`${NS}.saving`) : t(`${NS}.saveCloudIntegration`)}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             disabled={scanning || !arn.trim()}
             onClick={runCloudScan}
             className="px-4 py-2 rounded-xl text-sm font-semibold border border-white/20 bg-white/5 text-white hover:bg-white/10 disabled:opacity-40"
           >
             {scanning ? t(`${NS}.scanning`) : t(`${NS}.runAgentlessScan`)}
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -195,7 +196,7 @@ export default function ComplianceDashboardTab() {
           {frameworks.map((f) => (
             <div
               key={f.framework}
-              className="rounded-xl border border-white/10 bg-slate-950/80 p-4 flex flex-col gap-1"
+              className="rounded-xl border border-white/10 bg-[var(--bg-0)]/80 p-4 flex flex-col gap-1"
             >
               <span className="text-xs uppercase tracking-widest text-white/45">{labelForFramework(f.framework)}</span>
               <span className="text-3xl font-bold text-white tabular-nums">{f.compliance_percent}%</span>

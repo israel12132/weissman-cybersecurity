@@ -13,21 +13,26 @@
  */
 import { ClientProvider } from '../context/ClientContext'
 import { TelemetryProvider } from '../context/TelemetryContext'
+import { NotificationProvider } from '../context/NotificationContext'
 import { WarRoomProvider } from '../context/WarRoomContext'
 import { EngineHubProvider } from '../context/EngineHubContext'
 import { EngineManifestProvider } from '../engineC2/EngineManifestContext'
+import IdleTimeoutWatcher from '../components/auth/IdleTimeoutWatcher'
 
 export function ProtectedProviders({ children }) {
   return (
     <ClientProvider>
       <TelemetryProvider>
-        <WarRoomProvider>
-          <EngineHubProvider>
-            <EngineManifestProvider>
-              {children}
-            </EngineManifestProvider>
-          </EngineHubProvider>
-        </WarRoomProvider>
+        <NotificationProvider>
+          <WarRoomProvider>
+            <EngineHubProvider>
+              <EngineManifestProvider>
+                <IdleTimeoutWatcher />
+                {children}
+              </EngineManifestProvider>
+            </EngineHubProvider>
+          </WarRoomProvider>
+        </NotificationProvider>
       </TelemetryProvider>
     </ClientProvider>
   )

@@ -2,7 +2,13 @@
  * Export tenant findings rows to CSV — live data only, no fabricated columns.
  */
 export function escapeCsvCell(v) {
-  return `"${String(v ?? '').replace(/"/g, '""')}"`
+  let s = String(v ?? '')
+  // Neutralize spreadsheet formula injection: a cell that Excel/Sheets would evaluate as a formula
+  // (leading = + - @, or tab/CR) is prefixed with a single quote so it's treated as literal text.
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = `'${s}`
+  }
+  return `"${s.replace(/"/g, '""')}"`
 }
 
 export function downloadCsv(rows, header, filenamePrefix) {

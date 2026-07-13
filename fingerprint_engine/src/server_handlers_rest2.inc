@@ -186,7 +186,7 @@ async fn api_client_report_pdf(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "PDF generation failed", "detail": e.to_string()})),
+                Json(json!({"error": "PDF generation failed", "detail": scrub_internal_error(&e)})),
             )
                 .into_response();
         }

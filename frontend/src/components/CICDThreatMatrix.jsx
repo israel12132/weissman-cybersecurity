@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
+import Button from './ui/Button'
 
 const STAGE_KEYS = ['commit', 'build', 'test', 'deploy']
 
@@ -81,40 +82,40 @@ export default function CICDThreatMatrix() {
             value={runRepoUrl}
             onChange={(e) => setRunRepoUrl(e.target.value)}
             placeholder={t(`${NS}.repo_placeholder`)}
-            className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-sm text-white placeholder-slate-500 w-80"
+            className="rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] w-80"
           />
-          <button
+          <Button variant="unstyled"
             onClick={runScan}
             disabled={running || !clientId}
-            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-slate-600 text-white text-sm font-medium"
+            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:bg-[var(--bg-4)] text-white text-sm font-medium"
           >
             {running ? t(`${NS}.scanning`) : t(`${NS}.run_scan`)}
-          </button>
+          </Button>
         </div>
 
-        <div className="rounded-xl bg-slate-900/80 border border-slate-700/60 p-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">{t(`${NS}.pipeline_title`)}</h2>
+        <div className="rounded-xl bg-[var(--bg-1)]/80 border border-[var(--border-default)]/60 p-6">
+          <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-4">{t(`${NS}.pipeline_title`)}</h2>
           <div className="flex flex-wrap items-center justify-between gap-4">
             {STAGES.map((stage, idx) => {
               const count = (findingsByStage[stage.apiName] || []).length
               const isRed = count > 0
               return (
                 <div key={stage.key} className="flex items-center gap-2">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => count > 0 && setModalFinding(findingsByStage[stage.apiName][0])}
                     title={count > 0 ? t(`${NS}.view_findings`, { count }) : ''}
                     className={`rounded-xl px-6 py-4 font-bold text-sm transition-all ${
                       isRed
                         ? 'bg-red-500/30 border-2 border-red-500 text-red-200 hover:bg-red-500/50'
-                        : 'bg-slate-800 border border-slate-600 text-slate-300 hover:border-slate-500'
+                        : 'bg-[var(--bg-3)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]'
                     }`}
                   >
                     {stage.label}
                     {count > 0 && <span className="ml-2 text-xs">({count})</span>}
-                  </button>
+                  </Button>
                   {idx < STAGES.length - 1 && (
-                    <span className="text-slate-600">→</span>
+                    <span className="text-[var(--text-muted)]">→</span>
                   )}
                 </div>
               )
@@ -122,9 +123,9 @@ export default function CICDThreatMatrix() {
           </div>
         </div>
 
-        {loading && <p className="text-slate-500 mt-4">{t(`${NS}.loading_findings`)}</p>}
+        {loading && <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.loading_findings`)}</p>}
         {!loading && findings.length === 0 && (
-          <p className="text-slate-500 mt-4">{t(`${NS}.no_findings`)}</p>
+          <p className="text-[var(--text-muted)] mt-4">{t(`${NS}.no_findings`)}</p>
         )}
 
         {modalFinding && (
@@ -133,32 +134,32 @@ export default function CICDThreatMatrix() {
             onClick={() => setModalFinding(null)}
           >
             <div
-              className="rounded-xl bg-slate-900 border-2 border-slate-600 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              className="rounded-xl bg-[var(--bg-1)] border-2 border-[var(--border-strong)] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-[var(--border-default)] flex items-center justify-between">
                 <h3 className="text-lg font-bold text-red-400">{t(`${NS}.playbook_title`)}</h3>
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => setModalFinding(null)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 >
                   ✕
-                </button>
+                </Button>
               </div>
-              <div className="p-4 text-sm text-amber-200 bg-amber-500/10 border-b border-slate-700">
+              <div className="p-4 text-sm text-amber-200 bg-amber-500/10 border-b border-[var(--border-default)]">
                 <strong>{t(`${NS}.blast_radius`)}</strong> {modalFinding.blast_radius || '—'}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 overflow-auto flex-1">
                 <div>
-                  <div className="text-slate-400 text-xs uppercase mb-2">{t(`${NS}.vulnerable_code`, { path: modalFinding.file_path })}</div>
-                  <pre className="rounded-lg bg-slate-950 p-4 text-slate-300 text-xs overflow-x-auto whitespace-pre-wrap border border-slate-700">
+                  <div className="text-[var(--text-tertiary)] text-xs uppercase mb-2">{t(`${NS}.vulnerable_code`, { path: modalFinding.file_path })}</div>
+                  <pre className="rounded-lg bg-[var(--bg-0)] p-4 text-[var(--text-secondary)] text-xs overflow-x-auto whitespace-pre-wrap border border-[var(--border-default)]">
                     {modalFinding.vulnerable_snippet || '—'}
                   </pre>
                 </div>
                 <div>
-                  <div className="text-slate-400 text-xs uppercase mb-2">{t(`${NS}.poc_code`)}</div>
-                  <pre className="rounded-lg bg-slate-950 p-4 text-red-200/90 text-xs overflow-x-auto whitespace-pre-wrap border border-red-900/50">
+                  <div className="text-[var(--text-tertiary)] text-xs uppercase mb-2">{t(`${NS}.poc_code`)}</div>
+                  <pre className="rounded-lg bg-[var(--bg-0)] p-4 text-red-200/90 text-xs overflow-x-auto whitespace-pre-wrap border border-red-900/50">
                     {modalFinding.poc_exploit || '—'}
                   </pre>
                 </div>

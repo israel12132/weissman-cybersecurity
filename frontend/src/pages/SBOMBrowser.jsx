@@ -10,6 +10,7 @@ import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { apiFetch } from '../lib/apiBase';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 
 const FILTER_KEYS = ['all', 'vulnerable', 'high_severity', 'direct', 'transitive'];
 
@@ -148,7 +149,7 @@ export default function SBOMBrowser() {
       case 'low':
         return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
     }
   };
 
@@ -172,14 +173,14 @@ export default function SBOMBrowser() {
     >
       <div className="space-y-6">
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
             {error}
           </div>
         )}
 
         {showClientEmpty ? (
           <EmptyState
-            icon={<Database className="w-8 h-8 text-white/20" />}
+            icon={<Database className="w-8 h-8 text-[var(--text-disabled)]" />}
             title={t('pages.sbomBrowser.no_client_title')}
             description={t('pages.sbomBrowser.no_client')}
           />
@@ -188,13 +189,13 @@ export default function SBOMBrowser() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">{t('pages.sbomBrowser.total_components')}</span>
+                  <span className="text-sm text-[var(--text-tertiary)]">{t('pages.sbomBrowser.total_components')}</span>
                   <Package className="w-4 h-4 text-cyan-400" />
                 </div>
                 <div className="text-2xl font-bold text-white">{stats.total}</div>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-[var(--text-muted)] mt-1">
                   {t('pages.sbomBrowser.direct_transitive', { direct: stats.direct, transitive: stats.transitive })}
                 </div>
               </div>
@@ -241,27 +242,27 @@ export default function SBOMBrowser() {
               resultCount={visibleComponents.length}
               totalCount={categoryFilteredComponents.length}
             >
-              <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg p-1 flex-wrap">
+              <div className="flex items-center gap-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg p-1 flex-wrap">
                 {FILTER_KEYS.map((f) => (
-                  <button
+                  <Button variant="unstyled"
                     key={f}
                     type="button"
                     onClick={() => setFilter(f)}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                       filter === f
                         ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]'
                     }`}
                   >
                     {t(`pages.sbomBrowser.filter_${f}`)}
-                  </button>
+                  </Button>
                 ))}
               </div>
               {ecosystems.length > 0 && (
                 <select
                   value={ecosystemFilter}
                   onChange={(e) => setEcosystemFilter(e.target.value)}
-                  className="px-3 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  className="px-3 py-2 bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                 >
                   <option value="all">{t('pages.sbomBrowser.all_ecosystems')}</option>
                   {ecosystems.map((eco) => (
@@ -272,7 +273,7 @@ export default function SBOMBrowser() {
             </WeissmanListToolbar>
 
             <div className="flex justify-end gap-2">
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => exportSBOM('spdx')}
                 disabled={components.length === 0}
@@ -280,8 +281,8 @@ export default function SBOMBrowser() {
               >
                 <Download className="w-4 h-4" />
                 {t('pages.sbomBrowser.export_spdx')}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => exportSBOM('cyclonedx')}
                 disabled={components.length === 0}
@@ -289,14 +290,14 @@ export default function SBOMBrowser() {
               >
                 <Download className="w-4 h-4" />
                 {t('pages.sbomBrowser.export_cyclonedx')}
-              </button>
+              </Button>
             </div>
           </>
         )}
 
         {!showClientEmpty && (
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-white/10">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-[var(--border-default)]">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Package className="w-4 h-4 text-cyan-400" />
                 {t('pages.sbomBrowser.components_heading', { count: visibleComponents.length })}
@@ -305,7 +306,7 @@ export default function SBOMBrowser() {
 
             {showDataEmpty ? (
               <EmptyState
-                icon={<Package className="w-8 h-8 text-white/20" />}
+                icon={<Package className="w-8 h-8 text-[var(--text-disabled)]" />}
                 title={t('pages.sbomBrowser.empty_data_title')}
                 description={t('pages.sbomBrowser.empty_data')}
               />
@@ -316,13 +317,13 @@ export default function SBOMBrowser() {
                 description={t('weissmanFindings.filtered_body')}
               />
             ) : (
-              <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+              <div className="divide-y divide-[var(--border-subtle)] max-h-[600px] overflow-y-auto">
                 {visibleComponents.map((component) => {
                   const vulns = component.vulnerabilities || [];
                   return (
                     <div
                       key={component.id}
-                      className="p-4 hover:bg-white/5 transition-colors"
+                      className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
                         <div className="p-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg shrink-0">
@@ -333,7 +334,7 @@ export default function SBOMBrowser() {
                             <h4 className="text-sm font-semibold text-white font-mono">
                               {component.name || component.package_name}
                             </h4>
-                            <span className="text-xs text-gray-400 font-mono">
+                            <span className="text-xs text-[var(--text-tertiary)] font-mono">
                               v{component.version || component.version_spec || 'unknown'}
                             </span>
                             {component.type && (
@@ -341,7 +342,7 @@ export default function SBOMBrowser() {
                                 className={`px-2 py-0.5 rounded text-xs font-medium ${
                                   component.type === 'direct'
                                     ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                    : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                                    : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)] border border-[var(--border-strong)]/30'
                                 }`}
                               >
                                 {t(`pages.sbomBrowser.type_${component.type}`, component.type)}
@@ -353,14 +354,14 @@ export default function SBOMBrowser() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                          <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
                             {component.ecosystem && (
                               <span className="px-2 py-0.5 rounded border border-purple-500/20 text-purple-300/80 bg-purple-500/10">
                                 {component.ecosystem}
                               </span>
                             )}
                             {component.source && (
-                              <span className="font-mono text-white/35">{component.source}</span>
+                              <span className="font-mono text-[var(--text-muted)]">{component.source}</span>
                             )}
                             {component.created_at && (
                               <span>{t('pages.sbomBrowser.ingested_at', { date: new Date(component.created_at).toLocaleDateString() })}</span>
@@ -384,7 +385,7 @@ export default function SBOMBrowser() {
                                       className="flex items-center justify-between gap-2"
                                     >
                                       <div className="flex items-center gap-2 min-w-0">
-                                        <span className="text-xs font-mono text-gray-400 shrink-0">
+                                        <span className="text-xs font-mono text-[var(--text-tertiary)] shrink-0">
                                           {cveLabel(vuln)}
                                         </span>
                                         <span
@@ -393,7 +394,7 @@ export default function SBOMBrowser() {
                                           {vuln.severity}
                                         </span>
                                         {vuln.title && (
-                                          <span className="text-xs text-gray-500 truncate">
+                                          <span className="text-xs text-[var(--text-muted)] truncate">
                                             {vuln.title}
                                           </span>
                                         )}
@@ -412,7 +413,7 @@ export default function SBOMBrowser() {
                                   );
                                 })}
                                 {vulns.length > 3 && (
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-xs text-[var(--text-muted)]">
                                     {t('pages.sbomBrowser.more_vulnerabilities', { count: vulns.length - 3 })}
                                   </div>
                                 )}
@@ -435,7 +436,7 @@ export default function SBOMBrowser() {
               <AlertTriangle className="w-5 h-5 text-red-400" />
               <h3 className="text-sm font-semibold text-white">{t('pages.sbomBrowser.alert_title')}</h3>
             </div>
-            <p className="text-sm text-gray-300">
+            <p className="text-sm text-[var(--text-secondary)]">
               {t('pages.sbomBrowser.alert_body', { count: stats.vulnerable })}
             </p>
           </div>

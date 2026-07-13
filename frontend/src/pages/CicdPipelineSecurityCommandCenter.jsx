@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'cicd_pipeline'
 
@@ -133,31 +134,31 @@ function buildScanBody(params, clientId, target) {
 function Section({ title, icon, accent = '#84cc16', count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors">
+    <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors">
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
-          {count != null && <span className="text-white/30 normal-case tracking-normal">· {count}</span>}
+          {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
 
 function Hint({ children }) {
   if (!children) return null
-  return <span className="block text-[9px] font-mono text-white/25 mt-0.5 leading-snug">{children}</span>
+  return <span className="block text-[9px] font-mono text-[var(--text-disabled)] mt-0.5 leading-snug">{children}</span>
 }
 
 function Num({ label, value, onChange, min, max, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input type="number" min={min} max={max} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-lime-400/40" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-lime-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -166,9 +167,9 @@ function Num({ label, value, onChange, min, max, hint }) {
 function Sel({ label, value, onChange, options, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-lime-400/40">
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-lime-400/40">
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
       <Hint>{hint}</Hint>
@@ -179,9 +180,9 @@ function Sel({ label, value, onChange, options, hint }) {
 function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-lime-400/40" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white font-mono placeholder-white/20 focus:outline-none focus:border-lime-400/40" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -190,9 +191,9 @@ function Txt({ label, value, onChange, placeholder, hint, type = 'text' }) {
 function Area({ label, value, onChange, placeholder, rows = 3, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
       <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-lime-400/40 resize-y" />
+        className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-xs text-white font-mono placeholder-white/20 focus:outline-none focus:border-lime-400/40 resize-y" />
       <Hint>{hint}</Hint>
     </label>
   )
@@ -202,13 +203,13 @@ function Toggle({ label, value, onChange, hint }) {
   return (
     <div className="flex items-start justify-between gap-3 py-0.5">
       <div className="min-w-0">
-        <span className="text-[11px] font-mono text-white/70">{label}</span>
+        <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
         <Hint>{hint}</Hint>
       </div>
-      <button type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)}
-        className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-lime-500/40' : 'bg-black/60 border border-white/10'}`}>
+      <Button variant="unstyled" type="button" role="switch" aria-checked={value} onClick={() => onChange(!value)}
+        className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all ${value ? 'bg-lime-500/40' : 'bg-[var(--scrim)] border border-[var(--border-default)]'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${value ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -310,7 +311,7 @@ function PostureGauge({ score, grade }) {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold text-white">{pct || '—'}</span>
         {grade && <span className="text-lg font-mono text-lime-300/80">{grade}</span>}
-        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">Exposure</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Exposure</span>
       </div>
     </div>
   )
@@ -318,8 +319,8 @@ function PostureGauge({ score, grade }) {
 
 function MetricTile({ label, value, accent = '#84cc16' }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">{label}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-4" style={{ boxShadow: `inset 0 1px 0 ${accent}20` }}>
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{label}</p>
       <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
     </div>
   )
@@ -335,10 +336,10 @@ function RiskDimensionBar({ label, value, accent = '#84cc16' }) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[9px] font-mono uppercase tracking-wide">
-        <span className="text-white/45">{label}</span>
+        <span className="text-[var(--text-muted)]">{label}</span>
         <span style={{ color: accent }}>{pct}%</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] overflow-hidden">
         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: accent, boxShadow: `0 0 8px ${accent}60` }} />
       </div>
     </div>
@@ -350,8 +351,8 @@ function PolicyHitsPanel({ policyHits }) {
   const entries = Object.entries(policyHits).sort((a, b) => b[1] - a[1]).slice(0, 12)
   if (!entries.length) return null
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">WZ Policy Catalog Hits</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 space-y-2">
+      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">WZ Policy Catalog Hits</p>
       <div className="flex flex-wrap gap-1.5">
         {entries.map(([id, count]) => (
           <span key={id} className="text-[9px] font-mono px-2 py-0.5 rounded border border-lime-500/25 text-lime-200/90 bg-lime-500/10">
@@ -372,10 +373,10 @@ function CompliancePosturePanel({ compliancePosture }) {
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-cyan-300/60">Compliance Posture</p>
       <div className="grid grid-cols-2 gap-2">
         {entries.map(([fw, data]) => (
-          <div key={fw} className="rounded-lg border border-white/10 bg-black/40 px-2 py-1.5">
-            <p className="text-[9px] font-mono text-white/40 truncate">{fw}</p>
+          <div key={fw} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-2 py-1.5">
+            <p className="text-[9px] font-mono text-[var(--text-muted)] truncate">{fw}</p>
             <p className="text-lg font-bold text-cyan-200">{data?.score ?? '—'}</p>
-            <p className="text-[8px] font-mono text-white/30">{data?.policy_violations ?? 0} policy hits</p>
+            <p className="text-[8px] font-mono text-[var(--text-disabled)]">{data?.policy_violations ?? 0} policy hits</p>
           </div>
         ))}
       </div>
@@ -393,9 +394,9 @@ function RemediationPlaybookPanel({ playbook }) {
       </p>
       <div className="space-y-1.5 max-h-48 overflow-auto">
         {actions.map((a, i) => (
-          <div key={i} className="flex gap-2 text-[10px] border-b border-white/5 pb-1.5 last:border-0">
+          <div key={i} className="flex gap-2 text-[10px] border-b border-[var(--border-subtle)] pb-1.5 last:border-0">
             <span className="shrink-0 font-mono text-amber-400/90">{a.priority || 'P?'}</span>
-            <span className="text-white/65 leading-snug">{a.action}</span>
+            <span className="text-[var(--text-tertiary)] leading-snug">{a.action}</span>
           </div>
         ))}
       </div>
@@ -582,18 +583,18 @@ export default function CicdPipelineSecurityCommandCenter() {
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-400/30 text-emerald-300 bg-emerald-500/10 uppercase tracking-widest">
                   {paramCount} {t('cicdSec.params_badge', 'live parameters')}
                 </span>
-                <span className="text-[10px] font-mono text-white/30">MITRE T1195.002 · NIST SA-12</span>
+                <span className="text-[10px] font-mono text-[var(--text-disabled)]">MITRE T1195.002 · NIST SA-12</span>
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{engine?.label || 'CI/CD Pipeline Security'}</h1>
-              <p className="text-sm text-white/50 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-2xl leading-relaxed">
                 {t('cicdSec.hero_desc', 'Evidence-only: every finding requires a live HTTP/API signal or fetched pipeline artifact. No fabricated results.')}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Link to="/supply-chain" className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+              <Link to="/supply-chain" className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">
                 Supply Chain Hub →
               </Link>
-              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+              <Link to={`/engines/${ENGINE_ID}`} className="text-[11px] font-mono px-3 py-1.5 rounded-lg border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-colors">
                 Engine Detail →
               </Link>
             </div>
@@ -607,17 +608,17 @@ export default function CicdPipelineSecurityCommandCenter() {
                 <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                   <span>🎛️</span> {t('cicdSec.control_column', 'DevSecOps Control Column')}
                 </h2>
-                <button type="button" onClick={resetParams}
-                  className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 transition-colors">
+                <Button variant="unstyled" type="button" onClick={resetParams}
+                  className="text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-md border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors">
                   {t('common.reset', 'Reset')}
-                </button>
+                </Button>
               </div>
 
               <Section title={t('cicdSec.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-mono text-white/45 uppercase tracking-wide">{t('common.client', 'Client')}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
                   <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:border-lime-400/40">
+                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-lime-400/40">
                     <option value="">—</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
                   </select>
@@ -647,10 +648,10 @@ export default function CicdPipelineSecurityCommandCenter() {
                   {PLATFORMS.map((p) => {
                     const on = params.platform_filter.includes(p.id)
                     return (
-                      <button key={p.id} type="button" onClick={() => togglePlatform(p.id)}
-                        className={`text-[10px] font-mono px-2 py-1 rounded-lg border transition-colors ${on ? 'border-lime-400/50 text-lime-200 bg-lime-500/15' : 'border-white/10 text-white/40 hover:border-white/25'}`}>
+                      <Button variant="unstyled" key={p.id} type="button" onClick={() => togglePlatform(p.id)}
+                        className={`text-[10px] font-mono px-2 py-1 rounded-lg border transition-colors ${on ? 'border-lime-400/50 text-lime-200 bg-lime-500/15' : 'border-[var(--border-default)] text-[var(--text-muted)] hover:border-[var(--border-strong)]'}`}>
                         {p.icon} {p.label}
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -681,10 +682,10 @@ export default function CicdPipelineSecurityCommandCenter() {
                   {FRAMEWORKS.map((f) => {
                     const on = params.compliance_frameworks.includes(f)
                     return (
-                      <button key={f} type="button" onClick={() => toggleFramework(f)}
-                        className={`text-[9px] font-mono px-2 py-1 rounded-lg border transition-colors ${on ? 'border-cyan-400/40 text-cyan-200 bg-cyan-500/10' : 'border-white/10 text-white/40'}`}>
+                      <Button variant="unstyled" key={f} type="button" onClick={() => toggleFramework(f)}
+                        className={`text-[9px] font-mono px-2 py-1 rounded-lg border transition-colors ${on ? 'border-cyan-400/40 text-cyan-200 bg-cyan-500/10' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}>
                         {f}
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -702,18 +703,18 @@ export default function CicdPipelineSecurityCommandCenter() {
               </Section>
 
               <Section title={t('cicdSec.sec_payload', 'Live Payload Preview')} icon="📦" accent="#64748b" count={paramCount} defaultOpen={false}>
-                <button type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-lime-300/70 hover:text-lime-200">
+                <Button variant="unstyled" type="button" onClick={() => setShowPreview((s) => !s)} className="text-[10px] font-mono text-lime-300/70 hover:text-lime-200">
                   {showPreview ? t('cicdSec.hide_json', 'hide JSON') : t('cicdSec.show_json', 'show exact request JSON')}
-                </button>
+                </Button>
                 {showPreview && (
-                  <pre className="max-h-60 overflow-auto rounded-lg bg-black/60 border border-white/10 p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
+                  <pre className="max-h-60 overflow-auto rounded-lg bg-[var(--scrim)] border border-[var(--border-default)] p-2.5 text-[10px] font-mono text-emerald-300/80 leading-relaxed">
                     {JSON.stringify(previewBody, null, 2)}
                   </pre>
                 )}
               </Section>
 
               <div className="mt-3 space-y-2">
-                <button type="button" onClick={() => handleRun()} disabled={running || !selectedClientId || !target.trim()}
+                <Button variant="unstyled" type="button" onClick={() => handleRun()} disabled={running || !selectedClientId || !target.trim()}
                   className="w-full py-3 rounded-xl font-mono text-sm uppercase tracking-widest border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
                     borderColor: running ? 'rgba(132,204,22,0.5)' : 'rgba(132,204,22,0.6)',
@@ -722,20 +723,20 @@ export default function CicdPipelineSecurityCommandCenter() {
                     boxShadow: running ? 'none' : '0 0 24px rgba(132,204,22,0.18)',
                   }}>
                   {running ? t('cicdSec.running', 'Assessing CI/CD…') : t('cicdSec.run', 'Run DevSecOps Scan')}
-                </button>
-                <button type="button" onClick={() => handleRun({ dryRun: true })} disabled={running || !selectedClientId || !target.trim()}
+                </Button>
+                <Button variant="unstyled" type="button" onClick={() => handleRun({ dryRun: true })} disabled={running || !selectedClientId || !target.trim()}
                   className="w-full py-2 rounded-xl font-mono text-[11px] uppercase tracking-widest border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                   {t('cicdSec.dry_run', 'Dry-Run Plan (no requests)')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
 
           <div className="space-y-6 min-w-0">
             <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
-              <div className="2xl:col-span-2 rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+              <div className="2xl:col-span-2 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">
                     {t('cicdSec.graph_viz', 'Supply Chain Attack Graph')}
                   </span>
                   {running && (
@@ -751,8 +752,8 @@ export default function CicdPipelineSecurityCommandCenter() {
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-5 text-center">
-                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-5 text-center">
+                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
                     {t('cicdSec.posture_score', 'DevSecOps Exposure Score')}
                   </p>
                   <PostureGauge score={metrics?.score} grade={metrics?.grade} />
@@ -769,8 +770,8 @@ export default function CicdPipelineSecurityCommandCenter() {
                   <MetricTile label="Attack Paths" value={attackPaths.length || '—'} accent="#84cc16" />
                 </div>
                 {metrics?.risk_dimensions && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2.5">
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">{t('cicdSec.risk_dimensions', '5-Dimension Risk Model')}</p>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3 space-y-2.5">
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)]">{t('cicdSec.risk_dimensions', '5-Dimension Risk Model')}</p>
                     <RiskDimensionBar label="API Exposure" value={metrics.risk_dimensions.api_exposure} accent="#ef4444" />
                     <RiskDimensionBar label="Pipeline Integrity" value={metrics.risk_dimensions.pipeline_integrity} accent="#f59e0b" />
                     <RiskDimensionBar label="Secrets Leakage" value={metrics.risk_dimensions.secrets_leakage} accent="#f97316" />
@@ -782,8 +783,8 @@ export default function CicdPipelineSecurityCommandCenter() {
                 <CompliancePosturePanel compliancePosture={metrics?.compliance_posture} />
                 <RemediationPlaybookPanel playbook={metrics?.remediation_playbook} />
                 {metrics?.platforms?.length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3">
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-2">Detected Platforms</p>
+                  <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2">Detected Platforms</p>
                     <div className="flex flex-wrap gap-1.5">
                       {metrics.platforms.map((pid) => {
                         const p = PLATFORMS.find((x) => x.id === pid)
@@ -807,17 +808,17 @@ export default function CicdPipelineSecurityCommandCenter() {
                     {t('cicdSec.attack_paths', 'Attack Paths (Toxic Combinations)')} · {attackPaths.length}
                   </p>
                   {attackPaths.map((p, i) => (
-                    <div key={i} className="rounded-lg border border-white/10 bg-black/40 p-3">
+                    <div key={i} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-[10px] font-mono" style={sevColor(p.severity)}>[{p.severity}]</span>
                         <span className="text-sm font-semibold text-white">{p.title}</span>
                       </div>
-                      {p.description && <p className="text-[10px] text-white/45 leading-snug">{p.description}</p>}
+                      {p.description && <p className="text-[10px] text-[var(--text-muted)] leading-snug">{p.description}</p>}
                       {Array.isArray(p.path_steps) && p.path_steps.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5 mt-2">
                           {p.path_steps.map((step, j) => (
                             <React.Fragment key={j}>
-                              <span className="text-[10px] font-mono text-white/60 rounded border border-white/10 bg-black/40 px-1.5 py-0.5">{step}</span>
+                              <span className="text-[10px] font-mono text-[var(--text-tertiary)] rounded border border-[var(--border-default)] bg-[var(--bg-2)] px-1.5 py-0.5">{step}</span>
                               {j < p.path_steps.length - 1 && <span className="text-lime-400/60 text-xs">→</span>}
                             </React.Fragment>
                           ))}
@@ -829,8 +830,8 @@ export default function CicdPipelineSecurityCommandCenter() {
               )}
             </AnimatePresence>
 
-            <div className="rounded-2xl border border-white/10 bg-black/60 overflow-hidden">
-              <div className="px-4 py-2 border-b border-white/5 text-[10px] font-mono text-white/40 uppercase tracking-widest">
+            <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--scrim)] overflow-hidden">
+              <div className="px-4 py-2 border-b border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
                 {t('cicdSec.telemetry', 'Scan Telemetry')}
               </div>
               <pre className="h-44 overflow-auto p-3 text-[10px] font-mono text-emerald-400/80 leading-relaxed">
@@ -856,18 +857,18 @@ export default function CicdPipelineSecurityCommandCenter() {
               emptyReadyTitle={t('cicdSec.no_findings', 'No findings yet — configure target and run scan.')}
               emptyReadyBody={t('cicdSec.awaiting', 'Awaiting assessment…')}
               renderFinding={(f, i) => (
-                <div key={i} className="text-[11px] border-b border-white/5 pb-2 last:border-0">
+                <div key={i} className="text-[11px] border-b border-[var(--border-subtle)] pb-2 last:border-0">
                   <div className="flex items-start gap-2">
                     <span className="font-mono shrink-0" style={sevColor(f.severity)}>[{f.severity || 'info'}]</span>
-                    <span className="text-white/80 min-w-0 font-semibold">{f.title}</span>
+                    <span className="text-[var(--text-secondary)] min-w-0 font-semibold">{f.title}</span>
                   </div>
-                  {f.description && <p className="text-[10px] text-white/40 ml-1 mt-0.5 leading-snug">{f.description}</p>}
+                  {f.description && <p className="text-[10px] text-[var(--text-muted)] ml-1 mt-0.5 leading-snug">{f.description}</p>}
                   <div className="flex flex-wrap gap-1.5 ml-1 mt-1">
                     {f.evidence?.policy && (
                       <span className="text-[9px] font-mono text-lime-300/70 rounded border border-lime-500/20 px-1.5 py-0.5">{f.evidence.policy}</span>
                     )}
                     {f.mitre_attack && (
-                      <span className="text-[9px] font-mono text-white/30 rounded border border-white/10 px-1.5 py-0.5">{f.mitre_attack}</span>
+                      <span className="text-[9px] font-mono text-[var(--text-disabled)] rounded border border-[var(--border-default)] px-1.5 py-0.5">{f.mitre_attack}</span>
                     )}
                   </div>
                 </div>

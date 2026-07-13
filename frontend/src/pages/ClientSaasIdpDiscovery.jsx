@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../lib/apiBase'
 import { alertDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 function pct(n) {
   const v = Number(n)
@@ -124,7 +125,7 @@ export default function ClientSaasIdpDiscovery() {
       <PageShell title={t('pages.clientSaasIdpDiscovery.title')} subtitle={t('pages.clientEngagements.loading_subtitle')}>
         <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-slate-400">{t('pages.clientSaasIdpDiscovery.loading')}</p>
+          <p className="mt-4 text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.loading')}</p>
         </div>
       </PageShell>
     )
@@ -145,17 +146,17 @@ export default function ClientSaasIdpDiscovery() {
     >
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <Link to={`/clients/${clientId}`} className="text-sm text-slate-400 hover:text-slate-200">
+          <Link to={`/clients/${clientId}`} className="text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {t('pages.clientSaasIdpDiscovery.back_to_client')}
           </Link>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={runDiscovery}
             disabled={running}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
           >
             {running ? t('pages.clientSaasIdpDiscovery.running') : t('pages.clientSaasIdpDiscovery.rerun')}
-          </button>
+          </Button>
         </div>
 
         {error && (
@@ -164,22 +165,22 @@ export default function ClientSaasIdpDiscovery() {
           </div>
         )}
 
-        <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
+        <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.domains_heading')}</h2>
-          <div className="mt-2 text-sm text-slate-300">
+          <div className="mt-2 text-sm text-[var(--text-secondary)]">
             {domains.length === 0 ? (
-              <span className="text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_domains')}</span>
+              <span className="text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.empty_domains')}</span>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {domains.map((d) => (
-                  <span key={d} className="px-2 py-1 rounded bg-slate-900/60 border border-slate-700 font-mono text-[12px]">
+                  <span key={d} className="px-2 py-1 rounded bg-[var(--bg-1)]/60 border border-[var(--border-default)] font-mono text-[12px]">
                     {d}
                   </span>
                 ))}
               </div>
             )}
           </div>
-          <div className="mt-3 text-xs text-slate-500">
+          <div className="mt-3 text-xs text-[var(--text-muted)]">
             {t('pages.clientSaasIdpDiscovery.domains_hint')}
           </div>
         </div>
@@ -193,10 +194,10 @@ export default function ClientSaasIdpDiscovery() {
           />
         )}
 
-        <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
+        <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.idp_heading')}</h2>
           {idps.length === 0 ? (
-            <div className="mt-2 text-sm text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_idp')}</div>
+            <div className="mt-2 text-sm text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.empty_idp')}</div>
           ) : visibleIdps.length === 0 ? (
             <EmptyState
               icon="search"
@@ -214,32 +215,32 @@ export default function ClientSaasIdpDiscovery() {
                   const issuer = top?.issuer || ''
                   const finalHost = top?.final_host || top?.vendor_host || ''
                   return (
-                    <div key={c.vendor} className="p-4 bg-slate-900/40 border border-slate-700 rounded-lg">
+                    <div key={c.vendor} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <div className="text-white font-semibold">{vendorLabel(c.vendor)}</div>
-                          <div className="text-xs text-slate-400 mt-1">
+                          <div className="text-xs text-[var(--text-tertiary)] mt-1">
                             {t('pages.clientSaasIdpDiscovery.confidence', { pct: pct(c.confidence) })}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           {issuer && (
-                            <button
+                            <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(issuer)}
-                              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
+                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_issuer')}
-                            </button>
+                            </Button>
                           )}
                           {finalHost && (
-                            <button
+                            <Button variant="unstyled"
                               type="button"
                               onClick={() => copy(finalHost)}
-                              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
+                              className="px-3 py-1 text-xs bg-[var(--bg-4)] text-white rounded hover:bg-[var(--bg-4)]"
                             >
                               {t('pages.clientSaasIdpDiscovery.copy_host')}
-                            </button>
+                            </Button>
                           )}
                           <Link
                             to="/sso-config"
@@ -251,16 +252,16 @@ export default function ClientSaasIdpDiscovery() {
                       </div>
 
                       {issuer && (
-                        <div className="mt-3 text-[12px] text-slate-300 font-mono break-all">
+                        <div className="mt-3 text-[12px] text-[var(--text-secondary)] font-mono break-all">
                           {t('pages.clientSaasIdpDiscovery.issuer_label', { value: issuer })}
                         </div>
                       )}
                       {finalHost && (
-                        <div className="mt-1 text-[12px] text-slate-400 font-mono break-all">
+                        <div className="mt-1 text-[12px] text-[var(--text-tertiary)] font-mono break-all">
                           {t('pages.clientSaasIdpDiscovery.host_label', { value: finalHost })}
                         </div>
                       )}
-                      <div className="mt-3 text-xs text-slate-500">
+                      <div className="mt-3 text-xs text-[var(--text-muted)]">
                         {t('pages.clientSaasIdpDiscovery.idp_hint')}
                       </div>
                     </div>
@@ -270,10 +271,10 @@ export default function ClientSaasIdpDiscovery() {
           )}
         </div>
 
-        <div className="p-6 bg-slate-800/40 border border-slate-700 rounded-xl">
+        <div className="p-6 bg-[var(--bg-3)]/40 border border-[var(--border-default)] rounded-xl">
           <h2 className="text-lg font-semibold text-white">{t('pages.clientSaasIdpDiscovery.saas_heading')}</h2>
           {saas.length === 0 ? (
-            <div className="mt-2 text-sm text-slate-400">{t('pages.clientSaasIdpDiscovery.empty_saas')}</div>
+            <div className="mt-2 text-sm text-[var(--text-tertiary)]">{t('pages.clientSaasIdpDiscovery.empty_saas')}</div>
           ) : visibleSaas.length === 0 ? (
             <EmptyState
               icon="search"
@@ -284,9 +285,9 @@ export default function ClientSaasIdpDiscovery() {
           ) : (
             <div className="mt-4 space-y-3">
               {visibleSaas.map((s) => (
-                <div key={s.name} className="p-4 bg-slate-900/40 border border-slate-700 rounded-lg">
+                <div key={s.name} className="p-4 bg-[var(--bg-1)]/40 border border-[var(--border-default)] rounded-lg">
                   <div className="text-white font-semibold">{s.name}</div>
-                  <div className="mt-2 text-xs text-slate-300 font-mono space-y-1">
+                  <div className="mt-2 text-xs text-[var(--text-secondary)] font-mono space-y-1">
                     {(Array.isArray(s.evidence) ? s.evidence : []).slice(0, 10).map((e) => (
                       <div key={e} className="break-all">{e}</div>
                     ))}

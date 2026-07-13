@@ -9,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId } from '../lib/aliasClient';
+import Button from '../components/ui/Button'
 import AttackExposurePanel from './AttackExposurePanel';
 import ArsenalConsole from './ArsenalConsole';
 import ArsenalInventory from './ArsenalInventory';
@@ -157,7 +158,7 @@ export default function ThreatAnalysisCenter() {
             refreshDisabled={clientId == null}
             exportDisabled={!filteredFindings.length}
           />
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={persistIncidents}
             disabled={persisting || clientId == null}
@@ -167,12 +168,12 @@ export default function ThreatAnalysisCenter() {
             {persisting
               ? t('pages.threatAnalysis.persisting')
               : t('pages.threatAnalysis.persist')}
-          </button>
+          </Button>
         </div>
       )}
     >
       <div className="space-y-6">
-        <p className="text-sm text-gray-400 max-w-2xl">
+        <p className="text-sm text-[var(--text-tertiary)] max-w-2xl">
           {t('pages.threatAnalysis.subtitle', { })}
         </p>
 
@@ -192,7 +193,7 @@ export default function ThreatAnalysisCenter() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl bg-black/40 border border-white/10 p-6">
+          <div className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-6">
             <SkeletonWidgetGrid count={4} />
           </div>
         ) : clientId == null ? (
@@ -212,11 +213,11 @@ export default function ThreatAnalysisCenter() {
             {/* Hero score + summary */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className={`rounded-xl p-5 border ${tone.ring} ${tone.bg}`}>
-                <div className="text-xs text-gray-400 mb-1">
+                <div className="text-xs text-[var(--text-tertiary)] mb-1">
                   {t('pages.threatAnalysis.incident_score')}
                 </div>
                 <div className={`text-4xl font-bold ${tone.text}`}>{score.toFixed(0)}</div>
-                <div className="text-[11px] text-gray-500 mt-1">
+                <div className="text-[11px] text-[var(--text-muted)] mt-1">
                   {t('pages.threatAnalysis.findings_analyzed', { n: report?.findings_analyzed ?? 0,
                   })}
                 </div>
@@ -243,18 +244,18 @@ export default function ThreatAnalysisCenter() {
 
             {/* Attack chain */}
             {chain?.reached_goal && Array.isArray(chain.steps) && chain.steps.length > 0 && (
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-5">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-5">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
                   <GitBranch className="w-4 h-4 text-red-400" />
                   {t('pages.threatAnalysis.attack_chain')}
-                  <span className="text-[11px] text-gray-500 font-normal">
+                  <span className="text-[11px] text-[var(--text-muted)] font-normal">
                     {t('pages.threatAnalysis.goal')}: {chain.goal} · cost {chain.total_cost}
                   </span>
                 </h3>
                 <div className="flex items-center gap-2 flex-wrap">
                   {chain.steps.map((s, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      {i > 0 && <span className="text-gray-600">→</span>}
+                      {i > 0 && <span className="text-[var(--text-muted)]">→</span>}
                       <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5">
                         <div className="text-xs font-medium text-white">{s.name}</div>
                         <div className="text-[10px] font-mono text-red-300/80">{s.mitre}</div>
@@ -279,12 +280,12 @@ export default function ThreatAnalysisCenter() {
               emptyTitle={t('pages.threatAnalysis.no_incidents', { })}
               emptyBody={t('pages.threatAnalysis.no_incidents', { })}
               renderFinding={(f) => (
-                <div key={f.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div key={f.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-sm font-medium text-white">{f.title}</span>
                     <span className="flex items-center gap-2">
                       {f.type && (
-                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border border-white/10 text-white/40">
+                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-muted)]">
                           {f.type}
                         </span>
                       )}
@@ -292,19 +293,19 @@ export default function ThreatAnalysisCenter() {
                     </span>
                   </div>
                   {f.target && (
-                    <div className="text-[11px] text-gray-400 mb-2">
+                    <div className="text-[11px] text-[var(--text-tertiary)] mb-2">
                       {t('pages.threatAnalysis.target')}:{' '}
-                      <span className="font-mono text-white/70">{f.target}</span>
+                      <span className="font-mono text-[var(--text-secondary)]">{f.target}</span>
                     </div>
                   )}
                   {f.description && (
-                    <p className="text-[11px] text-gray-400 mb-2">{f.description}</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)] mb-2">{f.description}</p>
                   )}
                   {f.stages?.length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {f.stages.map((st, i) => (
                         <div key={i} className="flex items-center gap-1.5">
-                          {i > 0 && <span className="text-gray-600 text-xs">→</span>}
+                          {i > 0 && <span className="text-[var(--text-muted)] text-xs">→</span>}
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-orange-300">
                             {st.category}
                           </span>
@@ -324,9 +325,9 @@ export default function ThreatAnalysisCenter() {
 
 function SummaryCard({ label, value, valueClass, icon }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+    <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-400">{label}</span>
+        <span className="text-sm text-[var(--text-tertiary)]">{label}</span>
         {icon}
       </div>
       <div className={`text-2xl font-bold ${valueClass}`}>{value}</div>

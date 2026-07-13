@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Fingerprint, FileCode, X } from 'lucide-react'
 import CopyButton from '../components/ui/CopyButton'
+import Button from '../components/ui/Button'
 
 export default function ForensicEvidencePanel({ node, evidence = [], onClose }) {
   const { t } = useTranslation()
@@ -19,9 +20,9 @@ export default function ForensicEvidencePanel({ node, evidence = [], onClose }) 
               {t('battlespace.forensic_provenance')}
             </span>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-white/40 hover:text-white/80" aria-label="Close">
+          <Button variant="unstyled" type="button" onClick={onClose} className="p-1 text-white/40 hover:text-white/80" aria-label="Close">
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         <div className="p-4 space-y-3 max-h-[40vh] overflow-y-auto">

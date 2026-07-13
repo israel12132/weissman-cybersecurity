@@ -1,6 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import i18n from '../i18n'
+import Button from './ui/Button'
 
 const NS = 'components.intelWidgets.routeErrorBoundary'
 
@@ -31,13 +32,13 @@ export default class RouteErrorBoundary extends React.Component {
           <h1 className="text-lg font-semibold text-red-400 mb-2">{i18n.t(`${NS}.title`)}</h1>
           <p className="text-sm text-white/60 mb-6 max-w-lg text-center font-mono break-words">{msg}</p>
           <div className="flex gap-4">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => this.setState({ error: null })}
               className="px-4 py-2 rounded-lg border border-white/20 text-sm hover:bg-white/10"
             >
               {i18n.t(`${NS}.tryAgain`)}
-            </button>
+            </Button>
             <Link
               to="/"
               className="px-4 py-2 rounded-lg border border-cyan-500/40 text-cyan-400 text-sm hover:bg-cyan-500/10"

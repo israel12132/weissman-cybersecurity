@@ -4,154 +4,21 @@ import { Link } from 'react-router-dom';
 import { Network, Globe, Shield, Activity, AlertTriangle, Search, Download } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import { apiFetch } from '../lib/apiBase';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
+import Button from '../components/ui/Button'
 
 /**
- * NetworkProtocols — probe-derived protocol exposure from live findings and,
- * when a client is selected, contextual risk-graph network nodes. No fabricated stats.
+ * NetworkProtocols — live protocol-exposure posture served by the SOC
+ * aggregator at GET /api/soc/network-protocols. No fabricated stats.
  */
-
-const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-
-const NETWORK_SOURCES = new Set([
-  'asm',
-  'bgp_dns_hijacking',
-  'ipv6_attack',
-  'mtls_grpc',
-  'smb_netbios',
-  'pki_tls',
-  'discovery_engine',
-  'recon',
-]);
-
-const ENGINE_PROTOCOL_NAMES = {
-  bgp_dns_hijacking: 'DNS / BGP',
-  ipv6_attack: 'IPv6',
-  mtls_grpc: 'Transport Security',
-  smb_netbios: 'SMB / NetBIOS',
-  pki_tls: 'TLS / SSL',
-  asm: 'ASM Services',
-};
-
-function parseFindingsResponse(data) {
-  return Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : [];
-}
-
-function findingSource(f) {
-  return (f.source || f.engine || '').toLowerCase();
-}
-
-function isNetworkFinding(f) {
-  const src = findingSource(f);
-  if (NETWORK_SOURCES.has(src)) return true;
-  const text = `${f.title || ''} ${f.description || ''}`.toLowerCase();
-  return /smb|netbios|dns|bgp|tls|ssl|ftp|smtp|ssh|grpc|mtls|ipv6|open port|exposed.+port|port.?(\d{2,5})/i.test(text);
-}
-
-function classifyProtocol(finding) {
-  const src = findingSource(finding);
-  if (ENGINE_PROTOCOL_NAMES[src]) return ENGINE_PROTOCOL_NAMES[src];
-
-  const text = `${finding.title || ''} ${finding.description || ''}`.toLowerCase();
-  if (/smb|netbios|port.?445|port.?139|port.?137/.test(text)) return 'SMB';
-  if (/\bftp\b/.test(text)) return 'FTP';
-  if (/\bsmtp\b/.test(text)) return 'SMTP';
-  if (/\bssh\b/.test(text)) return 'SSH';
-  if (/\bdns\b|bgp\b|hijack/.test(text)) return 'DNS';
-  if (/tls|ssl|hsts|certificate/.test(text)) return 'TLS/SSL';
-  if (/grpc|mtls/.test(text)) return 'mTLS / gRPC';
-  if (/ipv6|aaaa/.test(text)) return 'IPv6';
-  if (/http/.test(text)) return 'HTTP/HTTPS';
-  if (src === 'asm') return 'ASM Services';
-  return null;
-}
-
-function statusFromSeverities(severities, count) {
-  const max = severities.reduce((m, s) => Math.max(m, SEVERITY_ORDER[s] ?? 0), 0);
-  if (max >= SEVERITY_ORDER.critical || max >= SEVERITY_ORDER.high) return 'critical';
-  if (max >= SEVERITY_ORDER.medium || count > 3) return 'warning';
-  if (count > 0) return 'warning';
-  return 'secure';
-}
-
-function protocolsFromFindings(findings) {
-  const buckets = new Map();
-  for (const f of findings) {
-    if (!isNetworkFinding(f)) continue;
-    const name = classifyProtocol(f);
-    if (!name) continue;
-    const cur = buckets.get(name) || { name, findings: 0, severities: [] };
-    cur.findings += 1;
-    cur.severities.push((f.severity || 'info').toLowerCase());
-    buckets.set(name, cur);
-  }
-  return Array.from(buckets.values()).map((p) => ({
-    name: p.name,
-    findings: p.findings,
-    status: statusFromSeverities(p.severities, p.findings),
-  }));
-}
-
-function protocolNameFromRiskNode(node) {
-  const ext = node.external_id || '';
-  if (ext.startsWith('ot:')) {
-    const parts = ext.split(':');
-    if (parts.length >= 4 && parts[3]) return parts[3].toUpperCase();
-  }
-  const label = (node.label || '').trim();
-  if (!label) return 'Network';
-  const first = label.split(/\s+/)[0];
-  return first.length <= 12 ? first : label.slice(0, 40);
-}
-
-function protocolsFromRiskGraph(nodes) {
-  const buckets = new Map();
-  for (const n of nodes) {
-    const nt = (n.node_type || '').toLowerCase();
-    if (nt !== 'network' && nt !== 'physical_asset') continue;
-    const name = protocolNameFromRiskNode(n);
-    const cur = buckets.get(name) || { name, findings: 0, severities: [] };
-    cur.findings += 1;
-    const score = Number(n.risk_score) || 0;
-    if (score >= 8) cur.severities.push('critical');
-    else if (score >= 5) cur.severities.push('high');
-    else cur.severities.push('medium');
-    buckets.set(name, cur);
-  }
-  return Array.from(buckets.values()).map((p) => ({
-    name: p.name,
-    findings: p.findings,
-    status: statusFromSeverities(p.severities, p.findings),
-  }));
-}
-
-function mergeProtocols(primary, supplemental) {
-  const map = new Map(primary.map((p) => [p.name, { ...p }]));
-  for (const p of supplemental) {
-    const existing = map.get(p.name);
-    if (existing) {
-      existing.findings += p.findings;
-      const mergedStatus = [existing.status, p.status];
-      existing.status = mergedStatus.includes('critical')
-        ? 'critical'
-        : mergedStatus.includes('warning')
-          ? 'warning'
-          : 'secure';
-    } else {
-      map.set(p.name, { ...p });
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => b.findings - a.findings);
-}
 
 function getStatusColor(status) {
   switch (status) {
     case 'critical': return 'text-red-400 bg-red-500/10 border-red-500/30';
     case 'warning': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
     case 'secure': return 'text-green-400 bg-green-500/10 border-green-500/30';
-    default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+    default: return 'text-[var(--text-tertiary)] bg-[var(--border-strong)]/10 border-[var(--border-strong)]/30';
   }
 }
 
@@ -230,16 +97,6 @@ export default function NetworkProtocols() {
     URL.revokeObjectURL(url);
   }, [filteredProtocols]);
 
-  const { exportCsv: exportWorkbenchCsv } = useFindingsWorkbench(
-    filteredProtocols.map((p) => ({
-      severity: p.status === 'critical' ? 'critical' : p.status === 'warning' ? 'medium' : 'info',
-      title: p.name,
-      type: 'protocol',
-      description: String(p.findings ?? ''),
-    })),
-    { csvPrefix: 'network-protocols' },
-  )
-
   return (
     <PageShell
       title={t('pages.networkProtocols.title')}
@@ -257,18 +114,18 @@ export default function NetworkProtocols() {
         <EvidenceNotice>{t('pages.networkProtocols.evidence_notice')}</EvidenceNotice>
 
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[11px] font-mono text-white/40">{t('pages.networkProtocols.client_scope')}</span>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.networkProtocols.client_scope')}</span>
           <select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40"
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
           >
             <option value="">{t('pages.networkProtocols.all_clients')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <span className="text-[10px] font-mono text-white/30">
+          <span className="text-[10px] font-mono text-[var(--text-disabled)]">
             {t('pages.networkProtocols.source_label', { source: dataSource === 'soc' ? '/api/soc/network-protocols' : dataSource })}
           </span>
           <Link to="/findings" className="text-xs text-cyan-300 hover:text-cyan-200 ml-auto">{t('pages.networkProtocols.open_findings')}</Link>
@@ -276,16 +133,17 @@ export default function NetworkProtocols() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-disabled)] pointer-events-none" />
             <input
               type="search"
               value={protocolSearch}
               onChange={(e) => setProtocolSearch(e.target.value)}
+              aria-label={t('pages.networkProtocols.search_placeholder')}
               placeholder={t('pages.networkProtocols.search_placeholder')}
-              className="w-full bg-black/60 border border-white/10 rounded-lg pl-10 pr-3 py-2 text-sm text-white/90 font-mono placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg pl-10 pr-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
             disabled={filteredProtocols.length === 0}
@@ -293,7 +151,7 @@ export default function NetworkProtocols() {
           >
             <Download className="h-3.5 w-3.5" />
             {t('pages.networkProtocols.export_csv')}
-          </button>
+          </Button>
         </div>
 
         {error && (
@@ -303,41 +161,41 @@ export default function NetworkProtocols() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.protocols_scanned')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.protocols_scanned')}</span>
               <Network className="w-4 h-4 text-cyan-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.scanned}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.critical_issues')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.critical_issues')}</span>
               <AlertTriangle className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.critical}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.warnings')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.warnings')}</span>
               <Activity className="w-4 h-4 text-yellow-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.warning}</div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
+          <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">{t('pages.networkProtocols.secure')}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{t('pages.networkProtocols.secure')}</span>
               <Shield className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-white">{loading ? '…' : stats.secure}</div>
           </div>
         </div>
 
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
+        <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--border-default)]">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <Globe className="w-4 h-4 text-cyan-400" />
               {t('pages.networkProtocols.heading')}
@@ -345,24 +203,24 @@ export default function NetworkProtocols() {
           </div>
 
           {loading ? (
-            <div className="p-6 text-sm text-white/40">{t('pages.networkProtocols.loading')}</div>
+            <div className="p-6 text-sm text-[var(--text-muted)]">{t('pages.networkProtocols.loading')}</div>
           ) : protocols.length === 0 ? (
-            <div className="p-6 space-y-3 text-sm text-white/50">
+            <div className="p-6 space-y-3 text-sm text-[var(--text-tertiary)]">
               <p>{t('pages.networkProtocols.empty_title')}</p>
-              <p className="text-xs text-white/35">
+              <p className="text-xs text-[var(--text-muted)]">
                 {t('pages.networkProtocols.empty_hint')}{' '}
                 <Link to="/network" className="text-cyan-300 hover:text-cyan-200">{t('pages.networkProtocols.network_intel_link')}</Link>
                 {' '}{t('pages.networkProtocols.empty_suffix')}
               </p>
             </div>
           ) : filteredProtocols.length === 0 ? (
-            <div className="p-6 text-sm text-white/50 text-center">
+            <div className="p-6 text-sm text-[var(--text-tertiary)] text-center">
               {t('pages.networkProtocols.no_search_results')}
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--border-subtle)]">
               {filteredProtocols.map((protocol) => (
-                <div key={protocol.name} className="p-4 hover:bg-white/5 transition-colors">
+                <div key={protocol.name} className="p-4 hover:bg-[var(--row-hover-bg)] transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -371,7 +229,7 @@ export default function NetworkProtocols() {
                           {statusLabel(protocol.status)}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--text-tertiary)]">
                         {protocol.findings === 1
                           ? t('pages.networkProtocols.findings_one', { count: protocol.findings })
                           : t('pages.networkProtocols.findings_other', { count: protocol.findings })}

@@ -31,6 +31,34 @@ export function apiUrl(path) {
 
 const ACCESS_TOKEN_KEY = 'weissman_access_token'
 
+/**
+ * Access-token storage is tiered by XSS blast radius:
+ *  1. `inMemoryAccessToken` (below) is the primary store — not reachable after
+ *     the tab is closed and never written to disk.
+ *  2. `sessionStorage` is a tab-scoped fallback (see getStoredAccessToken) so the
+ *     token survives a same-tab reload before the HttpOnly refresh cookie +
+ *     `tryRefreshToken()` rehydrate it. It IS readable by same-origin script, so
+ *     it is deliberately *not* localStorage (no cross-tab/session persistence),
+ *     and the strict CSP (`script-src 'self'`) is the primary defense against a
+ *     script being injected to read it in the first place.
+ * The token is never mirrored to localStorage; legacy copies are purged on access.
+ */
+let inMemoryAccessToken = null
+
+/**
+ * Remove any access token left behind in `localStorage` by older builds that
+ * mirrored it there. The token must never live in `localStorage` — it persists
+ * across tabs/sessions and is a prime XSS-exfiltration target.
+ */
+function purgeLegacyLocalStorageToken() {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+  } catch {
+    /* storage access can throw in privacy modes — ignore */
+  }
+}
+
 let rateLimitToastCallback = null
 
 /** Register a callback for 429 responses (used by RateLimitToast in AppShell). */
@@ -63,14 +91,24 @@ const ALLOW_PERSISTENT_TOKEN =
   typeof import.meta !== 'undefined' && import.meta.env ? !import.meta.env.PROD : false
 
 export function getStoredAccessToken() {
+  // Always clean up a token left in localStorage by an older build.
+  purgeLegacyLocalStorageToken()
+  if (inMemoryAccessToken) return inMemoryAccessToken
+  // sessionStorage fallback: tab-scoped, cleared on tab close. Lets the token
+  // survive same-tab reloads before the refresh cookie kicks in, without the
+  // cross-session persistence (and XSS blast radius) of localStorage.
   if (typeof sessionStorage === 'undefined') return null
   const t = sessionStorage.getItem(ACCESS_TOKEN_KEY)
-  if (t && String(t).trim()) return String(t).trim()
+  if (t && String(t).trim()) {
+    inMemoryAccessToken = String(t).trim()
+    return inMemoryAccessToken
+  }
   // Dev/test only: survives Playwright context resets when the HttpOnly cookie isn't visible to JS.
   if (ALLOW_PERSISTENT_TOKEN && typeof localStorage !== 'undefined') {
     const legacy = localStorage.getItem(ACCESS_TOKEN_KEY)
     if (legacy && String(legacy).trim()) {
       const v = String(legacy).trim()
+      inMemoryAccessToken = v
       sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
       return v
     }
@@ -79,25 +117,41 @@ export function getStoredAccessToken() {
 }
 
 export function setStoredAccessToken(token) {
-  if (typeof sessionStorage === 'undefined') return
+  purgeLegacyLocalStorageToken()
   if (token && String(token).trim()) {
     const v = String(token).trim()
-    sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
+    inMemoryAccessToken = v
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
     if (typeof localStorage !== 'undefined') {
       // Production: proactively clear any stale mirror so a token can't linger after XSS.
       if (ALLOW_PERSISTENT_TOKEN) localStorage.setItem(ACCESS_TOKEN_KEY, v)
       else localStorage.removeItem(ACCESS_TOKEN_KEY)
     }
   } else {
-    sessionStorage.removeItem(ACCESS_TOKEN_KEY)
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
+    inMemoryAccessToken = null
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)
   }
 }
 
 export function clearStoredAccessToken() {
-  if (typeof sessionStorage === 'undefined') return
-  sessionStorage.removeItem(ACCESS_TOKEN_KEY)
-  if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
+  inMemoryAccessToken = null
+  purgeLegacyLocalStorageToken()
+  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+}
+
+/** True only for same-origin or the configured API-origin URLs — the only places
+ *  the bearer token may be attached. */
+export function isSameApiOrigin(url) {
+  try {
+    const base = typeof window !== 'undefined' ? window.location.href : undefined
+    const target = new URL(url, base)
+    const selfOrigin = typeof window !== 'undefined' ? window.location.origin : null
+    let apiOrigin = null
+    try { apiOrigin = new URL(apiUrl('/'), base).origin } catch { apiOrigin = null }
+    return target.origin === selfOrigin || (apiOrigin != null && target.origin === apiOrigin)
+  } catch {
+    return false
+  }
 }
 
 /** Merge Bearer token for APIs when cookies are blocked (e.g. legacy Secure cookies on http://127.0.0.1). */
@@ -110,7 +164,7 @@ export function authHeaders() {
  * Attempt to refresh the access token using the refresh token cookie.
  * Returns true if refresh succeeded, false otherwise.
  */
-async function tryRefreshToken() {
+async function doRefreshToken() {
   try {
     const r = await fetch(apiUrl('/api/auth/refresh'), {
       method: 'POST',
@@ -129,6 +183,19 @@ async function tryRefreshToken() {
   }
 }
 
+// Single-flight guard: when several requests (and the SSE/WS streams) all 401 at
+// once on an expired token, they must share ONE refresh. Otherwise, with refresh
+// -token rotation, the first call rotates the cookie and the rest present the
+// now-consumed token, fail, and trigger a spurious logout (refresh stampede).
+let refreshPromise = null
+export async function tryRefreshToken() {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = doRefreshToken().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
+}
+
 /**
  * Same-origin fetch with credentials + optional Bearer from sessionStorage.
  * On 401, attempts automatic token refresh and retries once.
@@ -140,11 +207,14 @@ export async function apiFetch(pathOrUrl, init = {}) {
   }
   const pathStr = String(pathOrUrl)
   const url = pathStr.startsWith('http') ? pathStr : apiUrl(pathStr)
-  
+
   const doFetch = () => {
     const headers = new Headers(init.headers || {})
     const ah = authHeaders()
-    if (ah.Authorization) headers.set('Authorization', ah.Authorization)
+    // Never leak the bearer token to a foreign origin: only attach it to
+    // same-origin or the configured API-origin requests. Relative paths always
+    // resolve to one of those; a hostile absolute URL would not.
+    if (ah.Authorization && isSameApiOrigin(url)) headers.set('Authorization', ah.Authorization)
     const method = String(init.method || 'GET').toUpperCase()
     const withInit =
       method === 'GET' && init.cache === undefined ? { ...init, cache: 'no-store' } : init

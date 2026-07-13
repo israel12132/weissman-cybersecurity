@@ -7,6 +7,7 @@ import { apiUrl } from '../../lib/apiBase'
 import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from '../LanguageSwitcher'
 import Logo from '../Logo'
+import Button from '../ui/Button'
 
 const formVariants = {
   initial: { opacity: 0, x: 24 },
@@ -414,7 +415,7 @@ export default function Login() {
                       ref={mfaInputRef}
                     />
 
-                    <button
+                    <Button variant="unstyled"
                       type="submit"
                       disabled={submitting || mfaCode.length !== 6}
                       className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-cyan-400/40 bg-gradient-to-b from-cyan-400/15 to-cyan-500/10 py-3.5 text-sm font-semibold tracking-wide text-cyan-100 transition-all hover:border-cyan-400/60 hover:from-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-45"
@@ -427,9 +428,9 @@ export default function Login() {
                       ) : (
                         t('auth.mfa_verify')
                       )}
-                    </button>
+                    </Button>
 
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={() => {
                         setMfaToken(null)
@@ -439,7 +440,7 @@ export default function Login() {
                       className="w-full py-2 text-xs text-white/40 transition-colors hover:text-white/70"
                     >
                       {t('auth.mfa_back_to_password')}
-                    </button>
+                    </Button>
                   </motion.form>
                 ) : (
                   <motion.form
@@ -481,7 +482,7 @@ export default function Login() {
                       required
                       disabled={submitting}
                       endAdornment={
-                        <button
+                        <Button variant="unstyled"
                           type="button"
                           onClick={() => setShowPassword((v) => !v)}
                           className="absolute end-3 top-1/2 z-10 -translate-y-1/2 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/5 hover:text-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
@@ -494,11 +495,11 @@ export default function Login() {
                           ) : (
                             <Eye className="h-4 w-4" aria-hidden />
                           )}
-                        </button>
+                        </Button>
                       }
                     />
 
-                    <button
+                    <Button variant="unstyled"
                       type="submit"
                       disabled={submitting}
                       className="group relative mt-2 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-cyan-400/40 bg-gradient-to-b from-cyan-400/15 to-cyan-500/10 py-3.5 text-sm font-semibold tracking-wide text-cyan-100 transition-all hover:border-cyan-400/60 hover:from-cyan-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#030712] disabled:cursor-not-allowed disabled:opacity-45"
@@ -511,7 +512,7 @@ export default function Login() {
                       ) : (
                         t('auth.authenticate')
                       )}
-                    </button>
+                    </Button>
                   </motion.form>
                 )}
               </AnimatePresence>
@@ -526,20 +527,20 @@ export default function Login() {
                     <div className="h-px flex-1 bg-white/10" aria-hidden />
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60 transition-all hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200/90"
                       onClick={() => beginSso('/api/auth/oidc/begin')}
                     >
                       {t('auth.sso_oidc')}
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="unstyled"
                       type="button"
                       className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60 transition-all hover:border-cyan-400/30 hover:bg-cyan-400/[0.04] hover:text-cyan-200/90"
                       onClick={() => beginSso('/api/auth/saml/begin')}
                     >
                       {t('auth.sso_saml')}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

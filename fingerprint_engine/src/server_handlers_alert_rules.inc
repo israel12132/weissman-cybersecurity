@@ -253,7 +253,7 @@ async fn api_alert_rules_patch(
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }
@@ -283,7 +283,7 @@ async fn api_alert_rules_delete(
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }
@@ -390,7 +390,7 @@ async fn api_alert_rules_test(
                     let _ = tx.rollback().await;
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"ok": false, "success": false, "detail": e.to_string()})),
+                        Json(json!({"ok": false, "success": false, "detail": scrub_internal_error(&e)})),
                     )
                         .into_response()
                 }
@@ -404,7 +404,7 @@ async fn api_alert_rules_test(
             let _ = tx.rollback().await;
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "success": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "success": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

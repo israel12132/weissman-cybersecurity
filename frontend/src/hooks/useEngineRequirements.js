@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/apiBase'
 
 const DEFAULT_MODULES = ['baseline_asm']
@@ -98,18 +98,21 @@ export function computeLocalReadiness(catalog, tenantStatus, form, selectedModul
   const items = [...reqIds].map((id) => {
     const def = catalog.requirements[id] || {}
     const scope = def.scope || 'client'
-    const satisfied = scope === 'tenant' ? !!checks[id] : !!checks[id]
-    const hard = !optional.has(id)
+    const satisfied = !!checks[id]
+    // Tenant-scoped requirements (tenant_llm/tenant_oast/entitlement) are a
+    // one-time admin config, not a per-client field — surface them but never let
+    // an unconfigured tenant hard-block onboarding of an individual client.
+    const hard = !optional.has(id) && scope !== 'tenant'
     return { id, def, satisfied, hard, scope }
   })
 
   const required = items.filter((i) => i.hard)
   const satisfiedCount = required.filter((i) => i.satisfied).length
-  const total = required.length || 1
 
   return {
     ready: required.every((i) => i.satisfied),
-    percent: Math.round((satisfiedCount * 100) / total),
+    // No hard requirements → fully ready (100%), not the contradictory 0%.
+    percent: required.length === 0 ? 100 : Math.round((satisfiedCount * 100) / required.length),
     satisfied: satisfiedCount,
     total: required.length,
     items,
@@ -139,6 +142,8 @@ export function defaultOnboardingForm() {
     repo_urls: '',
     agent_platforms: [],
     llm_secops_urls: '',
+    ebpf_ssh_host: '',
+    ebpf_ssh_user: '',
     industrial_ot_enabled: false,
     roe_mode: 'safe_proofs',
     stealth_level: 50,
@@ -175,6 +180,8 @@ export function buildClientPayload(form) {
       ad_domain: str(form.ad_domain).trim(),
       repo_urls,
       agent_platforms: form.agent_platforms,
+      ebpf_ssh_host: str(form.ebpf_ssh_host).trim(),
+      ebpf_ssh_user: str(form.ebpf_ssh_user).trim(),
       industrial_ot_enabled: form.industrial_ot_enabled,
       roe_mode: form.roe_mode,
       stealth_level: form.stealth_level,

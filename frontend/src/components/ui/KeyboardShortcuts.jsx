@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import useFocusTrap from '../../hooks/useFocusTrap'
+import Button from './Button'
 
 const SHORTCUT_DEFS = [
   { keys: '?', descKey: 'shortcuts.show_help', global: true },
@@ -84,10 +85,10 @@ export default function KeyboardShortcuts() {
   if (!helpOpen) return null
   return (
     <div className="fixed inset-0 z-[9500] flex items-center justify-center p-4">
-      <button
+      <Button variant="unstyled"
         type="button"
         onClick={() => setHelpOpen(false)}
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-[var(--bg-1)] backdrop-blur-sm"
         aria-label={t('a11y.close_shortcuts')}
       />
       <div
@@ -95,37 +96,37 @@ export default function KeyboardShortcuts() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="kbd-help-title"
-        className="relative w-full max-w-lg rounded-2xl border border-white/15 bg-[#0b1120]/98 backdrop-blur-md p-6 shadow-2xl"
+        className="relative w-full max-w-lg rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] backdrop-blur-md p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id="kbd-help-title" className="text-base font-semibold text-white/90">
+          <h2 id="kbd-help-title" className="text-base font-semibold text-[var(--text-primary)]">
             {t('a11y.keyboard_shortcuts')}
           </h2>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setHelpOpen(false)}
-            className="text-white/40 hover:text-white text-2xl leading-none"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-2xl leading-none"
             aria-label={t('a11y.close')}
-          >×</button>
+          >×</Button>
         </div>
         <table className="w-full text-[13px] font-mono data-grid">
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-[var(--border-subtle)]">
             {SHORTCUT_DEFS.map(({ keys, descKey }) => (
               <tr key={keys}>
                 <td className="py-2 pe-4 w-32">
                   {keys.split(' ').map((k, i) => (
                     <React.Fragment key={i}>
-                      {i > 0 && <span className="text-white/30 mx-1">{t('a11y.then')}</span>}
-                      <kbd className="inline-block px-2 py-0.5 rounded border border-white/15 bg-white/5 text-cyan-200 text-[11px]">{k}</kbd>
+                      {i > 0 && <span className="text-[var(--text-disabled)] mx-1">{t('a11y.then')}</span>}
+                      <kbd className="inline-block px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-cyan-200 text-[11px]">{k}</kbd>
                     </React.Fragment>
                   ))}
                 </td>
-                <td className="py-2 text-white/70">{t(descKey)}</td>
+                <td className="py-2 text-[var(--text-secondary)]">{t(descKey)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-[10px] text-white/35 mt-4">
+        <p className="text-[10px] text-[var(--text-muted)] mt-4">
           {t('a11y.press_esc_to_close')}
         </p>
       </div>

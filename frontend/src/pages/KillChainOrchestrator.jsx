@@ -8,7 +8,7 @@
  * Data: `/api/findings` (chains + phase findings), `/api/engines/production`
  * (mapped engines), `/api/dashboard/exec-kpis` (KPI strip). No fabricated chains.
  */
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
@@ -20,6 +20,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { apiFetch } from '../lib/apiBase'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useProductionEngines } from '../lib/useProductionEngines'
+import Button from '../components/ui/Button'
 
 // ─── Kill Chain Phases (MITRE scaffolding — engines/findings are live) ────────
 
@@ -486,7 +487,7 @@ export default function KillChainOrchestrator() {
         />
       )}
     >
-      <p className="text-xs text-white/45 font-mono mb-6">
+      <p className="text-xs text-[var(--text-muted)] font-mono mb-6">
         {t('pages.killChainOrchestrator.data_source_note', {
           live: chainsFromApi ? t('pages.killChainOrchestrator.data_source_live') : t('pages.killChainOrchestrator.data_source_fallback'),
           engines: productionCount > 0 ? t('pages.killChainOrchestrator.data_source_engines', { count: productionCount }) : '',
@@ -506,15 +507,15 @@ export default function KillChainOrchestrator() {
           { label: t('pages.killChainOrchestrator.kpi_techniques'), value: isLoading ? '…' : techniquesMapped, color: '#f97316' },
           { label: t('pages.killChainOrchestrator.kpi_phases_covered'), value: isLoading ? '…' : `${phasesCovered}/${PHASE_DEFS.length}`, color: '#10b981' },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+          <div key={kpi.label} className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-4 text-center">
             <div className="text-2xl font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-            <div className="text-[11px] text-white/50 mt-1">{kpi.label}</div>
+            <div className="text-[11px] text-[var(--text-tertiary)] mt-1">{kpi.label}</div>
           </div>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm text-white/45">
+        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-8 text-center text-sm text-[var(--text-muted)]">
           {t('pages.killChainOrchestrator.loading')}
         </div>
       ) : chains.length === 0 ? (
@@ -530,11 +531,11 @@ export default function KillChainOrchestrator() {
           {/* ── Left: Chain List ── */}
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-white/80">{t('pages.killChainOrchestrator.attack_chains')}</h2>
+              <h2 className="text-sm font-semibold text-[var(--text-secondary)]">{t('pages.killChainOrchestrator.attack_chains')}</h2>
               <select
                 value={filterSeverity}
                 onChange={(e) => setFilterSeverity(e.target.value)}
-                className="text-xs bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white/60 focus:outline-none"
+                className="text-xs bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg px-2 py-1 text-[var(--text-tertiary)] focus:outline-none"
               >
                 <option value="all">{t('pages.killChainOrchestrator.filter_all')}</option>
                 <option value="critical">{t('pages.killChainOrchestrator.filter_critical')}</option>
@@ -580,7 +581,7 @@ export default function KillChainOrchestrator() {
                     className={`w-full text-left rounded-2xl border p-4 transition-all ${
                       activeChain?.id === chain.id
                         ? 'border-[#ef4444]/50 bg-[#ef4444]/10'
-                        : 'border-white/10 bg-white/5 hover:bg-white/10'
+                        : 'border-[var(--border-default)] bg-[var(--row-hover-bg)] hover:bg-[var(--row-hover-bg)]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -592,11 +593,11 @@ export default function KillChainOrchestrator() {
                         {sm.label}
                       </span>
                     </div>
-                    <div className="text-[11px] text-white/40 mb-3 truncate">{chain.target}</div>
-                    <div className="w-full bg-white/10 rounded-full h-1.5 mb-1">
+                    <div className="text-[11px] text-[var(--text-muted)] mb-3 truncate">{chain.target}</div>
+                    <div className="w-full bg-[var(--row-hover-bg)] rounded-full h-1.5 mb-1">
                       <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: sm.color }} />
                     </div>
-                    <div className="flex justify-between text-[10px] text-white/40">
+                    <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
                       <span>{chain.completedPhases}/{chain.totalPhases} {t('pages.killChainOrchestrator.phases_label')}</span>
                       <span>
                         {t('pages.killChainOrchestrator.risk_label')}: <span className="font-mono" style={{ color: sm.color }}>{chain.riskScore}</span>
@@ -612,27 +613,27 @@ export default function KillChainOrchestrator() {
           <div className="lg:col-span-2 space-y-4">
             {activeChain ? (
               <>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 mb-2">
+                <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5 mb-2">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
                       <h2 className="text-base font-bold text-white">{activeChain.name}</h2>
-                      <div className="text-[11px] text-white/40 mt-1">
+                      <div className="text-[11px] text-[var(--text-muted)] mt-1">
                         {t('pages.killChainOrchestrator.target_label')}: <span className="text-[#22d3ee]/80">{activeChain.target}</span>
                         {activeChain.discoveredAt && (
                           <>
                             {' · '}
                             {t('pages.killChainOrchestrator.detected_label')}:{' '}
-                            <span className="text-white/60">{activeChain.discoveredAt.slice(0, 10)}</span>
+                            <span className="text-[var(--text-tertiary)]">{activeChain.discoveredAt.slice(0, 10)}</span>
                           </>
                         )}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-2xl font-bold text-[#ef4444]">{activeChain.riskScore}</div>
-                      <div className="text-[10px] text-white/40">{t('pages.killChainOrchestrator.risk_score')}</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">{t('pages.killChainOrchestrator.risk_score')}</div>
                     </div>
                   </div>
-                  <p className="text-xs text-white/60 leading-relaxed">{activeChain.summary}</p>
+                  <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{activeChain.summary}</p>
                   {activeChain.techniques.length > 0 ? (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {activeChain.techniques.map((technique) => (
@@ -646,7 +647,7 @@ export default function KillChainOrchestrator() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-white/35 mt-3 font-mono">
+                    <p className="text-[10px] text-[var(--text-muted)] mt-3 font-mono">
                       {t('pages.killChainOrchestrator.no_mitre_hint')}
                     </p>
                   )}
@@ -665,14 +666,14 @@ export default function KillChainOrchestrator() {
                         key={phase.id}
                         layout
                         className={`rounded-2xl border transition-all ${
-                          isExpanded ? 'border-white/20 bg-white/8' :
-                          isCompleted ? 'border-white/10 bg-white/5' :
-                          isActive ? 'bg-white/5' :
-                          'border-white/5 bg-black/20 opacity-50'
+                          isExpanded ? 'border-[var(--border-strong)] bg-white/8' :
+                          isCompleted ? 'border-[var(--border-default)] bg-[var(--row-hover-bg)]' :
+                          isActive ? 'bg-[var(--row-hover-bg)]' :
+                          'border-[var(--border-subtle)] bg-[var(--bg-1)] opacity-50'
                         }`}
                         style={isExpanded ? { borderColor: `${phase.color}40` } : {}}
                       >
-                        <button
+                        <Button variant="unstyled"
                           type="button"
                           className="w-full flex items-center gap-3 p-4 text-left"
                           onClick={() => setActivePhase(isExpanded ? null : phase.id)}
@@ -689,14 +690,14 @@ export default function KillChainOrchestrator() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold text-white">{phase.label}</span>
-                              <span className="text-[10px] font-mono text-white/30">{phase.mitre}</span>
+                              <span className="text-[10px] font-mono text-[var(--text-disabled)]">{phase.mitre}</span>
                               {isActive && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/30 animate-pulse">
                                   {t('pages.killChainOrchestrator.phase_active')}
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-white/40 truncate">{phase.description}</div>
+                            <div className="text-[11px] text-[var(--text-muted)] truncate">{phase.description}</div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {phaseFindingLabels.length > 0 && (
@@ -704,9 +705,9 @@ export default function KillChainOrchestrator() {
                                 {t('pages.killChainOrchestrator.findings_count', { count: phaseFindingLabels.length })}
                               </span>
                             )}
-                            <span className="text-white/30 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                            <span className="text-[var(--text-disabled)] text-xs">{isExpanded ? '▲' : '▼'}</span>
                           </div>
-                        </button>
+                        </Button>
 
                         <AnimatePresence>
                           {isExpanded && (
@@ -719,7 +720,7 @@ export default function KillChainOrchestrator() {
                               <div className="px-4 pb-4 space-y-3">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div>
-                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">
+                                    <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">
                                       {t('pages.killChainOrchestrator.production_engines')}
                                     </div>
                                     {phase.engines.length > 0 ? (
@@ -731,7 +732,7 @@ export default function KillChainOrchestrator() {
                                             <Link
                                               key={e.id}
                                               to={`/engines/${e.id}`}
-                                              className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/60 border border-white/10 hover:border-white/20 hover:text-white/80 transition-colors"
+                                              className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)] transition-colors"
                                             >
                                               <span>{e.label}</span>
                                               {st?.findingCount > 0 ? (
@@ -747,18 +748,18 @@ export default function KillChainOrchestrator() {
                                                   {st.findingCount} · {sm.label}
                                                 </span>
                                               ) : (
-                                                <span className="text-white/25 font-mono">{t('pages.killChainOrchestrator.idle')}</span>
+                                                <span className="text-[var(--text-disabled)] font-mono">{t('pages.killChainOrchestrator.idle')}</span>
                                               )}
                                             </Link>
                                           )
                                         })}
                                       </div>
                                     ) : (
-                                      <p className="text-[10px] text-white/35">{t('pages.killChainOrchestrator.no_engines_phase')}</p>
+                                      <p className="text-[10px] text-[var(--text-muted)]">{t('pages.killChainOrchestrator.no_engines_phase')}</p>
                                     )}
                                   </div>
                                   <div>
-                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.killChainOrchestrator.mitre_techniques')}</div>
+                                    <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.killChainOrchestrator.mitre_techniques')}</div>
                                     <div className="flex flex-wrap gap-1">
                                       {phase.techniques.map((technique) => (
                                         <span key={technique} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30">
@@ -770,10 +771,10 @@ export default function KillChainOrchestrator() {
                                 </div>
                                 {phaseFindingLabels.length > 0 ? (
                                   <div>
-                                    <div className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{t('pages.killChainOrchestrator.findings_heading')}</div>
+                                    <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.killChainOrchestrator.findings_heading')}</div>
                                     <ul className="space-y-1">
                                       {phaseFindingLabels.map((f, i) => (
-                                        <li key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                        <li key={i} className="text-xs text-[var(--text-secondary)] flex items-start gap-2">
                                           <span className="text-[#ef4444] mt-0.5">▸</span>
                                           {f}
                                         </li>
@@ -781,7 +782,7 @@ export default function KillChainOrchestrator() {
                                     </ul>
                                   </div>
                                 ) : (
-                                  <p className="text-[10px] text-white/35">{t('pages.killChainOrchestrator.no_findings_phase')}</p>
+                                  <p className="text-[10px] text-[var(--text-muted)]">{t('pages.killChainOrchestrator.no_findings_phase')}</p>
                                 )}
                               </div>
                             </motion.div>

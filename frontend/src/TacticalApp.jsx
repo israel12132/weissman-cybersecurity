@@ -1,15 +1,19 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
+import { MotionConfig } from 'framer-motion'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { ProtectedProviders } from './providers/ProtectedProviders'
 import { AuthProvider } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
+import RequireRole from './components/auth/RequireRole'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { ToastProvider } from './components/ui/Toaster'
 import RateLimitProvider from './components/RateLimitProvider'
 import KeyboardShortcuts from './components/ui/KeyboardShortcuts'
+import GlobalSearch from './components/GlobalSearch'
 import SkipToContent from './components/ui/SkipToContent'
 import NotFound from './components/ui/NotFound'
 import RouteLoader from './components/ui/RouteLoader'
@@ -76,6 +80,17 @@ import {
   ThreatIntelHub,
   IncidentResponseCenter,
   VulnIntelDashboard,
+  FinancialRisk,
+  AttackPaths,
+  AttackCoverage,
+  SecurityPosture,
+  IocFeed,
+  UebaAnomalies,
+  FindingSuppressions,
+  CryptoPosture,
+  LiveFeed,
+  ReportHistory,
+  ExecutiveOverview,
   AgentManagement,
   DarkWebMonitor,
   TargetIntelligence,
@@ -142,6 +157,9 @@ function ProtectedOutlet() {
   return (
     <ProtectedProviders>
       <ChainPredictor />
+      {/* Single global command palette — available on every protected page
+          (⌘K / header button), not just the ones that render AppShell. */}
+      <GlobalSearch />
       <RouteErrorBoundary key={location.pathname}>
         <React.Suspense fallback={<RouteLoader />}>
           <Outlet />
@@ -242,6 +260,17 @@ export default function TacticalApp() {
           <Route path="intel-map" element={<App />} />
           <Route path="incident-response" element={<IncidentResponseCenter />} />
           <Route path="vuln-intel" element={<VulnIntelDashboard />} />
+          <Route path="financial-risk" element={<FinancialRisk />} />
+          <Route path="attack-paths" element={<AttackPaths />} />
+          <Route path="attack-coverage" element={<AttackCoverage />} />
+          <Route path="security-posture" element={<SecurityPosture />} />
+          <Route path="iocs" element={<IocFeed />} />
+          <Route path="ueba" element={<UebaAnomalies />} />
+          <Route path="suppressions" element={<FindingSuppressions />} />
+          <Route path="crypto-posture" element={<CryptoPosture />} />
+          <Route path="live-feed" element={<LiveFeed />} />
+          <Route path="reports" element={<ReportHistory />} />
+          <Route path="overview" element={<ExecutiveOverview />} />
           <Route path="dark-web" element={<DarkWebMonitor />} />
           <Route path="target-intel" element={<TargetIntelligence />} />
           <Route path="stealth-ops" element={<StealthOperations />} />
@@ -249,7 +278,7 @@ export default function TacticalApp() {
           <Route path="threat-analysis" element={<ThreatAnalysisCenter />} />
           <Route path="engine-catalog" element={<EngineClientCatalog />} />
           <Route path="engine-reliability" element={<EngineReliability />} />
-          <Route path="admin" element={<AdminManagement />} />
+          <Route path="admin" element={<RequireRole min="ceo"><AdminManagement /></RequireRole>} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/new" element={<ClientNew />} />
           <Route path="clients/:id" element={<ClientDetail />} />
@@ -266,9 +295,9 @@ export default function TacticalApp() {
           <Route path="remediation" element={<RemediationHub />} />
           <Route path="remediation-analytics" element={<RemediationAnalytics />} />
           <Route path="engine-management" element={<EngineManagementConsole />} />
-          <Route path="system-config" element={<SystemConfiguration />} />
+          <Route path="system-config" element={<RequireRole min="admin"><SystemConfiguration /></RequireRole>} />
           <Route path="metrics" element={<MetricsDashboard />} />
-          <Route path="ceo-vault" element={<CeoVault />} />
+          <Route path="ceo-vault" element={<RequireRole min="ceo"><CeoVault /></RequireRole>} />
           <Route path="risk-graph" element={<RiskGraphVisualization />} />
           <Route path="compliance" element={<ComplianceFrameworks />} />
           <Route path="sbom" element={<SBOMBrowser />} />
@@ -288,7 +317,7 @@ export default function TacticalApp() {
           <Route path="playbooks" element={<PlaybookBuilder />} />
           <Route path="ask" element={<AskWeissman />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />
-          <Route path="supreme-nerve-center" element={<SupremeNerveCenter />} />
+          <Route path="supreme-nerve-center" element={<RequireRole min="ceo"><SupremeNerveCenter /></RequireRole>} />
           <Route path="*" element={<NotFound />} />
         </Route>
         <Route path="*" element={<NotFound />} />
@@ -299,12 +328,17 @@ export default function TacticalApp() {
 
 export function TacticalProviders({ children }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ToastProvider>
-          <RateLimitProvider>{children}</RateLimitProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      {/* Respect the OS "reduce motion" setting across all framer-motion animations. */}
+      <MotionConfig reducedMotion="user">
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ToastProvider>
+              <RateLimitProvider>{children}</RateLimitProvider>
+            </ToastProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MotionConfig>
+    </ThemeProvider>
   )
 }

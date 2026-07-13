@@ -6,7 +6,7 @@
  *  2. Configuration Form — fields tailored to the selected vendor
  *  3. Active IdP Table — list of configured IdPs with status, Test Connection, edit/delete
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -17,6 +17,8 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiUrl } from '../lib/apiBase'
 import { api } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
+import Button from '../components/ui/Button'
+
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ function deriveIssuerUrl(vendor, form) {
 function ActiveBadge({ active, lastOk }) {
   const { t } = useTranslation()
   if (!active) return (
-    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-white/10 text-white/30">{t('pages.ssoDashboard.status_inactive')}</span>
+    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-[var(--border-default)] text-[var(--text-disabled)]">{t('pages.ssoDashboard.status_inactive')}</span>
   )
   if (lastOk === true) return (
     <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded border border-green-500/30 bg-green-900/10 text-green-400">{t('pages.ssoDashboard.status_active_ok')}</span>
@@ -97,17 +99,17 @@ function ProviderCard({ prov, onClick }) {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="group text-left rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 hover:border-white/25 p-5 transition-all space-y-3"
+      className="group text-left rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] hover:border-[var(--border-strong)] p-5 transition-all space-y-3"
     >
       <div className="flex items-center gap-3">
         <span className="text-2xl">{prov.logo}</span>
         <div>
           <p className="font-semibold text-white text-sm">{t(`pages.ssoDashboard.providers.${prov.id}.label`)}</p>
-          <p className="text-[10px] font-mono text-white/30 uppercase">{prov.protocol}</p>
+          <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol}</p>
         </div>
       </div>
-      <p className="text-[11px] text-white/45">{t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
-      <div className="text-[10px] font-mono text-white/20 group-hover:text-white/50 transition-colors">{t('pages.ssoDashboard.configure_card')}</div>
+      <p className="text-[11px] text-[var(--text-muted)]">{t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
+      <div className="text-[10px] font-mono text-[var(--text-disabled)] group-hover:text-[var(--text-tertiary)] transition-colors">{t('pages.ssoDashboard.configure_card')}</div>
     </motion.button>
   )
 }
@@ -144,16 +146,16 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
-      className="rounded-2xl bg-black/50 backdrop-blur-md border border-white/15 p-6 space-y-5"
+      className="rounded-2xl bg-[var(--bg-3)] backdrop-blur-md border border-[var(--border-strong)] p-6 space-y-5"
     >
       {/* Header */}
       <div className="flex items-center gap-3">
         <span className="text-xl">{prov.logo}</span>
         <div>
           <h3 className="text-sm font-bold text-white">{t('pages.ssoDashboard.configure_sso', { label: t(`pages.ssoDashboard.providers.${prov.id}.label`) })}</h3>
-          <p className="text-[10px] font-mono text-white/30 uppercase">{prov.protocol} · {t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
+          <p className="text-[10px] font-mono text-[var(--text-disabled)] uppercase">{prov.protocol} · {t(`pages.ssoDashboard.providers.${prov.id}.description`)}</p>
         </div>
-        <button type="button" onClick={onCancel} className="ml-auto text-white/30 hover:text-white/60 text-lg transition-colors">✕</button>
+        <Button variant="unstyled" type="button" aria-label="Close" onClick={onCancel} className="ml-auto text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-lg transition-colors">✕</Button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -166,19 +168,19 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
             const note = meta.hasNote ? t(`pages.ssoDashboard.fields.${key}.note`) : ''
             if (meta.type === 'textarea') return (
               <div key={key} className="sm:col-span-2 space-y-1">
-                <label className="text-[11px] font-mono text-white/40 uppercase">{label}{meta.required && <span className="text-rose-400 ml-0.5">*</span>}</label>
+                <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{label}{meta.required && <span className="text-rose-400 ml-0.5">*</span>}</label>
                 <textarea
                   rows={5}
                   placeholder={placeholder}
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] font-mono text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40 resize-none"
+                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] font-mono text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40 resize-none"
                 />
               </div>
             )
             return (
               <div key={key} className={`space-y-1 ${key === 'name' ? 'sm:col-span-2' : ''}`}>
-                <label className="text-[11px] font-mono text-white/40 uppercase">
+                <label className="text-[11px] font-mono text-[var(--text-muted)] uppercase">
                   {label}{meta.required && <span className="text-rose-400 ml-0.5">*</span>}
                 </label>
                 <input
@@ -187,25 +189,25 @@ function ConfigForm({ prov, initial, onSave, onCancel, saving }) {
                   value={form[key] ?? ''}
                   onChange={e => set(key, e.target.value)}
                   required={meta.required && (!initial || !form[key])}
-                  className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[12px] text-white/70 placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
+                  className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] placeholder-white/20 focus:outline-none focus:border-cyan-500/40"
                 />
-                {note && <p className="text-[10px] text-white/25">{note}</p>}
+                {note && <p className="text-[10px] text-[var(--text-disabled)]">{note}</p>}
               </div>
             )
           })}
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button
+          <Button variant="unstyled"
             type="submit"
             disabled={saving}
             className="flex-1 px-4 py-2 rounded-xl border border-cyan-500/40 text-cyan-300/80 text-[12px] font-mono uppercase hover:bg-cyan-950/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             {saving ? t('pages.ssoDashboard.saving') : initial ? t('pages.ssoDashboard.update_connection') : t('pages.ssoDashboard.add_connection_btn')}
-          </button>
-          <button type="button" onClick={onCancel} className="px-4 py-2 rounded-xl border border-white/10 text-white/40 text-[12px] font-mono hover:border-white/20 transition-all">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={onCancel} className="px-4 py-2 rounded-xl border border-[var(--border-default)] text-[var(--text-muted)] text-[12px] font-mono hover:border-[var(--border-strong)] transition-all">
             {t('pages.ssoDashboard.cancel')}
-          </button>
+          </Button>
         </div>
       </form>
     </motion.div>
@@ -224,15 +226,15 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-4 flex flex-col sm:flex-row sm:items-center gap-4"
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-4 flex flex-col sm:flex-row sm:items-center gap-4"
     >
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <span className="text-xl shrink-0">{prov.logo}</span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate">{idp.name}</p>
-          <p className="text-[10px] font-mono text-white/30 truncate">{idp.issuer_url || idp.saml_idp_sso_url || '—'}</p>
+          <p className="text-[10px] font-mono text-[var(--text-disabled)] truncate">{idp.issuer_url || idp.saml_idp_sso_url || '—'}</p>
           {idp.last_test_at && (
-            <p className="text-[10px] text-white/20 mt-0.5">
+            <p className="text-[10px] text-[var(--text-disabled)] mt-0.5">
               {t('pages.ssoDashboard.last_tested', { time: new Date(idp.last_test_at).toLocaleString() })}
               {idp.last_test_error && <span className="text-rose-400/70 ml-1">— {idp.last_test_error.slice(0, 60)}</span>}
             </p>
@@ -243,15 +245,15 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
       <div className="flex items-center gap-2 flex-wrap shrink-0">
         <ActiveBadge active={idp.active} lastOk={idp.last_test_ok} />
 
-        <button
+        <Button variant="unstyled"
           type="button"
           disabled={testing}
           onClick={() => onTest(idp.id)}
-          className="text-[11px] font-mono border border-white/10 text-white/40 hover:text-cyan-300/70 hover:border-cyan-500/30 px-2.5 py-1 rounded-xl transition-all disabled:opacity-40"
+          className="text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-cyan-300/70 hover:border-cyan-500/30 px-2.5 py-1 rounded-xl transition-all disabled:opacity-40"
         >
           {testing ? t('pages.ssoDashboard.testing') : t('pages.ssoDashboard.test_btn')}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled"
           type="button"
           onClick={() => onToggle(idp.id)}
           className={`text-[11px] font-mono border px-2.5 py-1 rounded-xl transition-all ${
@@ -261,21 +263,21 @@ function IdpRow({ idp, onEdit, onDelete, onToggle, onTest, testing }) {
           }`}
         >
           {idp.active ? t('pages.ssoDashboard.disable') : t('pages.ssoDashboard.enable')}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled"
           type="button"
           onClick={() => onEdit(idp)}
-          className="text-[11px] font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 px-2.5 py-1 rounded-xl transition-all"
+          className="text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] px-2.5 py-1 rounded-xl transition-all"
         >
           {t('pages.ssoDashboard.edit')}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled"
           type="button"
           onClick={() => onDelete(idp.id)}
           className="text-[11px] font-mono border border-rose-500/20 text-rose-400/50 hover:bg-rose-900/20 px-2.5 py-1 rounded-xl transition-all"
         >
           ✕
-        </button>
+        </Button>
       </div>
     </motion.div>
   )
@@ -333,7 +335,7 @@ export default function SsoDashboard() {
   }, [editingIdp, fetchIdps, showToast, t])
 
   const handleDelete = useCallback(async (id) => {
-    if (!window.confirm(t('pages.ssoDashboard.delete_confirm'))) return
+    if (!(await confirmDialog(t('pages.ssoDashboard.delete_confirm')))) return
     try {
       await api.delete(`/api/sso/idps/${id}`)
       showToast(t('pages.ssoDashboard.connection_removed'))
@@ -423,7 +425,7 @@ export default function SsoDashboard() {
         {/* Header */}
         <div className="space-y-1">
           <h2 className="text-lg font-bold text-white">{t('pages.ssoDashboard.title')}</h2>
-          <p className="text-[12px] text-white/40">
+          <p className="text-[12px] text-[var(--text-muted)]">
             {t('pages.ssoDashboard.header_detail')}
           </p>
         </div>
@@ -438,7 +440,7 @@ export default function SsoDashboard() {
               className="space-y-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest">{t('pages.ssoDashboard.add_connection')}</h3>
+                <h3 className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-widest">{t('pages.ssoDashboard.add_connection')}</h3>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {PROVIDERS.map(prov => (
@@ -465,21 +467,21 @@ export default function SsoDashboard() {
         {/* Configured connections */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-mono text-white/40 uppercase tracking-widest">
+            <h3 className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-widest">
               {t('pages.ssoDashboard.configured_connections')}
-              {idps.length > 0 && <span className="ml-2 text-white/25">{t('pages.ssoDashboard.connection_count', { count: idps.length })}</span>}
+              {idps.length > 0 && <span className="ml-2 text-[var(--text-disabled)]">{t('pages.ssoDashboard.connection_count', { count: idps.length })}</span>}
             </h3>
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={fetchIdps}
-              className="text-[11px] font-mono border border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 px-2.5 py-1 rounded-xl transition-all"
+              className="text-[11px] font-mono border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] px-2.5 py-1 rounded-xl transition-all"
             >
               {t('pages.ssoDashboard.refresh')}
-            </button>
+            </Button>
           </div>
 
           {loading && (
-            <p className="text-[11px] text-white/25 font-mono animate-pulse">{t('pages.ssoDashboard.loading')}</p>
+            <p className="text-[11px] text-[var(--text-disabled)] font-mono animate-pulse">{t('pages.ssoDashboard.loading')}</p>
           )}
 
           {!loading && idps.length > 0 && (
@@ -496,10 +498,10 @@ export default function SsoDashboard() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="rounded-2xl border border-dashed border-white/10 p-10 text-center"
+                className="rounded-2xl border border-dashed border-[var(--border-default)] p-10 text-center"
               >
-                <p className="text-white/20 text-[12px]">{t('pages.ssoDashboard.no_idps')}</p>
-                <p className="text-white/15 text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
+                <p className="text-[var(--text-disabled)] text-[12px]">{t('pages.ssoDashboard.no_idps')}</p>
+                <p className="text-[var(--text-disabled)] text-[11px] mt-1">{t('pages.ssoDashboard.no_idps_hint')}</p>
               </motion.div>
             )}
             {!loading && idps.length > 0 && visibleIdps.length === 0 && (
@@ -525,8 +527,8 @@ export default function SsoDashboard() {
         </div>
 
         {/* SP Metadata info */}
-        <div className="rounded-2xl bg-white/[0.02] border border-white/8 px-5 py-4 space-y-2">
-          <h4 className="text-[11px] font-mono text-white/35 uppercase">{t('pages.ssoDashboard.sp_metadata')}</h4>
+        <div className="rounded-2xl bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] px-5 py-4 space-y-2">
+          <h4 className="text-[11px] font-mono text-[var(--text-muted)] uppercase">{t('pages.ssoDashboard.sp_metadata')}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
               { label: t('pages.ssoDashboard.oidc_callback'), value: apiUrl('/api/auth/oidc/callback') },
@@ -535,7 +537,7 @@ export default function SsoDashboard() {
               { label: t('pages.ssoDashboard.saml_login'), value: `${apiUrl('/api/auth/saml/begin')}?tenant_slug=TENANT&idp_name=NAME` },
             ].map(item => (
               <div key={item.label} className="space-y-0.5">
-                <p className="text-[9px] font-mono text-white/25 uppercase">{item.label}</p>
+                <p className="text-[9px] font-mono text-[var(--text-disabled)] uppercase">{item.label}</p>
                 <code className="text-[10px] font-mono text-cyan-400/50 break-all">{item.value}</code>
               </div>
             ))}

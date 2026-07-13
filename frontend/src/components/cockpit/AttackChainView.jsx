@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
-import { ShieldAlert, ListOrdered } from 'lucide-react'
+import { ListOrdered } from 'lucide-react';
 import { apiFetch } from '../../lib/apiBase'
 import StandaloneLabShell from '../ui/StandaloneLabShell'
 

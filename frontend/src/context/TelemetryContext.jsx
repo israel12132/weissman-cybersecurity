@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { openSseStream } from '../lib/sseStream'
 
 const TelemetryContext = createContext(null)

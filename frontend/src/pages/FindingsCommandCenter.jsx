@@ -7,12 +7,15 @@
  * Row click: drawer showing raw JSON + technical details + status update.
  * Export: CSV download of all findings.
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
 import { apiFetch } from '../lib/apiBase'
+import { bulkUpdateFindingStatus } from '../lib/bulkFindingStatus'
+import { useSavedViews } from '../hooks/useSavedViews'
+import { encodeFindingsFilters, decodeFindingsFilters } from '../lib/findingsUrlState'
 import { sanitizeFindingPlainText } from '../lib/sanitizeFinding'
 import { useToast } from '../components/ui/Toaster'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
@@ -27,6 +30,7 @@ import SeverityBadge, {
   getSeverityMeta,
   getSeverityOrder,
 } from '../components/ui/SeverityBadge'
+import Button from '../components/ui/Button'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -80,19 +84,37 @@ function isKevListed(f) {
   return !!(f?.kev_listed || f?.kev || f?.raw?.kev)
 }
 
-/** Map source/engine-id string → registry label & group */
+// Registry is static, so precompute a normalized-label → engine index ONCE
+// instead of scanning all ~563 engines on every unmatched lookup. Results are
+// memoized by raw input — the accessors below run per-row × per-render over a
+// 2000-row set, so this must be O(1), not an O(n) find per call.
+const _normLabelIndex = (() => {
+  const idx = new Map()
+  for (const e of Object.values(ENGINES_BY_ID)) {
+    const key = String(e.label || '').toLowerCase().replace(/[-_\s]/g, '')
+    if (key && !idx.has(key)) idx.set(key, e)
+  }
+  return idx
+})()
+const _resolveEngineCache = new Map()
+
+/** Map source/engine-id string → registry label & group (memoized, O(1)). */
 function resolveEngine(sourceOrId) {
   if (!sourceOrId) return { label: '—', group: null, mitre: null }
-  // Direct ID match
+  const cached = _resolveEngineCache.get(sourceOrId)
+  if (cached) return cached
+  let result
   const byId = ENGINES_BY_ID[sourceOrId]
-  if (byId) return { label: byId.label, group: byId.group, mitre: byId.mitre }
-  // Fuzzy match on label (case-insensitive)
-  const lower = sourceOrId.toLowerCase().replace(/[-_\s]/g, '')
-  const found = Object.values(ENGINES_BY_ID).find(
-    (e) => e.label.toLowerCase().replace(/[-_\s]/g, '') === lower,
-  )
-  if (found) return { label: found.label, group: found.group, mitre: found.mitre }
-  return { label: sanitizeFindingPlainText(sourceOrId, 64), group: null, mitre: null }
+  if (byId) {
+    result = { label: byId.label, group: byId.group, mitre: byId.mitre }
+  } else {
+    const found = _normLabelIndex.get(sourceOrId.toLowerCase().replace(/[-_\s]/g, ''))
+    result = found
+      ? { label: found.label, group: found.group, mitre: found.mitre }
+      : { label: sanitizeFindingPlainText(sourceOrId, 64), group: null, mitre: null }
+  }
+  _resolveEngineCache.set(sourceOrId, result)
+  return result
 }
 
 function formatDate(val) {
@@ -115,41 +137,16 @@ function formatDate(val) {
 // ─── Small UI pieces ──────────────────────────────────────────────────────────
 
 function MitreBadge({ id }) {
-  if (!id) return <span className="text-white/25 font-mono text-[11px]">—</span>
+  if (!id) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   return (
-    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-white/10 text-white/55 tracking-wider">
+    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] text-[var(--text-tertiary)] tracking-wider">
       {id}
     </span>
   )
 }
 
-function ComplianceBadges({ compliance }) {
-  const list = Array.isArray(compliance) ? compliance : []
-  if (list.length === 0) return <span className="text-white/25 font-mono text-[11px]">—</span>
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {list.slice(0, 12).map((c, idx) => {
-        const raw = typeof c === 'string' ? c : JSON.stringify(c)
-        const label = sanitizeFindingPlainText(raw || '—', 48)
-        return (
-          <span
-            key={`${label}-${idx}`}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/5 border border-white/10 text-white/55 tracking-wider"
-            title={sanitizeFindingPlainText(raw || '', 256)}
-          >
-            {label}
-          </span>
-        )
-      })}
-      {list.length > 12 ? (
-        <span className="text-[10px] font-mono text-white/35 px-1.5 py-0.5">+{list.length - 12}</span>
-      ) : null}
-    </div>
-  )
-}
-
 function ScoreBadge({ score }) {
-  if (score == null || score === '') return <span className="text-white/25 font-mono text-[11px]">—</span>
+  if (score == null || score === '') return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
   const n = typeof score === 'number' ? score : parseFloat(score)
   const color = n >= 9 ? '#ef4444' : n >= 7 ? '#f97316' : n >= 4 ? '#f59e0b' : '#22d3ee'
   return (
@@ -189,7 +186,7 @@ function buildColumns(t, onVerifyRow) {
           const groupDef = eng.group ? ENGINE_GROUPS[eng.group] : null
           return (
             <div className="min-w-0">
-              <div className="text-[12px] text-white/80 truncate">{getValue()}</div>
+              <div className="text-[12px] text-[var(--text-secondary)] truncate">{getValue()}</div>
               {groupDef && (
                 <div
                   className="text-[10px] font-mono truncate"
@@ -217,7 +214,7 @@ function buildColumns(t, onVerifyRow) {
       size: 280,
       cell: ({ getValue }) => (
         <span
-          className="text-[12px] text-white/85 line-clamp-2 leading-snug"
+          className="text-[12px] text-[var(--text-primary)] line-clamp-2 leading-snug"
           title={sanitizeFindingPlainText(getValue() || '', 512)}
         >
           {sanitizeFindingPlainText(getValue() || t('findings.untitled'), 128)}
@@ -233,9 +230,9 @@ function buildColumns(t, onVerifyRow) {
         enableSorting: false,
         cell: ({ getValue }) => {
           const v = getValue()
-          if (!v) return <span className="text-white/25 font-mono text-[11px]">—</span>
+          if (!v) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">—</span>
           return (
-            <span className="text-[11px] font-mono text-white/55 line-clamp-1" title={sanitizeFindingPlainText(String(v), 512)}>
+            <span className="text-[11px] font-mono text-[var(--text-tertiary)] line-clamp-1" title={sanitizeFindingPlainText(String(v), 512)}>
               {sanitizeFindingPlainText(String(v), 96)}
             </span>
           )
@@ -277,7 +274,7 @@ function buildColumns(t, onVerifyRow) {
             <div className="flex flex-col gap-0.5">
               <ScoreBadge score={v} />
               {(kev || epss != null) && (
-                <span className="text-[9px] font-mono text-white/40">
+                <span className="text-[9px] font-mono text-[var(--text-muted)]">
                   {kev ? 'KEV' : ''}{kev && epss != null ? ' · ' : ''}{epss != null ? `EPSS ${(epss * 100).toFixed(0)}%` : ''}
                 </span>
               )}
@@ -294,7 +291,7 @@ function buildColumns(t, onVerifyRow) {
         size: 70,
         cell: ({ getValue }) => {
           const n = getValue()
-          if (!n || n <= 1) return <span className="text-white/25 font-mono text-[11px]">1×</span>
+          if (!n || n <= 1) return <span className="text-[var(--text-disabled)] font-mono text-[11px]">1×</span>
           return (
             <span className="text-[11px] font-mono text-amber-300/90" title="Recurrence count from dedup engine">
               {n}×
@@ -328,7 +325,7 @@ function buildColumns(t, onVerifyRow) {
         header: t('findings.col_compliance'),
         size: 110,
         enableSorting: false,
-        cell: ({ row, getValue }) => {
+        cell: ({ getValue }) => {
           const count = getValue()
           const has = count > 0
           return (
@@ -377,7 +374,7 @@ function buildColumns(t, onVerifyRow) {
         header: t('findings.col_date'),
         size: 160,
         cell: ({ getValue }) => (
-          <span className="text-[11px] font-mono text-white/45 whitespace-nowrap">
+          <span className="text-[11px] font-mono text-[var(--text-muted)] whitespace-nowrap">
             {formatDate(getValue())}
           </span>
         ),
@@ -419,19 +416,47 @@ export default function FindingsCommandCenter() {
 
   const [selectedFinding, setSelectedFinding] = useState(null)
 
-  // Filter state
-  const [globalFilter, setGlobalFilter] = useState('')
-  const [severityFilter, setSeverityFilter] = useState('')
-  const [engineFilter, setEngineFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [kevFilter, setKevFilter] = useState(false)
+  // Filter state — hydrated once from the URL so a shared link opens pre-filtered.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialUrlFilters = useMemo(() => decodeFindingsFilters(searchParams), []) // eslint-disable-line react-hooks/exhaustive-deps
+  const [globalFilter, setGlobalFilter] = useState(initialUrlFilters.globalFilter)
+  const [severityFilter, setSeverityFilter] = useState(initialUrlFilters.severityFilter)
+  const [engineFilter, setEngineFilter] = useState(initialUrlFilters.engineFilter)
+  const [statusFilter, setStatusFilter] = useState(initialUrlFilters.statusFilter)
+  const [kevFilter, setKevFilter] = useState(initialUrlFilters.kevFilter)
   const [filtersExpanded, setFiltersExpanded] = useState(true)
+
+  // Keep the URL in sync with the active filters (shareable / bookmarkable),
+  // preserving any unrelated query params. Replace (no history spam).
+  useEffect(() => {
+    const FILTER_KEYS = ['q', 'sev', 'status', 'engine', 'kev']
+    const encoded = encodeFindingsFilters({ globalFilter, severityFilter, statusFilter, engineFilter, kevFilter })
+    // Compare only our own keys so unrelated params (and their order) never
+    // trigger a redundant write — avoids a cosmetic replace() on mount.
+    const changed = FILTER_KEYS.some((k) => (encoded[k] ?? '') !== (searchParams.get(k) ?? ''))
+    if (!changed) return
+    const next = new URLSearchParams(searchParams)
+    for (const k of FILTER_KEYS) next.delete(k)
+    for (const [k, v] of Object.entries(encoded)) next.set(k, v)
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalFilter, severityFilter, statusFilter, engineFilter, kevFilter])
 
   // Sorting
   const [sorting, setSorting] = useState([{ id: 'severity', desc: false }])
 
   // Pagination
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
+
+  // Bulk selection / actions
+  const [selectedRows, setSelectedRows] = useState([])
+  const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [selectionResetSignal, setSelectionResetSignal] = useState(0)
+
+  // Saved views (named filter/sort snapshots, per-user, localStorage)
+  const { views: savedViews, saveView, deleteView } = useSavedViews('weissman_findings_views')
+  const [viewName, setViewName] = useState('')
 
   const loadFindings = useCallback(() => {
     setLoading(true)
@@ -483,6 +508,33 @@ export default function FindingsCommandCenter() {
       })
       .catch((e) => toast.error(t('findings.toast_status_failed', { detail: e?.message || t('findings.network_error') })))
   }, [toast, t])
+
+  // Bulk status update — batches the per-finding PATCH /api/findings/:id/status
+  // (there is no server bulk endpoint) with concurrency-limited requests, then
+  // reports an aggregate result. Local state is patched from each success.
+  const applyBulkStatus = useCallback(async () => {
+    const status = bulkStatus
+    const targets = selectedRows.map((f) => f.raw_id ?? f.id)
+    if (!status || targets.filter((id) => id != null).length === 0) return
+    setBulkBusy(true)
+    const { ok, failed } = await bulkUpdateFindingStatus(targets, status, {
+      apiFetch,
+      onSuccess: (rawId, serverStatus) => {
+        // Match on both keys: targets are `raw_id ?? id`, so a finding without a
+        // raw_id was PATCHed by its id and must be matched by id here too, else
+        // the row shows a stale status despite the server success.
+        setRawFindings((prev) => prev.map((f) => (Number(f.raw_id) === Number(rawId) || Number(f.id) === Number(rawId) ? { ...f, status: serverStatus } : f)))
+      },
+    })
+    setBulkBusy(false)
+    setSelectionResetSignal((n) => n + 1)
+    setSelectedRows([])
+    if (failed.length === 0) {
+      toast.success(t('findings.bulk_status_ok', { count: ok, status }))
+    } else {
+      toast.warning(t('findings.bulk_status_partial', { ok, failed: failed.length }))
+    }
+  }, [bulkStatus, selectedRows, toast, t])
 
   const handleExportCsv = useCallback(() => {
     apiFetch('/api/findings/export/csv')
@@ -538,6 +590,26 @@ export default function FindingsCommandCenter() {
     if (statusFilter) f.push({ id: 'status', value: statusFilter })
     return f
   }, [severityFilter, engineFilter, statusFilter])
+
+  // Snapshot / restore the full filter+sort state for saved views.
+  const saveCurrentView = useCallback(() => {
+    const name = viewName.trim()
+    if (!name) return
+    saveView(name, { globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, sorting })
+    setViewName('')
+    toast.success(t('findings.view_saved', { name }))
+  }, [viewName, saveView, globalFilter, severityFilter, engineFilter, statusFilter, kevFilter, sorting, toast, t])
+
+  const applyView = useCallback((state) => {
+    if (!state) return
+    setGlobalFilter(state.globalFilter ?? '')
+    setSeverityFilter(state.severityFilter ?? '')
+    setEngineFilter(state.engineFilter ?? '')
+    setStatusFilter(state.statusFilter ?? '')
+    setKevFilter(Boolean(state.kevFilter))
+    if (Array.isArray(state.sorting)) setSorting(state.sorting)
+    setPagination((p) => ({ ...p, pageIndex: 0 }))
+  }, [])
 
   const totalFiltered = useMemo(() => {
     let count = 0
@@ -617,23 +689,23 @@ export default function FindingsCommandCenter() {
 
   return (
     <div
-      className="min-h-[100dvh] text-slate-100"
+      className="min-h-[100dvh] text-[var(--text-secondary)]"
       style={{
-        background: 'radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
+        background: 'var(--shell-bg)',
       }}
     >
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-3)] backdrop-blur-md">
         <div className="max-w-screen-2xl mx-auto px-4 py-2.5 flex flex-wrap items-center gap-3 text-[11px] font-mono">
-          <Link to="/" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
+          <Link to="/" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0">
             ← {t('nav.dashboard')}
           </Link>
-          <span className="text-white/15">|</span>
-          <Link to="/engines" className="text-white/40 hover:text-white/70 transition-colors shrink-0">
+          <span className="text-[var(--text-disabled)]">|</span>
+          <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0">
             {t('nav.engine_matrix')}
           </Link>
           {region && (
             <>
-              <span className="text-white/15">|</span>
+              <span className="text-[var(--text-disabled)]">|</span>
               <span
                 className="text-[10px] px-2 py-0.5 rounded-full border"
                 style={{ color: '#22d3ee', borderColor: '#22d3ee30', backgroundColor: '#22d3ee08' }}
@@ -663,13 +735,13 @@ export default function FindingsCommandCenter() {
           exportLabel={t('common.export_csv')}
           refreshLabel={t('common.refresh')}
         >
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
           >
             {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
-          </button>
+          </Button>
         </PremiumPageHeader>
 
         {filtersExpanded && (
@@ -728,9 +800,9 @@ export default function FindingsCommandCenter() {
               ]}
             />
 
-            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/8">
+            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[var(--border-subtle)]">
               <div className="relative flex-1 min-w-[220px] max-w-md">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] text-xs pointer-events-none">
                   ⌕
                 </span>
                 <input
@@ -741,17 +813,17 @@ export default function FindingsCommandCenter() {
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
                   placeholder={t('findings.search_findings')}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-8 py-2.5 text-xs text-white/80 font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                  className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-8 py-2.5 text-xs text-[var(--text-secondary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
                 />
                 {globalFilter && (
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => setGlobalFilter('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] text-xs"
                     aria-label={t('common.close')}
                   >
                     ✕
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -761,7 +833,7 @@ export default function FindingsCommandCenter() {
                   setEngineFilter(e.target.value)
                   setPagination((p) => ({ ...p, pageIndex: 0 }))
                 }}
-                className="bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white/70 font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-2.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40 transition-colors"
               >
                 <option value="">{t('findings.all_engine_groups')}</option>
                 {ENGINE_GROUP_DEFS.map((g) => (
@@ -770,7 +842,7 @@ export default function FindingsCommandCenter() {
               </select>
 
               {(globalFilter || severityFilter || engineFilter || statusFilter || kevFilter) && (
-                <button
+                <Button variant="unstyled"
                   type="button"
                   onClick={() => {
                     setGlobalFilter('')
@@ -780,17 +852,53 @@ export default function FindingsCommandCenter() {
                     setKevFilter(false)
                     setPagination((p) => ({ ...p, pageIndex: 0 }))
                   }}
-                  className="px-3 py-2.5 rounded-xl text-xs font-mono border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors"
+                  className="px-3 py-2.5 rounded-xl text-xs font-mono border border-[var(--border-default)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                 >
                   {t('common.clear_filters')}
-                </button>
+                </Button>
               )}
+            </div>
+
+            {/* Saved views — named filter/sort snapshots (per-user, local). */}
+            <div className="flex flex-wrap items-center gap-2 pt-3 mt-1 border-t border-[var(--border-subtle)]">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('findings.views_label')}</span>
+              {savedViews.map((v) => (
+                <span key={v.id} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] pl-2.5 pr-1 py-1 text-[11px] font-mono text-[var(--text-secondary)]">
+                  <Button variant="unstyled" type="button" onClick={() => applyView(v.state)} className="hover:text-cyan-300 transition-colors" title={t('findings.view_apply')}>
+                    {v.name}
+                  </Button>
+                  <Button variant="unstyled" type="button" onClick={() => deleteView(v.id)} aria-label={t('findings.view_delete', { name: v.name })} className="w-4 h-4 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-300 transition-colors">×</Button>
+                </span>
+              ))}
+              {savedViews.length === 0 && (
+                <span className="text-[11px] font-mono text-[var(--text-disabled)]">{t('findings.views_empty')}</span>
+              )}
+              <form
+                className="inline-flex items-center gap-1.5 ms-auto"
+                onSubmit={(e) => { e.preventDefault(); saveCurrentView() }}
+              >
+                <input
+                  type="text"
+                  value={viewName}
+                  onChange={(e) => setViewName(e.target.value)}
+                  placeholder={t('findings.view_name_placeholder')}
+                  aria-label={t('findings.view_name_placeholder')}
+                  className="w-40 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+                />
+                <Button variant="unstyled"
+                  type="submit"
+                  disabled={!viewName.trim()}
+                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {t('findings.view_save')}
+                </Button>
+              </form>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
             {error}
           </div>
         )}
@@ -803,6 +911,44 @@ export default function FindingsCommandCenter() {
             cta={{ label: t('findings.run_scan_cta'), to: '/clients' }}
             secondary={{ label: t('nav.engine_matrix'), to: '/engines' }}
           />
+        )}
+
+        {selectedRows.length > 0 && (
+          <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-cyan-500/30 bg-[var(--bg-elevated)] px-4 py-2.5 shadow-lg">
+            <span className="text-[12px] font-mono text-cyan-300">
+              {t('findings.bulk_selected', { count: selectedRows.length })}
+            </span>
+            <div className="flex items-center gap-2 ms-auto">
+              <label className="text-[11px] font-mono text-[var(--text-muted)]">{t('findings.bulk_set_status')}</label>
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                aria-label={t('findings.bulk_set_status')}
+                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2 py-1.5 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
+              >
+                <option value="">{t('findings.bulk_choose_status')}</option>
+                {FINDING_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
+                ))}
+              </select>
+              <Button variant="unstyled"
+                type="button"
+                disabled={!bulkStatus || bulkBusy}
+                onClick={applyBulkStatus}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-[12px] font-mono text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {bulkBusy && <span className="w-3 h-3 border-2 border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" />}
+                {t('findings.bulk_apply', { count: selectedRows.length })}
+              </Button>
+              <Button variant="unstyled"
+                type="button"
+                onClick={() => { setSelectionResetSignal((n) => n + 1); setSelectedRows([]) }}
+                className="rounded-lg border border-[var(--border-default)] px-2.5 py-1.5 text-[12px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                {t('findings.bulk_clear')}
+              </Button>
+            </div>
+          </div>
         )}
 
         {(tableData.length > 0 || loading) && (
@@ -821,6 +967,12 @@ export default function FindingsCommandCenter() {
             pageSizes={PAGE_SIZES}
             onRowClick={handleRowClick}
             selectedRowId={selectedRowId}
+            enableSelection
+            onSelectionChange={setSelectedRows}
+            selectionResetSignal={selectionResetSignal}
+            selectLabel={t('findings.select_row')}
+            selectAllLabel={t('findings.select_all')}
+            densityToggle
             getRowAccentColor={(row) => getSeverityMeta(row.severity).border ?? getSeverityMeta(row.severity).color}
             emptyFilteredMessage={t('findings.no_filter_match')}
             zebra
@@ -833,7 +985,7 @@ export default function FindingsCommandCenter() {
         onClose={handleCloseDrawer}
         onStatusUpdate={handleStatusUpdate}
         onVerifyComplete={handleVerifyComplete}
-        statusOptions={FINDING_STATUSES.map(({ value, label }) => ({ value, label }))}
+        statusOptions={FINDING_STATUSES.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
         headerExtra={drawerEngineMeta.headerExtra}
         subtitle={drawerEngineMeta.subtitle}
       />

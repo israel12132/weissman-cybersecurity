@@ -1,4 +1,3 @@
-import React from 'react'
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 
 function DeltaDisplay({ delta, trend }) {
@@ -14,7 +13,7 @@ function DeltaDisplay({ delta, trend }) {
   const colors = {
     up: 'text-emerald-400',
     down: 'text-rose-400',
-    neutral: 'text-white/40',
+    neutral: 'text-[var(--text-muted)]',
   }
   const Icon = resolvedTrend === 'up' ? ArrowUp : resolvedTrend === 'down' ? ArrowDown : Minus
 
@@ -61,8 +60,8 @@ export default function StatCard({
   return (
     <Wrapper
       {...wrapperProps}
-      className={`group rounded-2xl border border-white/10 bg-[var(--card-bg)]/80 backdrop-blur-md p-5 transition-colors ${
-        onClick ? 'hover:border-white/20 hover:bg-white/[0.03] cursor-pointer' : ''
+      className={`group rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] backdrop-blur-md p-5 transition-colors ${
+        onClick ? 'hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] cursor-pointer' : ''
       } ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -77,7 +76,7 @@ export default function StatCard({
             <DeltaDisplay delta={delta} trend={trend} />
           </div>
           {hint && (
-            <p className="text-[11px] text-white/45 mt-1.5 leading-snug">{hint}</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5 leading-snug">{hint}</p>
           )}
         </div>
         {sparkline && (
@@ -87,7 +86,7 @@ export default function StatCard({
         )}
       </div>
       {footer && (
-        <div className="mt-3 pt-3 border-t border-white/5 text-[10px] font-mono text-white/35">
+        <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] text-[10px] font-mono text-[var(--text-muted)]">
           {footer}
         </div>
       )}

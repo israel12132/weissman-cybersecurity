@@ -73,19 +73,19 @@ export default function ReportView() {
       )}
 
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-200 mb-2">{t('components.reportView.executive_summary')}</h2>
-        <p className="text-slate-400 text-sm">
+        <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('components.reportView.executive_summary')}</h2>
+        <p className="text-[var(--text-tertiary)] text-sm">
           <Trans
             i18nKey="components.reportView.summary_body"
             values={{ name: clientName }}
-            components={{ 1: <strong className="text-slate-300" /> }}
+            components={{ 1: <strong className="text-[var(--text-secondary)]" /> }}
           />
         </p>
-        <p className="text-slate-500 text-xs mt-2">
+        <p className="text-[var(--text-muted)] text-xs mt-2">
           {t('components.reportView.total_findings', { total: findings.length, verified: verifiedFindings.length })}
         </p>
         {breakdownPairs.length > 0 && (
-          <p className="text-slate-500 text-xs mt-1">
+          <p className="text-[var(--text-muted)] text-xs mt-1">
             {t('components.reportView.verified_breakdown')}: {breakdownPairs.map(([k, v]) => `${k}=${v}`).join(' · ')}
           </p>
         )}
@@ -93,27 +93,27 @@ export default function ReportView() {
 
       {findings.length > 0 && (
         <section className="mb-8 overflow-x-auto">
-          <h2 className="text-lg font-semibold text-slate-200 mb-2">{t('components.reportView.recent_findings')}</h2>
-          <table className="w-full border-collapse border border-slate-600">
+          <h2 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">{t('components.reportView.recent_findings')}</h2>
+          <table className="w-full border-collapse border border-[var(--border-strong)]">
             <thead>
-              <tr className="bg-slate-800/80">
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_id')}</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_title')}</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_severity')}</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_source')}</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_verified')}</th>
-                <th className="border border-slate-600 px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_how')}</th>
+              <tr className="bg-[var(--bg-3)]/80">
+                <th className="border border-[var(--border-strong)] px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_id')}</th>
+                <th className="border border-[var(--border-strong)] px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_title')}</th>
+                <th className="border border-[var(--border-strong)] px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_severity')}</th>
+                <th className="border border-[var(--border-strong)] px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_source')}</th>
+                <th className="border border-[var(--border-strong)] px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_verified')}</th>
+                <th className="border border-[var(--border-strong)] px-3 py-2 text-left text-cyan-400 text-sm">{t('components.reportView.col_how')}</th>
               </tr>
             </thead>
             <tbody>
               {findings.slice(0, 50).map((f) => (
-                <tr key={f.id} className="border-b border-slate-700">
+                <tr key={f.id} className="border-b border-[var(--border-default)]">
                   <td className="px-3 py-2 text-sm">{f.id}</td>
                   <td className="px-3 py-2 text-sm">{f.title || '—'}</td>
                   <td className="px-3 py-2 text-sm">{f.severity || '—'}</td>
                   <td className="px-3 py-2 text-sm">{f.source || '—'}</td>
                   <td className="px-3 py-2 text-sm">{(f.verified || f.poc_sealed) ? '✓' : '—'}</td>
-                  <td className="px-3 py-2 text-xs font-mono text-slate-400">{f.verification_method || (f.poc_sealed ? 'crypto_seal' : '—')}</td>
+                  <td className="px-3 py-2 text-xs font-mono text-[var(--text-tertiary)]">{f.verification_method || (f.poc_sealed ? 'crypto_seal' : '—')}</td>
                 </tr>
               ))}
             </tbody>
@@ -121,9 +121,9 @@ export default function ReportView() {
         </section>
       )}
 
-      <section className="rounded-xl border border-cyan-500/40 bg-slate-900/60 p-6 backdrop-blur">
+      <section className="rounded-xl border border-cyan-500/40 bg-[var(--bg-1)]/60 p-6 backdrop-blur">
         <h2 className="text-lg font-semibold text-cyan-400 mb-2">{t('components.reportView.crypto_proof')}</h2>
-        <p className="text-slate-400 text-sm mb-4">
+        <p className="text-[var(--text-tertiary)] text-sm mb-4">
           {t('components.reportView.crypto_sealed_body')}
         </p>
         {cryptoProof?.audit_root_hash ? (
@@ -132,11 +132,11 @@ export default function ReportView() {
               <img
                 src={cryptoProof.qr_data_url}
                 alt="QR verification"
-                className="w-40 h-40 rounded border border-slate-600 bg-white p-1"
+                className="w-40 h-40 rounded border border-[var(--border-strong)] bg-white p-1"
               />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-slate-300 text-sm break-all font-mono">
+              <p className="text-[var(--text-secondary)] text-sm break-all font-mono">
                 <strong className="text-cyan-400">{t('components.reportView.audit_root_hash_label')}</strong><br />
                 {cryptoProof.audit_root_hash}
               </p>
@@ -155,7 +155,7 @@ export default function ReportView() {
             </div>
           </div>
         ) : (
-          <p className="text-slate-500 text-sm">
+          <p className="text-[var(--text-muted)] text-sm">
             {t('components.reportView.no_sealed_run')}
           </p>
         )}

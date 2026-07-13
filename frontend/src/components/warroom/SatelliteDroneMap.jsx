@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker, Line } from 'react-simple-maps'
@@ -7,9 +7,11 @@ import { useWarRoom } from '../../context/WarRoomContext'
 import { useWarRoomSound } from '../../hooks/useWarRoomSound'
 import { stableGeoFromLabel } from '../../lib/stableGeoFromLabel'
 import { apiFetch } from '../../lib/apiBase'
+// Vendored locally (see world-atlas dependency) so the map needs no external
+// CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
+import worldGeography from 'world-atlas/countries-110m.json'
 
 const NS = 'components.cockpitWidgets.satelliteDroneMap'
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 const US_CENTER = [37.09, -95.71]
 const PATROL_IDLE_MS = 30000
 const PATROL_PAN_SPEED = 0.08
@@ -26,7 +28,7 @@ function mapCenterFromLatLng([lat, lng]) {
 
 export default function SatelliteDroneMap() {
   const { t } = useTranslation()
-  const { selectedClient, selectedClientId } = useClient()
+  const { selectedClientId } = useClient()
   const { vulnMarkers, setVulnMarkers, mapZoomComplete, setMapZoomComplete, lastNewTarget, setLastNewTarget, discoveredTargets, lastLatencyMs, US_CENTER: usCenter } = useWarRoom()
   const { playZoom } = useWarRoomSound()
   const usMapCenter = mapCenterFromLatLng(usCenter || US_CENTER)
@@ -39,9 +41,16 @@ export default function SatelliteDroneMap() {
   const lastTargetTimeRef = useRef(0)
   const patrolOffsetRef = useRef(0)
 
+  // Seed the map with targets already discovered for this client (live telemetry
+  // accumulated in WarRoom context) so the flight path isn't empty on mount — new
+  // targets still animate in on top via the lastNewTarget effect below.
   useEffect(() => {
-    setTargetCoordsList([])
-  }, [selectedClientId])
+    const seeded = (discoveredTargets || [])
+      .filter((tgt) => String(tgt.client_id) === String(selectedClientId) && tgt.host)
+      .map((tgt) => geoForTarget(tgt.host))
+      .slice(-16)
+    setTargetCoordsList(seeded)
+  }, [selectedClientId, discoveredTargets])
 
   useEffect(() => {
     if (!lastNewTarget || !selectedClientId || String(lastNewTarget.client_id) !== String(selectedClientId)) return
@@ -122,7 +131,7 @@ export default function SatelliteDroneMap() {
 
   return (
     <motion.div
-      className="absolute inset-0 rounded-2xl overflow-hidden bg-slate-950/90 border border-white/10"
+      className="absolute inset-0 rounded-2xl overflow-hidden bg-[var(--bg-0)]/90 border border-white/10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
@@ -134,7 +143,7 @@ export default function SatelliteDroneMap() {
           style={{ width: '100%', height: '100%' }}
         >
           <ZoomableGroup center={center} zoom={zoom}>
-            <Geographies geography={GEO_URL}>
+            <Geographies geography={worldGeography}>
               {({ geographies }) =>
                 geographies.map((geo) => (
                   <Geography
@@ -152,7 +161,9 @@ export default function SatelliteDroneMap() {
               <Line
                 coordinates={[
                   [(usCenter || US_CENTER)[1], (usCenter || US_CENTER)[0]],
-                  ...targetCoordsList.map(([lat, lng]) => [lng, lat]),
+                  // targetCoordsList already holds [lng, lat] (from geoForTarget),
+                  // the order react-simple-maps expects — same as the markers below.
+                  ...targetCoordsList,
                 ]}
                 stroke="#22d3ee"
                 strokeWidth={1}

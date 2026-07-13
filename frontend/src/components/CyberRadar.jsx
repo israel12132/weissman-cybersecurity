@@ -48,7 +48,7 @@ export default function CyberRadar() {
       <div className="relative inline-block">
         <canvas ref={canvasRef} className="block rounded-full border border-cyber-cyan/30" />
       </div>
-      <p className="text-[10px] text-slate-500 mt-1 font-mono">{t(`${NS}.subtitle`)}</p>
+      <p className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">{t(`${NS}.subtitle`)}</p>
     </div>
   )
 }

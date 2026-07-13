@@ -2,8 +2,9 @@
  * Single source of truth for AppShell navigation and breadcrumbs.
  * Only routes registered in main.jsx — no fake nav items.
  */
+import { sessionHasRole } from './roles'
 
-/** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean, beta?: boolean, hideFromNav?: boolean }} NavItem */
+/** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean, beta?: boolean, hideFromNav?: boolean, minRole?: string }} NavItem */
 /** @typedef {{ id: string, labelKey: string, items: NavItem[] }} NavGroup */
 
 /** Production-ready surfaces — always visible at the top of the sidebar. */
@@ -60,6 +61,8 @@ export const NAV_GROUPS = [
     labelKey: 'nav.groups.command',
     items: [
       { to: '/', labelKey: 'nav.cockpit', icon: '◈', exact: true },
+      { to: '/overview', labelKey: 'nav.overview', icon: '▤' },
+      { to: '/live-feed', labelKey: 'nav.live_feed', icon: '📡' },
       { to: '/findings', labelKey: 'nav.findings', icon: '◉' },
       { to: '/jobs', labelKey: 'nav.jobs', icon: '⏱' },
     ],
@@ -71,6 +74,8 @@ export const NAV_GROUPS = [
       { to: '/target-intel', labelKey: 'nav.target_intel', icon: '◎' },
       { to: '/threat-intel', labelKey: 'nav.threat_intel', icon: '🎯' },
       { to: '/threat-hunting', labelKey: 'nav.threat_hunting', icon: '🔭' },
+      { to: '/iocs', labelKey: 'nav.iocs', icon: '🎯' },
+      { to: '/ueba', labelKey: 'nav.ueba', icon: '📈' },
       { to: '/threat-analysis', labelKey: 'nav.threat_analysis', icon: '🧩' },
       { to: '/dark-web', labelKey: 'nav.dark_web', icon: '🕸' },
       { to: '/intel-map', labelKey: 'nav.intel_map', icon: '🌐' },
@@ -83,6 +88,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
+      { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
@@ -143,6 +149,10 @@ export const NAV_GROUPS = [
     id: 'governance',
     labelKey: 'nav.groups.governance',
     items: [
+      { to: '/security-posture', labelKey: 'nav.security_posture', icon: '🛡' },
+      { to: '/crypto-posture', labelKey: 'nav.crypto_posture', icon: '🔑' },
+      { to: '/financial-risk', labelKey: 'nav.financial_risk', icon: '💵' },
+      { to: '/attack-coverage', labelKey: 'nav.attack_coverage', icon: '▦' },
       { to: '/compliance', labelKey: 'nav.compliance', icon: '🛡' },
       { to: '/sbom', labelKey: 'nav.sbom', icon: '📦' },
       { to: '/risk-graph', labelKey: 'nav.risk_graph', icon: '🕸' },
@@ -154,6 +164,7 @@ export const NAV_GROUPS = [
       { to: '/social-engineering', labelKey: 'nav.social_engineering', icon: '👥' },
       { to: '/alert-rules', labelKey: 'nav.alert_rules', icon: '🔔' },
       { to: '/containment-rules', labelKey: 'nav.containment_rules', icon: '🚧' },
+      { to: '/suppressions', labelKey: 'nav.suppressions', icon: '🙈' },
       { to: '/scan-scheduler', labelKey: 'nav.scan_scheduler', icon: '📅' },
     ],
   },
@@ -171,6 +182,7 @@ export const NAV_GROUPS = [
       { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
       { to: '/supreme-nerve-center', labelKey: 'nav.supreme_nerve_center', icon: '🧠', hideFromNav: false },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
+      { to: '/reports', labelKey: 'nav.reports', icon: '🧾' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
     ],
   },
@@ -286,11 +298,23 @@ function dedupeCrumbs(crumbs) {
   return out
 }
 
-/** Gate restricted nav targets (admin / CEO vault). */
+/**
+ * Minimum role required per restricted route. Kept in lockstep with the route
+ * guards in TacticalApp.jsx so the sidebar and the guard can never drift.
+ * @type {Record<string, string>}
+ */
+export const NAV_MIN_ROLE = {
+  '/admin': 'ceo',
+  '/ceo-vault': 'ceo',
+  '/ceo': 'ceo',
+  '/supreme-nerve-center': 'ceo',
+  '/system-config': 'admin',
+}
+
+/** Gate restricted nav targets via the shared RBAC ladder. */
 export function canAccessNavItem(item, session) {
   if (item?.hideFromNav) return false
-  const restricted = item?.to === '/admin' || item?.to === '/ceo-vault' || item?.to === '/ceo' || item?.to === '/supreme-nerve-center'
-  if (!restricted) return true
-  const role = (session?.role || '').toLowerCase()
-  return session?.is_superadmin === true || session?.is_ceo === true || role === 'ceo'
+  const min = item?.minRole || NAV_MIN_ROLE[item?.to]
+  if (!min) return true
+  return sessionHasRole(session, min)
 }

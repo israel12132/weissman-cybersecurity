@@ -33,8 +33,8 @@ export default [
   {
     files: ['src/**/*.{js,jsx}'],
     languageOptions: {
-      // 'latest' so modern syntax (e.g. JSON import attributes `with { type: 'json' }`)
-      // parses — Vite handles it at build time; ESLint's parser needs the newer level.
+      // 'latest' so the parser understands import attributes (`with { type: 'json' }`),
+      // which some engine-manifest modules use; older ecmaVersions error on it.
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
@@ -61,12 +61,34 @@ export default [
       // Surface dead/typo'd bindings without blocking on intentional throwaways.
       'no-unused-vars': [
         'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrors: 'none',
+          // `const { engine, ...rest } = body` names properties to OMIT — the
+          // siblings are used (to exclude them), not dead bindings.
+          ignoreRestSiblings: true,
+        },
       ],
       // Stylistic React rules → warnings (backlog, not a merge blocker).
       'react/no-unescaped-entities': 'warn',
       'react/display-name': 'warn',
       'react/no-unknown-property': 'warn',
+      // Native browser dialogs are banned app-wide — use utils/confirmDialog
+      // (confirmDialog/promptDialog/alertDialog), which are themed, focus-managed
+      // and i18n-friendly. ERROR so a regression can't re-introduce OS chrome.
+      'no-restricted-globals': [
+        'error',
+        { name: 'confirm', message: 'Use confirmDialog from utils/confirmDialog instead of window.confirm.' },
+        { name: 'prompt', message: 'Use promptDialog from utils/confirmDialog instead of window.prompt.' },
+        { name: 'alert', message: 'Use alertDialog from utils/confirmDialog (or a toast) instead of window.alert.' },
+      ],
+      'no-restricted-properties': [
+        'error',
+        { object: 'window', property: 'confirm', message: 'Use confirmDialog from utils/confirmDialog.' },
+        { object: 'window', property: 'prompt', message: 'Use promptDialog from utils/confirmDialog.' },
+        { object: 'window', property: 'alert', message: 'Use alertDialog from utils/confirmDialog (or a toast).' },
+      ],
       // Empty blocks (incl. empty catch) are a hygiene smell, not a correctness bug —
       // surfaced as warnings to burn down rather than blocking the gate.
       'no-empty': ['warn', { allowEmptyCatch: false }],
@@ -90,11 +112,25 @@ export default [
   },
   // Standalone scripts (e.g. qa-walkthrough.mjs) drive a real browser, so their code
   // legitimately references both Node and browser globals (page.evaluate callbacks).
+  // Vite build plugins under plugins/ run in Node.
   {
-    files: ['*.mjs', 'scripts/**/*.{js,mjs}'],
+    files: ['*.mjs', 'scripts/**/*.{js,mjs}', 'plugins/**/*.{js,mjs,cjs}'],
     languageOptions: {
       sourceType: 'module',
       globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'no-unused-vars': 'warn',
+      'no-empty': ['warn', { allowEmptyCatch: true }],
+    },
+  },
+  // Service workers under public/ run in the ServiceWorker global scope
+  // (self, caches, fetch, clients, …), not a DOM window.
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: { ...globals.serviceworker, ...globals.browser },
     },
     rules: {
       'no-unused-vars': 'warn',

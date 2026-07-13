@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  Activity, AlertTriangle, CheckCircle, Database, Scan, XCircle, RefreshCw, Shield,
-} from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Database, Scan, XCircle, Shield } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import PageShell from './PageShell';
 import ShellScanActions from '../components/engine/ShellScanActions';
@@ -11,6 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton';
 import { apiFetch } from '../lib/apiBase';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 const SEVERITY_COLORS = {
   critical: '#ef4444',
@@ -83,11 +82,8 @@ export default function MetricsDashboard() {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  useEffect(() => {
-    if (!autoRefresh) return undefined;
-    const interval = setInterval(() => fetchMetrics(true), 10000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, fetchMetrics]);
+  // Auto-refresh every 10s, skipping ticks while the tab is hidden.
+  useVisiblePolling(() => fetchMetrics(true), 10000, { paused: !autoRefresh });
 
   const severityLabel = (severity) => t(`pages.metricsDashboard.severity_${severity}`, {
     defaultValue: severity.charAt(0).toUpperCase() + severity.slice(1),
@@ -124,12 +120,12 @@ export default function MetricsDashboard() {
       icon={<Activity />}
       actions={
         <>
-          <label className="flex items-center gap-2 text-[11px] font-mono text-white/55">
+          <label className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-tertiary)]">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-white/20 bg-black/40 text-cyan-500"
+              className="w-3.5 h-3.5 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500"
             />
             {t('pages.metricsDashboard.auto_refresh')}
           </label>
@@ -148,7 +144,7 @@ export default function MetricsDashboard() {
         </div>
 
         {lastUpdated && (
-          <p className="text-[11px] font-mono text-white/40">
+          <p className="text-[11px] font-mono text-[var(--text-muted)]">
             {t('pages.metricsDashboard.last_updated', {
               time: lastUpdated.toLocaleTimeString(i18n.language),
             })}
@@ -255,14 +251,14 @@ export default function MetricsDashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-white">{t('pages.metricsDashboard.findings_by_severity')}</h3>
-                  <span className="text-xs text-gray-400">{t('pages.metricsDashboard.total_count', { count: totalFindings })}</span>
+                  <span className="text-xs text-[var(--text-tertiary)]">{t('pages.metricsDashboard.total_count', { count: totalFindings })}</span>
                 </div>
                 {totalFindings > 0 ? (
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={severityChartData}>
+                    <BarChart accessibilityLayer data={severityChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                       <XAxis dataKey="label" stroke="#64748b" style={{ fontSize: '12px' }} />
                       <YAxis stroke="#64748b" style={{ fontSize: '12px' }} allowDecimals={false} />
@@ -295,7 +291,7 @@ export default function MetricsDashboard() {
                 )}
               </div>
 
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-6">
+              <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
                 <h3 className="text-sm font-semibold text-white mb-4">{t('pages.metricsDashboard.severity_breakdown')}</h3>
                 <div className="space-y-3">
                   {severityChartData.map(({ severity, count, label }) => (
@@ -304,8 +300,8 @@ export default function MetricsDashboard() {
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: SEVERITY_COLORS[severity] }}
                       />
-                      <span className="text-sm text-gray-300 w-20">{label}</span>
-                      <div className="flex-1 h-2 bg-black/30 rounded-full overflow-hidden">
+                      <span className="text-sm text-[var(--text-secondary)] w-20">{label}</span>
+                      <div className="flex-1 h-2 bg-[var(--table-surface)] rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all duration-300"
                           style={{
@@ -314,11 +310,11 @@ export default function MetricsDashboard() {
                           }}
                         />
                       </div>
-                      <span className="text-sm font-mono text-gray-400 w-10 text-right">{count}</span>
+                      <span className="text-sm font-mono text-[var(--text-tertiary)] w-10 text-right">{count}</span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap gap-3">
+                <div className="mt-6 pt-4 border-t border-[var(--border-default)] flex flex-wrap gap-3">
                   <Link to="/jobs" className="text-[11px] font-mono text-cyan-400 hover:underline">
                     {t('pages.metricsDashboard.link_jobs')} →
                   </Link>

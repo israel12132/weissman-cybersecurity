@@ -1,13 +1,19 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/apiBase'
 import PageShell from './PageShell'
+import DataTable from '../components/ui/DataTable'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { confirmDialog } from '../utils/confirmDialog'
+import useFocusTrap from '../hooks/useFocusTrap'
+import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 /**
  * Admin Management Dashboard - Enterprise User & Role Management
@@ -34,6 +40,8 @@ export default function AdminManagement() {
   const [editingUser, setEditingUser] = useState(null)
   const [editRole, setEditRole] = useState('')
   const [editIsSuperadmin, setEditIsSuperadmin] = useState(false)
+  const editModalRef = useRef(null)
+  useFocusTrap(editModalRef, !!editingUser)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -177,12 +185,101 @@ export default function AdminManagement() {
     return users.filter((u) => emails.has(u.email))
   }, [users, filteredFindings, searchQuery])
 
+  const columns = useMemo(() => [
+    columnHelper.accessor('email', {
+      header: 'Email',
+      cell: (ctx) => (
+        <span className="text-white font-mono">{ctx.getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor((u) => u.role || 'viewer', {
+      id: 'role',
+      header: 'Role',
+      cell: (ctx) => {
+        const role = ctx.getValue()
+        return (
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
+              role === 'ceo'
+                ? 'bg-amber-500/20 text-amber-400'
+                : role === 'admin'
+                ? 'bg-violet-500/20 text-violet-400'
+                : role === 'operator'
+                ? 'bg-cyan-500/20 text-cyan-400'
+                : role === 'analyst'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)]'
+            }`}
+          >
+            {role}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor((u) => u.is_active !== false, {
+      id: 'status',
+      header: 'Status',
+      cell: (ctx) => {
+        const active = ctx.getValue()
+        return (
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${
+              active
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-red-500/20 text-red-400'
+            }`}
+          >
+            {active ? 'Active' : 'Inactive'}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor((u) => Boolean(u.is_superadmin), {
+      id: 'superadmin',
+      header: 'Superadmin',
+      cell: (ctx) =>
+        ctx.getValue() ? (
+          <span className="text-amber-400 font-semibold">★</span>
+        ) : null,
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      enableSorting: false,
+      cell: (ctx) => {
+        const user = ctx.row.original
+        return (
+          <div className="text-right space-x-2">
+            <Button variant="unstyled"
+              id={`adminmgmt-edit-user-${user.id}-btn`}
+              type="button"
+              onClick={() => openEditModal(user)}
+              className="px-2 py-1 rounded text-xs border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--row-hover-bg)]"
+            >
+              Edit
+            </Button>
+            {user.is_active !== false && (
+              <Button variant="unstyled"
+                id={`adminmgmt-deactivate-user-${user.id}-btn`}
+                type="button"
+                onClick={() => handleDeactivateUser(user.id, user.email)}
+                className="px-2 py-1 rounded text-xs border border-red-500/30 text-red-400 hover:bg-red-500/20"
+              >
+                Deactivate
+              </Button>
+            )}
+          </div>
+        )
+      },
+    }),
+  ], [t])
+
   if (!isCeo && !session?.is_superadmin) {
     return (
       <PageShell title={t('pages.adminManagement.title')} subtitle={t('pages.adminManagement.subtitle_loading')}>
         <div className="p-8 text-center">
           <div className="text-red-400 text-lg font-semibold mb-2">Access Denied</div>
-          <p className="text-slate-400 text-sm">
+          <p className="text-[var(--text-tertiary)] text-sm">
             You need CEO or Superadmin privileges to access this page.
           </p>
         </div>
@@ -211,14 +308,14 @@ export default function AdminManagement() {
             className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-lg text-sm flex justify-between items-center"
           >
             <span>{successMsg}</span>
-            <button
+            <Button variant="unstyled"
               id="adminmgmt-dismiss-success-btn"
               type="button"
               onClick={() => setSuccessMsg(null)}
               className="text-emerald-400 hover:text-emerald-300 ml-4"
             >
               ✕
-            </button>
+            </Button>
           </div>
         )}
         {error && (
@@ -227,19 +324,19 @@ export default function AdminManagement() {
             className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm flex justify-between items-center"
           >
             <span>{error}</span>
-            <button
+            <Button variant="unstyled"
               id="adminmgmt-dismiss-error-btn"
               type="button"
               onClick={() => setError(null)}
               className="text-red-400 hover:text-red-300 ml-4"
             >
               ✕
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Create New User Section */}
-        <section className="bg-black/30 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
+        <section className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-2xl p-6 backdrop-blur-md">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <span className="text-cyan-400">+</span> Create New User
           </h2>
@@ -247,7 +344,7 @@ export default function AdminManagement() {
             <div>
               <label
                 htmlFor="adminmgmt-new-email"
-                className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 Email
               </label>
@@ -258,13 +355,13 @@ export default function AdminManagement() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="user@example.com"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
               <label
                 htmlFor="adminmgmt-new-password"
-                className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 Password
               </label>
@@ -275,13 +372,13 @@ export default function AdminManagement() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white placeholder:text-[var(--text-muted)] focus:border-cyan-500/50 focus:outline-none text-sm"
               />
             </div>
             <div>
               <label
                 htmlFor="adminmgmt-new-role"
-                className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
               >
                 Role
               </label>
@@ -289,7 +386,7 @@ export default function AdminManagement() {
                 id="adminmgmt-new-role"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
               >
                 <option value="viewer">Viewer</option>
                 <option value="analyst">Analyst</option>
@@ -305,24 +402,24 @@ export default function AdminManagement() {
                   type="checkbox"
                   checked={newIsSuperadmin}
                   onChange={(e) => setNewIsSuperadmin(e.target.checked)}
-                  className="rounded border-white/20 bg-black/50 w-4 h-4 accent-amber-500"
+                  className="rounded border-[var(--border-strong)] bg-[var(--bg-3)] w-4 h-4 accent-amber-500"
                 />
                 <span className="text-xs text-amber-400 uppercase tracking-widest">Superadmin</span>
               </label>
-              <button
+              <Button variant="unstyled"
                 id="adminmgmt-create-user-btn"
                 type="submit"
                 disabled={submitting}
                 className="px-4 py-2 rounded-lg font-semibold text-sm bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 disabled:opacity-50 transition-colors"
               >
                 {submitting ? t('pages.adminManagement.creating') : t('pages.adminManagement.create_user')}
-              </button>
+              </Button>
             </div>
           </form>
         </section>
 
         {/* Users List Section */}
-        <section className="bg-black/30 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
+        <section className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-2xl p-6 backdrop-blur-md">
           <div className="flex flex-col gap-4 mb-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
               <span className="text-violet-400">◎</span> System Users
@@ -338,105 +435,39 @@ export default function AdminManagement() {
           </div>
 
           {loading && users.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.loading')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.loading')}</div>
           ) : users.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('pages.adminManagement.no_users')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('pages.adminManagement.no_users')}</div>
           ) : visibleUsers.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Email
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Role
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Superadmin
-                    </th>
-                    <th className="text-right py-3 px-2 text-xs uppercase tracking-widest text-slate-500 font-medium">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleUsers.map((user, idx) => (
-                    <tr
-                      key={user.id || idx}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                    >
-                      <td className="py-3 px-2 text-white font-mono">{user.email}</td>
-                      <td className="py-3 px-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
-                            user.role === 'ceo'
-                              ? 'bg-amber-500/20 text-amber-400'
-                              : user.role === 'admin'
-                              ? 'bg-violet-500/20 text-violet-400'
-                              : user.role === 'operator'
-                              ? 'bg-cyan-500/20 text-cyan-400'
-                              : user.role === 'analyst'
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-slate-500/20 text-slate-400'
-                          }`}
-                        >
-                          {user.role || 'viewer'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            user.is_active !== false
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-red-500/20 text-red-400'
-                          }`}
-                        >
-                          {user.is_active !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
-                        {user.is_superadmin && (
-                          <span className="text-amber-400 font-semibold">★</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-2 text-right space-x-2">
-                        <button
-                          id={`adminmgmt-edit-user-${user.id}-btn`}
-                          type="button"
-                          onClick={() => openEditModal(user)}
-                          className="px-2 py-1 rounded text-xs border border-white/20 text-slate-400 hover:text-white hover:bg-white/10"
-                        >
-                          Edit
-                        </button>
-                        {user.is_active !== false && (
-                          <button
-                            id={`adminmgmt-deactivate-user-${user.id}-btn`}
-                            type="button"
-                            onClick={() => handleDeactivateUser(user.id, user.email)}
-                            className="px-2 py-1 rounded text-xs border border-red-500/30 text-red-400 hover:bg-red-500/20"
-                          >
-                            Deactivate
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={columns}
+              data={visibleUsers}
+              getRowId={(u) => u.id}
+              animateRows={false}
+              searchable
+              searchPlaceholder={t('pages.adminManagement.search_users', 'Search users…')}
+              exportable
+              exportFilename="weissman-users"
+              columnToggle
+            />
           )}
         </section>
 
         {/* Edit User Modal */}
         {editingUser && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md">
+          <div
+            className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onKeyDown={(e) => { if (e.key === 'Escape') setEditingUser(null) }}
+          >
+            <div
+              ref={editModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Edit user ${editingUser.email}`}
+              className="bg-[var(--bg-1)] border border-[var(--border-default)] rounded-2xl p-6 w-full max-w-md"
+            >
               <h3 className="text-lg font-semibold text-white mb-4">
                 Edit User: {editingUser.email}
               </h3>
@@ -444,7 +475,7 @@ export default function AdminManagement() {
                 <div>
                   <label
                     htmlFor="adminmgmt-edit-role"
-                    className="block text-xs uppercase tracking-widest text-slate-500 mb-2"
+                    className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
                   >
                     Role
                   </label>
@@ -452,7 +483,7 @@ export default function AdminManagement() {
                     id="adminmgmt-edit-role"
                     value={editRole}
                     onChange={(e) => setEditRole(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
                   >
                     <option value="viewer">Viewer</option>
                     <option value="analyst">Analyst</option>
@@ -467,21 +498,21 @@ export default function AdminManagement() {
                     type="checkbox"
                     checked={editIsSuperadmin}
                     onChange={(e) => setEditIsSuperadmin(e.target.checked)}
-                    className="rounded border-white/20 bg-black/50 w-4 h-4 accent-amber-500"
+                    className="rounded border-[var(--border-strong)] bg-[var(--bg-3)] w-4 h-4 accent-amber-500"
                   />
                   <span className="text-sm text-amber-400">Grant Superadmin privileges</span>
                 </label>
               </div>
               <div className="flex gap-3 mt-6">
-                <button
+                <Button variant="unstyled"
                   id="adminmgmt-cancel-edit-btn"
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-white/20 text-slate-400 hover:bg-white/5"
+                  className="flex-1 px-4 py-2 rounded-lg font-medium text-sm border border-[var(--border-strong)] text-[var(--text-tertiary)] hover:bg-[var(--row-hover-bg)]"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled"
                   id="adminmgmt-save-edit-btn"
                   type="button"
                   onClick={handleUpdateRole}
@@ -489,19 +520,19 @@ export default function AdminManagement() {
                   className="flex-1 px-4 py-2 rounded-lg font-semibold text-sm bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30 disabled:opacity-50"
                 >
                   {submitting ? 'Saving…' : 'Save Changes'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         )}
 
         {/* Quick Admin Actions */}
-        <section className="bg-black/30 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
+        <section className="bg-[var(--table-surface)] border border-[var(--border-default)] rounded-2xl p-6 backdrop-blur-md">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <span className="text-emerald-400">⚡</span> Quick Actions
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <button
+            <Button variant="unstyled"
               id="adminmgmt-export-users-btn"
               type="button"
               onClick={() => {
@@ -523,34 +554,34 @@ export default function AdminManagement() {
                 a.click()
                 URL.revokeObjectURL(url)
               }}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📄 Export Users (CSV)
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="adminmgmt-audit-log-btn"
               type="button"
               onClick={() => navigate('/')}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📋 View Audit Logs
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="adminmgmt-sso-config-btn"
               type="button"
               onClick={() => navigate('/sso-config')}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               🔑 SSO Configuration
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               id="adminmgmt-system-settings-btn"
               type="button"
               onClick={() => navigate('/')}
-              className="px-4 py-3 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 text-left"
+              className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               ⚙️ System Settings
-            </button>
+            </Button>
           </div>
         </section>
       </div>

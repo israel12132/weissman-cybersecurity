@@ -550,7 +550,8 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
                     let name: String = r.try_get("name").unwrap_or_else(|_| "—".to_string());
                     let domains: String = r.try_get("domains").unwrap_or_else(|_| "[]".to_string());
                     let dom_short = if domains.len() > 60 {
-                        format!("{}…", &domains[..57])
+                        // char-safe truncation — byte slicing panics on a multibyte boundary (IDN/non-ASCII domains)
+                        format!("{}…", domains.chars().take(57).collect::<String>())
                     } else {
                         domains.clone()
                     };
@@ -1221,6 +1222,15 @@ struct DeceptionDeployCloudBody {
 }
 
 const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz","microsecond_timing","ai_adversarial_redteam","nexus_sovereign_swarm"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
+
+// Logs an internal error server-side and returns a generic, non-leaking detail string
+// for the client. Used at `INTERNAL_SERVER_ERROR` sites so raw sqlx/internal error text
+// (table names, SQL, connection strings) never reaches API consumers.
+#[inline]
+fn scrub_internal_error<E: std::fmt::Display>(e: E) -> &'static str {
+    tracing::error!(target: "http", error = %e, "internal server error");
+    "internal error"
+}
 
 // Handlers: see `handler_fragments.rs` (single wiring point for all `.inc` fragments).
 #[path = "serve_route_groups.rs"]

@@ -95,7 +95,7 @@ export default function EngineRealityBadge({
         </span>
       )}
       {showCanonical && canonical && kind !== 'alias' && (
-        <span className="text-[9px] font-mono text-gray-500 truncate max-w-[140px]" title={`Canonical: ${canonical}`}>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] truncate max-w-[140px]" title={`Canonical: ${canonical}`}>
           → {canonical}
         </span>
       )}
@@ -127,7 +127,7 @@ export function EngineRealitySummary({ className = '', compact = false }) {
   return (
     <div className={`flex flex-wrap items-center gap-2 text-[10px] font-mono ${className}`}>
       {!compact && (
-        <span className="text-gray-500 uppercase tracking-wider">
+        <span className="text-[var(--text-muted)] uppercase tracking-wider">
           {total} engines · {remoteDetectionCount} remote
         </span>
       )}

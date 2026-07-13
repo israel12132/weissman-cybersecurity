@@ -1,13 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import {
-  apiUrl,
-  getApiBase,
-  authHeaders,
-  formatHttpApiError,
-  getStoredAccessToken,
-  setStoredAccessToken,
-  clearStoredAccessToken,
-} from './apiBase.js'
+import { describe, it, expect, beforeEach } from 'vitest';
+import { apiUrl, getApiBase, authHeaders, formatHttpApiError, setStoredAccessToken, clearStoredAccessToken } from './apiBase.js';
 
 describe('apiBase deep', () => {
   beforeEach(() => clearStoredAccessToken())

@@ -4,7 +4,7 @@ import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
 import { useIntegrationsPrefill } from '../hooks/useHubLocalScanParams'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -15,6 +15,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'smb_netbios'
 const ACCENT = '#3b82f6'
@@ -249,10 +250,35 @@ function gradeColor(g) {
   return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c', F: '#ef4444' }[g] || '#94a3b8'
 }
 
-function sevValue(s) {
-  return { critical: 4, high: 3, medium: 2, low: 1, info: 0 }[s] ?? 0
-}
+function CategoryBreakdown({ findings }) {
+  const groups = useMemo(() => {
+    const counts = new Map()
+    for (const f of findings) {
+      const key = CATEGORY_META[f?.category] ? f.category : 'other'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([key, count]) => ({ key, count, meta: CATEGORY_META[key] || CATEGORY_META.other }))
+      .sort((a, b) => a.meta.order - b.meta.order)
+  }, [findings])
 
+  if (!groups.length) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {groups.map(({ key, count, meta }) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono border"
+          style={{ color: meta.color, borderColor: `${meta.color}33`, background: `${meta.color}0f` }}
+        >
+          <span aria-hidden="true">{meta.icon}</span>
+          {meta.label}
+          <span className="px-1.5 py-0.5 rounded bg-[var(--scrim)] text-[var(--text-secondary)]">{count}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
 
 function isSummary(f) {
   return f?.category === 'posture_summary' || f?.summary === true || typeof f?.posture_score === 'number'
@@ -266,14 +292,14 @@ function PipeMatrixPanel({ matrix, L }) {
   if (!matrix || typeof matrix !== 'object') return null
   const shares = Array.isArray(matrix.admin_shares) ? matrix.admin_shares : []
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 p-4 mb-6">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">{L.pipeMatrix}</div>
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 mb-6">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{L.pipeMatrix}</div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
         {PIPE_DEFS.map(({ key, label, critical }) => {
           const open = Boolean(matrix[key])
           return (
-            <div key={key} className={`rounded-lg border px-2 py-2 ${open ? (critical ? 'border-rose-500/40 bg-rose-500/10' : 'border-orange-500/30 bg-orange-500/10') : 'border-white/5 bg-white/[0.02]'}`}>
-              <div className="text-[10px] font-mono text-white/50 truncate">{label}</div>
+            <div key={key} className={`rounded-lg border px-2 py-2 ${open ? (critical ? 'border-rose-500/40 bg-rose-500/10' : 'border-orange-500/30 bg-orange-500/10') : 'border-[var(--border-subtle)] bg-[var(--row-hover-bg)]'}`}>
+              <div className="text-[10px] font-mono text-[var(--text-tertiary)] truncate">{label}</div>
               <div className={`text-xs font-mono mt-0.5 ${open ? (critical ? 'text-rose-300' : 'text-orange-300') : 'text-emerald-400/80'}`}>
                 {open ? L.pipeOpen : L.pipeClosed}
               </div>
@@ -282,8 +308,8 @@ function PipeMatrixPanel({ matrix, L }) {
         })}
       </div>
       {shares.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-white/5">
-          <div className="text-[10px] font-mono text-white/40 mb-2">{L.adminShares}</div>
+        <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+          <div className="text-[10px] font-mono text-[var(--text-muted)] mb-2">{L.adminShares}</div>
           <div className="flex flex-wrap gap-2">
             {shares.map((s, i) => (
               <span key={i} className="text-[10px] font-mono px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 text-amber-200">
@@ -306,33 +332,33 @@ function MetricsTelemetryPanel({ metrics, L }) {
   const ms17 = m.ms17_010_ntstatus
   return (
     <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 to-black/40 p-4 mb-6">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">{L.telemetry}</div>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{L.telemetry}</div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div>
-          <div className="text-[10px] font-mono text-white/40">{L.probesRun}</div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.probesRun}</div>
           <div className="text-2xl font-bold font-mono text-white">{m.probes_run ?? '—'}</div>
         </div>
         <div>
-          <div className="text-[10px] font-mono text-white/40">{L.implementation}</div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.implementation}</div>
           <div className="text-sm font-mono text-cyan-200">{m.implementation ?? '—'}</div>
         </div>
         <div>
-          <div className="text-[10px] font-mono text-white/40">{L.maxDialect}</div>
-          <div className="text-sm font-mono text-white/80">{m.max_dialect ?? '—'}</div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.maxDialect}</div>
+          <div className="text-sm font-mono text-[var(--text-secondary)]">{m.max_dialect ?? '—'}</div>
         </div>
         <div>
-          <div className="text-[10px] font-mono text-white/40">{L.ransomwareReadiness}</div>
-          <div className="text-2xl font-black font-mono" style={{ color: rwColor }}>{rw}<span className="text-sm text-white/40">/100</span></div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.ransomwareReadiness}</div>
+          <div className="text-2xl font-black font-mono" style={{ color: rwColor }}>{rw}<span className="text-sm text-[var(--text-muted)]">/100</span></div>
         </div>
         {elapsed != null && (
           <div>
-            <div className="text-[10px] font-mono text-white/40">{L.scanElapsed}</div>
-            <div className="text-sm font-mono text-white/80">{elapsed} ms</div>
+            <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.scanElapsed}</div>
+            <div className="text-sm font-mono text-[var(--text-secondary)]">{elapsed} ms</div>
           </div>
         )}
         {ms17 != null && ms17 !== 0 && (
           <div>
-            <div className="text-[10px] font-mono text-white/40">{L.ms17Status}</div>
+            <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.ms17Status}</div>
             <div className="text-sm font-mono text-amber-200/90">{typeof ms17 === 'number' ? `0x${ms17.toString(16).padStart(8, '0').toUpperCase()}` : String(ms17)}</div>
           </div>
         )}
@@ -353,15 +379,15 @@ function CompliancePanel({ metrics, L }) {
   const any = sections.some((s) => Array.isArray(gaps[s.key]) && gaps[s.key].length > 0)
   if (!any) return null
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 mb-6">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-3">{L.compliance}</div>
+    <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] p-4 mb-6">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-3">{L.compliance}</div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {sections.map(({ key, label, color }) => (
           <div key={key}>
             <div className="text-[10px] font-mono mb-2" style={{ color }}>{label}</div>
             <ul className="space-y-1">
               {(gaps[key] || []).map((item, i) => (
-                <li key={i} className="text-[10px] font-mono text-white/55 leading-relaxed">• {item}</li>
+                <li key={i} className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed">• {item}</li>
               ))}
               {(!gaps[key] || gaps[key].length === 0) && <li className="text-[10px] font-mono text-emerald-400/70">{L.noGaps}</li>}
             </ul>
@@ -448,7 +474,7 @@ function SmbExposureGraph({ graph, running }) {
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-44 rounded-xl bg-black/50 border border-white/5"
+      className="w-full h-44 rounded-xl bg-[var(--bg-3)] border border-[var(--border-subtle)]"
       aria-label="SMB exposure graph"
     />
   )
@@ -456,12 +482,12 @@ function SmbExposureGraph({ graph, running }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <button type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/5 hover:bg-white/[0.07] text-left">
-      <span className="text-[11px] font-mono text-white/75">{label}</span>
+    <Button variant="unstyled" type="button" onClick={onClick} className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] text-left">
+      <span className="text-[11px] font-mono text-[var(--text-secondary)]">{label}</span>
       <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-blue-500/70' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -477,7 +503,7 @@ function PostureCard({ summary, graph, pathCount, L, running }) {
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-blue-500/25 bg-gradient-to-br from-blue-950/30 via-orange-950/10 to-black/40 p-5 mb-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">{L.posture}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{L.posture}</div>
           <div className="flex items-center gap-4">
             <div className="relative w-24 h-24 shrink-0">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -486,11 +512,11 @@ function PostureCard({ summary, graph, pathCount, L, running }) {
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-bold" style={{ color: gradeColor(grade) }}>{score}</span>
-                <span className="text-[9px] font-mono text-white/40">/100</span>
+                <span className="text-[9px] font-mono text-[var(--text-muted)]">/100</span>
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-mono text-white/40">{L.grade}</div>
+              <div className="text-[10px] font-mono text-[var(--text-muted)]">{L.grade}</div>
               <div className="text-4xl font-black font-mono" style={{ color: gradeColor(grade) }}>{grade}</div>
               {pathCount > 0 && (
                 <div className="text-[10px] font-mono text-rose-300/80 mt-1">{pathCount} attack path(s)</div>
@@ -499,7 +525,7 @@ function PostureCard({ summary, graph, pathCount, L, running }) {
           </div>
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-2">{L.counts}</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{L.counts}</div>
           <div className="flex flex-wrap gap-1.5">
             {['critical', 'high', 'medium', 'low', 'info'].map((s) => (
               <span key={s} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-mono"
@@ -510,8 +536,8 @@ function PostureCard({ summary, graph, pathCount, L, running }) {
           </div>
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-white/40 mb-1">{L.graphTitle}</div>
-          <p className="text-[10px] text-white/35 mb-2">{L.graphHint}</p>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1">{L.graphTitle}</div>
+          <p className="text-[10px] text-[var(--text-muted)] mb-2">{L.graphHint}</p>
           <SmbExposureGraph graph={exposureGraph} running={running} />
         </div>
       </div>
@@ -529,12 +555,12 @@ function AttackPathCard({ finding }) {
         <h4 className="text-sm font-bold text-rose-100 leading-snug">{finding.title}</h4>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-rose-500/40 text-rose-300 uppercase">{finding.severity}</span>
       </div>
-      {finding.description && <p className="text-xs text-white/55 mb-3 leading-relaxed">{finding.description}</p>}
+      {finding.description && <p className="text-xs text-[var(--text-tertiary)] mb-3 leading-relaxed">{finding.description}</p>}
       <ol className="space-y-2">
         {steps.map((step, i) => (
           <li key={i} className="flex gap-2.5 text-xs">
             <span className="shrink-0 w-6 h-6 rounded-full bg-rose-500/20 text-rose-200 flex items-center justify-center font-mono text-[10px] font-bold">{i + 1}</span>
-            <span className="text-white/80 leading-relaxed pt-0.5">{step}</span>
+            <span className="text-[var(--text-secondary)] leading-relaxed pt-0.5">{step}</span>
           </li>
         ))}
       </ol>
@@ -551,33 +577,33 @@ function FindingCard({ finding, L }) {
   const standards = Array.isArray(finding.standards) ? finding.standards : []
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden mb-2">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/[0.04]">
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] overflow-hidden mb-2">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-3 p-3 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SEV_COLOR[sev] }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[sev] }}>{sev}</span>
-            {finding.mitre_attack && <span className="text-[10px] font-mono text-white/30">{finding.mitre_attack}</span>}
+            {finding.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">{finding.mitre_attack}</span>}
             {standards.slice(0, 3).map((s) => (
               <span key={s} className="text-[9px] font-mono px-1 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-300/80">{s}</span>
             ))}
           </div>
-          <div className="text-sm text-white/85 mt-0.5 font-medium">{finding.title}</div>
+          <div className="text-sm text-[var(--text-primary)] mt-0.5 font-medium">{finding.title}</div>
         </div>
-        <span className="text-white/30 text-xs">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)] text-xs">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden px-3 pb-3">
-            <p className="text-xs text-white/55 leading-relaxed">{finding.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{finding.description}</p>
             {evKeys.length > 0 && (
-              <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-2">
-                <div className="text-[10px] uppercase tracking-widest text-white/30 mb-1">{L.evidence}</div>
+              <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-2">
+                <div className="text-[10px] uppercase tracking-widest text-[var(--text-disabled)] mb-1">{L.evidence}</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[10px]">
                   {evKeys.map((k) => (
                     <div key={k} className="flex gap-2">
-                      <span className="text-white/35 shrink-0">{k}</span>
-                      <span className="text-white/65 break-all">{typeof ev[k] === 'object' ? JSON.stringify(ev[k]) : String(ev[k])}</span>
+                      <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+                      <span className="text-[var(--text-tertiary)] break-all">{typeof ev[k] === 'object' ? JSON.stringify(ev[k]) : String(ev[k])}</span>
                     </div>
                   ))}
                 </div>
@@ -587,8 +613,8 @@ function FindingCard({ finding, L }) {
               <div className="mt-2 space-y-1">
                 {checks.map((c, i) => (
                   <div key={i} className="flex gap-2 text-[10px] font-mono">
-                    <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '·'}</span>
-                    <span className="text-white/55">{c.name}</span>
+                    <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '·'}</span>
+                    <span className="text-[var(--text-tertiary)]">{c.name}</span>
                   </div>
                 ))}
               </div>
@@ -781,50 +807,50 @@ export default function SmbNetbiosCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-blue-500/30 text-blue-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-blue-500/30 text-blue-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{L.client}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{L.client}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono min-w-[180px] focus:outline-none focus:border-blue-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono min-w-[180px] focus:outline-none focus:border-blue-500/40">
               <option value="">{L.selectClient}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{L.target}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{L.target}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder={L.targetPh}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-blue-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-blue-500/40" />
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-blue-500/40 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 transition-all disabled:opacity-40">
             {status === 'running' ? L.scanning : `▶ ${L.run}`}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? L.hideParams : L.showParams}
-          </button>
+          </Button>
           {findings.length > 0 && (
-            <button type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80">
+            <Button variant="unstyled" type="button" onClick={handleExport} className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
               {L.export}
-            </button>
+            </Button>
           )}
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">{L.layers}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-2">{L.layers}</div>
                   <div className="space-y-1.5">
                     <Toggle on={params.check_signing} onClick={() => set('check_signing', !params.check_signing)} label={L.checkSigning} />
                     <Toggle on={params.check_encryption} onClick={() => set('check_encryption', !params.check_encryption)} label={L.checkEncryption} />
@@ -855,22 +881,22 @@ export default function SmbNetbiosCommandCenter() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{L.ports}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{L.ports}</label>
                     <input type="text" value={params.ports} onChange={(e) => set('ports', e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80 focus:outline-none focus:border-blue-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-white/40 block mb-1">{L.timeout}</label>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)] block mb-1">{L.timeout}</label>
                     <input type="number" min={200} max={30000} value={params.timeout_ms} onChange={(e) => set('timeout_ms', e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80 focus:outline-none focus:border-blue-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-blue-500/40" />
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <button type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[10px] font-mono text-white/40 hover:text-white/70 text-left">{L.reset}</button>
-                  <div className="text-[10px] font-mono text-white/30 leading-relaxed rounded-lg border border-white/5 p-3 bg-black/30">
+                  <Button variant="unstyled" type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[10px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-left">{L.reset}</Button>
+                  <div className="text-[10px] font-mono text-[var(--text-disabled)] leading-relaxed rounded-lg border border-[var(--border-subtle)] p-3 bg-[var(--table-surface)]">
                     MITRE T1021.002 · T1210 · T1187 · T1018 — every finding requires an observed SMB/NetBIOS protocol response on the wire.
                   </div>
-                  <div className="text-[10px] font-mono text-white/25 mt-auto">{L.related}:</div>
+                  <div className="text-[10px] font-mono text-[var(--text-disabled)] mt-auto">{L.related}:</div>
                   <div className="flex flex-wrap gap-2">
                     <Link to="/network" className="text-[10px] font-mono text-blue-300/70 hover:text-blue-200">{L.relatedNetwork}</Link>
                     <Link to="/tls-posture" className="text-[10px] font-mono text-blue-300/70 hover:text-blue-200">{L.relatedTls}</Link>
@@ -882,10 +908,10 @@ export default function SmbNetbiosCommandCenter() {
             </motion.div>
           )}
         </AnimatePresence>
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{L.lastRun}: {lastRun}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{L.lastRun}: {lastRun}</p>}
       </div>
 
-      {!clientId && <p className="text-xs font-mono text-white/40 mb-6">{L.runToPopulate}</p>}
+      {!clientId && <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{L.runToPopulate}</p>}
 
       {(summary || findings.length > 0) && (
         <PostureCard summary={summary} graph={exposureGraph} pathCount={attackPaths.length} L={L} running={status === 'running'} />
@@ -903,8 +929,10 @@ export default function SmbNetbiosCommandCenter() {
       )}
 
       {findings.length === 0 && status !== 'running' && (
-        <p className="text-xs font-mono text-white/30 text-center py-12">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
+        <p className="text-xs font-mono text-[var(--text-disabled)] text-center py-12">{status === 'completed' ? L.noFindings : L.runToPopulate}</p>
       )}
+
+      {realFindings.length > 0 && <CategoryBreakdown findings={realFindings} />}
 
       <WeissmanFindingsPanel
         findings={realFindings}

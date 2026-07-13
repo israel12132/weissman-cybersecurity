@@ -40,10 +40,34 @@
   --bg-overlay: rgba(6, 6, 10, 0.82);
   --bg-glass: rgba(12, 12, 18, 0.55);
   --bg-glass-elevated: rgba(18, 18, 26, 0.72);
+  --cockpit-bg:
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(34, 211, 238, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 5%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse 120% 80% at 50% 100%, rgba(15, 23, 42, 0.9) 0%, transparent 60%),
+    linear-gradient(180deg, #0c1220 0%, #070b14 42%, #04060c 100%);
+  --kpi-strip-bg: linear-gradient(180deg, rgba(8, 12, 20, 0.92) 0%, rgba(5, 8, 14, 0.75) 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(10, 15, 26, 0.97) 0%, rgba(5, 8, 16, 0.99) 55%, rgba(3, 6, 12, 1) 100%);
 
   /* Legacy aliases — existing components reference these */
   --app-bg: var(--bg-0);
   --card-bg: var(--bg-2);
+
+  /* App shell background (radial). Themeable so the frame flips with the theme. */
+  --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #0f172a 0%, #020617 60%, #000 100%);
+
+  /* Row interaction overlays (data tables) — themeable so they read on light too. */
+  --row-hover-bg: rgba(255, 255, 255, 0.04);
+  --row-zebra-bg: rgba(255, 255, 255, 0.015);
+
+  /* Data-table container surface. Dark value == the legacy bg-black/30 glass, so
+     dark is byte-identical; light gets a frosted-white panel. */
+  --table-surface: rgba(0, 0, 0, 0.30);
+
+  /* Chrome surfaces — dark values match the legacy hardcoded glass exactly. */
+  --sidebar-surface: rgba(0, 0, 0, 0.50);
+  --header-surface: rgba(0, 0, 0, 0.45);
+  --scrim: rgba(0, 0, 0, 0.60);
+  --skeleton-bg: rgba(255, 255, 255, 0.05);
 
   /* ── Borders ────────────────────────────────────────────────────────────── */
   --border-subtle: rgba(255, 255, 255, 0.04);
@@ -58,7 +82,7 @@
   --text-primary: #f0f0f5;
   --text-secondary: #b4b4c0;
   --text-tertiary: #8b8b9a;
-  --text-muted: #636372;
+  --text-muted: #85858f; /* WCAG 1.4.3: ≥4.5:1 on dark surfaces (was #636372 ≈ 3:1) */
   --text-disabled: #45454f;
   --text-inverse: #06060a;
   --text-accent: #67e8f9;
@@ -199,4 +223,88 @@
   --z-sticky: 100;
   --z-modal: 200;
   --z-toast: 300;
+}
+
+/**
+ * ── Light theme ──────────────────────────────────────────────────────────────
+ * Opt-in via <html data-theme="light">. Overrides ONLY the surface / border /
+ * text / shadow / shell tokens; the semantic severity, status, KEV/EPSS and
+ * accent hues carry over (their bg tints read correctly on light too). Dark is
+ * the default and is completely unaffected by this block.
+ */
+:root[data-theme='light'] {
+  /* Surfaces */
+  --bg-0: #f4f6fa;
+  --bg-1: #eceff4;
+  --bg-2: #ffffff;
+  --bg-3: #f5f7fb;
+  --bg-4: #e7ebf2;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(236, 239, 244, 0.86);
+  --bg-glass: rgba(255, 255, 255, 0.68);
+  --bg-glass-elevated: rgba(255, 255, 255, 0.82);
+  --cockpit-bg:
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(34, 211, 238, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 5%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+    linear-gradient(180deg, #eef2f8 0%, #e9edf4 55%, #dfe4ec 100%);
+  --kpi-strip-bg: linear-gradient(180deg, rgba(244, 246, 250, 0.95) 0%, rgba(233, 237, 244, 0.85) 100%);
+  --sidebar-bg: linear-gradient(180deg, rgba(238, 242, 248, 0.98) 0%, rgba(233, 237, 244, 0.99) 55%, rgba(228, 232, 240, 1) 100%);
+
+  --shell-bg: radial-gradient(ellipse 120% 80% at 50% 0%, #eef2f8 0%, #f4f6fa 55%, #e9edf4 100%);
+
+  /* Borders */
+  --border-subtle: rgba(15, 23, 42, 0.05);
+  --border-default: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --border-accent: rgba(8, 145, 178, 0.30);
+  --border-accent-violet: rgba(124, 58, 237, 0.30);
+  --border-danger: rgba(220, 38, 38, 0.35);
+
+  /* Text hierarchy */
+  --text-primary: #0f1220;
+  --text-secondary: #363a47;
+  --text-tertiary: #565b6a;
+  --text-muted: #5f6470; /* WCAG 1.4.3: ≥4.5:1 on light surfaces (was #7c828f ≈ 3.9:1) */
+  --text-disabled: #aab0bc;
+  --text-inverse: #ffffff;
+  --text-accent: #0891b2;
+  --text-accent-violet: #7c3aed;
+
+  /* Accent muteds a touch stronger for contrast on white */
+  --accent-cyan-muted: rgba(8, 145, 178, 0.14);
+  --accent-violet-muted: rgba(124, 58, 237, 0.14);
+
+  /* Severity TEXT hues darkened for light mode — the bright dark-mode hues fail
+     WCAG 1.4.3 on white (e.g. medium #fbbf24 ≈ 1.6:1). These clear ≥4.9:1 on the
+     light severity tints; the *-bg/*-border tints are kept (they read fine on
+     light). Applies to badges, dots and severity-colored text app-wide. */
+  --severity-critical: #b91c1c;
+  --severity-high: #c2410c;
+  --severity-medium: #b45309;
+  --severity-low: #15803d;
+  --severity-info: #0369a1;
+
+  /* Shadows — softer, cooler on light */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 8px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 16px 48px rgba(15, 23, 42, 0.16), 0 8px 16px rgba(15, 23, 42, 0.08);
+  --shadow-inner: inset 0 1px 0 rgba(15, 23, 42, 0.04), inset 0 -1px 0 rgba(15, 23, 42, 0.05);
+
+  --selection-bg: rgba(8, 145, 178, 0.2);
+  --row-hover-bg: rgba(15, 23, 42, 0.05);
+  --row-zebra-bg: rgba(15, 23, 42, 0.025);
+  --table-surface: rgba(255, 255, 255, 0.9);
+  --sidebar-surface: rgba(255, 255, 255, 0.82);
+  --header-surface: rgba(255, 255, 255, 0.80);
+  --scrim: rgba(15, 23, 42, 0.35);
+  --skeleton-bg: rgba(15, 23, 42, 0.07);
+}
+
+/* Flip the document background in light mode (higher specificity than the
+   hardcoded body utility class), so no dark flashes behind the app shell. */
+:root[data-theme='light'] body {
+  background-color: var(--bg-0);
+  color: var(--text-secondary);
 }

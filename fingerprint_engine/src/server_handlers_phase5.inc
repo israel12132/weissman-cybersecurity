@@ -72,7 +72,7 @@ async fn api_swarm_events(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "detail": e.to_string() })),
+            Json(json!({ "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -134,7 +134,7 @@ async fn api_swarm_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue swarm_run failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }
@@ -212,7 +212,7 @@ async fn api_threat_ingest_run(
             tracing::error!(target: "async_jobs", error = %e, "enqueue threat_ingest_run failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": e.to_string()})),
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
             )
                 .into_response()
         }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import CeoWarRoomStream from '../components/ceo/CeoWarRoomStream'
 import CeoGenesisPanel from '../components/ceo/CeoGenesisPanel'
@@ -58,16 +58,16 @@ export default function CeoCommandCenter() {
 
   return (
     <div
-      className="min-h-screen text-slate-100"
+      className="min-h-screen text-[var(--text-secondary)]"
       style={{
-        background: 'radial-gradient(ellipse 100% 80% at 50% 0%, #0f172a 0%, #020617 55%, #000 100%)',
+        background: 'var(--shell-bg)',
       }}
     >
-      <header className="border-b border-white/10 bg-black/30 backdrop-blur-md sticky top-0 z-10">
+      <header className="border-b border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold tracking-tight text-white">{t('pages.ceoCommandCenter.title')}</h1>
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mt-1">
+            <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mt-1">
               {t('pages.ceoCommandCenter.subtitle')}
             </p>
           </div>
@@ -135,7 +135,7 @@ export default function CeoCommandCenter() {
             </section>
             )}
             {!showWarRoom && !showGenesis && !showVault && !showLab && q && (
-              <p className="text-sm font-mono text-white/40 text-center py-8">{t('weissmanFindings.filtered_title')}</p>
+              <p className="text-sm font-mono text-[var(--text-muted)] text-center py-8">{t('weissmanFindings.filtered_title')}</p>
             )}
           </>
         )}

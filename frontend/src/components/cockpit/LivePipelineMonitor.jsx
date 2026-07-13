@@ -2,7 +2,7 @@
  * Live Pipeline Monitor — Stages 0–4 and true DAG tree in real time. Pause, resume, skip per client.
  * Data from GET /api/pipeline/state, GET /api/dag, and SSE pipeline_stage events.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -10,6 +10,7 @@ import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { Layers, Pause, Play, Radio, GitBranch } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.livePipelineMonitor'
 
@@ -183,30 +184,30 @@ export default function LivePipelineMonitor() {
             <span className="text-xs text-white/50 font-mono">{t(`${NS}.runPrefix`, { id: runId })}</span>
           )}
           <div className="flex rounded-lg border border-white/10 overflow-hidden">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setViewMode('stages')}
-              className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-white'}`}
+              className={`px-2 py-1 text-xs ${viewMode === 'stages' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-[var(--text-primary)]'}`}
             >
               {t(`${NS}.stages`)}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled"
               type="button"
               onClick={() => setViewMode('dag')}
-              className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-white'}`}
+              className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'dag' ? 'bg-[#22d3ee]/20 text-[#22d3ee]' : 'text-white/60 hover:text-[var(--text-primary)]'}`}
             >
               <GitBranch className="w-3 h-3" /> {t(`${NS}.dagTree`)}
-            </button>
+            </Button>
           </div>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={fetchState}
           disabled={loading}
           className="text-xs text-[#22d3ee] hover:underline disabled:opacity-50"
         >
           {t(`${NS}.refresh`)}
-        </button>
+        </Button>
       </div>
       <div className="p-4 space-y-4">
         {viewMode === 'dag' && (
@@ -248,7 +249,7 @@ export default function LivePipelineMonitor() {
                       {s.client_id === '__global__' ? t(`${NS}.global`) : s.client_id}
                     </span>
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => patchState({ client_id: s.client_id, paused: !s.paused })}
                         disabled={patching}
@@ -256,7 +257,7 @@ export default function LivePipelineMonitor() {
                       >
                         {s.paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                         {s.paused ? t(`${NS}.resume`) : t(`${NS}.pause`)}
-                      </button>
+                      </Button>
                       <select
                         className="bg-black/60 border border-white/10 rounded-lg text-xs text-white px-2 py-1"
                         value=""

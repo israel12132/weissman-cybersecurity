@@ -1,6 +1,6 @@
-import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
+import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.roePanel'
 
@@ -27,7 +27,7 @@ export default function RoEPanel() {
               ? t(`${NS}.takeoverDescription`)
               : t(`${NS}.safeDescription`)}
           </span>
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={handleToggle}
             disabled={configLoading}
@@ -42,7 +42,7 @@ export default function RoEPanel() {
             `}
           >
             {!isTakeover ? t(`${NS}.safeButton`) : t(`${NS}.takeoverButton`)}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

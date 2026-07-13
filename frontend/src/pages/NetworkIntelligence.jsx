@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams, useHubEngineFocus } from '../hooks/useLaunchEngineScan'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,6 +11,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const FLAGSHIP_ID = 'bgp_dns_hijacking'
 
@@ -187,18 +188,18 @@ function buildBgpBody(params, clientId, target) {
 function Section({ title, icon, accent = '#f97316', defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button
+    <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>{title}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
@@ -206,15 +207,15 @@ function Section({ title, icon, accent = '#f97316', defaultOpen = true, children
 function FieldRow({ label, hint, children }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">{label}</span>
       {children}
-      {hint && <span className="block text-[9px] font-mono text-white/25 leading-relaxed">{hint}</span>}
+      {hint && <span className="block text-[9px] font-mono text-[var(--text-disabled)] leading-relaxed">{hint}</span>}
     </label>
   )
 }
 
 function TextField({ label, hint, value, onChange, placeholder, area = false }) {
-  const cls = 'w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-[#f97316]/40'
+  const cls = 'w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[#f97316]/40'
   return (
     <FieldRow label={label} hint={hint}>
       {area
@@ -228,7 +229,7 @@ function NumField({ label, hint, value, onChange, min, max }) {
   return (
     <FieldRow label={label} hint={hint}>
       <input type="number" value={value} min={min} max={max} onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-[#f97316]/40" />
+        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[#f97316]/40" />
     </FieldRow>
   )
 }
@@ -237,7 +238,7 @@ function SelectField({ label, value, onChange, options }) {
   return (
     <FieldRow label={label}>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-[#f97316]/40">
+        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[#f97316]/40">
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </FieldRow>
@@ -246,14 +247,14 @@ function SelectField({ label, value, onChange, options }) {
 
 function Toggle({ label, value, onChange }) {
   return (
-    <button type="button" onClick={() => onChange(!value)}
+    <Button variant="unstyled" type="button" onClick={() => onChange(!value)}
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
-        value ? 'border-[#f97316]/40 bg-[#f97316]/10 text-[#f97316]' : 'border-white/10 bg-black/40 text-white/40 hover:text-white/60'}`}>
+        value ? 'border-[#f97316]/40 bg-[#f97316]/10 text-[#f97316]' : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'}`}>
       <span>{label}</span>
-      <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#f97316]/40' : 'bg-white/10'}`}>
+      <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#f97316]/40' : 'bg-[var(--row-hover-bg)]'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${value ? 'left-3.5' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -279,7 +280,7 @@ function ScoreGauge({ score, label }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-4xl font-bold font-mono" style={{ color: c }}>{score}</span>
-        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{label}</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{label}</span>
       </div>
     </div>
   )
@@ -290,8 +291,8 @@ function PostureChip({ label, state }) {
     good: 'text-[#4ade80] bg-[#4ade80]/10 border-[#4ade80]/30',
     bad: 'text-red-300 bg-red-950/30 border-red-500/30',
     warn: 'text-amber-300 bg-amber-950/20 border-amber-500/30',
-    na: 'text-white/30 bg-white/5 border-white/10',
-  }[state] ?? 'text-white/30 bg-white/5 border-white/10'
+    na: 'text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border-[var(--border-default)]',
+  }[state] ?? 'text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border-[var(--border-default)]'
   const glyph = { good: '✓', bad: '✕', warn: '!', na: '–' }[state] ?? '–'
   return (
     <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[10px] font-mono ${styles}`}>
@@ -316,23 +317,23 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-white/[0.03]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
-        <span className="text-[11px] font-mono text-white/85 flex-1 leading-snug">{f.title || f.type}</span>
-        {typeof f.confidence === 'number' && <span className="text-[9px] font-mono text-white/30 shrink-0">{Math.round(f.confidence * 100)}%</span>}
-        <span className={`text-white/30 text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+        <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
+        {typeof f.confidence === 'number' && <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{Math.round(f.confidence * 100)}%</span>}
+        <span className={`text-[var(--text-disabled)] text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-white/5">
-          {f.description && <p className="text-[10px] font-mono text-white/55 leading-relaxed">{f.description}</p>}
-          {f.remediation && <p className="text-[10px] font-mono text-[#f97316]/70 leading-relaxed"><span className="text-white/30">→ </span>{f.remediation}</p>}
+        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[var(--border-subtle)]">
+          {f.description && <p className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>}
+          {f.remediation && <p className="text-[10px] font-mono text-[#f97316]/70 leading-relaxed"><span className="text-[var(--text-disabled)]">→ </span>{f.remediation}</p>}
           {checks.length > 0 && (
             <div className="space-y-1">
               {checks.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-[9px] font-mono">
-                  <span className={c.observed ? 'text-[#4ade80]' : 'text-white/30'}>{c.observed ? '●' : '○'}</span>
-                  <span className="text-white/50">{c.name}</span>
-                  <span className="text-white/25 truncate">{typeof c.detail === 'string' ? c.detail : JSON.stringify(c.detail)}</span>
+                  <span className={c.observed ? 'text-[#4ade80]' : 'text-[var(--text-disabled)]'}>{c.observed ? '●' : '○'}</span>
+                  <span className="text-[var(--text-tertiary)]">{c.name}</span>
+                  <span className="text-[var(--text-disabled)] truncate">{typeof c.detail === 'string' ? c.detail : JSON.stringify(c.detail)}</span>
                 </div>
               ))}
             </div>
@@ -348,7 +349,7 @@ function StatusBadge({ status, t }) {
     running: { label: t('pages.networkIntelligence.status_running'), cls: 'text-[#22d3ee] border-[#22d3ee]/30 bg-[#22d3ee]/10' },
     completed: { label: t('pages.networkIntelligence.status_done'), cls: 'text-[#4ade80] border-[#4ade80]/30 bg-[#4ade80]/10' },
     error: { label: t('pages.networkIntelligence.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
-    idle: { label: t('pages.networkIntelligence.status_idle'), cls: 'text-white/30 border-white/10 bg-white/5' },
+    idle: { label: t('pages.networkIntelligence.status_idle'), cls: 'text-[var(--text-disabled)] border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   }
   const { label, cls } = map[status] ?? map.idle
   return <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest ${cls}`}>{label}</span>
@@ -458,22 +459,22 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
             <span className="text-2xl">🛰</span>
             <h2 className="text-base font-bold text-white">{tt('flagship_title', 'DNS & BGP Hijack-Resistance')}</h2>
           </div>
-          <p className="text-[11px] text-white/45 mt-1 max-w-2xl leading-relaxed">
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
             {tt('flagship_desc', 'Live multi-resolver consensus, DNSSEC chain validation, RPKI ROA validation, BGP origin-AS / MOAS analysis, NS diversity, CAA & subdomain-takeover — fully read-only.')}
           </p>
         </div>
-        <button type="button" onClick={handleScan} disabled={scanning || !clientId}
+        <Button variant="unstyled" type="button" onClick={handleScan} disabled={scanning || !clientId}
           className="shrink-0 px-5 py-2 rounded-xl font-mono text-sm border border-[#f97316]/40 text-[#f97316] bg-[#f97316]/10 hover:bg-[#f97316]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           {scanning ? tt('scanning', '⟳ Scanning…') : tt('run_scan', '▶ Run Hijack-Resistance Scan')}
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Parameter column */}
         <div className="space-y-3 lg:col-span-1">
           <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-mono text-white/40 uppercase tracking-widest">{tt('params', 'Parameters')}</h3>
-            <button type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-white/30 hover:text-white/60 underline">{tt('reset', 'reset')}</button>
+            <h3 className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{tt('params', 'Parameters')}</h3>
+            <Button variant="unstyled" type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] underline">{tt('reset', 'reset')}</Button>
           </div>
           <Section title={tt('sec_probes', 'Probes')} icon="⚡">
             <Toggle label={tt('p_consensus', 'Multi-resolver consensus')} value={params.check_resolver_consensus} onChange={(v) => setParam('check_resolver_consensus', v)} />
@@ -544,11 +545,11 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
         <div className="space-y-4 lg:col-span-2">
           <AnimatePresence mode="wait">
             {summary ? (
-              <motion.div key="score" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 border border-white/10 p-5">
+              <motion.div key="score" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-5">
                 <div className="flex items-center gap-6 flex-wrap">
                   <ScoreGauge score={score ?? 0} label={tt('score_label', 'RESISTANCE')} />
                   <div className="flex-1 min-w-[240px] space-y-3">
-                    <p className="text-[11px] font-mono text-white/45 leading-relaxed">{summary.description}</p>
+                    <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed">{summary.description}</p>
                     <div className="grid grid-cols-2 gap-2">
                       <PostureChip label={tt('po_dnssec', 'DNSSEC')} state={ev.dnssec_broken ? 'bad' : (ev.dnssec_validated ? 'good' : 'warn')} />
                       <PostureChip label={tt('po_rpki', 'RPKI ROA')} state={rpkiState} />
@@ -565,14 +566,14 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
                   </div>
                 </div>
                 {Array.isArray(summary.roadmap) && summary.roadmap.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-white/5">
-                    <h4 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">{tt('roadmap', 'Hardening Roadmap')}</h4>
+                  <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
+                    <h4 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{tt('roadmap', 'Hardening Roadmap')}</h4>
                     <div className="space-y-1.5">
                       {summary.roadmap.map((s) => (
                         <div key={s.order} className="flex items-start gap-2 text-[10px] font-mono">
-                          <span className={`shrink-0 mt-0.5 ${s.done ? 'text-[#4ade80]' : 'text-white/25'}`}>{s.done ? '✓' : `${s.order}.`}</span>
-                          <span className={s.done ? 'text-white/60' : 'text-white/75'}>{s.title}</span>
-                          <span className="text-white/25 hidden md:inline">— {s.detail}</span>
+                          <span className={`shrink-0 mt-0.5 ${s.done ? 'text-[#4ade80]' : 'text-[var(--text-disabled)]'}`}>{s.done ? '✓' : `${s.order}.`}</span>
+                          <span className={s.done ? 'text-[var(--text-tertiary)]' : 'text-[var(--text-secondary)]'}>{s.title}</span>
+                          <span className="text-[var(--text-disabled)] hidden md:inline">— {s.detail}</span>
                         </div>
                       ))}
                     </div>
@@ -580,8 +581,8 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
                 )}
               </motion.div>
             ) : (
-              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl bg-black/40 border border-white/10 p-10 text-center">
-                <p className="text-[11px] font-mono text-white/25">
+              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] p-10 text-center">
+                <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {scanning ? tt('scan_running', 'Probing DNS resolvers, DNSSEC, RPKI and BGP origins…')
                     : !clientId ? t('pages.networkIntelligence.select_client_warning')
                       : tt('empty_ready', 'Ready — run to measure DNS/BGP hijack resistance.')}
@@ -655,32 +656,32 @@ function NetworkEngineCard({ engine, clientId, target, showToast, isFocused, onF
     <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       onMouseEnter={onFocus}
       onFocus={onFocus}
-      className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 space-y-4 hover:border-white/20 transition-all">
+      className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 space-y-4 hover:border-[var(--border-strong)] transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-sm font-semibold text-white">{engine.label}</h3>
             <StatusBadge status={status} t={t} />
           </div>
-          <span className="text-[9px] font-mono text-white/30 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{engine.mitre}</span>
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] px-1.5 py-0.5 rounded border border-[var(--border-default)]">{engine.mitre}</span>
         </div>
-        <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+        <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
           className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase border border-[#f97316]/30 text-[#f97316]/70 hover:bg-[#f97316]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           {status === 'running' ? '⟳' : t('pages.networkIntelligence.scan')}
-        </button>
+        </Button>
       </div>
-      <p className="text-[11px] text-white/45 leading-relaxed">{engine.description}</p>
+      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{engine.description}</p>
       {engine.commandCenter && (
         <Link to={engine.commandCenter} className="inline-block text-[10px] font-mono text-blue-300/80 hover:text-blue-200">
           → Command Center
         </Link>
       )}
-      {lastRun && <p className="text-[10px] font-mono text-white/25">{t('pages.networkIntelligence.last_scan', { time: lastRun })}</p>}
+      {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)]">{t('pages.networkIntelligence.last_scan', { time: lastRun })}</p>}
       {findings.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-white/5">
-          <p className="text-[10px] font-mono text-white/35">{findings.length} findings</p>
+        <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+          <p className="text-[10px] font-mono text-[var(--text-muted)]">{findings.length} findings</p>
           {findings.slice(0, 3).map((f, i) => (
-            <div key={i} className="text-[11px] font-mono text-white/60 bg-white/5 rounded px-2 py-1 truncate">{f.title ?? f.type}</div>
+            <div key={i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-[var(--row-hover-bg)] rounded px-2 py-1 truncate">{f.title ?? f.type}</div>
           ))}
         </div>
       )}
@@ -734,23 +735,23 @@ export default function NetworkIntelligence() {
     >
       <div className="flex items-end gap-3 mb-6 flex-wrap">
         <label className="space-y-1">
-          <span className="block text-[10px] font-mono text-white/40 uppercase tracking-wider">{t('pages.networkIntelligence.client_label')}</span>
+          <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.networkIntelligence.client_label')}</span>
           <select value={selectedClientId ?? ''} onChange={(e) => { setSelectedClientId(e.target.value || null); setTargetTouched(false) }}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[180px]">
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[180px]">
             <option value="">{t('pages.networkIntelligence.select_client')}</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="block text-[10px] font-mono text-white/40 uppercase tracking-wider">{tt('target_label', 'Target host / domain')}</span>
+          <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('target_label', 'Target host / domain')}</span>
           <input type="text" value={target} placeholder={tt('target_placeholder', 'example.com')}
             onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }}
-            className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[260px]" />
+            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[260px]" />
         </label>
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#f97316]/30 text-[#f97316]'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#f97316]/30 text-[#f97316]'}`}>
           {toast.msg}
         </div>
       )}
@@ -772,7 +773,7 @@ export default function NetworkIntelligence() {
         onShellReady={setShellHandlers}
       />
 
-      <h3 className="text-[11px] font-mono text-white/40 uppercase tracking-widest mt-8 mb-4">{tt('other_engines', 'Other Network Engines')}</h3>
+      <h3 className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest mt-8 mb-4">{tt('other_engines', 'Other Network Engines')}</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {OTHER_ENGINES.map((engine) => (
           <NetworkEngineCard

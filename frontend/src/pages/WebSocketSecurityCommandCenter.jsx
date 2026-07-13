@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE = 'websocket_attack'
 const ACCENT = '#22d3ee'
@@ -206,7 +207,7 @@ const SEV_STYLE = {
   high: { text: 'text-orange-300', bd: 'border-orange-500/40', bg: 'bg-orange-500/10', dot: '#fb923c' },
   medium: { text: 'text-amber-300', bd: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: '#fbbf24' },
   low: { text: 'text-sky-300', bd: 'border-sky-500/40', bg: 'bg-sky-500/10', dot: '#38bdf8' },
-  info: { text: 'text-slate-300', bd: 'border-white/10', bg: 'bg-white/5', dot: '#94a3b8' },
+  info: { text: 'text-[var(--text-secondary)]', bd: 'border-[var(--border-default)]', bg: 'bg-[var(--row-hover-bg)]', dot: '#94a3b8' },
 }
 
 function gradeColor(g) { return { A: '#34d399', B: '#a3e635', C: '#fbbf24', D: '#fb923c' }[g] || '#fb7185' }
@@ -234,23 +235,23 @@ function EvidenceView({ evidence }) {
   const checks = Array.isArray(evidence.checks) ? evidence.checks : []
   const scalars = Object.entries(evidence).filter(([k]) => k !== 'checks')
   return (
-    <div className="mt-2 rounded-lg bg-black/40 border border-white/5 p-3 space-y-2">
+    <div className="mt-2 rounded-lg bg-[var(--bg-2)] border border-[var(--border-subtle)] p-3 space-y-2">
       {scalars.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
           {scalars.map(([k, v]) => (
             <div key={k} className="flex items-start gap-2 text-[11px] font-mono">
-              <span className="text-white/35 shrink-0">{k}</span>
-              <span className="text-white/70 break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+              <span className="text-[var(--text-muted)] shrink-0">{k}</span>
+              <span className="text-[var(--text-secondary)] break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
       )}
       {checks.length > 0 && (
-        <div className="space-y-1 pt-1 border-t border-white/5">
+        <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
-              <span className={c.observed ? 'text-emerald-400' : 'text-white/30'}>{c.observed ? '✓' : '·'}</span>
-              <span className="text-white/60">{c.name}</span>
+              <span className={c.observed ? 'text-emerald-400' : 'text-[var(--text-disabled)]'}>{c.observed ? '✓' : '·'}</span>
+              <span className="text-[var(--text-tertiary)]">{c.name}</span>
             </div>
           ))}
         </div>
@@ -265,21 +266,21 @@ function FindingCard({ f }) {
   const st = SEV_STYLE[sev] || SEV_STYLE.info
   return (
     <div className={`rounded-xl border ${st.bd} ${st.bg} p-3`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.dot }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] font-mono uppercase tracking-wider ${st.text}`}>{sev}</span>
-            {f.mitre_attack && <span className="text-[10px] font-mono text-white/30">· {f.mitre_attack}</span>}
+            {f.mitre_attack && <span className="text-[10px] font-mono text-[var(--text-disabled)]">· {f.mitre_attack}</span>}
           </div>
-          <div className="text-sm text-white/90 font-medium mt-0.5">{f.title || f.type}</div>
+          <div className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{f.title || f.type}</div>
         </div>
-        <span className="text-white/30 text-xs mt-1">{open ? '▾' : '▸'}</span>
-      </button>
+        <span className="text-[var(--text-disabled)] text-xs mt-1">{open ? '▾' : '▸'}</span>
+      </Button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-white/60 leading-relaxed mt-2">{f.description}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed mt-2">{f.description}</p>
             <EvidenceView evidence={f.evidence} />
           </motion.div>
         )}
@@ -297,7 +298,7 @@ function Scorecard({ summary, t }) {
   const st = SEV_STYLE[worst] || SEV_STYLE.info
   const cats = summary.weak_categories || []
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-black/40 backdrop-blur-md border border-cyan-500/20 p-6 mb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-cyan-500/20 p-6 mb-6">
       <div className="flex flex-col md:flex-row md:items-center gap-6">
         <div className="flex items-center gap-5">
           <div className="relative w-28 h-28 shrink-0">
@@ -307,7 +308,7 @@ function Scorecard({ summary, t }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-3xl font-bold" style={{ color }}>{score}</span>
-              <span className="text-[10px] font-mono text-white/40">/ 100</span>
+              <span className="text-[10px] font-mono text-[var(--text-muted)]">/ 100</span>
             </div>
           </div>
           <div>
@@ -320,8 +321,8 @@ function Scorecard({ summary, t }) {
         </div>
       </div>
       {cats.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap gap-2">
-          <span className="text-[10px] font-mono text-white/40">{t('pages.websocketSecurity.weak_areas', 'Weak areas:')}</span>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex flex-wrap gap-2">
+          <span className="text-[10px] font-mono text-[var(--text-muted)]">{t('pages.websocketSecurity.weak_areas', 'Weak areas:')}</span>
           {cats.map((c) => (
             <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/5 border border-cyan-500/20 text-cyan-200/70">
               {(CATEGORY_META[c] || CATEGORY_META.other).icon} {(CATEGORY_META[c] || CATEGORY_META.other).label}
@@ -493,30 +494,30 @@ export default function WebSocketSecurityCommandCenter() {
       )}
     >
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-cyan-500/30 text-cyan-200'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-200'}`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5 mb-6">
+      <div className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-5 mb-6">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.websocketSecurity.client', 'Client')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.websocketSecurity.client', 'Client')}</label>
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono min-w-[180px] focus:outline-none focus:border-cyan-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono min-w-[180px] focus:outline-none focus:border-cyan-500/40">
               <option value="">{t('pages.websocketSecurity.select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.websocketSecurity.target', 'Target URL')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.websocketSecurity.target', 'Target URL')}</label>
             <input type="text" value={target} onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }} placeholder="https://app.example.com"
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{t('pages.websocketSecurity.intensity', 'Intensity')}</label>
+            <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.websocketSecurity.intensity', 'Intensity')}</label>
             <select value={intensity} onChange={(e) => setIntensity(e.target.value)}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40">
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40">
               <option value="light">{t('pages.websocketSecurity.intensity_light', 'Light')}</option>
               <option value="normal">{t('pages.websocketSecurity.intensity_normal', 'Normal')}</option>
               <option value="aggressive">{t('pages.websocketSecurity.intensity_aggressive', 'Aggressive')}</option>
@@ -524,31 +525,31 @@ export default function WebSocketSecurityCommandCenter() {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor, boxShadow: status === 'running' ? `0 0 6px ${ACCENT}` : 'none' }} />
-            <span className="text-[10px] font-mono text-white/40 uppercase">{status}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{status}</span>
           </div>
-          <button type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
+          <Button variant="unstyled" type="button" onClick={handleRun} disabled={status === 'running' || !clientId}
             className="px-5 py-2 rounded-xl font-mono text-sm border border-cyan-500/40 text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all disabled:opacity-40">
             {status === 'running' ? t('pages.websocketSecurity.scanning', '⟳ Scanning…') : t('pages.websocketSecurity.run_scan', '▶ Run WebSocket Scan')}
-          </button>
-          <button type="button" onClick={() => setShowParams((s) => !s)}
-            className="px-3 py-2 rounded-xl font-mono text-xs border border-white/10 text-white/50 hover:text-white/80">
+          </Button>
+          <Button variant="unstyled" type="button" onClick={() => setShowParams((s) => !s)}
+            className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
             {showParams ? '▾' : '▸'} {t('pages.websocketSecurity.params', 'Parameters')}
-          </button>
+          </Button>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {Object.entries(PRESETS).map(([key, p]) => (
-            <button key={key} type="button" title={p.hint} onClick={() => applyPreset(key)}
+            <Button variant="unstyled" key={key} type="button" title={p.hint} onClick={() => applyPreset(key)}
               className="px-3 py-1.5 rounded-lg text-[11px] font-mono border border-cyan-500/25 text-cyan-200/80 bg-cyan-500/5 hover:bg-cyan-500/15 transition-all">
               {p.label}
-            </button>
+            </Button>
           ))}
         </div>
 
         <AnimatePresence initial={false}>
           {showParams && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              <div className="mt-5 pt-5 border-t border-white/5 grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="mt-5 pt-5 border-t border-[var(--border-subtle)] grid grid-cols-1 xl:grid-cols-2 gap-6">
                 {TOGGLE_GROUPS.map((group) => (
                   <div key={group.id}>
                     <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/50 mb-2">
@@ -556,7 +557,7 @@ export default function WebSocketSecurityCommandCenter() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {group.items.map((tg) => (
-                        <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-white/70 cursor-pointer">
+                        <label key={tg.key} title={tg.hint} className="flex items-center gap-2 text-xs font-mono text-[var(--text-secondary)] cursor-pointer">
                           <input type="checkbox" checked={!!toggles[tg.key]} onChange={(e) => setToggles((p) => ({ ...p, [tg.key]: e.target.checked }))} className="accent-cyan-500" />
                           {tg.label}
                         </label>
@@ -566,72 +567,77 @@ export default function WebSocketSecurityCommandCenter() {
                 ))}
                 <div className="space-y-3 xl:col-span-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.paths', 'WebSocket paths')}</label>
+                    <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.paths', 'WebSocket paths')}</label>
                     <textarea value={paths} onChange={(e) => setPaths(e.target.value)} rows={4}
-                      className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:border-cyan-500/40" />
+                      className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40" />
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.foreign_origin', 'Foreign Origin')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.foreign_origin', 'Foreign Origin')}</label>
                       <input type="text" value={foreignOrigin} onChange={(e) => setForeignOrigin(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80 focus:outline-none focus:border-cyan-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.session_cookie', 'Session cookie (CSWSH auth test)')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.session_cookie', 'Session cookie (CSWSH auth test)')}</label>
                       <input type="password" value={sessionCookie} onChange={(e) => setSessionCookie(e.target.value)} placeholder="session=…"
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80 focus:outline-none focus:border-cyan-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40" />
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.timeout_ms', 'Timeout (ms)')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.timeout_ms', 'Timeout (ms)')}</label>
                       <input type="number" min={500} max={30000} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.message_read_ms', 'Message read window (ms)')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.message_read_ms', 'Message read window (ms)')}</label>
                       <input type="number" min={500} max={15000} value={messageReadMs} onChange={(e) => setMessageReadMs(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.bearer_token', 'Bearer token (optional)')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.concurrency', 'Concurrency (parallel probes)')}</label>
+                      <input type="number" min={1} max={64} value={concurrency} onChange={(e) => setConcurrency(e.target.value)}
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.bearer_token', 'Bearer token (optional)')}</label>
                       <input type="password" value={bearerToken} onChange={(e) => setBearerToken(e.target.value)} placeholder="eyJ…"
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80 focus:outline-none focus:border-cyan-500/40" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.custom_messages', 'Custom WS messages')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.custom_messages', 'Custom WS messages')}</label>
                       <textarea value={customMessages} onChange={(e) => setCustomMessages(e.target.value)} rows={3} placeholder='{"type":"ping"}'
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                   </div>
                 </div>
-                <div className="xl:col-span-2 pt-2 border-t border-white/5">
+                <div className="xl:col-span-2 pt-2 border-t border-[var(--border-subtle)]">
                   <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/50 mb-3">{t('pages.websocketSecurity.advanced', 'Weissman Standard (advanced)')}</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">stateful_fuzz_rounds</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">stateful_fuzz_rounds</label>
                       <input type="number" min={1} max={6} value={statefulFuzzRounds} onChange={(e) => setStatefulFuzzRounds(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.race_connections', 'Race parallel connections')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.race_connections', 'Race parallel connections')}</label>
                       <input type="number" min={2} max={16} value={raceConnections} onChange={(e) => setRaceConnections(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.race_sync_us', 'Race sync window (µs)')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.race_sync_us', 'Race sync window (µs)')}</label>
                       <input type="number" min={0} max={50000} value={raceSyncUs} onChange={(e) => setRaceSyncUs(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div className="md:col-span-2 lg:col-span-4">
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.race_payload', 'Race transactional frame')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.race_payload', 'Race transactional frame')}</label>
                       <input type="text" value={racePayload} onChange={(e) => setRacePayload(e.target.value)}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div className="md:col-span-2 lg:col-span-4">
-                      <label className="text-[10px] font-mono uppercase text-white/40 block mb-1">{t('pages.websocketSecurity.http_escalation_paths', 'HTTP escalation paths')}</label>
+                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">{t('pages.websocketSecurity.http_escalation_paths', 'HTTP escalation paths')}</label>
                       <textarea value={httpEscalationPaths} onChange={(e) => setHttpEscalationPaths(e.target.value)} rows={3}
-                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white/80" />
+                        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                   </div>
                 </div>
@@ -639,11 +645,11 @@ export default function WebSocketSecurityCommandCenter() {
             </motion.div>
           )}
         </AnimatePresence>
-        {lastRun && <p className="text-[10px] font-mono text-white/25 mt-3">{t('pages.websocketSecurity.last_run', 'Last completed: {{time}}', { time: lastRun })}</p>}
+        {lastRun && <p className="text-[10px] font-mono text-[var(--text-disabled)] mt-3">{t('pages.websocketSecurity.last_run', 'Last completed: {{time}}', { time: lastRun })}</p>}
       </div>
 
       {!clientId && (
-        <p className="text-xs font-mono text-white/40 mb-6">{t('pages.websocketSecurity.select_client_hint', 'Select an in-scope client — Weissman WebSocket assessment requires explicit client authorization.')}</p>
+        <p className="text-xs font-mono text-[var(--text-muted)] mb-6">{t('pages.websocketSecurity.select_client_hint', 'Select an in-scope client — Weissman WebSocket assessment requires explicit client authorization.')}</p>
       )}
 
       {detailFindings.length > 0 && <Scorecard summary={summary} t={t} />}

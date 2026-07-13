@@ -1,7 +1,7 @@
 import { firstClientTarget } from '../lib/clientTarget'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageShell from './PageShell'
@@ -10,6 +10,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import { apiFetch } from '../lib/apiBase'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob } from '../lib/useJobPoll'
+import Button from '../components/ui/Button'
 
 const ENGINE_ID = 'pqc_scanner'
 
@@ -94,20 +95,20 @@ function buildScanBody(params, clientId, target) {
 function Section({ title, icon, accent = '#10b981', count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border bg-black/30 overflow-hidden" style={{ borderColor: `${accent}22` }}>
-      <button
+    <div className="rounded-xl border bg-[var(--table-surface)] overflow-hidden" style={{ borderColor: `${accent}22` }}>
+      <Button variant="unstyled"
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--row-hover-bg)] transition-colors"
       >
         <span className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.18em] font-semibold" style={{ color: accent }}>
           <span>{icon}</span>
           {title}
-          {count != null && <span className="text-white/30 normal-case tracking-normal">· {count}</span>}
+          {count != null && <span className="text-[var(--text-disabled)] normal-case tracking-normal">· {count}</span>}
         </span>
-        <span className={`text-white/40 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
-      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-white/5">{children}</div>}
+        <span className={`text-[var(--text-muted)] text-xs transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
+      {open && <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[var(--border-subtle)]">{children}</div>}
     </div>
   )
 }
@@ -115,9 +116,9 @@ function Section({ title, icon, accent = '#10b981', count, defaultOpen = true, c
 function FieldRow({ label, hint, children }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">{label}</span>
       {children}
-      {hint && <span className="block text-[9px] font-mono text-white/25 leading-relaxed">{hint}</span>}
+      {hint && <span className="block text-[9px] font-mono text-[var(--text-disabled)] leading-relaxed">{hint}</span>}
     </label>
   )
 }
@@ -130,7 +131,7 @@ function TextField({ label, hint, value, onChange, placeholder, mono = true }) {
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 ${mono ? 'font-mono' : ''} focus:outline-none focus:border-[#10b981]/40`}
+        className={`w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] ${mono ? 'font-mono' : ''} focus:outline-none focus:border-[#10b981]/40`}
       />
     </FieldRow>
   )
@@ -145,7 +146,7 @@ function NumField({ label, hint, value, onChange, min, max }) {
         min={min}
         max={max}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-[#10b981]/40"
+        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[#10b981]/40"
       />
     </FieldRow>
   )
@@ -157,7 +158,7 @@ function SelectField({ label, hint, value, onChange, options }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-[#10b981]/40"
+        className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[#10b981]/40"
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -167,18 +168,18 @@ function SelectField({ label, hint, value, onChange, options }) {
 
 function Toggle({ label, value, onChange }) {
   return (
-    <button
+    <Button variant="unstyled"
       type="button"
       onClick={() => onChange(!value)}
       className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-mono transition-all ${
-        value ? 'border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981]' : 'border-white/10 bg-black/40 text-white/40 hover:text-white/60'
+        value ? 'border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981]' : 'border-[var(--border-default)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text-tertiary)]'
       }`}
     >
       <span>{label}</span>
-      <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#10b981]/40' : 'bg-white/10'}`}>
+      <span className={`w-7 h-4 rounded-full relative transition-colors ${value ? 'bg-[#10b981]/40' : 'bg-[var(--row-hover-bg)]'}`}>
         <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${value ? 'left-3.5' : 'left-0.5'}`} />
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -211,7 +212,7 @@ function ScoreGauge({ score, label }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-4xl font-bold font-mono" style={{ color: c }}>{score}</span>
-        <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{label}</span>
+        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{label}</span>
       </div>
     </div>
   )
@@ -223,8 +224,8 @@ function PostureChip({ label, state }) {
     good: 'text-[#4ade80] bg-[#4ade80]/10 border-[#4ade80]/30',
     bad: 'text-red-300 bg-red-950/30 border-red-500/30',
     warn: 'text-amber-300 bg-amber-950/20 border-amber-500/30',
-    na: 'text-white/30 bg-white/5 border-white/10',
-  }[state] ?? 'text-white/30 bg-white/5 border-white/10'
+    na: 'text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border-[var(--border-default)]',
+  }[state] ?? 'text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border-[var(--border-default)]'
   const glyph = { good: '✓', bad: '✕', warn: '!', na: '–' }[state] ?? '–'
   return (
     <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[10px] font-mono ${styles}`}>
@@ -250,27 +251,27 @@ function FindingCard({ f }) {
   const checks = Array.isArray(ev.checks) ? ev.checks : []
   return (
     <div className={`rounded-xl border ${SEV_STYLE[sev] ?? SEV_STYLE.info} overflow-hidden`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-white/[0.03]">
+      <Button variant="unstyled" type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-[var(--row-hover-bg)]">
         <span className="text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-current shrink-0 mt-0.5">{sev}</span>
-        <span className="text-[11px] font-mono text-white/85 flex-1 leading-snug">{f.title || f.type}</span>
+        <span className="text-[11px] font-mono text-[var(--text-primary)] flex-1 leading-snug">{f.title || f.type}</span>
         {typeof f.confidence === 'number' && (
-          <span className="text-[9px] font-mono text-white/30 shrink-0">{Math.round(f.confidence * 100)}%</span>
+          <span className="text-[9px] font-mono text-[var(--text-disabled)] shrink-0">{Math.round(f.confidence * 100)}%</span>
         )}
-        <span className={`text-white/30 text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-      </button>
+        <span className={`text-[var(--text-disabled)] text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </Button>
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-white/5">
-          {f.description && <p className="text-[10px] font-mono text-white/55 leading-relaxed">{f.description}</p>}
+        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[var(--border-subtle)]">
+          {f.description && <p className="text-[10px] font-mono text-[var(--text-tertiary)] leading-relaxed">{f.description}</p>}
           {f.remediation && (
-            <p className="text-[10px] font-mono text-[#10b981]/70 leading-relaxed"><span className="text-white/30">→ </span>{f.remediation}</p>
+            <p className="text-[10px] font-mono text-[#10b981]/70 leading-relaxed"><span className="text-[var(--text-disabled)]">→ </span>{f.remediation}</p>
           )}
           {checks.length > 0 && (
             <div className="space-y-1">
               {checks.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-[9px] font-mono">
-                  <span className={c.observed ? 'text-[#4ade80]' : 'text-white/30'}>{c.observed ? '●' : '○'}</span>
-                  <span className="text-white/50">{c.name}</span>
-                  <span className="text-white/25 truncate">{typeof c.detail === 'string' ? c.detail : JSON.stringify(c.detail)}</span>
+                  <span className={c.observed ? 'text-[#4ade80]' : 'text-[var(--text-disabled)]'}>{c.observed ? '●' : '○'}</span>
+                  <span className="text-[var(--text-tertiary)]">{c.name}</span>
+                  <span className="text-[var(--text-disabled)] truncate">{typeof c.detail === 'string' ? c.detail : JSON.stringify(c.detail)}</span>
                 </div>
               ))}
             </div>
@@ -420,39 +421,39 @@ export default function PqcRadar() {
       <div className="flex items-end justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-end gap-3 flex-wrap">
           <label className="space-y-1">
-            <span className="block text-[10px] font-mono text-white/40 uppercase tracking-wider">{tt('client_label', 'Client')}</span>
+            <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('client_label', 'Client')}</span>
             <select
               value={selectedClientId ?? ''}
               onChange={(e) => { setSelectedClientId(e.target.value || null); setTargetTouched(false) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#10b981]/40 min-w-[180px]"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#10b981]/40 min-w-[180px]"
             >
               <option value="">{tt('select_client', '— Select client —')}</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label className="space-y-1">
-            <span className="block text-[10px] font-mono text-white/40 uppercase tracking-wider">{tt('target_label', 'Target host')}</span>
+            <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('target_label', 'Target host')}</span>
             <input
               type="text"
               value={target}
               placeholder={tt('target_placeholder', 'example.com or https://host:port')}
               onChange={(e) => { setTarget(e.target.value); setTargetTouched(true) }}
-              className="bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white/80 font-mono focus:outline-none focus:border-[#10b981]/40 min-w-[260px]"
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#10b981]/40 min-w-[260px]"
             />
           </label>
         </div>
-        <button
+        <Button variant="unstyled"
           type="button"
           onClick={handleScan}
           disabled={scanning || !selectedClientId}
           className="px-5 py-2 rounded-xl font-mono text-sm border border-[#10b981]/40 text-[#10b981] bg-[#10b981]/10 hover:bg-[#10b981]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
           {scanning ? tt('scanning', '⟳ Scanning…') : tt('run_scan', '▶ Run PQC Scan')}
-        </button>
+        </Button>
       </div>
 
       {toast && (
-        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-black/80 border-[#10b981]/30 text-[#10b981]'}`}>
+        <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#10b981]/30 text-[#10b981]'}`}>
           {toast.msg}
         </div>
       )}
@@ -461,10 +462,10 @@ export default function PqcRadar() {
         {/* ── Parameter control column ── */}
         <div className="space-y-3 lg:col-span-1">
           <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-mono text-white/40 uppercase tracking-widest">{tt('advanced_params', 'Scan Parameters')}</h3>
-            <button type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-white/30 hover:text-white/60 underline">
+            <h3 className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest">{tt('advanced_params', 'Scan Parameters')}</h3>
+            <Button variant="unstyled" type="button" onClick={() => setParams(DEFAULT_PARAMS)} className="text-[9px] font-mono text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] underline">
               {tt('reset_defaults', 'reset')}
-            </button>
+            </Button>
           </div>
 
           <Section title={tt('sec_scope', 'Scope')} icon="◎">
@@ -518,14 +519,14 @@ export default function PqcRadar() {
                 key="score"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6"
+                className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6"
               >
                 <div className="flex items-center gap-6 flex-wrap">
                   <ScoreGauge score={score ?? 0} label={tt('score_label', 'READINESS')} />
                   <div className="flex-1 min-w-[240px] space-y-3">
                     <div>
                       <h3 className="text-sm font-bold text-white">{tt('readiness_score', 'Quantum-Readiness Score')}</h3>
-                      <p className="text-[11px] font-mono text-white/40 leading-relaxed mt-1">{summary.description}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-muted)] leading-relaxed mt-1">{summary.description}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <PostureChip label={tt('posture_tls_pqc', 'TLS PQC KEX')} state={ev.tls_pqc_kex ? 'good' : 'bad'} />
@@ -542,14 +543,14 @@ export default function PqcRadar() {
                 </div>
 
                 {Array.isArray(summary.roadmap) && summary.roadmap.length > 0 && (
-                  <div className="mt-5 pt-4 border-t border-white/5">
-                    <h4 className="text-[10px] font-mono text-white/40 uppercase tracking-widest mb-2">{tt('roadmap', 'Migration Roadmap')}</h4>
+                  <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
+                    <h4 className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-2">{tt('roadmap', 'Migration Roadmap')}</h4>
                     <div className="space-y-1.5">
                       {summary.roadmap.map((s) => (
                         <div key={s.order} className="flex items-start gap-2 text-[10px] font-mono">
-                          <span className={`shrink-0 mt-0.5 ${s.done ? 'text-[#4ade80]' : 'text-white/25'}`}>{s.done ? '✓' : `${s.order}.`}</span>
-                          <span className={s.done ? 'text-white/60' : 'text-white/75'}>{s.title}</span>
-                          <span className="text-white/25 hidden md:inline">— {s.detail}</span>
+                          <span className={`shrink-0 mt-0.5 ${s.done ? 'text-[#4ade80]' : 'text-[var(--text-disabled)]'}`}>{s.done ? '✓' : `${s.order}.`}</span>
+                          <span className={s.done ? 'text-[var(--text-tertiary)]' : 'text-[var(--text-secondary)]'}>{s.title}</span>
+                          <span className="text-[var(--text-disabled)] hidden md:inline">— {s.detail}</span>
                         </div>
                       ))}
                     </div>
@@ -561,9 +562,9 @@ export default function PqcRadar() {
                 key="empty"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-10 text-center"
+                className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-10 text-center"
               >
-                <p className="text-[11px] font-mono text-white/25">
+                <p className="text-[11px] font-mono text-[var(--text-disabled)]">
                   {scanning
                     ? tt('scan_running', 'Negotiating post-quantum key exchange with the target…')
                     : !selectedClientId
@@ -599,20 +600,20 @@ export default function PqcRadar() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-6 space-y-3"
+            className="rounded-2xl bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] p-6 space-y-3"
           >
             <div>
-              <h3 className="text-xs font-mono text-white/50 uppercase tracking-widest mb-1">{tt('nist_reference', 'NIST PQC Standard Reference')}</h3>
-              <p className="text-[11px] text-white/30">{tt('nist_subtitle', 'Quantum-safe algorithms vs legacy exposure')}</p>
+              <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest mb-1">{tt('nist_reference', 'NIST PQC Standard Reference')}</h3>
+              <p className="text-[11px] text-[var(--text-disabled)]">{tt('nist_subtitle', 'Quantum-safe algorithms vs legacy exposure')}</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {NIST_ALGORITHMS.map((algo) => (
-                <div key={algo.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/5">
+                <div key={algo.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-subtle)]">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: algo.color }} />
                     <div className="min-w-0">
-                      <p className="text-[11px] font-mono text-white/90 truncate">{algo.id}</p>
-                      <p className="text-[9px] font-mono text-white/40">{algo.type} · {algo.standard}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-primary)] truncate">{algo.id}</p>
+                      <p className="text-[9px] font-mono text-[var(--text-muted)]">{algo.type} · {algo.standard}</p>
                     </div>
                   </div>
                   <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest shrink-0" style={{ color: algo.color, borderColor: `${algo.color}40` }}>

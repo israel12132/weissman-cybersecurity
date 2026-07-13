@@ -98,7 +98,7 @@ async fn api_ceo_hpc_policy_get(
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -135,7 +135,7 @@ async fn api_ceo_vault_list(
         Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -155,7 +155,7 @@ async fn api_ceo_vault_get(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -170,7 +170,7 @@ async fn api_ceo_vault_post(
         Ok(id) => (StatusCode::CREATED, Json(json!({ "ok": true, "id": id }))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -211,7 +211,7 @@ async fn api_ceo_vault_export_criticals(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -232,7 +232,7 @@ async fn api_ceo_suspended_list(
         Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -252,7 +252,7 @@ async fn api_ceo_suspended_get(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -309,7 +309,7 @@ async fn api_ceo_sovereign_buffer_get(
         Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -410,7 +410,7 @@ async fn api_ceo_jobs_live_get(
         Ok(jobs) => (StatusCode::OK, Json(json!({ "ok": true, "jobs": jobs }))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -465,7 +465,7 @@ async fn api_ceo_god_mode_snapshot_get(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -480,7 +480,7 @@ async fn api_ceo_god_mode_snapshot_get(
         Ok(j) => (StatusCode::OK, Json(j)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "ok": false, "detail": e.to_string() })),
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
         )
             .into_response(),
     }
@@ -539,7 +539,7 @@ async fn api_ceo_tenant_engines_get(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -581,7 +581,7 @@ async fn api_ceo_tenant_engines_put(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "ok": false, "detail": format!("resolve default tenant: {e}") })),
+                Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
             )
                 .into_response();
         }
@@ -624,7 +624,7 @@ async fn api_ceo_supreme_nerve_center_get(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({
                 "ok": false,
-                "detail": format!("nerve center snapshot failed: {e}"),
+                "detail": scrub_internal_error(&e),
             })),
         )
             .into_response(),

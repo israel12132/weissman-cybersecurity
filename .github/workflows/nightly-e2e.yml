@@ -48,6 +48,14 @@ jobs:
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@1.91.1
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend production bundle (served by weissman-server)
+        working-directory: frontend
+        run: npm run build
+
       - name: Apply database migrations
         env:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
@@ -99,6 +107,30 @@ jobs:
           WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
           WEISSMAN_FINDINGS_E2E_POLL_MAX: "120"
         run: node scripts/verify_engine_groups_findings_e2e.mjs
+
+      # True-Live UI feature specs against the same production-mode backend: the
+      # findings written above now have UI features driven end-to-end (bulk
+      # status → verified persisted in Postgres, saved views, URL severity
+      # filter, row density, ⌘K palette).
+      - name: Playwright True-Live feature specs (bulk · views · URL filter · density)
+        working-directory: frontend
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: nightly@localhost
+          WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+        run: |
+          npx playwright install chromium
+          npm run test:e2e:live -- live-feature
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: |
+          echo '--- weissman-server.log ---'
+          cat /tmp/weissman-server.log || true
+          echo '--- weissman-worker.log ---'
+          cat /tmp/weissman-worker.log || true
 
   fuzz:
     name: Fuzz fuzz_core (nightly, time-boxed)

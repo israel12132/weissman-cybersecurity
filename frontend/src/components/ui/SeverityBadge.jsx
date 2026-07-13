@@ -1,4 +1,3 @@
-import React from 'react'
 
 /** Unified severity metadata — single source of truth for SOC screens. */
 export const SEVERITY_META = {

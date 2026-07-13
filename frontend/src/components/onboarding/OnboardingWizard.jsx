@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 import { formatApiErrorFromBody } from '../../lib/apiError'
+import Button from '../ui/Button'
 
 const STEPS = [
   { id: 1, labelKey: 'client', icon: Building2 },
@@ -135,14 +136,14 @@ export default function OnboardingWizard({ open, onComplete }) {
         initial={{ opacity: 0, y: 24, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-        className="relative w-full max-w-xl rounded-2xl border border-white/10 bg-[#0a0f18]/95 shadow-[0_24px_80px_rgba(0,0,0,0.65),0_0_0_1px_rgba(34,211,238,0.06)] overflow-hidden"
+        className="relative w-full max-w-xl rounded-2xl border border-[var(--border-default)] bg-[#0a0f18]/95 shadow-[0_24px_80px_rgba(0,0,0,0.65),0_0_0_1px_rgba(34,211,238,0.06)] overflow-hidden"
       >
         <div
           className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"
           aria-hidden
         />
 
-        <div className="px-6 sm:px-8 pt-7 pb-5 border-b border-white/[0.06]">
+        <div className="px-6 sm:px-8 pt-7 pb-5 border-b border-[var(--border-subtle)]">
           <div className="flex items-start gap-3 mb-6">
             <div className="shrink-0 w-10 h-10 rounded-xl border border-cyan-500/30 bg-cyan-500/10 flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-cyan-400" strokeWidth={1.75} />
@@ -154,7 +155,7 @@ export default function OnboardingWizard({ open, onComplete }) {
               <h2 id="onboarding-wizard-title" className="text-lg font-semibold text-white tracking-tight">
                 {t('components.onboarding.title')}
               </h2>
-              <p className="text-[13px] text-white/45 mt-1 leading-relaxed">
+              <p className="text-[13px] text-[var(--text-muted)] mt-1 leading-relaxed">
                 {t('components.onboarding.subtitle')}
               </p>
             </div>
@@ -173,7 +174,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                         ? 'bg-cyan-500/15 border border-cyan-500/35 text-cyan-200'
                         : done
                           ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-300/80'
-                          : 'bg-white/[0.03] border border-white/[0.06] text-white/30'
+                          : 'bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] text-[var(--text-disabled)]'
                     }`}
                   >
                     {done ? (
@@ -184,7 +185,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     <span>{t(`components.onboarding.steps.${s.labelKey}`)}</span>
                   </div>
                   {i < STEPS.length - 1 && (
-                    <ChevronRight className="w-3.5 h-3.5 text-white/15 shrink-0" aria-hidden />
+                    <ChevronRight className="w-3.5 h-3.5 text-[var(--text-disabled)] shrink-0" aria-hidden />
                   )}
                 </React.Fragment>
               )
@@ -205,7 +206,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                 className="space-y-5"
               >
                 <div>
-                  <label htmlFor="onboarding-name" className="block text-[11px] font-mono uppercase tracking-[0.18em] text-white/45 mb-2">
+                  <label htmlFor="onboarding-name" className="block text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-2">
                     {t('components.onboarding.client_name')}
                   </label>
                   <input
@@ -215,25 +216,25 @@ export default function OnboardingWizard({ open, onComplete }) {
                     onChange={(e) => setName(e.target.value)}
                     placeholder={t('components.onboarding.client_placeholder')}
                     autoFocus
-                    className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                   />
                 </div>
                 <div>
-                  <label htmlFor="onboarding-domain" className="block text-[11px] font-mono uppercase tracking-[0.18em] text-white/45 mb-2">
+                  <label htmlFor="onboarding-domain" className="block text-[11px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mb-2">
                     {t('components.onboarding.authorized_domain')}
                   </label>
                   <div className="relative">
-                    <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
+                    <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-disabled)] pointer-events-none" />
                     <input
                       id="onboarding-domain"
                       type="text"
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
                       placeholder={t('components.onboarding.domain_placeholder')}
-                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-white/25 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                     />
                   </div>
-                  <p className="mt-2 text-[11px] text-white/30">
+                  <p className="mt-2 text-[11px] text-[var(--text-disabled)]">
                     {t('components.onboarding.domain_hint')}
                   </p>
                 </div>
@@ -242,7 +243,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     {error}
                   </div>
                 )}
-                <button
+                <Button variant="unstyled"
                   type="submit"
                   disabled={submitting}
                   className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm tracking-wide border border-cyan-500/50 bg-gradient-to-r from-cyan-500/15 to-violet-500/10 text-cyan-100 hover:from-cyan-500/25 hover:to-violet-500/15 hover:shadow-[0_0_24px_rgba(34,211,238,0.15)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -258,7 +259,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}
-                </button>
+                </Button>
               </motion.form>
             )}
 
@@ -271,13 +272,13 @@ export default function OnboardingWizard({ open, onComplete }) {
                 transition={{ duration: 0.25 }}
                 className="space-y-5"
               >
-                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 space-y-4">
+                <div className="rounded-xl border border-[var(--border-default)] bg-[var(--row-hover-bg)] p-5 space-y-4">
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-1">{t('components.onboarding.client_label')}</p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">{t('components.onboarding.client_label')}</p>
                     <p className="text-base font-semibold text-white">{name.trim()}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35 mb-2">{t('components.onboarding.domains_label')}</p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2">{t('components.onboarding.domains_label')}</p>
                     <ul className="space-y-1.5">
                       {domains.map((d) => (
                         <li
@@ -290,8 +291,8 @@ export default function OnboardingWizard({ open, onComplete }) {
                       ))}
                     </ul>
                   </div>
-                  <div className="pt-2 border-t border-white/[0.06]">
-                    <p className="text-[11px] text-white/40 leading-relaxed">
+                  <div className="pt-2 border-t border-[var(--border-subtle)]">
+                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                       <Trans
                         i18nKey="components.onboarding.scope_hint"
                         components={{ 1: <span className="text-emerald-400/90 font-medium" /> }}
@@ -305,9 +306,9 @@ export default function OnboardingWizard({ open, onComplete }) {
                     type="checkbox"
                     checked={scopeConfirmed}
                     onChange={(e) => setScopeConfirmed(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40"
+                    className="mt-0.5 w-4 h-4 rounded border-[var(--border-strong)] bg-[var(--bg-2)] text-cyan-500 focus:ring-cyan-500/40"
                   />
-                  <span className="text-sm text-white/60 group-hover:text-white/80 transition-colors leading-relaxed">
+                  <span className="text-sm text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)] transition-colors leading-relaxed">
                     {t('components.onboarding.scope_confirm')}
                   </span>
                 </label>
@@ -319,14 +320,14 @@ export default function OnboardingWizard({ open, onComplete }) {
                 )}
 
                 <div className="flex gap-3">
-                  <button
+                  <Button variant="unstyled"
                     type="button"
                     onClick={() => { setStep(1); setError('') }}
-                    className="px-4 py-3 rounded-xl text-sm font-medium border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
+                    className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors"
                   >
                     {t('components.onboarding.back')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="unstyled"
                     type="button"
                     disabled={!scopeConfirmed}
                     onClick={() => { setError(''); setStep(3) }}
@@ -334,7 +335,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                   >
                     {t('components.onboarding.confirm_scope')}
                     <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               </motion.div>
             )}
@@ -358,7 +359,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                       <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                     </motion.div>
                     <h3 className="text-lg font-semibold text-white mb-1">{t('components.onboarding.scan_launched')}</h3>
-                    <p className="text-sm text-white/50 max-w-sm">{scanResult.message}</p>
+                    <p className="text-sm text-[var(--text-tertiary)] max-w-sm">{scanResult.message}</p>
                     {scanResult.jobs_queued > 0 && (
                       <p className="mt-2 text-[11px] font-mono text-cyan-400/80">
                         {scanResult.jobs_queued === 1
@@ -366,7 +367,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                           : t('components.onboarding.jobs_queued_plural', { count: scanResult.jobs_queued })}
                       </p>
                     )}
-                    <p className="mt-4 text-[11px] text-white/30 font-mono uppercase tracking-[0.15em]">
+                    <p className="mt-4 text-[11px] text-[var(--text-disabled)] font-mono uppercase tracking-[0.15em]">
                       {t('components.onboarding.opening_cockpit')}
                     </p>
                   </div>
@@ -377,11 +378,11 @@ export default function OnboardingWizard({ open, onComplete }) {
                         <Radar className="w-7 h-7 text-violet-400" strokeWidth={1.5} />
                       </div>
                       <h3 className="text-base font-semibold text-white mb-2">{t('components.onboarding.ready_title')}</h3>
-                      <p className="text-sm text-white/45 leading-relaxed max-w-sm mx-auto">
+                      <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-sm mx-auto">
                         <Trans
                           i18nKey="components.onboarding.ready_body"
                           values={{ name: name.trim() }}
-                          components={{ 1: <span className="text-white/80 font-medium" /> }}
+                          components={{ 1: <span className="text-[var(--text-secondary)] font-medium" /> }}
                         />
                       </p>
                     </div>
@@ -393,15 +394,15 @@ export default function OnboardingWizard({ open, onComplete }) {
                     )}
 
                     <div className="flex gap-3">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => { setStep(2); setError('') }}
                         disabled={submitting}
-                        className="px-4 py-3 rounded-xl text-sm font-medium border border-white/10 text-white/50 hover:text-white/80 hover:border-white/20 transition-colors disabled:opacity-50"
+                        className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:border-[var(--border-strong)] transition-colors disabled:opacity-50"
                       >
                         {t('components.onboarding.back')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         type="button"
                         onClick={handleLaunchScan}
                         disabled={submitting}
@@ -418,7 +419,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                             {t('components.onboarding.launch_full_scan')}
                           </>
                         )}
-                      </button>
+                      </Button>
                     </div>
                   </>
                 )}

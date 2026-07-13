@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../lib/apiBase'
 import { launchEngineScan } from '../lib/launchEngineScan'
+import Button from './ui/Button'
 
 const ENGINE_IDS = [
   { id: 'supply_chain', color: 'emerald' },
@@ -163,7 +164,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
           className="soc-command-bar-input"
           aria-label={t('components.commandBar.target_placeholder')}
         />
-        <button
+        <Button variant="unstyled"
           type="button"
           disabled={loading != null}
           onClick={runFullScanAllClients}
@@ -171,13 +172,13 @@ export default function CommandBar({ onScanLaunched, onError }) {
           title={t('components.commandBar.scan_all_hint')}
         >
           {loading === 'run-all' ? '…' : t('components.commandBar.scan_all')}
-        </button>
+        </Button>
         <div className="soc-command-bar-engines">
           {ENGINE_IDS.map(({ id, color }) => {
             const label = t(`components.commandBar.engines.${id}.label`)
             const short = t(`components.commandBar.engines.${id}.short`)
             return (
-              <button
+              <Button variant="unstyled"
                 key={id}
                 type="button"
                 disabled={loading != null}
@@ -186,7 +187,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
                 title={label}
               >
                 {loading === id ? '…' : short}
-              </button>
+              </Button>
             )
           })}
         </div>

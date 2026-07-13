@@ -14,6 +14,7 @@ import { SkeletonCardGrid, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
+import Button from '../components/ui/Button'
 
 function fmtUsd(n) {
   if (n == null) return '$—'
@@ -265,7 +266,7 @@ export default function Clients() {
         ) : null}
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
             {error}
           </div>
         )}
@@ -278,7 +279,7 @@ export default function Clients() {
           }`}>
             <div className="font-medium text-sm">{scanToast.message}</div>
             {scanToast.kind === 'ok' && (
-              <div className="mt-1.5 text-xs text-white/45 font-mono">
+              <div className="mt-1.5 text-xs text-[var(--text-muted)] font-mono">
                 {t('clients_page.track_jobs')}{' '}
                 <Link to="/jobs" className="underline hover:text-emerald-200">{t('nav.jobs')}</Link>
                 {' · '}
@@ -341,7 +342,7 @@ export default function Clients() {
               return (
                 <article
                   key={client.id}
-                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur-md p-5 transition-all hover:border-violet-500/35 hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)]"
+                  className="group relative overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md p-5 transition-all hover:border-violet-500/35 hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)]"
                 >
                   <div
                     className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
@@ -354,7 +355,7 @@ export default function Clients() {
                         {client.name}
                       </h3>
                       {client.contact_email && (
-                        <p className="text-sm text-white/45 mt-1 truncate font-mono">{client.contact_email}</p>
+                        <p className="text-sm text-[var(--text-muted)] mt-1 truncate font-mono">{client.contact_email}</p>
                       )}
                     </div>
                     <Link
@@ -377,23 +378,23 @@ export default function Clients() {
                         {t('clients_page.at_risk')}
                       </span>
                       {!risk[client.id] && (
-                        <button
+                        <Button variant="unstyled"
                           type="button"
                           onClick={() => recomputeRisk(client.id)}
                           className="text-[10px] font-mono text-cyan-300/70 hover:text-cyan-200"
                           title={t('clients_page.compute_title')}
                         >
                           {t('clients_page.compute_risk')}
-                        </button>
+                        </Button>
                       )}
                     </div>
                     <div className="text-2xl font-bold text-rose-200 tabular-nums mt-1 tracking-tight">
                       {risk[client.id]
                         ? fmtUsd(risk[client.id].sle_worst_usd)
-                        : <span className="text-white/35 text-sm font-normal">{t('clients_page.no_snapshot')}</span>}
+                        : <span className="text-[var(--text-muted)] text-sm font-normal">{t('clients_page.no_snapshot')}</span>}
                     </div>
                     {risk[client.id] && (
-                      <div className="text-[10px] font-mono text-white/40 mt-1.5">
+                      <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1.5">
                         {t('clients_page.ale_crown', {
                           ale: fmtUsd(risk[client.id].ale_annualised_usd),
                           crown: fmtUsd(risk[client.id].crown_jewel_value_usd),
@@ -402,26 +403,26 @@ export default function Clients() {
                     )}
                   </div>
 
-                  <dl className="space-y-2 text-sm border-t border-white/8 pt-3">
+                  <dl className="space-y-2 text-sm border-t border-[var(--border-subtle)] pt-3">
                     <div className="flex items-center justify-between">
-                      <dt className="text-white/40 font-mono text-[11px]">{t('clients_page.domains_label')}</dt>
+                      <dt className="text-[var(--text-muted)] font-mono text-[11px]">{t('clients_page.domains_label')}</dt>
                       <dd className="text-white font-semibold tabular-nums">{domains.length}</dd>
                     </div>
                     <div className="flex items-center justify-between">
-                      <dt className="text-white/40 font-mono text-[11px]">{t('clients_page.ip_ranges_label')}</dt>
+                      <dt className="text-[var(--text-muted)] font-mono text-[11px]">{t('clients_page.ip_ranges_label')}</dt>
                       <dd className="text-white font-semibold tabular-nums">{ipRanges.length}</dd>
                     </div>
                     {client.created_at && (
-                      <div className="flex items-center justify-between pt-2 border-t border-white/8">
-                        <dt className="text-white/35 font-mono text-[10px]">{t('clients_page.created_label')}</dt>
-                        <dd className="text-white/50 font-mono text-[10px]">
+                      <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
+                        <dt className="text-[var(--text-muted)] font-mono text-[10px]">{t('clients_page.created_label')}</dt>
+                        <dd className="text-[var(--text-tertiary)] font-mono text-[10px]">
                           {new Date(client.created_at).toLocaleDateString()}
                         </dd>
                       </div>
                     )}
                   </dl>
 
-                  <div className="mt-4 pt-4 border-t border-white/8 flex items-center justify-between gap-2">
+                  <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
                     <Link
                       to={`/clients/${client.id}`}
                       className="text-sm text-violet-300 hover:text-violet-200 font-mono transition-colors"
@@ -429,23 +430,23 @@ export default function Clients() {
                       {t('clients_page.manage')}
                     </Link>
                     <div className="flex items-center gap-3">
-                      <button
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => runScan(client.id, client.name)}
                         disabled={scanningId === client.id || domains.length === 0}
-                        className="text-sm text-emerald-300 hover:text-emerald-200 disabled:text-white/25 disabled:cursor-not-allowed transition-colors font-mono"
+                        className="text-sm text-emerald-300 hover:text-emerald-200 disabled:text-[var(--text-disabled)] disabled:cursor-not-allowed transition-colors font-mono"
                         title={domains.length === 0 ? t('clients_page.scan_no_domain') : t('clients_page.scan_title')}
                       >
                         {scanningId === client.id ? t('clients_page.queuing') : t('clients_page.scan_now')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="unstyled"
                         type="button"
                         onClick={() => deleteClient(client.id, client.name)}
                         className="text-sm text-rose-400/80 hover:text-rose-300 transition-colors font-mono"
                         title={t('clients_page.delete_title')}
                       >
                         {t('clients_page.delete_client')}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </article>

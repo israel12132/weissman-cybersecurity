@@ -35,8 +35,9 @@ export default function Logo({ compact = false, size = 32, className = '', glow 
           </linearGradient>
           {!compact && (
             <linearGradient id={`${gradId}-wt`} x1="80" y1="0" x2="240" y2="0" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="#f1f5f9" />
-              <stop offset="1" stopColor="#94a3b8" />
+              {/* Theme-aware wordmark: reads as dark ink in light mode, bright in dark. */}
+              <stop offset="0" stopColor="var(--text-primary)" />
+              <stop offset="1" stopColor="var(--text-tertiary)" />
             </linearGradient>
           )}
         </defs>

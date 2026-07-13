@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -10,10 +10,12 @@ import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import FilterPills from '../components/ui/FilterPills'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import DataTable from '../components/ui/DataTable'
+import { useSavedViews } from '../hooks/useSavedViews'
 import SeverityBadge, { SEVERITY_META, getSeverityMeta } from '../components/ui/SeverityBadge'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import Button from '../components/ui/Button'
 
 const STATUS_COLORS = {
   OPEN: '#ef4444',
@@ -65,7 +67,7 @@ function buildColumns(t) {
       header: t('common.name'),
       size: 320,
       cell: ({ getValue }) => (
-        <span className="text-white/85 text-[12px] line-clamp-2 leading-snug">{getValue()}</span>
+        <span className="text-[var(--text-primary)] text-[12px] line-clamp-2 leading-snug">{getValue()}</span>
       ),
     }),
     columnHelper.accessor((row) => row.source || row.engine || '—', {
@@ -73,7 +75,7 @@ function buildColumns(t) {
       header: t('findings.source'),
       size: 140,
       cell: ({ getValue }) => (
-        <span className="text-white/55 font-mono text-[11px] truncate">{getValue()}</span>
+        <span className="text-[var(--text-tertiary)] font-mono text-[11px] truncate">{getValue()}</span>
       ),
     }),
     columnHelper.accessor((row) => (row.status || 'OPEN').toUpperCase(), {
@@ -98,7 +100,7 @@ function buildColumns(t) {
       header: t('findings.discovered'),
       size: 160,
       cell: ({ getValue }) => (
-        <span className="text-white/45 font-mono text-[11px] whitespace-nowrap">
+        <span className="text-[var(--text-muted)] font-mono text-[11px] whitespace-nowrap">
           {formatDate(getValue())}
         </span>
       ),
@@ -119,6 +121,23 @@ export default function VulnIntelDashboard() {
   const [total, setTotal] = useState(0)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [selected, setSelected] = useState(null)
+
+  // Saved views (named filter snapshots, per-user, localStorage)
+  const { views: savedViews, saveView, deleteView } = useSavedViews('weissman_vuln_views')
+  const [viewName, setViewName] = useState('')
+  const saveCurrentView = useCallback(() => {
+    const name = viewName.trim()
+    if (!name) return
+    saveView(name, { filter, severityFilter, statusFilter, kevFilter })
+    setViewName('')
+  }, [viewName, saveView, filter, severityFilter, statusFilter, kevFilter])
+  const applyView = useCallback((state) => {
+    if (!state) return
+    setFilter(state.filter ?? '')
+    setSeverityFilter(state.severityFilter ?? 'all')
+    setStatusFilter(state.statusFilter ?? '')
+    setKevFilter(Boolean(state.kevFilter))
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -243,7 +262,7 @@ export default function VulnIntelDashboard() {
           onRefresh={() => load()}
           refreshLabel={t('common.refresh')}
         >
-          <button
+          <Button variant="unstyled"
             type="button"
             onClick={exportCsv}
             disabled={filtered.length === 0}
@@ -251,14 +270,14 @@ export default function VulnIntelDashboard() {
           >
             <Download className="h-3.5 w-3.5" />
             {t('vuln_intel.export_csv')}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled"
             type="button"
             onClick={() => setFiltersExpanded((v) => !v)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-white/12 bg-white/[0.03] text-white/65 hover:text-white hover:border-white/25 transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-mono border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)] transition-all"
           >
             {filtersExpanded ? t('common.hide_filters') : t('common.show_filters')}
-          </button>
+          </Button>
         </PremiumPageHeader>
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -346,16 +365,42 @@ export default function VulnIntelDashboard() {
             />
 
             <div className="relative max-w-xl">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-xs pointer-events-none">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-disabled)] text-xs pointer-events-none">
                 ⌕
               </span>
               <input
                 type="search"
+                aria-label={t('findings.search_placeholder')}
                 placeholder={t('findings.search_placeholder')}
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono text-white/85 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                className="w-full bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
               />
+            </div>
+
+            {/* Saved views — named filter snapshots (per-user, local). */}
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border-subtle)]">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t('findings.views_label')}</span>
+              {savedViews.map((v) => (
+                <span key={v.id} className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] pl-2.5 pr-1 py-1 text-[11px] font-mono text-[var(--text-secondary)]">
+                  <Button variant="unstyled" type="button" onClick={() => applyView(v.state)} className="hover:text-cyan-300 transition-colors" title={t('findings.view_apply')}>{v.name}</Button>
+                  <Button variant="unstyled" type="button" onClick={() => deleteView(v.id)} aria-label={t('findings.view_delete', { name: v.name })} className="w-4 h-4 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-rose-300 transition-colors">×</Button>
+                </span>
+              ))}
+              {savedViews.length === 0 && (
+                <span className="text-[11px] font-mono text-[var(--text-disabled)]">{t('findings.views_empty')}</span>
+              )}
+              <form className="inline-flex items-center gap-1.5 ms-auto" onSubmit={(e) => { e.preventDefault(); saveCurrentView() }}>
+                <input
+                  type="text"
+                  value={viewName}
+                  onChange={(e) => setViewName(e.target.value)}
+                  placeholder={t('findings.view_name_placeholder')}
+                  aria-label={t('findings.view_name_placeholder')}
+                  className="w-40 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-cyan-500/40"
+                />
+                <Button variant="unstyled" type="submit" disabled={!viewName.trim()} className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-2.5 py-1.5 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">{t('findings.view_save')}</Button>
+              </form>
             </div>
           </div>
         )}
@@ -392,18 +437,19 @@ export default function VulnIntelDashboard() {
               selectedRowId={selectedRowId}
               getRowAccentColor={(row) => getSeverityMeta(row.severity).border}
               emptyFilteredMessage={t('vuln_intel.no_match_title')}
+              densityToggle
               zebra
               stickyHeader
             />
             {!loading && filtered.length > 200 && (
-              <p className="text-[11px] font-mono text-white/35 text-center">
+              <p className="text-[11px] font-mono text-[var(--text-muted)] text-center">
                 {t('vuln_intel.showing_first', { count: filtered.length })}
               </p>
             )}
           </>
         )}
 
-        <p className="text-[10px] font-mono text-white/30 text-center">
+        <p className="text-[10px] font-mono text-[var(--text-disabled)] text-center">
           {t('findings.shown_of_total', { shown: filtered.length, total })}
         </p>
       </div>

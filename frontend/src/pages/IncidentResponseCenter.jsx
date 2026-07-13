@@ -5,7 +5,7 @@
  * real-time timelines, containment / eradication actions, MTTR metrics.
  * Route: /incident-response
  */
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download } from 'lucide-react'
@@ -17,8 +17,52 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { usePageAutoRefresh } from '../hooks/usePageAutoRefresh'
+import { computeSla, slaBand, SLA_BAND_COLOR, slaCountdownLabel } from '../lib/incidentSla'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.incidentResponseCenter'
+
+/**
+ * Ticking clock for live SLA countdowns. Updates on a coarse interval
+ * (minute-granularity display doesn't need per-second churn) and pauses when
+ * the tab is hidden to avoid needless re-renders.
+ */
+function useNow(intervalMs = 30_000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now())
+    }
+    const id = setInterval(tick, intervalMs)
+    const onVis = () => { if (document.visibilityState === 'visible') setNow(Date.now()) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [intervalMs])
+  return now
+}
+
+/** Compact SLA countdown pill, colored by band. */
+function SlaBadge({ incident, now, t, showLabel = true }) {
+  const sla = computeSla(incident, now)
+  if (sla.unknown) return null
+  const band = slaBand(sla)
+  const color = SLA_BAND_COLOR[band]
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-wider"
+      style={{ color, borderColor: `${color}40`, background: `${color}10` }}
+      title={t(`${NS}.sla_tooltip`)}
+    >
+      {band === 'breached' && !sla.resolved ? '⚠ ' : ''}
+      {showLabel ? t(`${NS}.sla_prefix`) + ' ' : ''}
+      {slaCountdownLabel(sla, t)}
+    </span>
+  )
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -98,7 +142,7 @@ const STATUS_META = {
 
 function severityLabel(severity, t) {
   const s = String(severity ?? 'high').toLowerCase()
-  return t(`${NS}.severity_${s}`, { defaultValue: s.toUpperCase() })
+  return t(`${NS}.severity_${s}`)
 }
 
 function durationHuman(created, updated, t) {
@@ -164,19 +208,19 @@ function MetricCard({ label, value, sub, color, icon }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl bg-black/40 backdrop-blur border border-white/8 p-4 flex flex-col gap-1"
+      className="rounded-xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-subtle)] p-4 flex flex-col gap-1"
     >
       <div className="flex items-center gap-2">
         {icon && <span className="text-lg">{icon}</span>}
         <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: `${color}99` }}>{label}</span>
       </div>
       <div className="text-3xl font-bold font-mono" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-white/30 font-mono">{sub}</div>}
+      {sub && <div className="text-[10px] text-[var(--text-disabled)] font-mono">{sub}</div>}
     </motion.div>
   )
 }
 
-function IncidentRow({ incident, selected, onSelect, t }) {
+function IncidentRow({ incident, selected, onSelect, t, now }) {
   const sm = STATUS_META[incident.status] ?? { labelKey: null, color: '#6b7280' }
   const sc = SEVERITY_COLOR[incident.severity] ?? '#6b7280'
   const statusLabel = sm.labelKey ? t(sm.labelKey) : incident.status.toUpperCase()
@@ -196,7 +240,7 @@ function IncidentRow({ incident, selected, onSelect, t }) {
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="text-[10px] font-mono text-white/35">{incident.id}</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)]">{incident.id}</span>
             <span
               className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
               style={{ color: sm.color, borderColor: `${sm.color}40`, background: `${sm.color}10` }}
@@ -209,17 +253,18 @@ function IncidentRow({ incident, selected, onSelect, t }) {
             >
               {severityLabel(incident.severity, t)}
             </span>
+            <SlaBadge incident={incident} now={now} t={t} showLabel={false} />
           </div>
-          <p className="text-xs font-semibold text-white/85 leading-snug">{incident.title}</p>
+          <p className="text-xs font-semibold text-[var(--text-primary)] leading-snug">{incident.title}</p>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-[10px] font-mono text-white/30">{incident.source}</div>
-          <div className="text-[10px] font-mono text-white/20">{durationHuman(incident.created, incident.updated, t)}</div>
+          <div className="text-[10px] font-mono text-[var(--text-disabled)]">{incident.source}</div>
+          <div className="text-[10px] font-mono text-[var(--text-disabled)]">{durationHuman(incident.created, incident.updated, t)}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
         {incident.affectedAssets.map((a) => (
-          <span key={a} className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-white/45">
+          <span key={a} className="text-[9px] font-mono px-1.5 py-0.5 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded text-[var(--text-muted)]">
             {a}
           </span>
         ))}
@@ -235,14 +280,14 @@ function Timeline({ events }) {
         <div key={i} className="flex gap-3">
           <div className="flex flex-col items-center gap-0">
             <span className="w-2 h-2 rounded-full bg-cyan-400/70 shrink-0 mt-0.5" />
-            {i < events.length - 1 && <div className="w-px flex-1 bg-white/10 mt-1 min-h-[20px]" />}
+            {i < events.length - 1 && <div className="w-px flex-1 bg-[var(--row-hover-bg)] mt-1 min-h-[20px]" />}
           </div>
           <div className="pb-3 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="text-[10px] font-mono text-cyan-400/70">{e.t}</span>
-              <span className="text-[9px] font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-white/40">{e.actor}</span>
+              <span className="text-[9px] font-mono bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">{e.actor}</span>
             </div>
-            <p className="text-xs text-white/65 leading-relaxed">{e.msg}</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{e.msg}</p>
           </div>
         </div>
       ))}
@@ -259,10 +304,10 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">{t(pb.labelKey)}</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(pb.labelKey)}</span>
         <span className="text-[10px] font-mono" style={{ color: barColor }}>{done}/{steps.length} ({pct}%)</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/5 mb-4 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[var(--row-hover-bg)] mb-4 overflow-hidden">
         <motion.div
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.5 }}
@@ -278,7 +323,7 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
             <motion.div
               key={step.id}
               layout
-              className="flex items-start gap-3 rounded-lg p-2.5 border transition-all cursor-pointer hover:border-white/20"
+              className="flex items-start gap-3 rounded-lg p-2.5 border transition-all cursor-pointer hover:border-[var(--border-strong)]"
               style={{
                 borderColor: step.done ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.07)',
                 background: step.done ? 'rgba(34,211,238,0.04)' : 'rgba(0,0,0,0.2)',
@@ -303,12 +348,12 @@ function PlaybookSteps({ playbookId, onToggle, steps, t }) {
                     {phaseLabel}
                   </span>
                   {step.mitre && (
-                    <span className="text-[9px] font-mono text-white/25 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded">
                       {step.mitre}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-white/70 mt-0.5" style={{ textDecoration: step.done ? 'line-through' : 'none', opacity: step.done ? 0.4 : 0.85 }}>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5" style={{ textDecoration: step.done ? 'line-through' : 'none', opacity: step.done ? 0.4 : 0.85 }}>
                   {t(step.actionKey)}
                 </p>
               </div>
@@ -330,9 +375,11 @@ export default function IncidentResponseCenter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [stepSaving, setStepSaving] = useState(false)
+  const now = useNow(30_000)
 
-  const loadIncidents = useCallback(async () => {
-    setLoading(true)
+  const loadIncidents = useCallback(async (opts) => {
+    const silent = opts?.silent === true
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const r = await apiFetch('/api/soc/incidents')
@@ -342,15 +389,19 @@ export default function IncidentResponseCenter() {
       setIncidents(list)
       setSelectedId((prev) => prev ?? list[0]?.id ?? null)
     } catch (e) {
-      setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
+      // A background refresh must not blow away a working view with an error.
+      if (!silent) setError(e.message ?? t('pages.incidentResponseCenter.load_failed'))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [t])
 
   useEffect(() => {
     loadIncidents()
   }, [loadIncidents])
+
+  // Keep the queue live without a full-page skeleton flash.
+  usePageAutoRefresh(() => loadIncidents({ silent: true }), 30_000, true)
 
   const selected = useMemo(() => incidents.find((i) => i.id === selectedId), [incidents, selectedId])
 
@@ -411,20 +462,24 @@ export default function IncidentResponseCenter() {
     const avgH = incidents.length
       ? (totalMs / incidents.length / 3_600_000).toFixed(1)
       : '0.0'
-    return { active, crit, resolved, avgH }
-  }, [incidents])
+    // Open incidents already past their SLA target — the number an IR lead
+    // watches. Recomputed on the SLA clock tick.
+    const slaBreaching = incidents.filter(
+      (i) => i.status !== 'resolved' && computeSla(i, now).breached,
+    ).length
+    return { active, crit, resolved, avgH, slaBreaching }
+  }, [incidents, now])
 
   const listFindings = useMemo(() => incidents.map((i) => ({
     id: i.id,
     severity: i.severity || 'medium',
     title: i.title || i.id,
     type: i.status || 'incident',
-    description: i.summary || '',
+    description: i.description || '',
     resource: i.assignee || '',
   })), [incidents])
 
   const {
-    exportCsv,
     filteredFindings,
     searchQuery,
     setSearchQuery,
@@ -469,15 +524,22 @@ export default function IncidentResponseCenter() {
       ) : (
         <>
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         <MetricCard label={t(`${NS}.active_incidents`)} value={metrics.active} sub={t(`${NS}.active_sub`)} color="#ef4444" icon="🔥" />
         <MetricCard label={t(`${NS}.critical_severity`)} value={metrics.crit} sub={t(`${NS}.critical_sub`)} color="#f97316" icon="⚠️" />
+        <MetricCard
+          label={t(`${NS}.sla_breaching`)}
+          value={metrics.slaBreaching}
+          sub={t(`${NS}.sla_breaching_sub`)}
+          color={metrics.slaBreaching > 0 ? '#ef4444' : '#4ade80'}
+          icon="⏳"
+        />
         <MetricCard label={t(`${NS}.avg_mttr`)} value={`${metrics.avgH}h`} sub={t(`${NS}.mttr_sub`)} color="#22d3ee" icon="⏱️" />
         <MetricCard label={t(`${NS}.resolved_7d`)} value={metrics.resolved} sub={t(`${NS}.resolved_sub`)} color="#4ade80" icon="✅" />
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono mb-6">
+        <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono mb-6">
           {error}
         </div>
       )}
@@ -496,15 +558,15 @@ export default function IncidentResponseCenter() {
         {/* ── Left: Incident List ───────────────────────────────────────── */}
         <div className="space-y-2">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-white/30">{t(`${NS}.incident_queue`)}</h2>
-            <button
+            <h2 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-disabled)]">{t(`${NS}.incident_queue`)}</h2>
+            <Button variant="unstyled"
               type="button"
               onClick={() => exportIncidentsCsv(incidents)}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-cyan-500/30 text-[10px] font-mono text-cyan-300/80 hover:bg-cyan-500/10"
             >
               <Download className="w-3 h-3" />
               {t(`${NS}.export_csv`)}
-            </button>
+            </Button>
           </div>
           <WeissmanListToolbar
             searchQuery={searchQuery}
@@ -513,7 +575,7 @@ export default function IncidentResponseCenter() {
             totalCount={incidents.length}
           />
           {visibleIncidents.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">{t('weissmanFindings.filtered_title')}</div>
+            <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
           ) : visibleIncidents.map((inc) => (
             <IncidentRow
               key={inc.id}
@@ -521,6 +583,7 @@ export default function IncidentResponseCenter() {
               selected={selectedId === inc.id}
               onSelect={setSelectedId}
               t={t}
+              now={now}
             />
           ))}
         </div>
@@ -533,12 +596,12 @@ export default function IncidentResponseCenter() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="rounded-2xl bg-black/40 backdrop-blur border border-white/10 p-6 space-y-6"
+              className="rounded-2xl bg-[var(--bg-2)] backdrop-blur border border-[var(--border-default)] p-6 space-y-6"
             >
               {/* Header */}
               <div>
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-[10px] font-mono text-white/30">{selected.id}</span>
+                  <span className="text-[10px] font-mono text-[var(--text-disabled)]">{selected.id}</span>
                   <span
                     className="text-[9px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-widest"
                     style={{
@@ -562,33 +625,47 @@ export default function IncidentResponseCenter() {
                     {severityLabel(selected.severity, t)}
                   </span>
                   {selected.mitre && (
-                    <span className="text-[9px] font-mono text-white/25 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-mono text-[var(--text-disabled)] bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-1.5 py-0.5 rounded">
                       {selected.mitre}
                     </span>
                   )}
                 </div>
                 <h2 className="text-sm font-bold text-white mb-2">{selected.title}</h2>
-                <p className="text-xs text-white/50 leading-relaxed">{selected.description}</p>
+                <p className="text-xs text-[var(--text-tertiary)] leading-relaxed">{selected.description}</p>
               </div>
 
               {/* Meta row */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: t('pages.incidentResponseCenter.assignee'), value: selected.assignee },
                   { label: t('pages.incidentResponseCenter.source'), value: selected.source },
                   { label: t(`${NS}.duration`), value: durationHuman(selected.created, selected.updated, t) },
                 ].map(({ label, value }) => (
-                  <div key={label} className="rounded-lg bg-black/30 border border-white/8 p-3">
-                    <div className="text-[9px] font-mono uppercase tracking-widest text-white/25 mb-1">{label}</div>
-                    <div className="text-xs font-semibold text-white/75">{value}</div>
+                  <div key={label} className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+                    <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-1">{label}</div>
+                    <div className="text-xs font-semibold text-[var(--text-secondary)]">{value}</div>
                   </div>
                 ))}
+                {(() => {
+                  const sla = computeSla(selected, now)
+                  const color = SLA_BAND_COLOR[slaBand(sla)]
+                  return (
+                    <div className="rounded-lg bg-[var(--table-surface)] border border-[var(--border-subtle)] p-3">
+                      <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-disabled)] mb-1">
+                        {t(`${NS}.sla_prefix`)}
+                      </div>
+                      <div className="text-xs font-semibold" style={{ color }}>
+                        {sla.unknown ? '—' : slaCountdownLabel(sla, t)}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Tabs */}
-              <div className="flex gap-2 border-b border-white/10 pb-2">
+              <div className="flex gap-2 border-b border-[var(--border-default)] pb-2">
                 {['timeline', 'playbook'].map((tabKey) => (
-                  <button
+                  <Button variant="unstyled"
                     key={tabKey}
                     type="button"
                     onClick={() => setTab(tabKey)}
@@ -600,7 +677,7 @@ export default function IncidentResponseCenter() {
                     }}
                   >
                     {tabKey === 'timeline' ? t('pages.incidentResponseCenter.tab_timeline') : t('pages.incidentResponseCenter.tab_playbook')}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -608,7 +685,7 @@ export default function IncidentResponseCenter() {
                 selected.timeline.length > 0 ? (
                   <Timeline events={selected.timeline} />
                 ) : (
-                  <p className="text-xs text-white/35 font-mono">
+                  <p className="text-xs text-[var(--text-muted)] font-mono">
                     {t(`${NS}.no_timeline`)}
                   </p>
                 )
