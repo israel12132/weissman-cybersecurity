@@ -14,41 +14,6 @@ macro_rules! cli_wrapper {
     };
 }
 
-async fn missing_header_finding(
-    target: &str,
-    engine_id: &str,
-    title: &str,
-    mitre: &str,
-    headers: &[&str],
-) -> EngineResult {
-    if target.trim().is_empty() {
-        return EngineResult::error("target required");
-    }
-    let client = http_client().await;
-    let url = normalize_url(target);
-    let mut findings: Vec<Value> = Vec::new();
-    if let Some(p) = http_get(&client, &url).await {
-        for h in headers {
-            if !has_header(&p.headers, h) {
-                findings.push(finding(
-                    engine_id,
-                    &format!("{}: missing {}", title, h),
-                    "low",
-                    mitre,
-                    &format!("Response from {} lacks header '{}'.", p.final_url, h),
-                    target,
-                ));
-            }
-        }
-    }
-    if findings.is_empty() {
-        empty_ok(engine_id, target)
-    } else {
-        let n = findings.len();
-        EngineResult::ok(findings, format!("{}: {} missing header(s)", engine_id, n))
-    }
-}
-
 pub async fn run_process_hollowing_result(t: &str) -> EngineResult {
     crate::engine_probes::agent_required_ok(
         "process_hollowing",
@@ -60,7 +25,12 @@ pub async fn run_process_hollowing_result(t: &str) -> EngineResult {
 cli_wrapper!(run_process_hollowing, run_process_hollowing_result);
 
 pub async fn run_dll_hijacking_engine_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "dll_hijacking_engine",
+        t,
+        "DLL search-order / phantom-DLL hijacking requires host filesystem + loader inspection",
+        "T1574.001 plants a malicious DLL in a writable path earlier in a legitimate process's search order — a host filesystem/loader condition with no network signal. The Weissman agent audits DLL search paths, unsigned module loads, and phantom-DLL write targets.",
+    )
 }
 cli_wrapper!(run_dll_hijacking_engine, run_dll_hijacking_engine_result);
 
@@ -198,12 +168,22 @@ pub async fn run_living_off_land_result(t: &str) -> EngineResult {
 cli_wrapper!(run_living_off_land, run_living_off_land_result);
 
 pub async fn run_sandbox_evasion_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "sandbox_evasion",
+        t,
+        "Sandbox-evasion detection requires detonation telemetry",
+        "T1497 environment checks (VM artifacts, user-activity, timing) run inside the sample on the host to decide whether to detonate — not observable over HTTP. The Weissman agent performs instrumented detonation and flags environment-fingerprinting behavior.",
+    )
 }
 cli_wrapper!(run_sandbox_evasion, run_sandbox_evasion_result);
 
 pub async fn run_rootkit_surface_probe_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "rootkit_surface_probe",
+        t,
+        "Rootkit assessment requires kernel/host integrity inspection",
+        "T1014 rootkits hide processes, files and sockets from userland by patching the kernel or hooking syscalls — a network scan cannot see what the kernel is told to hide. The Weissman agent cross-checks kernel structures, SSDT/IDT hooks, and hidden-object discrepancies.",
+    )
 }
 cli_wrapper!(run_rootkit_surface_probe, run_rootkit_surface_probe_result);
 
@@ -214,7 +194,12 @@ pub async fn run_rootkit_simulation_result(t: &str) -> EngineResult {
 cli_wrapper!(run_rootkit_simulation, run_rootkit_simulation_result);
 
 pub async fn run_memory_forensics_evasion_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "memory_forensics_evasion",
+        t,
+        "Memory-forensics evasion requires live-memory acquisition",
+        "T1055/T1620 direct-kernel-object manipulation, unlinked pages and anti-dump tricks defeat post-mortem analysis in RAM — a network probe cannot see process memory. The Weissman agent runs volatile-memory integrity checks and detects hidden/unlinked artifacts.",
+    )
 }
 cli_wrapper!(
     run_memory_forensics_evasion,
@@ -222,7 +207,12 @@ cli_wrapper!(
 );
 
 pub async fn run_av_bypass_engine_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "av_bypass_engine",
+        t,
+        "AV/EDR bypass validation requires host endpoint telemetry",
+        "T1562.001 bypass (userland unhooking, AMSI patching, direct syscalls) manipulates the local security stack inside a process — invisible to a remote probe. The Weissman agent detects hook tampering, AMSI/ETW patching, and direct-syscall stubs.",
+    )
 }
 cli_wrapper!(run_av_bypass_engine, run_av_bypass_engine_result);
 
@@ -332,24 +322,32 @@ pub async fn run_https_c2_masquerade_result(t: &str) -> EngineResult {
 cli_wrapper!(run_https_c2_masquerade, run_https_c2_masquerade_result);
 
 pub async fn run_icmp_covert_result(t: &str) -> EngineResult {
-    missing_header_finding(
-        t,
+    crate::engine_probes::agent_required_ok(
         "icmp_covert",
-        "ICMP exposure surface",
-        "T1095",
-        &["x-trace-id"],
+        t,
+        "ICMP covert-channel detection requires packet-level traffic inspection",
+        "T1095 covert channels tunnel data inside ICMP echo payloads and inter-packet timing — detectable only by inspecting the packet stream, not HTTP headers. The Weissman agent / network sensor performs ICMP payload-entropy and timing analysis.",
     )
-    .await
 }
 cli_wrapper!(run_icmp_covert, run_icmp_covert_result);
 
 pub async fn run_rop_chain_engine_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "rop_chain_engine",
+        t,
+        "ROP/JOP chain execution requires host runtime inspection",
+        "T1055 return/jump-oriented programming reuses in-memory gadgets while exploiting a live process — there is no network-observable signal. The Weissman agent enforces CFI / shadow-stack telemetry and detects gadget-chain execution.",
+    )
 }
 cli_wrapper!(run_rop_chain_engine, run_rop_chain_engine_result);
 
 pub async fn run_heap_exploitation_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "heap_exploitation",
+        t,
+        "Heap exploitation requires host memory / runtime instrumentation",
+        "T1055 heap grooming, use-after-free and allocator-metadata corruption happen inside a live process's memory — invisible to HTTP/DNS probes. The Weissman agent instruments allocator telemetry and flags heap-spray / corruption patterns at runtime.",
+    )
 }
 cli_wrapper!(run_heap_exploitation, run_heap_exploitation_result);
 
@@ -359,24 +357,32 @@ pub async fn run_timing_evasion_engine_result(t: &str) -> EngineResult {
 cli_wrapper!(run_timing_evasion_engine, run_timing_evasion_engine_result);
 
 pub async fn run_log_tampering_engine_result(t: &str) -> EngineResult {
-    missing_header_finding(
-        t,
+    crate::engine_probes::agent_required_ok(
         "log_tampering_engine",
-        "Audit chain headers",
-        "T1562.008",
-        &["x-request-id", "x-trace-id"],
+        t,
+        "Log-tampering detection requires audit-trail integrity telemetry",
+        "T1562.008 clears or modifies audit logs on the host or in the cloud control plane — confirmable only against the actual log store, not response headers. The Weissman agent + SIEM integration verify append-only audit-chain integrity and detect gaps/clears.",
     )
-    .await
 }
 cli_wrapper!(run_log_tampering_engine, run_log_tampering_engine_result);
 
 pub async fn run_jit_spray_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "jit_spray",
+        t,
+        "JIT spray requires host JIT-page inspection",
+        "T1055 JIT spray writes executable gadgets into a JIT compiler's code cache on the victim host — not observable from a remote probe. The Weissman agent monitors RWX JIT pages and anomalous code-cache growth.",
+    )
 }
 cli_wrapper!(run_jit_spray, run_jit_spray_result);
 
 pub async fn run_com_hijacking_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "com_hijacking",
+        t,
+        "COM hijacking requires host registry inspection",
+        "T1546.015 redirects a COM CLSID to an attacker DLL via HKCU registry keys, executed on the host — no remote signal. The Weissman agent audits COM CLSID registrations and hijackable InprocServer32 entries.",
+    )
 }
 cli_wrapper!(run_com_hijacking, run_com_hijacking_result);
 
@@ -389,11 +395,21 @@ cli_wrapper!(
 );
 
 pub async fn run_anti_debug_evasion_result(t: &str) -> EngineResult {
-    crate::antiforensics_engine::run_antiforensics_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "anti_debug_evasion",
+        t,
+        "Anti-debug technique detection requires host process telemetry",
+        "T1622 anti-debugging (IsDebuggerPresent, timing checks, INT3 scanning) runs inside the target process against a debugger — invisible to a network probe. The Weissman agent correlates anti-debug API usage and process self-inspection.",
+    )
 }
 cli_wrapper!(run_anti_debug_evasion, run_anti_debug_evasion_result);
 
 pub async fn run_parent_pid_spoof_result(t: &str) -> EngineResult {
-    crate::edr_evasion_engine::run_edr_evasion_result(t).await
+    crate::engine_probes::agent_required_ok(
+        "parent_pid_spoof",
+        t,
+        "Parent-PID spoofing requires host process-tree telemetry",
+        "T1134.004 forges a process's parent to blend malicious children under a trusted process — a host process-creation event invisible to network probes. The Weissman agent reconstructs the true process tree and flags PPID/creator mismatches.",
+    )
 }
 cli_wrapper!(run_parent_pid_spoof, run_parent_pid_spoof_result);

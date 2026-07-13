@@ -19,6 +19,7 @@ import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { isTopTierEngine } from '../lib/topTierEngineProfiles'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
+import EngineAccountingBanner from '../components/engine/EngineAccountingBanner'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { fetchEngineHistorySummary, invalidateEngineHistorySummary } from '../lib/engineHistorySummary'
@@ -794,6 +795,7 @@ export default function EngineMatrix() {
 
       <main className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5">
         <EngineHubForensicHeader evidence={t('engines.evidence_notice')} />
+        <EngineAccountingBanner />
         {lastMatrixSync && (
           <p className="text-[10px] font-mono text-white/35 -mt-3">
             {t('weissmanFindings.last_updated', { time: lastMatrixSync.toLocaleString() })}

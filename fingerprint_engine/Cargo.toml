@@ -42,6 +42,9 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-r
 openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
 oauth2 = { version = "5", default-features = false, features = ["reqwest"] }
 url = "2.5"
+# Full IANA Public Suffix List matching + IDN (punycode) normalization for the
+# target-intelligence classifier (target_profile.rs).
+idna = "1"
 uuid = { version = "1", features = ["v4"] }
 quick-xml = "0.31"
 flate2 = "1"

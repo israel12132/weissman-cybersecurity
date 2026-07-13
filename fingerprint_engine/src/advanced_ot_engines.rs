@@ -3,8 +3,9 @@
 //! require an enrolled endpoint agent (no HTTP stand-ins).
 
 use crate::engine_probes::{
-    agent_required_ok, empty_ok, extract_host, finding, http_client, http_get, join_url,
-    normalize_url, status_indicates_presence, tcp_open, tcp_probe_response, udp_probe_response,
+    agent_required_ok, empty_ok, extract_host, finding, header_value, http_client, http_get,
+    join_url, normalize_url, status_indicates_presence, tcp_open, tcp_probe_response,
+    udp_probe_response,
 };
 use crate::engine_result::{print_result, EngineResult};
 use crate::ot_ics_engine::{
@@ -783,29 +784,134 @@ pub async fn run_plc_logic_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_plc_logic_attack, run_plc_logic_attack_result);
 
+/// Match a known OT/embedded product from an HTTP Server header + body.
+fn match_ot_signature<'a>(
+    body_low: &str,
+    server_low: &str,
+    sigs: &[(&str, &'a str)],
+) -> Option<&'a str> {
+    sigs.iter()
+        .find(|(needle, _)| body_low.contains(needle) || server_low.contains(needle))
+        .map(|(_, product)| *product)
+}
+
+/// Fetch the web surface on the given ports and identify a specific OT/embedded
+/// product from the Server header + body (real fingerprinting, not a bare TCP
+/// connect). Confirmed products are reported at `severity`; a reachable-but-
+/// unidentified web service is reported as `medium`; falls back to `empty_ok`.
+async fn ot_web_fingerprint(
+    t: &str,
+    engine_id: &str,
+    title: &str,
+    severity: &str,
+    mitre: &str,
+    ports: &[u16],
+    sigs: &[(&str, &str)],
+    note: &str,
+) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let client = http_client().await;
+    let mut findings: Vec<Value> = Vec::new();
+    for &port in ports {
+        if !tcp_open(&host, port).await {
+            continue;
+        }
+        let scheme = if matches!(port, 443 | 8443) {
+            "https"
+        } else {
+            "http"
+        };
+        let url = format!("{scheme}://{host}:{port}/");
+        let Some(p) = http_get(&client, &url).await else {
+            continue;
+        };
+        let server_low = header_value(&p.headers, "server")
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let body_low = p.body.to_ascii_lowercase();
+        if let Some(product) = match_ot_signature(&body_low, &server_low, sigs) {
+            findings.push(finding(
+                engine_id,
+                &format!("{title}: {product} identified"),
+                severity,
+                mitre,
+                &format!("{host}:{port} ({scheme}) fingerprinted as {product}. {note}"),
+                t,
+            ));
+        } else {
+            findings.push(finding(
+                engine_id,
+                &format!("{title}: web service on {port}"),
+                "medium",
+                mitre,
+                &format!(
+                    "{host}:{port} ({scheme}) serves HTTP (server='{server_low}') but the product was not fingerprinted. {note}"
+                ),
+                t,
+            ));
+        }
+    }
+    if findings.is_empty() {
+        empty_ok(engine_id, t)
+    } else {
+        let n = findings.len();
+        EngineResult::ok(findings, format!("{engine_id}: {n} web surface signal(s)"))
+    }
+}
+
+static HMI_SIGNATURES: &[(&str, &str)] = &[
+    ("ignition", "Inductive Automation Ignition"),
+    ("factorytalk", "Rockwell FactoryTalk"),
+    ("wincc", "Siemens WinCC"),
+    ("simatic", "Siemens SIMATIC"),
+    ("wonderware", "AVEVA/Wonderware"),
+    ("aveva", "AVEVA"),
+    ("niagara", "Tridium Niagara"),
+    ("citect", "AVEVA Citect"),
+    ("ge digital", "GE Digital"),
+    ("ifix", "GE iFIX"),
+    ("scada", "Generic SCADA HMI"),
+];
+
 pub async fn run_hmi_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(
+    ot_web_fingerprint(
         t,
         "hmi_attack",
         "HMI / SCADA web UI",
         "high",
         "T0822",
         &[80, 443, 8080, 8443],
-        "Web-based HMI surfaces.",
+        HMI_SIGNATURES,
+        "Web-based HMIs frequently ship default or weak credentials — verify authentication and network segmentation.",
     )
     .await
 }
 cli_wrapper!(run_hmi_attack, run_hmi_attack_result);
 
+static SATCOM_SIGNATURES: &[(&str, &str)] = &[
+    ("idirect", "iDirect VSAT gateway"),
+    ("hughes", "Hughes satellite gateway"),
+    ("comtech", "Comtech modem"),
+    ("newtec", "Newtec/ST Engineering modem"),
+    ("gilat", "Gilat VSAT"),
+    ("viasat", "Viasat terminal"),
+    ("vsat", "Generic VSAT gateway"),
+    ("satellite", "Satellite management console"),
+];
+
 pub async fn run_satellite_comm_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(
+    ot_web_fingerprint(
         t,
         "satellite_comm_attack",
         "Satellite gateway management",
-        "medium",
+        "high",
         "T0883",
-        &[443, 8443, 8000],
-        "VSAT gateway HTTP admin candidates.",
+        &[443, 8443, 8000, 80],
+        SATCOM_SIGNATURES,
+        "Exposed VSAT/satellite modem management enables link disruption and config tampering — restrict to an out-of-band management network.",
     )
     .await
 }
@@ -833,21 +939,61 @@ pub async fn run_profinet_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_profinet_attack, run_profinet_attack_result);
 
+static RFID_SIGNATURES: &[(&str, &str)] = &[
+    ("impinj", "Impinj RFID reader"),
+    ("zebra", "Zebra RFID reader"),
+    ("alien technology", "Alien Technology RFID"),
+    ("thingmagic", "JADAK ThingMagic RFID"),
+    ("nordic id", "Nordic ID RFID"),
+    ("rfid", "RFID middleware"),
+    ("nfc", "NFC gateway"),
+];
+
 pub async fn run_rfid_nfc_attack_result(t: &str) -> EngineResult {
-    port_probe_finding(
+    ot_web_fingerprint(
         t,
         "rfid_nfc_attack",
         "RFID/NFC gateway",
-        "low",
+        "medium",
         "T0809",
-        &[8080, 80],
-        "RFID middleware HTTP admin candidates.",
+        &[8080, 80, 443],
+        RFID_SIGNATURES,
+        "Exposed RFID middleware can be abused to clone/replay access credentials — restrict management access.",
     )
     .await
 }
 cli_wrapper!(run_rfid_nfc_attack, run_rfid_nfc_attack_result);
 
 pub async fn run_industrial_protocol_fuzz_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    // Real, read-only ICS protocol handshakes (not a bare TCP connect): send an
+    // actual Modbus FC-03 read, an OPC-UA HEL/ACK discovery, and a BACnet
+    // ReadProperty, then report every protocol that genuinely answers with
+    // fingerprint evidence. Reuses the vetted probes from `ot_ics_engine`.
+    let mut findings: Vec<Value> = Vec::new();
+    if let Some(fp) = probe_modbus_function_code(&host).await {
+        findings.push(ot_fingerprint_finding(&fp, "industrial_protocol_fuzz", t));
+    }
+    if let Some(fp) = probe_opcua_discovery(&host).await {
+        findings.push(ot_fingerprint_finding(&fp, "industrial_protocol_fuzz", t));
+    }
+    if let Some(fp) = probe_bacnet_read_property(&host).await {
+        findings.push(ot_fingerprint_finding(&fp, "industrial_protocol_fuzz", t));
+    }
+    if !findings.is_empty() {
+        let n = findings.len();
+        return EngineResult::ok(
+            findings,
+            format!(
+                "industrial_protocol_fuzz: {n} ICS protocol handshake(s) confirmed via live probes"
+            ),
+        );
+    }
+    // No handshake confirmed — fall back to the open-port surface so coverage
+    // never regresses.
     port_probe_finding(
         t,
         "industrial_protocol_fuzz",
@@ -855,7 +1001,7 @@ pub async fn run_industrial_protocol_fuzz_result(t: &str) -> EngineResult {
         "high",
         "T0843",
         &[502, 102, 20000, 4840, 44818],
-        "Common ICS ports to fuzz under controlled conditions.",
+        "ICS ports reachable but no Modbus/OPC-UA/BACnet handshake confirmed — fuzz under authorized, controlled conditions.",
     )
     .await
 }
@@ -924,5 +1070,27 @@ mod mqtt_tests {
         assert_eq!(parse_mqtt_connack(&[0x20, 0x02, 0x00, 0x05]), Some(0x05));
         assert_eq!(parse_mqtt_connack(&[0x30, 0x02, 0x00, 0x00]), None); // not a CONNACK
         assert_eq!(parse_mqtt_connack(&[0x20, 0x02]), None); // too short
+    }
+}
+
+#[cfg(test)]
+mod ot_web_fingerprint_tests {
+    use super::match_ot_signature;
+
+    #[test]
+    fn matches_product_from_body_or_server() {
+        let sigs: &[(&str, &str)] = &[
+            ("ignition", "Inductive Automation Ignition"),
+            ("wincc", "Siemens WinCC"),
+        ];
+        assert_eq!(
+            match_ot_signature("welcome to ignition gateway", "", sigs),
+            Some("Inductive Automation Ignition")
+        );
+        assert_eq!(
+            match_ot_signature("", "wincc/7.5", sigs),
+            Some("Siemens WinCC")
+        );
+        assert_eq!(match_ot_signature("nothing here", "nginx", sigs), None);
     }
 }
