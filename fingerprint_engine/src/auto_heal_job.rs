@@ -503,6 +503,16 @@ pub async fn run_auto_heal_job(
         .unwrap_or_default();
     let channel = crate::heal_channels::DeliveryChannel::from_id(&channel_id);
 
+    // Serialize the start path per (tenant, finding) with a transaction-scoped advisory lock, so two
+    // workers can't both pass the running-dupe check and start the same heal. The lock releases when
+    // this short guard transaction commits below (before the long sandbox work), so it only
+    // serializes the check→transition, not the actual healing. Fail-open: if the lock can't be taken
+    // we fall back to the (racy) count check rather than blocking the job.
+    let _ = sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("{tenant_id}:{finding_id}"))
+        .execute(&mut *tx)
+        .await;
+
     // Concurrency guard: never run the sandbox for a finding that another spec is already healing
     // (two workers picking up heals for the same finding would waste work and race on the branch).
     let running_dupe: i64 = sqlx::query_scalar(

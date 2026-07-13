@@ -285,8 +285,12 @@ pub fn spawn_pool_metrics_loop(
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
         tick.tick().await;
+        // Cheap pool/dependency gauges run every 10s tick; the heavier heal_requests aggregation
+        // (a full GROUP BY) runs at a slower cadence to keep it off the /api/metrics hot path.
+        let mut iter: u64 = 0;
         loop {
             tick.tick().await;
+            iter = iter.wrapping_add(1);
             metrics::gauge!("weissman_db_pool_size", "pool" => "app").set(app_pool.size() as f64);
             metrics::gauge!("weissman_db_pool_idle", "pool" => "app")
                 .set(app_pool.num_idle() as f64);
@@ -335,31 +339,35 @@ pub fn spawn_pool_metrics_loop(
                 },
             );
 
-            // Auto-heal outcome distribution + success rate, from heal_requests.
-            if let Ok(rows) = sqlx::query_as::<_, (String, i64)>(
-                "SELECT COALESCE(verdict, 'unknown') AS verdict, count(*)::bigint \
-                 FROM heal_requests GROUP BY 1",
-            )
-            .fetch_all(app_pool.as_ref())
-            .await
-            {
-                let mut total: i64 = 0;
-                let mut fixed: i64 = 0;
-                for (verdict, n) in &rows {
-                    metrics::gauge!("weissman_heal_by_verdict", "verdict" => verdict.clone())
-                        .set(*n as f64);
-                    total += *n;
-                    if verdict == "fixed" {
-                        fixed += *n;
+            // Auto-heal outcome distribution + success rate, from heal_requests. Run every ~60s
+            // (and immediately on the first pass) rather than every 10s — a full GROUP BY scan is
+            // too heavy for the metrics hot path as the table grows.
+            if iter % 6 == 1 {
+                if let Ok(rows) = sqlx::query_as::<_, (String, i64)>(
+                    "SELECT COALESCE(verdict, 'unknown') AS verdict, count(*)::bigint \
+                     FROM heal_requests GROUP BY 1",
+                )
+                .fetch_all(app_pool.as_ref())
+                .await
+                {
+                    let mut total: i64 = 0;
+                    let mut fixed: i64 = 0;
+                    for (verdict, n) in &rows {
+                        metrics::gauge!("weissman_heal_by_verdict", "verdict" => verdict.clone())
+                            .set(*n as f64);
+                        total += *n;
+                        if verdict == "fixed" {
+                            fixed += *n;
+                        }
                     }
+                    metrics::gauge!("weissman_heal_total_requests").set(total as f64);
+                    let rate = if total > 0 {
+                        fixed as f64 / total as f64
+                    } else {
+                        0.0
+                    };
+                    metrics::gauge!("weissman_heal_success_rate").set(rate);
                 }
-                metrics::gauge!("weissman_heal_total_requests").set(total as f64);
-                let rate = if total > 0 {
-                    fixed as f64 / total as f64
-                } else {
-                    0.0
-                };
-                metrics::gauge!("weissman_heal_success_rate").set(rate);
             }
 
             // Dependency-health gauges (up=1 / down=0) — a first-class signal for

@@ -485,7 +485,23 @@ pub async fn collect_changed_files(
                 deleted.push(path);
             }
             'A' | 'M' | 'R' | 'C' | 'T' => {
+                // Fail fast on count and size (via metadata) BEFORE buffering the file into memory,
+                // so an oversized staged file can't cause a transient host-side memory spike.
+                if files.len() >= MAX_CHANGED_FILES {
+                    return Err(format!(
+                        "patch changes more than {} files — refusing to auto-commit",
+                        MAX_CHANGED_FILES
+                    ));
+                }
                 let full = repo_dir.join(&path);
+                if let Ok(meta) = tokio::fs::metadata(&full).await {
+                    if total_bytes.saturating_add(meta.len() as usize) > MAX_CHANGED_BYTES {
+                        return Err(format!(
+                            "patched files exceed {} bytes — refusing to auto-commit",
+                            MAX_CHANGED_BYTES
+                        ));
+                    }
+                }
                 let content = match tokio::fs::read(&full).await {
                     Ok(bytes) => match String::from_utf8(bytes) {
                         Ok(s) => s,
@@ -498,12 +514,7 @@ pub async fn collect_changed_files(
                     Err(e) => return Err(format!("read changed file {}: {}", path, e)),
                 };
                 total_bytes = total_bytes.saturating_add(content.len());
-                if files.len() >= MAX_CHANGED_FILES {
-                    return Err(format!(
-                        "patch changes more than {} files — refusing to auto-commit",
-                        MAX_CHANGED_FILES
-                    ));
-                }
+                // Re-check the exact byte total after decoding (metadata is an upper-bound guard).
                 if total_bytes > MAX_CHANGED_BYTES {
                     return Err(format!(
                         "patched files exceed {} bytes — refusing to auto-commit",

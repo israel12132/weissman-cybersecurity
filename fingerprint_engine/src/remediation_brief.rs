@@ -197,10 +197,29 @@ pub async fn generate_remediation_brief(
     if brief.cwe.trim().is_empty() {
         brief.cwe = cwe.to_string();
     }
-    // Guarantee channel guidance exists even if the model omitted it.
-    if brief.channels.is_empty() {
-        brief.channels = default_channel_howtos();
-    }
+    // Merge model-provided channel guidance with the factual defaults: guarantee EVERY channel is
+    // present and EVERY bilingual field is populated. A model entry replaces the default only when
+    // it is complete (both he+en for connect AND apply); an omitted channel or a partial/blank entry
+    // falls back to the default instead of being cached as-is.
+    let provided: std::collections::HashMap<String, ChannelHowTo> = brief
+        .channels
+        .drain(..)
+        .map(|c| (c.channel.clone(), c))
+        .collect();
+    brief.channels = default_channel_howtos()
+        .into_iter()
+        .map(|def| match provided.get(&def.channel) {
+            Some(m)
+                if !m.connect.he.trim().is_empty()
+                    && !m.connect.en.trim().is_empty()
+                    && !m.apply.he.trim().is_empty()
+                    && !m.apply.en.trim().is_empty() =>
+            {
+                m.clone()
+            }
+            _ => def,
+        })
+        .collect();
     Ok(brief)
 }
 

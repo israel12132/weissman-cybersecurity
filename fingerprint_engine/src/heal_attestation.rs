@@ -155,6 +155,11 @@ mod tests {
             base,
             heal_digest("F1", "fixed", 200, 200, "curl x", &files(), 100)
         );
+        // baseline_status (3rd param) must also be part of the digest.
+        assert_ne!(
+            base,
+            heal_digest("F1", "fixed", 500, 403, "curl x", &files(), 100)
+        );
         assert_ne!(
             base,
             heal_digest("F1", "fixed", 200, 403, "curl y", &files(), 100)

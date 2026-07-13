@@ -468,8 +468,13 @@ pub async fn notify_heal_completed(
     if let Some(url) = config.alert_webhook_url.as_deref() {
         delivered |= post_json_signed(&client, url, &payload).await;
     }
+    // Slack: the dedicated heal-Slack path (`post_heal_slack`) posts richer Block Kit content to the
+    // same destination when enabled, so skip a duplicate generic post here in that case. When it is
+    // explicitly disabled, keep this generic post as the Slack fallback so completions still notify.
     if let Some(url) = config.slack_webhook_url.as_deref() {
-        delivered |= post_json_signed(&client, url, &payload).await;
+        if !heal_slack_notify_enabled() {
+            delivered |= post_json_signed(&client, url, &payload).await;
+        }
     }
     if (!ok || verdict == "broke_app") {
         if let Some(key) = resolve_pagerduty_key(&config) {
