@@ -75,6 +75,23 @@ pub async fn run_verification(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("remediation verify: open tenant tx failed: {e}"))?;
+    // Read the prior status so a regression alert fires ONLY on a genuine VERIFIED_FIXED → REOPENED
+    // transition. A finding that was never fixed and is simply still present is a failed fix, not a
+    // regression, and must not trigger re-remediation.
+    let was_verified_fixed: bool = sqlx::query_scalar::<_, String>(
+        r#"SELECT status FROM vulnerabilities
+            WHERE tenant_id = $1 AND finding_id = $2
+              AND ($3::bigint IS NULL OR client_id = $3)"#,
+    )
+    .bind(tenant_id)
+    .bind(original_finding_id)
+    .bind(client_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .as_deref()
+        == Some("VERIFIED_FIXED");
     sqlx::query(
         r#"UPDATE vulnerabilities
               SET status = $1,
@@ -103,18 +120,21 @@ pub async fn run_verification(
     // Closed-loop regression alert: if a previously-fixed vector reopened, notify so it gets
     // re-remediated (autonomous re-heal can be wired via a SOAR playbook on this signal).
     if still
+        && was_verified_fixed
         && std::env::var("WEISSMAN_REGRESSION_ALERT")
             .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
             .unwrap_or(true)
     {
-        crate::alert_delivery::notify_regression(
-            pool,
-            tenant_id,
-            original_finding_id,
-            engine,
-            target,
-        )
-        .await;
+        // Fire-and-forget: the verdict is already committed, so best-effort notification delivery
+        // (config lookup + up to three 15s outbound calls) must not block the verification result.
+        let pool = pool.clone();
+        let finding_id = original_finding_id.to_string();
+        let engine = engine.to_string();
+        let target = target.to_string();
+        tokio::spawn(async move {
+            crate::alert_delivery::notify_regression(&pool, tenant_id, &finding_id, &engine, &target)
+                .await;
+        });
     }
     Ok(outcome)
 }
