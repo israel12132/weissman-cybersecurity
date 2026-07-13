@@ -16,5 +16,17 @@ spec:
         - name: nginx
           image: your-registry/weissman-gateway:latest
           imagePullPolicy: IfNotPresent
+          # Least-privilege: no setuid/setgid escalation; drop every Linux
+          # capability and re-add only NET_BIND_SERVICE so nginx can still bind
+          # port 80. seccomp RuntimeDefault filters the syscall surface.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: 80

@@ -3058,7 +3058,7 @@ mod tests {
         assert!(redact_secrets("just a normal page").is_empty());
 
         let tok = redact_secrets(
-            r#"{"access_token":"ya29.aVeryLongOauthTokenValue123456","expires_in":3599}"#,
+            r#"{"access_token":"ya29.aVeryLongOauthTokenValue123456","expires_in":3599}"#, // nosemgrep
         );
         assert!(tok.iter().any(|s| s.contains("access_token")));
     }

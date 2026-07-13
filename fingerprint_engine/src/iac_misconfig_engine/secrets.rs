@@ -255,7 +255,7 @@ mod tests {
     fn flags_aws_key_and_private_key() {
         // Realistic-looking (non-"EXAMPLE", no "123456") key so the anti-FP filter keeps it.
         let c =
-            "aws_access_key_id = AKIAZ7Q2LP4RW8TB1YC3\n-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n";
+            "aws_access_key_id = AKIAZ7Q2LP4RW8TB1YC3\n-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n"; // nosemgrep
         let f = evaluate("main.tf", c);
         assert!(f.iter().any(|x| x.policy.id == AWS_KEY.id));
         assert!(f.iter().any(|x| x.policy.id == PRIVATE_KEY.id));

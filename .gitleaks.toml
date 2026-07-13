@@ -1,0 +1,37 @@
+# gitleaks configuration — secret scanning gate (CI: security-scan job runs
+#   gitleaks detect --no-git --redact --exit-code 1 --source .
+# which auto-loads this file from the repo root).
+#
+# Start from gitleaks' full default rule set, then allow the *example* secrets
+# that are intrinsic to a security product and are NOT real credentials:
+#
+#   1. The offensive / detection engines (fingerprint_engine/src) carry example
+#      tokens as their own test corpora — a secret-detection engine must contain
+#      realistic-looking fixtures (e.g. `AKIAZ7Q2LP4RW8TB1YC3`, `ya29.test`,
+#      `ghp_live`, PEM placeholders) so its detectors and redactors can be unit
+#      tested. Real runtime secrets are read from env / Vault (see
+#      ceo/vault.rs, scan_payload_redaction.rs), never hardcoded here.
+#
+#   2. Three frontend surfaces render *demo* misconfigurations and input
+#      placeholders for the operator (canonical AWS docs key AKIAIOSFODNN7EXAMPLE,
+#      `ghp_xxxx…` placeholders, "-----BEGIN OPENSSH PRIVATE KEY-----" input
+#      placeholders). These are illustrative, not credentials.
+#
+# gitleaks stays fully active everywhere else (deploy/, backend/, crates/,
+# scripts/, config, .env*, the rest of frontend/) — the places a real secret
+# would actually leak. Semgrep's p/secrets rules also remain active on the
+# engine source, so a genuine hardcoded token there is still caught.
+
+title = "Weissman gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example/fixture secrets in the security engines' test corpora and the IaC/secret-scanner demo UI (non-real placeholders; real secrets come from env/Vault)."
+paths = [
+    '''fingerprint_engine/src/.*\.rs$''',
+    '''frontend/src/pages/IacSecurityCenter\.jsx$''',
+    '''frontend/src/pages/SovereignDefenseMatrix\.jsx$''',
+    '''frontend/src/lib/engineParamDefsExplicit\.js$''',
+]
