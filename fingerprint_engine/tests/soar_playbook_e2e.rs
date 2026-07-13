@@ -59,8 +59,10 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("SKIP soar_playbook_e2e: database unavailable: {e}");
-            return;
+            // We only get here when TEST_DATABASE_URL was provided, so a failed
+            // connection is a real infra/migration problem, not a skip condition —
+            // fail loudly so the DB-enabled CI job can't go green without running.
+            panic!("connect TEST_DATABASE_URL failed: {e}");
         }
     };
 

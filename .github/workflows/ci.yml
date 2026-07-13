@@ -142,10 +142,14 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          # Dependency + IaC-misconfig only; secrets are gated by gitleaks above
+          # (Trivy's secret scanner double-flags the demo/fixture placeholders).
+          scanners: vuln,misconfig
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
           format: table
+          trivyignores: .trivyignore
 
       - name: Generate SBOM (CycloneDX via Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -327,6 +331,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           format: table
+          trivyignores: .trivyignore
 
       - name: Validate docker-compose.test.yml
         run: docker compose -f docker-compose.test.yml config > /dev/null

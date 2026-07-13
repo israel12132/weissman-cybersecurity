@@ -1,0 +1,12 @@
+# Trivy ignore file (auto-loaded by the fs + image scans in .github/workflows/ci.yml).
+# Mirrors the documented cargo-audit / deny.toml advisory posture — each entry is a
+# transitive advisory with no upstream fix available for our pinned tree. Re-review
+# on every dependency bump.
+#
+# GHSA-82j2-j2ch-gfr8 == RUSTSEC-2026-0049 (rustls-webpki: DoS via panic on a
+# malformed CRL BIT STRING). Reached through tokio-tungstenite 0.21 -> rustls 0.22
+# -> rustls-webpki 0.101; the fixed 0.103 line requires rustls 0.23, which
+# tokio-tungstenite 0.21 does not allow. We do not configure CRL revocation on our
+# WS/TLS clients, so the CRL-matching path is out of our surface. Tracked with a
+# tokio-tungstenite 0.24+ bump.
+GHSA-82j2-j2ch-gfr8

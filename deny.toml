@@ -17,8 +17,8 @@ unmaintained = "workspace"
 ignore = [
     "RUSTSEC-2023-0071", # rsa (Marvin timing) via openidconnect (OIDC) — no fixed release
     "RUSTSEC-2026-0098", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
-    "RUSTSEC-2026-0099",
-    "RUSTSEC-2026-0104",
+    "RUSTSEC-2026-0099", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
+    "RUSTSEC-2026-0104", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
     "RUSTSEC-2026-0187", # lopdf parse-DoS via genpdf->printpdf — we generate, never parse untrusted PDFs
     "RUSTSEC-2026-0049", # rustls-webpki CRL matching via tokio-tungstenite 0.21 — CRL revocation not used
 ]
