@@ -6,8 +6,9 @@
 
 use crate::engine_probes::{
     dns_a, dns_a_min_ttl, dns_caa, dns_mx, dns_txt, empty_ok, extract_host, finding,
-    finding_with_probe_depth, host_header_rebinding_signal, http_client, http_get_with_headers,
-    normalize_url, tcp_banner, tcp_open, tcp_probe_response, udp_probe_response,
+    finding_with_probe_depth, host_header_rebinding_signal, http_client, http_get,
+    http_get_with_headers, join_url, normalize_url, status_indicates_presence, tcp_banner,
+    tcp_open, tcp_probe_response, tcp_scan, udp_probe_response,
 };
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::Value;
@@ -460,13 +461,105 @@ pub async fn run_voip_sip_attack_result(t: &str) -> EngineResult {
 }
 cli_wrapper!(run_voip_sip_attack, run_voip_sip_attack_result);
 
-pub async fn run_ss7_attack_simulation_result(t: &str) -> EngineResult {
-    crate::engine_probes::agent_required_ok(
-        "ss7_attack_simulation",
-        t,
-        "SS7/SIGTRAN detection requires telco PCAP or SS7 gateway logs",
-        "M3UA/SCTP signaling is not observable via internet TCP connect probes; ingest PCAP from the SS7 gateway or deploy the telco sensor agent.",
+pub async fn run_ss7_signaling_probe_result(t: &str) -> EngineResult {
+    if t.trim().is_empty() {
+        return EngineResult::error("target required");
+    }
+    let host = extract_host(t);
+    let client = http_client().await;
+    let mut findings: Vec<Value> = Vec::new();
+
+    let mx = dns_mx(&host).await;
+    for rec in mx.iter().take(5) {
+        let low = rec.to_ascii_lowercase();
+        if low.contains("sms")
+            || low.contains("smpp")
+            || low.contains("messaging")
+            || low.contains("telco")
+            || low.contains("mobile")
+        {
+            findings.push(net_finding(
+                "ss7_signaling_probe",
+                &format!("Telco/SMS MX candidate: {rec}"),
+                "info",
+                "T1557",
+                &format!(
+                    "MX record {rec} for {host} suggests SMS/messaging infrastructure — correlate with SS7/SIGTRAN PCAP from carrier gateway for MAP/HLR abuse validation."
+                ),
+                t,
+            ));
+        }
+    }
+
+    let ss7_ports = tcp_scan(&host, &[2775, 2905, 8080, 8443, 9090], 6).await;
+    for port in ss7_ports {
+        let svc = match port {
+            2775 => "SMPP (SMS gateway)",
+            2905 => "SS7/SIGTRAN management (vendor-specific)",
+            _ => "Telco HTTP management",
+        };
+        findings.push(net_finding(
+            "ss7_signaling_probe",
+            &format!("{svc} port {port}/tcp open on {host}"),
+            if port == 2775 { "high" } else { "medium" },
+            "T1557",
+            &format!(
+                "Live TCP connect to {host}:{port} succeeded — {svc} surface in scope. Full MAP/SS7 abuse requires PCAP from SS7 gateway or telco sensor agent."
+            ),
+            t,
+        ));
+    }
+
+    let base = normalize_url(t);
+    for path in ["/smpp", "/ss7", "/sigtran", "/sms", "/api/sms", "/api/ss7"] {
+        let url = join_url(&base, path);
+        if let Some(p) = http_get(&client, &url).await {
+            if status_indicates_presence(p.status) {
+                findings.push(net_finding(
+                    "ss7_signaling_probe",
+                    "Telco signaling HTTP management path reachable",
+                    "medium",
+                    "T1557",
+                    &format!(
+                        "{} ({}) — review for exposed SMSC/SS7 admin interfaces; pair with carrier PCAP for live MAP validation.",
+                        p.final_url, p.status
+                    ),
+                    t,
+                ));
+                break;
+            }
+        }
+    }
+
+    if findings.is_empty() {
+        let finding = finding(
+            "ss7_signaling_probe",
+            "No internet-exposed SS7/SMPP surface observed",
+            "info",
+            "T1557",
+            &format!(
+                "Live DNS/TCP/HTTP probes against {host} found no SMPP (2775), telco MX, or SS7 mgmt paths. Ingest M3UA/SCTP PCAP from the SS7 gateway or deploy the telco sensor agent for MAP-layer validation."
+            ),
+            t,
+        );
+        return EngineResult::ok(
+            vec![finding],
+            format!("ss7_signaling_probe: perimeter clear — PCAP/agent required for {host}"),
+        );
+    }
+    EngineResult::ok(
+        findings.clone(),
+        format!(
+            "ss7_signaling_probe: {} live telco surface signal(s)",
+            findings.len()
+        ),
     )
+}
+cli_wrapper!(run_ss7_signaling_probe, run_ss7_signaling_probe_result);
+
+/// Legacy CLI name — delegates to live probe (no simulated findings).
+pub async fn run_ss7_attack_simulation_result(t: &str) -> EngineResult {
+    run_ss7_signaling_probe_result(t).await
 }
 cli_wrapper!(run_ss7_attack_simulation, run_ss7_attack_simulation_result);
 

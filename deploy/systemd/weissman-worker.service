@@ -29,8 +29,36 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=weissman-worker
 
+# --- Hardening (adjust if you hit permission errors) ---
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Engines make outbound TCP/UDP/DNS probes — keep the inet/unix/netlink families.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# Connect-scan uses ordinary sockets (no raw sockets), so no capabilities are needed. If you
+# enable raw-socket/SYN scanning, add: CapabilityBoundingSet=CAP_NET_RAW and AmbientCapabilities=CAP_NET_RAW.
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+StateDirectory=weissman
+ReadWritePaths=/opt/weissman/app /var/lib/weissman
 
 [Install]
 WantedBy=weissman.target multi-user.target

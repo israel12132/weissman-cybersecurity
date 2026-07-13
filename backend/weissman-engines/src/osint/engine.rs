@@ -52,7 +52,7 @@ pub async fn run_osint_result(target: &str, st: Option<&stealth::StealthConfig>)
 
     let c = match st {
         Some(s) => {
-            stealth::apply_jitter(s);
+            stealth::apply_jitter(s).await;
             stealth::build_client(s, TIMEOUT_SECS)
         }
         None => default_client().await,
@@ -69,7 +69,7 @@ pub async fn run_osint_result(target: &str, st: Option<&stealth::StealthConfig>)
     };
     let whois_fut = async {
         if let Some(s) = st {
-            stealth::apply_jitter(s);
+            stealth::apply_jitter(s).await;
         }
         let req = apply_stealth_headers(c2.get(&whois_url), st);
         req.send().await

@@ -176,14 +176,14 @@ Lines:
     )
     .await
     .map_err(|e| e.to_string())?;
-    let _ = telemetry.send(
+    let _ = telemetry.send(crate::http::tenant_stream::stamp_value(
+        tid,
         json!({
             "event": "security_events_llm_review",
             "severity": "info",
             "chars": text.len(),
-        })
-        .to_string(),
-    );
+        }),
+    ));
     tracing::info!(target: "predictive_analyzer", review = %text.chars().take(500).collect::<String>(), "security_events LLM review");
     Ok(())
 }

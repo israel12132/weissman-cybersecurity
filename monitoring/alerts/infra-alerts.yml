@@ -1,0 +1,106 @@
+# Infrastructure alerts backed by the node / postgres / redis / blackbox exporters
+# (enabled by the docker-compose `monitoring` profile). Metric names follow the standard
+# exporter conventions.
+groups:
+  - name: exporter_targets
+    interval: 30s
+    rules:
+      - alert: ExporterDown
+        expr: up{job=~"node|postgres|redis|blackbox-http"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: monitoring
+        annotations:
+          summary: "Exporter target down: {{ $labels.job }}"
+          description: "{{ $labels.job }} ({{ $labels.instance }}) has been unscrapeable for 5m."
+
+  - name: synthetic_probes
+    interval: 30s
+    rules:
+      - alert: SyntheticProbeFailing
+        expr: probe_success == 0
+        for: 3m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Synthetic probe failing: {{ $labels.instance }}"
+          description: "External blackbox probe of {{ $labels.instance }} has failed for 3m — the endpoint looks down from outside the cluster."
+      - alert: SyntheticProbeSlow
+        expr: probe_http_duration_seconds{phase="processing"} > 3
+        for: 10m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Synthetic probe slow: {{ $labels.instance }}"
+          description: "External probe processing time > 3s for {{ $labels.instance }} over 10m."
+
+  - name: postgres_health
+    interval: 30s
+    rules:
+      - alert: PostgresReplicationLagHigh
+        expr: pg_replication_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Postgres replication lag high"
+          description: "Replica lag is {{ $value }}s (threshold 30s) — failover would lose recent writes."
+      - alert: PostgresTooManyConnections
+        expr: sum(pg_stat_activity_count) > (pg_settings_max_connections * 0.9)
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Postgres connection saturation"
+          description: "Active connections are above 90% of max_connections — put PgBouncer in front or raise the limit."
+
+  - name: redis_health
+    interval: 30s
+    rules:
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9 and redis_memory_max_bytes > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Redis memory > 90% of maxmemory"
+          description: "Redis is near its memory limit; with noeviction the job bus / rate limiter will start erroring."
+      - alert: RedisEvictingKeys
+        expr: rate(redis_evicted_keys_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis is evicting keys"
+          description: "Keys are being evicted — SOAR idempotency / rate-limit / job-bus state is being lost."
+
+  - name: node_health
+    interval: 30s
+    rules:
+      - alert: NodeDiskFillingUp
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.10
+        for: 10m
+        labels:
+          severity: critical
+          category: capacity
+        annotations:
+          summary: "Node disk < 10% free"
+          description: "{{ $labels.instance }} {{ $labels.mountpoint }} has less than 10% free — Postgres/backups will start failing writes."
+      - alert: NodeHighMemoryPressure
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          category: capacity
+        annotations:
+          summary: "Node memory > 90% used"
+          description: "{{ $labels.instance }} is under sustained memory pressure."

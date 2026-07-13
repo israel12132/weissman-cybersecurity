@@ -206,7 +206,53 @@ fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Opt
     }
 }
 
-/// Auth middleware: allow only POST /api/login; all other /api/* require valid JWT.
+/// Whether an unauthenticated route is always public or only reachable outside production.
+#[derive(Clone, Copy)]
+enum RouteGate {
+    Always,
+    /// Public only when NOT running in production (interactive API docs / OpenAPI JSON).
+    NonProdOnly,
+}
+
+/// Declarative allow-list of routes reachable WITHOUT authentication. This replaces a
+/// hand-maintained chain of `if path == "…" && method == …` blocks inside `auth_guard`,
+/// where a single typo or omission silently changed the security posture. Adding a public
+/// route means adding one row here, and `public_route_guard_tests` assert the table stays
+/// honest. (Login + MFA-verify are matched separately by `is_account_lockout_post`, which
+/// intentionally spans several paths.)
+static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
+    (Method::GET, "/api/health", RouteGate::Always),
+    (Method::POST, "/api/logout", RouteGate::Always),
+    (Method::POST, "/api/auth/refresh", RouteGate::Always),
+    (Method::POST, "/api/onboarding/register", RouteGate::Always),
+    (Method::POST, "/api/webhooks/paddle", RouteGate::Always),
+    (Method::GET, "/api/auth/oidc/begin", RouteGate::Always),
+    (Method::GET, "/api/auth/oidc/callback", RouteGate::Always),
+    (Method::POST, "/api/auth/saml/acs", RouteGate::Always),
+    (Method::GET, "/api/auth/saml/begin", RouteGate::Always),
+    (Method::POST, "/api/deception/aws-events", RouteGate::Always),
+    (Method::POST, "/api/auth/signup", RouteGate::Always),
+    (Method::GET, "/api/auth/verify", RouteGate::Always),
+    (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
+    (Method::POST, "/api/agents/enroll", RouteGate::Always),
+    (Method::GET, "/api/openapi.json", RouteGate::NonProdOnly),
+    (Method::GET, "/api/docs", RouteGate::NonProdOnly),
+    (Method::GET, "/api/docs/", RouteGate::NonProdOnly),
+];
+
+/// True when `(method, path)` is an exact match on the unauthenticated allow-list.
+fn is_public_route(method: &Method, path: &str) -> bool {
+    PUBLIC_ROUTES.iter().any(|(m, p, gate)| {
+        m == method
+            && *p == path
+            && match gate {
+                RouteGate::Always => true,
+                RouteGate::NonProdOnly => !weissman_core::tls_policy::is_production_environment(),
+            }
+    })
+}
+
+/// Auth middleware: allow only the declared public routes; all other /api/* require valid JWT.
 async fn auth_guard(
     State(state): State<Arc<AppState>>,
     mut request: Request<Body>,
@@ -214,60 +260,12 @@ async fn auth_guard(
 ) -> Response {
     let path = request.uri().path();
     let method = request.method();
-    if path == "/api/health" && method == Method::GET {
-        return next.run(request).await;
-    }
     // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
     if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;
     }
-    if path == "/api/logout" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/refresh" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/onboarding/register" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/webhooks/paddle" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/oidc/begin" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/oidc/callback" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/saml/acs" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/saml/begin" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/deception/aws-events" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/openapi.json" && method == Method::GET {
-        if !weissman_core::tls_policy::is_production_environment() {
-            return next.run(request).await;
-        }
-    }
-    if (path == "/api/docs" || path == "/api/docs/") && method == Method::GET {
-        if !weissman_core::tls_policy::is_production_environment() {
-            return next.run(request).await;
-        }
-    }
-    if path == "/api/auth/signup" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/auth/verify" && method == Method::GET {
-        return next.run(request).await;
-    }
-    if path == "/api/v1/alerts/aws-canary" && method == Method::POST {
-        return next.run(request).await;
-    }
-    if path == "/api/agents/enroll" && method == Method::POST {
+    // Everything else reachable without a JWT is declared once in PUBLIC_ROUTES.
+    if is_public_route(method, path) {
         return next.run(request).await;
     }
     if path.starts_with("/api/") || path.starts_with("/ws/") {
@@ -882,10 +880,6 @@ async fn handle_ws_command_center(
 
     let mut rx = telemetry.subscribe();
     let mut ticker = tokio::time::interval(Duration::from_secs(15));
-    // The telemetry broadcast is process-global; gate every forwarded event to
-    // this socket's tenant. Refreshed on the ticker so newly-added clients start
-    // showing up without a reconnect.
-    let mut client_ids = tenant_client_id_set(pool.as_ref(), tenant_id).await;
 
     loop {
         tokio::select! {
@@ -907,18 +901,17 @@ async fn handle_ws_command_center(
             }
             telemetry_msg = rx.recv() => {
                 if let Ok(raw) = telemetry_msg {
-                    if !telemetry_event_visible_to_tenant(&raw, tenant_id, &client_ids) {
-                        continue;
-                    }
-                    if let Some(normalized) = normalize_cc_event(&raw) {
-                        if socket.send(Message::Text(normalized)).await.is_err() {
-                            break;
+                    // Tenant isolation: only forward events stamped for this socket's tenant.
+                    if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                        if let Some(normalized) = normalize_cc_event(&scoped) {
+                            if socket.send(Message::Text(normalized)).await.is_err() {
+                                break;
+                            }
                         }
                     }
                 }
             }
             _ = ticker.tick() => {
-                client_ids = tenant_client_id_set(pool.as_ref(), tenant_id).await;
                 let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else { continue; };
                 let row = sqlx::query(
                     "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
@@ -1109,14 +1102,6 @@ struct PipelineStateQuery {
     client_id: String,
 }
 
-/// Legacy shape for POST /api/system/configs: `[{ "key", "value" }]`. The handler also accepts `{ "configs": { ... } }`.
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct SystemConfigBody {
-    key: String,
-    value: String,
-}
-
 #[derive(Deserialize)]
 struct IdentityContextBody {
     role_name: String,
@@ -1214,66 +1199,6 @@ const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","
 fn scrub_internal_error<E: std::fmt::Display>(e: E) -> &'static str {
     tracing::error!(target: "http", error = %e, "internal server error");
     "internal error"
-}
-
-// The set of client ids owned by a tenant (id as text, matching how producers
-// stringify client_id in telemetry payloads). RLS scopes the SELECT to the
-// tenant. Used to gate the shared telemetry broadcast per subscriber.
-async fn tenant_client_id_set(pool: &PgPool, tenant_id: i64) -> std::collections::HashSet<String> {
-    let mut set = std::collections::HashSet::new();
-    if let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await {
-        if let Ok(rows) = sqlx::query("SELECT id::text AS id FROM clients")
-            .fetch_all(&mut *tx)
-            .await
-        {
-            for row in rows {
-                if let Ok(id) = row.try_get::<String, _>("id") {
-                    set.insert(id);
-                }
-            }
-        }
-    }
-    set
-}
-
-// Tenant-isolation gate for the process-global telemetry broadcast. The channel
-// is shared across all tenants, so every consumer MUST filter: forward an event
-// only if it belongs to the subscriber's tenant. Fail-closed — an unparseable or
-// foreign-tenant payload is dropped.
-//   * tenant_id present  → strict match against the subscriber's tenant.
-//   * else client_id present → the client must be owned by the subscriber's tenant.
-//   * else (no tenant identity) → a genuine system-wide aggregate; allowed.
-fn telemetry_event_visible_to_tenant(
-    payload: &str,
-    tenant_id: i64,
-    client_ids: &std::collections::HashSet<String>,
-) -> bool {
-    let value: Value = match serde_json::from_str(payload) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let obj = match value.as_object() {
-        Some(o) => o,
-        None => return false,
-    };
-    let ev_tenant = obj.get("tenant_id").and_then(|x| {
-        x.as_i64()
-            .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
-    });
-    if let Some(t) = ev_tenant {
-        return t == tenant_id;
-    }
-    let ev_client = obj.get("client_id").and_then(|x| {
-        if let Some(s) = x.as_str() {
-            Some(s.to_string())
-        } else {
-            x.as_i64().map(|n| n.to_string())
-        }
-    });
-    match ev_client {
-        Some(c) => client_ids.contains(&c),
-        None => true,
-    }
 }
 
 // Handlers: see `handler_fragments.rs` (single wiring point for all `.inc` fragments).
@@ -1451,6 +1376,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
                 }
             }
         });
+        crate::audit_log::spawn_audit_checkpoint_worker(app_pool.clone(), auth_pool.clone());
         tokio::spawn(crate::payload_sync_worker::run_worker_loop(
             app_pool.clone(),
             intel_pool.clone(),
@@ -1488,6 +1414,12 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         // UEBA — purge old samples once an hour so the table stays bounded.
         crate::ueba_detector::spawn_retention_loop(app_pool.clone());
         crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
+            app_pool.clone(),
+            state.telemetry_broadcast_tx.clone(),
+        );
+        // Autonomous self-improvement engine — hourly, toggled live from the Command Center
+        // (`self_improve_enabled`). Proposes improvements; approval opens a PR, never touches main.
+        crate::self_improve::spawn_self_improve_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),
         );
@@ -1746,70 +1678,44 @@ async fn shutdown_signal() {
 }
 
 #[cfg(test)]
-mod telemetry_tenant_gate_tests {
-    use super::telemetry_event_visible_to_tenant;
-    use std::collections::HashSet;
+mod public_route_guard_tests {
+    use super::{is_public_route, Method};
 
-    fn clients(ids: &[&str]) -> HashSet<String> {
-        ids.iter().map(|s| s.to_string()).collect()
+    /// Every route that was historically reachable without auth must still be public.
+    /// (Only the `Always` entries are asserted here so the test is env-independent; the
+    /// `NonProdOnly` docs routes depend on `is_production_environment()`.)
+    #[test]
+    fn public_routes_cover_historical_allowlist() {
+        let expected: &[(Method, &str)] = &[
+            (Method::GET, "/api/health"),
+            (Method::POST, "/api/logout"),
+            (Method::POST, "/api/auth/refresh"),
+            (Method::POST, "/api/onboarding/register"),
+            (Method::POST, "/api/webhooks/paddle"),
+            (Method::GET, "/api/auth/oidc/begin"),
+            (Method::GET, "/api/auth/oidc/callback"),
+            (Method::POST, "/api/auth/saml/acs"),
+            (Method::GET, "/api/auth/saml/begin"),
+            (Method::POST, "/api/deception/aws-events"),
+            (Method::POST, "/api/auth/signup"),
+            (Method::GET, "/api/auth/verify"),
+            (Method::POST, "/api/v1/alerts/aws-canary"),
+            (Method::POST, "/api/agents/enroll"),
+        ];
+        for (m, p) in expected {
+            assert!(is_public_route(m, p), "expected {m} {p} to be public");
+        }
     }
 
+    /// Protected routes must never be public, and a public path with the wrong method
+    /// must not slip through.
     #[test]
-    fn matching_tenant_id_is_visible() {
-        let set = clients(&[]);
-        assert!(telemetry_event_visible_to_tenant(
-            r#"{"event":"x","tenant_id":7,"client_id":"99"}"#, 7, &set));
-    }
-
-    #[test]
-    fn foreign_tenant_id_is_hidden_even_if_client_matches() {
-        // tenant_id takes strict precedence: a foreign tenant is dropped
-        // regardless of client ownership.
-        let set = clients(&["5"]);
-        assert!(!telemetry_event_visible_to_tenant(
-            r#"{"event":"x","tenant_id":8,"client_id":"5"}"#, 7, &set));
-    }
-
-    #[test]
-    fn client_owned_event_without_tenant_id_is_visible() {
-        let set = clients(&["5", "6"]);
-        assert!(telemetry_event_visible_to_tenant(
-            r#"{"event":"containment_executed","client_id":"5"}"#, 7, &set));
-    }
-
-    #[test]
-    fn foreign_client_event_is_hidden() {
-        let set = clients(&["5"]);
-        assert!(!telemetry_event_visible_to_tenant(
-            r#"{"event":"containment_executed","client_id":"999"}"#, 7, &set));
-    }
-
-    #[test]
-    fn numeric_client_id_is_coerced_and_matched() {
-        let set = clients(&["42"]);
-        assert!(telemetry_event_visible_to_tenant(
-            r#"{"event":"x","client_id":42}"#, 7, &set));
-    }
-
-    #[test]
-    fn bare_event_with_no_tenant_identity_is_visible() {
-        let set = clients(&[]);
-        assert!(telemetry_event_visible_to_tenant(
-            r#"{"event":"system_heartbeat","status":"ok"}"#, 7, &set));
-    }
-
-    #[test]
-    fn unparseable_payload_is_dropped() {
-        let set = clients(&["5"]);
-        assert!(!telemetry_event_visible_to_tenant("not json", 7, &set));
-    }
-
-    #[test]
-    fn tenant_id_as_string_is_parsed() {
-        let set = clients(&[]);
-        assert!(telemetry_event_visible_to_tenant(
-            r#"{"tenant_id":"7"}"#, 7, &set));
-        assert!(!telemetry_event_visible_to_tenant(
-            r#"{"tenant_id":"8"}"#, 7, &set));
+    fn protected_routes_are_not_public() {
+        assert!(!is_public_route(&Method::GET, "/api/findings"));
+        assert!(!is_public_route(&Method::POST, "/api/command-center/scan"));
+        assert!(!is_public_route(&Method::DELETE, "/api/clients/1"));
+        // Correct public path but wrong method is not public.
+        assert!(!is_public_route(&Method::GET, "/api/logout"));
+        assert!(!is_public_route(&Method::POST, "/api/health"));
     }
 }

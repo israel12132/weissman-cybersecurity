@@ -136,6 +136,19 @@ pub async fn fetch_epss_for_cves(pool: &PgPool, cves: &[String]) -> HashMap<Stri
     stale.sort();
     stale.dedup();
 
+    // Cache telemetry: fresh cache hits vs. missing/stale rows that require a live fetch
+    // (feeds the Grafana "Cache Hit Rate" panel). Labelled by cache so more caches can join.
+    let miss_count = stale.len() as u64;
+    let hit_count = (normalized.len() as u64).saturating_sub(miss_count);
+    if hit_count > 0 {
+        metrics::counter!("weissman_cache_operations_total", "operation" => "hit", "cache" => "epss")
+            .increment(hit_count);
+    }
+    if miss_count > 0 {
+        metrics::counter!("weissman_cache_operations_total", "operation" => "miss", "cache" => "epss")
+            .increment(miss_count);
+    }
+
     if stale.is_empty() {
         return out;
     }

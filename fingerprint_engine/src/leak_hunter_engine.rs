@@ -161,7 +161,7 @@ async fn probe_url(
 ) -> Option<(u16, String)> {
     let req = match stealth {
         Some(s) => {
-            stealth_engine::apply_jitter(s);
+            stealth_engine::apply_jitter(s).await;
             c.get(url).headers(stealth_engine::random_morph_headers(s))
         }
         None => c.get(url),

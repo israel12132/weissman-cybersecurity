@@ -50,7 +50,7 @@
    │            │ POST /api/ueba/ingest               │ HTTP/TCP/DNS/TLS │
    │            │ + finding payloads                  ▼                  │
    │            ▼                           ┌──────────────────┐         │
-   │            ───────────────────────────▶│ 530+ engines     │         │
+   │            ───────────────────────────▶│ 563 engines     │         │
    │                                        │ web · cloud · OT │         │
    │                                        │ AI/LLM · supply  │         │
    │                                        │ chain · OSINT ·  │         │

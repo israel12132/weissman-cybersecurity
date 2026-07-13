@@ -12,7 +12,7 @@ import { SkeletonBar } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import Button from '../components/ui/Button'
 
-const DEFAULT_TEMPLATE = 'multi_step_state_demo'
+const DEFAULT_TEMPLATE = 'multi_step_state_chain'
 
 export default function FeedbackLoopVerification() {
   const { t } = useTranslation()

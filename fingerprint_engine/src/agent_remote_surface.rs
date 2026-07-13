@@ -72,8 +72,11 @@ pub async fn run_remote_surface_probe(
         "process_inventory" => probe_process_inventory_surface(engine_id, target).await,
         "av_bypass_engine" => probe_edr_av_surface(engine_id, target).await,
         "log_tampering_engine" => probe_log_tampering_surface(engine_id, target).await,
+        "timestomping" => probe_timestomping_surface(engine_id, target).await,
         "anti_debug_evasion" => probe_anti_debug_surface(engine_id, target).await,
-        "rootkit_simulation" => probe_rootkit_surface(engine_id, target).await,
+        "rootkit_surface_probe" | "rootkit_simulation" => {
+            probe_rootkit_surface(engine_id, target).await
+        }
         "memory_forensics_evasion" => probe_memory_forensics_surface(engine_id, target).await,
         "usb_enumeration" => probe_usb_policy_surface(engine_id, target).await,
         "dns_tunneling_c2" => probe_dns_tunneling_surface(engine_id, target).await,
@@ -308,6 +311,58 @@ async fn probe_log_tampering_surface(engine_id: &str, target: &str) -> EngineRes
                 ));
                 break;
             }
+        }
+    }
+    collect(engine_id, target, findings)
+}
+
+async fn probe_timestomping_surface(engine_id: &str, target: &str) -> EngineResult {
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/.git/HEAD",
+        "/backup.zip",
+        "/backup.tar.gz",
+        "/db.sql.bak",
+        "/archive.zip",
+        "/old/",
+        "/.bak",
+    ];
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        let lm = p
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("last-modified"))
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+        findings.push(remote_finding(
+            engine_id,
+            "Backup or VCS artifact exposed (timestamp surface)",
+            if p.final_url.contains(".git") {
+                "high"
+            } else {
+                "medium"
+            },
+            "T1070.006",
+            &format!(
+                "{} ({}){} — timestomping tradecraft alters MAC times on disk; exposed archives and .git leak filesystem timeline anchors for agent validation.",
+                p.final_url,
+                p.status,
+                if lm.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Last-Modified: {lm}")
+                }
+            ),
+            target,
+        ));
+        if findings.len() >= 3 {
+            break;
         }
     }
     collect(engine_id, target, findings)
@@ -633,7 +688,44 @@ async fn probe_acoustic_exfil_surface(engine_id: &str, target: &str) -> EngineRe
 }
 
 async fn probe_em_exfil_surface(engine_id: &str, target: &str) -> EngineResult {
-    collect(engine_id, target, vec![])
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/emc-compliance",
+        "/docs/emc",
+        "/shielding",
+        "/rf-lab",
+        "/api/spectrum",
+        "/api/emc",
+    ];
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        let body = p.body.to_ascii_lowercase();
+        if body.contains("emc")
+            || body.contains("tempest")
+            || body.contains("shield")
+            || body.contains("spectrum")
+            || body.contains("faraday")
+        {
+            findings.push(remote_finding(
+                engine_id,
+                "EMC/TEMPEST documentation or RF lab surface exposed",
+                "low",
+                "T1048",
+                &format!(
+                    "{} ({}) — EM side-channel exfil requires physical proximity; exposed EMC/RF policy pages indicate RF-sensitive facilities in scope for agent validation.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+    collect(engine_id, target, findings)
 }
 
 async fn probe_optical_exfil_surface(engine_id: &str, target: &str) -> EngineResult {
@@ -662,7 +754,35 @@ async fn probe_optical_exfil_surface(engine_id: &str, target: &str) -> EngineRes
 }
 
 async fn probe_keyboard_acoustic_surface(engine_id: &str, target: &str) -> EngineResult {
-    collect(engine_id, target, vec![])
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/api/dictation",
+        "/api/speech",
+        "/webrtc",
+        "/api/voice",
+        "/api/transcribe",
+        "/ws/audio",
+    ];
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(remote_finding(
+                engine_id,
+                "Voice/dictation/WebRTC endpoint exposed",
+                "medium",
+                "T1056.001",
+                &format!(
+                    "{} ({}) — acoustic keyboard side-channels correlate with exposed audio capture APIs; agent validates local microphone hooks.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+    collect(engine_id, target, findings)
 }
 
 async fn probe_screen_capture_surface(engine_id: &str, target: &str) -> EngineResult {
@@ -689,26 +809,32 @@ async fn probe_screen_capture_surface(engine_id: &str, target: &str) -> EngineRe
 async fn probe_clipboard_surface(engine_id: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    if let Some(p) = http_get(&client, &join_url(&base, "/api/clipboard")).await {
+    let paths = &[
+        "/api/clipboard",
+        "/api/paste",
+        "/clipboard",
+        "/api/share",
+        "/api/copy",
+    ];
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
         if status_indicates_presence(p.status) {
-            return collect(
+            findings.push(remote_finding(
                 engine_id,
+                "Clipboard/share API endpoint exposed",
+                "high",
+                "T1115",
+                &format!(
+                    "{} ({}) — clipboard hijacking requires host hook; exposed clipboard/share APIs widen blast radius.",
+                    p.final_url, p.status
+                ),
                 target,
-                vec![remote_finding(
-                    engine_id,
-                    "Clipboard API endpoint exposed",
-                    "high",
-                    "T1115",
-                    &format!(
-                        "{} ({}) — clipboard hijacking requires host hook; exposed clipboard APIs widen blast radius.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                )],
-            );
+            ));
+            break;
         }
     }
-    collect(engine_id, target, vec![])
+    collect(engine_id, target, findings)
 }
 
 async fn probe_insider_exfil_surface(engine_id: &str, target: &str) -> EngineResult {
@@ -1049,26 +1175,45 @@ async fn probe_bluetooth_mobile_surface(engine_id: &str, target: &str) -> Engine
 async fn probe_nfc_surface(engine_id: &str, target: &str) -> EngineResult {
     let client = http_client().await;
     let base = normalize_url(target);
-    if let Some(p) = http_get(&client, &join_url(&base, "/api/nfc")).await {
+    let paths = &[
+        "/api/nfc",
+        "/api/payment/nfc",
+        "/api/wallet",
+        "/api/tap",
+        "/nfc",
+    ];
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
         if status_indicates_presence(p.status) {
-            return collect(
+            findings.push(remote_finding(
                 engine_id,
+                "NFC/payment API endpoint exposed",
+                "medium",
+                "T1557",
+                &format!(
+                    "{} ({}) — NFC relay requires physical tap; exposed NFC/payment APIs indicate access integration in scope.",
+                    p.final_url, p.status
+                ),
                 target,
-                vec![remote_finding(
-                    engine_id,
-                    "NFC API endpoint exposed",
-                    "medium",
-                    "T1557",
-                    &format!(
-                        "{} ({}) — NFC relay requires physical tap; exposed NFC APIs indicate payment/access integration.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                )],
-            );
+            ));
+            break;
         }
     }
-    collect(engine_id, target, vec![])
+    let host = extract_host(target);
+    if findings.is_empty() && (tcp_open(&host, 8080).await || tcp_open(&host, 443).await) {
+        findings.push(remote_finding(
+            engine_id,
+            "Mobile payment web surface reachable",
+            "info",
+            "T1557",
+            &format!(
+                "Host {host} accepts HTTPS/8080 — NFC relay attacks pair with mobile wallet webviews; agent validates local NFC stack."
+            ),
+            target,
+        ));
+    }
+    collect(engine_id, target, findings)
 }
 
 async fn probe_deepfake_voice_surface(engine_id: &str, target: &str) -> EngineResult {
@@ -1205,7 +1350,50 @@ async fn probe_lorawan_surface(engine_id: &str, target: &str) -> EngineResult {
 }
 
 async fn probe_voltage_glitch_surface(engine_id: &str, target: &str) -> EngineResult {
-    collect(engine_id, target, vec![])
+    let host = extract_host(target);
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let mut findings = Vec::new();
+    let jtag_ports = tcp_scan(&host, &[4444, 3333, 23, 8728, 47808], 8).await;
+    for port in jtag_ports {
+        let label = match port {
+            4444 | 3333 => "OpenOCD/JTAG debug",
+            23 => "Telnet (embedded debug)",
+            8728 => "ESP8266/32 serial bridge",
+            47808 => "BACnet/IP (ICS debug plane)",
+            _ => "Debug/service port",
+        };
+        findings.push(remote_finding(
+            engine_id,
+            &format!("{label} port {port}/tcp open"),
+            "high",
+            "T0809",
+            &format!(
+                "Host {} accepts TCP/{port} — fault-injection and voltage-glitch attacks target exposed JTAG/UART/debug services; agent validates local secure-boot policy.",
+                host
+            ),
+            target,
+        ));
+    }
+    let paths = &["/jtag", "/debug/swd", "/api/firmware", "/docs/hardware"];
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if status_indicates_presence(p.status) {
+            findings.push(remote_finding(
+                engine_id,
+                "Hardware debug documentation or API exposed",
+                "medium",
+                "T0809",
+                &format!(
+                    "{} ({}) — voltage/fault injection targets SoC debug interfaces documented here.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+    collect(engine_id, target, findings)
 }
 
 async fn probe_tpm_surface(engine_id: &str, target: &str) -> EngineResult {
@@ -1213,7 +1401,58 @@ async fn probe_tpm_surface(engine_id: &str, target: &str) -> EngineResult {
 }
 
 async fn probe_cold_boot_surface(engine_id: &str, target: &str) -> EngineResult {
-    collect(engine_id, target, vec![])
+    let client = http_client().await;
+    let base = normalize_url(target);
+    let paths = &[
+        "/bitlocker",
+        "/docs/encryption",
+        "/security/encryption",
+        "/api/device/encryption",
+        "/tpm",
+        "/secure-boot",
+    ];
+    let mut findings = Vec::new();
+    let probes = probe_paths_concurrent(&client, &base, paths, DEFAULT_PROBE_CONCURRENCY).await;
+    for p in probes {
+        if !status_indicates_presence(p.status) {
+            continue;
+        }
+        let body = p.body.to_ascii_lowercase();
+        if body.contains("bitlocker")
+            || body.contains("full disk")
+            || body.contains("fde")
+            || body.contains("tpm")
+            || body.contains("secure boot")
+            || body.contains("hibernation")
+        {
+            findings.push(remote_finding(
+                engine_id,
+                "Full-disk encryption / TPM policy surface exposed",
+                "info",
+                "T1552",
+                &format!(
+                    "{} ({}) — cold-boot attacks target RAM remanence when FDE/hibernate policies are weak; agent validates local key material handling.",
+                    p.final_url, p.status
+                ),
+                target,
+            ));
+            break;
+        }
+    }
+    let host = extract_host(target);
+    if tcp_open(&host, 3389).await && findings.is_empty() {
+        findings.push(remote_finding(
+            engine_id,
+            "RDP exposed without observed FDE policy page",
+            "medium",
+            "T1552",
+            &format!(
+                "Host {host} accepts RDP/3389 — review BitLocker/hibernate lock policy via endpoint agent; cold-boot window applies to unattended workstations.",
+            ),
+            target,
+        ));
+    }
+    collect(engine_id, target, findings)
 }
 
 async fn probe_infostealer_surface(engine_id: &str, target: &str) -> EngineResult {

@@ -1,9 +1,16 @@
-async fn ws_swarm(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+async fn ws_swarm(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let tenant_id = auth.tenant_id;
     let mut rx = state.swarm_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if socket.send(Message::Text(msg)).await.is_err() {
-                break;
+            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+                if socket.send(Message::Text(scoped)).await.is_err() {
+                    break;
+                }
             }
         }
     })
@@ -693,13 +700,15 @@ async fn api_containment_execute(
         {
             Ok(msg) => {
                 let _ = state.telemetry_broadcast_tx.send(
-                    json!({
-                        "event": "containment_executed",
-                        "severity": "critical",
-                        "client_id": client_id.to_string(),
-                        "message": msg,
-                    })
-                    .to_string(),
+                    crate::http::tenant_stream::stamp_value(
+                        auth.tenant_id,
+                        json!({
+                            "event": "containment_executed",
+                            "severity": "critical",
+                            "client_id": client_id.to_string(),
+                            "message": msg,
+                        }),
+                    ),
                 );
                 (StatusCode::OK, Json(json!({"ok": true, "detail": msg}))).into_response()
             }
@@ -756,13 +765,15 @@ async fn api_containment_execute(
         {
             Ok(msg) => {
                 let _ = state.telemetry_broadcast_tx.send(
-                    json!({
-                        "event": "containment_k8s_applied",
-                        "severity": "critical",
-                        "client_id": client_id.to_string(),
-                        "message": msg,
-                    })
-                    .to_string(),
+                    crate::http::tenant_stream::stamp_value(
+                        auth.tenant_id,
+                        json!({
+                            "event": "containment_k8s_applied",
+                            "severity": "critical",
+                            "client_id": client_id.to_string(),
+                            "message": msg,
+                        }),
+                    ),
                 );
                 (StatusCode::OK, Json(json!({"ok": true, "detail": msg}))).into_response()
             }

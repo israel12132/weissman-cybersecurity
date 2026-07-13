@@ -1,0 +1,35 @@
+# Keep at least one healthy replica of each tier during voluntary disruptions
+# (node drains, rolling upgrades). Pair with the multi-replica Deployments + anti-affinity.
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-backend
+  namespace: weissman
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-worker
+  namespace: weissman
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-gateway
+  namespace: weissman
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-gateway

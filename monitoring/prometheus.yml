@@ -33,17 +33,33 @@ scrape_configs:
       type: Bearer
       credentials_file: /etc/prometheus/metrics_token
 
-  # Optional sidecars — only enable these jobs once the matching exporter services
-  # exist in your compose/k8s stack, otherwise they will show as "down" targets.
-  # - job_name: 'redis'
-  #   static_configs:
-  #     - targets: ['redis-exporter:9121']
-  # - job_name: 'postgres'
-  #   static_configs:
-  #     - targets: ['pg-exporter:9187']
-  # - job_name: 'node'
-  #   static_configs:
-  #     - targets: ['node-exporter:9100']
+  # Exporters — provided by the `monitoring` profile in docker-compose.yml.
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Synthetic (blackbox) probes — external-perspective health of the API + public status page.
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://backend:8000/api/health
+          - http://gateway:80/status
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
 
   # Prometheus self-monitoring
   - job_name: 'prometheus'

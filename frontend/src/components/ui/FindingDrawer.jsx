@@ -122,6 +122,8 @@ export default function FindingDrawer({
   const [activeTab, setActiveTab] = useState('evidence')
   const dialogRef = useRef(null)
   const tabRefs = useRef([])
+
+  // Keep Tab focus inside the modal drawer while it's open (a11y: role="dialog" aria-modal).
   useFocusTrap(dialogRef, Boolean(finding))
 
   const drawerTabs = useMemo(
@@ -170,9 +172,14 @@ export default function FindingDrawer({
     document.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // Remember what had focus so we can restore it when the drawer closes (a11y).
+    const invoker = document.activeElement
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
+      if (invoker instanceof HTMLElement && document.contains(invoker)) {
+        invoker.focus()
+      }
     }
   }, [finding, onClose])
 

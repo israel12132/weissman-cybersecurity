@@ -1,0 +1,106 @@
+# Redis for the job bus / SOAR idempotency / rate limits. Redis is a correctness-critical
+# dependency, so the single-replica Deployment (redis-deployment.yaml, no persistence) is a
+# SPOF + data-loss risk. This is the hardened replacement: a StatefulSet with AOF persistence,
+# a PodDisruptionBudget, and anti-affinity.
+#
+# For automatic FAILOVER (true HA), pick one of:
+#   • Managed Redis with replication + failover (ElastiCache / Memorystore / Upstash).
+#   • Redis Sentinel: Bitnami chart `bitnami/redis` with `sentinel.enabled=true`, or the
+#     Redis Operator (spotahome/redis-operator). Point REDIS_URL at the Sentinel-aware
+#     service. Keep this StatefulSet as the single-primary baseline until then.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: weissman-redis-config
+  namespace: weissman
+data:
+  redis.conf: |
+    appendonly yes
+    appendfsync everysec
+    maxmemory-policy noeviction
+    save 900 1
+    save 300 10
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: weissman-redis
+  namespace: weissman
+spec:
+  serviceName: weissman-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weissman-redis
+  template:
+    metadata:
+      labels:
+        app: weissman-redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "/etc/redis/redis.conf"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: weissman-redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weissman-redis
+  namespace: weissman
+spec:
+  selector:
+    app: weissman-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: weissman-redis
+  namespace: weissman
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: weissman-redis

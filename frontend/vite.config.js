@@ -55,6 +55,9 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2020',
+    // Strip console/debugger from production bundles: prevents leaking raw error objects
+    // (response bodies, integration detail) into the browser console. Dev server is unaffected.
+    esbuild: { drop: ['console', 'debugger'] },
     modulePreload: { polyfill: false },
     rollupOptions: {
       output: {

@@ -2,6 +2,14 @@ import js from '@eslint/js'
 import globals from 'globals'
 import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
+
+// Accessibility rules run as WARN (not ERROR) so `npm run lint` — which fails only on
+// errors — stays green while we burn down the a11y backlog across the ~77 pages that
+// currently lack aria/role coverage. New code is nudged toward accessible markup.
+const jsxA11yWarnings = Object.fromEntries(
+  Object.keys(jsxA11y.flatConfigs.recommended.rules).map((rule) => [rule, 'warn']),
+)
 
 // Flat config (ESLint 9). Scoped to application source (src/**). The Playwright
 // specs under tests-e2e/** are TypeScript and linted by their own toolchain, so we
@@ -38,9 +46,10 @@ export default [
       },
     },
     settings: { react: { version: 'detect' } },
-    plugins: { react, 'react-hooks': reactHooks },
+    plugins: { react, 'react-hooks': reactHooks, 'jsx-a11y': jsxA11y },
     rules: {
       ...react.configs.flat.recommended.rules,
+      ...jsxA11yWarnings,
       // Vite uses the automatic JSX runtime — no React import needed in scope.
       'react/react-in-jsx-scope': 'off',
       'react/jsx-uses-react': 'off',

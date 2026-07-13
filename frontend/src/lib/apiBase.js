@@ -84,6 +84,12 @@ function parseRetryAfter(retryAfterHeader) {
   }
 }
 
+// Persisting the bearer to localStorage re-exposes it to any XSS (it survives tab close,
+// unlike the HttpOnly cookie which JS can't read). Allow that mirror only in dev/test
+// builds (Playwright context resets); production relies on the HttpOnly cookie + refresh.
+const ALLOW_PERSISTENT_TOKEN =
+  typeof import.meta !== 'undefined' && import.meta.env ? !import.meta.env.PROD : false
+
 export function getStoredAccessToken() {
   // Always clean up a token left in localStorage by an older build.
   purgeLegacyLocalStorageToken()
@@ -97,6 +103,16 @@ export function getStoredAccessToken() {
     inMemoryAccessToken = String(t).trim()
     return inMemoryAccessToken
   }
+  // Dev/test only: survives Playwright context resets when the HttpOnly cookie isn't visible to JS.
+  if (ALLOW_PERSISTENT_TOKEN && typeof localStorage !== 'undefined') {
+    const legacy = localStorage.getItem(ACCESS_TOKEN_KEY)
+    if (legacy && String(legacy).trim()) {
+      const v = String(legacy).trim()
+      inMemoryAccessToken = v
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
+      return v
+    }
+  }
   return null
 }
 
@@ -106,6 +122,11 @@ export function setStoredAccessToken(token) {
     const v = String(token).trim()
     inMemoryAccessToken = v
     if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
+    if (typeof localStorage !== 'undefined') {
+      // Production: proactively clear any stale mirror so a token can't linger after XSS.
+      if (ALLOW_PERSISTENT_TOKEN) localStorage.setItem(ACCESS_TOKEN_KEY, v)
+      else localStorage.removeItem(ACCESS_TOKEN_KEY)
+    }
   } else {
     inMemoryAccessToken = null
     if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)

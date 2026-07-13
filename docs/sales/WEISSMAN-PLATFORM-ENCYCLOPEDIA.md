@@ -80,7 +80,7 @@
 | [041](#page-041) | API — Integrations & Webhooks | API |
 | [042](#page-042) | מפת API מלאה — כל ה-endpoints | API |
 
-### חלק ו׳ — 533 מנועים
+### חלק ו׳ — 563 מנועים
 
 | עמוד | נושא | סוג |
 |------|------|-----|
@@ -662,7 +662,7 @@
 | **מתי** | לפני demo, RFP, due diligence, onboarding מנהלים, או הדרכת צוות מכירות. |
 | **איפה** | PDF / Markdown — `docs/sales/WEISSMAN-PLATFORM-ENCYCLOPEDIA.md` |
 | **איך** | פתחו את תוכן העניינים → קפצו לעמוד לפי מספר → קראו את ששת הממדים (מה·למה·מתי·איפה·איך·כמה). |
-| **כמה** | 533+ מנועים · 94+ מסכי Command Center · 9 crates Rust · multi-tenant SaaS |
+| **כמה** | 563 מנועי-ID · 95 מסכי Command Center · 9 crates Rust · multi-tenant SaaS |
 | **למי** | CEO, VP Sales, Pre-Sales, CISO, MSSP |
 | **מה יוצא** | הבנה מלאה של היקף המוצר ללא גישה לסביבה |
 ---
@@ -690,7 +690,7 @@
 | **מתי** | פתיחת כל שיחת מכירה. |
 | **איפה** | https://<host>/command-center/ |
 | **איך** | Login → Cockpit → Client → Scan → Job → Finding → Report. מנועים ב-Engine Matrix או Hub ייעודי. |
-| **כמה** | 533 מנועים · strict billing ב-production · RLS per tenant |
+| **כמה** | 563 מנועי-ID · strict billing ב-production · RLS per tenant |
 | **למי** | Pre-Sales, Architect |
 | **מה יוצא** | תמונה מental של זרימת הנתונים |
 ---
@@ -1197,7 +1197,7 @@
 > **סוג:** api · **מזהה:** `api-engines`
 
 | **מה** | Production list, capabilities, history, export, top-tier, telemetry. |
-| **למה** | 533 engines registry truth. |
+| **למה** | 563 engine-ID registry truth (303 real + 212 alias + 48 agent). |
 | **מתי** | Engine Matrix, profiles. |
 | **איפה** | /api/engines/production · /api/engines/capabilities |
 | **איך** | GET production → dispatch by id. |

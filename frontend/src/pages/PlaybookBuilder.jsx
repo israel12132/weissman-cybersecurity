@@ -27,6 +27,7 @@ import { downloadBytes } from '../lib/pdfExport'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { confirmDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
+import PlaybookGraph from '../components/PlaybookGraph'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -761,6 +762,15 @@ export default function PlaybookBuilder() {
                     </Button>
                   ))}
                 </div>
+                {(draft.actions || []).length > 0 && (
+                  <div className="mb-4">
+                    <PlaybookGraph
+                      trigger={draft.trigger}
+                      actions={draft.actions}
+                      onDryRun={dryRun}
+                    />
+                  </div>
+                )}
                 {(draft.actions || []).length === 0 ? (
                   <p className="py-8 text-center text-[12px] text-[var(--text-muted)]">{t('playbooks.no_actions')}</p>
                 ) : (

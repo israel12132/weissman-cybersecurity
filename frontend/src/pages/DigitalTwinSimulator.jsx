@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Play, RotateCw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
@@ -15,7 +16,7 @@ import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
 const ENGINE = 'digital_twin'
-const SIMULATION_SCENARIO_IDS = ['xss', 'sqli', 'mitm', 'cors']
+const SCENARIO_IDS = ['xss', 'sqli', 'mitm', 'cors']
 
 const SCENARIO_META = {
   xss: { mitre: 'T1059.007', color: '#ef4444', risk: 'high' },
@@ -229,7 +230,7 @@ function ScenarioCard({ scenarioId, result, onRun, running, disabled, t }) {
           {running || isPending ? <Loader2 className="w-3 h-3 animate-spin" />
             : hasResult ? <RotateCw className="w-3 h-3" /> : <Play className="w-3 h-3" />}
           {running ? t('pages.digitalTwinSimulator.simulating')
-            : isPending ? t('pages.digitalTwinSimulatostatus_pending')
+            : isPending ? t('pages.digitalTwinSimulator.status_pending')
               : hasResult ? t('pages.digitalTwinSimulator.rerun')
                 : t('pages.digitalTwinSimulator.simulate')}
         </Button>
@@ -426,7 +427,7 @@ export default function DigitalTwinSimulator() {
     }
   }, [t])
 
-  const handleSimulate = useCallback(async (scenarioId) => {
+  const handleRunScenario = useCallback(async (scenarioId) => {
     if (!selectedClientId) { showToast('error', t('pages.digitalTwinSimulator.select_client_first')); return }
     const body = buildScanBody(scenarioId)
     if (!body.target) { showToast('error', t('pages.digitalTwinSimulator.no_domain')); return }
@@ -481,10 +482,10 @@ export default function DigitalTwinSimulator() {
   })
 
   const handleRunAll = useCallback(async () => {
-    for (const id of SIMULATION_SCENARIO_IDS) {
-      await handleSimulate(id)
+    for (const id of SCENARIO_IDS) {
+      await handleRunScenario(id)
     }
-  }, [handleSimulate])
+  }, [handleRunScenario])
 
   const clearResults = useCallback(() => {
     setResults({})
@@ -497,7 +498,7 @@ export default function DigitalTwinSimulator() {
   const overview = useMemo(() => {
     const vals = Object.values(results)
     return {
-      simulated: vals.filter((r) => !r.pending).length,
+      scenariosCompleted: vals.filter((r) => !r.pending).length,
       vulnerable: vals.filter((r) => !r.pending && r.vulnerable).length,
       clear: vals.filter((r) => !r.pending && !r.vulnerable).length,
       running: vals.filter((r) => r.pending).length,
@@ -519,6 +520,8 @@ export default function DigitalTwinSimulator() {
         />
       )}
     >
+      <EvidenceNotice className="mb-6">{t('pages.digitalTwinSimulator.evidence_notice')}</EvidenceNotice>
+
       {toast && (
         <div className={`fixed top-16 right-4 z-50 rounded-xl border px-4 py-3 text-sm font-mono max-w-sm shadow-2xl ${toast.sev === 'error' ? 'bg-rose-950/90 border-rose-500/40 text-rose-200' : 'bg-[var(--bg-1)] border-[#8b5cf6]/30 text-[#8b5cf6]'}`}>
           {toast.msg}
@@ -621,7 +624,7 @@ export default function DigitalTwinSimulator() {
       {hasAnyResult && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[
-            { key: 'overview_simulated', value: overview.simulated, color: '#a78bfa' },
+            { key: 'overview_scenarios_completed', value: overview.scenariosCompleted, color: '#a78bfa' },
             { key: 'overview_vulnerable', value: overview.vulnerable, color: '#f43f5e' },
             { key: 'overview_clear', value: overview.clear, color: '#34d399' },
             { key: 'overview_running', value: overview.running, color: '#38bdf8' },
@@ -663,9 +666,9 @@ export default function DigitalTwinSimulator() {
         <div className="lg:col-span-2 space-y-4">
           <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.digitalTwinSimulator.attack_simulations')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {SIMULATION_SCENARIO_IDS.map((scenarioId) => (
+            {SCENARIO_IDS.map((scenarioId) => (
               <ScenarioCard key={scenarioId} scenarioId={scenarioId} result={results[scenarioId] ?? null}
-                onRun={handleSimulate} running={runningId === scenarioId} disabled={!selectedClientId} t={t} />
+                onRun={handleRunScenario} running={runningId === scenarioId} disabled={!selectedClientId} t={t} />
             ))}
           </div>
         </div>

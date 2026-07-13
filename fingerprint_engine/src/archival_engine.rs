@@ -45,7 +45,7 @@ pub async fn wayback_paths_for_domain(
         urlencoding::encode(&domain)
     );
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let resp = match c.get(&url).send().await {
         Ok(r) => r,
@@ -107,7 +107,7 @@ pub async fn otx_urls_for_domain(
         urlencoding::encode(&domain)
     );
     if let Some(s) = stealth {
-        stealth_engine::apply_jitter(s);
+        stealth_engine::apply_jitter(s).await;
     }
     let resp = match c.get(&url).send().await {
         Ok(r) => r,

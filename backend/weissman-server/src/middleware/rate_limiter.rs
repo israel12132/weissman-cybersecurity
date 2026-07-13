@@ -78,9 +78,20 @@ fn limiter_default() -> Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, De
 }
 
 fn client_ip<B>(req: &Request<B>) -> Option<IpAddr> {
-    req.extensions()
+    let peer = req
+        .extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map(|ci| ci.0.ip())
+        .map(|ci| ci.0)?;
+    // Proxy-aware keying: behind nginx/Caddy the socket peer is the reverse proxy, so
+    // keying on it alone collapses every client into ONE bucket — defeating per-IP
+    // login/signup throttles and turning them into a shared-bucket DoS. Reuse the same
+    // trusted-proxy XFF/X-Real-IP resolution the inner API/login limiters use.
+    // (Distributed, cross-replica enforcement is handled by the inner
+    // `fingerprint_engine::http::api_rate_limit`/`rate_limit_redis` layer.)
+    match fingerprint_engine::http::extract_client_ip(req.headers(), peer).parse::<IpAddr>() {
+        Ok(ip) => Some(ip),
+        Err(_) => Some(peer.ip()),
+    }
 }
 
 pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next) -> Response {

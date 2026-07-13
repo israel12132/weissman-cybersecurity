@@ -6,9 +6,7 @@
 use super::EngineRunContext;
 use crate::engine_result::EngineResult;
 
-pub use weissman_core::models::engine_agent::{
-    is_agent_required_engine, AGENT_REQUIRED_ENGINES,
-};
+pub use weissman_core::models::engine_agent::{is_agent_required_engine, AGENT_REQUIRED_ENGINES};
 
 /// Dispatch an agent-required engine to the endpoint fleet (or return a status finding).
 pub async fn run_agent_required_engine(

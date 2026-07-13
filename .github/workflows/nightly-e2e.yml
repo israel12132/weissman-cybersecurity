@@ -131,3 +131,62 @@ jobs:
           cat /tmp/weissman-server.log || true
           echo '--- weissman-worker.log ---'
           cat /tmp/weissman-worker.log || true
+
+  fuzz:
+    name: Fuzz fuzz_core (nightly, time-boxed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly toolchain + cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal --component llvm-tools-preview
+          cargo install cargo-fuzz --locked
+      - name: Fuzz mutate target (120s)
+        working-directory: fuzz_core
+        run: cargo +nightly fuzz run mutate -- -max_total_time=120 -rss_limit_mb=4096
+      - name: Fuzz analyze target (120s)
+        working-directory: fuzz_core
+        run: cargo +nightly fuzz run analyze -- -max_total_time=120 -rss_limit_mb=4096
+      - name: Upload crash artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz_core/fuzz/artifacts/
+          if-no-files-found: ignore
+
+  backup-restore-verify:
+    name: Backup PITR restore-verify (self-contained)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Prove a pg_basebackup can actually be RESTORED, not just that files exist. Fully
+      # self-contained: create a source cluster, back it up with the image's own
+      # (version-matched) pg_basebackup, then run the production restore-verify script.
+      - name: Backup → restore round-trip
+        run: |
+          set -euo pipefail
+          IMG=pgvector/pgvector:pg16
+          BASE_DIR=/tmp/weissman-backups/base
+          mkdir -p "$BASE_DIR/base_ci"
+
+          docker run -d --name bkp-src \
+            -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=weissman "$IMG"
+          for _ in $(seq 1 30); do docker exec bkp-src pg_isready -U postgres -q && break; sleep 2; done
+
+          # Seed a _sqlx_migrations table so the restore sanity check has data to assert on.
+          docker exec bkp-src psql -U postgres -d weissman -c \
+            "CREATE TABLE IF NOT EXISTS _sqlx_migrations(version bigint primary key, description text); \
+             INSERT INTO _sqlx_migrations VALUES (1,'ci-seed') ON CONFLICT DO NOTHING;"
+
+          # Base backup via the container's own pg_basebackup over the local socket
+          # (local replication is trust in the official image).
+          docker exec bkp-src bash -lc 'rm -rf /tmp/bb && mkdir -p /tmp/bb && \
+            pg_basebackup -U postgres -D /tmp/bb -Ft -z -X stream'
+          docker cp bkp-src:/tmp/bb/base.tar.gz "$BASE_DIR/base_ci/base.tar.gz"
+          docker cp bkp-src:/tmp/bb/pg_wal.tar.gz "$BASE_DIR/base_ci/pg_wal.tar.gz" || true
+          ln -sfn "$BASE_DIR/base_ci" "$BASE_DIR/latest"
+          docker rm -f bkp-src
+
+          WEISSMAN_PITR_BASE_DIR="$BASE_DIR" ./scripts/backup_restore_verify.sh

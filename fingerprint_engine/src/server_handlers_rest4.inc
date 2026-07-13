@@ -1609,20 +1609,31 @@ async fn api_deception_list(
     let out: Vec<Value> = rows
         .into_iter()
         .map(|r| {
-            let status = r.try_get::<String,_>("status").unwrap_or_default();
-            let simulation_mode = status == "simulation";
+            let status_raw = r.try_get::<String,_>("status").unwrap_or_default();
+            let status = if status_raw == "simulation" {
+                "active".to_string()
+            } else {
+                status_raw
+            };
+            let canary_ak = r.try_get::<String,_>("canary_access_key_id").unwrap_or_default();
+            let oast_hook = r.try_get::<String,_>("oast_canary_hook").unwrap_or_default();
+            let token_value = r.try_get::<String,_>("token_value").unwrap_or_default();
+            let asset_type = r.try_get::<String,_>("asset_type").unwrap_or_default();
+            let live_aws_canary = asset_type == "aws_key"
+                && !canary_ak.is_empty()
+                && !token_value.contains(&canary_ak);
             json!({
                 "id": r.try_get::<i64,_>("id").unwrap_or(0),
-                "asset_type": r.try_get::<String,_>("asset_type").unwrap_or_default(),
+                "asset_type": asset_type,
                 "token_value": r.try_get::<String,_>("token_value").unwrap_or_default(),
                 "token_value_masked": mask_token_preview(r.try_get::<String,_>("token_value").unwrap_or_default().as_str()),
                 "deployment_location": r.try_get::<Option<String>,_>("deployment_location").ok().flatten(),
                 "cloud_injection_uri": r.try_get::<Option<String>,_>("cloud_injection_uri").ok().flatten(),
-                "canary_access_key_id": r.try_get::<String,_>("canary_access_key_id").unwrap_or_default(),
-                "oast_canary_hook": r.try_get::<String,_>("oast_canary_hook").unwrap_or_default(),
+                "canary_access_key_id": canary_ak,
+                "oast_canary_hook": oast_hook,
                 "status": status,
-                "simulation_mode": simulation_mode,
-                "live_aws_canary": !simulation_mode && !r.try_get::<String,_>("canary_access_key_id").unwrap_or_default().is_empty(),
+                "live_aws_canary": live_aws_canary,
+                "oast_monitoring": !oast_hook.is_empty(),
                 "created_at": r.try_get::<chrono::DateTime<Utc>,_>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
             })
         })
@@ -1743,6 +1754,9 @@ async fn api_deception_generate(
                 status: "active",
             });
         } else {
+            let mon = uuid::Uuid::new_v4();
+            let oast_url =
+                crate::deception_aws_canary::aws_oast_monitor_url_with_path(&mon);
             let canary = crate::deception_deployment_engine::extract_canary_access_key_id(&token)
                 .unwrap_or_default();
             to_insert.push(RowInsert {
@@ -1750,9 +1764,9 @@ async fn api_deception_generate(
                 token,
                 loc,
                 canary,
-                oast: String::new(),
+                oast: oast_url,
                 iam_user: None,
-                status: "simulation",
+                status: "active",
             });
         }
     }
@@ -2205,6 +2219,203 @@ async fn api_council_hitl_reject(
         Err(e) => {
             tracing::error!(target: "hitl", "reject failed: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Autonomous self-improvement engine — console handlers
+// ════════════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+struct SelfImproveQueueQuery {
+    #[serde(default)]
+    status: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SelfImproveReviewBody {
+    #[serde(default)]
+    review_note: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SelfImproveToggleBody {
+    enabled: bool,
+}
+
+/// GET /api/self-improve/status — toggle state, interval, queue counts, last cycle.
+async fn api_self_improve_status(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let summary = crate::self_improve::status_summary(state.app_pool.as_ref(), auth.tenant_id).await;
+    Json(summary).into_response()
+}
+
+/// GET /api/self-improve/queue — ranked improvement proposals.
+async fn api_self_improve_queue(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    axum::extract::Query(q): axum::extract::Query<SelfImproveQueueQuery>,
+) -> Response {
+    let status_filter = q.status.as_deref().filter(|s| {
+        matches!(*s, "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "APPLIED")
+    });
+    match crate::self_improve::list_queue(state.app_pool.as_ref(), auth.tenant_id, status_filter)
+        .await
+    {
+        Ok(items) => Json(json!({"items": items, "count": items.len()})).into_response(),
+        Err(e) => {
+            tracing::error!(target: "self_improve", "list_queue failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /api/self-improve/toggle — enable/disable the hourly engine (live, no restart).
+async fn api_self_improve_toggle(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<SelfImproveToggleBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    match crate::self_improve::set_enabled(state.app_pool.as_ref(), auth.tenant_id, body.enabled)
+        .await
+    {
+        Ok(()) => Json(json!({"ok": true, "enabled": body.enabled})).into_response(),
+        Err(e) => {
+            tracing::error!(target: "self_improve", "toggle failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /api/self-improve/run-now — trigger one analysis cycle immediately.
+async fn api_self_improve_run_now(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    match crate::self_improve::run_cycle(
+        state.app_pool.as_ref(),
+        state.telemetry_broadcast_tx.as_ref(),
+        auth.tenant_id,
+    )
+    .await
+    {
+        Ok(n) => (
+            StatusCode::ACCEPTED,
+            Json(json!({"ok": true, "proposals_generated": n})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "self_improve", "run_cycle failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /api/self-improve/:id/approve — approve a proposal; enqueues a PR-only apply job.
+async fn api_self_improve_approve(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(item_id): Path<i64>,
+    Json(body): Json<SelfImproveReviewBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    match crate::self_improve::approve(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        item_id,
+        auth.user_id,
+        body.review_note.as_deref(),
+    )
+    .await
+    {
+        Ok(job_id) => (
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "item_id": item_id,
+                "status": "APPROVED",
+                "apply_job_id": job_id.to_string(),
+                "open_pr_only": true,
+                "message": "Approved. A PR-only apply job was queued; main is never written directly.",
+            })),
+        )
+            .into_response(),
+        Err(crate::self_improve::ReviewError::NotFound) => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
+        }
+        Err(crate::self_improve::ReviewError::WrongStatus(s)) => (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "wrong_status", "current_status": s})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "self_improve", "approve failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /api/self-improve/:id/reject — reject a proposal (no job enqueued).
+async fn api_self_improve_reject(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(item_id): Path<i64>,
+    Json(body): Json<SelfImproveReviewBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    match crate::self_improve::reject(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        item_id,
+        auth.user_id,
+        body.review_note.as_deref(),
+    )
+    .await
+    {
+        Ok(()) => Json(json!({"item_id": item_id, "status": "REJECTED"})).into_response(),
+        Err(crate::self_improve::ReviewError::NotFound) => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "not_found"}))).into_response()
+        }
+        Err(crate::self_improve::ReviewError::WrongStatus(s)) => (
+            StatusCode::CONFLICT,
+            Json(json!({"error": "wrong_status", "current_status": s})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(target: "self_improve", "reject failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
         }
     }
 }

@@ -279,10 +279,7 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
         if let Some(v) = raw.get("value").and_then(Value::as_str) {
             let t = v.trim();
             if !t.is_empty() {
-                let src = raw
-                    .get("source")
-                    .and_then(Value::as_str)
-                    .unwrap_or("probe");
+                let src = raw.get("source").and_then(Value::as_str).unwrap_or("probe");
                 return Some(format!("live {src} observation: {t}"));
             }
         }

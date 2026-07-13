@@ -6,6 +6,7 @@ import {
   Shield, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Search, FileCheck, ShieldCheck,
 } from 'lucide-react';
 import PageShell from './PageShell';
+import CompliancePosturePanel from './CompliancePosturePanel';
 import ShellScanActions from '../components/engine/ShellScanActions';
 import DataTable from '../components/ui/DataTable';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
@@ -635,6 +636,8 @@ export default function ComplianceFrameworks() {
             </div>
           )}
         </div>
+        {/* Live, client-scoped compliance exposure rolled up from open findings via the crosswalk. */}
+        <CompliancePosturePanel />
 
         <div className="flex items-center gap-3 overflow-x-auto pb-2">
           {loadingFrameworks && frameworks.length === 0 ? (

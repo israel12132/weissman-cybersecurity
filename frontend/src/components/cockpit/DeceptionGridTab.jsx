@@ -302,6 +302,11 @@ export default function DeceptionGridTab() {
                       {t(`${NS}.liveAwsBadge`)}
                     </span>
                   )}
+                  {a.oast_monitoring && !a.live_aws_canary && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                      {t(`${NS}.liveOastBadge`, 'Live OAST')}
+                    </span>
+                  )}
                   {a.status === 'triggered' && <AlertTriangle className="w-4 h-4 text-red-400 ml-auto" />}
                 </div>
                 <div className="mt-1 font-mono text-[10px] text-white/60 truncate" title={a.token_value_masked}>

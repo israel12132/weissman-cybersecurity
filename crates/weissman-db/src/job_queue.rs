@@ -343,7 +343,9 @@ pub struct JobStatusView {
     pub source: &'static str,
 }
 
-/// Strict tenant scoping (table has no RLS — application enforces `tenant_id`).
+/// Strict tenant scoping. Application enforces `tenant_id` in the query; RLS on
+/// `weissman_async_jobs` (migration `20260708120000_rls_job_bus_tables`) adds a
+/// defense-in-depth filter whenever a tenant GUC is set (worker path is exempt).
 pub async fn get_job_for_tenant(
     pool: &PgPool,
     tenant_id: i64,

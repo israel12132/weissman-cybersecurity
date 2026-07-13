@@ -92,13 +92,7 @@ impl RunGuard {
         detail: &str,
     ) -> Self {
         run_start(
-            job_id,
-            engine_id,
-            target,
-            tenant_id,
-            client_id,
-            phase,
-            detail,
+            job_id, engine_id, target, tenant_id, client_id, phase, detail,
         );
         Self {
             job_id: job_id.to_string(),
@@ -189,9 +183,7 @@ pub async fn build_snapshot(
         std::collections::HashMap::new();
 
     for r in &job_rows {
-        let payload: Value = r
-            .try_get::<Value, _>("payload")
-            .unwrap_or(json!({}));
+        let payload: Value = r.try_get::<Value, _>("payload").unwrap_or(json!({}));
         let engine_from_payload = payload
             .get("engine")
             .and_then(Value::as_str)
@@ -225,9 +217,7 @@ pub async fn build_snapshot(
     }
 
     let telem_map: std::collections::HashMap<String, crate::engine_telemetry::EngineHealth> =
-        crate::engine_telemetry::snapshot()
-            .into_iter()
-            .collect();
+        crate::engine_telemetry::snapshot().into_iter().collect();
 
     let mut engines: Vec<Value> = Vec::with_capacity(PRODUCTION_ENGINE_IDS.len());
     let mut running = 0u32;
@@ -241,8 +231,7 @@ pub async fn build_snapshot(
 
         let live_ref = live_by_engine.as_ref();
         let job_ref = engine_job_map.get(eid);
-        let (lifecycle, stuck_reason) =
-            lifecycle_from_job_and_live(eid, live_ref, job_ref);
+        let (lifecycle, stuck_reason) = lifecycle_from_job_and_live(eid, live_ref, job_ref);
 
         match lifecycle.as_str() {
             "running" => running += 1,
@@ -464,11 +453,7 @@ async fn build_system_modules(pool: &PgPool, tenant_id: i64, uptime_secs: u64) -
             "Endpoint Agent Fleet",
             "edge",
             "Host-resident detections; timestomp, log integrity, USB, etc.",
-            if agents_online > 0 {
-                "healthy"
-            } else {
-                "idle"
-            },
+            if agents_online > 0 { "healthy" } else { "idle" },
             true,
             "registry",
             json!({ "online_5m": agents_online }),

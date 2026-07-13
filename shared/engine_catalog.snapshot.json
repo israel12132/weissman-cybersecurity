@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-06T05:01:59.093Z",
+  "generated_at": "2026-07-06T13:47:40.764Z",
   "source": {
     "production": "backend/weissman-core/src/models/engine.rs",
     "agent_required": "backend/weissman-core/src/models/engine_agent.rs",
@@ -36,7 +36,7 @@
     "log_tampering_engine",
     "timestomping",
     "anti_debug_evasion",
-    "rootkit_simulation",
+    "rootkit_surface_probe",
     "memory_forensics_evasion",
     "usb_enumeration",
     "dns_tunneling_c2",
@@ -79,8 +79,8 @@
     "infostealer_emulation"
   ],
   "parity": {
-    "frontend_subset_of_production": true,
-    "production_subset_of_frontend": true,
+    "frontend_subset_of_production": false,
+    "production_subset_of_frontend": false,
     "counts_match": true
   }
 }

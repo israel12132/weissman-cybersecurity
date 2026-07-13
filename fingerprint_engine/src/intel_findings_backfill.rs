@@ -197,6 +197,20 @@ pub async fn run_findings_intel_backfill(pool: &PgPool) -> Result<(usize, usize)
     .await
     .map_err(|e| e.to_string())?;
 
+    // Re-rank effective_risk for findings just discovered to be KEV-listed. Without this a
+    // finding LEARNED to be known-exploited would stay frozen at its CVSS-only priority forever.
+    // The KEV floor is idempotent (GREATEST) and the WHERE only touches rows still below it, so
+    // this can't double-count and won't churn already-ranked rows.
+    let _ = sqlx::query(
+        r#"UPDATE vulnerabilities v
+              SET effective_risk = CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END
+            WHERE v.kev_listed
+              AND COALESCE(v.effective_risk, 0.0)
+                  < CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END"#,
+    )
+    .execute(pool)
+    .await;
+
     Ok((
         cve_updates,
         epss_res.rows_affected() as usize + kev_res.rows_affected() as usize,

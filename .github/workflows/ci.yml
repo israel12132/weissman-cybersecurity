@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
   pull_request:
     branches: ["**"]
 
@@ -92,6 +93,14 @@ jobs:
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104
 
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Run cargo deny (license + advisory + source provenance gate)
+        # Enforces the dependency-license allow-list (fails on GPL/AGPL/unknown),
+        # advisory policy, and crates.io-only sources. Config: deny.toml.
+        run: cargo deny check licenses advisories sources bans
+
       - name: Check Rust formatting
         run: cargo fmt --all --check
 
@@ -117,12 +126,12 @@ jobs:
             | tar -xz gitleaks
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
 
-      - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL)
+      - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
           scan-ref: .
-          severity: CRITICAL
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
           format: table
@@ -149,9 +158,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Frontend npm audit (critical CVEs only)
+      - name: Frontend npm audit (high+critical CVEs)
         working-directory: frontend
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=high
 
   frontend-build:
     name: Frontend — lint, test, build
@@ -294,16 +303,16 @@ jobs:
       - name: Build Docker production images
         run: docker compose build backend worker gateway
 
-      - name: Scan built backend image (Trivy, CRITICAL)
+      - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the
         # actual runtime image (base OS packages baked into weissman-backend:stable).
-        # ignore-unfixed keeps it actionable — only CRITICALs with an available fix
+        # ignore-unfixed keeps it actionable — only CRITICAL/HIGH with an available fix
         # fail the build (then bump the base image; Dependabot 'docker' helps here).
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: image
           image-ref: weissman-backend:stable
-          severity: CRITICAL
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
           format: table
@@ -353,6 +362,19 @@ jobs:
           echo "weissman-server did not become healthy"
           cat /tmp/weissman-server.log || true
           exit 1
+
+      - name: DAST — OWASP ZAP baseline against the live stack (informational)
+        # We sell DAST, so we run it against our own live stack every CI build. Non-blocking
+        # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
+        # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
+        # container itself — target the runner's docker-bridge gateway to reach the host.
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: http://172.17.0.1:18000/api/health
+          cmd_options: '-I -a'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-baseline-report
 
       - name: Live RLS cross-tenant isolation contract
         env:
@@ -504,3 +526,102 @@ jobs:
             --config p/owasp-top-ten \
             --metrics off \
             --error
+
+  rust-coverage:
+    name: Rust — coverage (llvm-cov)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91.1
+        with:
+          components: llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+      - name: Coverage (workspace lib tests) with a floor
+        # Security-critical code should carry measured coverage, not just green tests.
+        # Start the floor conservative and ratchet up; lcov is uploaded for inspection.
+        run: |
+          cargo llvm-cov --workspace --lib --lcov --output-path lcov.info --fail-under-lines 40
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-lcov
+          path: lcov.info
+          if-no-files-found: warn
+
+  publish:
+    name: Publish signed image (tags only)
+    runs-on: ubuntu-latest
+    # Only build+publish after the quality gates pass, and only for release tags.
+    needs: [rust-audit, security-scan, frontend-build, engine-wiring-and-smoke, semgrep]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # keyless cosign + provenance attestation
+      attestations: write # actions/attest-*
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/weissman-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/backend.Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:latest
+          sbom: true # BuildKit SBOM attestation
+          provenance: mode=max # BuildKit SLSA provenance attestation
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the published image (keyless / OIDC)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Attest SLSA build provenance (GitHub, pushed to registry)
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Generate image SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx
+          output: sbom-backend.cdx.json
+
+      - name: Attest SBOM (pushed to registry)
+        uses: actions/attest-sbom@v1
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom-backend.cdx.json
+          push-to-registry: true
+
+      - name: Print digest to pin in k8s
+        run: |
+          echo "::notice title=Pin this digest in deploy/k8s/backend-deployment.yaml::${IMAGE}@${{ steps.build.outputs.digest }}"
+          echo "Verify with:"
+          echo "  cosign verify ${IMAGE}@${{ steps.build.outputs.digest }} \\"
+          echo "    --certificate-identity-regexp 'https://github.com/${{ github.repository }}/.*' \\"
+          echo "    --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+          echo "  gh attestation verify oci://${IMAGE}@${{ steps.build.outputs.digest }} -R ${{ github.repository }}"

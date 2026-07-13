@@ -24,6 +24,36 @@ export const PRIMARY_NAV_GROUP = {
   items: PRIMARY_NAV,
 }
 
+/**
+ * Flat "quick-nav" for the cinematic SOC intel-map view (App.jsx). Defined here so the two
+ * navigation surfaces share ONE source and can't silently drift. `separatorBefore` renders a
+ * divider; `color`/`className` preserve that view's bespoke styling.
+ */
+export const INTEL_MAP_QUICKNAV = [
+  { to: '/', labelKey: 'components.intelMap.dashboard' },
+  { to: '/clients', labelKey: 'components.intelMap.clients' },
+  { to: '/engines', labelKey: 'components.intelMap.engine_matrix', className: 'nav-link-active' },
+  { to: '/threat-intel', labelKey: 'components.intelMap.threat_intel', color: 'rgba(139,92,246,0.85)' },
+  { to: '/threat-emulation', labelKey: 'components.intelMap.apt_emulation' },
+  { to: '/cloud', labelKey: 'components.intelMap.cloud' },
+  { to: '/supply-chain', labelKey: 'components.intelMap.supply_chain' },
+  { to: '/network', labelKey: 'components.intelMap.network' },
+  { to: '/domain-discovery', labelKey: 'components.intelMap.discovery' },
+  { to: '/pqc-radar', labelKey: 'components.intelMap.pqc_radar' },
+  { to: '/oast', labelKey: 'components.intelMap.oast' },
+  { to: '/digital-twin', labelKey: 'components.intelMap.digital_twin' },
+  { to: '/zero-day-radar', labelKey: 'components.intelMap.zero_day' },
+  { to: '/findings', labelKey: 'components.intelMap.findings_c2', className: 'nav-link-findings', separatorBefore: true },
+  { to: '/incident-response', labelKey: 'components.intelMap.ir_center', color: 'rgba(239,68,68,0.85)' },
+  { to: '/vuln-intel', labelKey: 'components.intelMap.vuln_intel', color: 'rgba(249,115,22,0.85)' },
+  { to: '/dark-web', labelKey: 'components.intelMap.dark_web', color: 'rgba(167,139,250,0.85)' },
+  { to: '/threat-hunting', labelKey: 'components.intelMap.threat_hunt', color: 'rgba(139,92,246,0.85)' },
+  { to: '/council-queue', labelKey: 'components.intelMap.council', color: 'rgba(251,191,36,0.7)', separatorBefore: true },
+  { to: '/sso-config', labelKey: 'components.intelMap.sso', color: 'rgba(168,85,247,0.7)' },
+  { to: '/admin', labelKey: 'components.intelMap.admin', color: 'rgba(251,191,36,0.9)' },
+  { to: '/system-core', labelKey: 'components.intelMap.system_core' },
+]
+
 /** @type {NavGroup[]} */
 export const NAV_GROUPS = [
   {
@@ -61,6 +91,7 @@ export const NAV_GROUPS = [
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
+      { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },
       { to: '/roe-approvals', labelKey: 'nav.roe_approvals', icon: '📜' },
       { to: '/remediation', labelKey: 'nav.remediation', icon: '🔧' },
       { to: '/agents', labelKey: 'nav.agents', icon: '📡' },

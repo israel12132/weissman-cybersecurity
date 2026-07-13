@@ -261,7 +261,66 @@ services:
           cpus: '0.25'
           memory: 128M
 
+  # --- Exporters (host / redis / postgres metrics + synthetic HTTP probes) ---
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    profiles: [monitoring]
+    pid: host
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+    expose:
+      - "9100"
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    profiles: [monitoring]
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    expose:
+      - "9121"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    profiles: [monitoring]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}?sslmode=disable"
+    expose:
+      - "9187"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    profiles: [monitoring]
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    expose:
+      - "9115"
+    restart: unless-stopped
+
+  # --- Distributed tracing backend (Grafana Tempo, OTLP receiver). To export spans, set
+  #     WEISSMAN_OTLP_ENDPOINT=http://tempo:4318/v1/traces on backend + worker. ---
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: [tracing]
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./monitoring/tempo.yml:/etc/tempo/tempo.yml:ro
+      - weissman_tempo:/var/tempo
+    expose:
+      - "4318" # OTLP/HTTP
+      - "3200" # Tempo query API
+    restart: unless-stopped
+
 volumes:
   weissman_pg:
   weissman_prometheus:
   weissman_grafana:
+  weissman_tempo:

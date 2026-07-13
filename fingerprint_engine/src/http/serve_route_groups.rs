@@ -21,10 +21,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/findings/:id/status",
             patch(api_findings_update_status),
         )
-        .route(
-            "/api/findings/:id/verify",
-            post(api_findings_verify_live),
-        )
+        .route("/api/findings/:id/verify", post(api_findings_verify_live))
         .route("/api/intel/status", get(api_intel_status))
         .route("/api/attack-coverage", get(api_attack_coverage))
         .route("/api/intel/suppressions", get(api_intel_suppressions))
@@ -53,6 +50,62 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/threat-analysis/:client_id",
             get(api_threat_analysis_for_client),
+        )
+        // Global remediation priority: one ranked, root-cause-deduplicated "fix-first" program
+        // fusing effective_risk (EPSS/KEV) + attack-graph choke points across all findings.
+        .route(
+            "/api/remediation/priority/:client_id",
+            get(api_remediation_priority_for_client),
+        )
+        // Live per-client MITRE ATT&CK exposure: technique ranking + tactic rollup over findings.
+        .route(
+            "/api/attack-exposure/:client_id",
+            get(api_attack_exposure_for_client),
+        )
+        // Board-level security posture score (0..100 + A–F) distilled from the fix-first program.
+        .route(
+            "/api/posture/score/:client_id",
+            get(api_posture_score_for_client),
+        )
+        // Per-client compliance-framework posture: open findings rolled up per framework control.
+        .route(
+            "/api/compliance/posture/:client_id",
+            get(api_compliance_posture_for_client),
+        )
+        // Proactive SLA breach forecast: cumulative breaches by 7/14/30/60/90-day horizons.
+        .route(
+            "/api/remediation/sla-forecast/:client_id",
+            get(api_sla_forecast_for_client),
+        )
+        // Unified exec summary: posture + projection + SLA forecast + top actions in one query.
+        .route(
+            "/api/executive-summary/:client_id",
+            get(api_executive_summary_for_client),
+        )
+        // Backlog-aging analytics: open findings bucketed by age x severity + aged-critical flags.
+        .route(
+            "/api/remediation/aging/:client_id",
+            get(api_finding_aging_for_client),
+        )
+        // Complete arsenal inventory: every production engine + classification + category + ATT&CK.
+        .route("/api/arsenal/catalog", get(api_arsenal_catalog))
+        // Arsenal integrity/de-dup audit: distinct engines vs 100%-duplicate aliases (anti-fluff).
+        .route("/api/arsenal/integrity", get(api_arsenal_integrity))
+        // Stealth dispatch plan preview: how a batch of N engines drips out (concurrency/jitter/UA).
+        .route("/api/arsenal/deploy-plan", get(api_arsenal_deploy_plan))
+        // Stealth batch deploy: "run all" → backend drips the engines under concurrency/jitter/UA.
+        .route("/api/arsenal/deploy", post(api_arsenal_deploy))
+        // Arsenal recommendation: cross client exposure vs the engine arsenal → one-click plan + gaps.
+        .route(
+            "/api/arsenal/recommendation/:client_id",
+            get(api_arsenal_recommendation_for_client),
+        )
+        // Portfolio (fleet-wide) posture: every client's grade rolled into one MSSP summary.
+        .route("/api/portfolio/posture", get(api_portfolio_posture))
+        // Portfolio (fleet-wide) ATT&CK exposure: technique ranking merged across all clients.
+        .route(
+            "/api/portfolio/attack-exposure",
+            get(api_portfolio_attack_exposure),
         )
         .route(
             "/api/risk-graph/nodes/:node_id/flags",
@@ -214,6 +267,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/auth/saml/begin", get(crate::saml_auth::saml_begin))
         .route("/api/auth/saml/acs", post(crate::saml_auth::saml_acs))
         .route("/api/health", get(api_health))
+        .route("/api/ready", get(api_ready))
         .route("/api/audit-logs", get(api_audit_logs))
         .route("/api/audit/export", get(api_audit_export))
         .route("/api/auth/me", get(api_auth_me))
@@ -332,6 +386,19 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/council/hitl/:id/reject",
             post(api_council_hitl_reject),
+        )
+        // ── Autonomous self-improvement engine console ───────────────────────
+        .route("/api/self-improve/status", get(api_self_improve_status))
+        .route("/api/self-improve/queue", get(api_self_improve_queue))
+        .route("/api/self-improve/toggle", post(api_self_improve_toggle))
+        .route("/api/self-improve/run-now", post(api_self_improve_run_now))
+        .route(
+            "/api/self-improve/:id/approve",
+            post(api_self_improve_approve),
+        )
+        .route(
+            "/api/self-improve/:id/reject",
+            post(api_self_improve_reject),
         )
         // ── Structured OAST probe token registry ─────────────────────────────
         .route("/api/oast/probe", post(api_oast_probe_mint))

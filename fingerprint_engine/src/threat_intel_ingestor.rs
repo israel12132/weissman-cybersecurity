@@ -293,15 +293,16 @@ fn trigger_emergency_global_scan(
         return;
     }
     LAST_EMERGENCY_SCAN_MS.store(now_ms, Ordering::SeqCst);
-    let _ = telemetry.send(
+    // Genuinely platform-wide event (scan dispatched across all tenants) — stamp SYSTEM.
+    let _ = telemetry.send(crate::http::tenant_stream::stamp_value(
+        crate::http::tenant_stream::SYSTEM_TENANT,
         json!({
             "event": "emergency_swarm_scan",
             "severity": "critical",
             "message": "Zero-day / SBOM correlation — starting global orchestrator cycle",
             "detail": reason,
-        })
-        .to_string(),
-    );
+        }),
+    ));
     tokio::spawn(async move {
         let Ok(permit) = crate::scan_concurrency::acquire_full_scan_permit().await else {
             metrics::counter!("weissman_emergency_scan_skipped_total", "reason" => "concurrency_timeout")
@@ -476,16 +477,16 @@ pub async fn run_ingest_cycle(
             {
                 eprintln!("[Weissman][Ingest] persist tenant {}: {}", tid, e);
             }
-            let _ = telemetry.send(
+            let _ = telemetry.send(crate::http::tenant_stream::stamp_value(
+                tid,
                 json!({
                     "event": "threat_ingest_sbom_hit",
                     "severity": if critical { "critical" } else { "high" },
                     "tenant_id": tid.to_string(),
                     "external_id": item.external_id,
                     "matched": matched_names,
-                })
-                .to_string(),
-            );
+                }),
+            ));
             if critical && !triggered_emergency {
                 triggered_emergency = true;
                 trigger_emergency_global_scan(

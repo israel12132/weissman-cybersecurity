@@ -671,35 +671,31 @@ async fn api_reports_executive(
         None
     };
 
-    let sev_rows = if let Some(cid) = q.client_id {
-        sqlx::query("SELECT COALESCE(severity,'') AS severity FROM vulnerabilities WHERE client_id = $1")
-            .bind(cid)
-            .fetch_all(&mut *tx)
-            .await
-            .unwrap_or_default()
+    // Aggregate severity counts in SQL instead of loading the entire (fastest-growing) table
+    // into Rust and counting row-by-row. The FILTER ladder mirrors the previous
+    // critical > high > medium > low precedence exactly.
+    const SEV_AGG: &str = "COUNT(*) FILTER (WHERE lower(severity) LIKE '%critical%') AS critical, \
+         COUNT(*) FILTER (WHERE lower(severity) NOT LIKE '%critical%' AND lower(severity) LIKE '%high%') AS high, \
+         COUNT(*) FILTER (WHERE lower(severity) NOT LIKE '%critical%' AND lower(severity) NOT LIKE '%high%' AND lower(severity) LIKE '%med%') AS medium, \
+         COUNT(*) FILTER (WHERE lower(severity) NOT LIKE '%critical%' AND lower(severity) NOT LIKE '%high%' AND lower(severity) NOT LIKE '%med%') AS low";
+    let sev_row = if let Some(cid) = q.client_id {
+        sqlx::query(&format!(
+            "SELECT {SEV_AGG} FROM vulnerabilities WHERE client_id = $1"
+        ))
+        .bind(cid)
+        .fetch_one(&mut *tx)
+        .await
     } else {
-        sqlx::query("SELECT COALESCE(severity,'') AS severity FROM vulnerabilities")
-            .fetch_all(&mut *tx)
+        sqlx::query(&format!("SELECT {SEV_AGG} FROM vulnerabilities"))
+            .fetch_one(&mut *tx)
             .await
-            .unwrap_or_default()
     };
-    let mut critical = 0u32;
-    let mut high = 0u32;
-    let mut medium = 0u32;
-    let mut low = 0u32;
-    for r in sev_rows {
-        if let Ok(s) = r.try_get::<String, _>("severity") {
-            let l = s.to_lowercase();
-            if l.contains("critical") {
-                critical += 1;
-            } else if l.contains("high") {
-                high += 1;
-            } else if l.contains("medium") || l.contains("med") {
-                medium += 1;
-            } else {
-                low += 1;
-            }
-        }
+    let (mut critical, mut high, mut medium, mut low) = (0u32, 0u32, 0u32, 0u32);
+    if let Ok(r) = sev_row {
+        critical = r.try_get::<i64, _>("critical").unwrap_or(0).max(0) as u32;
+        high = r.try_get::<i64, _>("high").unwrap_or(0).max(0) as u32;
+        medium = r.try_get::<i64, _>("medium").unwrap_or(0).max(0) as u32;
+        low = r.try_get::<i64, _>("low").unwrap_or(0).max(0) as u32;
     }
 
     let cloud_n: i64 = if let Some(cid) = q.client_id {
