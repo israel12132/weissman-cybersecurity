@@ -7,15 +7,15 @@
 #
 #   1. The offensive / detection engines (fingerprint_engine/src) carry example
 #      tokens as their own test corpora — a secret-detection engine must contain
-#      realistic-looking fixtures (e.g. `AKIAZ7Q2LP4RW8TB1YC3`, `ya29.test`,
-#      `ghp_live`, PEM placeholders) so its detectors and redactors can be unit
-#      tested. Real runtime secrets are read from env / Vault (see
-#      ceo/vault.rs, scan_payload_redaction.rs), never hardcoded here.
+#      realistic-looking fixtures (AWS-style access-key IDs, Google-OAuth-style
+#      tokens, GitHub-PAT-style strings, PEM key headers) so its detectors and
+#      redactors can be unit tested. Real runtime secrets are read from env /
+#      Vault (see ceo/vault.rs, scan_payload_redaction.rs), never hardcoded here.
 #
 #   2. Three frontend surfaces render *demo* misconfigurations and input
-#      placeholders for the operator (canonical AWS docs key AKIAIOSFODNN7EXAMPLE,
-#      `ghp_xxxx…` placeholders, "-----BEGIN OPENSSH PRIVATE KEY-----" input
-#      placeholders). These are illustrative, not credentials.
+#      placeholders for the operator (the canonical AWS-docs example key, GitHub
+#      token placeholders, OpenSSH private-key input placeholders). These are
+#      illustrative, not credentials.
 #
 # gitleaks stays fully active everywhere else (deploy/, backend/, crates/,
 # scripts/, config, .env*, the rest of frontend/) — the places a real secret
@@ -34,4 +34,7 @@ paths = [
     '''frontend/src/pages/IacSecurityCenter\.jsx$''',
     '''frontend/src/pages/SovereignDefenseMatrix\.jsx$''',
     '''frontend/src/lib/engineParamDefsExplicit\.js$''',
+    # Generated vitest coverage report — embeds the (already-allowlisted) source
+    # HTML, so it inherits the same illustrative placeholders.
+    '''frontend/coverage/''',
 ]
