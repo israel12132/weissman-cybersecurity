@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, CheckCircle, XCircle, AlertTriangle, GitPullRequest, Repeat } from 'lucide-react'
+import { ShieldCheck, CheckCircle, AlertTriangle, GitPullRequest, Repeat } from 'lucide-react'
 
 /**
  * RemediationAnalyticsPanel — a self-contained visual dashboard for auto-heal outcomes, built from
