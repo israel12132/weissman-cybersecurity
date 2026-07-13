@@ -28,13 +28,25 @@ title = "Weissman gitleaks configuration"
 useDefault = true
 
 [allowlist]
-description = "Example/fixture secrets in the security engines' test corpora and the IaC/secret-scanner demo UI (non-real placeholders; real secrets come from env/Vault)."
+description = "Example/fixture secrets in the security engines' test corpora, the IaC/secret-scanner demo UI, and CI/E2E test fixtures (non-real placeholders; real secrets come from env/Vault)."
 paths = [
-    '''fingerprint_engine/src/.*\.rs$''',
+    '''fingerprint_engine/src/.*\.(rs|inc)$''',
     '''frontend/src/pages/IacSecurityCenter\.jsx$''',
     '''frontend/src/pages/SovereignDefenseMatrix\.jsx$''',
     '''frontend/src/lib/engineParamDefsExplicit\.js$''',
-    # Generated vitest coverage report — embeds the (already-allowlisted) source
-    # HTML, so it inherits the same illustrative placeholders.
+    # Generated vitest coverage report + production bundle — embed the
+    # (already-allowlisted) source, so they inherit the same illustrative demo
+    # placeholders. dist/ is a build artifact, not committed.
     '''frontend/coverage/''',
+    '''frontend/dist/''',
+    # Playwright saved login state — JWTs signed with the CI-only test secret,
+    # scoped to a test tenant; worthless outside CI.
+    '''frontend/tests-e2e/\.auth/''',
+]
+regexes = [
+    # `key = 'enable_rfc3161_signing'` is a config FLAG NAME, not a credential —
+    # the generic-api-key heuristic mis-fires on the `key = '...'` shape.
+    '''enable_rfc3161_signing''',
+    # Literal CI test env secret in the nightly-e2e workflow (not a real secret).
+    '''nightly-e2e-secret-min-32-chars''',
 ]
