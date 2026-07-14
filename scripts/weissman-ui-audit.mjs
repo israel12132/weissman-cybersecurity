@@ -229,6 +229,23 @@ async function main() {
   const chunksSrc = await readFile(join(FRONTEND_SRC, 'routing/routeChunks.js'), 'utf8')
   const tacticalSrc = await readFile(join(FRONTEND_SRC, 'TacticalApp.jsx'), 'utf8')
   const lazyMap = loadLazyImports(chunksSrc)
+
+  // Drift guard: EMBEDDED_SUBCOMPONENTS are excluded from the page audit on the premise that
+  // they are container-children, never standalone routes. If one later appears as a lazy route
+  // in routeChunks.js the exclusion has gone stale — it would silently hide a real routed
+  // surface from the forensic standard. Fail loudly so the exclusion list is kept honest.
+  const routedBasenames = new Set(
+    [...lazyMap.values()].map((spec) => `${spec.split('/').pop()}.jsx`),
+  )
+  const leakedEmbedded = [...EMBEDDED_SUBCOMPONENTS].filter((f) => routedBasenames.has(f))
+  if (leakedEmbedded.length) {
+    console.error(
+      `\n✖ EMBEDDED_SUBCOMPONENTS entries are now routed in routeChunks.js — remove them from the` +
+        ` exclusion set so they are audited as standalone surfaces: ${leakedEmbedded.join(', ')}`,
+    )
+    process.exit(1)
+  }
+
   const routes = extractTacticalRoutes(tacticalSrc, lazyMap)
   const leafRoutes = routes.filter((r) => r.path !== '/' && r.path !== '*')
   const routeCount = leafRoutes.length + 1

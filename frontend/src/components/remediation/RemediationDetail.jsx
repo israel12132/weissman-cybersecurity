@@ -302,7 +302,7 @@ export default function RemediationDetail({ finding, onClose }) {
             {briefError && (
               <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-900/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                {t('pages.remediationHub.brief_error', { error: briefError })}: {briefError}
+                {t('pages.remediationHub.brief_error', { error: briefError })}
               </div>
             )}
 

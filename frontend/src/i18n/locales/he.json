@@ -1885,7 +1885,7 @@
       "detail_title": "תדריך תיקון",
       "generate_brief": "הפק תדריך",
       "brief_loading": "מפיק תדריך דו-לשוני…",
-      "brief_error": "לא ניתן להפיק את התדריך",
+      "brief_error": "לא ניתן להפיק את התדריך: {{error}}",
       "brief_problem": "הבעיה",
       "brief_root_cause": "שורש הבעיה",
       "brief_impact": "השפעה",

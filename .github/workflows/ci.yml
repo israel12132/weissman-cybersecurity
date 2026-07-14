@@ -273,6 +273,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Install frontend dependencies
+        # Must precede the Weissman UI compliance audit below: that script parses the
+        # route tree with @babel/parser + @babel/traverse, which are frontend devDeps.
+        run: npm ci
+        working-directory: frontend
+
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
 
@@ -308,10 +314,6 @@ jobs:
 
       - name: i18n templated-key resolution gate
         run: node scripts/verify_i18n_template_keys.mjs
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
 
       - name: Build frontend production bundle
         run: npm run build

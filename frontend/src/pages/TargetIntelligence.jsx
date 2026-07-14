@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
@@ -63,14 +63,14 @@ export default function TargetIntelligence() {
   const [error, setError] = useState('')
   const [rankQuery, setRankQuery] = useState('')
 
-  const exportRanked = () => {
+  const exportRanked = useCallback(() => {
     const ranked = data?.selection?.ranked || []
     downloadCsv(
       ranked.map((c) => [c.engine_id, c.group || '', c.score, c.recommended ? 'yes' : 'no', c.reason || '']),
       ['engine_id', 'group', 'score', 'recommended', 'reason'],
       'weissman-target-engine-selection',
     )
-  }
+  }, [data])
 
   const analyze = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
@@ -290,7 +290,7 @@ export default function TargetIntelligence() {
                 onChange={(ev) => setRankQuery(ev.target.value)}
                 aria-label={t('common.search')}
                 placeholder={t('common.search')}
-                className="w-40 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                className="w-40 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-white/80 placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
               />
             </div>
             <ol className="space-y-1 max-h-[26rem] overflow-y-auto pr-1">

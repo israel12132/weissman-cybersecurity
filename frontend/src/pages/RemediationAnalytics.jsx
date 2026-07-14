@@ -126,17 +126,16 @@ export default function RemediationAnalytics() {
     return () => { cancelled = true }
   }, [clientIds])
 
-  const visibleHeals = useMemo(
-    () =>
-      heals.filter(
-        (h) =>
-          !healQuery ||
-          [h.finding_id, h.channel, h.status, h.verification_status, h.verdict].some((x) =>
-            String(x || '').toLowerCase().includes(healQuery.toLowerCase()),
-          ),
-      ),
-    [heals, healQuery],
-  )
+  const visibleHeals = useMemo(() => {
+    const q = healQuery.toLowerCase()
+    return heals.filter(
+      (h) =>
+        !healQuery ||
+        [h.finding_id, h.channel, h.status, h.verification_status, h.verdict].some((x) =>
+          String(x || '').toLowerCase().includes(q),
+        ),
+    )
+  }, [heals, healQuery])
 
   return (
     <PageShell

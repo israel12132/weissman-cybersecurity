@@ -78,9 +78,19 @@ export default function SelfImprovementConsole() {
   const [note, setNote] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
+  const searchLc = searchQuery.toLowerCase()
+  const visibleItems = (items || []).filter(
+    (it) =>
+      !searchQuery ||
+      [it.id, it.title, it.summary, it.status].some((x) =>
+        String(x || '').toLowerCase().includes(searchLc),
+      ),
+  )
+
+  // Export mirrors the current view: CSV reflects the active search filter, not the raw queue.
   const exportProposals = () => {
     downloadCsv(
-      (items || []).map((it) => [
+      visibleItems.map((it) => [
         it.id,
         it.title || it.summary || '',
         it.status || '',
@@ -153,14 +163,6 @@ export default function SelfImprovementConsole() {
   const counts = status?.counts || {}
   const intervalMin = status ? Math.round((status.interval_secs || 3600) / 60) : 60
   const enabled = !!status?.enabled
-
-  const visibleItems = (items || []).filter(
-    (it) =>
-      !searchQuery ||
-      [it.id, it.title, it.summary, it.status].some((x) =>
-        String(x || '').toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
-  )
 
   return (
     <PageShell

@@ -143,8 +143,9 @@ export default function StealthOperations() {
   const cfg = data && data.config
   const l = data && data.live
   const id = data && data.identity
+  const hostQueryLc = hostQuery.toLowerCase()
   const visibleHosts = (l?.active_hosts || []).filter(
-    (h) => !hostQuery || String(h.host).toLowerCase().includes(hostQuery.toLowerCase()),
+    (h) => !hostQuery || String(h.host).toLowerCase().includes(hostQueryLc),
   )
 
   return (
@@ -329,7 +330,7 @@ export default function StealthOperations() {
                   onChange={(e) => setHostQuery(e.target.value)}
                   aria-label={t('common.search')}
                   placeholder={t('common.search')}
-                  className="w-44 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                  className="w-44 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-white/80 placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                 />
                 <span className="text-xs font-mono text-slate-500">
                   {t('stealthOps.showing', { n: visibleHosts.length })}

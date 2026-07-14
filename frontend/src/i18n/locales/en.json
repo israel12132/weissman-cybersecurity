@@ -1885,7 +1885,7 @@
       "detail_title": "Remediation brief",
       "generate_brief": "Generate brief",
       "brief_loading": "Generating bilingual brief…",
-      "brief_error": "Could not generate the brief",
+      "brief_error": "Could not generate the brief: {{error}}",
       "brief_problem": "The problem",
       "brief_root_cause": "Root cause",
       "brief_impact": "Impact",
