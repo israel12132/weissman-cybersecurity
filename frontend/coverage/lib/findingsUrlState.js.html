@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for lib/clientTarget.js</title>
+    <title>Code coverage report for lib/findingsUrlState.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,20 +19,20 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> clientTarget.js</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> findingsUrlState.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">80.76% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>21/26</span>
+                <span class='fraction'>13/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">68.18% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>15/22</span>
+                <span class='fraction'>19/19</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">95% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>19/20</span>
+                <span class='fraction'>11/11</span>
             </div>
         
             
@@ -111,24 +111,13 @@
 <a name='L46'></a><a href='#L46'>46</a>
 <a name='L47'></a><a href='#L47'>47</a>
 <a name='L48'></a><a href='#L48'>48</a>
-<a name='L49'></a><a href='#L49'>49</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -136,76 +125,93 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">32x</span>
+<span class="cline-any cline-yes">32x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">8x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/** First scope URL for engine targets (https:// + primary domain). */
-export function clientPrimaryTargetUrl(client) {
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!client) <span class="cstat-no" title="statement not covered" >return ''</span>
-  let list = []
-  const raw = client.domains
-  if (Array.isArray(raw)) {
-    list = raw.map(String).filter(Boolean)
-  } else if (typeof raw === 'string') {
-    try {
-      const arr = JSON.parse(raw)
-      list = Array.isArray(arr) ? arr.map(String).filter(Boolean) : <span class="branch-1 cbranch-no" title="branch not covered" >[]</span>
-    } catch {
-<span class="cstat-no" title="statement not covered" >      list = []</span>
-    }
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * Serialize / restore the findings filter state to URL query params so a filtered
+ * view is shareable and bookmarkable. Pure functions — no React, fully testable.
+ *
+ * Params: q (search), sev (severity), status, engine, kev (1). Empty/default
+ * values are omitted so a clean view yields a clean URL.
+ */
+&nbsp;
+const KEYS = {
+  globalFilter: 'q',
+  severityFilter: 'sev',
+  statusFilter: 'status',
+  engineFilter: 'engine',
+}
+&nbsp;
+/** @returns {Record&lt;string,string&gt;} only the non-empty params */
+export function encodeFindingsFilters(state = {}) {
+  const out = {}
+  for (const [stateKey, param] of Object.entries(KEYS)) {
+    const v = state[stateKey]
+    if (v != null &amp;&amp; String(v).trim() !== '') out[param] = String(v)
   }
-  const first = list[0] || ''
-  if (!first) return ''
-  return first.startsWith('http') ? <span class="branch-0 cbranch-no" title="branch not covered" >first.trim() </span>: `https://${first.replace(/^\/+/, '')}`
+  if (state.kevFilter) out.kev = '1'
+  return out
 }
 &nbsp;
-/** Alias used across command-center hubs. */
-export const firstClientTarget = clientPrimaryTargetUrl
-&nbsp;
-/** Resolve client from id + list (or pass client object directly). */
-export function resolveClient(clientId, clients) {
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!clients) <span class="cstat-no" title="statement not covered" >return null</span>
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!Array.isArray(clients)) <span class="cstat-no" title="statement not covered" >return clients</span>
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!clientId) <span class="cstat-no" title="statement not covered" >return null</span>
-  return clients.find((c) =&gt; String(c.id) === String(clientId)) ?? <span class="branch-1 cbranch-no" title="branch not covered" >null</span>
+/**
+ * @param {URLSearchParams | Record&lt;string,string&gt;} params
+ * @returns {{globalFilter:string,severityFilter:string,statusFilter:string,engineFilter:string,kevFilter:boolean}}
+ */
+export function decodeFindingsFilters(params) {
+  const get = (k) =&gt; (
+    typeof params?.get === 'function' ? (params.get(k) ?? '') : (params?.[k] ?? '')
+  )
+  return {
+    globalFilter: get('q'),
+    severityFilter: get('sev'),
+    statusFilter: get('status'),
+    engineFilter: get('engine'),
+    kevFilter: get('kev') === '1',
+  }
 }
 &nbsp;
-/** Engines that do not need a URL target (tenant/global job). */
-export function engineRunsWithoutTarget(engineId) {
-  // Kept for backward compat; new code should import TARGETLESS_ENGINE_IDS from enginesRegistry.js
-  const TARGETLESS = new Set([
-    'zero_day_radar',
-    'zero_day_prediction',
-    'aws_attack',
-    'azure_attack',
-    'gcp_attack',
-    'k8s_container',
-    'iac_misconfig',
-    'ble_rf',
-    'edr_evasion',
-    'antiforensics',
-  ])
-  return TARGETLESS.has(engineId)
+/** True when a decoded filter set carries at least one active filter. */
+export function hasAnyFilter(state = {}) {
+  return Boolean(
+    state.globalFilter || state.severityFilter || state.statusFilter
+    || state.engineFilter || state.kevFilter,
+  )
 }
 &nbsp;</pre></td></tr></table></pre>
 

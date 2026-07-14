@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for lib/engineParamDefsLoader.js</title>
+    <title>Code coverage report for utils/safeUrl.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,34 +19,34 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> engineParamDefsLoader.js</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">utils</a> safeUrl.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.9% </span>
+                <span class="strong">85.71% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>10/11</span>
+                <span class='fraction'>6/7</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">66.66% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>4/6</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">75% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>3/4</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90% </span>
+                <span class="strong">83.33% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>9/10</span>
+                <span class='fraction'>5/6</span>
             </div>
         
             
@@ -82,79 +82,43 @@
 <a name='L17'></a><a href='#L17'>17</a>
 <a name='L18'></a><a href='#L18'>18</a>
 <a name='L19'></a><a href='#L19'>19</a>
-<a name='L20'></a><a href='#L20'>20</a>
-<a name='L21'></a><a href='#L21'>21</a>
-<a name='L22'></a><a href='#L22'>22</a>
-<a name='L23'></a><a href='#L23'>23</a>
-<a name='L24'></a><a href='#L24'>24</a>
-<a name='L25'></a><a href='#L25'>25</a>
-<a name='L26'></a><a href='#L26'>26</a>
-<a name='L27'></a><a href='#L27'>27</a>
-<a name='L28'></a><a href='#L28'>28</a>
-<a name='L29'></a><a href='#L29'>29</a>
-<a name='L30'></a><a href='#L30'>30</a>
-<a name='L31'></a><a href='#L31'>31</a>
-<a name='L32'></a><a href='#L32'>32</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L20'></a><a href='#L20'>20</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
- * Deferred generated param profiles — 450KB+ isolated from boot shell.
- */
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Guard against `javascript:`/`data:` and other non-navigational URI schemes reaching an &lt;a href&gt;.
+// React does NOT sanitize href at runtime, so a stored `javascript:alert(1)` from an external feed
+// (e.g. synced exploit payload source_url) would execute on click. Allow only http/https.
 &nbsp;
-/** @type {Promise&lt;Record&lt;string, unknown[]&gt;&gt; | null} */
-let generatedPromise = null
-&nbsp;
-/** @type {Record&lt;string, unknown[]&gt; | null} */
-let generatedCache = null
-&nbsp;
-export function loadGeneratedParamDefs() {
-  if (generatedCache) return Promise.resolve(generatedCache)
-  <span class="missing-if-branch" title="else path not taken" >E</span>if (!generatedPromise) {
-    generatedPromise = import(
-      /* webpackChunkName: "data-engine-params" */
-      './engineParamDefs.generated.js'
-    ).then((mod) =&gt; {
-      generatedCache = mod.GENERATED_PARAM_DEFS || <span class="branch-1 cbranch-no" title="branch not covered" >{}</span>
-      return generatedCache
-    })
+export function isHttpUrl(value) {
+  if (typeof value !== 'string' || value.trim() === '') return false
+  try {
+    const u = new URL(value, window.location.origin)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+<span class="cstat-no" title="statement not covered" >    return false</span>
   }
-  return generatedPromise
 }
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >prefetchEngineParamDefs(</span>) {
-<span class="cstat-no" title="statement not covered" >  void loadGeneratedParamDefs()</span>
-}
-&nbsp;
-export function getGeneratedParamDefsSync() {
-  return generatedCache
+// Returns the URL when it is a safe http(s) link, otherwise undefined — so callers can fall back to
+// rendering plain text instead of an actionable link.
+export function safeHttpHref(value) {
+  return isHttpUrl(value) ? value : undefined
 }
 &nbsp;</pre></td></tr></table></pre>
 

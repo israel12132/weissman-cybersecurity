@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for lib/engineParamDefsLoader.js</title>
+    <title>Code coverage report for lib/suppressionStatus.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,34 +19,34 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> engineParamDefsLoader.js</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> suppressionStatus.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.9% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>10/11</span>
+                <span class='fraction'>11/11</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">66.66% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>4/6</span>
+                <span class='fraction'>13/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">75% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>3/4</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>9/10</span>
+                <span class='fraction'>8/8</span>
             </div>
         
             
@@ -91,70 +91,61 @@
 <a name='L26'></a><a href='#L26'>26</a>
 <a name='L27'></a><a href='#L27'>27</a>
 <a name='L28'></a><a href='#L28'>28</a>
-<a name='L29'></a><a href='#L29'>29</a>
-<a name='L30'></a><a href='#L30'>30</a>
-<a name='L31'></a><a href='#L31'>31</a>
-<a name='L32'></a><a href='#L32'>32</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L29'></a><a href='#L29'>29</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
- * Deferred generated param profiles — 450KB+ isolated from boot shell.
+ * Finding-suppression expiry status helpers.
+ *
+ * A suppression silences a finding signature until an optional `expires_at`.
+ * These pure helpers classify a suppression as expired / expiring-soon so the
+ * registry UI can colour and filter it. `now` is injectable for testing.
  */
 &nbsp;
-/** @type {Promise&lt;Record&lt;string, unknown[]&gt;&gt; | null} */
-let generatedPromise = null
+const SOON_WINDOW_MS = 7 * 86_400_000 // 7 days
 &nbsp;
-/** @type {Record&lt;string, unknown[]&gt; | null} */
-let generatedCache = null
-&nbsp;
-export function loadGeneratedParamDefs() {
-  if (generatedCache) return Promise.resolve(generatedCache)
-  <span class="missing-if-branch" title="else path not taken" >E</span>if (!generatedPromise) {
-    generatedPromise = import(
-      /* webpackChunkName: "data-engine-params" */
-      './engineParamDefs.generated.js'
-    ).then((mod) =&gt; {
-      generatedCache = mod.GENERATED_PARAM_DEFS || <span class="branch-1 cbranch-no" title="branch not covered" >{}</span>
-      return generatedCache
-    })
-  }
-  return generatedPromise
+/** True when the suppression has an expiry that is already in the past. */
+export function isExpired(s, now = Date.now()) {
+  return s?.expires_at != null &amp;&amp; new Date(s.expires_at).getTime() &lt; now
 }
 &nbsp;
-export function <span class="fstat-no" title="function not covered" >prefetchEngineParamDefs(</span>) {
-<span class="cstat-no" title="statement not covered" >  void loadGeneratedParamDefs()</span>
+/** True when active but expiring within the next 7 days. */
+export function isExpiringSoon(s, now = Date.now()) {
+  if (s?.expires_at == null) return false
+  const ms = new Date(s.expires_at).getTime() - now
+  return ms &gt; 0 &amp;&amp; ms &lt;= SOON_WINDOW_MS
 }
 &nbsp;
-export function getGeneratedParamDefsSync() {
-  return generatedCache
+/** Coarse status bucket: 'expired' | 'soon' | 'active'. */
+export function suppressionStatus(s, now = Date.now()) {
+  if (isExpired(s, now)) return 'expired'
+  if (isExpiringSoon(s, now)) return 'soon'
+  return 'active'
 }
 &nbsp;</pre></td></tr></table></pre>
 

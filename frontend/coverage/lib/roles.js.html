@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for lib/clientTarget.js</title>
+    <title>Code coverage report for lib/roles.js</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../prettify.css" />
     <link rel="stylesheet" href="../base.css" />
@@ -19,20 +19,20 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> clientTarget.js</h1>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> roles.js</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">80.76% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>21/26</span>
+                <span class='fraction'>17/17</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">68.18% </span>
+                <span class="strong">83.33% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>15/22</span>
+                <span class='fraction'>15/18</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">95% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>19/20</span>
+                <span class='fraction'>13/13</span>
             </div>
         
             
@@ -111,41 +111,11 @@
 <a name='L46'></a><a href='#L46'>46</a>
 <a name='L47'></a><a href='#L47'>47</a>
 <a name='L48'></a><a href='#L48'>48</a>
-<a name='L49'></a><a href='#L49'>49</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -155,57 +125,99 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/** First scope URL for engine targets (https:// + primary domain). */
-export function clientPrimaryTargetUrl(client) {
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!client) <span class="cstat-no" title="statement not covered" >return ''</span>
-  let list = []
-  const raw = client.domains
-  if (Array.isArray(raw)) {
-    list = raw.map(String).filter(Boolean)
-  } else if (typeof raw === 'string') {
-    try {
-      const arr = JSON.parse(raw)
-      list = Array.isArray(arr) ? arr.map(String).filter(Boolean) : <span class="branch-1 cbranch-no" title="branch not covered" >[]</span>
-    } catch {
-<span class="cstat-no" title="statement not covered" >      list = []</span>
-    }
-  }
-  const first = list[0] || ''
-  if (!first) return ''
-  return first.startsWith('http') ? <span class="branch-0 cbranch-no" title="branch not covered" >first.trim() </span>: `https://${first.replace(/^\/+/, '')}`
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">41x</span>
+<span class="cline-any cline-yes">34x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">41x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">38x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">38x</span>
+<span class="cline-any cline-yes">36x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * RBAC role ladder — single source of truth for the frontend.
+ *
+ * Mirrors the backend ladder `viewer → analyst → operator → admin → ceo`
+ * plus the `superadmin` override. This is defense-in-depth for the UI: the
+ * backend still enforces every privileged call with a 403. Route guards and
+ * nav gating both consume `roleRank`/`hasRole` so they can never drift apart.
+ */
+&nbsp;
+/** Ordered low→high. Index is intentionally not the rank — use ROLE_RANK. */
+export const ROLE_LADDER = ['viewer', 'analyst', 'operator', 'admin', 'ceo', 'superadmin']
+&nbsp;
+/** @type {Record&lt;string, number&gt;} role → numeric rank (higher = more privilege). */
+export const ROLE_RANK = ROLE_LADDER.reduce((acc, role, i) =&gt; {
+  acc[role] = i + 1
+  return acc
+}, {})
+&nbsp;
+/**
+ * Resolve the effective role of a session.
+ * `is_superadmin` always wins regardless of the stored role string.
+ * @param {{ role?: string, is_superadmin?: boolean, ok?: boolean } | null | undefined} session
+ * @returns {string} a role from ROLE_LADDER, or 'viewer' when unknown
+ */
+export function effectiveRole(session) {
+  if (!session || session.ok === false) return 'viewer'
+  if (session.is_superadmin === true) return 'superadmin'
+  const r = (session.role || <span class="branch-1 cbranch-no" title="branch not covered" >'')</span>.toString().trim().toLowerCase()
+  return ROLE_RANK[r] ? r : 'viewer'
 }
 &nbsp;
-/** Alias used across command-center hubs. */
-export const firstClientTarget = clientPrimaryTargetUrl
-&nbsp;
-/** Resolve client from id + list (or pass client object directly). */
-export function resolveClient(clientId, clients) {
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!clients) <span class="cstat-no" title="statement not covered" >return null</span>
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!Array.isArray(clients)) <span class="cstat-no" title="statement not covered" >return clients</span>
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (!clientId) <span class="cstat-no" title="statement not covered" >return null</span>
-  return clients.find((c) =&gt; String(c.id) === String(clientId)) ?? <span class="branch-1 cbranch-no" title="branch not covered" >null</span>
+/**
+ * Numeric rank of a session's effective role.
+ * @param {object|null|undefined} session
+ * @returns {number}
+ */
+export function sessionRoleRank(session) {
+  return ROLE_RANK[effectiveRole(session)] || <span class="branch-1 cbranch-no" title="branch not covered" >0</span>
 }
 &nbsp;
-/** Engines that do not need a URL target (tenant/global job). */
-export function engineRunsWithoutTarget(engineId) {
-  // Kept for backward compat; new code should import TARGETLESS_ENGINE_IDS from enginesRegistry.js
-  const TARGETLESS = new Set([
-    'zero_day_radar',
-    'zero_day_prediction',
-    'aws_attack',
-    'azure_attack',
-    'gcp_attack',
-    'k8s_container',
-    'iac_misconfig',
-    'ble_rf',
-    'edr_evasion',
-    'antiforensics',
-  ])
-  return TARGETLESS.has(engineId)
+/**
+ * Does the session meet or exceed `minRole`?
+ * @param {object|null|undefined} session
+ * @param {string} minRole one of ROLE_LADDER (unknown/empty → allowed)
+ * @returns {boolean}
+ */
+export function sessionHasRole(session, minRole) {
+  if (!minRole) return true
+  const min = ROLE_RANK[(minRole || <span class="branch-1 cbranch-no" title="branch not covered" >'')</span>.toString().trim().toLowerCase()]
+  if (!min) return true // unknown gate → don't lock users out on a typo
+  return sessionRoleRank(session) &gt;= min
 }
 &nbsp;</pre></td></tr></table></pre>
 
