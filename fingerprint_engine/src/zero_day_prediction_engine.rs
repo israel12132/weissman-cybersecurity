@@ -1,4 +1,7 @@
-//! Zero-Day Prediction Engine — uses NVD CVE history and component analysis to predict high-risk components.
+//! Component Risk Heuristic (engine id `zero_day_prediction`) — ranks fingerprinted
+//! components by historical NVD CVE frequency as a proxy for latent risk. This is a
+//! heuristic over *past* disclosures (real inputs, no fabrication), NOT a forecast of
+//! any specific future zero-day; findings are emitted as `info`/advisory.
 
 use crate::engine_result::{print_result, EngineResult};
 use serde_json::json;
@@ -288,8 +291,8 @@ pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
                             "mitre_attack": "T1212",
                             "description": format!(
                                 "NVD database contains {} CVEs for component '{}'. Most recent: {}. \
-                                High CVE velocity indicates active research and exploitation interest — \
-                                predictive indicator of near-term zero-day disclosure.",
+                                High historical CVE velocity is a heuristic risk signal (active research \
+                                and exploitation interest) — not a forecast of a specific future disclosure.",
                                 total, component, recent_id
                             ),
                             "value": base,
