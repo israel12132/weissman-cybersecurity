@@ -327,6 +327,9 @@ jobs:
       - name: Run Rust workspace tests (blocking gate)
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          # Fail (don't skip) the DB-backed integration tests here, so a dropped
+          # TEST_DATABASE_URL can never masquerade as a green run.
+          WEISSMAN_REQUIRE_DB_TESTS: "1"
         run: cargo test --workspace --all-targets
 
       - name: Build Docker production images

@@ -27,10 +27,23 @@ fn require_test_database_url() -> String {
     match std::env::var("TEST_DATABASE_URL") {
         Ok(u) if !u.trim().is_empty() => u,
         _ => {
+            // In CI (WEISSMAN_REQUIRE_DB_TESTS=1) a missing DB is a hard failure, so a
+            // dropped TEST_DATABASE_URL can never masquerade as a green run. Locally it
+            // stays a visible skip.
+            assert!(
+                !require_db_tests(),
+                "rls_cross_tenant requires TEST_DATABASE_URL, but WEISSMAN_REQUIRE_DB_TESTS is set"
+            );
             eprintln!("SKIP rls_cross_tenant: TEST_DATABASE_URL not set (no test Postgres)");
             String::new()
         }
     }
+}
+
+fn require_db_tests() -> bool {
+    std::env::var("WEISSMAN_REQUIRE_DB_TESTS")
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }
 
 #[tokio::test]
