@@ -126,15 +126,20 @@ async fn run_cycle(app_pool: &PgPool, auth_pool: &PgPool) -> Result<u64, String>
             processed += 1;
             let ok = match task.probe_type.as_str() {
                 "pr_exists" => verify_heal_job(app_pool, tenant_id, &task.target).await,
-                _ => verify_probe(
-                    &task.probe_type,
-                    &task.target,
-                    &task.ports,
-                    &task.payload,
-                    &task.provider,
-                )
-                .await
-                .unwrap_or(false),
+                _ => {
+                    // Decrypt any provider credentials encrypted at rest in the
+                    // persisted execution payload before handing them to the probe.
+                    let payload = super::integrations_vault::decrypt_config(&task.payload);
+                    verify_probe(
+                        &task.probe_type,
+                        &task.target,
+                        &task.ports,
+                        &payload,
+                        &task.provider,
+                    )
+                    .await
+                    .unwrap_or(false)
+                }
             };
             if ok {
                 let detail = format!("verified via {} probe on {}", task.probe_type, task.target);

@@ -104,6 +104,14 @@ pub fn decrypt_secret(stored: &str) -> String {
     }
 }
 
+/// True if `stored` is an encrypted envelope produced by [`encrypt_secret`]
+/// (as opposed to legacy plaintext). Callers use this to detect rows that
+/// still need at-rest migration without hard-coding the envelope prefix.
+#[must_use]
+pub fn is_encrypted(stored: &str) -> bool {
+    stored.starts_with(INT_PREFIX)
+}
+
 fn is_secret_field(key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
     SECRET_KEYS
@@ -184,6 +192,66 @@ mod tests {
         let enc = encrypt_secret("super-secret-token");
         assert!(enc.starts_with(INT_PREFIX));
         assert_eq!(decrypt_secret(&enc), "super-secret-token");
+        std::env::remove_var("WEISSMAN_INTEGRATIONS_VAULT_KEY");
+    }
+
+    #[test]
+    fn envelope_produces_ciphertext_and_roundtrips_with_explicit_key() {
+        // Deterministic (no env / no OnceLock): proves a stored secret is
+        // ciphertext at rest and never contains the plaintext.
+        let key = [7u8; 32];
+        let plaintext = "JBSWY3DPEHPK3PXP"; // sample base32 TOTP seed
+        let enc = encrypt_with_key(&key, plaintext).expect("encrypt");
+        assert!(enc.starts_with(INT_PREFIX), "must be an encrypted envelope");
+        assert!(is_encrypted(&enc));
+        assert!(
+            !enc.contains(plaintext),
+            "plaintext seed must not appear in the at-rest value"
+        );
+        assert_eq!(
+            decrypt_with_key(&key, &enc).as_deref(),
+            Some(plaintext),
+            "round-trip must recover the original seed"
+        );
+        assert!(!is_encrypted(plaintext), "bare base32 is not an envelope");
+    }
+
+    #[test]
+    fn encrypt_config_hides_soar_provider_secrets() {
+        // Same key string as `roundtrip_when_key_available` so the process-wide
+        // vault-key OnceLock stays consistent regardless of test order.
+        std::env::set_var(
+            "WEISSMAN_INTEGRATIONS_VAULT_KEY",
+            "test-vault-key-for-integrations-32b-minimum!!",
+        );
+        let payload = json!({
+            "device_id": "abc123",
+            "base_url": "https://api.crowdstrike.com",
+            "client_id": "id-not-secret",
+            "client_secret": "SUPER-SECRET-VALUE",  // crowdstrike
+            "routing_key": "PD-ROUTING-KEY",        // pagerduty
+            "api_key": "OPSGENIE-KEY",              // opsgenie
+            "password": "SNOW-PASSWORD",            // servicenow
+        });
+        let enc = encrypt_config(&payload);
+        // Non-secret fields are untouched.
+        assert_eq!(enc["device_id"], json!("abc123"));
+        assert_eq!(enc["client_id"], json!("id-not-secret"));
+        // Every credential is an envelope and its plaintext never appears at rest.
+        for (field, plain) in [
+            ("client_secret", "SUPER-SECRET-VALUE"),
+            ("routing_key", "PD-ROUTING-KEY"),
+            ("api_key", "OPSGENIE-KEY"),
+            ("password", "SNOW-PASSWORD"),
+        ] {
+            let v = enc[field].as_str().unwrap_or_default();
+            assert!(is_encrypted(v), "{field} must be encrypted at rest, got {v}");
+            assert!(!v.contains(plain), "{field} plaintext leaked into the payload");
+        }
+        // And point-of-use decryption recovers the originals.
+        let dec = decrypt_config(&enc);
+        assert_eq!(dec["client_secret"], json!("SUPER-SECRET-VALUE"));
+        assert_eq!(dec["password"], json!("SNOW-PASSWORD"));
         std::env::remove_var("WEISSMAN_INTEGRATIONS_VAULT_KEY");
     }
 }

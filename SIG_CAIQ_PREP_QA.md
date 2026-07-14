@@ -96,9 +96,11 @@ compilation, AND Postgres refuses non-SELECT regardless.
 ## Cryptography & key handling
 
 ### Q12. Are sensitive fields encrypted?
-**Answer:** MFA secrets and integration credentials are encrypted via
-`database_encryption.py` (Vault Transit primary, Fernet fallback). DB volume
-encryption is operator-managed (LUKS / KMS at the platform layer).
+**Answer:** MFA TOTP seeds and integration credentials are encrypted at rest with
+an application-layer AES-256-GCM envelope (`fingerprint_engine/src/soar/integrations_vault.rs`;
+MFA via `auth_mfa::encrypt_secret_at_rest`), keyed by a dedicated vault key
+(`WEISSMAN_INTEGRATIONS_VAULT_KEY` / `WEISSMAN_VAULT_KEY`). DB volume encryption is
+operator-managed (LUKS / KMS at the platform layer).
 
 ### Q13. Are webhook payloads protected?
 **Answer:** Outbound webhooks signed `X-Weissman-Signature: sha256=…`

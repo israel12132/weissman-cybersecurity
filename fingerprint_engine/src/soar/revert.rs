@@ -111,6 +111,9 @@ async fn apply_revert_step(
     step: &RevertStep,
 ) -> String {
     let merged = merge_step_payload(integrations, step);
+    // Credentials persisted in the step payload are encrypted at rest; decrypt at
+    // point-of-use so the provider calls below receive usable secrets.
+    let merged = super::integrations_vault::decrypt_config(&merged);
     match step.operation.as_str() {
         "resolve_incident" => resolve_pagerduty_incident(&merged).await,
         "close_alert" => close_opsgenie_alert(&merged).await,
