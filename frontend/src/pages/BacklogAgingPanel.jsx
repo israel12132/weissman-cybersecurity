@@ -82,7 +82,7 @@ export default function BacklogAgingPanel() {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Hourglass className="w-4 h-4 text-amber-400" />
-          {t('pages.remediationHub.aging_heading', { defaultValue: 'Backlog Aging' })}
+          {t('pages.remediationHub.aging_heading')}
         </h3>
         {(agedCriticals > 0 || agedHighs > 0) && (
           <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 font-medium">
@@ -90,7 +90,6 @@ export default function BacklogAgingPanel() {
             {t('pages.remediationHub.aging_aged', {
               criticals: agedCriticals,
               highs: agedHighs,
-              defaultValue: '{{criticals}} critical / {{highs}} high open > 90d',
             })}
           </span>
         )}
@@ -108,7 +107,7 @@ export default function BacklogAgingPanel() {
         ))}
         {Number(data?.unknown_age) > 0 && (
           <div className="text-[10px] text-white/35 font-mono pt-1">
-            {t('pages.remediationHub.aging_unknown', { count: data.unknown_age, defaultValue: '{{count}} with unknown age' })}
+            {t('pages.remediationHub.aging_unknown', { count: data.unknown_age })}
           </div>
         )}
       </div>

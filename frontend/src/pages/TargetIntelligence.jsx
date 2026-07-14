@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 // Sensitivity tint.
 const SEV = {
@@ -58,6 +61,16 @@ export default function TargetIntelligence() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [rankQuery, setRankQuery] = useState('')
+
+  const exportRanked = () => {
+    const ranked = data?.selection?.ranked || []
+    downloadCsv(
+      ranked.map((c) => [c.engine_id, c.group || '', c.score, c.recommended ? 'yes' : 'no', c.reason || '']),
+      ['engine_id', 'group', 'score', 'recommended', 'reason'],
+      'weissman-target-engine-selection',
+    )
+  }
 
   const analyze = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
@@ -88,12 +101,18 @@ export default function TargetIntelligence() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
-          <span aria-hidden>🎯</span> {t('targetIntel.title')}
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">{t('targetIntel.subtitle')}</p>
-      </header>
+      <PremiumPageHeader
+        title={<><span aria-hidden>🎯</span> {t('targetIntel.title')}</>}
+        subtitle={t('targetIntel.subtitle')}
+        onRefresh={() => analyze()}
+        onExport={data ? exportRanked : undefined}
+        loading={loading}
+        className="mb-4"
+      />
+
+      <EvidenceNotice className="mb-4">
+        {t('common.live_source')}: GET /api/intel/target-profile
+      </EvidenceNotice>
 
       <form onSubmit={analyze} className="mb-6">
         <div className="flex gap-2">
@@ -261,11 +280,28 @@ export default function TargetIntelligence() {
               )}
             </div>
 
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-              {t('targetIntel.rankedTop', { n: Math.min(40, (sel.ranked || []).length) })}
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500">
+                {t('targetIntel.rankedTop', { n: Math.min(40, (sel.ranked || []).length) })}
+              </div>
+              <input
+                type="search"
+                value={rankQuery}
+                onChange={(ev) => setRankQuery(ev.target.value)}
+                aria-label={t('common.search')}
+                placeholder={t('common.search')}
+                className="w-40 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+              />
             </div>
             <ol className="space-y-1 max-h-[26rem] overflow-y-auto pr-1">
-              {(sel.ranked || []).map((c) => (
+              {(sel.ranked || [])
+                .filter(
+                  (c) =>
+                    !rankQuery ||
+                    String(c.engine_id).toLowerCase().includes(rankQuery.toLowerCase()) ||
+                    String(c.group || '').toLowerCase().includes(rankQuery.toLowerCase()),
+                )
+                .map((c) => (
                 <li
                   key={c.engine_id}
                   className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5"

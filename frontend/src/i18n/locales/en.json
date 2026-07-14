@@ -53,6 +53,7 @@
     "count": "Count",
     "clear_filters": "Clear filters",
     "export_csv": "Export CSV",
+    "live_source": "Live data source",
     "show_filters": "Filters",
     "hide_filters": "Hide filters",
     "dismiss": "Dismiss",

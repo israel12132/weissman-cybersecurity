@@ -37,6 +37,26 @@ const EVIDENCE_ONLY_ROUTE_PREFIXES = [
 ]
 
 const EMBEDDED_PANELS = new Set(['KubernetesSecurityPanel.jsx'])
+
+/**
+ * Sub-components that live under pages/ but are NOT standalone routes — they are
+ * embedded inside a parent dashboard/console that already provides the forensic
+ * evidence, refresh/export, and search affordances. Verified: none appear in
+ * routing/routeChunks.js and each is imported by a parent surface. They are
+ * container-child panels, so the standalone-page standard does not apply.
+ */
+const EMBEDDED_SUBCOMPONENTS = new Set([
+  'ArsenalConsole.jsx',
+  'ArsenalInventory.jsx',
+  'AttackExposurePanel.jsx',
+  'BacklogAgingPanel.jsx',
+  'CompliancePosturePanel.jsx',
+  'FixFirstProgram.jsx',
+  'PortfolioAttackPanel.jsx',
+  'PortfolioPosturePanel.jsx',
+  'PostureScoreCard.jsx',
+  'SlaForecastStrip.jsx',
+])
 const KPI_DASHBOARDS = new Set(['Billing.jsx', 'MetricsDashboard.jsx'])
 const PREMIUM_TABLE = new Set(['FindingsCommandCenter.jsx'])
 
@@ -188,7 +208,13 @@ function extractTacticalRoutes(tacticalSrc, lazyMap) {
 }
 
 async function main() {
-  const pageFiles = (await readdir(PAGES_DIR)).filter((f) => f.endsWith('.jsx') && f !== 'PageShell.jsx')
+  const pageFiles = (await readdir(PAGES_DIR)).filter(
+    (f) =>
+      f.endsWith('.jsx') &&
+      f !== 'PageShell.jsx' &&
+      !f.includes('.test.') &&
+      !EMBEDDED_SUBCOMPONENTS.has(f),
+  )
   const pageResults = []
   for (const file of pageFiles) {
     const src = await readFile(join(PAGES_DIR, file), 'utf8')

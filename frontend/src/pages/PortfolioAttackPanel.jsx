@@ -52,13 +52,12 @@ export default function PortfolioAttackPanel() {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-rose-400" />
-          {t('clients_page.fleet_attack_heading', { defaultValue: 'Fleet ATT&CK Exposure' })}
+          {t('clients_page.fleet_attack_heading')}
         </h3>
         <span className="text-[10px] font-mono text-white/40">
           {t('clients_page.fleet_attack_summary', {
             techniques: Number(data.unique_techniques) || techniques.length,
             clients: Number(data.exposed_clients) || 0,
-            defaultValue: '{{techniques}} techniques · {{clients}} clients exposed',
           })}
         </span>
       </div>
@@ -74,8 +73,8 @@ export default function PortfolioAttackPanel() {
               <div className="h-full rounded-full bg-gradient-to-r from-rose-500/70 to-amber-400/70" style={{ width: `${((Number(tech.finding_count) || 0) / barMax) * 100}%` }} />
             </div>
             <span className="w-10 shrink-0 text-right text-xs font-bold tabular-nums text-white">{tech.finding_count}</span>
-            <span className="w-16 shrink-0 text-right text-[10px] font-mono text-violet-300" title={t('clients_page.fleet_attack_clients_hint', { defaultValue: 'clients exposed' })}>
-              {t('clients_page.fleet_attack_clients', { count: tech.client_count, defaultValue: '{{count}} cli' })}
+            <span className="w-16 shrink-0 text-right text-[10px] font-mono text-violet-300" title={t('clients_page.fleet_attack_clients_hint')}>
+              {t('clients_page.fleet_attack_clients', { count: tech.client_count })}
             </span>
           </div>
         ))}

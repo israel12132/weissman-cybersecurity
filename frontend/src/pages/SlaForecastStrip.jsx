@@ -62,12 +62,12 @@ export default function SlaForecastStrip() {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <CalendarClock className="w-4 h-4 text-amber-400" />
-          {t('pages.remediationHub.forecast_heading', { defaultValue: 'SLA Breach Forecast' })}
+          {t('pages.remediationHub.forecast_heading')}
         </h3>
         {Number(data?.overdue_now) > 0 && (
           <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 font-medium">
             <AlertTriangle className="w-3.5 h-3.5" />
-            {t('pages.remediationHub.forecast_overdue_now', { count: data.overdue_now, defaultValue: '{{count}} already overdue' })}
+            {t('pages.remediationHub.forecast_overdue_now', { count: data.overdue_now })}
           </span>
         )}
       </div>
@@ -80,7 +80,7 @@ export default function SlaForecastStrip() {
             <div key={b.within_days} className="flex flex-col items-center gap-1.5">
               <div className="text-lg font-bold tabular-nums text-white">{breached}</div>
               {kev > 0 && (
-                <div className="text-[10px] font-mono text-orange-300">{t('pages.remediationHub.forecast_kev', { count: kev, defaultValue: '{{count}} KEV' })}</div>
+                <div className="text-[10px] font-mono text-orange-300">{t('pages.remediationHub.forecast_kev', { count: kev })}</div>
               )}
               <div className="w-full h-16 flex items-end">
                 <div
@@ -89,7 +89,7 @@ export default function SlaForecastStrip() {
                 />
               </div>
               <div className="text-[10px] text-white/40 font-mono">
-                {t('pages.remediationHub.forecast_within', { days: b.within_days, defaultValue: '≤{{days}}d' })}
+                {t('pages.remediationHub.forecast_within', { days: b.within_days })}
               </div>
             </div>
           )

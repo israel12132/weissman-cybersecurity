@@ -34,7 +34,7 @@ export default function BatchHealPanel({ findings, onClose }) {
 
   const submit = async () => {
     if (!repoSlug.trim() || !gitToken.trim()) {
-      setError(t('pages.remediationHub.repo_token_required', { defaultValue: 'repo_slug and git_token are required' }))
+      setError(t('pages.remediationHub.repo_token_required'))
       return
     }
     setSubmitting(true)
@@ -70,7 +70,7 @@ export default function BatchHealPanel({ findings, onClose }) {
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-cyan-200 flex items-center gap-1.5">
           <Wrench className="w-3.5 h-3.5" />
-          {t('pages.remediationHub.batch_heal_title', { defaultValue: 'Heal all fixable ({{n}})', n: healable.length })}
+          {t('pages.remediationHub.batch_heal_title', { n: healable.length })}
         </span>
         <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></button>
       </div>
@@ -78,7 +78,7 @@ export default function BatchHealPanel({ findings, onClose }) {
       {result ? (
         <div className="text-xs text-emerald-300 flex items-center gap-2">
           <CheckCircle className="w-4 h-4" />
-          {t('pages.remediationHub.batch_result', { defaultValue: 'Queued {{enqueued}}, skipped {{skipped}}', enqueued: result.enqueued, skipped: result.skipped })}
+          {t('pages.remediationHub.batch_result', { enqueued: result.enqueued, skipped: result.skipped })}
         </div>
       ) : (
         <>
@@ -93,7 +93,7 @@ export default function BatchHealPanel({ findings, onClose }) {
             </select>
           </div>
           <details className="text-[11px] text-white/45">
-            <summary className="cursor-pointer text-white/55">{t('pages.remediationHub.dual_auth_required', { defaultValue: 'Destructive / dual-approval headers (if enforced)' })}</summary>
+            <summary className="cursor-pointer text-white/55">{t('pages.remediationHub.dual_auth_required')}</summary>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
               <input type="password" value={destructiveConfirm} onChange={(e) => setDestructiveConfirm(e.target.value)} placeholder="X-Weissman-Destructive-Confirm"
                 className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40" />
@@ -107,7 +107,7 @@ export default function BatchHealPanel({ findings, onClose }) {
           <button type="button" onClick={submit} disabled={submitting || healable.length === 0}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-50">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-            {t('pages.remediationHub.batch_heal_go', { defaultValue: 'Heal all fixable ({{n}})', n: healable.length })}
+            {t('pages.remediationHub.batch_heal_go', { n: healable.length })}
           </button>
         </>
       )}

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 // Live-load tint by saturation ratio.
 function loadColor(ratio) {
@@ -46,7 +49,17 @@ export default function StealthOperations() {
   const [pacing, setPacing] = useState(null) // editable draft, seeded once from status
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [hostQuery, setHostQuery] = useState('')
   const timer = useRef(null)
+
+  const exportHosts = useCallback(() => {
+    const hosts = data?.live?.active_hosts || []
+    downloadCsv(
+      hosts.map((h) => [h.host, h.in_flight, h.capacity]),
+      ['host', 'in_flight', 'capacity'],
+      'weissman-stealth-hosts',
+    )
+  }, [data])
 
   const load = useCallback(async () => {
     try {
@@ -133,33 +146,31 @@ export default function StealthOperations() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
-      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
-            <span aria-hidden>🛡️</span> {t('stealthOps.title')}
-          </h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">{t('stealthOps.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setLive((v) => !v)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-              live
-                ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                : 'border-white/15 bg-slate-900/60 text-slate-400'
-            }`}
-          >
-            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-            {live ? t('stealthOps.live') : t('stealthOps.paused')}
-          </button>
-          <button
-            onClick={load}
-            className="rounded-lg border border-white/15 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/60"
-          >
-            {t('stealthOps.refresh')}
-          </button>
-        </div>
-      </header>
+      <PremiumPageHeader
+        title={<><span aria-hidden>🛡️</span> {t('stealthOps.title')}</>}
+        subtitle={t('stealthOps.subtitle')}
+        onRefresh={load}
+        onExport={exportHosts}
+        loading={loading}
+        className="mb-4"
+      >
+        <button
+          type="button"
+          onClick={() => setLive((v) => !v)}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            live
+              ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+              : 'border-white/15 bg-slate-900/60 text-slate-400'
+          }`}
+        >
+          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+          {live ? t('stealthOps.live') : t('stealthOps.paused')}
+        </button>
+      </PremiumPageHeader>
+
+      <EvidenceNotice className="mb-4">
+        {t('common.live_source')}: GET /api/stealth/status
+      </EvidenceNotice>
 
       {error && (
         <div className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-3 text-sm text-rose-300 mb-4">
@@ -304,32 +315,47 @@ export default function StealthOperations() {
 
           {/* ── Active hosts ── */}
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mt-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
                 {t('stealthOps.activeTargets')}
               </h2>
-              <span className="text-xs font-mono text-slate-500">
-                {t('stealthOps.showing', { n: l.active_hosts.length })}
-              </span>
-            </div>
-            {l.active_hosts.length === 0 ? (
-              <div className="text-sm text-slate-500 py-6 text-center">
-                {t('stealthOps.noRequests')}
+              <div className="flex items-center gap-2">
+                <input
+                  type="search"
+                  value={hostQuery}
+                  onChange={(e) => setHostQuery(e.target.value)}
+                  aria-label={t('common.search')}
+                  placeholder={t('common.search')}
+                  className="w-44 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                />
+                <span className="text-xs font-mono text-slate-500">
+                  {t('stealthOps.showing', { n: l.active_hosts.length })}
+                </span>
               </div>
-            ) : (
-              <ul className="space-y-2">
-                {l.active_hosts.map((h) => (
-                  <li key={h.host} className="flex items-center gap-3">
-                    <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
-                      {h.host}
-                    </span>
-                    <span className="flex-1">
-                      <LoadBar inFlight={h.in_flight} capacity={h.capacity} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            </div>
+            {(() => {
+              const visibleHosts = l.active_hosts.filter(
+                (h) => !hostQuery || String(h.host).toLowerCase().includes(hostQuery.toLowerCase()),
+              )
+              return visibleHosts.length === 0 ? (
+                <div className="text-sm text-slate-500 py-6 text-center">
+                  {t('stealthOps.noRequests')}
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {visibleHosts.map((h) => (
+                    <li key={h.host} className="flex items-center gap-3">
+                      <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
+                        {h.host}
+                      </span>
+                      <span className="flex-1">
+                        <LoadBar inFlight={h.in_flight} capacity={h.capacity} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            })()}
           </section>
         </>
       )}

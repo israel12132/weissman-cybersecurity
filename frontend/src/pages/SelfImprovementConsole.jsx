@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  RefreshCw,
   Play,
   Power,
   CheckCircle2,
@@ -11,6 +10,8 @@ import {
   GitPullRequest,
 } from 'lucide-react'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch'
@@ -75,6 +76,20 @@ export default function SelfImprovementConsole() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const exportProposals = () => {
+    downloadCsv(
+      (items || []).map((it) => [
+        it.id,
+        it.title || it.summary || '',
+        it.status || '',
+        (Array.isArray(it.affected_files) ? it.affected_files : []).join('; '),
+      ]),
+      ['id', 'title', 'status', 'affected_files'],
+      'weissman-self-improve-proposals',
+    )
+  }
 
   const load = useCallback(async () => {
     try {
@@ -139,6 +154,14 @@ export default function SelfImprovementConsole() {
   const intervalMin = status ? Math.round((status.interval_secs || 3600) / 60) : 60
   const enabled = !!status?.enabled
 
+  const visibleItems = (items || []).filter(
+    (it) =>
+      !searchQuery ||
+      [it.id, it.title, it.summary, it.status].some((x) =>
+        String(x || '').toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+  )
+
   return (
     <PageShell
       title="Autonomous Self-Improvement"
@@ -165,14 +188,7 @@ export default function SelfImprovementConsole() {
             <Power className="w-4 h-4" />
             {enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
           </button>
-          <button
-            onClick={load}
-            disabled={busy}
-            className="inline-flex items-center rounded-lg border border-white/15 bg-white/5 p-1.5 text-white/70 hover:bg-white/10 disabled:opacity-50"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} />
-          </button>
+          <ShellScanActions onRefresh={load} refreshLoading={busy} onExport={exportProposals} />
         </div>
       }
     >
@@ -211,7 +227,7 @@ export default function SelfImprovementConsole() {
             />
           </div>
 
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             {['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'APPLIED'].map((s) => (
               <button
                 key={s}
@@ -225,9 +241,17 @@ export default function SelfImprovementConsole() {
                 {s.replace('_', ' ').toLowerCase()}
               </button>
             ))}
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search"
+              placeholder="Search"
+              className="ml-auto w-44 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-mono text-white/80 placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            />
           </div>
 
-          {items.length === 0 ? (
+          {visibleItems.length === 0 ? (
             <EmptyState
               title="No proposals in this view"
               description={
@@ -239,7 +263,7 @@ export default function SelfImprovementConsole() {
           ) : (
             <div className="space-y-3">
               <AnimatePresence>
-                {items.map((it) => {
+                {visibleItems.map((it) => {
                   const files = Array.isArray(it.affected_files) ? it.affected_files : []
                   return (
                     <motion.div
