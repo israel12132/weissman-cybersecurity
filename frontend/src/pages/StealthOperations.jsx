@@ -143,6 +143,9 @@ export default function StealthOperations() {
   const cfg = data && data.config
   const l = data && data.live
   const id = data && data.identity
+  const visibleHosts = (l?.active_hosts || []).filter(
+    (h) => !hostQuery || String(h.host).toLowerCase().includes(hostQuery.toLowerCase()),
+  )
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
@@ -329,33 +332,28 @@ export default function StealthOperations() {
                   className="w-44 rounded-md border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                 />
                 <span className="text-xs font-mono text-slate-500">
-                  {t('stealthOps.showing', { n: l.active_hosts.length })}
+                  {t('stealthOps.showing', { n: visibleHosts.length })}
                 </span>
               </div>
             </div>
-            {(() => {
-              const visibleHosts = l.active_hosts.filter(
-                (h) => !hostQuery || String(h.host).toLowerCase().includes(hostQuery.toLowerCase()),
-              )
-              return visibleHosts.length === 0 ? (
-                <div className="text-sm text-slate-500 py-6 text-center">
-                  {t('stealthOps.noRequests')}
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {visibleHosts.map((h) => (
-                    <li key={h.host} className="flex items-center gap-3">
-                      <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
-                        {h.host}
-                      </span>
-                      <span className="flex-1">
-                        <LoadBar inFlight={h.in_flight} capacity={h.capacity} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )
-            })()}
+            {visibleHosts.length === 0 ? (
+              <div className="text-sm text-slate-500 py-6 text-center">
+                {t('stealthOps.noRequests')}
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {visibleHosts.map((h) => (
+                  <li key={h.host} className="flex items-center gap-3">
+                    <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
+                      {h.host}
+                    </span>
+                    <span className="flex-1">
+                      <LoadBar inFlight={h.in_flight} capacity={h.capacity} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </>
       )}

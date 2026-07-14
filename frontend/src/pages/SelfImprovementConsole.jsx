@@ -252,14 +252,21 @@ export default function SelfImprovementConsole() {
           </div>
 
           {visibleItems.length === 0 ? (
-            <EmptyState
-              title="No proposals in this view"
-              description={
-                enabled
-                  ? 'The engine will post proposals on its next hourly cycle. Or click “Run now”.'
-                  : 'The engine is disabled. Enable it, or click “Run now” for a one-off analysis.'
-              }
-            />
+            items.length > 0 && searchQuery ? (
+              <EmptyState
+                title="No matching proposals"
+                description={`No proposals in this view match “${searchQuery}”. Clear the search to see all ${items.length}.`}
+              />
+            ) : (
+              <EmptyState
+                title="No proposals in this view"
+                description={
+                  enabled
+                    ? 'The engine will post proposals on its next hourly cycle. Or click “Run now”.'
+                    : 'The engine is disabled. Enable it, or click “Run now” for a one-off analysis.'
+                }
+              />
+            )
           ) : (
             <div className="space-y-3">
               <AnimatePresence>
