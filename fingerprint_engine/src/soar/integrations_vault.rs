@@ -74,7 +74,10 @@ fn vault_key() -> Option<[u8; 32]> {
         if js.trim().len() < 16 {
             return None;
         }
-        Some(derive_key(b"weissman-integrations-vault-fallback|", js.trim()))
+        Some(derive_key(
+            b"weissman-integrations-vault-fallback|",
+            js.trim(),
+        ))
     })
 }
 
@@ -110,7 +113,10 @@ fn decrypt_keyring() -> &'static [[u8; 32]] {
         if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
             for e in csv.split(',') {
                 if e.trim().len() >= 16 {
-                    v.push(derive_key(b"weissman-integrations-vault-fallback|", e.trim()));
+                    v.push(derive_key(
+                        b"weissman-integrations-vault-fallback|",
+                        e.trim(),
+                    ));
                 }
             }
         }
@@ -309,8 +315,14 @@ mod tests {
             ("password", "SNOW-PASSWORD"),
         ] {
             let v = enc[field].as_str().unwrap_or_default();
-            assert!(is_encrypted(v), "{field} must be encrypted at rest, got {v}");
-            assert!(!v.contains(plain), "{field} plaintext leaked into the payload");
+            assert!(
+                is_encrypted(v),
+                "{field} must be encrypted at rest, got {v}"
+            );
+            assert!(
+                !v.contains(plain),
+                "{field} plaintext leaked into the payload"
+            );
         }
         // And point-of-use decryption recovers the originals.
         let dec = decrypt_config(&enc);
