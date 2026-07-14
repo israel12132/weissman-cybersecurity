@@ -86,6 +86,10 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
   envelope (`fingerprint_engine/src/soar/integrations_vault.rs`, applied to MFA
   via `auth_mfa::encrypt_secret_at_rest` / `decrypt_secret_at_rest`), keyed by a
   dedicated vault key (`WEISSMAN_INTEGRATIONS_VAULT_KEY` / `WEISSMAN_VAULT_KEY`).
+  Production **fails closed** at startup when no key material is present (never
+  silently stores plaintext), and a previous-key ring (`WEISSMAN_VAULT_KEY_PREVIOUS`
+  plus the existing `WEISSMAN_JWT_SECRET_PREVIOUS` rotation keyring) keeps
+  already-encrypted secrets readable across key rotation.
 
 ## 6. Threat intelligence integrity
 

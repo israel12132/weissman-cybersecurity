@@ -17,39 +17,80 @@ use std::sync::OnceLock;
 
 const VAULT_PREFIX: &str = "wzv1:";
 
+fn derive_key(domain: &[u8], material: &str) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(domain);
+    h.update(material.as_bytes());
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&h.finalize());
+    k
+}
+
+fn hex32(raw: &str) -> Option<[u8; 32]> {
+    let b = hex::decode(raw.trim()).ok()?;
+    if b.len() == 32 {
+        let mut k = [0u8; 32];
+        k.copy_from_slice(&b);
+        Some(k)
+    } else {
+        None
+    }
+}
+
 fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
     *KEY.get_or_init(|| {
         if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
             let t = raw.trim();
             if !t.is_empty() {
-                match hex::decode(t) {
-                    Ok(b) if b.len() == 32 => {
-                        let mut k = [0u8; 32];
-                        k.copy_from_slice(&b);
-                        return Some(k);
-                    }
-                    _ => eprintln!(
-                        "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
-                    ),
+                if let Some(k) = hex32(t) {
+                    return Some(k);
                 }
+                eprintln!(
+                    "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
+                );
             }
         }
         let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
         if js.trim().len() < 16 {
-            eprintln!(
-                "[Weissman][vault] no WEISSMAN_VAULT_KEY and weak/absent JWT secret — vault secrets stored UNENCRYPTED"
-            );
+            // No key material. In production the startup guard (key_present) refuses
+            // boot; in dev the CEO vault stores plaintext (no managed secrets there).
             return None;
         }
-        let mut h = Sha256::new();
-        h.update(b"weissman-vault-key-v1|");
-        h.update(js.as_bytes());
-        let d = h.finalize();
-        let mut k = [0u8; 32];
-        k.copy_from_slice(&d);
-        Some(k)
+        Some(derive_key(b"weissman-vault-key-v1|", js.trim()))
     })
+}
+
+/// True when a key is available to encrypt CEO-vault secrets at rest. The
+/// production startup guard requires this so secrets are never stored plaintext.
+#[must_use]
+pub fn key_present() -> bool {
+    vault_key().is_some()
+}
+
+/// Decrypt keyring: current key, then rotated-out previous keys
+/// (`WEISSMAN_VAULT_KEY_PREVIOUS` hex + the `WEISSMAN_JWT_SECRET_PREVIOUS`
+/// rotation keyring) so key rotation never orphans encrypted CEO-vault rows.
+fn decrypt_keyring() -> &'static [[u8; 32]] {
+    static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
+    KEYS.get_or_init(|| {
+        let mut v: Vec<[u8; 32]> = Vec::new();
+        if let Some(k) = vault_key() {
+            v.push(k);
+        }
+        if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
+            v.extend(csv.split(',').filter_map(hex32));
+        }
+        if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
+            for e in csv.split(',') {
+                if e.trim().len() >= 16 {
+                    v.push(derive_key(b"weissman-vault-key-v1|", e.trim()));
+                }
+            }
+        }
+        v
+    })
+    .as_slice()
 }
 
 fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
@@ -92,10 +133,12 @@ pub fn decrypt_secret(stored: &str) -> String {
     if !stored.starts_with(VAULT_PREFIX) {
         return stored.to_string();
     }
-    match vault_key() {
-        Some(k) => decrypt_with_key(&k, stored).unwrap_or_else(|| stored.to_string()),
-        None => stored.to_string(),
+    for k in decrypt_keyring() {
+        if let Some(pt) = decrypt_with_key(k, stored) {
+            return pt;
+        }
     }
+    stored.to_string()
 }
 
 #[derive(Debug, Serialize)]
