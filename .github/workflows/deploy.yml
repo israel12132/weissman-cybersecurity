@@ -1,0 +1,72 @@
+name: Deploy (verify-signed image → k8s)
+
+# Closes the deploy loop: the publish job (ci.yml, on tags) builds, cosign-signs
+# (keyless) and SLSA-attests the backend image by digest — but nothing consumed
+# that signature, and deploy/k8s used the mutable `:latest` tag. This workflow makes
+# the signature enforced at the consumption point: it VERIFIES the signature for a
+# given digest (fail-closed) before pinning that digest into the manifests and
+# applying them. Manual (workflow_dispatch) so a human authorizes each rollout.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: "Signed backend image digest to deploy (e.g. sha256:abc123...)"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # cosign keyless verify
+
+env:
+  IMAGE: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend
+
+jobs:
+  deploy:
+    name: Verify signature and roll out
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Verify image signature (fail closed)
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/israel12132/weissman-cybersecurity/.github/workflows/ci.yml@.*" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE}@${{ inputs.image_digest }}"
+
+      - name: Pin the verified digest into the k8s manifests
+        run: |
+          set -euo pipefail
+          DIGEST_REF="${IMAGE}@${{ inputs.image_digest }}"
+          # Replace any `image: <IMAGE>:tag` or existing digest with the verified digest.
+          for f in $(grep -rl "${IMAGE}" deploy/k8s || true); do
+            sed -i -E "s|image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+)|image: ${DIGEST_REF}|g" "$f"
+            echo "pinned $f -> ${DIGEST_REF}"
+          done
+
+      - name: Render pinned manifests (artifact for review / GitOps)
+        run: |
+          mkdir -p _render && cp deploy/k8s/*.yaml _render/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rendered-k8s-${{ inputs.image_digest }}
+          path: _render/
+
+      - name: Apply to cluster (only when a KUBECONFIG secret is configured)
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KUBECONFIG_DATA:-}" ]; then
+            echo "No KUBECONFIG_B64 secret set — signature verified and manifests pinned/rendered (uploaded as artifact), but not applied. Configure KUBECONFIG_B64 to enable rollout."
+            exit 0
+          fi
+          echo "$KUBECONFIG_DATA" | base64 -d > /tmp/kubeconfig
+          export KUBECONFIG=/tmp/kubeconfig
+          kubectl apply -f deploy/k8s/backend-deployment.yaml -f deploy/k8s/worker-deployment.yaml
+          kubectl rollout status deployment/weissman-backend -n weissman --timeout=180s

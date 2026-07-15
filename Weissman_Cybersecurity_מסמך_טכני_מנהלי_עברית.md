@@ -726,7 +726,7 @@ do   [ ...actions ]
 | סיסמאות · JWT | bcrypt cost-12, ≥12 תווים; JWT ≥48 תווים | `security_startup.rs` |
 | קריאה־בלבד NL→SQL | תפקיד `weissman_ro`, allow-list, timeouts | `nl_query.rs` |
 | קריפטוגרפיה | TLS 1.2+ נאכף, HMAC-SHA256, השוואות זמן־קבוע | `weissman_core::tls_policy` · `cicd_interceptor.rs` |
-| הצפנה במנוחה | LUKS/KMS; סודות ב־Vault Transit/Fernet | `database_encryption.py` |
+| הצפנה במנוחה | LUKS/KMS (פלטפורמה) + AES-256-GCM בשכבת האפליקציה לסודות MFA/אינטגרציות/CEO-vault | `soar/integrations_vault.rs` · `ceo/vault.rs` |
 | אימות תחום־סריקה | דחיית מחוץ־לתחום ו־IP פרטי | `security_hardening.rs` · `scan_routing.rs` |
 | הגבלת־קצב | middleware לכל־דייר; מכסת AI (50/יום) | `http/tenant_scan_limit.rs` |
 | שימור נתונים | TTL לכל מחלקה; ניקוי UEBA | `data_retention.rs` |

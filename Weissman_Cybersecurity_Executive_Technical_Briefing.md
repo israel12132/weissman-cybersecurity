@@ -726,7 +726,7 @@ Every control is traceable to a module in the source code (from `SECURITY_AND_CO
 | Passwords · JWT | bcrypt cost-12, ≥12 chars; JWT ≥48 chars | `security_startup.rs` |
 | Read-only NL→SQL | `weissman_ro` role, allow-list, timeouts | `nl_query.rs` |
 | Cryptography | TLS 1.2+ enforced, HMAC-SHA256, constant-time compares | `weissman_core::tls_policy` · `cicd_interceptor.rs` |
-| Encryption at rest | LUKS/KMS; secrets via Vault Transit/Fernet | `database_encryption.py` |
+| Encryption at rest | LUKS/KMS (platform) + app-layer AES-256-GCM for MFA seeds & integration/CEO-vault secrets | `soar/integrations_vault.rs` · `ceo/vault.rs` |
 | Scan-scope validation | Out-of-scope and private-IP rejection | `security_hardening.rs` · `scan_routing.rs` |
 | Rate limiting | Per-tenant middleware; AI quota (50/day) | `http/tenant_scan_limit.rs` |
 | Data retention | Per-class TTL; UEBA purge | `data_retention.rs` |

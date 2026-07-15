@@ -20,7 +20,7 @@ ignore = [
     "RUSTSEC-2026-0099", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
     "RUSTSEC-2026-0104", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
     "RUSTSEC-2026-0187", # lopdf parse-DoS via genpdf->printpdf — we generate, never parse untrusted PDFs
-    "RUSTSEC-2026-0049", # rustls-webpki CRL matching via tokio-tungstenite 0.21 — CRL revocation not used
+    "RUSTSEC-2026-0049", # rustls-webpki CRL matching. tokio-tungstenite bumped 0.21->0.24 (rustls 0.23); any residual path is via aws-config's rustls 0.21. CRL revocation not used — re-review if no longer triggered.
 ]
 
 [licenses]

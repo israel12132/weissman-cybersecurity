@@ -99,13 +99,13 @@ pub async fn exchange_frames(
     };
 
     for msg in outbound_text {
-        if ws.send(Message::Text(msg.clone())).await.is_err() {
+        if ws.send(Message::text(msg.clone())).await.is_err() {
             break;
         }
         result.sent.push(preview(msg, 240));
     }
     for bin in outbound_binary {
-        if ws.send(Message::Binary(bin.clone())).await.is_err() {
+        if ws.send(Message::binary(bin.clone())).await.is_err() {
             break;
         }
         result.sent.push(format!("[binary {}B]", bin.len()));
@@ -122,10 +122,10 @@ pub async fn exchange_frames(
         match tokio::time::timeout(remaining, ws.next()).await {
             Ok(Some(Ok(Message::Text(t)))) => result.received.push(preview(&t, 512)),
             Ok(Some(Ok(Message::Binary(b)))) if !b.is_empty() => {
-                result.received_binary.push(b);
+                result.received_binary.push(b.to_vec());
             }
             Ok(Some(Ok(Message::Close(frame)))) => {
-                result.close_reason = frame.map(|f| preview(f.reason.to_string().as_str(), 120));
+                result.close_reason = frame.map(|f| preview(&f.reason, 120));
                 break;
             }
             Ok(Some(Ok(Message::Ping(_)))) | Ok(Some(Ok(Message::Pong(_)))) => {}
@@ -151,7 +151,7 @@ pub async fn exchange_phases(
     let phase_budget = (opts.max_messages / phases.len().max(1)).max(1);
     for phase in phases {
         for msg in phase {
-            if ws.send(Message::Text(msg.clone())).await.is_err() {
+            if ws.send(Message::text(msg.clone())).await.is_err() {
                 let _ = ws.close(None).await;
                 return Some(result);
             }
@@ -170,11 +170,10 @@ pub async fn exchange_phases(
             match tokio::time::timeout(remaining, ws.next()).await {
                 Ok(Some(Ok(Message::Text(t)))) => result.received.push(preview(&t, 512)),
                 Ok(Some(Ok(Message::Binary(b)))) if !b.is_empty() => {
-                    result.received_binary.push(b);
+                    result.received_binary.push(b.to_vec());
                 }
                 Ok(Some(Ok(Message::Close(frame)))) => {
-                    result.close_reason =
-                        frame.map(|f| preview(f.reason.to_string().as_str(), 120));
+                    result.close_reason = frame.map(|f| preview(&f.reason, 120));
                     let _ = ws.close(None).await;
                     return Some(result);
                 }

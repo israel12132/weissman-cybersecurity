@@ -35,14 +35,30 @@
 | `WEISSMAN_INTEL_EPSS_ENABLED` | `true` | Disable to skip FIRST EPSS back-fill |
 | `WEISSMAN_SOVEREIGN_SELF_SCAN_INTERVAL_SECS` | `0` (off) | LLM review of `audit_logs` every N s (min 300 once on) |
 
+### Secrets at rest (vault)
+
+MFA TOTP seeds, SOAR provider credentials, and CEO-vault secrets are encrypted at
+rest (AES-256-GCM). **Production fails closed at startup if no key material is set.**
+
+| Var | Default | Effect |
+|-----|---------|--------|
+| `WEISSMAN_INTEGRATIONS_VAULT_KEY` | unset → JWT-derived | Dedicated key (passphrase ≥32 chars). Recommended over the JWT-derived fallback |
+| `WEISSMAN_VAULT_KEY` | unset → JWT-derived | Alternative dedicated key (64 hex = 32 bytes); also keys the CEO genesis vault |
+| `WEISSMAN_VAULT_KEY_PREVIOUS` | unset | Comma-separated rotated-out hex keys kept in the decrypt keyring so rotation never orphans data |
+| `WEISSMAN_JWT_SECRET_PREVIOUS` | unset | Existing JWT rotation keyring; also derives previous vault keys when the JWT-derived fallback is in use |
+
+> **Rotation:** set the new key, move the old value into `*_PREVIOUS`, restart. Old
+> ciphertext still decrypts via the previous key; MFA seeds re-encrypt opportunistically.
+
 ### LLM / embeddings (used by Council RAG, NL-Query, Predictive)
 
 | Var | Default | Effect |
 |-----|---------|--------|
-| `OPENAI_BASE_URL` / `WEISSMAN_LLM_BASE_URL` | `https://api.openai.com` | Any OpenAI-compatible server (vLLM, Ollama-mapped, Together) |
+| `OPENAI_BASE_URL` / `WEISSMAN_LLM_BASE_URL` | `http://127.0.0.1:8000/v1` (local vLLM) | Any OpenAI-compatible server (vLLM, Ollama-mapped, Together, or OpenAI cloud) |
 | `OPENAI_API_KEY` / `WEISSMAN_LLM_API_KEY` | unset | Bearer token if the server requires auth |
-| `WEISSMAN_EMBEDDINGS_MODEL` | `text-embedding-3-small` | 1536-d. Mapped & padded if shorter |
-| `WEISSMAN_NL_QUERY_MODEL` | `gpt-4o-mini` | Model used for Ask-Weissman planner |
+| `WEISSMAN_LLM_MODEL` | `meta-llama/Llama-3.2-3B-Instruct` | Default chat/completions model (`openai_chat::DEFAULT_LLM_MODEL`; override per deployment) |
+| `WEISSMAN_EMBEDDINGS_MODEL` | `BAAI/bge-small-en-v1.5` | Padded to 1536-d for pgvector; set `text-embedding-3-small` for OpenAI |
+| `WEISSMAN_NL_QUERY_MODEL` | falls back to `WEISSMAN_LLM_MODEL` (Llama-3.2-3B) | Ask-Weissman planner model; set a stronger model if desired |
 | `WEISSMAN_COUNCIL_MODEL_*` | … | Override per-role models for the Supreme Council |
 
 ### Alerts

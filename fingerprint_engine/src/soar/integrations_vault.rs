@@ -20,42 +20,109 @@ const SECRET_KEYS: &[&str] = &[
     "bot_token",
 ];
 
+fn derive_key(domain: &[u8], material: &str) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(domain);
+    h.update(material.as_bytes());
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&h.finalize());
+    k
+}
+
+fn hex32(raw: &str) -> Option<[u8; 32]> {
+    let b = hex::decode(raw.trim()).ok()?;
+    if b.len() == 32 {
+        let mut k = [0u8; 32];
+        k.copy_from_slice(&b);
+        Some(k)
+    } else {
+        None
+    }
+}
+
+/// True when a dedicated (non-JWT-derived) vault key is configured. When false
+/// the vault key is derived from `WEISSMAN_JWT_SECRET`, which couples secret
+/// rotation to JWT rotation — the startup guard warns operators to set a
+/// dedicated key.
+#[must_use]
+pub fn dedicated_key_configured() -> bool {
+    std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+        .map(|v| v.trim().len() >= 32)
+        .unwrap_or(false)
+        || std::env::var("WEISSMAN_VAULT_KEY")
+            .ok()
+            .and_then(|v| hex32(&v))
+            .is_some()
+}
+
+/// Current (encryption) key. `None` only when no key material exists at all
+/// (dev without a JWT secret) — in production the startup guard requires one.
 fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
     *KEY.get_or_init(|| {
         if let Ok(raw) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
-            let t = raw.trim();
-            if t.len() >= 32 {
-                let mut h = Sha256::new();
-                h.update(b"weissman-integrations-vault-v1|");
-                h.update(t.as_bytes());
-                let d = h.finalize();
-                let mut k = [0u8; 32];
-                k.copy_from_slice(&d);
-                return Some(k);
+            if raw.trim().len() >= 32 {
+                return Some(derive_key(b"weissman-integrations-vault-v1|", raw.trim()));
             }
         }
         if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            if let Ok(b) = hex::decode(raw.trim()) {
-                if b.len() == 32 {
-                    let mut k = [0u8; 32];
-                    k.copy_from_slice(&b);
-                    return Some(k);
-                }
+            if let Some(k) = hex32(&raw) {
+                return Some(k);
             }
         }
         let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
         if js.trim().len() < 16 {
             return None;
         }
-        let mut h = Sha256::new();
-        h.update(b"weissman-integrations-vault-fallback|");
-        h.update(js.as_bytes());
-        let d = h.finalize();
-        let mut k = [0u8; 32];
-        k.copy_from_slice(&d);
-        Some(k)
+        Some(derive_key(
+            b"weissman-integrations-vault-fallback|",
+            js.trim(),
+        ))
     })
+}
+
+/// True when a key is available to encrypt secrets at rest. The production
+/// startup guard calls this to fail closed rather than silently store plaintext.
+#[must_use]
+pub fn key_present() -> bool {
+    vault_key().is_some()
+}
+
+/// Decrypt keyring: current key first, then rotated-out previous keys so a key
+/// rotation never orphans already-encrypted secrets. Previous keys are read from
+/// `WEISSMAN_VAULT_KEY_PREVIOUS` (comma-separated hex),
+/// `WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS` (comma-separated passphrases), and
+/// the existing `WEISSMAN_JWT_SECRET_PREVIOUS` rotation keyring.
+fn decrypt_keyring() -> &'static [[u8; 32]] {
+    static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
+    KEYS.get_or_init(|| {
+        let mut v: Vec<[u8; 32]> = Vec::new();
+        if let Some(k) = vault_key() {
+            v.push(k);
+        }
+        if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
+            v.extend(csv.split(',').filter_map(hex32));
+        }
+        if let Ok(csv) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS") {
+            for e in csv.split(',') {
+                if e.trim().len() >= 32 {
+                    v.push(derive_key(b"weissman-integrations-vault-v1|", e.trim()));
+                }
+            }
+        }
+        if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
+            for e in csv.split(',') {
+                if e.trim().len() >= 16 {
+                    v.push(derive_key(
+                        b"weissman-integrations-vault-fallback|",
+                        e.trim(),
+                    ));
+                }
+            }
+        }
+        v
+    })
+    .as_slice()
 }
 
 fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
@@ -98,10 +165,21 @@ pub fn decrypt_secret(stored: &str) -> String {
     if !stored.starts_with(INT_PREFIX) {
         return stored.to_string();
     }
-    match vault_key() {
-        Some(k) => decrypt_with_key(&k, stored).unwrap_or_else(|| stored.to_string()),
-        None => stored.to_string(),
+    for k in decrypt_keyring() {
+        if let Some(pt) = decrypt_with_key(k, stored) {
+            return pt;
+        }
     }
+    // No key (current or rotated-out) matched — return as-is (fail-safe).
+    stored.to_string()
+}
+
+/// True if `stored` is an encrypted envelope produced by [`encrypt_secret`]
+/// (as opposed to legacy plaintext). Callers use this to detect rows that
+/// still need at-rest migration without hard-coding the envelope prefix.
+#[must_use]
+pub fn is_encrypted(stored: &str) -> bool {
+    stored.starts_with(INT_PREFIX)
 }
 
 fn is_secret_field(key: &str) -> bool {
@@ -185,5 +263,90 @@ mod tests {
         assert!(enc.starts_with(INT_PREFIX));
         assert_eq!(decrypt_secret(&enc), "super-secret-token");
         std::env::remove_var("WEISSMAN_INTEGRATIONS_VAULT_KEY");
+    }
+
+    #[test]
+    fn envelope_produces_ciphertext_and_roundtrips_with_explicit_key() {
+        // Deterministic (no env / no OnceLock): proves a stored secret is
+        // ciphertext at rest and never contains the plaintext.
+        let key = [7u8; 32];
+        let plaintext = "JBSWY3DPEHPK3PXP"; // sample base32 TOTP seed
+        let enc = encrypt_with_key(&key, plaintext).expect("encrypt");
+        assert!(enc.starts_with(INT_PREFIX), "must be an encrypted envelope");
+        assert!(is_encrypted(&enc));
+        assert!(
+            !enc.contains(plaintext),
+            "plaintext seed must not appear in the at-rest value"
+        );
+        assert_eq!(
+            decrypt_with_key(&key, &enc).as_deref(),
+            Some(plaintext),
+            "round-trip must recover the original seed"
+        );
+        assert!(!is_encrypted(plaintext), "bare base32 is not an envelope");
+    }
+
+    #[test]
+    fn encrypt_config_hides_soar_provider_secrets() {
+        // Same key string as `roundtrip_when_key_available` so the process-wide
+        // vault-key OnceLock stays consistent regardless of test order.
+        std::env::set_var(
+            "WEISSMAN_INTEGRATIONS_VAULT_KEY",
+            "test-vault-key-for-integrations-32b-minimum!!",
+        );
+        let payload = json!({
+            "device_id": "abc123",
+            "base_url": "https://api.crowdstrike.com",
+            "client_id": "id-not-secret",
+            "client_secret": "SUPER-SECRET-VALUE",  // crowdstrike
+            "routing_key": "PD-ROUTING-KEY",        // pagerduty
+            "api_key": "OPSGENIE-KEY",              // opsgenie
+            "password": "SNOW-PASSWORD",            // servicenow
+        });
+        let enc = encrypt_config(&payload);
+        // Non-secret fields are untouched.
+        assert_eq!(enc["device_id"], json!("abc123"));
+        assert_eq!(enc["client_id"], json!("id-not-secret"));
+        // Every credential is an envelope and its plaintext never appears at rest.
+        for (field, plain) in [
+            ("client_secret", "SUPER-SECRET-VALUE"),
+            ("routing_key", "PD-ROUTING-KEY"),
+            ("api_key", "OPSGENIE-KEY"),
+            ("password", "SNOW-PASSWORD"),
+        ] {
+            let v = enc[field].as_str().unwrap_or_default();
+            assert!(
+                is_encrypted(v),
+                "{field} must be encrypted at rest, got {v}"
+            );
+            assert!(
+                !v.contains(plain),
+                "{field} plaintext leaked into the payload"
+            );
+        }
+        // And point-of-use decryption recovers the originals.
+        let dec = decrypt_config(&enc);
+        assert_eq!(dec["client_secret"], json!("SUPER-SECRET-VALUE"));
+        assert_eq!(dec["password"], json!("SNOW-PASSWORD"));
+        std::env::remove_var("WEISSMAN_INTEGRATIONS_VAULT_KEY");
+    }
+
+    #[test]
+    fn previous_key_decrypts_after_rotation() {
+        // A secret encrypted under the now-previous key must still decrypt when
+        // the current key differs — this is exactly what the decrypt keyring does
+        // by trying [current, ...previous]. Deterministic: explicit keys, no env.
+        let old = [1u8; 32];
+        let new = [2u8; 32];
+        let enc = encrypt_with_key(&old, "rotated-secret").unwrap();
+        assert!(
+            decrypt_with_key(&new, &enc).is_none(),
+            "the rotated-in key must not decrypt old ciphertext"
+        );
+        assert_eq!(
+            decrypt_with_key(&old, &enc).as_deref(),
+            Some("rotated-secret"),
+            "the previous key must still recover the secret"
+        );
     }
 }

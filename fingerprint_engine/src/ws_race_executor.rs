@@ -50,7 +50,7 @@ async fn race_worker(
         tokio::time::sleep(Duration::from_micros(sync_window_us.min(50_000))).await;
     }
     let t0 = Instant::now();
-    ws.send(Message::Text(payload)).await.ok()?;
+    ws.send(Message::text(payload)).await.ok()?;
     let deadline = Instant::now() + Duration::from_millis(read_ms.clamp(200, 5000));
     let mut first = String::new();
     while Instant::now() < deadline {

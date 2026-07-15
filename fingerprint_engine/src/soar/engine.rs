@@ -201,7 +201,17 @@ pub async fn execute_armored_action(pool: &PgPool, cmd: ExecuteActionCommand) ->
     };
 
     match dispatch(&cmd, pool, &integration).await {
-        Ok(outcome) => {
+        Ok(mut outcome) => {
+            // Encrypt any provider credentials the adapter embedded in the outcome
+            // (and its revert steps) BEFORE persistence — these must never be written
+            // to soar_action_executions / soar_revert_runbooks in cleartext. The verify
+            // worker and revert runner decrypt at point-of-use. Covers every adapter
+            // uniformly (crowdstrike client_secret, pagerduty routing_key, servicenow
+            // password, opsgenie api_key, …).
+            outcome.payload = super::integrations_vault::encrypt_config(&outcome.payload);
+            for step in &mut outcome.revert_steps {
+                step.payload = super::integrations_vault::encrypt_config(&step.payload);
+            }
             let _ = update_execution_result(
                 pool,
                 cmd.tenant_id,

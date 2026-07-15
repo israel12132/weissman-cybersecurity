@@ -46,6 +46,8 @@ export default defineConfig({
         'src/lib/postureScore.js',
         'src/hooks/useSavedViews.js',
         'src/hooks/useVisiblePolling.js',
+        // safeUrl: security-relevant URL sanitizer, well unit-tested (100% fns/branches).
+        'src/utils/safeUrl.js',
       ],
       exclude: ['**/*.test.{js,jsx}', '**/*.spec.{js,jsx}', 'src/test/**'],
       thresholds: {

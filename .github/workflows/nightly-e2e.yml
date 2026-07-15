@@ -124,6 +124,20 @@ jobs:
           npx playwright install chromium
           npm run test:e2e:live -- live-feature
 
+      # Load/SLO smoke: grounds the 99.9% availability SLA with a real latency +
+      # error budget (k6 thresholds fail the job) against the same live backend.
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Load/SLO smoke (k6)
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: nightly@localhost
+          WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
+          K6_VUS: "15"
+          K6_DURATION: 1m
+        run: k6 run scripts/load/k6_slo.js
+
       - name: Dump server logs on failure
         if: failure()
         run: |
