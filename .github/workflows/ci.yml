@@ -91,9 +91,10 @@ jobs:
         #                      We GENERATE PDFs, never parse untrusted ones, so the
         #                      parser DoS is out of our surface. Tracked with genpdf.
         #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
-        #                      point) — via tokio-tungstenite 0.21 → rustls 0.22.
-        #                      We don't configure CRL revocation on WS/TLS clients,
-        #                      so the CRL-matching bug is out of our surface. Tracked
+        #                      point). tokio-tungstenite bumped 0.21 → 0.24 (rustls 0.23),
+        #                      removing the 0.22 path; any residual is via aws-config's
+        #                      rustls 0.21. We don't configure CRL revocation on WS/TLS
+        #                      clients, so the CRL-matching bug is out of our surface. Tracked
         #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
         run: |
           cargo audit \

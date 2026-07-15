@@ -23,7 +23,9 @@ pub async fn run_session(
     let ws_url = build_ws_url(server_url, &enrollment.ws_path, &enrollment.session_jwt)?;
     info!(target: "agent", "connecting to {}", scrub_token(&ws_url));
 
-    let (ws_stream, _resp) = tokio_tungstenite::connect_async(ws_url).await?;
+    // tokio-tungstenite 0.24 dropped the `url` integration (url::Url no longer
+    // implements IntoClientRequest); pass the URL as &str.
+    let (ws_stream, _resp) = tokio_tungstenite::connect_async(ws_url.as_str()).await?;
     let (mut sink, mut stream) = ws_stream.split();
 
     // Outbound channel: detections + heartbeat → WebSocket sink.
@@ -87,7 +89,7 @@ pub async fn run_session(
                     continue;
                 }
             };
-            if let Err(e) = sink.send(Message::Text(line)).await {
+            if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed");
                 break;
             }
