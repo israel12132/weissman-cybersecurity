@@ -202,7 +202,7 @@ async function main() {
   // structurally from the import graph (no hardcoded allowlist). Routed pages remain
   // covered by the route audit below even if a helper is imported from them.
   const embedded = new Set()
-  const importRe = /from\s+['"]\.\/([A-Za-z0-9_]+)['"]/g
+  const importRe = /from\s+['"]\.\/([A-Za-z0-9_-]+)(?:\.jsx)?['"]/g
   for (const [file, src] of pageSrc) {
     let m
     while ((m = importRe.exec(src)) !== null) {

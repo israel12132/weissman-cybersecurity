@@ -69,9 +69,10 @@ export default function EmptyState({
   const copy = body ?? description
   // Known lucide key → rendered as an icon component. A string that is not a
   // known key (e.g. an emoji) is rendered verbatim; a React node is rendered
-  // as-is. Only an undefined/null icon defaults to the inbox glyph.
-  const IconComponent = typeof icon === 'string' ? ICON_MAP[icon] : null
-  const glyphText = typeof icon === 'string' && !IconComponent ? icon : null
+  // as-is. An undefined OR null icon defaults to the inbox glyph.
+  const resolvedIcon = icon ?? 'inbox'
+  const IconComponent = typeof resolvedIcon === 'string' ? ICON_MAP[resolvedIcon] : null
+  const glyphText = typeof resolvedIcon === 'string' && !IconComponent ? resolvedIcon : null
 
   return (
     <div
@@ -94,7 +95,7 @@ export default function EmptyState({
         ) : glyphText ? (
           <span className={`${compact ? 'text-lg' : 'text-xl'} leading-none`}>{glyphText}</span>
         ) : (
-          icon
+          resolvedIcon
         )}
       </div>
 

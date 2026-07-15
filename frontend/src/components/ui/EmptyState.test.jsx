@@ -19,6 +19,12 @@ describe('EmptyState', () => {
     expect(container.querySelector('svg')).toBeInTheDocument()
   })
 
+  it('falls back to the inbox icon when icon is explicitly null', () => {
+    const { container } = render(<EmptyState icon={null} title="Nulled" />)
+    // Renders the lucide inbox svg rather than nothing.
+    expect(container.querySelector('svg')).toBeInTheDocument()
+  })
+
   it('renders an unknown string icon (emoji) verbatim instead of defaulting to inbox', () => {
     const { container } = render(<EmptyState icon="🎯" title="Targeted" />)
     // Emoji is rendered as text, not swapped for a lucide svg.
