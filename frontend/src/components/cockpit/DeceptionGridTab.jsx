@@ -7,7 +7,7 @@ import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { ShieldAlert, Plus, MapPin, AlertTriangle, Key, Cloud, Loader2 } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.deceptionGrid'
@@ -51,12 +51,9 @@ export default function DeceptionGridTab() {
     }
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/deception`)
-      if (r.ok) {
-        const d = await r.json()
-        const list = Array.isArray(d) ? d : (d.assets ?? [])
-        setAssets(list)
-      }
+      const d = await apiFetch(`/api/clients/${selectedClientId}/deception`)
+      const list = Array.isArray(d) ? d : (d.assets ?? [])
+      setAssets(list)
     } catch (_) {
       setAssets([])
     } finally {
@@ -81,8 +78,7 @@ export default function DeceptionGridTab() {
     try {
       await apiFetch(`/api/clients/${selectedClientId}/deception/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ types: typesToGenerate, tech_hint: 'generic' }),
+        body: { types: typesToGenerate, tech_hint: 'generic' },
       })
       await fetchAssets()
     } catch (_) {}
@@ -106,13 +102,12 @@ export default function DeceptionGridTab() {
         s3_region: deployForm.s3_region.trim() || undefined,
         ssm_parameter_path: deployForm.ssm_parameter_path.trim() || undefined,
       }
-      const r = await apiFetch(`/api/clients/${selectedClientId}/deception/deploy-cloud`, {
+      const d = await apiFetch(`/api/clients/${selectedClientId}/deception/deploy-cloud`, {
         method: 'POST',
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(body),
+        body,
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok && d.ok) {
+      if (d?.ok) {
         setDeployMsg({
           ok: true,
           text: t(`${NS}.deployed`, {
@@ -121,11 +116,14 @@ export default function DeceptionGridTab() {
           }),
         })
       } else {
-        setDeployMsg({ ok: false, text: d.detail || JSON.stringify(d) || r.statusText })
+        setDeployMsg({ ok: false, text: d?.detail || JSON.stringify(d) })
       }
       await fetchAssets()
     } catch (e) {
-      setDeployMsg({ ok: false, text: String(e) })
+      setDeployMsg({ ok: false, text: e?.status ? e.message : String(e) })
+      // A server response (carries e.status) refreshed assets pre-migration; a
+      // network failure did not. Preserve that.
+      if (e?.status) await fetchAssets()
     }
     setDeploying(false)
   }

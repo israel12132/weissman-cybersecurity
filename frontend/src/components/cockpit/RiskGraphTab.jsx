@@ -8,7 +8,7 @@ import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState 
 import '@xyflow/react/dist/style.css'
 import { useClient } from '../../context/ClientContext'
 import { Network, RefreshCw, AlertCircle } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NODE_WIDTH = 160
@@ -83,17 +83,16 @@ export default function RiskGraphTab() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
-      if (!r.ok) {
-        setError(t('components.cockpitTabs.riskGraph.load_failed'))
-        return
-      }
-      const d = await r.json()
+      const d = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`)
       const { nodes: n, edges: e } = layoutFromApi(d.nodes || [], d.edges || [])
       setNodes(n)
       setEdges(e)
-    } catch (_) {
-      setError(t('components.cockpitTabs.riskGraph.network_error'))
+    } catch (err) {
+      setError(
+        err?.status
+          ? t('components.cockpitTabs.riskGraph.load_failed')
+          : t('components.cockpitTabs.riskGraph.network_error'),
+      )
     } finally {
       setLoading(false)
     }
@@ -108,17 +107,16 @@ export default function RiskGraphTab() {
     setBuilding(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/risk-graph`, {
+      await apiFetch(`/api/clients/${selectedClientId}/risk-graph`, {
         method: 'POST',
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setError(d.error || t('components.cockpitTabs.riskGraph.build_failed'))
-        return
-      }
       await fetchGraph()
-    } catch (_) {
-      setError(t('components.cockpitTabs.riskGraph.build_request_failed'))
+    } catch (err) {
+      setError(
+        err?.status
+          ? err.message || t('components.cockpitTabs.riskGraph.build_failed')
+          : t('components.cockpitTabs.riskGraph.build_request_failed'),
+      )
     } finally {
       setBuilding(false)
     }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { RefreshCw, TrendingDown, TrendingUp, Minus } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import { EngineRealitySummary } from '../EngineRealityBadge'
 import Button from '../ui/Button'
 
@@ -135,9 +135,7 @@ export default function ExecKpiStrip() {
 
   const refresh = async () => {
     try {
-      const r = await apiFetch('/api/dashboard/exec-kpis')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch('/api/dashboard/exec-kpis')
       if (!cancelRef.current) {
         setKpis(d)
         setErr(null)

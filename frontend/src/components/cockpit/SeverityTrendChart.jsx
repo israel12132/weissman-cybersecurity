@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 const NS = 'components.cockpitWidgets.severityTrendChart'
 
@@ -37,8 +37,8 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
     let cancelled = false
     const load = async () => {
       try {
-        const r = await apiFetch('/api/dashboard/exec-kpis')
-        if (r.ok && !cancelled) setData(await r.json())
+        const d = await apiFetch('/api/dashboard/exec-kpis')
+        if (!cancelled) setData(d)
       } catch (_) {}
       finally { if (!cancelled) setLoading(false) }
     }

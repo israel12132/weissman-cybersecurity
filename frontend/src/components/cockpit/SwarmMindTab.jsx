@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { Network, Play, Radio, Bot } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.swarmMind'
@@ -61,7 +61,6 @@ export default function SwarmMindTab() {
     try {
       await apiFetch(`/api/clients/${selectedClientId}/swarm/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       })
     } catch (_) {}
     setTimeout(() => setRunning(false), 500)
