@@ -101,6 +101,14 @@ should link here rather than copying figures.
 | HTTP route registrations (\`.route(\`) | ${routes} | grep over \`fingerprint_engine/src\` + \`backend\` |
 ${migLines}
 
+**Reading the engine count honestly:** the ${e.total} catalog IDs resolve to
+**${e.distinct_real_implementations} distinct probe implementations** — ${e.alias} are
+aliases that re-tag a canonical probe, ${e.agent_required} are agent-required host
+techniques, and several "real" IDs delegate to a shared runner (e.g. APT-group
+surface profiles). The catalog number reflects breadth of technique coverage, not
+${e.total} independent scanners. Every ID still maps to a real execution path
+(\`engine_reality_audit.mjs\` fails on any \`no_path\`).
+
 > Verify locally: \`node scripts/sync_doc_metrics.mjs --check\`.
 `;
 }

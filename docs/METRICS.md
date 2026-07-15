@@ -11,9 +11,17 @@ should link here rather than copying figures.
 | — real live probes | 303 | same (295 distinct impls) |
 | — aliases | 212 | same |
 | — agent-required | 48 | same |
-| Rust test fns (`#[test]`/`#[tokio::test]`) | 1205 | grep over workspace |
+| Rust test fns (`#[test]`/`#[tokio::test]`) | 1206 | grep over workspace |
 | HTTP route registrations (`.route(`) | 333 | grep over `fingerprint_engine/src` + `backend` |
 | Migrations — `crates/weissman-db/migrations` | 89 |
 | Migrations — `fingerprint_engine/migrations` | 89 |
+
+**Reading the engine count honestly:** the 563 catalog IDs resolve to
+**295 distinct probe implementations** — 212 are
+aliases that re-tag a canonical probe, 48 are agent-required host
+techniques, and several "real" IDs delegate to a shared runner (e.g. APT-group
+surface profiles). The catalog number reflects breadth of technique coverage, not
+563 independent scanners. Every ID still maps to a real execution path
+(`engine_reality_audit.mjs` fails on any `no_path`).
 
 > Verify locally: `node scripts/sync_doc_metrics.mjs --check`.
