@@ -3787,6 +3787,53 @@ async fn api_compliance_control_mappings(
     }
 }
 
+/// GET /api/compliance/control-mappings/coverage — per-framework coverage rollup plus a live
+/// integrity check that every mapped `engine_id` still resolves to a known platform engine.
+/// This is what keeps the "live" mapping honest: if the engine fleet changes underneath the
+/// catalog, orphaned bindings surface here instead of silently degrading a compliance report.
+async fn api_compliance_control_mappings_coverage(
+    State(state): State<Arc<AppState>>,
+    Extension(_auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let framework = q.get("framework").map(|s| s.trim().to_string());
+    let rows = match crate::compliance_engine::load_control_mappings(
+        state.app_pool.as_ref(),
+        framework.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "ok": false, "error": scrub_internal_error(&e) })),
+            )
+                .into_response();
+        }
+    };
+
+    let is_known = weissman_core::models::engine::is_known_engine_id;
+    let coverage = crate::compliance_engine::summarize_control_coverage(&rows, is_known);
+    let orphaned = crate::compliance_engine::find_orphaned_engine_mappings(&rows, is_known);
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "coverage": coverage,
+            "integrity": {
+                "orphaned_engine_mappings": orphaned,
+                "orphaned_count": orphaned.len(),
+                "consistent": orphaned.is_empty(),
+            },
+            "total_mappings": rows.len(),
+            "source": "compliance_control_mappings",
+        })),
+    )
+        .into_response()
+}
+
 /// GET /api/compliance/evidence-pack/:client_id — live findings → auditor evidence pack.
 async fn api_compliance_evidence_pack(
     State(state): State<Arc<AppState>>,
