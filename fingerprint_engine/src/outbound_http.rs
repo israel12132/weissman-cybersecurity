@@ -119,3 +119,37 @@ pub async fn get_bytes_with_retry(
         return Ok(bytes.to_vec());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_display_messages() {
+        assert_eq!(OutboundHttpError::Status(404).to_string(), "HTTP 404");
+        assert_eq!(OutboundHttpError::Status(503).to_string(), "HTTP 503");
+        assert_eq!(
+            OutboundHttpError::EmptyBody.to_string(),
+            "empty response body"
+        );
+        assert_eq!(
+            OutboundHttpError::ClientBuild("boom".into()).to_string(),
+            "failed to build HTTP client: boom"
+        );
+        assert_eq!(
+            OutboundHttpError::Request("dns fail".into()).to_string(),
+            "request failed: dns fail"
+        );
+        assert_eq!(
+            OutboundHttpError::Body("truncated".into()).to_string(),
+            "read body: truncated"
+        );
+    }
+
+    #[test]
+    fn timeout_constants_are_stable() {
+        assert_eq!(EXTERNAL_CONNECT_TIMEOUT, Duration::from_secs(10));
+        assert_eq!(EXTERNAL_TOTAL_TIMEOUT, Duration::from_secs(55));
+        assert!(EXTERNAL_CONNECT_TIMEOUT < EXTERNAL_TOTAL_TIMEOUT);
+    }
+}

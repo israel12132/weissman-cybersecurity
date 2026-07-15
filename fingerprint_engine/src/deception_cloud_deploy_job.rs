@@ -260,3 +260,48 @@ async fn mark_failed(pool: &PgPool, tenant_id: i64, deployment_id: Uuid, msg: &s
         let _ = tx.commit().await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deploy_request_deserializes_all_fields() {
+        let v = json!({
+            "asset_ids": [1i64, 2i64, 3i64],
+            "s3_bucket": "my-bucket",
+            "s3_object_key": "path/to/key",
+            "s3_region": "us-east-1",
+            "ssm_parameter_path": "/weissman/param"
+        });
+        let r: DeployRequest = serde_json::from_value(v).unwrap();
+        assert_eq!(r.asset_ids, vec![1, 2, 3]);
+        assert_eq!(r.s3_bucket.as_deref(), Some("my-bucket"));
+        assert_eq!(r.s3_object_key.as_deref(), Some("path/to/key"));
+        assert_eq!(r.s3_region.as_deref(), Some("us-east-1"));
+        assert_eq!(r.ssm_parameter_path.as_deref(), Some("/weissman/param"));
+    }
+
+    #[test]
+    fn deploy_request_optionals_default_to_none() {
+        let v = json!({ "asset_ids": [] });
+        let r: DeployRequest = serde_json::from_value(v).unwrap();
+        assert!(r.asset_ids.is_empty());
+        assert!(r.s3_bucket.is_none());
+        assert!(r.s3_object_key.is_none());
+        assert!(r.s3_region.is_none());
+        assert!(r.ssm_parameter_path.is_none());
+    }
+
+    #[test]
+    fn deploy_request_requires_asset_ids() {
+        let v = json!({ "s3_bucket": "b" });
+        assert!(serde_json::from_value::<DeployRequest>(v).is_err());
+    }
+
+    #[test]
+    fn deploy_request_rejects_wrong_asset_id_type() {
+        let v = json!({ "asset_ids": ["not-an-int"] });
+        assert!(serde_json::from_value::<DeployRequest>(v).is_err());
+    }
+}

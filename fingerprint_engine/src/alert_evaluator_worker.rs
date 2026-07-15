@@ -228,3 +228,75 @@ pub fn spawn_alert_evaluator_worker(app_pool: Arc<PgPool>, auth_pool: Arc<PgPool
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn severity_matches_explicit_array_is_case_insensitive() {
+        let cond = json!({ "severity": ["High", "Critical"] });
+        assert!(severity_matches(&cond, "high"));
+        assert!(severity_matches(&cond, "CRITICAL"));
+        assert!(!severity_matches(&cond, "low"));
+        assert!(!severity_matches(&cond, "medium"));
+    }
+
+    #[test]
+    fn severity_matches_min_severity_ranking() {
+        let cond = json!({ "min_severity": "high" });
+        // rank: critical=4, high=3, medium=2, low=1, other=0
+        assert!(severity_matches(&cond, "critical")); // 4 >= 3
+        assert!(severity_matches(&cond, "High")); // 3 >= 3
+        assert!(!severity_matches(&cond, "medium")); // 2 >= 3
+        assert!(!severity_matches(&cond, "low")); // 1 >= 3
+        assert!(!severity_matches(&cond, "informational")); // 0 >= 3
+    }
+
+    #[test]
+    fn severity_matches_defaults_to_true_without_condition() {
+        assert!(severity_matches(&json!({}), "anything"));
+        assert!(severity_matches(&json!({ "unrelated": 1 }), "low"));
+    }
+
+    #[test]
+    fn engine_matches_absent_engines_is_true() {
+        assert!(engine_matches(&json!({}), "nuclei_http"));
+    }
+
+    #[test]
+    fn engine_matches_uses_substring_and_case_insensitivity() {
+        let cond = json!({ "engines": ["Nuclei", "zap"] });
+        assert!(engine_matches(&cond, "nuclei_http_engine"));
+        assert!(engine_matches(&cond, "OWASP-ZAP"));
+        assert!(!engine_matches(&cond, "nmap"));
+    }
+
+    #[test]
+    fn engine_matches_falls_back_to_singular_engine_key() {
+        let cond = json!({ "engine": ["trivy"] });
+        assert!(engine_matches(&cond, "trivy-scan"));
+        assert!(!engine_matches(&cond, "grype"));
+    }
+
+    #[test]
+    fn cve_matches_empty_pattern_is_true() {
+        assert!(cve_matches(&json!({}), "any title", "any desc"));
+        assert!(cve_matches(&json!({ "cve_pattern": "" }), "t", "d"));
+    }
+
+    #[test]
+    fn cve_matches_searches_title_and_description() {
+        let cond = json!({ "cve_pattern": "CVE-2021-44228" });
+        assert!(cve_matches(&cond, "Log4Shell cve-2021-44228", "unrelated"));
+        assert!(cve_matches(&cond, "unrelated", "affected by CVE-2021-44228 here"));
+        assert!(!cve_matches(&cond, "nothing", "here"));
+    }
+
+    #[test]
+    fn cve_matches_falls_back_to_singular_cve_key() {
+        let cond = json!({ "cve": "log4j" });
+        assert!(cve_matches(&cond, "Apache Log4J RCE", "d"));
+        assert!(!cve_matches(&cond, "nginx", "d"));
+    }
+}

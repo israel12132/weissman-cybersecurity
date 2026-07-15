@@ -72,6 +72,35 @@ fn public_base_url() -> String {
         .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oidc_state_full_serde_round_trip() {
+        let s = OidcStateFull {
+            idp_id: 3,
+            tenant_id: 9,
+            nonce: "n-once".to_string(),
+            exp: 1_700_000_000,
+            pkce_verifier: "verifier-xyz".to_string(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["idp_id"], 3);
+        assert_eq!(v["tenant_id"], 9);
+        assert_eq!(v["nonce"], "n-once");
+        assert_eq!(v["exp"], 1_700_000_000_i64);
+        assert_eq!(v["pkce_verifier"], "verifier-xyz");
+
+        let back: OidcStateFull = serde_json::from_value(v).unwrap();
+        assert_eq!(back.idp_id, 3);
+        assert_eq!(back.tenant_id, 9);
+        assert_eq!(back.nonce, "n-once");
+        assert_eq!(back.exp, 1_700_000_000);
+        assert_eq!(back.pkce_verifier, "verifier-xyz");
+    }
+}
+
 /// GET /api/auth/oidc/begin
 pub async fn oidc_begin(
     State(state): State<Arc<AppState>>,

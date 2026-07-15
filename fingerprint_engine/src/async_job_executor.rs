@@ -2264,3 +2264,113 @@ async fn execute_job_unscoped(
         _ => Err(format!("unknown job kind: {}", job.kind)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tenant_consistency_ok_when_payload_has_no_tenant_id() {
+        assert!(enforce_job_tenant_consistency(7, &json!({})).is_ok());
+        assert!(enforce_job_tenant_consistency(7, &json!({ "foo": "bar" })).is_ok());
+    }
+
+    #[test]
+    fn tenant_consistency_ok_on_matching_integer() {
+        assert!(enforce_job_tenant_consistency(7, &json!({ "tenant_id": 7 })).is_ok());
+    }
+
+    #[test]
+    fn tenant_consistency_ok_on_matching_numeric_string() {
+        assert!(enforce_job_tenant_consistency(7, &json!({ "tenant_id": "7" })).is_ok());
+    }
+
+    #[test]
+    fn tenant_consistency_err_on_integer_mismatch() {
+        let err = enforce_job_tenant_consistency(7, &json!({ "tenant_id": 8 })).unwrap_err();
+        assert_eq!(err, "payload tenant_id 8 does not match job tenant 7");
+    }
+
+    #[test]
+    fn tenant_consistency_err_on_numeric_string_mismatch() {
+        let err = enforce_job_tenant_consistency(7, &json!({ "tenant_id": "8" })).unwrap_err();
+        assert_eq!(err, "payload tenant_id 8 does not match job tenant 7");
+    }
+
+    #[test]
+    fn tenant_consistency_ignores_unparseable_tenant_id() {
+        // A non-numeric string cannot be parsed to i64, so it is treated as absent
+        // and no cross-tenant check fires.
+        assert!(
+            enforce_job_tenant_consistency(7, &json!({ "tenant_id": "not-a-number" })).is_ok()
+        );
+    }
+
+    #[test]
+    fn payload_client_id_from_integer() {
+        assert_eq!(payload_client_id(&json!({ "client_id": 42 })), Some(42));
+    }
+
+    #[test]
+    fn payload_client_id_from_numeric_string() {
+        assert_eq!(payload_client_id(&json!({ "client_id": "42" })), Some(42));
+    }
+
+    #[test]
+    fn payload_client_id_none_when_missing_or_invalid() {
+        assert_eq!(payload_client_id(&json!({})), None);
+        assert_eq!(payload_client_id(&json!({ "client_id": null })), None);
+        assert_eq!(payload_client_id(&json!({ "client_id": "abc" })), None);
+    }
+
+    fn anomaly(oob: Option<&str>, llm: Option<&str>) -> fuzz_core::ValidatedAnomaly {
+        fuzz_core::ValidatedAnomaly {
+            target_url: "https://example.com".to_string(),
+            payload: "PAYLOAD".to_string(),
+            anomaly_type: "sqli".to_string(),
+            baseline_vs_anomaly: "base vs anom".to_string(),
+            oob_token: oob.map(str::to_string),
+            llm_user_prompt: llm.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn feedback_finding_high_severity_without_oob() {
+        let f = feedback_fuzz_anomaly_to_finding(&anomaly(None, None));
+        assert_eq!(f["severity"], "high");
+        assert_eq!(f["title"], "sqli");
+        assert_eq!(f["target_url"], "https://example.com");
+        assert_eq!(f["type"], "feedback_fuzz");
+        assert_eq!(f["anomaly_type"], "sqli");
+        assert_eq!(f["poc"], "PAYLOAD");
+        assert_eq!(f["description"], "base vs anom\n\nPayload excerpt:\nPAYLOAD");
+    }
+
+    #[test]
+    fn feedback_finding_critical_severity_with_oob_and_llm_annotations() {
+        let f = feedback_fuzz_anomaly_to_finding(&anomaly(Some("tok123"), Some("prompt")));
+        assert_eq!(f["severity"], "critical");
+        assert_eq!(
+            f["description"],
+            "base vs anom\n\nPayload excerpt:\nPAYLOAD\n\nOAST correlation token: tok123\n\n[Generative] Payload produced by vLLM; see generative_fuzz_winning_payloads.llm_user_prompt."
+        );
+    }
+
+    #[test]
+    fn feedback_finding_oob_only_omits_generative_note() {
+        let f = feedback_fuzz_anomaly_to_finding(&anomaly(Some("tok123"), None));
+        assert_eq!(f["severity"], "critical");
+        assert_eq!(
+            f["description"],
+            "base vs anom\n\nPayload excerpt:\nPAYLOAD\n\nOAST correlation token: tok123"
+        );
+    }
+
+    #[test]
+    fn feedback_finding_truncates_title_to_500_chars() {
+        let mut a = anomaly(None, None);
+        a.anomaly_type = "a".repeat(600);
+        let f = feedback_fuzz_anomaly_to_finding(&a);
+        assert_eq!(f["title"].as_str().unwrap().chars().count(), 500);
+    }
+}

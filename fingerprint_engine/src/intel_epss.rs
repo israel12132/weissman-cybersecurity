@@ -352,3 +352,129 @@ pub async fn enrich_with_epss(
     }
     Some(s)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn nd(y: i32, m: u32, d: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn normalize_cve_uppercases_and_trims() {
+        assert_eq!(normalize_cve("cve-2021-1234").as_deref(), Some("CVE-2021-1234"));
+        assert_eq!(normalize_cve("  CVE-2021-1  ").as_deref(), Some("CVE-2021-1"));
+        assert_eq!(normalize_cve("CVE-2021-44228").as_deref(), Some("CVE-2021-44228"));
+    }
+
+    #[test]
+    fn normalize_cve_rejects_non_cve_and_empty_body() {
+        assert_eq!(normalize_cve("GHSA-xxxx-yyyy"), None);
+        assert_eq!(normalize_cve("CVE-"), None); // empty body
+        assert_eq!(normalize_cve("cve-"), None);
+        assert_eq!(normalize_cve(""), None);
+    }
+
+    #[test]
+    fn parse_score_reads_valid_row() {
+        let row = EpssApiRow {
+            cve: "CVE-2024-1".into(),
+            epss: "0.5".into(),
+            percentile: "0.9".into(),
+            date: "2024-06-01".into(),
+        };
+        let s = parse_score(&row).unwrap();
+        assert_eq!(
+            s,
+            EpssScore {
+                score: 0.5,
+                percentile: 0.9,
+                date: nd(2024, 6, 1),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_score_trims_whitespace() {
+        let row = EpssApiRow {
+            cve: "CVE-2024-2".into(),
+            epss: " 0.25 ".into(),
+            percentile: " 0.75 ".into(),
+            date: " 2024-01-02 ".into(),
+        };
+        let s = parse_score(&row).unwrap();
+        assert_eq!(s.score, 0.25);
+        assert_eq!(s.percentile, 0.75);
+        assert_eq!(s.date, nd(2024, 1, 2));
+    }
+
+    #[test]
+    fn parse_score_rejects_bad_numbers() {
+        let bad_epss = EpssApiRow {
+            cve: "CVE-2024-3".into(),
+            epss: "abc".into(),
+            percentile: "0.5".into(),
+            date: "2024-01-01".into(),
+        };
+        assert!(parse_score(&bad_epss).is_none());
+
+        let bad_pct = EpssApiRow {
+            cve: "CVE-2024-4".into(),
+            epss: "0.5".into(),
+            percentile: "".into(),
+            date: "2024-01-01".into(),
+        };
+        assert!(parse_score(&bad_pct).is_none());
+    }
+
+    #[test]
+    fn parse_score_bad_date_falls_back_but_keeps_numbers() {
+        let row = EpssApiRow {
+            cve: "CVE-2024-5".into(),
+            epss: "0.1".into(),
+            percentile: "0.2".into(),
+            date: "not-a-date".into(),
+        };
+        let s = parse_score(&row).expect("valid numbers => Some despite bad date");
+        assert_eq!(s.score, 0.1);
+        assert_eq!(s.percentile, 0.2);
+        // Bad date falls back to "today"; just assert it parsed to a real date.
+        assert!(s.date.year() >= 2024);
+    }
+
+    #[test]
+    fn api_response_deserializes_data_rows() {
+        let resp: EpssApiResponse = serde_json::from_value(serde_json::json!({
+            "data": [{
+                "cve": "CVE-2024-1",
+                "epss": "0.1",
+                "percentile": "0.2",
+                "date": "2024-01-01"
+            }]
+        }))
+        .unwrap();
+        assert_eq!(resp.data.len(), 1);
+        assert_eq!(resp.data[0].cve, "CVE-2024-1");
+        assert_eq!(resp.data[0].epss, "0.1");
+        assert_eq!(resp.data[0].percentile, "0.2");
+        assert_eq!(resp.data[0].date, "2024-01-01");
+    }
+
+    #[test]
+    fn api_response_defaults_missing_fields() {
+        let resp: EpssApiResponse = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(resp.data.is_empty());
+
+        // Row with only the required `cve` field defaults the rest to "".
+        let row: EpssApiRow =
+            serde_json::from_value(serde_json::json!({"cve": "CVE-2024-9"})).unwrap();
+        assert_eq!(row.cve, "CVE-2024-9");
+        assert_eq!(row.epss, "");
+        assert_eq!(row.percentile, "");
+        assert_eq!(row.date, "");
+    }
+
+    // Bring `chrono::Datelike` into scope for `.year()`.
+    use chrono::Datelike as _;
+}

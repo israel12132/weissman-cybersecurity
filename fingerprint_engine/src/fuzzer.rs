@@ -1251,3 +1251,64 @@ async fn param_injection_pass_with_urls(
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waf_block_detected_by_status_codes() {
+        for s in [401u16, 403, 405, 406, 429, 503] {
+            assert!(
+                probe_suggests_waf_block(s, "totally normal body"),
+                "status {s} should look like a WAF block"
+            );
+        }
+    }
+
+    #[test]
+    fn waf_block_not_detected_for_benign_500() {
+        // 500 is not in the block-status set and the body has no marker.
+        assert!(!probe_suggests_waf_block(500, "internal error occurred"));
+        assert!(!probe_suggests_waf_block(200, "welcome home"));
+    }
+
+    #[test]
+    fn waf_block_detected_by_body_markers_case_insensitive() {
+        assert!(probe_suggests_waf_block(200, "Request Rejected by WAF"));
+        assert!(probe_suggests_waf_block(200, "You are BLOCKED"));
+        assert!(probe_suggests_waf_block(200, "Access Denied"));
+        assert!(probe_suggests_waf_block(200, "Powered by CLOUDFLARE"));
+        assert!(probe_suggests_waf_block(200, "served by Akamai"));
+        assert!(probe_suggests_waf_block(200, "403 Forbidden page"));
+        assert!(probe_suggests_waf_block(200, "Not Acceptable"));
+    }
+
+    #[test]
+    fn truncate_for_log_short_string_unchanged_but_newlines_flattened() {
+        assert_eq!(truncate_for_log("ab\ncd", 10), "ab cd");
+        assert_eq!(truncate_for_log("abc", 3), "abc");
+        assert_eq!(truncate_for_log("", 5), "");
+    }
+
+    #[test]
+    fn truncate_for_log_long_string_is_cut_with_ellipsis() {
+        assert_eq!(truncate_for_log("abcdef", 3), "abc...");
+        // Newline replacement happens before length comparison.
+        assert_eq!(truncate_for_log("a\nbcdef", 3), "a b...");
+    }
+
+    #[test]
+    fn target_host_strips_scheme_path_and_port_and_lowercases() {
+        assert_eq!(target_host_for_memory("https://Example.com/path"), "example.com");
+        assert_eq!(target_host_for_memory("http://host:8080/x?y=1"), "host");
+        assert_eq!(target_host_for_memory("HTTP-less.example.org"), "http-less.example.org");
+        assert_eq!(target_host_for_memory("https://API.Corp.NET:443"), "api.corp.net");
+    }
+
+    #[test]
+    fn target_host_bare_host_no_scheme() {
+        assert_eq!(target_host_for_memory("example.org"), "example.org");
+        assert_eq!(target_host_for_memory("  spaced.io  "), "spaced.io");
+    }
+}

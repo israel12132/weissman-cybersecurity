@@ -794,3 +794,75 @@ async fn perform_test_connection(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_are_stable() {
+        assert_eq!(default_vendor_hint(), "oidc_custom");
+        assert!(default_active());
+    }
+
+    #[test]
+    fn norm_provider_accepts_only_oidc_and_saml() {
+        assert_eq!(norm_provider("oidc"), Some("oidc"));
+        assert_eq!(norm_provider("saml"), Some("saml"));
+        assert_eq!(norm_provider("SAML"), None);
+        assert_eq!(norm_provider("ldap"), None);
+        assert_eq!(norm_provider(""), None);
+    }
+
+    #[test]
+    fn norm_vendor_hint_passes_known_and_falls_back() {
+        for h in ["okta", "azure_ad", "google", "ping", "saml_custom", "oidc_custom"] {
+            assert_eq!(norm_vendor_hint(h), h);
+        }
+        assert_eq!(norm_vendor_hint("unknown"), "oidc_custom");
+        assert_eq!(norm_vendor_hint(""), "oidc_custom");
+        // Case sensitivity: "Okta" is not in the allow-list.
+        assert_eq!(norm_vendor_hint("Okta"), "oidc_custom");
+    }
+
+    #[test]
+    fn validate_outbound_url_accepts_public_https() {
+        assert!(validate_outbound_url("https://example.com/.well-known/openid-configuration").is_ok());
+        assert!(validate_outbound_url("https://8.8.8.8/x").is_ok());
+        // 100.63.0.0 is below the 100.64.0.0/10 CGNAT floor and public.
+        assert!(validate_outbound_url("https://100.63.0.1/").is_ok());
+    }
+
+    #[test]
+    fn validate_outbound_url_rejects_non_https() {
+        assert!(validate_outbound_url("http://example.com").is_err());
+        assert!(validate_outbound_url("ftp://example.com").is_err());
+    }
+
+    #[test]
+    fn validate_outbound_url_rejects_invalid_url() {
+        assert!(validate_outbound_url("not a url").is_err());
+        assert!(validate_outbound_url("").is_err());
+    }
+
+    #[test]
+    fn validate_outbound_url_blocks_localhost_and_loopback() {
+        assert!(validate_outbound_url("https://localhost").is_err());
+        assert!(validate_outbound_url("https://127.0.0.1").is_err());
+    }
+
+    #[test]
+    fn validate_outbound_url_blocks_private_and_reserved_ranges() {
+        assert!(validate_outbound_url("https://10.0.0.1").is_err());
+        assert!(validate_outbound_url("https://192.168.1.1").is_err());
+        assert!(validate_outbound_url("https://172.16.0.1").is_err());
+        assert!(validate_outbound_url("https://169.254.169.254").is_err()); // link-local + metadata
+        assert!(validate_outbound_url("https://100.64.0.1").is_err()); // CGNAT
+        assert!(validate_outbound_url("https://100.127.0.1").is_err()); // CGNAT upper
+    }
+
+    #[test]
+    fn validate_outbound_url_blocks_metadata_hostnames() {
+        assert!(validate_outbound_url("https://metadata.google.internal").is_err());
+    }
+}

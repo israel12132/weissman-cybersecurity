@@ -24,3 +24,30 @@ pub async fn api_docs_swagger() -> Response {
     );
     resp
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn swagger_response_sets_status_and_security_headers() {
+        let resp = api_docs_swagger().await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(header::CACHE_CONTROL)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "public, max-age=3600"
+        );
+        assert_eq!(
+            resp.headers()
+                .get(header::X_FRAME_OPTIONS)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "SAMEORIGIN"
+        );
+    }
+}

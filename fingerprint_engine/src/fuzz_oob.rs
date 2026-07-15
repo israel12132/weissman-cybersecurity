@@ -296,3 +296,114 @@ pub fn enrich_job_payload_with_oast_scan_binding(payload: &mut serde_json::Value
     obj.insert("oast_scan_host".into(), json!(host));
     obj.insert("oast_scan_callback_url".into(), json!(callback));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn looks_form_detects_urlencoded_forms() {
+        assert!(looks_form("a=1&b=2"));
+        assert!(looks_form("a=1"));
+        // Only the first three segments are inspected.
+        assert!(looks_form("a=1&b=2&c=3&d"));
+        assert!(!looks_form("a=1&b"));
+        assert!(!looks_form(""));
+        assert!(!looks_form("plain text"));
+    }
+
+    #[test]
+    fn tenant_oast_config_default_is_empty() {
+        let c = TenantOastConfig::default();
+        assert!(c.listener_url.is_empty());
+        assert!(c.domain.is_empty());
+        assert!(c.api_key.is_empty());
+    }
+
+    #[test]
+    fn tenant_override_normalizes_and_guard_clears() {
+        assert_eq!(tenant_oast_domain(), None);
+        {
+            let _g = push_tenant_oast(TenantOastConfig {
+                listener_url: "http://listener:9090/".to_string(),
+                domain: "OAST.Example.Test.".to_string(),
+                api_key: " k123 ".to_string(),
+            });
+            // domain: trimmed, trailing dot removed, lowercased.
+            assert_eq!(tenant_oast_domain(), Some("oast.example.test".to_string()));
+            // listener: trimmed, trailing slash removed.
+            assert_eq!(
+                tenant_oast_listener(),
+                Some("http://listener:9090".to_string())
+            );
+            // api key: trimmed.
+            assert_eq!(tenant_oast_api_key(), Some("k123".to_string()));
+            assert_eq!(oast_hook_domain(), Some("oast.example.test".to_string()));
+        }
+        // Guard dropped -> thread-local cleared.
+        assert_eq!(tenant_oast_domain(), None);
+        assert_eq!(tenant_oast_listener(), None);
+        assert_eq!(tenant_oast_api_key(), None);
+    }
+
+    #[test]
+    fn builtin_urls_use_tenant_domain_and_listener() {
+        let _g = push_tenant_oast(TenantOastConfig {
+            listener_url: "http://listener:9090".to_string(),
+            domain: "oast.example.test".to_string(),
+            api_key: String::new(),
+        });
+        assert_eq!(
+            builtin_embed_url("abc"),
+            Some("http://abc.oast.example.test/i".to_string())
+        );
+        assert_eq!(
+            builtin_verify_url("tok"),
+            Some("http://listener:9090/api/oast/status/tok".to_string())
+        );
+    }
+
+    #[test]
+    fn operator_prompt_hint_includes_domain() {
+        let _g = push_tenant_oast(TenantOastConfig {
+            domain: "oast.example.test".to_string(),
+            ..Default::default()
+        });
+        let h = oast_operator_prompt_hint();
+        assert!(h.starts_with("Operator OAST / blind callback domain: oast.example.test."));
+        assert!(h.contains("<uuid>.oast.example.test"));
+    }
+
+    #[test]
+    fn inject_oob_token_json_adds_url_key() {
+        let _g = push_tenant_oast(TenantOastConfig {
+            domain: "oast.example.test".to_string(),
+            ..Default::default()
+        });
+        let out = inject_oob_token(r#"{"a":1}"#, "tok");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["a"], json!(1));
+        assert!(v
+            .get("weissman_oast_url")
+            .and_then(|x| x.as_str())
+            .is_some());
+    }
+
+    #[test]
+    fn inject_oob_token_form_xml_and_plain_variants() {
+        let _g = push_tenant_oast(TenantOastConfig {
+            domain: "oast.example.test".to_string(),
+            ..Default::default()
+        });
+        let form = inject_oob_token("a=1&b=2", "tok");
+        assert!(form.starts_with("a=1&b=2&weissman_oast_url="));
+
+        let xml = inject_oob_token("<x>hi</x>", "tok");
+        assert!(xml.starts_with("<x>hi</x>\n"));
+        assert!(xml.contains("<!-- weissman_oast: tok -->"));
+        assert!(xml.contains("<weissman_oast_url>"));
+
+        let plain = inject_oob_token("hello world", "tok");
+        assert!(plain.starts_with("hello world\n"));
+    }
+}

@@ -478,3 +478,179 @@ pub fn build_security_graph(
     let _ = target;
     (nodes, edges)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn category_scores_all_clean_are_100() {
+        let sig = IdentitySignals::default();
+        let j = finalize_category_scores(&sig).to_json();
+        for k in [
+            "flow_hygiene",
+            "token_crypto",
+            "redirect_validation",
+            "client_authentication",
+            "modern_hardening",
+            "endpoint_exposure",
+            "federation_bridge",
+            "token_endpoint_hygiene",
+        ] {
+            assert_eq!(j[k].as_u64().unwrap(), 100, "axis {k}");
+        }
+    }
+
+    #[test]
+    fn category_scores_specific_penalties() {
+        let mut sig = IdentitySignals::default();
+        sig.alg_none = true; // token_crypto 100-40
+        sig.open_redirect_uri = true; // redirect_validation 100-45
+        sig.implicit_flow = true; // flow_hygiene 100-35
+        sig.subdomain_takeover_hits = 3; // endpoint_exposure via count_penalty 100-66
+        let j = finalize_category_scores(&sig).to_json();
+        assert_eq!(j["flow_hygiene"].as_u64().unwrap(), 65);
+        assert_eq!(j["token_crypto"].as_u64().unwrap(), 60);
+        assert_eq!(j["redirect_validation"].as_u64().unwrap(), 55);
+        assert_eq!(j["endpoint_exposure"].as_u64().unwrap(), 34);
+        // Untouched axes stay clean.
+        assert_eq!(j["client_authentication"].as_u64().unwrap(), 100);
+        assert_eq!(j["federation_bridge"].as_u64().unwrap(), 100);
+    }
+
+    #[test]
+    fn category_scores_client_auth_requires_public_and_pkce_gap() {
+        // public_clients_allowed alone does not fail client_authentication.
+        let mut a = IdentitySignals::default();
+        a.public_clients_allowed = true;
+        assert_eq!(
+            finalize_category_scores(&a).to_json()["client_authentication"]
+                .as_u64()
+                .unwrap(),
+            100
+        );
+        // public + pkce-not-advertised does.
+        let mut b = IdentitySignals::default();
+        b.public_clients_allowed = true;
+        b.pkce_not_advertised = true;
+        assert_eq!(
+            finalize_category_scores(&b).to_json()["client_authentication"]
+                .as_u64()
+                .unwrap(),
+            65
+        );
+    }
+
+    #[test]
+    fn extend_attack_paths_device_phish() {
+        let mut sig = IdentitySignals::default();
+        sig.device_flow_reachable = true;
+        sig.pkce_not_enforced_live = true;
+        let mut f = Vec::new();
+        extend_attack_paths("t", &sig, &mut f);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0]["severity"], "high");
+    }
+
+    #[test]
+    fn extend_attack_paths_subdomain_takeover_is_critical() {
+        let mut sig = IdentitySignals::default();
+        sig.subdomain_takeover_hits = 1;
+        sig.subdomain_oauth_surfaces = 1;
+        let mut f = Vec::new();
+        extend_attack_paths("t", &sig, &mut f);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0]["severity"], "critical");
+    }
+
+    #[test]
+    fn extend_attack_paths_none_when_clean() {
+        let sig = IdentitySignals::default();
+        let mut f = Vec::new();
+        extend_attack_paths("t", &sig, &mut f);
+        assert!(f.is_empty());
+    }
+
+    #[test]
+    fn toxic_headline_empty_when_no_combos() {
+        let sig = IdentitySignals::default();
+        let mut f = Vec::new();
+        emit_toxic_headline("t", &sig, &mut f);
+        assert!(f.is_empty());
+    }
+
+    #[test]
+    fn toxic_headline_alg_none_inserts_front() {
+        let mut sig = IdentitySignals::default();
+        sig.alg_none = true;
+        let mut f = vec![json!({"title": "existing"})];
+        emit_toxic_headline("t", &sig, &mut f);
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[0]["severity"], "critical");
+        assert_eq!(f[0]["category"], "toxic_combination");
+        assert!(f[0]["title"].as_str().unwrap().starts_with("TOXIC COMBINATION:"));
+    }
+
+    #[test]
+    fn remediation_roadmap_always_emits() {
+        let sig = IdentitySignals::default();
+        let mut f = Vec::new();
+        emit_remediation_roadmap("t", &sig, &mut f);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0]["category"], "remediation_roadmap");
+        assert!(f[0]["evidence"]["roadmap"].as_array().unwrap().len() >= 2);
+    }
+
+    #[test]
+    fn agent_guidance_emits_six() {
+        let mut f = Vec::new();
+        emit_agent_guidance("t", &mut f);
+        assert_eq!(f.len(), 6);
+        for finding in &f {
+            assert_eq!(finding["category"], "agent_guidance");
+        }
+    }
+
+    #[test]
+    fn security_graph_clean_root_only() {
+        let sig = IdentitySignals::default();
+        let (nodes, edges) = build_security_graph("t", &sig, "host.example.com");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, "root");
+        assert_eq!(nodes[0].label, "host.example.com");
+        assert_eq!(nodes[0].status, "secure"); // radar avg 100
+        assert!(edges.is_empty());
+    }
+
+    #[test]
+    fn security_graph_root_label_falls_back_to_target() {
+        let sig = IdentitySignals::default();
+        let (nodes, _) = build_security_graph("target-id", &sig, "");
+        assert_eq!(nodes[0].label, "target-id");
+    }
+
+    #[test]
+    fn security_graph_redirect_and_flow_chain() {
+        let mut sig = IdentitySignals::default();
+        sig.open_redirect_uri = true;
+        sig.implicit_flow = true;
+        let (nodes, edges) = build_security_graph("t", &sig, "h");
+        // root + redirect + flow
+        assert_eq!(nodes.len(), 3);
+        // e_root_redirect, e_root_flow, ap_token
+        assert_eq!(edges.len(), 3);
+        assert!(edges.iter().any(|e| e.edge_type == "TOKEN_EXFIL"));
+    }
+
+    #[test]
+    fn security_graph_crypto_forge_edge() {
+        let mut sig = IdentitySignals::default();
+        sig.discovered = true;
+        sig.alg_none = true;
+        let (nodes, edges) = build_security_graph("t", &sig, "h");
+        // root + discovery + crypto
+        assert_eq!(nodes.len(), 3);
+        assert!(edges.iter().any(|e| e.edge_type == "ID_TOKEN_FORGE"));
+    }
+}

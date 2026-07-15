@@ -540,3 +540,81 @@ fn component_target_url(component_ref: &str) -> String {
     }
     String::new()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn norm_sev_trims_lowercases_and_truncates() {
+        assert_eq!(norm_sev("  HIGH "), "high");
+        assert_eq!(norm_sev("Critical"), "critical");
+        assert_eq!(norm_sev("MeDiUm"), "medium");
+        assert_eq!(norm_sev(""), "");
+        assert_eq!(norm_sev("   "), "");
+        // Truncated to at most 32 chars (after trim/lowercase).
+        let long = "a".repeat(40);
+        assert_eq!(norm_sev(&long).len(), 32);
+    }
+
+    #[test]
+    fn component_target_url_passes_through_http_urls() {
+        assert_eq!(component_target_url("http://ex.com"), "http://ex.com");
+        assert_eq!(component_target_url("https://ex.com/x"), "https://ex.com/x");
+        // Leading/trailing whitespace is trimmed first.
+        assert_eq!(component_target_url("  https://ex.com "), "https://ex.com");
+    }
+
+    #[test]
+    fn component_target_url_expands_seed_repo_prefix() {
+        // Bare owner/repo becomes a github URL.
+        assert_eq!(
+            component_target_url("WEISSMAN_GENESIS_SEED_REPOS:owner/repo"),
+            "https://github.com/owner/repo"
+        );
+        // A value already containing github.com is returned as-is (after trim).
+        assert_eq!(
+            component_target_url("WEISSMAN_GENESIS_SEED_REPOS: https://github.com/o/r "),
+            "https://github.com/o/r"
+        );
+    }
+
+    #[test]
+    fn component_target_url_returns_empty_for_unknown() {
+        assert_eq!(component_target_url("just-a-name"), "");
+        assert_eq!(component_target_url(""), "");
+        assert_eq!(component_target_url("   "), "");
+    }
+
+    #[test]
+    fn proposed_attack_chain_serde_defaults() {
+        let p: ProposedAttackChain = serde_json::from_str("{}").unwrap();
+        assert!(p.chain_steps.is_empty());
+        assert_eq!(p.summary, "");
+        assert_eq!(p.estimated_severity, "");
+    }
+
+    #[test]
+    fn defense_and_bypass_serde_defaults() {
+        let d: DefenseConstraint = serde_json::from_str("{}").unwrap();
+        assert!(!d.breaks_chain);
+        assert_eq!(d.constraint_description, "");
+
+        let b: BypassResponse = serde_json::from_str(r#"{"bypass_exists":true}"#).unwrap();
+        assert!(b.bypass_exists);
+        assert!(b.revised_chain_steps.is_empty());
+    }
+
+    #[test]
+    fn vaccine_artifacts_roundtrips() {
+        let v = VaccineArtifacts {
+            remediation_patch: "patch".into(),
+            detection_signature: "sig".into(),
+            severity: "high".into(),
+        };
+        let s = serde_json::to_string(&v).unwrap();
+        let back: VaccineArtifacts = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.severity, "high");
+        assert_eq!(back.remediation_patch, "patch");
+    }
+}

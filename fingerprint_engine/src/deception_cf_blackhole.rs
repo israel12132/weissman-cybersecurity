@@ -257,3 +257,91 @@ pub async fn maybe_blackhole_source_ip(source_ip: Option<IpAddr>) {
         Err(e) => warn!(target: "deception_cf_blackhole", "{}", e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::net::Ipv4Addr;
+
+    #[test]
+    fn slash24_zeros_last_octet() {
+        assert_eq!(ipv4_slash24(Ipv4Addr::new(203, 0, 113, 47)), "203.0.113.0/24");
+        assert_eq!(ipv4_slash24(Ipv4Addr::new(8, 8, 8, 8)), "8.8.8.0/24");
+        assert_eq!(ipv4_slash24(Ipv4Addr::new(1, 2, 3, 0)), "1.2.3.0/24");
+    }
+
+    #[test]
+    fn sniff_ipv4_from_bare_string() {
+        assert_eq!(
+            sniff_ipv4_from_json(&json!("198.51.100.7"), 0),
+            Some(Ipv4Addr::new(198, 51, 100, 7))
+        );
+        // Surrounding whitespace is trimmed before parsing.
+        assert_eq!(
+            sniff_ipv4_from_json(&json!("  10.0.0.1  "), 0),
+            Some(Ipv4Addr::new(10, 0, 0, 1))
+        );
+    }
+
+    #[test]
+    fn sniff_ipv4_prefers_known_keys_and_recurses() {
+        let v = json!({
+            "detail": { "sourceIPAddress": "203.0.113.9", "other": "not-an-ip" }
+        });
+        assert_eq!(
+            sniff_ipv4_from_json(&v, 0),
+            Some(Ipv4Addr::new(203, 0, 113, 9))
+        );
+    }
+
+    #[test]
+    fn sniff_ipv4_from_nested_array() {
+        let v = json!({ "records": [ { "x": 1 }, { "clientIp": "192.0.2.44" } ] });
+        assert_eq!(sniff_ipv4_from_json(&v, 0), Some(Ipv4Addr::new(192, 0, 2, 44)));
+    }
+
+    #[test]
+    fn sniff_ipv4_ignores_ipv6_and_missing() {
+        // "::1" parses as IPv6, not V4 -> None.
+        assert_eq!(sniff_ipv4_from_json(&json!("::1"), 0), None);
+        assert_eq!(sniff_ipv4_from_json(&json!({ "a": "hello" }), 0), None);
+        assert_eq!(sniff_ipv4_from_json(&json!(1234), 0), None);
+    }
+
+    #[test]
+    fn sniff_ipv4_depth_guard_returns_none() {
+        assert_eq!(sniff_ipv4_from_json(&json!("8.8.8.8"), 29), None);
+    }
+
+    #[test]
+    fn sniff_asn_from_number_and_string() {
+        assert_eq!(sniff_asn_from_json(&json!(64512u64), 0), Some(64512));
+        assert_eq!(sniff_asn_from_json(&json!("13335"), 0), Some(13335));
+    }
+
+    #[test]
+    fn sniff_asn_from_known_keys() {
+        assert_eq!(
+            sniff_asn_from_json(&json!({ "autonomousSystemNumber": 15169 }), 0),
+            Some(15169)
+        );
+        assert_eq!(
+            sniff_asn_from_json(&json!({ "remoteIpDetails": { "asn": 7018 } }), 0),
+            Some(7018)
+        );
+    }
+
+    #[test]
+    fn sniff_asn_from_array_and_none_cases() {
+        assert_eq!(sniff_asn_from_json(&json!([{ "source_asn": 3356 }]), 0), Some(3356));
+        assert_eq!(sniff_asn_from_json(&json!("not-a-number"), 0), None);
+        assert_eq!(sniff_asn_from_json(&json!({ "x": "abc" }), 0), None);
+        assert_eq!(sniff_asn_from_json(&json!(true), 0), None);
+    }
+
+    #[test]
+    fn sniff_asn_depth_guard_returns_none() {
+        assert_eq!(sniff_asn_from_json(&json!(64512u64), 29), None);
+    }
+}

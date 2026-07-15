@@ -207,3 +207,194 @@ pub fn format_context_block(briefs: &[NvdCveBrief]) -> String {
     }
     s
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn brief(id: &str, desc: &str, sev: Option<&str>) -> NvdCveBrief {
+        NvdCveBrief {
+            id: id.to_string(),
+            description: desc.to_string(),
+            base_severity: sev.map(|s| s.to_string()),
+        }
+    }
+
+    #[test]
+    fn severity_prefers_base_severity_and_metric_order() {
+        // v3.1 baseSeverity present.
+        let cve = json!({"metrics": {"cvssMetricV31": [{"cvssData": {"baseSeverity": "HIGH"}}]}});
+        assert_eq!(severity_from_cve_json(&cve).as_deref(), Some("HIGH"));
+
+        // v3.1 preferred over v3.0.
+        let cve = json!({"metrics": {
+            "cvssMetricV31": [{"cvssData": {"baseSeverity": "CRITICAL"}}],
+            "cvssMetricV30": [{"cvssData": {"baseSeverity": "LOW"}}]
+        }});
+        assert_eq!(severity_from_cve_json(&cve).as_deref(), Some("CRITICAL"));
+
+        // Falls through to v2 when v3.x absent.
+        let cve = json!({"metrics": {"cvssMetricV2": [{"cvssData": {"baseSeverity": "MEDIUM"}}]}});
+        assert_eq!(severity_from_cve_json(&cve).as_deref(), Some("MEDIUM"));
+    }
+
+    #[test]
+    fn severity_formats_version_and_score_when_no_base_severity() {
+        let cve = json!({"metrics": {"cvssMetricV31": [{"cvssData": {
+            "version": "3.1",
+            "baseScore": 9.8
+        }}]}});
+        assert_eq!(severity_from_cve_json(&cve).as_deref(), Some("CVSS3.1 9.8"));
+    }
+
+    #[test]
+    fn severity_none_when_missing() {
+        assert_eq!(severity_from_cve_json(&json!({})), None);
+        assert_eq!(severity_from_cve_json(&json!({"metrics": {}})), None);
+        // Present metric but no usable cvssData fields.
+        assert_eq!(
+            severity_from_cve_json(&json!({"metrics": {"cvssMetricV31": [{"cvssData": {}}]}})),
+            None
+        );
+    }
+
+    #[test]
+    fn description_prefers_english() {
+        let cve = json!({"descriptions": [
+            {"lang": "es", "value": "hola"},
+            {"lang": "en", "value": "hello"}
+        ]});
+        assert_eq!(description_en(&cve), "hello");
+    }
+
+    #[test]
+    fn description_falls_back_to_first_then_empty() {
+        // No English => first entry.
+        let cve = json!({"descriptions": [{"lang": "es", "value": "hola"}]});
+        assert_eq!(description_en(&cve), "hola");
+        // No descriptions key at all => empty.
+        assert_eq!(description_en(&json!({})), "");
+        // English entry present but no value => empty string.
+        let cve = json!({"descriptions": [{"lang": "en"}]});
+        assert_eq!(description_en(&cve), "");
+    }
+
+    #[test]
+    fn parse_response_bytes_extracts_briefs() {
+        let v = json!({"vulnerabilities": [{
+            "cve": {
+                "id": "CVE-2021-44228",
+                "descriptions": [{"lang": "en", "value": "Log4Shell"}],
+                "metrics": {"cvssMetricV31": [{"cvssData": {"baseSeverity": "CRITICAL"}}]}
+            }
+        }]});
+        let bytes = serde_json::to_vec(&v).unwrap();
+        let out = parse_nvd_response_bytes(&bytes).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, "CVE-2021-44228");
+        assert_eq!(out[0].description, "Log4Shell");
+        assert_eq!(out[0].base_severity.as_deref(), Some("CRITICAL"));
+    }
+
+    #[test]
+    fn parse_response_bytes_skips_incomplete_items() {
+        // First item missing `cve`, second missing `id` => both skipped.
+        let v = json!({"vulnerabilities": [
+            {"notcve": {}},
+            {"cve": {"descriptions": []}},
+            {"cve": {"id": "CVE-2020-0001"}}
+        ]});
+        let bytes = serde_json::to_vec(&v).unwrap();
+        let out = parse_nvd_response_bytes(&bytes).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].id, "CVE-2020-0001");
+        assert_eq!(out[0].description, "");
+        assert_eq!(out[0].base_severity, None);
+    }
+
+    #[test]
+    fn parse_response_bytes_errors() {
+        // Missing vulnerabilities array.
+        let bytes = serde_json::to_vec(&json!({"foo": 1})).unwrap();
+        assert!(matches!(
+            parse_nvd_response_bytes(&bytes),
+            Err(NvdFetchError::MissingVulnerabilitiesArray)
+        ));
+        // Invalid JSON.
+        assert!(matches!(
+            parse_nvd_response_bytes(b"not json"),
+            Err(NvdFetchError::Json(_))
+        ));
+    }
+
+    #[test]
+    fn catalog_json_respects_limit_and_null_severity() {
+        let briefs = vec![
+            brief("CVE-1", "d1", Some("HIGH")),
+            brief("CVE-2", "d2", None),
+        ];
+        // limit 1 => only first item.
+        assert_eq!(
+            nvd_catalog_json_value(&briefs, 1),
+            json!({"items": [{"id": "CVE-1", "description": "d1", "base_severity": "HIGH"}]})
+        );
+        // Full list; None severity serializes to null.
+        assert_eq!(
+            nvd_catalog_json_value(&briefs, 10),
+            json!({"items": [
+                {"id": "CVE-1", "description": "d1", "base_severity": "HIGH"},
+                {"id": "CVE-2", "description": "d2", "base_severity": null}
+            ]})
+        );
+        // limit 0 => empty items.
+        assert_eq!(nvd_catalog_json_value(&briefs, 0), json!({"items": []}));
+    }
+
+    #[test]
+    fn context_block_formatting() {
+        assert_eq!(format_context_block(&[]), "");
+        assert_eq!(
+            format_context_block(&[brief("CVE-1", "boom", Some("HIGH"))]),
+            "NVD context (keyword search):\n- CVE-1 [HIGH]: boom\n"
+        );
+        // No severity => no bracket segment.
+        assert_eq!(
+            format_context_block(&[brief("CVE-1", "boom", None)]),
+            "NVD context (keyword search):\n- CVE-1: boom\n"
+        );
+    }
+
+    #[test]
+    fn fetch_error_display() {
+        assert_eq!(
+            NvdFetchError::ApiKeyMissing.to_string(),
+            "NVD_API_KEY not configured"
+        );
+        assert_eq!(NvdFetchError::KeywordTooShort.to_string(), "keyword too short");
+        assert_eq!(NvdFetchError::HttpStatus(500).to_string(), "HTTP status 500");
+        assert_eq!(NvdFetchError::Json("x".into()).to_string(), "JSON: x");
+        assert_eq!(NvdFetchError::Body("b".into()).to_string(), "read body: b");
+        assert_eq!(
+            NvdFetchError::HttpClient("c".into()).to_string(),
+            "HTTP client: c"
+        );
+        assert_eq!(
+            NvdFetchError::MissingVulnerabilitiesArray.to_string(),
+            "response missing vulnerabilities array"
+        );
+    }
+
+    #[test]
+    fn brief_serde_round_trip() {
+        let b = brief("CVE-2021-1", "desc", Some("HIGH"));
+        let val = serde_json::to_value(&b).unwrap();
+        assert_eq!(
+            val,
+            json!({"id": "CVE-2021-1", "description": "desc", "base_severity": "HIGH"})
+        );
+        let back: NvdCveBrief = serde_json::from_value(val).unwrap();
+        assert_eq!(back.id, "CVE-2021-1");
+        assert_eq!(back.description, "desc");
+        assert_eq!(back.base_severity.as_deref(), Some("HIGH"));
+    }
+}

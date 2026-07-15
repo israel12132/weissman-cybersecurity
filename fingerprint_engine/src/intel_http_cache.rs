@@ -68,3 +68,28 @@ pub fn osv_summary_cache() -> &'static Cache<String, Arc<String>> {
 pub fn github_advisories_cache() -> &'static Cache<String, Arc<Vec<u8>>> {
     GITHUB_ADV_CACHE.get_or_init(github_adv_inner)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn getters_return_stable_singleton() {
+        // OnceLock guarantees repeated calls hand back the *same* instance.
+        assert!(std::ptr::eq(nvd_keyword_cache(), nvd_keyword_cache()));
+        assert!(std::ptr::eq(nvd_recent_cache(), nvd_recent_cache()));
+        assert!(std::ptr::eq(osv_summary_cache(), osv_summary_cache()));
+        assert!(std::ptr::eq(
+            github_advisories_cache(),
+            github_advisories_cache()
+        ));
+    }
+
+    #[test]
+    fn distinct_byte_caches_are_separate_instances() {
+        // The two Vec<u8> caches are backed by different OnceLocks.
+        assert!(!std::ptr::eq(nvd_keyword_cache(), nvd_recent_cache()));
+        assert!(!std::ptr::eq(nvd_keyword_cache(), github_advisories_cache()));
+        assert!(!std::ptr::eq(nvd_recent_cache(), github_advisories_cache()));
+    }
+}

@@ -522,3 +522,210 @@ fn cookie_header_from_set_cookie(headers: &HeaderMap) -> Option<(String, String)
     }
     Some(("cookie".into(), parts.join("; ")))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::header::{HeaderValue, SET_COOKIE};
+    use serde_json::json;
+
+    fn ctx(privilege_order: i32) -> AuthContext {
+        AuthContext {
+            role_name: format!("role_{privilege_order}"),
+            privilege_order,
+            token_type: "bearer".into(),
+            token_value: "tok".into(),
+        }
+    }
+
+    #[test]
+    fn from_db_contexts_sorts_by_privilege_desc() {
+        let b = IdentityBundle::from_db_contexts(vec![ctx(1), ctx(3), ctx(2)]);
+        match &b {
+            IdentityBundle::Static(v) => {
+                assert_eq!(v[0].privilege_order, 3);
+                assert_eq!(v[1].privilege_order, 2);
+                assert_eq!(v[2].privilege_order, 1);
+            }
+            _ => panic!("expected Static variant"),
+        }
+        assert_eq!(b.len(), 3);
+        assert_eq!(b.context_count(), 3);
+        assert!(b.is_shadow_ready());
+    }
+
+    #[test]
+    fn shadow_ready_needs_two() {
+        let one = IdentityBundle::from_db_contexts(vec![ctx(5)]);
+        assert_eq!(one.len(), 1);
+        assert!(!one.is_shadow_ready());
+        let empty = IdentityBundle::from_db_contexts(vec![]);
+        assert!(!empty.is_shadow_ready());
+    }
+
+    #[test]
+    fn join_url_absolute_path() {
+        assert_eq!(join_url("http://h", "/a"), "http://h/a");
+        assert_eq!(join_url("http://h/", "/a"), "http://h/a");
+    }
+
+    #[test]
+    fn join_url_relative_path() {
+        assert_eq!(join_url("http://h", "rel"), "http://h/rel");
+    }
+
+    #[test]
+    fn join_url_trims_whitespace() {
+        assert_eq!(join_url("http://h", " /x "), "http://h/x");
+    }
+
+    #[test]
+    fn build_creds_json_uses_supplied_keys() {
+        assert_eq!(
+            build_creds_json("email", "password", "a@b.com", "pw"),
+            json!({"email": "a@b.com", "password": "pw"})
+        );
+        assert_eq!(
+            build_creds_json("username", "pwd", "bob", "secret"),
+            json!({"username": "bob", "pwd": "secret"})
+        );
+    }
+
+    #[test]
+    fn discover_candidates_fallbacks_when_no_spec() {
+        let out = discover_auth_candidates(None);
+        assert_eq!(out.len(), 8);
+        assert_eq!(
+            out[0],
+            (
+                Some("/rest/user/registration".to_string()),
+                "/rest/user/login".to_string(),
+                "email".to_string(),
+                "password".to_string()
+            )
+        );
+        assert_eq!(
+            out[7],
+            (
+                None,
+                "/api/users/login".to_string(),
+                "username".to_string(),
+                "password".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn discover_candidates_login_only_from_spec() {
+        let spec = json!({"paths": {"/signin": {"post": {"summary": "User Login"}}}});
+        let out = discover_auth_candidates(Some(&spec));
+        assert_eq!(out.len(), 9); // 1 derived + 8 fallbacks
+        assert_eq!(
+            out[0],
+            (
+                None,
+                "/signin".to_string(),
+                "email".to_string(),
+                "password".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn discover_candidates_register_and_login_from_spec() {
+        let spec = json!({"paths": {
+            "/register": {"post": {"operationId": "registerUser"}},
+            "/login": {"post": {"summary": "login"}}
+        }});
+        let out = discover_auth_candidates(Some(&spec));
+        assert_eq!(out.len(), 9);
+        assert_eq!(
+            out[0],
+            (
+                Some("/register".to_string()),
+                "/login".to_string(),
+                "email".to_string(),
+                "password".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn infer_credential_keys_defaults() {
+        let op = json!({});
+        let (e, p) = infer_credential_keys(op.as_object().unwrap());
+        assert_eq!(e, "email");
+        assert_eq!(p, "password");
+    }
+
+    #[test]
+    fn infer_credential_keys_from_schema_props() {
+        let op = json!({
+            "requestBody": {"content": {"application/json": {"schema": {"properties": {
+                "userEmail": {"type": "string"},
+                "pwd": {"type": "string"}
+            }}}}}
+        });
+        let (e, p) = infer_credential_keys(op.as_object().unwrap());
+        assert_eq!(e, "userEmail");
+        assert_eq!(p, "pwd");
+    }
+
+    #[test]
+    fn infer_credential_keys_username_password() {
+        let op = json!({
+            "requestBody": {"content": {"application/json": {"schema": {"properties": {
+                "username": {"type": "string"},
+                "password": {"type": "string"}
+            }}}}}
+        });
+        let (e, p) = infer_credential_keys(op.as_object().unwrap());
+        assert_eq!(e, "username");
+        assert_eq!(p, "password");
+    }
+
+    #[test]
+    fn cookie_header_joins_first_parts() {
+        let mut h = HeaderMap::new();
+        h.append(
+            SET_COOKIE,
+            HeaderValue::from_static("session=abcdef; Path=/; HttpOnly"),
+        );
+        h.append(SET_COOKIE, HeaderValue::from_static("token=xyz12345; Secure"));
+        assert_eq!(
+            cookie_header_from_set_cookie(&h),
+            Some(("cookie".to_string(), "session=abcdef; token=xyz12345".to_string()))
+        );
+    }
+
+    #[test]
+    fn cookie_header_none_when_empty() {
+        let h = HeaderMap::new();
+        assert_eq!(cookie_header_from_set_cookie(&h), None);
+    }
+
+    #[test]
+    fn cookie_header_skips_short_values() {
+        let mut h = HeaderMap::new();
+        // "a=b" trims to len 3 (<= 5) so it is skipped, leaving nothing.
+        h.append(SET_COOKIE, HeaderValue::from_static("a=b; Path=/"));
+        assert_eq!(cookie_header_from_set_cookie(&h), None);
+    }
+
+    #[test]
+    fn synthetic_email_encodes_salt_hex() {
+        let e0 = synthetic_email(0);
+        assert!(e0.starts_with("ws0"), "got {e0}");
+        assert!(e0.ends_with("@auto.weissman.local"), "got {e0}");
+        let e255 = synthetic_email(255);
+        assert!(e255.starts_with("wsff"), "got {e255}");
+    }
+
+    #[test]
+    fn synthetic_password_length_and_charset() {
+        const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrst23456789!@#$%";
+        let p = synthetic_password();
+        assert_eq!(p.chars().count(), 22);
+        assert!(p.bytes().all(|b| CHARSET.contains(&b)), "unexpected char in {p}");
+    }
+}

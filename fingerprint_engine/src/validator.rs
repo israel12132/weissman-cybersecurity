@@ -145,3 +145,82 @@ pub async fn confirm_anomaly(
     let one_ok_for_500 = is_500 && confirm_count >= 1;
     confirm_count >= 2 || one_ok_for_500
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn hm(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn content_length_discrepancy_zero_baseline() {
+        // With no baseline, only a large absolute body (>1000) is anomalous.
+        assert!(!content_length_discrepancy(0, 500));
+        assert!(!content_length_discrepancy(0, 1000));
+        assert!(content_length_discrepancy(0, 1001));
+    }
+
+    #[test]
+    fn content_length_discrepancy_high_ratio() {
+        assert!(content_length_discrepancy(100, 200)); // ratio 2.0 == threshold
+        assert!(content_length_discrepancy(50, 400)); // ratio 8.0
+        // ratio 1.99 and baseline not > 100 -> not flagged
+        assert!(!content_length_discrepancy(100, 199));
+        assert!(!content_length_discrepancy(1000, 1000)); // ratio 1.0
+    }
+
+    #[test]
+    fn content_length_discrepancy_low_ratio() {
+        assert!(content_length_discrepancy(200, 50)); // ratio 0.25, baseline > 100
+        assert!(content_length_discrepancy(1000, 100)); // ratio 0.1
+        // ratio 0.25 but baseline not strictly > 100 -> not flagged
+        assert!(!content_length_discrepancy(100, 25));
+    }
+
+    #[test]
+    fn side_channel_detects_changed_server() {
+        let base = hm(&[("server", "nginx")]);
+        let probe = hm(&[("server", "apache")]);
+        assert!(headers_side_channel_detected(&base, &probe));
+    }
+
+    #[test]
+    fn side_channel_ignores_missing_probe_value() {
+        // Probe lacks the header entirely -> p is empty -> not counted.
+        let base = hm(&[("server", "nginx")]);
+        let probe = hm(&[]);
+        assert!(!headers_side_channel_detected(&base, &probe));
+    }
+
+    #[test]
+    fn side_channel_detects_new_powered_by() {
+        let base = hm(&[]);
+        let probe = hm(&[("x-powered-by", "PHP/7.4")]);
+        assert!(headers_side_channel_detected(&base, &probe));
+    }
+
+    #[test]
+    fn side_channel_identical_headers_no_detection() {
+        let base = hm(&[("server", "nginx"), ("via", "1.1 proxy")]);
+        let probe = hm(&[("server", "nginx"), ("via", "1.1 proxy")]);
+        assert!(!headers_side_channel_detected(&base, &probe));
+    }
+
+    #[test]
+    fn validation_baseline_holds_fields() {
+        let b = ValidationBaseline {
+            normal_status: 200,
+            avg_latency_ms: 12.5,
+            content_length: 42,
+        };
+        assert_eq!(b.normal_status, 200);
+        assert_eq!(b.content_length, 42);
+        assert!((b.avg_latency_ms - 12.5).abs() < f64::EPSILON);
+    }
+}

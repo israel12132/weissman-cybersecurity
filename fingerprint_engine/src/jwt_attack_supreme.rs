@@ -421,3 +421,181 @@ pub fn build_security_graph(
     let _ = target;
     (nodes, edges)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_signals_empty_defaults() {
+        let sig = collect_signals(&[], 0);
+        assert_eq!(sig.token_count, 0);
+        assert!(!sig.alg_none_accepted);
+        assert!(!sig.confusion_accepted);
+        let scores = finalize_category_scores(&sig);
+        assert_eq!(scores.harvest_surface, 70.0); // no tokens harvested
+        assert_eq!(scores.signature_integrity, 100.0);
+    }
+
+    #[test]
+    fn collect_signals_detects_titles() {
+        let findings = vec![
+            json!({"title": "alg=none ACCEPTED by verifier"}),
+            json!({"title": "Algorithm-Confusion detected"}),
+            json!({"title": "weak HMAC secret in use"}),
+            json!({"title": "privilege escalation via forged claim"}),
+        ];
+        let sig = collect_signals(&findings, 3);
+        assert!(sig.alg_none_accepted);
+        assert!(!sig.alg_none_in_use);
+        assert!(sig.confusion_accepted);
+        assert!(sig.weak_hmac_cracked);
+        assert!(sig.privilege_claims);
+        assert_eq!(sig.token_count, 3);
+    }
+
+    #[test]
+    fn collect_signals_confusion_via_evidence_attack() {
+        let findings = vec![json!({
+            "title": "generic finding",
+            "evidence": {"attack": "rs256_to_hs256_confusion"}
+        })];
+        let sig = collect_signals(&findings, 1);
+        assert!(sig.confusion_accepted);
+    }
+
+    #[test]
+    fn collect_signals_kid_and_jku() {
+        let findings = vec![
+            json!({"title": "'kid' header injectable"}),
+            json!({"title": "jku url is attacker controllable"}),
+        ];
+        let sig = collect_signals(&findings, 0);
+        assert!(sig.kid_surface);
+        assert!(sig.jku_x5u_surface);
+    }
+
+    #[test]
+    fn category_scores_json_shape() {
+        let findings = vec![
+            json!({"title": "alg=none accepted"}),
+            json!({"title": "algorithm-confusion"}),
+            json!({"title": "weak hmac cracked"}),
+            json!({"title": "privilege claim"}),
+        ];
+        let sig = collect_signals(&findings, 3);
+        let v = finalize_category_scores(&sig).to_json();
+        assert_eq!(v["signature_integrity"], json!(55));
+        assert_eq!(v["algorithm_policy"], json!(50));
+        assert_eq!(v["key_hygiene"], json!(60));
+        assert_eq!(v["header_injection"], json!(100));
+        assert_eq!(v["claim_hygiene"], json!(75));
+        assert_eq!(v["harvest_surface"], json!(100));
+    }
+
+    #[test]
+    fn emit_toxic_headline_inserts_when_combos() {
+        let sig = JwtSignals {
+            alg_none_accepted: true,
+            ..Default::default()
+        };
+        let mut findings = vec![json!({"title": "pre-existing"})];
+        emit_toxic_headline("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 2);
+        // Headline is inserted at the front.
+        assert_eq!(findings[0]["category"], json!("toxic_combination"));
+        assert_eq!(findings[0]["severity"], json!("critical"));
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("TOXIC COMBINATION"));
+    }
+
+    #[test]
+    fn emit_toxic_headline_noop_when_clean() {
+        let sig = JwtSignals::default();
+        let mut findings: Vec<Value> = Vec::new();
+        emit_toxic_headline("t", &sig, &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn extend_attack_paths_admin_chain() {
+        let sig = JwtSignals {
+            confusion_accepted: true,
+            privilege_claims: true,
+            ..Default::default()
+        };
+        let mut findings: Vec<Value> = Vec::new();
+        extend_attack_paths("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["category"], json!("attack_path"));
+        assert_eq!(findings[0]["severity"], json!("critical"));
+    }
+
+    #[test]
+    fn extend_attack_paths_none_when_uncorrelated() {
+        let sig = JwtSignals {
+            confusion_accepted: true, // privilege_claims missing -> no chain
+            ..Default::default()
+        };
+        let mut findings: Vec<Value> = Vec::new();
+        extend_attack_paths("t", &sig, &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn remediation_roadmap_always_emits_baseline() {
+        let sig = JwtSignals::default();
+        let mut findings: Vec<Value> = Vec::new();
+        emit_remediation_roadmap("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1); // P2 agent step is unconditional
+        assert_eq!(findings[0]["category"], json!("remediation_roadmap"));
+    }
+
+    #[test]
+    fn agent_guidance_emits_four() {
+        let mut findings: Vec<Value> = Vec::new();
+        emit_agent_guidance("t", &mut findings);
+        assert_eq!(findings.len(), 4);
+        assert!(findings
+            .iter()
+            .all(|f| f["category"] == json!("agent_guidance")));
+    }
+
+    #[test]
+    fn security_graph_secure_status_and_admin_edge() {
+        let sig = JwtSignals {
+            token_count: 2,
+            confusion_accepted: true,
+            privilege_claims: true,
+            ..Default::default()
+        };
+        let (nodes, edges) = build_security_graph("target", &sig, "example.com");
+        assert_eq!(nodes[0].id, "root");
+        assert_eq!(nodes[0].label, "example.com"); // host wins over target
+        assert_eq!(nodes[0].status, "secure"); // avg (55+100+100)/3 == 85
+        assert!(nodes
+            .iter()
+            .any(|n| n.id == "tokens" && n.label == "2 JWT(s) harvested"));
+        assert!(nodes.iter().any(|n| n.id == "confusion"));
+        assert!(edges.iter().any(|e| e.id == "ap_admin"
+            && e.from_id == "confusion"
+            && e.to_id == "tokens"
+            && e.edge_type == "ADMIN_FORGE"));
+    }
+
+    #[test]
+    fn security_graph_degraded_and_target_fallback() {
+        let sig = JwtSignals {
+            alg_none_accepted: true,
+            confusion_accepted: true,
+            weak_hmac_cracked: true,
+            weak_jwks: true,
+            ..Default::default()
+        };
+        let (nodes, _edges) = build_security_graph("target-host", &sig, "");
+        assert_eq!(nodes[0].label, "target-host"); // empty host -> target
+        assert_eq!(nodes[0].status, "degraded"); // avg (55+50+60)/3 == 55
+    }
+}

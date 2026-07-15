@@ -1598,3 +1598,101 @@ impl AliasResultExt for EngineResult {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alias_finding_sets_metadata_and_core_fields() {
+        let f = alias_finding(
+            "eng_a",
+            "Title X",
+            "high",
+            "T1234",
+            "desc here",
+            "example.com",
+            "canon_engine",
+        );
+        let obj = f.as_object().expect("alias_finding must be a JSON object");
+        assert_eq!(obj["type"], json!("eng_a"));
+        assert_eq!(obj["title"], json!("Title X"));
+        assert_eq!(obj["severity"], json!("high"));
+        assert_eq!(obj["mitre_attack"], json!("T1234"));
+        assert_eq!(obj["description"], json!("desc here"));
+        assert_eq!(obj["target"], json!("example.com"));
+        // ALIAS_DEPTH constant, injected via finding_with_probe_depth.
+        assert_eq!(obj["probe_depth"], json!("alias_specialized_probe"));
+        // Fields added by alias_finding itself.
+        assert_eq!(obj["canonical_engine"], json!("canon_engine"));
+        assert_eq!(obj["probe_fidelity"], json!("specialized_probe"));
+    }
+
+    #[test]
+    fn collect_empty_returns_empty_ok() {
+        let r = collect("eng_a", "example.com", "canon", vec![]);
+        assert_eq!(r.status, "ok");
+        assert!(r.findings.is_empty());
+        assert_eq!(r.message, "eng_a: no live signal observed on example.com");
+    }
+
+    #[test]
+    fn collect_nonempty_formats_message_and_keeps_findings() {
+        let f = json!({"k": "v"});
+        let r = collect("eng_a", "example.com", "canon", vec![f.clone(), f]);
+        assert_eq!(r.status, "ok");
+        assert_eq!(r.findings.len(), 2);
+        assert_eq!(
+            r.message,
+            "eng_a: 2 specialized finding(s) (canonical: canon)"
+        );
+    }
+
+    #[test]
+    fn email_regex_extracts_addresses() {
+        let re = email_re();
+        assert_eq!(
+            re.find("contact john.doe@example.com now")
+                .map(|m| m.as_str()),
+            Some("john.doe@example.com")
+        );
+        assert!(re.find("no address here").is_none());
+        let addrs: Vec<_> = re
+            .find_iter("a@x.io and b+tag@sub.example.co")
+            .map(|m| m.as_str().to_string())
+            .collect();
+        assert_eq!(
+            addrs,
+            vec!["a@x.io".to_string(), "b+tag@sub.example.co".to_string()]
+        );
+    }
+
+    #[test]
+    fn run_specialized_probe_empty_target_errors() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let ctx = EngineRunContext::default();
+        // Whitespace-only target trims to empty -> early error, no network.
+        let r = rt.block_on(run_specialized_probe("any_engine", "canon", "   ", &ctx));
+        assert_eq!(r.status, "error");
+        assert_eq!(r.message, "target required");
+    }
+
+    #[test]
+    fn run_specialized_probe_unknown_engine_is_empty_ok() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let ctx = EngineRunContext::default();
+        // Unknown id falls through to the `_ => empty_ok(..)` arm (no network).
+        let r =
+            rt.block_on(run_specialized_probe("no_such_engine_zzz", "canon", "example.com", &ctx));
+        assert_eq!(r.status, "ok");
+        assert!(r.findings.is_empty());
+        assert_eq!(
+            r.message,
+            "no_such_engine_zzz: no live signal observed on example.com"
+        );
+    }
+}

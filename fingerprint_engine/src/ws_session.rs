@@ -207,3 +207,58 @@ pub fn encode_client_text_frame(payload: &[u8]) -> Vec<u8> {
     }
     frame
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_to_ws_url_scheme_mapping() {
+        assert_eq!(
+            http_to_ws_url("https://example.com/x"),
+            "wss://example.com/x"
+        );
+        assert_eq!(http_to_ws_url("http://example.com/x"), "ws://example.com/x");
+        // No scheme -> defaults to wss and strips any leading slashes.
+        assert_eq!(http_to_ws_url("example.com/x"), "wss://example.com/x");
+        assert_eq!(http_to_ws_url("//example.com"), "wss://example.com");
+        assert_eq!(http_to_ws_url("///a"), "wss://a");
+    }
+
+    #[test]
+    fn preview_truncates_by_characters() {
+        assert_eq!(preview("hello", 3), "hel");
+        assert_eq!(preview("hi", 10), "hi");
+        assert_eq!(preview("", 5), "");
+        // Char-based (not byte-based) truncation for multibyte input.
+        assert_eq!(preview("héllo", 2), "hé");
+    }
+
+    #[test]
+    fn encode_short_text_frame_exact_bytes() {
+        // FIN+text opcode = 0x81, mask bit + len(2) = 0x82, mask key, then masked payload.
+        // 'H'(0x48) ^ 0x37 = 0x7f, 'i'(0x69) ^ 0xfa = 0x93.
+        let frame = encode_client_text_frame(b"Hi");
+        assert_eq!(frame, vec![0x81, 0x82, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x93]);
+    }
+
+    #[test]
+    fn encode_empty_frame() {
+        let frame = encode_client_text_frame(b"");
+        assert_eq!(frame, vec![0x81, 0x80, 0x37, 0xfa, 0x21, 0x3d]);
+    }
+
+    #[test]
+    fn encode_extended_16bit_length_header() {
+        let payload = vec![0u8; 200];
+        let frame = encode_client_text_frame(&payload);
+        assert_eq!(frame[0], 0x81);
+        assert_eq!(frame[1], 0xfe); // 0x80 (mask) | 126 (extended-16 marker)
+        assert_eq!(&frame[2..4], &[0x00, 0xc8]); // 200 as big-endian u16
+        assert_eq!(&frame[4..8], &[0x37, 0xfa, 0x21, 0x3d]); // mask key
+        assert_eq!(frame.len(), 2 + 2 + 4 + 200);
+        // Zero payload XORed with the mask reproduces the mask bytes cyclically.
+        assert_eq!(frame[8], 0x37);
+        assert_eq!(frame[9], 0xfa);
+    }
+}
