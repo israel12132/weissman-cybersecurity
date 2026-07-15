@@ -348,14 +348,18 @@ pub struct FrameworkControlCoverage {
     pub live_only_mappings: usize,
     /// Distinct engines referenced by this framework's mappings.
     pub distinct_engines: usize,
-    /// Engine-backed rows whose `engine_id` is not a known platform engine.
-    pub orphaned_engine_mappings: usize,
+    /// Engine-backed rows whose `engine_id` no longer resolves to a known platform engine.
+    /// Informational only — a stale engine reference is a data-quality signal, NOT a compliance
+    /// inconsistency, and never gates report generation (see `find_orphaned_controls`).
+    pub stale_engine_references: usize,
 }
 
-/// A mapping row whose `engine_id` no longer resolves to a known platform engine.
-/// These are the rot that "live" mappings accumulate when the engine fleet changes underneath.
+/// A mapping row whose `engine_id` no longer resolves to a known platform engine — a dangling
+/// reference left behind when the engine fleet changes underneath the catalog. This is a
+/// non-blocking data-quality diagnostic: an offensive engine that is simply unmapped to GRC is
+/// architecturally valid, so a stale reference never voids a compliance artifact on its own.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct OrphanedEngineMapping {
+pub struct StaleEngineReference {
     pub id: i64,
     pub framework: String,
     pub control_id: String,
@@ -377,7 +381,7 @@ where
     let mut total_mappings: HashMap<String, usize> = HashMap::new();
     let mut live_only: HashMap<String, usize> = HashMap::new();
     let mut engines: HashMap<String, HashSet<String>> = HashMap::new();
-    let mut orphaned: HashMap<String, usize> = HashMap::new();
+    let mut stale: HashMap<String, usize> = HashMap::new();
 
     for m in mappings {
         *total_mappings.entry(m.framework.clone()).or_default() += 1;
@@ -397,7 +401,7 @@ where
                 .or_default()
                 .insert(eng.to_string());
             if !is_known_engine(eng) {
-                *orphaned.entry(m.framework.clone()).or_default() += 1;
+                *stale.entry(m.framework.clone()).or_default() += 1;
             }
         }
     }
@@ -419,7 +423,7 @@ where
                 evidence_only_controls: total_controls.saturating_sub(engine_backed_controls),
                 live_only_mappings: live_only.get(&fw).copied().unwrap_or(0),
                 distinct_engines: engines.get(&fw).map(HashSet::len).unwrap_or(0),
-                orphaned_engine_mappings: orphaned.get(&fw).copied().unwrap_or(0),
+                stale_engine_references: stale.get(&fw).copied().unwrap_or(0),
                 framework: fw,
             }
         })
@@ -427,23 +431,23 @@ where
 }
 
 /// Return every mapping row that binds a control to an engine the platform no longer knows.
-/// Deterministic order (framework, control_id, id). An empty result means the live mapping
-/// catalog is fully consistent with the current engine registry.
-pub fn find_orphaned_engine_mappings<F>(
+/// Deterministic order (framework, control_id, id). Non-blocking diagnostic only — see the
+/// `StaleEngineReference` doc for why a stale engine reference does not void a compliance report.
+pub fn find_stale_engine_references<F>(
     mappings: &[ComplianceControlMappingRow],
     is_known_engine: F,
-) -> Vec<OrphanedEngineMapping>
+) -> Vec<StaleEngineReference>
 where
     F: Fn(&str) -> bool,
 {
-    let mut out: Vec<OrphanedEngineMapping> = mappings
+    let mut out: Vec<StaleEngineReference> = mappings
         .iter()
         .filter_map(|m| {
             let eng = engine_binding(&m.engine_id)?;
             if is_known_engine(eng) {
                 return None;
             }
-            Some(OrphanedEngineMapping {
+            Some(StaleEngineReference {
                 id: m.id,
                 framework: m.framework.clone(),
                 control_id: m.control_id.clone(),
@@ -458,6 +462,114 @@ where
             .then(a.id.cmp(&b.id))
     });
     out
+}
+
+/// A compliance requirement (framework control) the report asserts on but which has **no covering
+/// row** in the live control-mapping catalog. This is the state that voids a compliance artifact:
+/// a control claimed as assessed while nothing in the platform actually produces evidence for it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct OrphanedControl {
+    pub control_id: String,
+    pub control_title: String,
+}
+
+/// True if `mapped_id` covers the requirement `control_id`, by exact match or control-family
+/// containment in either direction (a family control `A.8` is covered by a sub-control `A.8.15`,
+/// and a sub-control `164.312(a)` is covered by a family mapping `164.312`). Dotted or space
+/// separators are both accepted so catalogs seeded at different granularities still reconcile.
+fn control_covered(control_id: &str, mapped_id: &str) -> bool {
+    let a = control_id.trim();
+    let b = mapped_id.trim();
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    if a == b {
+        return true;
+    }
+    let is_child = |child: &str, parent: &str| {
+        child.len() > parent.len()
+            && child.starts_with(parent)
+            && matches!(child.as_bytes()[parent.len()], b'.' | b' ')
+    };
+    is_child(b, a) || is_child(a, b)
+}
+
+/// Detect orphaned controls for a single framework.
+///
+/// `expected` is the framework's canonical control set (the requirements a report asserts on).
+/// `mapping_control_ids` are the `control_id`s present in `compliance_control_mappings` for that
+/// framework. A control is orphaned when no mapping covers it (see [`control_covered`]).
+///
+/// Enforcement scope: if `mapping_control_ids` is empty the framework is **not onboarded** to live
+/// control mapping and makes no live claim, so nothing is orphaned. Only a framework that is
+/// partially mapped — some requirements covered, others not — yields orphaned controls and is
+/// therefore "inconsistent". Deterministic order (control_id).
+pub fn find_orphaned_controls(
+    expected: &[(String, String)],
+    mapping_control_ids: &[String],
+) -> Vec<OrphanedControl> {
+    if mapping_control_ids.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<OrphanedControl> = expected
+        .iter()
+        .filter(|(id, _)| {
+            !mapping_control_ids
+                .iter()
+                .any(|mapped| control_covered(id, mapped))
+        })
+        .map(|(id, title)| OrphanedControl {
+            control_id: id.clone(),
+            control_title: title.clone(),
+        })
+        .collect();
+    out.sort_by(|a, b| a.control_id.cmp(&b.control_id));
+    out
+}
+
+/// Enforcement decision for an official compliance artifact (PDF report / evidence pack).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportGate {
+    /// Control mappings are consistent — emit the artifact normally.
+    Allow,
+    /// Orphaned controls present and the caller has not acknowledged — refuse (HTTP 409).
+    Block,
+    /// Orphaned controls present but the caller explicitly acknowledged — emit, visibly voided.
+    Watermark,
+}
+
+/// Gate an artifact on control-mapping consistency. Orphaned controls are the *only* trigger;
+/// engine-side diagnostics never reach this function. `acknowledged` corresponds to the explicit
+/// `acknowledge_inconsistent=true` opt-in that downgrades a hard block to a watermarked copy.
+pub fn report_gate(orphaned_controls: &[OrphanedControl], acknowledged: bool) -> ReportGate {
+    if orphaned_controls.is_empty() {
+        ReportGate::Allow
+    } else if acknowledged {
+        ReportGate::Watermark
+    } else {
+        ReportGate::Block
+    }
+}
+
+/// Reverse of [`normalize_framework_slug`]: map a catalog `framework` column value back to the UI
+/// slug whose canonical control set is known, so a per-framework coverage row can be reconciled
+/// against its expected requirements. Returns `None` for catalog frameworks with no UI slug
+/// (e.g. `STIG`, `NIST800-53`) — those are not reconciled against a static control set.
+pub fn framework_slug_for_db(db_framework: &str) -> Option<&'static str> {
+    match db_framework.trim().to_uppercase().as_str() {
+        "ISO27001" => Some("iso27001"),
+        "SOC2" => Some("soc2"),
+        "NIS2" => Some("nis2"),
+        "GDPR" => Some("gdpr"),
+        "IEC62443" => Some("iec62443"),
+        "PCI" => Some("pci"),
+        "CSA-CCM" => Some("csa-ccm"),
+        "CIS" => Some("cis"),
+        "NIST" => Some("nist"),
+        "HIPAA" => Some("hipaa"),
+        "FEDRAMP" => Some("fedramp"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -514,7 +626,7 @@ mod control_coverage_tests {
         assert_eq!(iso.evidence_only_controls, 1);
         assert_eq!(iso.live_only_mappings, 2);
         assert_eq!(iso.distinct_engines, 1);
-        assert_eq!(iso.orphaned_engine_mappings, 0);
+        assert_eq!(iso.stale_engine_references, 0);
     }
 
     #[test]
@@ -527,33 +639,106 @@ mod control_coverage_tests {
         assert_eq!(cov[0].engine_backed_controls, 0);
         assert_eq!(cov[0].evidence_only_controls, 2);
         assert_eq!(cov[0].distinct_engines, 0);
-        assert!(find_orphaned_engine_mappings(&mappings, known).is_empty());
+        assert!(find_stale_engine_references(&mappings, known).is_empty());
     }
 
     #[test]
-    fn orphaned_engine_bindings_are_flagged() {
+    fn stale_engine_references_are_flagged_but_never_gate() {
         let mappings = vec![
             row(1, "NIST", "SC-8", Some("tls_posture"), true), // known
-            row(2, "NIST", "SC-8", Some("retired_engine"), true), // orphan, same control
-            row(3, "NIST", "AC-2", Some("ghost_engine"), true), // orphan, other control
+            row(2, "NIST", "SC-8", Some("retired_engine"), true), // stale, same control
+            row(3, "NIST", "AC-2", Some("ghost_engine"), true), // stale, other control
         ];
-        let orphans = find_orphaned_engine_mappings(&mappings, known);
-        assert_eq!(orphans.len(), 2);
+        let stale = find_stale_engine_references(&mappings, known);
+        assert_eq!(stale.len(), 2);
         // Sorted by (framework, control_id, id): AC-2 then SC-8.
-        assert_eq!(orphans[0].control_id, "AC-2");
-        assert_eq!(orphans[0].engine_id, "ghost_engine");
-        assert_eq!(orphans[1].control_id, "SC-8");
-        assert_eq!(orphans[1].engine_id, "retired_engine");
+        assert_eq!(stale[0].control_id, "AC-2");
+        assert_eq!(stale[0].engine_id, "ghost_engine");
+        assert_eq!(stale[1].control_id, "SC-8");
+        assert_eq!(stale[1].engine_id, "retired_engine");
 
         let cov = summarize_control_coverage(&mappings, known);
         assert_eq!(cov[0].framework, "NIST");
-        assert_eq!(cov[0].orphaned_engine_mappings, 2);
+        assert_eq!(cov[0].stale_engine_references, 2);
         assert_eq!(cov[0].distinct_engines, 3);
     }
 
     #[test]
     fn empty_input_yields_empty_output() {
         assert!(summarize_control_coverage(&[], known).is_empty());
-        assert!(find_orphaned_engine_mappings(&[], known).is_empty());
+        assert!(find_stale_engine_references(&[], known).is_empty());
+    }
+
+    fn expected(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn control_covered_matches_families_in_both_directions() {
+        assert!(control_covered("A.8", "A.8.15")); // family covered by sub-control
+        assert!(control_covered("A.8.5", "A.8")); // sub-control covered by family
+        assert!(control_covered("164.312(a)", "164.312(a)")); // exact
+        assert!(!control_covered("A.8", "A.85")); // not a dotted child — no false match
+        assert!(!control_covered("A.9", "A.8.15"));
+        assert!(!control_covered("", "A.8"));
+    }
+
+    #[test]
+    fn unmapped_framework_yields_no_orphans() {
+        // Empty mapping catalog => framework not onboarded => nothing is orphaned.
+        let iso = expected(&[("A.5", "Org"), ("A.8", "Assets"), ("A.9", "Access")]);
+        assert!(find_orphaned_controls(&iso, &[]).is_empty());
+    }
+
+    #[test]
+    fn partially_mapped_framework_flags_the_gaps() {
+        // ISO27001 seed maps A.5.* and A.8.*; A.9/A.10 have no covering mapping.
+        let iso = expected(&[
+            ("A.5", "Org"),
+            ("A.8", "Assets"),
+            ("A.9", "Access"),
+            ("A.10", "Crypto"),
+        ]);
+        let mapped = vec![
+            "A.5.15".to_string(),
+            "A.8.15".to_string(),
+            "A.8.5".to_string(),
+        ];
+        let orphans = find_orphaned_controls(&iso, &mapped);
+        assert_eq!(orphans.len(), 2);
+        assert_eq!(orphans[0].control_id, "A.10"); // sorted by control_id
+        assert_eq!(orphans[1].control_id, "A.9");
+    }
+
+    #[test]
+    fn fully_mapped_framework_has_no_orphans() {
+        let fw = expected(&[("A.5", "Org"), ("A.8", "Assets")]);
+        let mapped = vec!["A.5.15".to_string(), "A.8.15".to_string()];
+        assert!(find_orphaned_controls(&fw, &mapped).is_empty());
+    }
+
+    #[test]
+    fn report_gate_transitions() {
+        let none: Vec<OrphanedControl> = vec![];
+        let some = vec![OrphanedControl {
+            control_id: "A.9".into(),
+            control_title: "Access".into(),
+        }];
+        assert_eq!(report_gate(&none, false), ReportGate::Allow);
+        assert_eq!(report_gate(&none, true), ReportGate::Allow);
+        assert_eq!(report_gate(&some, false), ReportGate::Block);
+        assert_eq!(report_gate(&some, true), ReportGate::Watermark);
+    }
+
+    #[test]
+    fn framework_slug_roundtrips_for_ui_frameworks() {
+        assert_eq!(framework_slug_for_db("ISO27001"), Some("iso27001"));
+        assert_eq!(framework_slug_for_db("cis"), Some("cis"));
+        // Catalog-only frameworks with no UI control set are not reconciled.
+        assert_eq!(framework_slug_for_db("NIST800-53"), None);
+        assert_eq!(framework_slug_for_db("STIG"), None);
     }
 }
