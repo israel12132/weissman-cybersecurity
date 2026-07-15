@@ -98,7 +98,10 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     let cmd = build_command(
         "isolate_host",
         tenant_id,
-        Some(1),
+        // client_id is NULL: CI seeds a default tenant but no `clients` row, and the
+        // column is a nullable FK (ON DELETE SET NULL). The isolate→verify→revert chain
+        // under test is client-agnostic, so a hardcoded client_id=1 only tripped the FK.
+        None,
         None,
         "i-test123456789".into(),
         json!({ "pre_approved": true, "blast_radius_override": true }),
