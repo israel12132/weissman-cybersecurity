@@ -741,4 +741,65 @@ mod control_coverage_tests {
         assert_eq!(framework_slug_for_db("NIST800-53"), None);
         assert_eq!(framework_slug_for_db("STIG"), None);
     }
+
+    // --- Proof that the seeded catalog clears the enforcement gate ---
+    //
+    // These read the real migration SQL at compile time, so a future edit that drops a mapping and
+    // re-orphans a control fails the build rather than silently re-arming the 409 in production.
+    const PHASE2_SQL: &str =
+        include_str!("../migrations/20260702120000_security_hardening_phase2.sql");
+    const ISO_CIS_COMPLETION_SQL: &str =
+        include_str!("../migrations/20260715120000_compliance_control_mappings_iso_cis_completion.sql");
+
+    /// Extract seeded `control_id`s for a framework from a migration's `VALUES` rows. Each row is a
+    /// single line of the form `('FRAMEWORK', 'CONTROL_ID', ...`.
+    fn ids_for(sql: &str, framework: &str) -> Vec<String> {
+        let needle = format!("('{framework}', '");
+        sql.lines()
+            .filter_map(|l| {
+                let rest = l.trim().strip_prefix(&needle)?;
+                let end = rest.find('\'')?;
+                Some(rest[..end].to_string())
+            })
+            .collect()
+    }
+
+    fn seeded_control_ids(framework: &str) -> Vec<String> {
+        let mut v = ids_for(PHASE2_SQL, framework);
+        v.extend(ids_for(ISO_CIS_COMPLETION_SQL, framework));
+        v
+    }
+
+    #[test]
+    fn iso27001_catalog_fully_maps_its_controls_and_allows() {
+        // Mirrors static_framework_controls("iso27001").
+        let controls = expected(&[
+            ("A.5", "Organizational controls"),
+            ("A.8", "Asset management"),
+            ("A.9", "Access control"),
+            ("A.10", "Cryptography"),
+            ("A.12", "Operations security"),
+            ("A.13", "Communications security"),
+        ]);
+        let ids = seeded_control_ids("ISO27001");
+        assert!(!ids.is_empty(), "ISO27001 must be onboarded to live mapping");
+        let orphans = find_orphaned_controls(&controls, &ids);
+        assert!(orphans.is_empty(), "ISO27001 still orphaned: {orphans:?}");
+        assert_eq!(report_gate(&orphans, false), ReportGate::Allow);
+    }
+
+    #[test]
+    fn cis_catalog_fully_maps_its_controls_and_allows() {
+        // Mirrors static_framework_controls("cis").
+        let controls = expected(&[
+            ("CIS 1", "Inventory and control of enterprise assets"),
+            ("CIS 3", "Data protection"),
+            ("CIS 6", "Access control management"),
+        ]);
+        let ids = seeded_control_ids("CIS");
+        assert!(!ids.is_empty(), "CIS must be onboarded to live mapping");
+        let orphans = find_orphaned_controls(&controls, &ids);
+        assert!(orphans.is_empty(), "CIS still orphaned: {orphans:?}");
+        assert_eq!(report_gate(&orphans, false), ReportGate::Allow);
+    }
 }
