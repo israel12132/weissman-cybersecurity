@@ -87,3 +87,95 @@ pub fn generate_deception_assets_simple(
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rand_hex_has_correct_len_and_charset() {
+        let s = rand_hex(32);
+        assert_eq!(s.len(), 32);
+        assert!(s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn rand_alpha_has_correct_len_and_uppercase() {
+        let s = rand_alpha(16);
+        assert_eq!(s.len(), 16);
+        assert!(s.chars().all(|c| c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn honeytoken_aws_key_format() {
+        let (value, location) = generate_honeytoken(TYPE_AWS_KEY, "");
+        assert_eq!(location, "env:AWS_ACCESS_KEY_ID");
+        let parts: Vec<&str> = value.split(':').collect();
+        assert_eq!(parts.len(), 2);
+        // "AKIA" + 16 alpha = 20 chars
+        assert!(parts[0].starts_with("AKIA"));
+        assert_eq!(parts[0].len(), 20);
+        // secret is 40 hex chars
+        assert_eq!(parts[1].len(), 40);
+        assert!(parts[1].chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn honeytoken_db_cred_format() {
+        let (value, location) = generate_honeytoken(TYPE_DB_CRED, "postgres");
+        assert_eq!(location, "config:database.url");
+        assert!(value.starts_with("db_honey_"));
+        let parts: Vec<&str> = value.split(':').collect();
+        assert_eq!(parts.len(), 2);
+    }
+
+    #[test]
+    fn honeytoken_api_key_format() {
+        let (value, location) = generate_honeytoken(TYPE_API_KEY, "");
+        assert_eq!(location, "env:API_KEY");
+        assert!(value.starts_with("sk_live_"));
+        // "sk_live_" (8) + 32 hex = 40
+        assert_eq!(value.len(), 40);
+    }
+
+    #[test]
+    fn honeytoken_shadow_endpoint_format() {
+        let (value, location) = generate_honeytoken(TYPE_SHADOW_ENDPOINT, "");
+        assert_eq!(location, "route:shadow");
+        assert!(value.starts_with("/.well-known/"));
+    }
+
+    #[test]
+    fn honeytoken_unknown_type_falls_back() {
+        let (value, location) = generate_honeytoken("something_else", "");
+        assert_eq!(location, "unknown");
+        assert_eq!(value.len(), 24);
+        assert!(value.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn generate_assets_preserves_client_and_type_order() {
+        let types = vec![TYPE_API_KEY.to_string(), TYPE_DB_CRED.to_string()];
+        let recs = generate_deception_assets("client-42", &types, "hint");
+        assert_eq!(recs.len(), 2);
+        assert_eq!(recs[0].0, "client-42");
+        assert_eq!(recs[0].1, TYPE_API_KEY);
+        assert_eq!(recs[1].1, TYPE_DB_CRED);
+    }
+
+    #[test]
+    fn generate_assets_empty_types_yields_empty() {
+        let recs = generate_deception_assets("c", &[], "hint");
+        assert!(recs.is_empty());
+    }
+
+    #[test]
+    fn generate_assets_simple_has_three_expected_types() {
+        let recs = generate_deception_assets_simple("c1", "hint");
+        assert_eq!(recs.len(), 3);
+        assert_eq!(recs[0].1, TYPE_API_KEY);
+        assert_eq!(recs[1].1, TYPE_AWS_KEY);
+        assert_eq!(recs[2].1, TYPE_DB_CRED);
+        assert!(recs.iter().all(|r| r.0 == "c1"));
+    }
+}

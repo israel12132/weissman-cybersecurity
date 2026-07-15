@@ -179,3 +179,33 @@ pub async fn run_archival_discovery(
     }
     set.into_iter().collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn domain_from_target_strips_https_and_path() {
+        assert_eq!(domain_from_target("https://example.com/a/b"), "example.com");
+    }
+
+    #[test]
+    fn domain_from_target_strips_http_and_path() {
+        assert_eq!(domain_from_target("http://example.com/foo"), "example.com");
+    }
+
+    #[test]
+    fn domain_from_target_bare_domain_with_path() {
+        assert_eq!(domain_from_target("example.com/foo"), "example.com");
+    }
+
+    #[test]
+    fn domain_from_target_bare_domain() {
+        assert_eq!(domain_from_target("example.com"), "example.com");
+    }
+
+    #[test]
+    fn domain_from_target_trims_whitespace() {
+        assert_eq!(domain_from_target("  https://example.com  "), "example.com");
+    }
+}

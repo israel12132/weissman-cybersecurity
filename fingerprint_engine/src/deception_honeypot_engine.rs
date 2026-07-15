@@ -201,3 +201,34 @@ pub async fn run_deception_honeypot_result(target: &str) -> EngineResult {
 pub async fn run_deception_honeypot(target: &str) {
     print_result(run_deception_honeypot_result(target).await);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_target_adds_https_when_missing() {
+        assert_eq!(normalize_target("example.com"), "https://example.com");
+    }
+
+    #[test]
+    fn normalize_target_preserves_existing_scheme() {
+        assert_eq!(normalize_target("http://x.com"), "http://x.com");
+        assert_eq!(normalize_target("https://x.com"), "https://x.com");
+    }
+
+    #[test]
+    fn normalize_target_trims_whitespace() {
+        assert_eq!(normalize_target("  example.com  "), "https://example.com");
+        assert_eq!(normalize_target("  https://x.com "), "https://x.com");
+    }
+
+    #[tokio::test]
+    async fn empty_target_returns_error_result() {
+        let r = run_deception_honeypot_result("   ").await;
+        assert_eq!(r.status, "error");
+        assert!(!r.success);
+        assert_eq!(r.message, "target required");
+        assert!(r.findings.is_empty());
+    }
+}

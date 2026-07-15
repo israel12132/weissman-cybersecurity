@@ -358,3 +358,111 @@ pub async fn run_ai_redteam_attack(
     );
     EngineResult::ok(findings, msg)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_base_adds_https_when_scheme_missing() {
+        assert_eq!(normalize_base("example.com"), "https://example.com");
+    }
+
+    #[test]
+    fn normalize_base_preserves_existing_scheme_and_trims_trailing_slash() {
+        assert_eq!(normalize_base("http://example.com/"), "http://example.com");
+        assert_eq!(normalize_base("https://example.com"), "https://example.com");
+    }
+
+    #[test]
+    fn normalize_base_trims_whitespace() {
+        assert_eq!(normalize_base("  example.com/  "), "https://example.com");
+    }
+
+    #[test]
+    fn normalize_base_empty_and_slash_only_are_empty() {
+        assert_eq!(normalize_base(""), "");
+        assert_eq!(normalize_base("   "), "");
+        assert_eq!(normalize_base("/"), "");
+    }
+
+    #[test]
+    fn resolve_ai_endpoint_uses_config_override() {
+        let config = AiRedteamConfig {
+            ai_redteam_endpoint: "  https://api.x/chat  ".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(resolve_ai_endpoint(&config, "ignored.com"), "https://api.x/chat");
+    }
+
+    #[test]
+    fn resolve_ai_endpoint_derives_from_target() {
+        let config = AiRedteamConfig::default();
+        assert_eq!(resolve_ai_endpoint(&config, "example.com"), "https://example.com/chat");
+    }
+
+    #[test]
+    fn resolve_ai_endpoint_empty_target_yields_empty() {
+        let config = AiRedteamConfig::default();
+        assert_eq!(resolve_ai_endpoint(&config, ""), "");
+    }
+
+    #[test]
+    fn parse_json_string_array_basic() {
+        assert_eq!(
+            parse_json_string_array(r#"["a","b"]"#),
+            vec!["a".to_string(), "b".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_json_string_array_extracts_from_surrounding_text() {
+        assert_eq!(
+            parse_json_string_array(r#"here you go: ["one"] done"#),
+            vec!["one".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_json_string_array_trims_and_skips_non_strings_and_empty() {
+        // 1 and true are skipped; "  hi  " is trimmed; "" is dropped.
+        assert_eq!(
+            parse_json_string_array(r#"[1, "  hi  ", true, ""]"#),
+            vec!["hi".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_json_string_array_caps_at_max_payloads() {
+        let out = parse_json_string_array(r#"["1","2","3","4","5","6","7"]"#);
+        assert_eq!(out.len(), MAX_PAYLOADS);
+        assert_eq!(out, vec!["1", "2", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn parse_json_string_array_invalid_returns_empty() {
+        assert!(parse_json_string_array("not json at all").is_empty());
+        assert!(parse_json_string_array("[").is_empty());
+    }
+
+    #[test]
+    fn redteam_stream_event_skips_none_optionals() {
+        let ev = RedteamStreamEvent {
+            phase: "payload".to_string(),
+            index: Some(0),
+            payload: Some("hi".to_string()),
+            response: None,
+            verdict: None,
+            explanation: None,
+            status: None,
+        };
+        let v = serde_json::to_value(&ev).unwrap();
+        assert_eq!(v["phase"], "payload");
+        assert_eq!(v["index"], 0);
+        assert_eq!(v["payload"], "hi");
+        assert!(v.get("response").is_none());
+        assert!(v.get("verdict").is_none());
+        assert!(v.get("explanation").is_none());
+        assert!(v.get("status").is_none());
+    }
+}

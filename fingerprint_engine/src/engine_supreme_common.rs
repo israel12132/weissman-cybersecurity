@@ -178,3 +178,158 @@ pub fn finalize_supreme_run(
     }
     build_simple_graph(target, host, avg_score(&category_scores), graph_nodes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn avg_score_averages_u64_values() {
+        assert_eq!(avg_score(&json!({ "a": 80, "b": 40 })), 60.0);
+        assert_eq!(avg_score(&json!({ "a": 90 })), 90.0);
+    }
+
+    #[test]
+    fn avg_score_defaults_and_filters_non_u64() {
+        // not an object -> default 70.0
+        assert_eq!(avg_score(&json!("nope")), 70.0);
+        // empty object -> default 70.0
+        assert_eq!(avg_score(&json!({})), 70.0);
+        // non-u64 entries are filtered out, leaving only 50
+        assert_eq!(avg_score(&json!({ "a": "x", "b": 50 })), 50.0);
+    }
+
+    #[test]
+    fn finding_has_matches_title_category_vuln_class_case_insensitively() {
+        let findings = vec![
+            json!({ "title": "SQL Injection detected" }),
+            json!({ "category": "toxic_combination" }),
+            json!({ "vuln_class": "XSS" }),
+        ];
+        assert!(finding_has(&findings, "sql"));
+        assert!(finding_has(&findings, "TOXIC"));
+        assert!(finding_has(&findings, "xss"));
+        assert!(!finding_has(&findings, "ssrf"));
+    }
+
+    #[test]
+    fn emit_toxic_empty_combos_pushes_nothing() {
+        let mut findings = Vec::new();
+        emit_toxic_from_combos("eng", "T1", "tgt", vec![], json!({}), &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn emit_toxic_inserts_critical_at_front() {
+        let mut findings = vec![json!({ "title": "existing" })];
+        emit_toxic_from_combos(
+            "eng",
+            "T1",
+            "tgt",
+            vec!["a".to_string(), "b".to_string()],
+            json!({}),
+            &mut findings,
+        );
+        assert_eq!(findings.len(), 2);
+        let first = &findings[0];
+        assert_eq!(
+            first.get("title").and_then(|v| v.as_str()),
+            Some("TOXIC COMBINATION: a ⊕ b")
+        );
+        assert_eq!(first.get("severity").and_then(|v| v.as_str()), Some("critical"));
+        assert_eq!(
+            first.get("category").and_then(|v| v.as_str()),
+            Some("toxic_combination")
+        );
+    }
+
+    #[test]
+    fn emit_roadmap_empty_steps_pushes_nothing() {
+        let mut findings = Vec::new();
+        emit_roadmap_from_steps("eng", "T1", "tgt", vec![], json!({}), &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn emit_roadmap_appends_info_finding() {
+        let mut findings = Vec::new();
+        emit_roadmap_from_steps(
+            "eng",
+            "T1",
+            "tgt",
+            vec![(1u8, "tier", "action", "detail")],
+            json!({ "cat": 50 }),
+            &mut findings,
+        );
+        assert_eq!(findings.len(), 1);
+        let f = &findings[0];
+        assert_eq!(
+            f.get("title").and_then(|v| v.as_str()),
+            Some("Prioritized remediation roadmap")
+        );
+        assert_eq!(
+            f.get("category").and_then(|v| v.as_str()),
+            Some("remediation_roadmap")
+        );
+        assert_eq!(f.get("severity").and_then(|v| v.as_str()), Some("info"));
+    }
+
+    #[test]
+    fn emit_agent_caps_pushes_one_finding_per_cap() {
+        let mut findings = Vec::new();
+        emit_agent_caps(
+            "eng",
+            "T1",
+            "tgt",
+            &[("cap1", "desc one"), ("cap2", "desc two")],
+            &mut findings,
+        );
+        assert_eq!(findings.len(), 2);
+        assert_eq!(
+            findings[0].get("title").and_then(|v| v.as_str()),
+            Some("Agent-required: desc one")
+        );
+        assert_eq!(
+            findings[0].get("category").and_then(|v| v.as_str()),
+            Some("agent_guidance")
+        );
+    }
+
+    #[test]
+    fn build_simple_graph_root_status_and_edges() {
+        let (nodes, edges) =
+            build_simple_graph("target.tld", "host.tld", 85.0, &[("n1", "L1", "link")]);
+        assert_eq!(nodes.len(), 2);
+        // root
+        assert_eq!(nodes[0].id, "root");
+        assert_eq!(nodes[0].label, "host.tld");
+        assert_eq!(nodes[0].node_type, "root");
+        assert_eq!(nodes[0].status, "secure");
+        // surface node
+        assert_eq!(nodes[1].id, "n1");
+        assert_eq!(nodes[1].label, "L1");
+        assert_eq!(nodes[1].node_type, "surface");
+        assert_eq!(nodes[1].status, "exposed");
+        // edge
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].id, "e_root_n1");
+        assert_eq!(edges[0].from_id, "root");
+        assert_eq!(edges[0].to_id, "n1");
+        assert_eq!(edges[0].edge_type, "link");
+    }
+
+    #[test]
+    fn build_simple_graph_root_label_falls_back_to_target_and_status_ladder() {
+        // empty host -> label uses target
+        let (secure, _) = build_simple_graph("target.tld", "", 80.0, &[]);
+        assert_eq!(secure[0].label, "target.tld");
+        assert_eq!(secure[0].status, "secure");
+
+        let (degraded, _) = build_simple_graph("t", "", 50.0, &[]);
+        assert_eq!(degraded[0].status, "degraded");
+
+        let (exposed, _) = build_simple_graph("t", "", 49.9, &[]);
+        assert_eq!(exposed[0].status, "exposed");
+    }
+}

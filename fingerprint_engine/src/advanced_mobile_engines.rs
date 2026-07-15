@@ -556,3 +556,87 @@ pub async fn run_react_native_attack_result(t: &str) -> EngineResult {
     }
 }
 cli_wrapper!(run_react_native_attack, run_react_native_attack_result);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn deep_link_invalid_json_is_none() {
+        assert!(deep_link_overbroad_finding("e", "not json", "u", "t").is_none());
+        // Valid JSON but no applinks/details -> not overbroad.
+        assert!(deep_link_overbroad_finding("e", "{}", "u", "t").is_none());
+    }
+
+    #[test]
+    fn deep_link_scoped_paths_is_none() {
+        let body = json!({"applinks": {"details": [{"paths": ["/auth/callback"]}]}}).to_string();
+        assert!(deep_link_overbroad_finding("e", &body, "u", "t").is_none());
+    }
+
+    #[test]
+    fn deep_link_wildcard_paths_flagged() {
+        for pat in ["*", "/*", "/"] {
+            let body = json!({"applinks": {"details": [{"paths": [pat]}]}}).to_string();
+            let f = deep_link_overbroad_finding("mob_engine", &body, "https://x.test/aasa", "x.test")
+                .unwrap_or_else(|| panic!("expected overbroad finding for path {pat:?}"));
+            assert_eq!(f.get("type").and_then(Value::as_str), Some("mob_engine"));
+            assert_eq!(f.get("severity").and_then(Value::as_str), Some("medium"));
+            assert_eq!(f.get("mitre_attack").and_then(Value::as_str), Some("T1416"));
+            assert_eq!(
+                f.get("probe_depth").and_then(Value::as_str),
+                Some(MOBILE_PROBE_DEPTH)
+            );
+            assert!(f
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap()
+                .contains("Over-broad"));
+        }
+    }
+
+    #[test]
+    fn deep_link_wildcard_component_flagged() {
+        let body = json!({"applinks": {"details": [{"components": [{"/": "*"}]}]}}).to_string();
+        let f = deep_link_overbroad_finding("e", &body, "u", "t");
+        assert!(f.is_some());
+        assert_eq!(
+            f.unwrap().get("severity").and_then(Value::as_str),
+            Some("medium")
+        );
+    }
+
+    #[test]
+    fn deep_link_scoped_component_is_none() {
+        let body = json!({"applinks": {"details": [{"components": [{"/": "/login"}]}]}}).to_string();
+        assert!(deep_link_overbroad_finding("e", &body, "u", "t").is_none());
+    }
+
+    #[tokio::test]
+    async fn ssl_pinning_empty_target_errors() {
+        let r = run_ssl_pinning_bypass_result("").await;
+        assert!(!r.success);
+        assert_eq!(r.status, "error");
+    }
+
+    #[tokio::test]
+    async fn mdm_bypass_empty_target_errors() {
+        assert!(!run_mdm_bypass_engine_result("  ").await.success);
+    }
+
+    #[tokio::test]
+    async fn react_native_empty_target_errors() {
+        assert!(!run_react_native_attack_result("").await.success);
+    }
+
+    #[tokio::test]
+    async fn sim_swap_is_agent_required() {
+        let r = run_sim_swap_engine_result("example.test").await;
+        assert!(r.success);
+        assert_eq!(r.findings.len(), 1);
+        let f = &r.findings[0];
+        assert_eq!(f.get("type").and_then(Value::as_str), Some("sim_swap_engine"));
+        assert_eq!(f.get("agent_required").and_then(Value::as_bool), Some(true));
+    }
+}

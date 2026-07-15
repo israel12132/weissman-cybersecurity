@@ -409,3 +409,102 @@ pub async fn run_mainframe_zos_attack_result(target: &str, ctx: &EngineRunContex
         ),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sap_port_classification_specific_services() {
+        let (svc, mitre, score, _) = classify_sap_port(3299);
+        assert_eq!(svc, "SAProuter");
+        assert_eq!(mitre, "T1190");
+        assert_eq!(score, 0.7);
+
+        let (svc, mitre, score, _) = classify_sap_port(3300);
+        assert_eq!(svc, "SAP Gateway (RFC)");
+        assert_eq!(mitre, "T1210");
+        assert_eq!(score, 0.85);
+        // 3301 shares the same arm.
+        assert_eq!(classify_sap_port(3301), classify_sap_port(3300));
+
+        let (svc, _, score, _) = classify_sap_port(3600);
+        assert_eq!(svc, "SAP Message Server");
+        assert_eq!(score, 0.8);
+        assert_eq!(classify_sap_port(3601), classify_sap_port(3600));
+
+        let (svc, _, score, _) = classify_sap_port(3200);
+        assert_eq!(svc, "SAP Dispatcher (DIAG)");
+        assert_eq!(score, 0.6);
+
+        let (svc, _, score, _) = classify_sap_port(1128);
+        assert_eq!(svc, "SAP Host Agent (SAPControl)");
+        assert_eq!(score, 0.7);
+
+        let (svc, _, score, _) = classify_sap_port(50013);
+        assert_eq!(svc, "SAP Start Service (SAPControl SOAP)");
+        assert_eq!(score, 0.75);
+    }
+
+    #[test]
+    fn sap_port_classification_default_web_icm() {
+        // Any unlisted (but scanned) port falls through to the generic ICM/Web arm.
+        let (svc, mitre, score, _) = classify_sap_port(8000);
+        assert_eq!(svc, "SAP Web/ICM");
+        assert_eq!(mitre, "T1190");
+        assert_eq!(score, 0.55);
+        assert_eq!(classify_sap_port(9999), classify_sap_port(8000));
+    }
+
+    #[test]
+    fn mainframe_port_classification_specific_services() {
+        let (svc, score, _) = classify_mainframe_port(23);
+        assert_eq!(svc, "TN3270 / Telnet (TSO/VTAM)");
+        assert_eq!(score, 0.7);
+        assert_eq!(classify_mainframe_port(2323), classify_mainframe_port(23));
+        assert_eq!(classify_mainframe_port(5023), classify_mainframe_port(23));
+
+        let (svc, score, _) = classify_mainframe_port(992);
+        assert_eq!(svc, "TN3270 over TLS");
+        assert_eq!(score, 0.6);
+
+        let (svc, score, _) = classify_mainframe_port(21);
+        assert_eq!(svc, "z/OS FTP (JES)");
+        assert_eq!(score, 0.85);
+
+        let (svc, score, _) = classify_mainframe_port(446);
+        assert_eq!(svc, "DB2 DRDA");
+        assert_eq!(score, 0.65);
+        assert_eq!(classify_mainframe_port(447), classify_mainframe_port(446));
+        assert_eq!(classify_mainframe_port(448), classify_mainframe_port(446));
+
+        let (svc, score, _) = classify_mainframe_port(1414);
+        assert_eq!(svc, "IBM MQ");
+        assert_eq!(score, 0.6);
+
+        let (svc, score, _) = classify_mainframe_port(175);
+        assert_eq!(svc, "NJE (Network Job Entry)");
+        assert_eq!(score, 0.7);
+
+        let (svc, score, _) = classify_mainframe_port(8009);
+        assert_eq!(svc, "AJP / z/OS Connect");
+        assert_eq!(score, 0.5);
+    }
+
+    #[test]
+    fn mainframe_port_classification_default() {
+        let (svc, score, _) = classify_mainframe_port(65000);
+        assert_eq!(svc, "Mainframe service");
+        assert_eq!(score, 0.4);
+    }
+
+    #[test]
+    fn default_port_lists_include_expected_members() {
+        // Guard against accidental edits to the documented port maps.
+        assert!(DEFAULT_SAP_PORTS.contains(&3299));
+        assert!(DEFAULT_SAP_PORTS.contains(&3300));
+        assert!(SAP_ICM_HTTP_PORTS.iter().all(|p| DEFAULT_SAP_PORTS.contains(p)));
+        assert!(DEFAULT_MAINFRAME_PORTS.contains(&21));
+        assert!(DEFAULT_MAINFRAME_PORTS.contains(&23));
+    }
+}

@@ -130,3 +130,57 @@ pub async fn deploy_honeytoken_injection(
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_canary_finds_embedded_key() {
+        // AKIA followed by 16 [0-9A-Z] chars.
+        let v = "AKIAIOSFODNN7EXAMPLE:some-secret-tail";
+        assert_eq!(
+            extract_canary_access_key_id(v),
+            Some("AKIAIOSFODNN7EXAMPLE".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_canary_plain_key() {
+        assert_eq!(
+            extract_canary_access_key_id("AKIAIOSFODNN7EXAMPLE"),
+            Some("AKIAIOSFODNN7EXAMPLE".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_canary_none_for_lowercase_or_missing() {
+        // lowercase does not match the [0-9A-Z] class.
+        assert_eq!(extract_canary_access_key_id("akiaiosfodnn7example"), None);
+        assert_eq!(extract_canary_access_key_id("no key present here"), None);
+        assert_eq!(extract_canary_access_key_id(""), None);
+    }
+
+    #[test]
+    fn normalize_bucket_key_trims_and_strips_leading_slashes() {
+        let (b, k) = normalize_bucket_key("  my-bucket  ", "  //config/canary.env  ").unwrap();
+        assert_eq!(b, "my-bucket");
+        assert_eq!(k, "config/canary.env");
+    }
+
+    #[test]
+    fn normalize_bucket_key_errors_on_empty() {
+        assert!(normalize_bucket_key("", "key").is_err());
+        assert!(normalize_bucket_key("bucket", "").is_err());
+        // key of only slashes normalizes to empty -> error.
+        assert!(normalize_bucket_key("bucket", "///").is_err());
+    }
+
+    #[test]
+    fn injection_targets_default_is_all_none() {
+        let t = InjectionTargets::default();
+        assert!(t.s3_bucket.is_none());
+        assert!(t.s3_object_key.is_none());
+        assert!(t.ssm_parameter_path.is_none());
+    }
+}

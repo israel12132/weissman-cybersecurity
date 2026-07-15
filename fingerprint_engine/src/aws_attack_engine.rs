@@ -1583,3 +1583,473 @@ fn build_posture_summary(
     }
     v
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unit tests — deterministic, side-effect-free helpers only (no AWS/network IO).
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A baseline config with no credentials and no permutation, easy to tweak per test.
+    fn base_cfg() -> AwsScanConfig {
+        AwsScanConfig {
+            enable_external: true,
+            enable_credentialed: true,
+            enable_iam: true,
+            enable_s3: true,
+            enable_ec2: true,
+            enable_attack_paths: true,
+            service_fingerprint: true,
+            access_key_id: None,
+            secret_access_key: None,
+            session_token: None,
+            role_arn: None,
+            external_id: None,
+            session_name: None,
+            region: "us-east-1".to_string(),
+            regions: vec!["us-east-1".to_string()],
+            bucket_candidates: Vec::new(),
+            bucket_permutations: false,
+            extra_bucket_suffixes: Vec::new(),
+            web_paths: Vec::new(),
+            access_key_max_age_days: 90,
+            max_users_scanned: 60,
+            max_buckets_scanned: 100,
+            timeout_ms: 10_000,
+            concurrency: 8,
+            intensity: Intensity::Normal,
+            min_severity: "info".to_string(),
+        }
+    }
+
+    // ── Domain / plane classification ───────────────────────────────────────
+
+    #[test]
+    fn domain_as_str_maps_every_variant() {
+        assert_eq!(Domain::Identity.as_str(), "identity");
+        assert_eq!(Domain::Data.as_str(), "data");
+        assert_eq!(Domain::Network.as_str(), "network");
+        assert_eq!(Domain::Exposure.as_str(), "exposure");
+        assert_eq!(Domain::Posture.as_str(), "posture");
+    }
+
+    #[test]
+    fn plane_for_only_exposure_is_external() {
+        assert_eq!(plane_for(Domain::Exposure), "external");
+        assert_eq!(plane_for(Domain::Identity), "credentialed");
+        assert_eq!(plane_for(Domain::Data), "credentialed");
+        assert_eq!(plane_for(Domain::Network), "credentialed");
+        assert_eq!(plane_for(Domain::Posture), "credentialed");
+    }
+
+    // ── Severity ladders ────────────────────────────────────────────────────
+
+    #[test]
+    fn sev_weight_ladder_and_case_insensitive() {
+        assert_eq!(sev_weight("critical"), 20.0);
+        assert_eq!(sev_weight("high"), 11.0);
+        assert_eq!(sev_weight("medium"), 4.5);
+        assert_eq!(sev_weight("low"), 1.5);
+        assert_eq!(sev_weight("info"), 0.0);
+        assert_eq!(sev_weight("unknown"), 0.0);
+        // Case-insensitive normalization.
+        assert_eq!(sev_weight("CRITICAL"), 20.0);
+        assert_eq!(sev_weight("High"), 11.0);
+    }
+
+    #[test]
+    fn sev_rank_ladder_and_case_insensitive() {
+        assert_eq!(sev_rank("critical"), 4);
+        assert_eq!(sev_rank("high"), 3);
+        assert_eq!(sev_rank("medium"), 2);
+        assert_eq!(sev_rank("low"), 1);
+        assert_eq!(sev_rank("info"), 0);
+        assert_eq!(sev_rank("bogus"), 0);
+        assert_eq!(sev_rank("MEDIUM"), 2);
+    }
+
+    // ── Finding field accessors ─────────────────────────────────────────────
+
+    #[test]
+    fn finding_sev_reads_field_or_defaults_info() {
+        assert_eq!(finding_sev(&json!({ "severity": "high" })), "high");
+        // Missing severity defaults to "info".
+        assert_eq!(finding_sev(&json!({ "title": "x" })), "info");
+    }
+
+    #[test]
+    fn finding_domain_reads_field_or_defaults_posture() {
+        assert_eq!(finding_domain(&json!({ "domain": "network" })), "network");
+        // Missing domain defaults to "posture".
+        assert_eq!(finding_domain(&json!({ "title": "x" })), "posture");
+    }
+
+    // ── Grading ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn grade_for_boundaries() {
+        assert_eq!(grade_for(95.0), "A+");
+        assert_eq!(grade_for(94.99), "A");
+        assert_eq!(grade_for(90.0), "A");
+        assert_eq!(grade_for(89.99), "B");
+        assert_eq!(grade_for(80.0), "B");
+        assert_eq!(grade_for(79.99), "C");
+        assert_eq!(grade_for(70.0), "C");
+        assert_eq!(grade_for(69.99), "D");
+        assert_eq!(grade_for(55.0), "D");
+        assert_eq!(grade_for(54.99), "E");
+        assert_eq!(grade_for(40.0), "E");
+        assert_eq!(grade_for(39.99), "F");
+        assert_eq!(grade_for(0.0), "F");
+    }
+
+    // ── Posture / domain scoring ────────────────────────────────────────────
+
+    #[test]
+    fn posture_score_empty_is_perfect() {
+        assert_eq!(posture_score(&[]), 100.0);
+    }
+
+    #[test]
+    fn posture_score_sums_severity_and_ignores_posture_domain() {
+        let findings = vec![
+            json!({ "domain": "identity", "severity": "critical" }), // 20
+            json!({ "domain": "data", "severity": "high" }),         // 11
+            json!({ "domain": "posture", "severity": "critical" }),  // ignored
+        ];
+        assert_eq!(posture_score(&findings), 100.0 - 20.0 - 11.0);
+    }
+
+    #[test]
+    fn posture_score_clamps_at_zero() {
+        // Six criticals = 120 penalty, clamped to 0.
+        let findings: Vec<Value> = (0..6)
+            .map(|_| json!({ "domain": "data", "severity": "critical" }))
+            .collect();
+        assert_eq!(posture_score(&findings), 0.0);
+    }
+
+    #[test]
+    fn domain_score_only_counts_matching_domain() {
+        let findings = vec![
+            json!({ "domain": "identity", "severity": "low" }),   // 1.5
+            json!({ "domain": "data", "severity": "critical" }),  // not identity
+        ];
+        assert_eq!(domain_score(&findings, Domain::Identity), 100.0 - 1.5);
+        assert_eq!(domain_score(&findings, Domain::Data), 100.0 - 20.0);
+        assert_eq!(domain_score(&findings, Domain::Network), 100.0);
+    }
+
+    // ── S3 bucket-location mapping ──────────────────────────────────────────
+
+    #[test]
+    fn map_bucket_location_defaults_and_aliases() {
+        assert_eq!(map_bucket_location(None), "us-east-1");
+        assert_eq!(map_bucket_location(Some("")), "us-east-1");
+        assert_eq!(map_bucket_location(Some("US")), "us-east-1");
+        assert_eq!(map_bucket_location(Some("EU")), "eu-west-1");
+        // Whitespace is trimmed before matching.
+        assert_eq!(map_bucket_location(Some("  EU  ")), "eu-west-1");
+        // Any other constraint passes through verbatim.
+        assert_eq!(map_bucket_location(Some("us-west-2")), "us-west-2");
+        assert_eq!(map_bucket_location(Some("eu-central-1")), "eu-central-1");
+    }
+
+    // ── Dangerous-port range check ──────────────────────────────────────────
+
+    #[test]
+    fn port_in_dangerous_exact_and_ranges() {
+        // Exact dangerous port.
+        assert!(port_in_dangerous(Some(22), Some(22)));
+        assert!(port_in_dangerous(Some(3389), Some(3389)));
+        // Range that spans several dangerous ports (22, 23, 25).
+        assert!(port_in_dangerous(Some(20), Some(25)));
+        // Range spanning 8020 and 9000.
+        assert!(port_in_dangerous(Some(8000), Some(9000)));
+        // `to` defaults to `from` when None.
+        assert!(port_in_dangerous(Some(6379), None));
+    }
+
+    #[test]
+    fn port_in_dangerous_negative_and_safe_ranges() {
+        // Safe single port.
+        assert!(!port_in_dangerous(Some(80), Some(80)));
+        // Safe range with no dangerous port inside.
+        assert!(!port_in_dangerous(Some(100), Some(120)));
+        // Both None => start/end = -1, no port matches.
+        assert!(!port_in_dangerous(None, None));
+    }
+
+    // ── Config predicate methods ────────────────────────────────────────────
+
+    #[test]
+    fn config_has_static_keys_requires_both_nonempty() {
+        let mut c = base_cfg();
+        assert!(!c.has_static_keys());
+        c.access_key_id = Some("AKIA...".to_string());
+        // Secret still missing.
+        assert!(!c.has_static_keys());
+        c.secret_access_key = Some("secret".to_string());
+        assert!(c.has_static_keys());
+        // Empty strings do not count.
+        c.secret_access_key = Some(String::new());
+        assert!(!c.has_static_keys());
+    }
+
+    #[test]
+    fn config_has_role_requires_iam_arn_prefix() {
+        let mut c = base_cfg();
+        assert!(!c.has_role());
+        c.role_arn = Some("not-an-arn".to_string());
+        assert!(!c.has_role());
+        c.role_arn = Some("arn:aws:iam::123456789012:role/Scanner".to_string());
+        assert!(c.has_role());
+    }
+
+    #[test]
+    fn config_credentialed_ready_gate() {
+        let mut c = base_cfg();
+        // No creds -> not ready.
+        assert!(!c.credentialed_ready());
+        // Static keys -> ready.
+        c.access_key_id = Some("AKIA".to_string());
+        c.secret_access_key = Some("s".to_string());
+        assert!(c.credentialed_ready());
+        // Disabling the plane overrides available creds.
+        c.enable_credentialed = false;
+        assert!(!c.credentialed_ready());
+        // Role alone (plane re-enabled) is also sufficient.
+        c.enable_credentialed = true;
+        c.access_key_id = None;
+        c.secret_access_key = None;
+        c.role_arn = Some("arn:aws:iam::111122223333:role/X".to_string());
+        assert!(c.credentialed_ready());
+    }
+
+    // ── Bucket-candidate derivation ─────────────────────────────────────────
+
+    #[test]
+    fn bucket_candidates_seeds_from_host_without_permutations() {
+        let cfg = base_cfg(); // permutations off
+        let out = bucket_candidates("https://acme.example.com/path", &cfg);
+        // First label + dot-collapsed host, sorted & deduped.
+        assert_eq!(out, vec!["acme".to_string(), "acme-example-com".to_string()]);
+    }
+
+    #[test]
+    fn bucket_candidates_permutations_add_suffixes() {
+        let mut cfg = base_cfg();
+        cfg.bucket_permutations = true;
+        // Single-label host so exactly one seed ("acme").
+        let out = bucket_candidates("acme", &cfg);
+        // seed + 24 built-in suffixes = 25 unique names.
+        assert_eq!(out.len(), 25);
+        assert!(out.contains(&"acme".to_string()));
+        assert!(out.contains(&"acme-backup".to_string()));
+        assert!(out.contains(&"acme-secrets".to_string()));
+    }
+
+    #[test]
+    fn bucket_candidates_respects_max_buckets_truncation() {
+        let mut cfg = base_cfg();
+        cfg.bucket_permutations = true;
+        cfg.max_buckets_scanned = 5;
+        let out = bucket_candidates("acme", &cfg);
+        assert_eq!(out.len(), 5);
+    }
+
+    #[test]
+    fn bucket_candidates_includes_operator_extra_suffixes() {
+        let mut cfg = base_cfg();
+        cfg.bucket_permutations = true;
+        cfg.extra_bucket_suffixes = vec!["-vault".to_string()];
+        let out = bucket_candidates("acme", &cfg);
+        assert!(out.contains(&"acme-vault".to_string()));
+    }
+
+    // ── Attack-path helper predicates ───────────────────────────────────────
+
+    #[test]
+    fn has_title_contains_matches_substring() {
+        let findings = vec![json!({ "title": "Public S3 bucket: acme-data" })];
+        assert!(has_title_contains(&findings, "Public S3 bucket"));
+        assert!(!has_title_contains(&findings, "Root account"));
+        // A finding without a title never matches.
+        assert!(!has_title_contains(&[json!({ "x": 1 })], "anything"));
+    }
+
+    #[test]
+    fn count_domain_sev_filters_by_domain_and_min_rank() {
+        let findings = vec![
+            json!({ "domain": "identity", "severity": "high" }),   // rank 3
+            json!({ "domain": "identity", "severity": "low" }),    // rank 1
+            json!({ "domain": "network", "severity": "critical" }),
+        ];
+        // identity findings with rank >= 2: only the "high" one.
+        assert_eq!(count_domain_sev(&findings, "identity", 2), 1);
+        // identity findings with rank >= 1: both.
+        assert_eq!(count_domain_sev(&findings, "identity", 1), 2);
+        // no medium+ network beyond the critical.
+        assert_eq!(count_domain_sev(&findings, "network", 4), 1);
+        assert_eq!(count_domain_sev(&findings, "data", 1), 0);
+    }
+
+    // ── Finding builders ────────────────────────────────────────────────────
+
+    #[test]
+    fn aws_finding_tags_domain_category_cis_and_plane() {
+        let f = aws_finding(
+            Domain::Identity,
+            "Some title",
+            "high",
+            "T1078",
+            "1.5",
+            "example.com",
+            0.9,
+            "a description",
+            Evidence::new().with("k", "v"),
+        );
+        assert_eq!(f.get("title").and_then(Value::as_str), Some("Some title"));
+        assert_eq!(f.get("severity").and_then(Value::as_str), Some("high"));
+        assert_eq!(f.get("domain").and_then(Value::as_str), Some("identity"));
+        assert_eq!(f.get("category").and_then(Value::as_str), Some("identity"));
+        assert_eq!(f.get("cis_aws").and_then(Value::as_str), Some("1.5"));
+        assert_eq!(f.get("plane").and_then(Value::as_str), Some("credentialed"));
+    }
+
+    #[test]
+    fn aws_finding_omits_empty_cis_and_uses_external_plane_for_exposure() {
+        let f = aws_finding(
+            Domain::Exposure,
+            "External title",
+            "critical",
+            "T1530",
+            "", // empty CIS -> field omitted
+            "example.com",
+            0.8,
+            "desc",
+            Evidence::new(),
+        );
+        assert!(f.get("cis_aws").is_none());
+        assert_eq!(f.get("plane").and_then(Value::as_str), Some("external"));
+        assert_eq!(f.get("domain").and_then(Value::as_str), Some("exposure"));
+    }
+
+    #[test]
+    fn attack_path_sets_kind_steps_and_posture_domain() {
+        let steps = ["step one", "step two"];
+        let f = attack_path(
+            "Attack path: test",
+            "critical",
+            "example.com",
+            &steps,
+            "T1552.001",
+            "a chain",
+        );
+        assert_eq!(f.get("severity").and_then(Value::as_str), Some("critical"));
+        // attack_path re-tags category and always lives in the posture domain.
+        assert_eq!(f.get("category").and_then(Value::as_str), Some("attack_path"));
+        assert_eq!(f.get("domain").and_then(Value::as_str), Some("posture"));
+        assert_eq!(f.get("attack_path").and_then(Value::as_bool), Some(true));
+        assert_eq!(f.get("steps"), Some(&json!(["step one", "step two"])));
+    }
+
+    // ── Attack-path correlation ─────────────────────────────────────────────
+
+    #[test]
+    fn synthesize_attack_paths_none_when_no_toxic_combo() {
+        let findings = vec![json!({
+            "domain": "data",
+            "severity": "low",
+            "title": "S3 bucket versioning disabled: acme"
+        })];
+        assert!(synthesize_attack_paths(&findings, "example.com", None).is_empty());
+    }
+
+    #[test]
+    fn synthesize_attack_paths_root_compromise_chain() {
+        let findings = vec![json!({
+            "domain": "identity",
+            "severity": "critical",
+            "title": "Root account MFA is not enabled"
+        })];
+        let paths = synthesize_attack_paths(&findings, "example.com", Some("123456789012"));
+        assert_eq!(paths.len(), 1);
+        let title = paths[0].get("title").and_then(Value::as_str).unwrap();
+        assert!(title.contains("root compromise"));
+    }
+
+    #[test]
+    fn synthesize_attack_paths_exposed_creds_plus_public_bucket() {
+        let findings = vec![
+            json!({ "domain": "exposure", "severity": "critical",
+                    "title": "Public S3 bucket (anonymously listable): acme" }),
+            json!({ "domain": "exposure", "severity": "critical",
+                    "title": "Exposed AWS credential material: https://x/.env" }),
+        ];
+        let paths = synthesize_attack_paths(&findings, "example.com", None);
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0]
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap()
+            .contains("exposed credentials"));
+    }
+
+    #[test]
+    fn synthesize_attack_paths_sg_plus_weak_identity() {
+        let findings = vec![
+            json!({ "domain": "network", "severity": "high",
+                    "title": "Security group open to the internet: sg-1 (22:22-22)" }),
+            json!({ "domain": "identity", "severity": "medium",
+                    "title": "Weak IAM password policy — minimum length" }),
+        ];
+        let paths = synthesize_attack_paths(&findings, "example.com", None);
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0]
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap()
+            .contains("internet-exposed service"));
+    }
+
+    // ── Posture summary assembly ────────────────────────────────────────────
+
+    #[test]
+    fn build_posture_summary_clean_estate_is_grade_a_plus() {
+        let cfg = base_cfg();
+        let summary = build_posture_summary(&[], &[], "example.com", None, None, &cfg);
+        assert_eq!(summary.get("grade").and_then(Value::as_str), Some("A+"));
+        assert_eq!(
+            summary.get("posture_score").and_then(Value::as_i64),
+            Some(100)
+        );
+        // Clean, high score with no criticals => informational summary severity.
+        assert_eq!(summary.get("severity").and_then(Value::as_str), Some("info"));
+        let counts = summary.get("severity_counts").unwrap();
+        assert_eq!(counts.get("critical").and_then(Value::as_i64), Some(0));
+    }
+
+    #[test]
+    fn build_posture_summary_counts_and_grades_findings() {
+        let cfg = base_cfg();
+        let findings = vec![json!({
+            "domain": "identity",
+            "severity": "critical",
+            "title": "Root account MFA is not enabled"
+        })];
+        let summary = build_posture_summary(&findings, &[], "example.com", None, None, &cfg);
+        // One critical => 100 - 20 = 80 => grade B.
+        assert_eq!(summary.get("posture_score").and_then(Value::as_i64), Some(80));
+        assert_eq!(summary.get("grade").and_then(Value::as_str), Some("B"));
+        // A critical present forces a "high" summary severity.
+        assert_eq!(summary.get("severity").and_then(Value::as_str), Some("high"));
+        let counts = summary.get("severity_counts").unwrap();
+        assert_eq!(counts.get("critical").and_then(Value::as_i64), Some(1));
+        let subscores = summary.get("subscores").unwrap();
+        assert_eq!(subscores.get("identity").and_then(Value::as_i64), Some(80));
+        assert_eq!(subscores.get("data").and_then(Value::as_i64), Some(100));
+    }
+}

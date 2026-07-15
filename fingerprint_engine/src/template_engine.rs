@@ -498,3 +498,167 @@ pub async fn run_template(
         steps: steps_out,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_base_url_cases() {
+        assert_eq!(normalize_base_url(""), "");
+        assert_eq!(normalize_base_url("   "), "");
+        assert_eq!(normalize_base_url("http://x"), "http://x");
+        assert_eq!(normalize_base_url("https://x"), "https://x");
+        assert_eq!(normalize_base_url("x.com"), "https://x.com");
+        assert_eq!(normalize_base_url("  x.com  "), "https://x.com");
+    }
+
+    #[test]
+    fn join_url_absolute_passthrough() {
+        assert_eq!(join_url("https://x.com", "http://evil/a"), "http://evil/a");
+        assert_eq!(join_url("https://x.com", "  https://y.com/z  "), "https://y.com/z");
+    }
+
+    #[test]
+    fn join_url_relative_paths() {
+        assert_eq!(join_url("https://x.com", "/a"), "https://x.com/a");
+        assert_eq!(join_url("https://x.com/", "/a"), "https://x.com/a");
+        assert_eq!(join_url("https://x.com", "a"), "https://x.com/a");
+        assert_eq!(join_url("https://x.com/", "a"), "https://x.com/a");
+    }
+
+    #[test]
+    fn render_string_replaces_placeholders() {
+        let mut vars = BTreeMap::new();
+        vars.insert("tok".to_string(), "T".to_string());
+        let mut state = BTreeMap::new();
+        state.insert("sid".to_string(), "S".to_string());
+        let out = render_string(
+            "{{BaseURL}}/x?t={{vars.tok}}&s={{state.sid}}",
+            "https://h",
+            &vars,
+            &state,
+        );
+        assert_eq!(out, "https://h/x?t=T&s=S");
+    }
+
+    #[test]
+    fn render_string_no_placeholders_unchanged() {
+        let vars = BTreeMap::new();
+        let state = BTreeMap::new();
+        assert_eq!(render_string("plain text", "https://h", &vars, &state), "plain text");
+    }
+
+    #[test]
+    fn eval_matchers_conditions() {
+        assert!(eval_matchers("and", &[])); // empty -> true
+        assert!(eval_matchers("or", &[])); // empty -> true
+        assert!(eval_matchers("and", &[true, true]));
+        assert!(!eval_matchers("and", &[true, false]));
+        assert!(eval_matchers("or", &[false, true]));
+        assert!(!eval_matchers("or", &[false, false]));
+        // unknown condition defaults to "all"
+        assert!(eval_matchers("weird", &[true, true]));
+        assert!(!eval_matchers("weird", &[true, false]));
+    }
+
+    #[test]
+    fn eval_matcher_status() {
+        let m = TemplateMatcher::Status { statuses: vec![200, 301] };
+        let h = BTreeMap::new();
+        let (ok, _) = eval_matcher(&m, 200, &h, "", 0, "", "");
+        assert!(ok);
+        let (ok, _) = eval_matcher(&m, 404, &h, "", 0, "", "");
+        assert!(!ok);
+    }
+
+    #[test]
+    fn eval_matcher_body_and_duration() {
+        let h = BTreeMap::new();
+        let body_m = TemplateMatcher::BodyContains { contains: "unused".to_string() };
+        let (ok, _) = eval_matcher(&body_m, 200, &h, "hello world", 0, "world", "");
+        assert!(ok);
+        let (ok, _) = eval_matcher(&body_m, 200, &h, "hello", 0, "world", "");
+        assert!(!ok);
+
+        let dur_m = TemplateMatcher::DurationGtMs { ms: 100 };
+        let (ok, _) = eval_matcher(&dur_m, 200, &h, "", 100, "", "");
+        assert!(ok); // boundary: >=
+        let (ok, _) = eval_matcher(&dur_m, 200, &h, "", 50, "", "");
+        assert!(!ok);
+    }
+
+    #[test]
+    fn eval_matcher_header_and_regex() {
+        let mut h = BTreeMap::new();
+        h.insert("server".to_string(), "nginx/1.25".to_string());
+        let hm = TemplateMatcher::HeaderContains {
+            header: "Server".to_string(),
+            contains: "unused".to_string(),
+        };
+        let (ok, _) = eval_matcher(&hm, 200, &h, "", 0, "nginx", "");
+        assert!(ok);
+        let (ok, _) = eval_matcher(&hm, 200, &h, "", 0, "apache", "");
+        assert!(!ok);
+
+        let rm = TemplateMatcher::Regex { regex: "unused".to_string() };
+        let (ok, _) = eval_matcher(&rm, 200, &h, "abc123", 0, "", "[0-9]+");
+        assert!(ok);
+        // invalid regex -> never_matches
+        let (ok, _) = eval_matcher(&rm, 200, &h, "abc123", 0, "", "[");
+        assert!(!ok);
+    }
+
+    #[test]
+    fn extract_into_state_header() {
+        let mut h = BTreeMap::new();
+        h.insert("x-token".to_string(), "abc".to_string());
+        let ex = TemplateExtractor::Header {
+            name: "tok".to_string(),
+            header: "X-Token".to_string(),
+        };
+        let mut state = BTreeMap::new();
+        let got = extract_into_state(&ex, &h, "", &mut state);
+        assert_eq!(got, Some(("tok".to_string(), "abc".to_string())));
+        assert_eq!(state.get("tok"), Some(&"abc".to_string()));
+    }
+
+    #[test]
+    fn extract_into_state_regex() {
+        let h = BTreeMap::new();
+        let ex = TemplateExtractor::Regex {
+            name: "v".to_string(),
+            regex: "id=(\\d+)".to_string(),
+            group: None,
+        };
+        let mut state = BTreeMap::new();
+        let got = extract_into_state(&ex, &h, "user id=42 here", &mut state);
+        assert_eq!(got, Some(("v".to_string(), "42".to_string())));
+        assert_eq!(state.get("v"), Some(&"42".to_string()));
+
+        // no match -> None, state untouched
+        let mut state2 = BTreeMap::new();
+        let none = extract_into_state(&ex, &h, "no digits", &mut state2);
+        assert!(none.is_none());
+        assert!(state2.is_empty());
+    }
+
+    #[test]
+    fn headers_to_map_lowercases_keys() {
+        let mut hm = reqwest::header::HeaderMap::new();
+        hm.insert(
+            reqwest::header::CONTENT_TYPE,
+            reqwest::header::HeaderValue::from_static("text/html"),
+        );
+        let m = headers_to_map(&hm);
+        assert_eq!(m.get("content-type"), Some(&"text/html".to_string()));
+    }
+
+    #[test]
+    fn builtin_template_yaml_known_and_unknown() {
+        assert!(builtin_template_yaml("http_baseline").is_some());
+        assert!(builtin_template_yaml("reflected_xss_token").is_some());
+        assert!(builtin_template_yaml("multi_step_state_chain").is_some());
+        assert!(builtin_template_yaml("does_not_exist").is_none());
+    }
+}

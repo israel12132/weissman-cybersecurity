@@ -168,3 +168,34 @@ pub async fn run_ipv6_attack_result(target: &str) -> EngineResult {
 pub async fn run_ipv6_attack(target: &str) {
     print_result(run_ipv6_attack_result(target).await);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_domain_strips_https_scheme_and_path() {
+        assert_eq!(extract_domain("https://example.com/path/to"), "example.com");
+    }
+
+    #[test]
+    fn extract_domain_strips_http_scheme() {
+        assert_eq!(extract_domain("http://example.com"), "example.com");
+    }
+
+    #[test]
+    fn extract_domain_bare_host_with_path() {
+        assert_eq!(extract_domain("example.com/a/b"), "example.com");
+    }
+
+    #[test]
+    fn extract_domain_trims_whitespace() {
+        assert_eq!(extract_domain("  example.com  "), "example.com");
+    }
+
+    #[test]
+    fn extract_domain_preserves_port() {
+        // extract_domain only splits on '/', so a port stays attached.
+        assert_eq!(extract_domain("https://example.com:8443/x"), "example.com:8443");
+    }
+}

@@ -808,3 +808,173 @@ mod control_coverage_tests {
         assert_eq!(report_gate(&orphans, false), ReportGate::Allow);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(
+        framework: &str,
+        control_id: &str,
+        control_title: &str,
+        cloud_rule_id: Option<&str>,
+        vuln_source_contains: Option<&str>,
+        vuln_title_contains: Option<&str>,
+        vuln_min_severity: Option<&str>,
+    ) -> ComplianceMappingRow {
+        ComplianceMappingRow {
+            id: 1,
+            framework: framework.to_string(),
+            control_id: control_id.to_string(),
+            control_title: control_title.to_string(),
+            rule_key: "rk".to_string(),
+            cloud_rule_id: cloud_rule_id.map(|s| s.to_string()),
+            vuln_source_contains: vuln_source_contains.map(|s| s.to_string()),
+            vuln_title_contains: vuln_title_contains.map(|s| s.to_string()),
+            vuln_min_severity: vuln_min_severity.map(|s| s.to_string()),
+        }
+    }
+
+    #[test]
+    fn severity_rank_ordering() {
+        assert_eq!(severity_rank("critical"), 4);
+        assert_eq!(severity_rank("CRIT"), 4);
+        assert_eq!(severity_rank("high"), 3);
+        assert_eq!(severity_rank("Medium"), 2);
+        assert_eq!(severity_rank("med"), 2);
+        assert_eq!(severity_rank("low"), 1);
+        assert_eq!(severity_rank("info"), 0);
+        assert_eq!(severity_rank(""), 0);
+    }
+
+    #[test]
+    fn mapping_matches_cloud_row_behavior() {
+        let m = row("SOC2", "CC1", "t", Some("s3_public"), None, None, None);
+        assert!(mapping_matches_cloud_row(&m, "s3_public"));
+        assert!(!mapping_matches_cloud_row(&m, "other_rule"));
+
+        let empty = row("SOC2", "CC1", "t", Some(""), None, None, None);
+        assert!(!mapping_matches_cloud_row(&empty, "s3_public"));
+
+        let none = row("SOC2", "CC1", "t", None, None, None, None);
+        assert!(!mapping_matches_cloud_row(&none, "s3_public"));
+    }
+
+    #[test]
+    fn mapping_matches_vulnerability_source_filter() {
+        let m = row("SOC2", "CC1", "t", None, Some("nuclei"), None, None);
+        assert!(mapping_matches_vulnerability(&m, "nuclei-scan", "anything", "low"));
+        assert!(!mapping_matches_vulnerability(&m, "zap", "anything", "low"));
+    }
+
+    #[test]
+    fn mapping_matches_vulnerability_min_severity_filter() {
+        let m = row("SOC2", "CC1", "t", None, None, None, Some("high"));
+        assert!(mapping_matches_vulnerability(&m, "src", "title", "critical"));
+        assert!(mapping_matches_vulnerability(&m, "src", "title", "high"));
+        assert!(!mapping_matches_vulnerability(&m, "src", "title", "low"));
+    }
+
+    #[test]
+    fn mapping_matches_vulnerability_cloud_only_row_is_excluded() {
+        let m = row("SOC2", "CC1", "t", Some("s3_public"), None, None, None);
+        assert!(!mapping_matches_vulnerability(&m, "src", "title", "critical"));
+    }
+
+    #[test]
+    fn mapping_matches_vulnerability_no_signal_is_false() {
+        let m = row("SOC2", "CC1", "t", None, None, None, None);
+        assert!(!mapping_matches_vulnerability(&m, "src", "title", "critical"));
+    }
+
+    #[test]
+    fn mapping_matches_vulnerability_title_filter_case_insensitive() {
+        let m = row("SOC2", "CC1", "t", None, None, Some("SQL"), None);
+        assert!(mapping_matches_vulnerability(&m, "src", "Blind sql injection", "low"));
+        assert!(!mapping_matches_vulnerability(&m, "src", "xss reflected", "low"));
+    }
+
+    #[test]
+    fn compute_posture_basic_percentages() {
+        let mappings = vec![
+            row("SOC2", "CC1", "Access", Some("s3_public"), None, None, None),
+            row("SOC2", "CC2", "Logging", None, None, Some("sql"), None),
+        ];
+        let cloud_rule_ids = vec!["s3_public".to_string()];
+        let vulns: Vec<(String, String, String)> = vec![];
+
+        let out = compute_posture(&mappings, &cloud_rule_ids, &vulns);
+        assert_eq!(out.len(), 1);
+        let p = &out[0];
+        assert_eq!(p.framework, "SOC2");
+        assert_eq!(p.total_mapped_controls, 2);
+        assert_eq!(p.violated_controls, 1);
+        assert_eq!(p.compliance_percent, 50);
+    }
+
+    #[test]
+    fn compute_posture_no_violations_is_full_compliance() {
+        let mappings = vec![row("ISO27001", "A.5", "Policy", None, None, Some("sql"), None)];
+        let out = compute_posture(&mappings, &[], &[]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].compliance_percent, 100);
+        assert_eq!(out[0].violated_controls, 0);
+    }
+
+    #[test]
+    fn compute_posture_empty_mappings() {
+        assert!(compute_posture(&[], &[], &[]).is_empty());
+    }
+
+    #[test]
+    fn compute_control_statuses_marks_and_sorts() {
+        let mappings = vec![
+            row("SOC2", "CC2", "Logging", None, None, Some("sql"), None),
+            row("SOC2", "CC1", "Access", Some("s3_public"), None, None, None),
+            row("ISO27001", "A.5", "Other", Some("s3_public"), None, None, None),
+        ];
+        let cloud_rule_ids = vec!["s3_public".to_string()];
+        let vulns: Vec<(String, String, String)> = vec![];
+
+        let out = compute_control_statuses(&mappings, "soc2", &cloud_rule_ids, &vulns);
+        assert_eq!(out.len(), 2);
+        // sorted by control_id: CC1 then CC2
+        assert_eq!(out[0].control_id, "CC1");
+        assert_eq!(out[0].status, "non-compliant");
+        assert_eq!(out[1].control_id, "CC2");
+        assert_eq!(out[1].status, "compliant");
+    }
+
+    #[test]
+    fn normalize_framework_slug_known_and_unknown() {
+        assert_eq!(normalize_framework_slug("soc2").as_deref(), Some("SOC2"));
+        assert_eq!(normalize_framework_slug("SOC_2").as_deref(), Some("SOC2"));
+        assert_eq!(normalize_framework_slug("pci-dss").as_deref(), Some("PCI"));
+        assert_eq!(normalize_framework_slug("nist-csf").as_deref(), Some("NIST"));
+        assert_eq!(normalize_framework_slug("  iso27001 ").as_deref(), Some("ISO27001"));
+        assert_eq!(normalize_framework_slug("unknown"), None);
+    }
+
+    #[test]
+    fn framework_display_name_mapping() {
+        assert_eq!(framework_display_name("iso27001"), "ISO/IEC 27001:2022");
+        assert_eq!(framework_display_name("soc-2"), "SOC 2 Type II");
+        assert_eq!(framework_display_name("pci_dss"), "PCI DSS 4.0");
+        assert_eq!(framework_display_name("mystery"), "Compliance Framework");
+    }
+
+    #[test]
+    fn framework_posture_serializes() {
+        let p = FrameworkPosture {
+            framework: "SOC2".to_string(),
+            compliance_percent: 75,
+            total_mapped_controls: 4,
+            violated_controls: 1,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["framework"], "SOC2");
+        assert_eq!(v["compliance_percent"], 75);
+        assert_eq!(v["total_mapped_controls"], 4);
+        assert_eq!(v["violated_controls"], 1);
+    }
+}

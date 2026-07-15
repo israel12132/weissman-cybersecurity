@@ -644,3 +644,38 @@ cli_wrapper!(
     run_cloud_privilege_persistence,
     run_cloud_privilege_persistence_result
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cloud_finding_has_expected_shape() {
+        let f = cloud_finding(
+            "s3_bucket_attack",
+            "Public bucket",
+            "high",
+            "T1530",
+            "listing readable",
+            "example.com",
+        );
+        assert_eq!(f["type"], serde_json::json!("s3_bucket_attack"));
+        assert_eq!(f["title"], serde_json::json!("Public bucket"));
+        assert_eq!(f["severity"], serde_json::json!("high"));
+        assert_eq!(f["mitre_attack"], serde_json::json!("T1530"));
+        assert_eq!(f["description"], serde_json::json!("listing readable"));
+        assert_eq!(f["target"], serde_json::json!("example.com"));
+        assert_eq!(f["probe_depth"], serde_json::json!(CLOUD_PROBE_DEPTH));
+        assert_eq!(f["probe_depth"], serde_json::json!("cloud_remote_surface"));
+    }
+
+    #[test]
+    fn cloud_finding_is_a_json_object_with_metadata() {
+        let f = cloud_finding("lambda_escape", "t", "info", "T1610", "d", "host");
+        let obj = f.as_object().expect("finding should be a JSON object");
+        // finding() always attaches remediation + compliance guidance.
+        assert!(obj.contains_key("remediation"));
+        assert!(obj.contains_key("compliance"));
+        assert!(obj.contains_key("probe_depth"));
+    }
+}

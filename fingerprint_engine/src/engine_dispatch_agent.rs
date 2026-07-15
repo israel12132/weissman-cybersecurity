@@ -157,3 +157,50 @@ async fn dispatch_to_agent(
     });
     EngineResult::ok(vec![f], format!("{}: task {} dispatched", engine, task))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn merge_empty_both_returns_agent_shell() {
+        let remote = EngineResult::ok(vec![], "remote-msg");
+        let agent = EngineResult::ok(vec![], "agent-msg");
+        let merged = merge_agent_hybrid(remote, agent, "ENG");
+        assert!(merged.findings.is_empty());
+        assert_eq!(merged.message, "agent-msg");
+        assert_eq!(merged.status, "ok");
+        assert!(merged.success);
+    }
+
+    #[test]
+    fn merge_dedupes_by_title_and_builds_plain_message() {
+        let remote = EngineResult::ok(vec![json!({"title": "A"})], "r");
+        let agent = EngineResult::ok(vec![json!({"title": "A"}), json!({"title": "B"})], "a");
+        let merged = merge_agent_hybrid(remote, agent, "ENG");
+        assert_eq!(merged.findings.len(), 2);
+        let titles: Vec<&str> = merged
+            .findings
+            .iter()
+            .filter_map(|f| f.get("title").and_then(|v| v.as_str()))
+            .collect();
+        assert_eq!(titles, vec!["A", "B"]);
+        assert_eq!(merged.message, "ENG: 2 finding(s) (remote surface + agent)");
+    }
+
+    #[test]
+    fn merge_flags_agent_guidance_in_message() {
+        let remote = EngineResult::ok(vec![], "r");
+        let agent = EngineResult::ok(
+            vec![json!({"title": "X", "agent_required": true})],
+            "a",
+        );
+        let merged = merge_agent_hybrid(remote, agent, "ENG");
+        assert_eq!(merged.findings.len(), 1);
+        assert!(merged
+            .message
+            .contains("endpoint agent recommended for host-resident validation"));
+        assert!(merged.message.starts_with("ENG: 1 finding(s)"));
+    }
+}
