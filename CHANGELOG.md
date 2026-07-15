@@ -5,6 +5,25 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Compliance-mapping integrity enforcement.** New deterministic audit
+  `compliance_engine::compute_mapping_integrity` flags *orphaned controls* — controls
+  present in the `compliance_mappings` catalog whose every rule is structurally dead
+  (no cloud rule id and no vulnerability predicate), so they can never be evaluated and
+  are silently reported "compliant" ("silent rot"). When a framework's catalog is
+  inconsistent, the official Compliance PDF (`pdf_report::build_compliance_framework_pdf`)
+  is no longer emitted as an authoritative document: every page is stamped with a diagonal
+  `INVALID` watermark, a red `INCONSISTENT COMPLIANCE MAPPING STATE` banner is drawn under
+  the title, and an integrity-warning section enumerates the orphaned controls. The report
+  endpoint additionally sets an `X-Weissman-Compliance-Integrity: consistent|inconsistent`
+  header, tags the download filename `…-INVALID.pdf`, logs a warning, and the controls JSON
+  endpoint gains an additive `integrity` object. Covered by 4 detection + 3 PDF unit tests.
+
+---
+
 ## [2026.06.2] — Liminal Boundary Engine — 2026-06-10
 
 ### Added

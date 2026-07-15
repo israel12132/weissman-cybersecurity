@@ -395,7 +395,22 @@ async fn api_compliance_frameworks_controls(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({ "ok": true, "controls": out }))).into_response()
+    let fw_db = crate::compliance_engine::normalize_framework_slug(&framework_id)
+        .unwrap_or_else(|| framework_id.to_uppercase());
+    let integrity = crate::compliance_engine::compute_mapping_integrity(&mappings, &fw_db);
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "controls": out,
+            "integrity": {
+                "consistent": integrity.consistent,
+                "total_controls": integrity.total_controls,
+                "orphaned_controls": integrity.orphaned_controls,
+            },
+        })),
+    )
+        .into_response()
 }
 
 /// GET /api/compliance/frameworks/:framework_id/report — PDF audit report (application/pdf).
@@ -445,11 +460,26 @@ async fn api_compliance_frameworks_report(
         })
         .collect();
     let framework_label = crate::compliance_engine::framework_display_name(&framework_id);
+    // Enforcement gate: audit the mapping catalog for this framework. Orphaned controls
+    // (present but with no actionable rule) mean the report cannot be trusted, so it is
+    // watermarked/flagged INVALID rather than emitted as an authoritative document.
+    let fw_db = crate::compliance_engine::normalize_framework_slug(&framework_id)
+        .unwrap_or_else(|| framework_id.to_uppercase());
+    let integrity = crate::compliance_engine::compute_mapping_integrity(&mappings, &fw_db);
+    if !integrity.consistent {
+        tracing::warn!(
+            framework = %framework_id,
+            orphaned = integrity.orphaned_controls.len(),
+            "compliance report generated in INCONSISTENT state: orphaned controls have no actionable mapping"
+        );
+    }
     let pdf = match crate::pdf_report::build_compliance_framework_pdf(
         &tenant_name,
         framework_label,
         compliance_pct,
         &pdf_controls,
+        integrity.consistent,
+        &integrity.orphaned_controls,
     ) {
         Ok(b) => b,
         Err(e) => {
@@ -464,7 +494,11 @@ async fn api_compliance_frameworks_report(
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
-    let filename = format!("{safe_id}-compliance-report.pdf");
+    let filename = if integrity.consistent {
+        format!("{safe_id}-compliance-report.pdf")
+    } else {
+        format!("{safe_id}-compliance-report-INVALID.pdf")
+    };
     let mut res = Response::new(Body::from(pdf));
     res.headers_mut().insert(
         CONTENT_TYPE,
@@ -478,6 +512,16 @@ async fn api_compliance_frameworks_report(
     res.headers_mut().insert(
         axum::http::HeaderName::from_static("x-content-type-options"),
         HeaderValue::from_static("nosniff"),
+    );
+    // Machine-readable integrity verdict so callers/UI can refuse to treat a flagged
+    // report as authoritative without parsing the PDF body.
+    res.headers_mut().insert(
+        axum::http::HeaderName::from_static("x-weissman-compliance-integrity"),
+        HeaderValue::from_static(if integrity.consistent {
+            "consistent"
+        } else {
+            "inconsistent"
+        }),
     );
     res
 }

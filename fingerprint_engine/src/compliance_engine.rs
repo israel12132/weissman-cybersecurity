@@ -280,6 +280,81 @@ pub fn compute_control_statuses(
     out
 }
 
+/// Deterministic integrity verdict for a framework's slice of the `compliance_mappings`
+/// catalog. `consistent == false` means at least one control is orphaned and any official
+/// report derived from this catalog must be blocked or flagged.
+#[derive(Debug, Clone, Serialize)]
+pub struct MappingIntegrity {
+    /// True only when every mapped control has at least one actionable rule.
+    pub consistent: bool,
+    /// Distinct controls seen in the catalog for this framework.
+    pub total_controls: usize,
+    /// Controls that exist in the catalog but have no actionable rule (sorted, deduplicated).
+    pub orphaned_controls: Vec<String>,
+}
+
+/// A mapping row is *actionable* when it carries at least one predicate that can ever match a
+/// live finding — a cloud rule id or a vulnerability signal (source/title/min-severity). A row
+/// with none of these is structurally dead: it contributes a control to the catalog but can
+/// never be evaluated, so that control is always reported "compliant" regardless of reality.
+pub fn mapping_row_is_actionable(m: &ComplianceMappingRow) -> bool {
+    let has_cloud = m
+        .cloud_rule_id
+        .as_deref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    let has_vuln = m
+        .vuln_source_contains
+        .as_deref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+        || m.vuln_title_contains
+            .as_deref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
+        || m.vuln_min_severity
+            .as_deref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+    has_cloud || has_vuln
+}
+
+/// Deterministic integrity audit of the `compliance_mappings` catalog for one framework.
+///
+/// A control is **orphaned** when it appears in the catalog but every one of its mapping rows
+/// is structurally dead (see [`mapping_row_is_actionable`]). Such a control can never be
+/// violated by any finding, so it is silently reported as compliant — false audit assurance
+/// ("silent rot"). The audit is a pure function of the catalog: identical input always yields
+/// an identical verdict, with `orphaned_controls` sorted for stable reporting.
+pub fn compute_mapping_integrity(
+    mappings: &[ComplianceMappingRow],
+    framework_db: &str,
+) -> MappingIntegrity {
+    let fw_upper = framework_db.to_uppercase();
+    // control_id -> whether it has at least one actionable mapping row.
+    let mut actionable: HashMap<String, bool> = HashMap::new();
+    for m in mappings {
+        if m.framework.to_uppercase() != fw_upper {
+            continue;
+        }
+        let entry = actionable.entry(m.control_id.clone()).or_insert(false);
+        if mapping_row_is_actionable(m) {
+            *entry = true;
+        }
+    }
+    let total_controls = actionable.len();
+    let mut orphaned_controls: Vec<String> = actionable
+        .into_iter()
+        .filter_map(|(id, ok)| if ok { None } else { Some(id) })
+        .collect();
+    orphaned_controls.sort();
+    MappingIntegrity {
+        consistent: orphaned_controls.is_empty(),
+        total_controls,
+        orphaned_controls,
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct ComplianceControlMappingRow {
     pub id: i64,
@@ -318,5 +393,88 @@ pub async fn load_control_mappings(
         )
         .fetch_all(pool)
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(
+        id: i64,
+        framework: &str,
+        control_id: &str,
+        cloud: Option<&str>,
+        vsrc: Option<&str>,
+    ) -> ComplianceMappingRow {
+        ComplianceMappingRow {
+            id,
+            framework: framework.to_string(),
+            control_id: control_id.to_string(),
+            control_title: format!("Control {control_id}"),
+            rule_key: format!("rk-{id}"),
+            cloud_rule_id: cloud.map(str::to_string),
+            vuln_source_contains: vsrc.map(str::to_string),
+            vuln_title_contains: None,
+            vuln_min_severity: None,
+        }
+    }
+
+    #[test]
+    fn integrity_consistent_when_every_control_is_actionable() {
+        let mappings = vec![
+            row(1, "SOC2", "CC6.1", Some("s3-public-acl"), None),
+            row(2, "SOC2", "CC7.2", None, Some("nuclei")),
+        ];
+        let v = compute_mapping_integrity(&mappings, "SOC2");
+        assert!(v.consistent, "all controls actionable => consistent");
+        assert_eq!(v.total_controls, 2);
+        assert!(v.orphaned_controls.is_empty());
+    }
+
+    #[test]
+    fn integrity_flags_orphaned_control_with_only_dead_rows() {
+        // CC6.1 is actionable; CC9.9 has only a structurally-dead row (no cloud id, no vuln signal).
+        let mappings = vec![
+            row(1, "SOC2", "CC6.1", Some("s3-public-acl"), None),
+            row(2, "SOC2", "CC9.9", None, None),
+            row(3, "SOC2", "CC9.9", Some(""), Some("")), // empty strings are also dead
+        ];
+        let v = compute_mapping_integrity(&mappings, "SOC2");
+        assert!(
+            !v.consistent,
+            "an orphaned control must make the catalog inconsistent"
+        );
+        assert_eq!(v.total_controls, 2);
+        assert_eq!(v.orphaned_controls, vec!["CC9.9".to_string()]);
+    }
+
+    #[test]
+    fn integrity_control_is_saved_by_any_single_actionable_row() {
+        // A control with a mix of dead and actionable rows is NOT orphaned.
+        let mappings = vec![
+            row(1, "ISO27001", "A.8.1", None, None),
+            row(2, "ISO27001", "A.8.1", Some("iam-mfa-missing"), None),
+        ];
+        let v = compute_mapping_integrity(&mappings, "ISO27001");
+        assert!(v.consistent);
+        assert!(v.orphaned_controls.is_empty());
+    }
+
+    #[test]
+    fn integrity_is_framework_scoped_and_deterministic() {
+        let mappings = vec![
+            row(1, "SOC2", "CC6.1", Some("s3-public-acl"), None),
+            row(2, "GDPR", "Art.32", None, None), // orphaned, but a different framework
+        ];
+        let soc2 = compute_mapping_integrity(&mappings, "soc2"); // case-insensitive
+        assert!(soc2.consistent, "GDPR rot must not affect SOC2 verdict");
+        let gdpr_a = compute_mapping_integrity(&mappings, "GDPR");
+        let gdpr_b = compute_mapping_integrity(&mappings, "GDPR");
+        assert!(!gdpr_a.consistent);
+        assert_eq!(
+            gdpr_a.orphaned_controls, gdpr_b.orphaned_controls,
+            "verdict must be deterministic"
+        );
     }
 }

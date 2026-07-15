@@ -997,16 +997,44 @@ pub fn build_executive_board_pdf(
 }
 
 /// Framework-specific compliance audit PDF from live control status rows.
+///
+/// `consistent` is the deterministic mapping-integrity verdict
+/// (`compliance_engine::compute_mapping_integrity`). When it is `false`, the report is a
+/// **flagged, non-authoritative** artifact: every page carries a diagonal `INVALID`
+/// watermark, a red invalidation banner sits under the title, and an integrity-warning
+/// section enumerates the orphaned controls named in `orphaned_controls`. A consistent
+/// catalog produces the normal, clean report.
 pub fn build_compliance_framework_pdf(
     org_label: &str,
     framework_label: &str,
     compliance_pct: u8,
     controls: &[(String, String, bool)],
+    consistent: bool,
+    orphaned_controls: &[String],
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
     b.set_fill_rgb(0.06, 0.09, 0.14);
     b.text(22, "WEISSMAN — COMPLIANCE AUDIT REPORT");
+    if !consistent {
+        // Prominent invalidation banner directly under the title.
+        let by = b.y - 30.0;
+        b.set_fill_rgb(0.75, 0.10, 0.10);
+        b.rect_fill(72.0, by, PAGE_W - 144.0, 26.0);
+        b.set_fill_rgb(1.0, 1.0, 1.0);
+        b.current.push_str(&format!(
+            "BT /F1 13 Tf {} {} Td (INVALID - INCONSISTENT COMPLIANCE MAPPING STATE) Tj ET\n",
+            80.0,
+            by + 9.0
+        ));
+        b.y = by - 12.0;
+        b.set_fill_rgb(0.75, 0.10, 0.10);
+        b.text(
+            9,
+            "NOT valid for official audit distribution: one or more controls have no actionable mapping (orphaned).",
+        );
+        b.y -= 4.0;
+    }
     b.set_fill_rgb(0.55, 0.62, 0.72);
     b.text(
         11,
@@ -1061,6 +1089,42 @@ pub fn build_compliance_framework_pdf(
         );
     }
 
+    if !consistent {
+        b.ensure_space(70.0);
+        b.y -= 10.0;
+        b.set_fill_rgb(0.75, 0.10, 0.10);
+        b.text(14, "Integrity warning — orphaned controls");
+        b.set_fill_rgb(0.60, 0.20, 0.20);
+        b.text(
+            9,
+            &format!(
+                "{} control(s) have no actionable mapping and cannot be evaluated against live findings.",
+                orphaned_controls.len()
+            ),
+        );
+        b.text(
+            9,
+            "Their status above is unverifiable; the overall compliance percentage is therefore not authoritative.",
+        );
+        b.y -= 4.0;
+        for cid in orphaned_controls.iter().take(40) {
+            b.ensure_space(16.0);
+            b.set_fill_rgb(0.55, 0.15, 0.15);
+            b.text(
+                10,
+                &format!(
+                    "- {} (orphaned: no actionable rule)",
+                    truncate_ascii(cid, 60)
+                ),
+            );
+        }
+        if orphaned_controls.len() > 40 {
+            b.ensure_space(16.0);
+            b.set_fill_rgb(0.55, 0.15, 0.15);
+            b.text(9, &format!("... and {} more", orphaned_controls.len() - 40));
+        }
+    }
+
     b.y -= 14.0;
     b.set_fill_rgb(0.45, 0.5, 0.58);
     b.text(
@@ -1072,7 +1136,15 @@ pub fn build_compliance_framework_pdf(
         "Confidential — authorized audit and risk distribution only.",
     );
 
-    let streams = b.finish();
+    let mut streams = b.finish();
+    // Enforcement: stamp a diagonal INVALID watermark onto EVERY page when the mapping
+    // catalog is inconsistent, so no page of an exported report can be mistaken for valid.
+    if !consistent {
+        let watermark = watermark_invalid_ops();
+        for s in streams.iter_mut() {
+            *s = format!("{watermark}{s}");
+        }
+    }
     let mut out = Vec::new();
     let mut offsets: Vec<usize> = vec![0];
     out.extend_from_slice(b"%PDF-1.4\n");
@@ -1140,6 +1212,19 @@ pub fn build_compliance_framework_pdf(
         .as_bytes(),
     );
     Ok(out)
+}
+
+/// Content-stream operators that stamp a large diagonal "INVALID / INCONSISTENT STATE"
+/// watermark across a page. Wrapped in `q`/`Q` (save/restore graphics state) so it never
+/// disturbs subsequent drawing, and coloured light pink so page text stays readable on top.
+/// Prepended to each page's content stream when the compliance catalog is inconsistent.
+fn watermark_invalid_ops() -> String {
+    // Text matrix rotated 45°: [cos, sin, -sin, cos, tx, ty] with cos(45°)=sin(45°)≈0.7071.
+    "q\n1 0.85 0.85 rg\n\
+     BT /F1 60 Tf 0.7071 0.7071 -0.7071 0.7071 110 250 Tm (INVALID) Tj ET\n\
+     BT /F1 20 Tf 0.7071 0.7071 -0.7071 0.7071 150 205 Tm (INCONSISTENT STATE) Tj ET\n\
+     Q\n"
+    .to_string()
 }
 
 /// Build HTML report (unchanged structure). Strictly live from DB. Israel time. Rating, heatmap, cURL, integrity.
@@ -1332,4 +1417,119 @@ fn escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn controls() -> Vec<(String, String, bool)> {
+        vec![
+            ("CC6.1".into(), "Logical access".into(), true),
+            ("CC7.2".into(), "Monitoring".into(), false),
+        ]
+    }
+
+    #[test]
+    fn compliance_pdf_consistent_has_no_invalid_markers() {
+        let pdf =
+            build_compliance_framework_pdf("Acme", "SOC 2 Type II", 82, &controls(), true, &[])
+                .expect("render");
+        assert!(pdf.starts_with(b"%PDF-1.4"));
+        assert!(pdf.ends_with(b"%%EOF\n"));
+        let body = String::from_utf8_lossy(&pdf);
+        assert!(
+            !body.contains("INVALID"),
+            "a consistent catalog must not stamp an INVALID watermark"
+        );
+        assert!(!body.contains("Integrity warning"));
+    }
+
+    #[test]
+    fn compliance_pdf_inconsistent_is_watermarked_and_flagged() {
+        let orphaned = vec!["CC9.9".to_string(), "A.5.1".to_string()];
+        let pdf = build_compliance_framework_pdf(
+            "Acme",
+            "SOC 2 Type II",
+            82,
+            &controls(),
+            false,
+            &orphaned,
+        )
+        .expect("render");
+        assert!(pdf.starts_with(b"%PDF-1.4"), "still a valid PDF");
+        assert!(pdf.ends_with(b"%%EOF\n"));
+        let body = String::from_utf8_lossy(&pdf);
+        // Diagonal per-page watermark.
+        assert!(
+            body.contains("(INVALID)"),
+            "must stamp the INVALID watermark"
+        );
+        // Invalidation banner + integrity section.
+        assert!(body.contains("INCONSISTENT COMPLIANCE MAPPING STATE"));
+        assert!(body.contains("Integrity warning"));
+        // Each orphaned control must be named.
+        assert!(body.contains("CC9.9"));
+        assert!(body.contains("A.5.1"));
+    }
+
+    /// Dev-only: writes a real INVALID compliance PDF to $WEISSMAN_DUMP_PDF for eyeballing.
+    /// No-op in normal test runs (env var unset), so it never pollutes CI or the repo.
+    #[test]
+    fn dump_inconsistent_pdf_artifact() {
+        let Ok(path) = std::env::var("WEISSMAN_DUMP_PDF") else {
+            return;
+        };
+        let orphaned = vec![
+            "CC9.9".to_string(),
+            "A.5.1".to_string(),
+            "Art.32".to_string(),
+        ];
+        let ctrls = vec![
+            (
+                "CC6.1".to_string(),
+                "Logical & physical access controls".to_string(),
+                true,
+            ),
+            ("CC7.2".to_string(), "System monitoring".to_string(), false),
+            (
+                "CC9.9".to_string(),
+                "Vendor risk (orphaned)".to_string(),
+                true,
+            ),
+        ];
+        let pdf = build_compliance_framework_pdf(
+            "Weissman Demo Tenant",
+            "SOC 2 Type II",
+            67,
+            &ctrls,
+            false,
+            &orphaned,
+        )
+        .expect("render");
+        std::fs::write(&path, &pdf).expect("write pdf");
+    }
+
+    #[test]
+    fn compliance_pdf_watermark_stamps_every_page() {
+        // Enough orphaned controls to force a page break, so we can assert >1 watermark.
+        let orphaned: Vec<String> = (0..80).map(|i| format!("CTRL-{i:03}")).collect();
+        let pdf = build_compliance_framework_pdf(
+            "Acme",
+            "ISO/IEC 27001:2022",
+            40,
+            &controls(),
+            false,
+            &orphaned,
+        )
+        .expect("render");
+        let body = String::from_utf8_lossy(&pdf);
+        let pages = body.matches("/Type /Page ").count();
+        let watermarks = body.matches("(INVALID)").count();
+        assert!(pages > 1, "expected a multi-page report, got {pages}");
+        assert_eq!(
+            watermarks, pages,
+            "every page ({pages}) must carry the INVALID watermark, found {watermarks}"
+        );
+    }
 }
