@@ -152,3 +152,50 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
 pub fn apply_global_rate_limit(router: axum::Router) -> axum::Router {
     router.layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nz_u32_clamps_within_bounds() {
+        // Unique env var per assertion avoids cross-test races on shared names.
+        let k = "WEISSMAN_TEST_NZ_A";
+        std::env::remove_var(k);
+        // Unset -> default (already within bounds).
+        assert_eq!(nz_u32(k, 10, 2, 60).get(), 10);
+        // Below min -> min.
+        std::env::set_var(k, "1");
+        assert_eq!(nz_u32(k, 10, 5, 60).get(), 5);
+        // Above max -> max.
+        std::env::set_var(k, "9999");
+        assert_eq!(nz_u32(k, 10, 5, 60).get(), 60);
+        // In range -> honored.
+        std::env::set_var(k, "25");
+        assert_eq!(nz_u32(k, 10, 5, 60).get(), 25);
+        std::env::remove_var(k);
+    }
+
+    #[test]
+    fn nz_u32_never_zero_even_if_min_zero() {
+        let k = "WEISSMAN_TEST_NZ_ZERO";
+        std::env::set_var(k, "0");
+        // clamp allows 0, but NonZeroU32 fallback keeps it >= 1.
+        assert_eq!(nz_u32(k, 0, 0, 10).get(), 1);
+        std::env::remove_var(k);
+    }
+
+    #[test]
+    fn client_ip_uses_socket_peer_without_forwarding_headers() {
+        let peer = SocketAddr::from(([203, 0, 113, 9], 51000));
+        let mut req = Request::builder().body(()).unwrap();
+        req.extensions_mut().insert(ConnectInfo(peer));
+        assert_eq!(client_ip(&req), Some(IpAddr::from([203, 0, 113, 9])));
+    }
+
+    #[test]
+    fn client_ip_none_without_connect_info() {
+        let req = Request::builder().body(()).unwrap();
+        assert_eq!(client_ip(&req), None);
+    }
+}
