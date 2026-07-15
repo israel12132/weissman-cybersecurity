@@ -28,6 +28,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { confirmDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
 import PlaybookGraph from '../components/PlaybookGraph'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -49,28 +50,18 @@ const ACTION_KINDS = [
 ]
 
 function exportPlaybooksCsv(list) {
+  // Reuse the shared exporter so cells are neutralized against spreadsheet formula
+  // injection (a name/description starting with = + - @ would otherwise execute in Excel/Sheets).
   const header = ['id', 'name', 'description', 'enabled', 'failure_count', 'actions_count']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...list.map((pb) =>
-      [
-        pb.id,
-        pb.name,
-        pb.description || '',
-        pb.enabled ? 'yes' : 'no',
-        pb.failure_count ?? 0,
-        Array.isArray(pb.actions) ? pb.actions.length : 0,
-      ].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `playbooks-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = list.map((pb) => [
+    pb.id,
+    pb.name,
+    pb.description || '',
+    pb.enabled ? 'yes' : 'no',
+    pb.failure_count ?? 0,
+    Array.isArray(pb.actions) ? pb.actions.length : 0,
+  ])
+  downloadCsv(rows, header, 'playbooks')
 }
 
 function buildExamplePlaybook(t) {

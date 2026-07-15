@@ -132,8 +132,14 @@ pub async fn run_verification(
         let engine = engine.to_string();
         let target = target.to_string();
         tokio::spawn(async move {
-            crate::alert_delivery::notify_regression(&pool, tenant_id, &finding_id, &engine, &target)
-                .await;
+            crate::alert_delivery::notify_regression(
+                &pool,
+                tenant_id,
+                &finding_id,
+                &engine,
+                &target,
+            )
+            .await;
         });
     }
     Ok(outcome)

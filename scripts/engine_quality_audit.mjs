@@ -20,7 +20,10 @@ for (const m of remoteRs.matchAll(
 )) {
   const fnName = m[2]
   const fnRe = new RegExp(`async fn ${fnName}\\([^)]*\\)[\\s\\S]*?^}`, 'm')
-  const fnBody = remoteRs.match(fnRe)
+  // `String.match` returns an Array; `.includes` on it tests element equality, not
+  // substring — so the stub check was a silent no-op. Use the matched string (index 0).
+  const fnMatch = remoteRs.match(fnRe)
+  const fnBody = fnMatch ? fnMatch[0] : null
   if (
     fnBody &&
     fnBody.includes('collect(engine_id, target, vec![])') &&

@@ -486,19 +486,25 @@ pub async fn dead_letter_job(pool: &PgPool, job_id: Uuid, err: &str) -> Result<(
 pub async fn release_reserved_job(
     pool: &PgPool,
     job_id: Uuid,
+    worker_id: &str,
     note: &str,
     backoff_secs: i64,
 ) -> Result<u64, sqlx::Error> {
     let msg: String = note.chars().take(4000).collect();
     let backoff = backoff_secs.clamp(1, 300);
+    // Ownership predicate: only requeue the row if THIS worker still owns it. Under
+    // sustained saturation a lapsed reservation can be re-reserved (or claimed) by
+    // another worker; without `worker_id = $4` this release would clobber that
+    // worker's freshly-`running` job back to `pending`, discarding its result.
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
-           WHERE id = $1 AND status IN ('pending', 'running')"#,
+           WHERE id = $1 AND worker_id = $4 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)
     .bind(&msg)
     .bind(backoff)
+    .bind(worker_id)
     .execute(pool)
     .await?;
     Ok(r.rows_affected())
@@ -509,16 +515,20 @@ pub async fn release_reserved_job(
 pub async fn force_requeue_running(
     pool: &PgPool,
     job_id: Uuid,
+    worker_id: &str,
     note: &str,
 ) -> Result<u64, sqlx::Error> {
     let msg: String = note.chars().take(4000).collect();
+    // Ownership predicate: only requeue a row THIS worker still owns, so a transient
+    // cleanup on one worker cannot reset a job another worker is actively running.
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now(), updated_at = now()
-           WHERE id = $1 AND status IN ('pending', 'running')"#,
+           WHERE id = $1 AND worker_id = $3 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)
     .bind(&msg)
+    .bind(worker_id)
     .execute(pool)
     .await?;
     Ok(r.rows_affected())

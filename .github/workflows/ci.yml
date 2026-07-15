@@ -153,6 +153,20 @@ jobs:
           format: table
           trivyignores: .trivyignore
 
+      - name: IaC misconfig scan (Trivy config, deploy manifests)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: deploy
+          # Blocking gate so k8s/network hardening (egress metadata block, network
+          # policies, secret handling, container hardening) cannot silently regress.
+          # Scoped to CRITICAL to avoid failing on the pre-existing securityContext
+          # backlog tracked separately; raise to HIGH as that backlog is burned down.
+          severity: CRITICAL
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore
+
       - name: Generate SBOM (CycloneDX via Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:

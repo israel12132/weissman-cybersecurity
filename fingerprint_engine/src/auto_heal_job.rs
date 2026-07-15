@@ -599,166 +599,160 @@ pub async fn run_auto_heal_job(
         .filter(|n: &u32| *n >= 1 && *n <= 6)
         .unwrap_or(1);
 
-    let mut vr: crate::verification_sandbox::VerificationResult =
-        if tournament_size >= 2 {
-            let (t, d, s) =
-                load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await;
-            finding_ctx = Some((t.clone(), d.clone(), s.clone()));
-            record_step(
-                &step_sink,
-                "tournament_start",
-                Some(format!(
-                    "generating up to {} candidate fixes",
-                    tournament_size
-                )),
-            )
-            .await;
+    let mut vr: crate::verification_sandbox::VerificationResult = if tournament_size >= 2 {
+        let (t, d, s) =
+            load_finding_context(app_pool.as_ref(), tenant_id, client_id, &finding_id).await;
+        finding_ctx = Some((t.clone(), d.clone(), s.clone()));
+        record_step(
+            &step_sink,
+            "tournament_start",
+            Some(format!(
+                "generating up to {} candidate fixes",
+                tournament_size
+            )),
+        )
+        .await;
 
-            // Candidate 0 is the pre-generated seed patch; 1..size are LLM candidates by strategy.
-            let mut candidates: Vec<(String, String)> =
-                vec![("seed".to_string(), patch_text.clone())];
-            if let Ok(cfg) = crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await
+        // Candidate 0 is the pre-generated seed patch; 1..size are LLM candidates by strategy.
+        let mut candidates: Vec<(String, String)> = vec![("seed".to_string(), patch_text.clone())];
+        if let Ok(cfg) = crate::council::CouncilConfig::load(app_pool.as_ref(), tenant_id).await {
+            let n_llm = (tournament_size - 1) as usize;
+            let strategies = crate::remediation_patch::CANDIDATE_STRATEGIES;
+            let gens = (0..n_llm).map(|i| {
+                let strat = strategies[i % strategies.len()];
+                crate::remediation_patch::generate_candidate(
+                    &cfg, tenant_id, i as u32, strat, &t, &d, &s, &poc_curl,
+                )
+            });
+            for (i, r) in futures::future::join_all(gens)
+                .await
+                .into_iter()
+                .enumerate()
             {
-                let n_llm = (tournament_size - 1) as usize;
-                let strategies = crate::remediation_patch::CANDIDATE_STRATEGIES;
-                let gens = (0..n_llm).map(|i| {
-                    let strat = strategies[i % strategies.len()];
-                    crate::remediation_patch::generate_candidate(
-                        &cfg, tenant_id, i as u32, strat, &t, &d, &s, &poc_curl,
-                    )
-                });
-                for (i, r) in futures::future::join_all(gens)
-                    .await
-                    .into_iter()
-                    .enumerate()
-                {
-                    match r {
-                        Ok(p)
-                            if crate::security_hardening::validate_remediation_patch(&p)
-                                .is_ok() =>
-                        {
-                            candidates.push((format!("strategy_{}", i + 1), p));
-                        }
-                        Ok(_) => {}
-                        Err(e) => {
-                            record_step(
-                                &step_sink,
-                                &format!("tournament_candidate_{}_skipped", i + 1),
-                                Some(e),
-                            )
-                            .await;
-                        }
+                match r {
+                    Ok(p) if crate::security_hardening::validate_remediation_patch(&p).is_ok() => {
+                        candidates.push((format!("strategy_{}", i + 1), p));
                     }
-                }
-            }
-
-            // Verify candidates concurrently (bounded), each with a throwaway in-memory step sink,
-            // then record summaries + pick the best by score deterministically.
-            let candidate_count = candidates.len() as u32;
-            let concurrency: usize = std::env::var("WEISSMAN_HEAL_TOURNAMENT_CONCURRENCY")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .filter(|n: &usize| *n >= 1 && *n <= 6)
-                .unwrap_or(2);
-            let cport = container_port as u16;
-            let verified: Vec<(
-                String,
-                String,
-                crate::verification_sandbox::VerificationResult,
-            )> = {
-                use futures::stream::StreamExt as _;
-                futures::stream::iter(candidates.into_iter().map(|(label, cand)| {
-                    let ds = docker_socket.clone();
-                    let im = image.clone();
-                    let rs = repo_slug.clone();
-                    let bb = base_branch.clone();
-                    let gt = git_token.clone();
-                    let gh = git_host.clone();
-                    let pc = poc_curl.clone();
-                    let hc = health_check_curl.clone();
-                    async move {
-                        let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(Vec::<
-                            crate::verification_sandbox::VerificationStep,
-                        >::new(
-                        ))));
-                        let cvr = verify_patch_ephemeral_docker(
-                            &ds,
-                            &im,
-                            cport,
-                            &rs,
-                            &bb,
-                            &gt,
-                            &gh,
-                            &cand,
-                            &pc,
-                            &hc,
-                            Some(mem),
+                    Ok(_) => {}
+                    Err(e) => {
+                        record_step(
+                            &step_sink,
+                            &format!("tournament_candidate_{}_skipped", i + 1),
+                            Some(e),
                         )
                         .await;
-                        (label, cand, cvr)
                     }
-                }))
-                .buffer_unordered(concurrency)
-                .collect()
-                .await
-            };
-            let mut best: Option<(
-                String,
-                crate::verification_sandbox::VerificationResult,
-                (u8, u8, i64),
-            )> = None;
-            for (label, cand, cvr) in verified {
-                let sc = score_result(&cvr);
-                record_step(
-                    &step_sink,
-                    &format!("tournament_{}", label),
-                    Some(format!(
-                        "verdict={} files={} score=({},{},{})",
-                        cvr.verdict.as_str(),
-                        cvr.changed_files.len(),
-                        sc.0,
-                        sc.1,
-                        sc.2
-                    )),
-                )
-                .await;
-                if best.as_ref().map(|(_, _, bs)| sc > *bs).unwrap_or(true) {
-                    best = Some((cand, cvr, sc));
                 }
             }
+        }
 
-            let (best_patch, best_vr, _) = best.expect("tournament always has the seed candidate");
+        // Verify candidates concurrently (bounded), each with a throwaway in-memory step sink,
+        // then record summaries + pick the best by score deterministically.
+        let candidate_count = candidates.len() as u32;
+        let concurrency: usize = std::env::var("WEISSMAN_HEAL_TOURNAMENT_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .filter(|n: &usize| *n >= 1 && *n <= 6)
+            .unwrap_or(2);
+        let cport = container_port as u16;
+        let verified: Vec<(
+            String,
+            String,
+            crate::verification_sandbox::VerificationResult,
+        )> = {
+            use futures::stream::StreamExt as _;
+            futures::stream::iter(candidates.into_iter().map(|(label, cand)| {
+                let ds = docker_socket.clone();
+                let im = image.clone();
+                let rs = repo_slug.clone();
+                let bb = base_branch.clone();
+                let gt = git_token.clone();
+                let gh = git_host.clone();
+                let pc = poc_curl.clone();
+                let hc = health_check_curl.clone();
+                async move {
+                    let mem = StepSink::Memory(Arc::new(tokio::sync::Mutex::new(Vec::<
+                        crate::verification_sandbox::VerificationStep,
+                    >::new(
+                    ))));
+                    let cvr = verify_patch_ephemeral_docker(
+                        &ds,
+                        &im,
+                        cport,
+                        &rs,
+                        &bb,
+                        &gt,
+                        &gh,
+                        &cand,
+                        &pc,
+                        &hc,
+                        Some(mem),
+                    )
+                    .await;
+                    (label, cand, cvr)
+                }
+            }))
+            .buffer_unordered(concurrency)
+            .collect()
+            .await
+        };
+        let mut best: Option<(
+            String,
+            crate::verification_sandbox::VerificationResult,
+            (u8, u8, i64),
+        )> = None;
+        for (label, cand, cvr) in verified {
+            let sc = score_result(&cvr);
             record_step(
                 &step_sink,
-                "tournament_winner",
+                &format!("tournament_{}", label),
                 Some(format!(
-                    "verdict={} across {} candidate(s)",
-                    best_vr.verdict.as_str(),
-                    candidate_count
+                    "verdict={} files={} score=({},{},{})",
+                    cvr.verdict.as_str(),
+                    cvr.changed_files.len(),
+                    sc.0,
+                    sc.1,
+                    sc.2
                 )),
             )
             .await;
-            patch_text = best_patch;
-            // NOTE: `candidate_count` is reported in the `tournament_winner` step above only. It
-            // must NOT seed the sequential self-repair counter or the persisted attempt count.
-            best_vr
-        } else {
-            let vr0 = verify_patch_ephemeral_docker(
-                &docker_socket,
-                &image,
-                container_port as u16,
-                &repo_slug,
-                &base_branch,
-                &git_token,
-                &git_host,
-                &patch_text,
-                &poc_curl,
-                &health_check_curl,
-                Some(step_sink.clone()),
-            )
-            .await;
-            vr0
-        };
+            if best.as_ref().map(|(_, _, bs)| sc > *bs).unwrap_or(true) {
+                best = Some((cand, cvr, sc));
+            }
+        }
+
+        let (best_patch, best_vr, _) = best.expect("tournament always has the seed candidate");
+        record_step(
+            &step_sink,
+            "tournament_winner",
+            Some(format!(
+                "verdict={} across {} candidate(s)",
+                best_vr.verdict.as_str(),
+                candidate_count
+            )),
+        )
+        .await;
+        patch_text = best_patch;
+        // NOTE: `candidate_count` is reported in the `tournament_winner` step above only. It
+        // must NOT seed the sequential self-repair counter or the persisted attempt count.
+        best_vr
+    } else {
+        let vr0 = verify_patch_ephemeral_docker(
+            &docker_socket,
+            &image,
+            container_port as u16,
+            &repo_slug,
+            &base_branch,
+            &git_token,
+            &git_host,
+            &patch_text,
+            &poc_curl,
+            &health_check_curl,
+            Some(step_sink.clone()),
+        )
+        .await;
+        vr0
+    };
 
     // Sequential self-repair counter, independent of tournament size: the initial verification
     // (tournament winner or single verify) is attempt 1. This lets self-repair run after a

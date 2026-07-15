@@ -7,7 +7,7 @@ Run with: pytest tests/unit/test_rate_limiter.py -v
 """
 
 import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 

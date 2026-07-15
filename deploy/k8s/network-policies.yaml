@@ -121,3 +121,57 @@ spec:
             cidr: 0.0.0.0/0
             except:
               - 169.254.0.0/16
+---
+# Backend egress: DNS, Redis, Postgres, and outbound HTTP(S). The backend drives
+# tenant-configured SOAR/webhook/Slack/PagerDuty delivery and pulls threat-intel
+# feeds (CISA KEV, FIRST EPSS), so it needs outbound internet — but the cloud
+# metadata endpoint is blocked so a compromised backend or an unvalidated webhook
+# URL cannot pivot to instance credentials (defence-in-depth behind the in-app
+# SSRF guard on outbound webhook URLs).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-egress
+  namespace: weissman
+spec:
+  podSelector:
+    matchLabels:
+      app: weissman-backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: weissman-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Managed Postgres — set to your database's CIDR (metadata IP excluded).
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+            except:
+              - 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Outbound HTTP(S) for threat-intel feeds and tenant SOAR/webhook delivery,
+    # with the cloud metadata range blocked (SSRF hardening).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

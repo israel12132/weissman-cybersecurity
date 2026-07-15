@@ -188,7 +188,13 @@ function extractTacticalRoutes(tacticalSrc, lazyMap) {
 }
 
 async function main() {
-  const pageFiles = (await readdir(PAGES_DIR)).filter((f) => f.endsWith('.jsx') && f !== 'PageShell.jsx')
+  const pageFiles = (await readdir(PAGES_DIR)).filter(
+    (f) =>
+      f.endsWith('.jsx') &&
+      !f.endsWith('.test.jsx') &&
+      !f.endsWith('.spec.jsx') &&
+      f !== 'PageShell.jsx',
+  )
   const pageResults = []
   for (const file of pageFiles) {
     const src = await readFile(join(PAGES_DIR, file), 'utf8')
