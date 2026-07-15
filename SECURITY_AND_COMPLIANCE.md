@@ -81,9 +81,15 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
   `WEISSMAN_ALLOW_INSECURE_TLS=1` refuses to start in production
   (`WEISSMAN_REGION` non-empty).
 - **At-rest encryption.** Postgres data volume is operator-managed (LUKS / KMS
-  on the deployment platform); MFA secrets are stored encrypted at the
-  application layer (Vault Transit primary, Fernet fallback in
-  `database_encryption.py`).
+  on the deployment platform); MFA TOTP seeds and SOAR integration credentials
+  are additionally encrypted at the application layer with an AES-256-GCM
+  envelope (`fingerprint_engine/src/soar/integrations_vault.rs`, applied to MFA
+  via `auth_mfa::encrypt_secret_at_rest` / `decrypt_secret_at_rest`), keyed by a
+  dedicated vault key (`WEISSMAN_INTEGRATIONS_VAULT_KEY` / `WEISSMAN_VAULT_KEY`).
+  Production **fails closed** at startup when no key material is present (never
+  silently stores plaintext), and a previous-key ring (`WEISSMAN_VAULT_KEY_PREVIOUS`
+  plus the existing `WEISSMAN_JWT_SECRET_PREVIOUS` rotation keyring) keeps
+  already-encrypted secrets readable across key rotation.
 
 ## 6. Threat intelligence integrity
 

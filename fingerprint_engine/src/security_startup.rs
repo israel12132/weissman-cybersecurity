@@ -143,14 +143,34 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
     }
 
     // Server + worker: zero-trust job bus HMAC signing secret (no JWT fallback in production).
-    if is_production_environment() {
-        let orchestrator = std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET").unwrap_or_default();
-        if orchestrator.trim().len() < 32 {
-            return Err(
-                "WEISSMAN_JOB_ORCHESTRATOR_SECRET must be set to a strong (>=32 chars) dedicated value in production for zero-trust job bus signing"
-                    .into(),
-            );
-        }
+    let orchestrator = std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET").unwrap_or_default();
+    if orchestrator.trim().len() < 32 {
+        return Err(
+            "WEISSMAN_JOB_ORCHESTRATOR_SECRET must be set to a strong (>=32 chars) dedicated value in production for zero-trust job bus signing"
+                .into(),
+        );
+    }
+
+    // Secrets-at-rest vaults: fail closed rather than silently storing MFA seeds,
+    // SOAR provider credentials, or CEO-vault secrets in plaintext.
+    if !crate::soar::integrations_vault::key_present() {
+        return Err(
+            "no secrets-at-rest key in production: set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars) or WEISSMAN_VAULT_KEY (64 hex); refusing to store MFA/SOAR secrets unencrypted"
+                .into(),
+        );
+    }
+    if !crate::ceo::vault::key_present() {
+        return Err(
+            "CEO genesis vault has no key in production: set WEISSMAN_VAULT_KEY (64 hex); refusing to store vault secrets unencrypted"
+                .into(),
+        );
+    }
+    if !crate::soar::integrations_vault::dedicated_key_configured() {
+        eprintln!(
+            "[Weissman][vault] WARNING: no dedicated vault key; deriving from WEISSMAN_JWT_SECRET. \
+             Set WEISSMAN_INTEGRATIONS_VAULT_KEY, and on JWT rotation set WEISSMAN_JWT_SECRET_PREVIOUS \
+             so already-encrypted secrets stay readable."
+        );
     }
 
     Ok(())

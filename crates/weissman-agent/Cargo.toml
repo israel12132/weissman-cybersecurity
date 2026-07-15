@@ -16,7 +16,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "tim
 # UEBA baseline uses chrono::Utc + Datelike for hour-of-week computation.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Streaming WebSocket + TLS.
-tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots", "connect"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots", "connect"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 url = "2"
 

@@ -56,7 +56,8 @@ async fn api_auth_mfa_verify(
                 .into_response();
         }
     };
-    let secret: String = row.try_get("mfa_secret").unwrap_or_default();
+    let stored_secret: String = row.try_get("mfa_secret").unwrap_or_default();
+    let secret: String = crate::auth_mfa::decrypt_secret_at_rest(&stored_secret);
     let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
     let email: String = row.try_get("email").unwrap_or_default();
     match crate::http::check_lockout_status(ctx.tenant_id, &email).await {
@@ -82,6 +83,22 @@ async fn api_auth_mfa_verify(
             Json(json!({"ok": false, "detail": "Invalid verification code"})),
         )
             .into_response();
+    }
+    // Lazy at-rest migration: the user just proved possession of the seed, so if
+    // it is still stored as legacy plaintext, re-persist it encrypted. Best-effort
+    // and self-limiting (skips once the row is already an envelope / when no key).
+    if !crate::auth_mfa::is_secret_encrypted(&stored_secret) {
+        let reencrypted = crate::auth_mfa::encrypt_secret_at_rest(&secret);
+        if crate::auth_mfa::is_secret_encrypted(&reencrypted) {
+            let _ = sqlx::query(
+                "UPDATE users SET mfa_secret = $1 WHERE id = $2 AND tenant_id = $3",
+            )
+            .bind(reencrypted)
+            .bind(ctx.user_id)
+            .bind(ctx.tenant_id)
+            .execute(state.app_pool.as_ref())
+            .await;
+        }
     }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, ctx.tenant_id).await {
         Ok(t) => t,
@@ -163,10 +180,12 @@ async fn api_auth_mfa_setup(
     .flatten()
     .unwrap_or_else(|| format!("user{}", auth.user_id));
     let otpauth = crate::auth_mfa::otpauth_uri(&secret, &email_row).unwrap_or_default();
+    // Persist the seed encrypted at rest; the plaintext `secret` is only returned
+    // once (below) so the user can enrol it in their authenticator app.
     let _ = sqlx::query(
         "UPDATE users SET mfa_secret = $1, mfa_enabled = false WHERE id = $2 AND tenant_id = $3",
     )
-    .bind(&secret)
+    .bind(crate::auth_mfa::encrypt_secret_at_rest(&secret))
     .bind(auth.user_id)
     .bind(auth.tenant_id)
     .execute(state.app_pool.as_ref())
@@ -197,7 +216,8 @@ async fn api_auth_mfa_enable(
     .ok()
     .flatten();
     let secret: String = row
-        .and_then(|r| r.try_get("mfa_secret").ok())
+        .and_then(|r| r.try_get::<String, _>("mfa_secret").ok())
+        .map(|s| crate::auth_mfa::decrypt_secret_at_rest(&s))
         .unwrap_or_default();
     if secret.is_empty() {
         return (
@@ -283,7 +303,8 @@ async fn api_auth_mfa_disable(
     .flatten();
     let secret: String = row
         .as_ref()
-        .and_then(|r| r.try_get("mfa_secret").ok())
+        .and_then(|r| r.try_get::<String, _>("mfa_secret").ok())
+        .map(|s| crate::auth_mfa::decrypt_secret_at_rest(&s))
         .unwrap_or_default();
     let enabled: bool = row
         .as_ref()

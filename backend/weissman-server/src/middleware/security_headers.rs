@@ -12,7 +12,12 @@ pub fn apply(router: Router) -> Router {
     // production — a stray or empty `WEISSMAN_DISABLE_SECURITY_HEADERS` (even `=0`)
     // must never silently strip CSP/HSTS/etc. off every response.
     let disabled = std::env::var("WEISSMAN_DISABLE_SECURITY_HEADERS")
-        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false);
     let is_prod = std::env::var("WEISSMAN_ENV")
         .map(|v| v.trim().eq_ignore_ascii_case("production"))

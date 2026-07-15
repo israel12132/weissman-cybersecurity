@@ -91,9 +91,10 @@ jobs:
         #                      We GENERATE PDFs, never parse untrusted ones, so the
         #                      parser DoS is out of our surface. Tracked with genpdf.
         #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
-        #                      point) — via tokio-tungstenite 0.21 → rustls 0.22.
-        #                      We don't configure CRL revocation on WS/TLS clients,
-        #                      so the CRL-matching bug is out of our surface. Tracked
+        #                      point). tokio-tungstenite bumped 0.21 → 0.24 (rustls 0.23),
+        #                      removing the 0.22 path; any residual is via aws-config's
+        #                      rustls 0.21. We don't configure CRL revocation on WS/TLS
+        #                      clients, so the CRL-matching bug is out of our surface. Tracked
         #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
         run: |
           cargo audit \
@@ -290,6 +291,12 @@ jobs:
       - name: Engine reality audit
         run: node scripts/engine_reality_audit.mjs
 
+      - name: Doc metrics sync (fail on drift)
+        run: node scripts/sync_doc_metrics.mjs --check
+
+      - name: Frontend↔backend route contract
+        run: node scripts/verify_frontend_route_contract.mjs
+
       - name: Cloud posture catalog parity
         run: node scripts/verify_cloud_posture_catalog.mjs
 
@@ -321,6 +328,9 @@ jobs:
       - name: Run Rust workspace tests (blocking gate)
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          # Fail (don't skip) the DB-backed integration tests here, so a dropped
+          # TEST_DATABASE_URL can never masquerade as a green run.
+          WEISSMAN_REQUIRE_DB_TESTS: "1"
         run: cargo test --workspace --all-targets
 
       - name: Build Docker production images

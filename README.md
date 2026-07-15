@@ -216,7 +216,7 @@ Background workers run inside the API process:
 
 ```bash
 cargo check --workspace      # ~25 s incremental
-cargo test  --workspace      # ~100 tests passing (≈78 fingerprint_engine + 14 weissman-db + core/agent)
+cargo test  --workspace      # ~1,200 test fns (see docs/METRICS.md — code-derived, CI-gated)
 cd frontend && npm run build # code-split route chunks (largest initial chunk ~290 KB gzipped)
 ```
 

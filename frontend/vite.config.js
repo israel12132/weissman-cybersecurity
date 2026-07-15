@@ -1,7 +1,37 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import forensicRouteCompliancePlugin from './plugins/vite-forensic-route-compliance.mjs'
 import cspPlugin from './plugins/vite-csp.mjs'
+
+const CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url))
+
+// Dev-only: the marketing/legal pages (signup/terms/privacy) are served from
+// deploy/public by the backend in production. Serve them under `vite dev` too, so
+// the Login footer links don't 404 in local / SPA-only development.
+function serveDeployPublicHtml() {
+  return {
+    name: 'serve-deploy-public-html',
+    apply: 'serve',
+    configureServer(server) {
+      const dir = path.resolve(CONFIG_DIR, '../deploy/public')
+      server.middlewares.use((req, res, next) => {
+        const m = req.url && req.url.match(/^\/([\w-]+\.html)(?:\?.*)?$/)
+        if (m) {
+          const fp = path.join(dir, m[1])
+          if (fp.startsWith(dir) && fs.existsSync(fp)) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.end(fs.readFileSync(fp))
+            return
+          }
+        }
+        next()
+      })
+    },
+  }
+}
 
 const VENDOR_REACT = ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler']
 const VENDOR_I18N = ['i18next', 'react-i18next', 'i18next-browser-languagedetector']
@@ -51,7 +81,7 @@ function manualChunkForId(id) {
 
 export default defineConfig({
   base: '/command-center/',
-  plugins: [forensicRouteCompliancePlugin(), react(), cspPlugin()],
+  plugins: [serveDeployPublicHtml(), forensicRouteCompliancePlugin(), react(), cspPlugin()],
   worker: { format: 'es' },
   build: {
     target: 'es2020',
