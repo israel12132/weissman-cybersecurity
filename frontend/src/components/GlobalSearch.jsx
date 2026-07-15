@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Command, Search, Zap, CornerDownLeft, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 import { PRIMARY_NAV, NAV_GROUPS, canAccessNavItem } from '../lib/appNav';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -162,10 +162,9 @@ export default function GlobalSearch() {
     const tmr = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
+        const d = await apiFetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
           signal: ctrl.signal,
         });
-        const d = await r.json().catch(() => ({}));
         setResults(Array.isArray(d.results) ? d.results : []);
       } catch {
         if (!ctrl.signal.aborted) setResults([]);

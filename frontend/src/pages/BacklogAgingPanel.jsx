@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Hourglass, AlertTriangle } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 /**
  * BacklogAgingPanel — how stale is the client's open-finding backlog?
@@ -54,9 +54,7 @@ export default function BacklogAgingPanel() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/remediation/aging/${encodeURIComponent(id)}?limit=2000`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/remediation/aging/${encodeURIComponent(id)}?limit=2000`)
       setData(d?.aging && typeof d.aging === 'object' ? d.aging : null)
     } catch (e) {
       setError(e?.message || 'load failed')

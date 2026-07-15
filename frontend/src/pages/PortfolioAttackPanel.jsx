@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Crosshair } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 /**
  * PortfolioAttackPanel — fleet-wide MITRE ATT&CK exposure across all clients.
@@ -27,9 +27,7 @@ export default function PortfolioAttackPanel() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/portfolio/attack-exposure')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch('/api/portfolio/attack-exposure')
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')

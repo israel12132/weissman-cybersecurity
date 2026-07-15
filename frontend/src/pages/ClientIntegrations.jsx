@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 import { useEngineRequirements, computeLocalReadiness } from '../hooks/useEngineRequirements'
 import Button from '../components/ui/Button'
@@ -82,9 +82,7 @@ export default function ClientIntegrations() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch(`/api/clients/${id}/integrations`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/clients/${id}/integrations`)
       const repos = Array.isArray(d.repo_urls) ? d.repo_urls : []
       const ips = typeof d.ip_ranges === 'string'
         ? (() => { try { return JSON.parse(d.ip_ranges) } catch { return [] } })()
@@ -157,10 +155,9 @@ export default function ClientIntegrations() {
           model: e.model.trim() || undefined,
           authorization: e.authorization.trim() || undefined,
         }))
-      const r = await apiFetch(`/api/clients/${id}/integrations`, {
+      await apiFetch(`/api/clients/${id}/integrations`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           aws_cross_account_role_arn: form.aws_cross_account_role_arn.trim(),
           aws_external_id: form.aws_external_id.trim(),
           gcp_project_id: form.gcp_project_id.trim(),
@@ -172,12 +169,8 @@ export default function ClientIntegrations() {
           industrial_ot_enabled: form.industrial_ot_enabled,
           ip_ranges: ips,
           llm_secops_endpoints: llm,
-        }),
+        },
       })
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}))
-        throw new Error(d.detail || `HTTP ${r.status}`)
-      }
       setSaved(true)
       await load()
     } catch (e) {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CalendarClock, AlertTriangle } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 /**
  * SlaForecastStrip — proactive view of upcoming SLA breaches for the selected client.
@@ -36,9 +36,7 @@ export default function SlaForecastStrip() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/remediation/sla-forecast/${encodeURIComponent(id)}`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/remediation/sla-forecast/${encodeURIComponent(id)}`)
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')

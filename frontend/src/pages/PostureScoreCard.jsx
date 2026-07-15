@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Gauge, AlertTriangle } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { SkeletonTable } from '../components/ui/Skeleton'
 
 /**
@@ -89,9 +89,7 @@ export default function PostureScoreCard() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/posture/score/${encodeURIComponent(id)}`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/posture/score/${encodeURIComponent(id)}`)
       setData(d?.posture && typeof d.posture === 'object' ? d.posture : null)
       setProjection(Array.isArray(d?.projection) ? d.projection : [])
     } catch (e) {
