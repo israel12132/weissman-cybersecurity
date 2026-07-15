@@ -8,6 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
+import EmptyState from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
@@ -235,11 +236,17 @@ export default function ScanScheduler() {
               Loading schedules...
             </div>
           ) : filteredSchedules.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">
-              No schedules found. Click &quot;Create Schedule&quot; to get started.
+            <div className="p-6">
+              <EmptyState
+                icon="inbox"
+                title="No schedules yet"
+                body='Click "Create Schedule" to get started.'
+              />
             </div>
           ) : visibleSchedules.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-6">
+              <EmptyState icon="search-x" title={t('weissmanFindings.filtered_title')} compact />
+            </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
               {visibleSchedules.map((schedule) => (

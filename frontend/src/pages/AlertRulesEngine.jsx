@@ -8,6 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
+import EmptyState from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
@@ -236,11 +237,17 @@ export default function AlertRulesEngine() {
               Loading rules...
             </div>
           ) : filteredRules.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">
-              No alert rules found. Click &quot;Create Rule&quot; to get started.
+            <div className="p-6">
+              <EmptyState
+                icon="alert"
+                title="No alert rules yet"
+                body='Click "Create Rule" to get started.'
+              />
             </div>
           ) : visibleRules.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-6">
+              <EmptyState icon="search-x" title={t('weissmanFindings.filtered_title')} compact />
+            </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
               {visibleRules.map((rule) => (
