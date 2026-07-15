@@ -48,3 +48,21 @@ pub async fn run_stealth_engine_result(target: &str) -> crate::engine_result::En
     );
     crate::engine_result::EngineResult::ok(findings, msg)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waf_detection_reexport_wired() {
+        assert!(is_waf_or_rate_limit(429, ""));
+        assert!(is_waf_or_rate_limit(403, "cloudflare attention required"));
+        assert!(!is_waf_or_rate_limit(200, "cloudflare"));
+    }
+
+    #[test]
+    fn proxy_swarm_parse_reexport_wired() {
+        let p = StealthConfig::parse_proxy_swarm("http://a:8080,https://b:3128\nftp://skip");
+        assert_eq!(p, vec!["http://a:8080".to_string(), "https://b:3128".to_string()]);
+    }
+}

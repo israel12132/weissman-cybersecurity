@@ -353,3 +353,55 @@ cli_wrapper!(
     run_storage_covert_channel,
     run_storage_covert_channel_result
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn network_engines_reject_empty_target() {
+        for r in [
+            run_dns_exfil_engine_result("").await,
+            run_dns_exfil_engine_result("   ").await,
+            run_http_covert_exfil_result("").await,
+            run_cloud_exfil_engine_result("").await,
+            run_encrypted_exfil_result("").await,
+            run_database_exfil_result("").await,
+            run_email_exfil_result("").await,
+        ] {
+            assert_eq!(r.status, "error");
+            assert!(r.message.contains("target required"));
+            assert!(r.findings.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn agent_required_engines_emit_agent_required_finding() {
+        let cases = [
+            ("acoustic_exfil", run_acoustic_exfil_result("host").await),
+            ("em_exfil_engine", run_em_exfil_engine_result("host").await),
+            ("optical_exfil", run_optical_exfil_result("host").await),
+            ("keyboard_acoustic", run_keyboard_acoustic_result("host").await),
+            (
+                "screen_capture_exfil",
+                run_screen_capture_exfil_result("host").await,
+            ),
+            ("clipboard_hijack", run_clipboard_hijack_result("host").await),
+            ("insider_exfil", run_insider_exfil_result("host").await),
+            (
+                "storage_covert_channel",
+                run_storage_covert_channel_result("host").await,
+            ),
+        ];
+        for (engine_id, r) in cases {
+            assert_eq!(r.status, "ok");
+            assert_eq!(r.findings.len(), 1);
+            let f = &r.findings[0];
+            assert_eq!(f["type"], engine_id);
+            assert_eq!(f["category"], "agent_required");
+            assert_eq!(f["severity"], "info");
+            assert_eq!(f["agent_required"], true);
+            assert!(r.message.contains("agent-based collector required"));
+        }
+    }
+}
