@@ -49,6 +49,9 @@ const ICON_MAP = {
  *  - title, body (alias: description)
  *  - cta: { label, onClick }
  *  - secondary: { label, href | onClick }
+ *  - action: a raw React node rendered in the actions row (use when you need a
+ *    custom control — e.g. a button with its own spinner/disabled state — that
+ *    the cta/secondary shorthands can't express)
  *  - compact: smaller padding
  *  - className
  */
@@ -59,6 +62,7 @@ export default function EmptyState({
   description,
   cta,
   secondary,
+  action,
   compact = false,
   className = '',
 }) {
@@ -109,8 +113,9 @@ export default function EmptyState({
         </p>
       )}
 
-      {(cta || secondary) && (
+      {(cta || secondary || action) && (
         <div className="flex gap-3 mt-6 flex-wrap justify-center">
+          {action}
           {cta &&
             (cta.to ? (
               <Link

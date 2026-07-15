@@ -26,6 +26,16 @@ describe('EmptyState', () => {
     expect(screen.getByText('🎯')).toBeInTheDocument()
   })
 
+  it('renders a custom action node in the actions row', () => {
+    render(
+      <EmptyState
+        title="Needs compute"
+        action={<button type="button">Compute now</button>}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Compute now' })).toBeInTheDocument()
+  })
+
   it('exposes a status role for assistive tech', () => {
     const { container } = render(<EmptyState title="Empty" />)
     expect(container.querySelector('[role="status"]')).toBeInTheDocument()

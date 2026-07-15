@@ -240,8 +240,8 @@ export default function AlertRulesEngine() {
             <div className="p-6">
               <EmptyState
                 icon="alert"
-                title="No alert rules yet"
-                body='Click "Create Rule" to get started.'
+                title={t('pages.alertRulesEngine.empty_title')}
+                body={t('pages.alertRulesEngine.empty_body')}
               />
             </div>
           ) : visibleRules.length === 0 ? (

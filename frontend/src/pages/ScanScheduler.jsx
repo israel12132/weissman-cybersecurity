@@ -239,8 +239,8 @@ export default function ScanScheduler() {
             <div className="p-6">
               <EmptyState
                 icon="inbox"
-                title="No schedules yet"
-                body='Click "Create Schedule" to get started.'
+                title={t('pages.scanScheduler.empty_title')}
+                body={t('pages.scanScheduler.empty_body')}
               />
             </div>
           ) : visibleSchedules.length === 0 ? (
