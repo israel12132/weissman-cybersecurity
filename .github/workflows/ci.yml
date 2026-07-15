@@ -293,6 +293,10 @@ jobs:
       - name: Cloud posture catalog parity
         run: node scripts/verify_cloud_posture_catalog.mjs
 
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
       - name: Weissman UI compliance audit
         run: node scripts/weissman-ui-audit.mjs
 
@@ -301,10 +305,6 @@ jobs:
 
       - name: i18n templated-key resolution gate
         run: node scripts/verify_i18n_template_keys.mjs
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
 
       - name: Build frontend production bundle
         run: npm run build

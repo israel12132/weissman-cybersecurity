@@ -188,11 +188,33 @@ function extractTacticalRoutes(tacticalSrc, lazyMap) {
 }
 
 async function main() {
-  const pageFiles = (await readdir(PAGES_DIR)).filter((f) => f.endsWith('.jsx') && f !== 'PageShell.jsx')
+  const allPageFiles = (await readdir(PAGES_DIR)).filter(
+    (f) => f.endsWith('.jsx') && !f.endsWith('.test.jsx') && f !== 'PageShell.jsx',
+  )
+  // Read every page source once so we can both audit and detect the import graph.
+  const pageSrc = new Map()
+  for (const f of allPageFiles) pageSrc.set(f, await readFile(join(PAGES_DIR, f), 'utf8'))
+
+  // Page-affordance detection (refresh/export/search/evidence chrome) applies to
+  // top-level *pages*. A file under pages/ that another page imports as a child is
+  // an embedded component — its parent page owns the chrome, so wrapping the child
+  // in its own page header/search/export would duplicate that chrome. Detect these
+  // structurally from the import graph (no hardcoded allowlist). Routed pages remain
+  // covered by the route audit below even if a helper is imported from them.
+  const embedded = new Set()
+  const importRe = /from\s+['"]\.\/([A-Za-z0-9_]+)['"]/g
+  for (const [file, src] of pageSrc) {
+    let m
+    while ((m = importRe.exec(src)) !== null) {
+      const target = `${m[1]}.jsx`
+      if (pageSrc.has(target) && target !== file) embedded.add(target)
+    }
+  }
+
+  const pageFiles = allPageFiles.filter((f) => !embedded.has(f))
   const pageResults = []
   for (const file of pageFiles) {
-    const src = await readFile(join(PAGES_DIR, file), 'utf8')
-    pageResults.push(auditSource(file, src))
+    pageResults.push(auditSource(file, pageSrc.get(file)))
   }
 
   const cockpitSrc = await readFile(join(FRONTEND_SRC, 'Cockpit.jsx'), 'utf8')

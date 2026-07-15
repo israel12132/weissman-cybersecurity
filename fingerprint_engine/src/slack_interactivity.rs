@@ -64,7 +64,9 @@ pub fn sign_action_value(tenant_id: i64, client_id: i64, finding_id: &str) -> Op
     let exp = chrono::Utc::now().timestamp() + action_ttl_secs();
     let receipt =
         crate::finding_attestation::attest(&action_digest(tenant_id, client_id, finding_id, exp))?;
-    Some(format!("{tenant_id}:{client_id}:{finding_id}:{exp}:{receipt}"))
+    Some(format!(
+        "{tenant_id}:{client_id}:{finding_id}:{exp}:{receipt}"
+    ))
 }
 
 /// Verify + parse a signed Slack button value back into (tenant, client, finding). Rejects malformed,
