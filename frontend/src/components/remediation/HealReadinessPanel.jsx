@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, XCircle, ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 /**
  * HealReadinessPanel — bilingual auto-heal readiness self-diagnostics from GET /api/heal-readiness.
@@ -19,9 +19,7 @@ export default function HealReadinessPanel() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const r = await apiFetch('/api/heal-readiness')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      setReport(await r.json())
+      setReport(await apiFetch('/api/heal-readiness'))
     } catch (e) {
       setError(e.message || 'failed')
     } finally {

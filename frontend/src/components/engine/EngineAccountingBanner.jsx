@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 /**
  * Honest engine accounting banner — surfaces GET /api/engines/accounting.
@@ -18,7 +18,6 @@ export default function EngineAccountingBanner() {
   useEffect(() => {
     let cancelled = false
     apiFetch('/api/engines/accounting')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((j) => {
         if (!cancelled) setA(j)
       })

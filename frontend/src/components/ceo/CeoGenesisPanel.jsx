@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 export default function CeoGenesisPanel() {
@@ -27,9 +27,7 @@ export default function CeoGenesisPanel() {
     setStrategyLoading(true)
     setStrategyErr('')
     try {
-      const r = await apiFetch('/api/ceo/strategy')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch('/api/ceo/strategy')
       const e = d.effective || {}
       setRamMb(Number(e.genesis_ram_budget_mb) || 4096)
       setSeedsRepos(e.genesis_seed_repos || '')
@@ -47,9 +45,7 @@ export default function CeoGenesisPanel() {
     setHpcLoading(true)
     setHpcErr('')
     try {
-      const r = await apiFetch('/api/ceo/hpc/policy')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch('/api/ceo/hpc/policy')
       setHpcView(d)
       const des = d.desired || {}
       setResearchPct(Number(des.research_core_share_percent) || 50)
@@ -82,13 +78,10 @@ export default function CeoGenesisPanel() {
           genesis_protocol_enabled: protocolOn ? 'true' : 'false',
         },
       }
-      const r = await apiFetch('/api/ceo/strategy', {
+      await apiFetch('/api/ceo/strategy', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
       await loadStrategy()
     } catch (err) {
       setStrategyErr(err.message || t('components.ceo.genesisPanel.saveFailed'))
@@ -102,18 +95,15 @@ export default function CeoGenesisPanel() {
     setHpcSaving(true)
     setHpcErr('')
     try {
-      const r = await apiFetch('/api/ceo/hpc/policy', {
+      await apiFetch('/api/ceo/hpc/policy', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           research_core_share_percent: Math.min(100, Math.max(0, Math.floor(researchPct))),
           research_cpu_affinity: researchAff,
           client_scan_cpu_affinity: clientAff,
           routing_note: routingNote,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
       await loadHpc()
     } catch (err) {
       setHpcErr(err.message || t('components.ceo.genesisPanel.saveFailed'))

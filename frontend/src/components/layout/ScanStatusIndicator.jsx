@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Radar } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import { useVisiblePolling } from '../../hooks/useVisiblePolling'
 
 const POLL_MS = 15000
@@ -19,9 +19,8 @@ export default function ScanStatusIndicator() {
 
   const poll = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/scan/status')
-      const d = await r.json().catch(() => ({}))
-      setActive(r.ok && d.scanning_active === true)
+      const d = await apiFetch('/api/scan/status')
+      setActive(d.scanning_active === true)
     } catch {
       setActive(false)
     }

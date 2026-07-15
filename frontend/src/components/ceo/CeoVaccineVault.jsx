@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiUrl, apiFetch } from '../../lib/apiBase'
+import { apiUrl } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 export default function CeoVaccineVault() {
@@ -24,9 +25,7 @@ export default function CeoVaccineVault() {
     setLoading(true)
     setErr('')
     try {
-      const r = await apiFetch('/api/ceo/vault?limit=100&offset=0')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch('/api/ceo/vault?limit=100&offset=0')
       setRows(Array.isArray(d) ? d : [])
     } catch (e) {
       setErr(e.message || t('components.ceo.vaccineVault.loadFailed'))
@@ -46,9 +45,7 @@ export default function CeoVaccineVault() {
     setMatchMsg('')
     try {
       const path = '/api/ceo/genesis/vault/' + encodeURIComponent(selected.id) + '/match'
-      const r = await apiFetch(path, { method: 'POST' })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch(path, { method: 'POST' })
       setMatchMsg(JSON.stringify(d, null, 2))
     } catch (e) {
       setMatchMsg(e.message || t('components.ceo.vaccineVault.matchFailed'))
