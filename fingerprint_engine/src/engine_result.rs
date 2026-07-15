@@ -103,3 +103,62 @@ pub fn print_result(r: EngineResult) {
         println!("{{\"status\":\"error\",\"findings\":[],\"message\":\"serialize failed\"}}");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ok_result_sets_success_and_summary() {
+        let r = EngineResult::ok(vec![serde_json::json!({"f": 1})], "done");
+        assert_eq!(r.status, "ok");
+        assert!(r.success);
+        assert_eq!(r.summary, "done");
+        assert_eq!(r.message, "done");
+        assert_eq!(r.findings.len(), 1);
+        assert!(r.graph_nodes.is_none());
+        assert!(r.graph_edges.is_none());
+    }
+
+    #[test]
+    fn error_result_has_no_findings_and_not_success() {
+        let r = EngineResult::error("boom");
+        assert_eq!(r.status, "error");
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        assert_eq!(r.summary, "boom");
+    }
+
+    #[test]
+    fn from_findings_vec_reports_count() {
+        let r: EngineResult = vec![serde_json::json!(1), serde_json::json!(2)].into();
+        assert_eq!(r.status, "ok");
+        assert!(r.success);
+        assert_eq!(r.message, "Generated 2 findings");
+    }
+
+    #[test]
+    fn from_engines_result_maps_status_to_success() {
+        let ok: EngineResult = weissman_engines::EngineResult::ok(vec![], "hi").into();
+        assert!(ok.success);
+        assert_eq!(ok.status, "ok");
+        let err: EngineResult = weissman_engines::EngineResult::error("nope").into();
+        assert!(!err.success);
+        assert_eq!(err.status, "error");
+    }
+
+    #[test]
+    fn serialization_skips_helper_and_none_graph_fields() {
+        let r = EngineResult::ok(vec![], "m");
+        let v: serde_json::Value = serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        let obj = v.as_object().unwrap();
+        assert!(obj.contains_key("status"));
+        assert!(obj.contains_key("findings"));
+        assert!(obj.contains_key("message"));
+        // success/summary are #[serde(skip_serializing)]; graph_* skipped when None.
+        assert!(!obj.contains_key("success"));
+        assert!(!obj.contains_key("summary"));
+        assert!(!obj.contains_key("graph_nodes"));
+        assert!(!obj.contains_key("graph_edges"));
+    }
+}
