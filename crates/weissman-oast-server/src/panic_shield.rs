@@ -154,3 +154,34 @@ pub async fn maybe_react_to_trap_hit(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::Ipv4Addr;
+
+    #[test]
+    fn sovereign_trap_matches_trap_prefix_label() {
+        assert!(host_is_sovereign_trap("trap-abc.weissmancyber.com"));
+        assert!(host_is_sovereign_trap("trap-xyz.example.com:8080"));
+        // Case-insensitive.
+        assert!(host_is_sovereign_trap("TRAP-Node.example.com"));
+    }
+
+    #[test]
+    fn sovereign_trap_rejects_non_trap_hosts() {
+        assert!(!host_is_sovereign_trap("normal.example.com"));
+        assert!(!host_is_sovereign_trap("mytrap-node.example.com"));
+        assert!(!host_is_sovereign_trap(""));
+    }
+
+    #[test]
+    fn ipv4_slash24_zeroes_last_octet() {
+        assert_eq!(ipv4_slash24(Ipv4Addr::new(192, 168, 1, 55)), "192.168.1.0/24");
+        assert_eq!(ipv4_slash24(Ipv4Addr::new(10, 0, 0, 0)), "10.0.0.0/24");
+        assert_eq!(
+            ipv4_slash24(Ipv4Addr::new(203, 0, 113, 254)),
+            "203.0.113.0/24"
+        );
+    }
+}

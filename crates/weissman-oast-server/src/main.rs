@@ -616,3 +616,175 @@ async fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UUID: &str = "550e8400-e29b-41d4-a716-446655440000";
+
+    fn expected_uuid() -> Uuid {
+        Uuid::parse_str(UUID).unwrap()
+    }
+
+    // ---- token label parsing ---------------------------------------------
+
+    #[test]
+    fn parse_token_label_plain_and_prefixed() {
+        assert_eq!(parse_interaction_token_label(UUID), Some(expected_uuid()));
+        assert_eq!(
+            parse_interaction_token_label(&format!("trap-{UUID}")),
+            Some(expected_uuid())
+        );
+        assert_eq!(
+            parse_interaction_token_label(&format!("aws-mon-{UUID}")),
+            Some(expected_uuid())
+        );
+        assert_eq!(
+            parse_interaction_token_label(&format!("  {UUID}  ")),
+            Some(expected_uuid())
+        );
+    }
+
+    #[test]
+    fn parse_token_label_rejects_garbage() {
+        assert_eq!(parse_interaction_token_label("not-a-uuid"), None);
+        assert_eq!(parse_interaction_token_label("trap-nope"), None);
+        assert_eq!(parse_interaction_token_label(""), None);
+    }
+
+    // ---- host / qname token extraction -----------------------------------
+
+    #[test]
+    fn token_from_host_extracts_first_label() {
+        let suffix = "weissmancyber.com";
+        assert_eq!(
+            token_from_host(&format!("{UUID}.weissmancyber.com"), suffix),
+            Some(expected_uuid())
+        );
+        assert_eq!(
+            token_from_host(&format!("trap-{UUID}.sub.weissmancyber.com"), suffix),
+            Some(expected_uuid())
+        );
+        // Host header with a port.
+        assert_eq!(
+            token_from_host(&format!("{UUID}.weissmancyber.com:443"), suffix),
+            Some(expected_uuid())
+        );
+    }
+
+    #[test]
+    fn token_from_host_rejects_wrong_suffix_and_empty() {
+        assert_eq!(
+            token_from_host(&format!("{UUID}.evil.com"), "weissmancyber.com"),
+            None
+        );
+        // Host equal to suffix (no label) rejected.
+        assert_eq!(token_from_host("weissmancyber.com", "weissmancyber.com"), None);
+        // Empty suffix rejected.
+        assert_eq!(token_from_host(&format!("{UUID}.x.com"), ""), None);
+    }
+
+    #[test]
+    fn token_from_qname_handles_trailing_dot() {
+        assert_eq!(
+            token_from_qname(&format!("{UUID}.weissmancyber.com."), "weissmancyber.com"),
+            Some(expected_uuid())
+        );
+        assert_eq!(
+            token_from_qname(&format!("{UUID}.evil.com"), "weissmancyber.com"),
+            None
+        );
+    }
+
+    // ---- header serialization --------------------------------------------
+
+    #[test]
+    fn headers_to_json_captures_ascii_headers() {
+        let mut h = HeaderMap::new();
+        h.insert("x-test", "value1".parse().unwrap());
+        h.insert("user-agent", "curl/8".parse().unwrap());
+        let v = headers_to_json(&h);
+        assert_eq!(v["x-test"], "value1");
+        assert_eq!(v["user-agent"], "curl/8");
+    }
+
+    // ---- constant-time equality ------------------------------------------
+
+    #[test]
+    fn constant_time_eq_matches_and_rejects() {
+        assert!(constant_time_eq(b"secret", b"secret"));
+        assert!(!constant_time_eq(b"secret", b"secreT"));
+        assert!(!constant_time_eq(b"secret", b"secret-longer"));
+        assert!(constant_time_eq(b"", b""));
+    }
+
+    // ---- DNS wire parsing -------------------------------------------------
+
+    /// Build a minimal DNS query packet for `labels` with the given qtype.
+    fn dns_query(labels: &[&str], qtype: u16) -> Vec<u8> {
+        let mut buf = vec![
+            0x12, 0x34, // id
+            0x01, 0x00, // flags
+            0x00, 0x01, // qdcount = 1
+            0x00, 0x00, // ancount
+            0x00, 0x00, // nscount
+            0x00, 0x00, // arcount
+        ];
+        for l in labels {
+            buf.push(l.len() as u8);
+            buf.extend_from_slice(l.as_bytes());
+        }
+        buf.push(0x00); // root terminator
+        buf.extend_from_slice(&qtype.to_be_bytes());
+        buf.extend_from_slice(&[0x00, 0x01]); // qclass IN
+        buf
+    }
+
+    #[test]
+    fn parse_dns_qname_roundtrip() {
+        let q = dns_query(&["abc", "weissmancyber", "com"], 1);
+        let (name, qtype) = parse_dns_qname(&q).unwrap();
+        assert_eq!(name, "abc.weissmancyber.com");
+        assert_eq!(qtype, 1);
+    }
+
+    #[test]
+    fn parse_dns_qname_rejects_short_or_no_question() {
+        assert_eq!(parse_dns_qname(&[0u8; 5]), None);
+        // qdcount = 0
+        let mut q = dns_query(&["a", "com"], 1);
+        q[4] = 0;
+        q[5] = 0;
+        assert_eq!(parse_dns_qname(&q), None);
+    }
+
+    #[test]
+    fn dns_qend_points_past_question() {
+        let q = dns_query(&["abc", "com"], 28);
+        let end = dns_qend(&q).unwrap();
+        // end must land exactly at the end of the question section.
+        assert_eq!(end, q.len());
+    }
+
+    #[test]
+    fn build_dns_response_sets_answer_flags() {
+        let q = dns_query(&["abc", "com"], 1);
+        let end = dns_qend(&q).unwrap();
+        let resp = build_dns_response(&q, end).unwrap();
+        // Same transaction id echoed back.
+        assert_eq!(&resp[0..2], &q[0..2]);
+        // Standard response flags 0x81 0x80.
+        assert_eq!(&resp[2..4], &[0x81, 0x80]);
+        // qdcount preserved, all answer/authority/additional counts zeroed.
+        assert_eq!(&resp[4..6], &q[4..6]);
+        assert_eq!(&resp[6..12], &[0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn build_dns_response_rejects_bad_bounds() {
+        assert_eq!(build_dns_response(&[0u8; 4], 4), None);
+        let q = dns_query(&["a", "com"], 1);
+        assert_eq!(build_dns_response(&q, q.len() + 10), None);
+    }
+}
