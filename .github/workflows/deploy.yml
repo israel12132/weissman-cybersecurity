@@ -32,17 +32,24 @@ jobs:
         uses: sigstore/cosign-installer@v3
 
       - name: Verify image signature (fail closed)
+        # `inputs.image_digest` is passed via env (never interpolated into the
+        # script text) so untrusted workflow input can't inject shell — see
+        # Semgrep run-shell-injection (sg.run/pkzk).
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
           cosign verify \
             --certificate-identity-regexp "https://github.com/israel12132/weissman-cybersecurity/.github/workflows/ci.yml@.*" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "${IMAGE}@${{ inputs.image_digest }}"
+            "${IMAGE}@${IMAGE_DIGEST}"
 
       - name: Pin the verified digest into the k8s manifests
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
-          DIGEST_REF="${IMAGE}@${{ inputs.image_digest }}"
+          DIGEST_REF="${IMAGE}@${IMAGE_DIGEST}"
           # Replace any `image: <IMAGE>:tag` or existing digest with the verified digest.
           for f in $(grep -rl "${IMAGE}" deploy/k8s || true); do
             sed -i -E "s|image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+)|image: ${DIGEST_REF}|g" "$f"
