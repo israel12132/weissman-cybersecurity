@@ -544,3 +544,246 @@ pub fn resolve_mutations(mutator: &Mutator, guided: &[String]) -> Vec<String> {
 pub extern "C" fn fuzz_core_wasm_abi_version() -> u32 {
     1
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn baseline(avg: f64, status: u16, len: usize) -> Baseline {
+        Baseline {
+            avg_latency_ms: avg,
+            status,
+            content_length: len,
+        }
+    }
+
+    // ---- Mutator ----------------------------------------------------------
+
+    #[test]
+    fn mutator_base_roundtrips() {
+        let m = Mutator::new("payload");
+        assert_eq!(m.base(), "payload");
+    }
+
+    #[test]
+    fn bit_flip_changes_middle_byte() {
+        let m = Mutator::new("AAAA");
+        let flipped = m.bit_flip();
+        // Middle byte (index 2) incremented: 'A' (0x41) -> 'B' (0x42).
+        assert_eq!(flipped, "AABA");
+        assert_ne!(flipped, m.base());
+    }
+
+    #[test]
+    fn bit_flip_empty_is_noop() {
+        let m = Mutator::new("");
+        assert_eq!(m.bit_flip(), "");
+    }
+
+    #[test]
+    fn byte_swap_swaps_two_bytes() {
+        let m = Mutator::new("abcd");
+        // len=4, i=2, j=3 -> swap 'c' and 'd'.
+        assert_eq!(m.byte_swap(), "abdc");
+    }
+
+    #[test]
+    fn byte_swap_short_input_is_noop() {
+        assert_eq!(Mutator::new("a").byte_swap(), "a");
+        assert_eq!(Mutator::new("").byte_swap(), "");
+    }
+
+    #[test]
+    fn dangerous_suffix_wraps_index() {
+        let m = Mutator::new("x");
+        let n = DANGEROUS_SUFFIXES.len();
+        // index and index+n select the same suffix (modular wrap).
+        assert_eq!(m.dangerous_suffix(0), m.dangerous_suffix(n));
+        assert!(m.dangerous_suffix(0).starts_with('x'));
+    }
+
+    #[test]
+    fn massive_length_is_capped() {
+        let m = Mutator::new("");
+        let big = m.massive_length(1_000_000);
+        assert_eq!(big.len(), 100_000);
+        let small = m.massive_length(10);
+        assert_eq!(small.len(), 10);
+    }
+
+    #[test]
+    fn mutations_include_base_and_variants() {
+        let m = Mutator::new("seed");
+        let muts = m.mutations();
+        assert_eq!(muts[0], "seed");
+        // base + bit_flip + byte_swap + all suffixes + 2 massive_length entries.
+        assert_eq!(muts.len(), 3 + DANGEROUS_SUFFIXES.len() + 2);
+    }
+
+    // ---- smart mutations --------------------------------------------------
+
+    #[test]
+    fn smart_mutations_for_json_object() {
+        let muts = smart_payload_mutations(r#"{"name":"bob","age":30}"#);
+        assert!(!muts.is_empty());
+        // Prototype pollution and NoSQL operator payloads are always appended.
+        assert!(muts.iter().any(|s| s.contains("__proto__")));
+        assert!(muts.iter().any(|s| s.contains("$where")));
+        // SQLi mutation of the string field.
+        assert!(muts.iter().any(|s| s.contains("OR '1'='1")));
+    }
+
+    #[test]
+    fn smart_mutations_for_json_array() {
+        let muts = smart_payload_mutations(r#"["a","b"]"#);
+        assert!(muts.iter().any(|s| s.contains("OR '1'='1")));
+        assert!(muts.iter().any(|s| s.contains(XSS_REFLECTION_TOKEN)));
+    }
+
+    #[test]
+    fn smart_mutations_empty_json_array() {
+        let muts = smart_payload_mutations("[]");
+        assert_eq!(muts, vec![r#"["' OR '1'='1"]"#.to_string()]);
+    }
+
+    #[test]
+    fn smart_mutations_for_form_urlencoded() {
+        let muts = smart_payload_mutations("user=bob&pass=secret");
+        assert!(!muts.is_empty());
+        assert!(muts.iter().any(|s| s.contains("OR")));
+    }
+
+    #[test]
+    fn smart_mutations_unknown_shape_is_empty() {
+        assert!(smart_payload_mutations("plain text no structure").is_empty());
+    }
+
+    #[test]
+    fn integer_probes_cover_boundaries() {
+        let probes = integer_probe_values();
+        assert!(probes.contains(&serde_json::json!(2147483647)));
+        assert!(probes.contains(&serde_json::json!(i64::MIN)));
+        assert!(probes.contains(&serde_json::json!(0)));
+    }
+
+    #[test]
+    fn form_urlencoded_detection() {
+        assert!(looks_like_form_urlencoded("a=1&b=2"));
+        assert!(!looks_like_form_urlencoded("{\"a\":1}"));
+        assert!(!looks_like_form_urlencoded("no equals here"));
+        assert!(!looks_like_form_urlencoded("=novalue"));
+    }
+
+    // ---- anomaly detection ------------------------------------------------
+
+    #[test]
+    fn anomaly_on_status_500() {
+        let b = baseline(100.0, 200, 500);
+        assert!(is_anomaly(&b, 500, 500, 100.0).unwrap().contains("500"));
+    }
+
+    #[test]
+    fn anomaly_on_latency_spike() {
+        let b = baseline(100.0, 200, 500);
+        let a = is_anomaly(&b, 200, 500, 600.0);
+        assert!(a.unwrap().contains("Response time anomaly"));
+    }
+
+    #[test]
+    fn anomaly_on_content_length_growth() {
+        let b = baseline(100.0, 200, 500);
+        let a = is_anomaly(&b, 200, 1000, 100.0);
+        assert!(a.unwrap().contains("Content-Length anomaly"));
+    }
+
+    #[test]
+    fn anomaly_on_content_length_shrink() {
+        let b = baseline(100.0, 200, 1000);
+        // base_len>100 and content < base/4 (250).
+        let a = is_anomaly(&b, 200, 100, 100.0);
+        assert!(a.unwrap().contains("Content-Length anomaly"));
+    }
+
+    #[test]
+    fn no_anomaly_for_normal_response() {
+        let b = baseline(100.0, 200, 500);
+        assert!(is_anomaly(&b, 200, 500, 100.0).is_none());
+    }
+
+    // ---- injection probe URL building ------------------------------------
+
+    #[test]
+    fn injection_probe_urls_respect_cap() {
+        let urls = build_param_injection_probe_urls("https://x.test/", 5);
+        assert_eq!(urls.len(), 5);
+        assert!(urls.iter().all(|u| u.starts_with("https://x.test/?")));
+    }
+
+    #[test]
+    fn injection_probe_urls_empty_base() {
+        assert!(build_param_injection_probe_urls("   ", 10).is_empty());
+    }
+
+    #[test]
+    fn append_query_param_first_and_subsequent() {
+        assert_eq!(
+            append_query_param("http://x/", "id", "1 2"),
+            "http://x/?id=1%202"
+        );
+        assert_eq!(
+            append_query_param("http://x/?a=b", "id", "v"),
+            "http://x/?a=b&id=v"
+        );
+    }
+
+    // ---- response signal heuristics --------------------------------------
+
+    #[test]
+    fn sqli_response_detection() {
+        assert!(looks_like_sqli_response(
+            "You have an error in your SQL syntax near ..."
+        ));
+        assert!(looks_like_sqli_response("Warning: mysqli error in your sql"));
+        assert!(looks_like_sqli_response("ORA-01756: quoted string"));
+        assert!(!looks_like_sqli_response("perfectly normal html page"));
+    }
+
+    #[test]
+    fn xss_reflection_detection() {
+        assert!(reflected_xss_indicated(&format!(
+            "<b>{XSS_REFLECTION_TOKEN}</b>"
+        )));
+        assert!(!reflected_xss_indicated("no token here"));
+    }
+
+    // ---- resolve_mutations dedup -----------------------------------------
+
+    #[test]
+    fn resolve_mutations_dedupes_and_prioritizes_guided() {
+        let m = Mutator::new("seed");
+        let guided = vec!["seed".to_string(), "guided_unique".to_string()];
+        let out = resolve_mutations(&m, &guided);
+        // Guided entries come first; "seed" appears exactly once despite being
+        // in guided AND classic mutations.
+        assert_eq!(out.iter().filter(|s| *s == "seed").count(), 1);
+        assert_eq!(out[0], "seed");
+        assert!(out.contains(&"guided_unique".to_string()));
+    }
+
+    // ---- file loader ------------------------------------------------------
+
+    #[test]
+    fn load_guided_payloads_trims_and_skips_blank() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("fuzz_core_guided_test.txt");
+        std::fs::write(&path, "  a  \n\n b \n").unwrap();
+        let loaded = load_guided_payloads_from_file(path.to_str().unwrap());
+        assert_eq!(loaded, vec!["a".to_string(), "b".to_string()]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_guided_payloads_missing_file_is_empty() {
+        assert!(load_guided_payloads_from_file("/nonexistent/weissman/xyz.txt").is_empty());
+    }
+}
