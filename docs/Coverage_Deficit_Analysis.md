@@ -110,6 +110,17 @@ sanctioned fix is to change the `rust-coverage` CI job to measure that:
    the DB-backed and integration tests count toward the denominator's *covered*
    side. This raises the number **legitimately** — it counts real tests exercising
    real code, excludes nothing, and does not touch the 40% floor.
+
+   > **First CI result (implemented):** the instrumented build + DB came up cleanly
+   > and 1150 unit tests plus the DB-backed contracts (rls_policy, auto_heal,
+   > engine_dispatch, mtls_grpc, …) ran and passed. One contract — the SOAR
+   > `isolate_host` E2E — needs the *running server* (which registers its live
+   > integration), not just the DB, so in a DB-only coverage context it returns
+   > `"skipped"`. The job therefore uses `--ignore-run-fail` so coverage is still
+   > measured from everything that ran and the verdict is the FLOOR check on the
+   > honest number — the `engine-wiring` job remains the real test gate. The
+   > fully-true number (every engine exercised) still requires instrumenting the
+   > entire live-stack run, which is `engine-wiring`'s domain.
 2. **Path B — genuine unit tests (incremental):** add category-(B) unit tests for the
    pure-logic modules. Real, reviewable coverage gains, done in batches.
 
