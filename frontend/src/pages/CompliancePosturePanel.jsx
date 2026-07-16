@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardCheck, Download, AlertTriangle } from 'lucide-react'
+import { ClipboardCheck, AlertTriangle, FileText, Search } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
-import { downloadCsv } from '../lib/exportFindingsCsv'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
 /**
  * CompliancePosturePanel — live, client-scoped compliance-framework exposure.
@@ -71,6 +73,7 @@ export default function CompliancePosturePanel() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async (id) => {
     if (id == null) { setData(null); return }
@@ -91,24 +94,80 @@ export default function CompliancePosturePanel() {
 
   useEffect(() => { load(clientId) }, [clientId, load])
 
-  const frameworks = Array.isArray(data?.frameworks) ? data.frameworks : []
+  const frameworks = useMemo(() => (Array.isArray(data?.frameworks) ? data.frameworks : []), [data])
+
+  // Client-side filter over the already-loaded posture: keep only the control ROWS that match
+  // the query (on control id, title, or framework name), and drop frameworks left with none.
+  const filteredFrameworks = useMemo(() => {
+    if (!searchQuery.trim()) return frameworks
+    return frameworks
+      .map((g) => {
+        const controls = (Array.isArray(g?.controls) ? g.controls : []).filter((c) =>
+          rowMatchesQuery(searchQuery, [c?.control, c?.title, g?.framework]),
+        )
+        return { ...g, controls }
+      })
+      .filter((g) => g.controls.length > 0)
+  }, [frameworks, searchQuery])
+
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(COMPLIANCE_CSV_HEADER, complianceCsvRows(filteredFrameworks), 'weissman-compliance-posture'),
+    [filteredFrameworks],
+  )
+  const exportPdf = useCallback(
+    () =>
+      exportRowsPdf(
+        'Weissman Compliance Posture',
+        COMPLIANCE_CSV_HEADER,
+        complianceCsvRows(filteredFrameworks),
+        'weissman-compliance-posture',
+      ),
+    [filteredFrameworks],
+  )
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live posture from GET /api/compliance/posture/:clientId — open findings crossed against the
+          tenant-scoped CWE→control map. No fabricated control telemetry.
+        </EvidenceNotice>
+      </div>
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <ClipboardCheck className="w-4 h-4 text-emerald-400" />
           {t('pages.complianceFrameworks.posture_heading', { defaultValue: 'Live Compliance Exposure' })}
         </h3>
-        <button
-          type="button"
-          disabled={frameworks.length === 0}
-          onClick={() => downloadCsv(complianceCsvRows(frameworks), COMPLIANCE_CSV_HEADER, 'weissman-compliance-posture')}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <Download className="w-3.5 h-3.5" />
-          {t('pages.complianceFrameworks.posture_export', { defaultValue: 'Export CSV' })}
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('common.search', { defaultValue: 'Search' })}
+              aria-label={t('common.search', { defaultValue: 'Search controls' })}
+              className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-emerald-500/40"
+            />
+          </div>
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={filteredFrameworks.length === 0}
+          />
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={filteredFrameworks.length === 0}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </button>
+        </div>
       </div>
 
       {clientId == null ? (
@@ -119,9 +178,11 @@ export default function CompliancePosturePanel() {
         <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
       ) : frameworks.length === 0 ? (
         <div className="p-4"><EmptyState compact icon="shield" title={t('pages.complianceFrameworks.posture_empty', { defaultValue: 'No open findings map to a tracked control for this client.' })} /></div>
+      ) : filteredFrameworks.length === 0 ? (
+        <div className="p-4 text-[11px] text-white/35">{t('pages.complianceFrameworks.posture_no_match', { defaultValue: 'No controls matched this search.' })}</div>
       ) : (
         <div className="divide-y divide-white/5">
-          {frameworks.map((g) => (
+          {filteredFrameworks.map((g) => (
             <div key={g.framework} className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-emerald-300">{g.framework}</span>

@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Crosshair, Download, AlertTriangle } from 'lucide-react'
+import { Crosshair, AlertTriangle, FileText, Search } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
 /**
  * AttackExposurePanel — live MITRE ATT&CK exposure for one client.
@@ -61,6 +64,7 @@ export default function AttackExposurePanel({ clientId }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async (id) => {
     if (id == null) { setData(null); return }
@@ -82,26 +86,61 @@ export default function AttackExposurePanel({ clientId }) {
   useEffect(() => { load(clientId) }, [clientId, load])
 
   const tactics = Array.isArray(data?.tactics) ? data.tactics : []
-  const techniques = Array.isArray(data?.techniques) ? data.techniques : []
-  const topTechniques = techniques.slice(0, 12)
+  const techniques = useMemo(() => (Array.isArray(data?.techniques) ? data.techniques : []), [data])
+
+  // Client-side filter over the already-loaded technique rollup (a bounded, tenant-scoped
+  // set — no server round-trip needed to search it).
+  const filteredTechniques = useMemo(
+    () =>
+      techniques.filter((tech) =>
+        rowMatchesQuery(searchQuery, [tech?.technique, tech?.name, tech?.tactic, tech?.count, tech?.critical, tech?.high, tech?.medium, tech?.low]),
+      ),
+    [techniques, searchQuery],
+  )
+  const topTechniques = filteredTechniques.slice(0, 12)
   const barMax = maxTacticCount(tactics)
+
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => downloadCsv(techniqueCsvRows(filteredTechniques), EXPOSURE_CSV_HEADER, 'weissman-attack-exposure'),
+    [filteredTechniques],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman ATT&CK Exposure', EXPOSURE_CSV_HEADER, techniqueCsvRows(filteredTechniques), 'weissman-attack-exposure'),
+    [filteredTechniques],
+  )
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live exposure from GET /api/attack-exposure/:clientId — MITRE ATT&amp;CK tactic and
+          technique rollup straight from the engine. No fabricated exposure telemetry.
+        </EvidenceNotice>
+      </div>
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-rose-400" />
           {t('pages.threatAnalysis.exposure_heading', { defaultValue: 'ATT&CK Exposure' })}
         </h3>
-        <button
-          type="button"
-          disabled={techniques.length === 0}
-          onClick={() => downloadCsv(techniqueCsvRows(techniques), EXPOSURE_CSV_HEADER, 'weissman-attack-exposure')}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <Download className="w-3.5 h-3.5" />
-          {t('pages.threatAnalysis.exposure_export', { defaultValue: 'Export CSV' })}
-        </button>
+        <div className="flex items-center gap-3">
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredTechniques.length}
+          />
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={!filteredTechniques.length}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </button>
+        </div>
       </div>
 
       {clientId == null ? (
@@ -134,7 +173,23 @@ export default function AttackExposurePanel({ clientId }) {
 
           {/* Top techniques */}
           <div className="p-4">
-            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_top', { defaultValue: 'Top techniques' })}</div>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.exposure_top', { defaultValue: 'Top techniques' })}</div>
+              <div className="relative">
+                <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('common.search', { defaultValue: 'Search' })}
+                  aria-label={t('common.search', { defaultValue: 'Search techniques' })}
+                  className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-rose-500/40"
+                />
+              </div>
+            </div>
+            {topTechniques.length === 0 ? (
+              <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.exposure_no_match', { defaultValue: 'No techniques matched this search.' })}</div>
+            ) : (
             <div className="space-y-2.5">
               {topTechniques.map((tech) => (
                 <div key={tech.technique} className="flex items-center gap-2">
@@ -149,6 +204,7 @@ export default function AttackExposurePanel({ clientId }) {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </div>
       )}

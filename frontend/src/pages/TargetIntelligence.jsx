@@ -1,6 +1,23 @@
-import React, { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { FileText, Search } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
+
+/** CSV/PDF columns for the ranked engine selection. Exported for tests. */
+export const TARGET_INTEL_CSV_HEADER = ['engine_id', 'score', 'group', 'reason']
+
+/** Pure: ranked engine candidates → export rows. Exported for tests. */
+export function targetIntelRows(ranked) {
+  return (Array.isArray(ranked) ? ranked : []).map((c) => [
+    c?.engine_id ?? '',
+    c?.score ?? 0,
+    c?.group ?? '',
+    c?.reason ?? '',
+  ])
+}
 
 // Sensitivity tint.
 const SEV = {
@@ -58,16 +75,17 @@ export default function TargetIntelligence() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [lastSubmitted, setLastSubmitted] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const analyze = async (e) => {
-    if (e && e.preventDefault) e.preventDefault()
-    const tgt = target.trim()
+  // Run a target lookup and cache its params so refresh can re-run the exact same query.
+  const load = useCallback(async (tgt, doEnrich) => {
     if (!tgt) return
     setLoading(true)
     setError('')
     setData(null)
     try {
-      const qs = `target=${encodeURIComponent(tgt)}${enrich ? '&enrich=1' : ''}`
+      const qs = `target=${encodeURIComponent(tgt)}${doEnrich ? '&enrich=1' : ''}`
       const r = await apiFetch(`/api/intel/target-profile?${qs}`)
       if (!r.ok) {
         const j = await r.json().catch(() => ({}))
@@ -79,12 +97,45 @@ export default function TargetIntelligence() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  const analyze = useCallback((e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    const tgt = target.trim()
+    if (!tgt) return
+    setLastSubmitted({ target: tgt, enrich })
+    load(tgt, enrich)
+  }, [target, enrich, load])
+
+  // Re-run the last submitted lookup (not whatever is currently typed in the box).
+  const handleRefresh = useCallback(() => {
+    if (lastSubmitted) load(lastSubmitted.target, lastSubmitted.enrich)
+  }, [lastSubmitted, load])
 
   const p = data && data.profile
   const sel = data && data.selection
   const prov = p && p.provenance
   const svc = p && p.service
+
+  // Ranked engine list from the loaded profile, filtered by the search box.
+  const ranked = useMemo(
+    () => (Array.isArray(data?.selection?.ranked) ? data.selection.ranked : []),
+    [data],
+  )
+  const filteredRanked = useMemo(
+    () => ranked.filter((c) => rowMatchesQuery(searchQuery, [c?.engine_id, c?.group, c?.reason])),
+    [ranked, searchQuery],
+  )
+
+  const exportCsv = useCallback(
+    () => exportRowsCsv(TARGET_INTEL_CSV_HEADER, targetIntelRows(filteredRanked), 'weissman-target-intelligence'),
+    [filteredRanked],
+  )
+  const exportPdf = useCallback(
+    () =>
+      exportRowsPdf('Weissman Target Intelligence', TARGET_INTEL_CSV_HEADER, targetIntelRows(filteredRanked), 'weissman-target-intelligence'),
+    [filteredRanked],
+  )
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
@@ -94,6 +145,11 @@ export default function TargetIntelligence() {
         </h1>
         <p className="text-sm text-slate-400 mt-1">{t('targetIntel.subtitle')}</p>
       </header>
+
+      <EvidenceNotice className="mb-5">
+        Live target profile from GET /api/intel/target-profile — engine ranking is computed
+        server-side from the resolved target. No fabricated selection scores.
+      </EvidenceNotice>
 
       <form onSubmit={analyze} className="mb-6">
         <div className="flex gap-2">
@@ -112,8 +168,9 @@ export default function TargetIntelligence() {
             {loading ? t('targetIntel.analyzing') : t('targetIntel.analyze')}
           </button>
         </div>
-        <label className="mt-2 flex items-center gap-2 text-xs text-slate-400 select-none cursor-pointer w-fit">
+        <label htmlFor="target-intel-enrich" className="mt-2 flex items-center gap-2 text-xs text-slate-400 select-none cursor-pointer w-fit">
           <input
+            id="target-intel-enrich"
             type="checkbox"
             checked={enrich}
             onChange={(ev) => setEnrich(ev.target.checked)}
@@ -233,16 +290,47 @@ export default function TargetIntelligence() {
 
           {/* ── Engine selection ── */}
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
                 {t('targetIntel.engineSelection')}
               </h2>
-              <span className="text-xs font-mono text-slate-400">
-                {t('targetIntel.focusCount', { focus: sel.focus_count, total: sel.engine_count })}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono text-slate-400">
+                  {t('targetIntel.focusCount', { focus: sel.focus_count, total: sel.engine_count })}
+                </span>
+                <ShellScanActions
+                  onRefresh={handleRefresh}
+                  onExport={exportCsv}
+                  refreshLoading={loading}
+                  refreshDisabled={!lastSubmitted}
+                  exportDisabled={!filteredRanked.length}
+                />
+                <button
+                  type="button"
+                  onClick={exportPdf}
+                  disabled={!filteredRanked.length}
+                  title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-slate-300 hover:bg-white/10 disabled:opacity-40 transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  {t('common.export_pdf', { defaultValue: 'PDF' })}
+                </button>
+              </div>
             </div>
 
             <p className="text-xs text-slate-400 mb-3">{sel.profile_summary}</p>
+
+            <div className="relative mb-3">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(ev) => setSearchQuery(ev.target.value)}
+                placeholder={t('targetIntel.searchEngines', { defaultValue: 'Filter engines by id, group, or reason' })}
+                aria-label={t('targetIntel.searchEngines', { defaultValue: 'Filter engines' })}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs font-mono bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
+            </div>
 
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
               {t('targetIntel.recommendedFocus')}
@@ -262,10 +350,10 @@ export default function TargetIntelligence() {
             </div>
 
             <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-              {t('targetIntel.rankedTop', { n: Math.min(40, (sel.ranked || []).length) })}
+              {t('targetIntel.rankedTop', { n: Math.min(40, filteredRanked.length) })}
             </div>
             <ol className="space-y-1 max-h-[26rem] overflow-y-auto pr-1">
-              {(sel.ranked || []).map((c) => (
+              {filteredRanked.map((c) => (
                 <li
                   key={c.engine_id}
                   className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5"

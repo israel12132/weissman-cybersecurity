@@ -1,8 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Hourglass, AlertTriangle } from 'lucide-react'
+import { Hourglass, AlertTriangle, FileText } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf } from '../lib/pageExport'
+
+/** CSV/PDF columns for the age-bucket backlog. Exported for tests. */
+export const BACKLOG_AGING_CSV_HEADER = ['label', 'total', 'critical', 'high', 'medium', 'low']
+
+/** Pure: age buckets → export rows. Exported for tests. */
+export function backlogAgingRows(buckets) {
+  return (Array.isArray(buckets) ? buckets : []).map((b) => [
+    b?.label ?? '',
+    b?.total ?? 0,
+    b?.critical ?? 0,
+    b?.high ?? 0,
+    b?.medium ?? 0,
+    b?.low ?? 0,
+  ])
+}
 
 /**
  * BacklogAgingPanel — how stale is the client's open-finding backlog?
@@ -68,9 +86,19 @@ export default function BacklogAgingPanel() {
 
   useEffect(() => { load(clientId) }, [clientId, load])
 
-  const buckets = Array.isArray(data?.buckets) ? data.buckets : []
+  const buckets = useMemo(() => (Array.isArray(data?.buckets) ? data.buckets : []), [data])
   const barMax = maxBucketTotal(buckets)
   const hasFindings = buckets.some((b) => (Number(b.total) || 0) > 0)
+
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(BACKLOG_AGING_CSV_HEADER, backlogAgingRows(buckets), 'weissman-backlog-aging'),
+    [buckets],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman Backlog Aging', BACKLOG_AGING_CSV_HEADER, backlogAgingRows(buckets), 'weissman-backlog-aging'),
+    [buckets],
+  )
 
   if (clientId == null || loading || error || !hasFindings) return null
 
@@ -79,21 +107,45 @@ export default function BacklogAgingPanel() {
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live backlog from GET /api/remediation/aging/:clientId — open findings bucketed by age
+          from the tenant-scoped remediation store. No fabricated aging telemetry.
+        </EvidenceNotice>
+      </div>
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Hourglass className="w-4 h-4 text-amber-400" />
           {t('pages.remediationHub.aging_heading', { defaultValue: 'Backlog Aging' })}
         </h3>
-        {(agedCriticals > 0 || agedHighs > 0) && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 font-medium">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            {t('pages.remediationHub.aging_aged', {
-              criticals: agedCriticals,
-              highs: agedHighs,
-              defaultValue: '{{criticals}} critical / {{highs}} high open > 90d',
-            })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {(agedCriticals > 0 || agedHighs > 0) && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 font-medium">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {t('pages.remediationHub.aging_aged', {
+                criticals: agedCriticals,
+                highs: agedHighs,
+                defaultValue: '{{criticals}} critical / {{highs}} high open > 90d',
+              })}
+            </span>
+          )}
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!buckets.length}
+          />
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={!buckets.length}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </button>
+        </div>
       </div>
 
       <div className="p-4 space-y-2">

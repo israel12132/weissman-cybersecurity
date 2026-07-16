@@ -1,6 +1,22 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { FileText, Search } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
+
+/** CSV/PDF columns for the live active-host saturation list. Exported for tests. */
+export const STEALTH_CSV_HEADER = ['host', 'in_flight', 'capacity']
+
+/** Pure: live active hosts → export rows. Exported for tests. */
+export function stealthHostRows(hosts) {
+  return (Array.isArray(hosts) ? hosts : []).map((h) => [
+    h?.host ?? '',
+    h?.in_flight ?? 0,
+    h?.capacity ?? 0,
+  ])
+}
 
 // Live-load tint by saturation ratio.
 function loadColor(ratio) {
@@ -46,6 +62,7 @@ export default function StealthOperations() {
   const [pacing, setPacing] = useState(null) // editable draft, seeded once from status
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const timer = useRef(null)
 
   const load = useCallback(async () => {
@@ -131,6 +148,28 @@ export default function StealthOperations() {
   const l = data && data.live
   const id = data && data.identity
 
+  // Client-side filter over the already-loaded live active-host list (a bounded, live
+  // snapshot — searched in place, no extra round-trip).
+  const activeHosts = useMemo(
+    () => (Array.isArray(data?.live?.active_hosts) ? data.live.active_hosts : []),
+    [data],
+  )
+  const filteredHosts = useMemo(
+    () => activeHosts.filter((h) => rowMatchesQuery(searchQuery, [h?.host])),
+    [activeHosts, searchQuery],
+  )
+
+  const handleRefresh = useCallback(() => load(), [load])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(STEALTH_CSV_HEADER, stealthHostRows(filteredHosts), 'weissman-stealth-operations'),
+    [filteredHosts],
+  )
+  const exportPdf = useCallback(
+    () =>
+      exportRowsPdf('Weissman Stealth Operations', STEALTH_CSV_HEADER, stealthHostRows(filteredHosts), 'weissman-stealth-operations'),
+    [filteredHosts],
+  )
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
@@ -158,8 +197,29 @@ export default function StealthOperations() {
           >
             {t('stealthOps.refresh')}
           </button>
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredHosts.length}
+          />
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={!filteredHosts.length}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/15 text-slate-300 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </button>
         </div>
       </header>
+
+      <EvidenceNotice className="mb-4">
+        Live snapshot from GET /api/stealth/status — real concurrency, pacing and rotating-identity
+        telemetry. Active-host saturation is exported as loaded; no fabricated host activity.
+      </EvidenceNotice>
 
       {error && (
         <div className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-3 text-sm text-rose-300 mb-4">
@@ -248,9 +308,10 @@ export default function StealthOperations() {
                     [t('stealthOps.jitterMax'), 'jitter_max_ms'],
                     [t('stealthOps.minInterval'), 'min_interval_ms'],
                   ].map(([k, key]) => (
-                    <label key={key} className="flex items-center justify-between gap-3">
+                    <label key={key} htmlFor={`pacing-${key}`} className="flex items-center justify-between gap-3">
                       <span className="text-sm text-slate-200">{k}</span>
                       <input
+                        id={`pacing-${key}`}
                         type="number"
                         min="0"
                         max="60000"
@@ -304,21 +365,38 @@ export default function StealthOperations() {
 
           {/* ── Active hosts ── */}
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mt-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
                 {t('stealthOps.activeTargets')}
               </h2>
-              <span className="text-xs font-mono text-slate-500">
-                {t('stealthOps.showing', { n: l.active_hosts.length })}
-              </span>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="w-3 h-3 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t('common.search', { defaultValue: 'Search host' })}
+                    aria-label={t('common.search', { defaultValue: 'Search host' })}
+                    className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-slate-950/60 border border-white/10 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                  />
+                </div>
+                <span className="text-xs font-mono text-slate-500">
+                  {t('stealthOps.showing', { n: filteredHosts.length })}
+                </span>
+              </div>
             </div>
-            {l.active_hosts.length === 0 ? (
+            {activeHosts.length === 0 ? (
               <div className="text-sm text-slate-500 py-6 text-center">
                 {t('stealthOps.noRequests')}
               </div>
+            ) : filteredHosts.length === 0 ? (
+              <div className="text-sm text-slate-500 py-6 text-center">
+                {t('stealthOps.noMatch', { defaultValue: 'No active hosts match your search.' })}
+              </div>
             ) : (
               <ul className="space-y-2">
-                {l.active_hosts.map((h) => (
+                {filteredHosts.map((h) => (
                   <li key={h.host} className="flex items-center gap-3">
                     <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
                       {h.host}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   RefreshCw,
@@ -9,11 +9,30 @@ import {
   Cpu,
   Clock,
   GitPullRequest,
+  FileText,
+  Search,
 } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
+
+/** CSV/PDF columns for the self-improvement proposal queue. Exported for tests. */
+export const SELF_IMPROVE_CSV_HEADER = ['id', 'category', 'source', 'title', 'status']
+
+/** Pure: proposal items → export rows. Exported for tests. */
+export function selfImproveRows(items) {
+  return (Array.isArray(items) ? items : []).map((it) => [
+    it?.id ?? '',
+    it?.category ?? '',
+    it?.source ?? '',
+    it?.title ?? '',
+    it?.status ?? '',
+  ])
+}
 
 const CATEGORY_LABEL = {
   new_engine: 'New engine',
@@ -75,6 +94,7 @@ export default function SelfImprovementConsole() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -139,6 +159,24 @@ export default function SelfImprovementConsole() {
   const intervalMin = status ? Math.round((status.interval_secs || 3600) / 60) : 60
   const enabled = !!status?.enabled
 
+  // Free-text search over the already status-filtered proposal set (loaded from the queue
+  // endpoint). Combines with the existing status filter tabs — no extra server round-trip.
+  const filteredItems = useMemo(
+    () => items.filter((it) => rowMatchesQuery(searchQuery, [it?.title, it?.category, it?.source])),
+    [items, searchQuery],
+  )
+
+  const handleRefresh = useCallback(() => load(), [load])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement'),
+    [filteredItems],
+  )
+  const exportPdf = useCallback(
+    () =>
+      exportRowsPdf('Weissman Self-Improvement Console', SELF_IMPROVE_CSV_HEADER, selfImproveRows(filteredItems), 'weissman-self-improvement'),
+    [filteredItems],
+  )
+
   return (
     <PageShell
       title="Autonomous Self-Improvement"
@@ -173,9 +211,31 @@ export default function SelfImprovementConsole() {
           >
             <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} />
           </button>
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredItems.length}
+          />
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={!filteredItems.length}
+            title="Export PDF"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10 disabled:opacity-50"
+          >
+            <FileText className="w-4 h-4" /> PDF
+          </button>
         </div>
       }
     >
+      <div className="mb-4">
+        <EvidenceNotice>
+          Live queue from GET /api/self-improve/status + /api/self-improve/queue — real proposals
+          from the autonomous engine. No fabricated suggestions; exports reflect the loaded rows.
+        </EvidenceNotice>
+      </div>
+
       {error && (
         <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
           {error}
@@ -211,7 +271,7 @@ export default function SelfImprovementConsole() {
             />
           </div>
 
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             {['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'APPLIED'].map((s) => (
               <button
                 key={s}
@@ -225,13 +285,26 @@ export default function SelfImprovementConsole() {
                 {s.replace('_', ' ').toLowerCase()}
               </button>
             ))}
+            <div className="relative ml-auto">
+              <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search title, category, source"
+                aria-label="Search proposals"
+                className="w-64 max-w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-black/30 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-white/30"
+              />
+            </div>
           </div>
 
-          {items.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <EmptyState
-              title="No proposals in this view"
+              title={searchQuery ? 'No proposals match your search' : 'No proposals in this view'}
               description={
-                enabled
+                searchQuery
+                  ? 'No proposals match your search in this status. Clear the search or switch tabs.'
+                  : enabled
                   ? 'The engine will post proposals on its next hourly cycle. Or click “Run now”.'
                   : 'The engine is disabled. Enable it, or click “Run now” for a one-off analysis.'
               }
@@ -239,7 +312,7 @@ export default function SelfImprovementConsole() {
           ) : (
             <div className="space-y-3">
               <AnimatePresence>
-                {items.map((it) => {
+                {filteredItems.map((it) => {
                   const files = Array.isArray(it.affected_files) ? it.affected_files : []
                   return (
                     <motion.div
@@ -328,11 +401,12 @@ export default function SelfImprovementConsole() {
                   )
                 })}
               </AnimatePresence>
-              {filter === 'PENDING_APPROVAL' && items.length > 0 && (
+              {filter === 'PENDING_APPROVAL' && filteredItems.length > 0 && (
                 <div className="pt-2">
                   <input
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
+                    aria-label="Optional review note applied to your next approve or reject"
                     placeholder="Optional review note (applied to your next approve/reject)"
                     className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/80 placeholder-white/30"
                   />
