@@ -64,17 +64,19 @@ jobs:
           components: clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          # Distinct cache scope for the lint/test job (separate from the
+          # instrumented coverage build) so target/ artifacts don't collide.
+          shared-key: rust-audit
+          cache-all-crates: true
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        # Prebuilt binary (taiki-e/install-action) instead of `cargo install`
+        # from source — seconds vs minutes, no target/ churn.
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Run cargo audit (known CVEs in Rust deps)
         # Each ignore below is a transitive advisory with NO fixed upgrade available;
@@ -90,23 +92,18 @@ jobs:
         #                      — via genpdf→printpdf→lopdf 0.26, pinned by genpdf.
         #                      We GENERATE PDFs, never parse untrusted ones, so the
         #                      parser DoS is out of our surface. Tracked with genpdf.
-        #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
-        #                      point). tokio-tungstenite bumped 0.21 → 0.24 (rustls 0.23),
-        #                      removing the 0.22 path; any residual is via aws-config's
-        #                      rustls 0.21. We don't configure CRL revocation on WS/TLS
-        #                      clients, so the CRL-matching bug is out of our surface. Tracked
-        #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
         run: |
           cargo audit \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2026-0098 \
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104 \
-            --ignore RUSTSEC-2026-0187 \
-            --ignore RUSTSEC-2026-0049
+            --ignore RUSTSEC-2026-0187
 
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
 
       - name: Run cargo deny (license + advisory + source provenance gate)
         # Enforces the dependency-license allow-list (fails on GPL/AGPL/unknown),
@@ -264,14 +261,10 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          shared-key: engine-wiring
+          cache-all-crates: true
 
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
@@ -590,8 +583,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: llvm-tools-preview
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Instrumented coverage build differs from the plain lint/test build,
+          # so keep it on its own cache scope.
+          shared-key: rust-coverage
+          cache-all-crates: true
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
       - name: Coverage (workspace lib tests) with a floor
         # Security-critical code should carry measured coverage, not just green tests.
         # Start the floor conservative and ratchet up; lcov is uploaded for inspection.
