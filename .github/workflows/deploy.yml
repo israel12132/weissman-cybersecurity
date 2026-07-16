@@ -68,7 +68,7 @@ jobs:
           set -euo pipefail
           mkdir -p _render && cp deploy/k8s/*.yaml _render/
           # GitHub artifact names forbid ':', so map `sha256:<hex>` -> `sha256-<hex>`.
-          # Value comes via env (no `${{ }}` in the script) to keep shell-injection safe.
+          # Value comes via the environment (IMAGE_DIGEST) to keep shell-injection safe.
           echo "ARTIFACT_NAME=rendered-k8s-${IMAGE_DIGEST//:/-}" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
