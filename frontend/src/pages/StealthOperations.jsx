@@ -332,7 +332,7 @@ export default function StealthOperations() {
                     onChange={(e) => setHostSearch(e.target.value)}
                     aria-label={t('stealthOps.search_placeholder')}
                     placeholder={t('stealthOps.search_placeholder')}
-                    className="w-40 sm:w-56 bg-slate-900/60 border border-white/10 rounded-lg px-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/40"
+                    className="w-40 sm:w-56 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-1 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-emerald-500/40"
                   />
                 )}
                 <span className="text-xs font-mono text-slate-500">
