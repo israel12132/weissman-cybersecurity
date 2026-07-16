@@ -591,18 +591,70 @@ jobs:
   rust-coverage:
     name: Rust — coverage (llvm-cov)
     runs-on: ubuntu-latest
+    # True-coverage measurement (Path A, see docs/Coverage_Deficit_Analysis.md):
+    # a live Postgres + Redis let the DB-backed integration/contract tests run, so
+    # coverage reflects how the I/O-heavy engines are ACTUALLY tested (integration/
+    # E2E), not just --lib unit tests. The 40% floor is intentionally kept — this
+    # reports the honest number so floor policy is decided on facts, not padding.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weissman
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d weissman"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: llvm-tools-preview
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cov-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Free runner disk (instrumented all-targets build is large)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
-      - name: Coverage (workspace lib tests) with a floor
-        # Security-critical code should carry measured coverage, not just green tests.
-        # Start the floor conservative and ratchet up; lcov is uploaded for inspection.
+      - name: Apply database migrations
+        env:
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+        run: cargo run -q -p weissman-db --example run_migrate
+      - name: Coverage (workspace incl. integration tests) with a floor
+        # --workspace (not --lib): includes integration tests. TEST_DATABASE_URL +
+        # WEISSMAN_REQUIRE_DB_TESTS make the DB-backed contract tests run (not skip)
+        # against the Postgres service, so their coverage counts. Floor kept at 40%.
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_REQUIRE_DB_TESTS: "1"
         run: |
-          cargo llvm-cov --workspace --lib --lcov --output-path lcov.info --fail-under-lines 40
+          cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 40
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
