@@ -27,6 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Read-only checkout: this job never pushes back, so don't leave the
+          # GitHub token in .git/config for later steps (least privilege).
+          persist-credentials: false
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
@@ -51,17 +55,24 @@ jobs:
           set -euo pipefail
           DIGEST_REF="${IMAGE}@${IMAGE_DIGEST}"
           # Replace any `image: <IMAGE>:tag` or existing digest with the verified digest.
-          for f in $(grep -rl "${IMAGE}" deploy/k8s || true); do
+          # NUL-delimited so filenames with spaces/newlines are handled safely.
+          while IFS= read -r -d '' f; do
             sed -i -E "s|image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+)|image: ${DIGEST_REF}|g" "$f"
             echo "pinned $f -> ${DIGEST_REF}"
-          done
+          done < <(grep -rlZ "${IMAGE}" deploy/k8s || true)
 
       - name: Render pinned manifests (artifact for review / GitOps)
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
+          set -euo pipefail
           mkdir -p _render && cp deploy/k8s/*.yaml _render/
+          # GitHub artifact names forbid ':', so map `sha256:<hex>` -> `sha256-<hex>`.
+          # Value comes via env (no `${{ }}` in the script) to keep shell-injection safe.
+          echo "ARTIFACT_NAME=rendered-k8s-${IMAGE_DIGEST//:/-}" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: rendered-k8s-${{ inputs.image_digest }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: _render/
 
       - name: Apply to cluster (only when a KUBECONFIG secret is configured)
