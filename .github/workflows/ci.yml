@@ -673,7 +673,7 @@ jobs:
           #      (kept at 40 on purpose; see docs/Coverage_Deficit_Analysis.md).
           cargo llvm-cov --workspace --ignore-run-fail --no-report
           cargo llvm-cov report --lcov --output-path lcov.info
-          cargo llvm-cov report --summary-only --fail-under-lines 40
+          cargo llvm-cov report --fail-under-lines 40
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
