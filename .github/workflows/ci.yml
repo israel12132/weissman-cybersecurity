@@ -77,6 +77,19 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Free runner disk (workspace links several large debug binaries)
+        # `cargo build --workspace` links weissman-server, weissman-worker AND the
+        # fingerprint_engine binary as full debug executables. On the stock runner the
+        # linker exhausts the disk mid-link and `ld` dies with SIGBUS (signal 7, "Bus
+        # error", core dumped) — NOT a code error: the same workspace compiles in the
+        # rust-coverage job, which already frees disk first. Reclaim the unused language
+        # toolchains up front so ld has headroom through clippy + build. Mirrors the
+        # rust-coverage job's identical step.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
