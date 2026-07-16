@@ -7,7 +7,7 @@ the truth and explain the gap.**
 |---|---|
 | Measurement | `cargo llvm-cov --workspace --lib` (unit tests) |
 | **Measured line coverage** | **19.32%** (42,868 of 221,884 lines covered; 179,016 uncovered) |
-| Region coverage | 20.15% · Function coverage | 25.37% |
+| Region coverage | 20.15% · Function coverage: 25.37% |
 | CI floor (`--fail-under-lines`) | **40%** — kept intact; **not** lowered |
 
 > Integration/E2E coverage is **not** in this number. `--lib` measures only unit
