@@ -61,7 +61,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.91.1
         with:
-          components: clippy
+          # rustfmt must be pinned to the toolchain (1.91.1) so `cargo fmt --check`
+          # below is deterministic. Without it, cargo falls back to the runner's
+          # preinstalled rustfmt, whose formatting drifts from the pinned compiler and
+          # fails on code that is correctly formatted for 1.91.1 (e.g. pdf_report.rs).
+          components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
         uses: actions/cache@v4
