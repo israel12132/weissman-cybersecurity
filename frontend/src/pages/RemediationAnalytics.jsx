@@ -127,9 +127,9 @@ export default function RemediationAnalytics() {
 
   return (
     <PageShell
-      title={t('pages.remediationAnalytics.title', { defaultValue: 'Remediation Analytics' })}
-      subtitle={t('pages.remediationAnalytics.subtitle', { defaultValue: 'Auto-heal outcomes aggregated across every active client' })}
-      badge={t('pages.remediationAnalytics.badge', { defaultValue: 'ANALYTICS' })}
+      title={t('pages.remediationAnalytics.title')}
+      subtitle={t('pages.remediationAnalytics.subtitle')}
+      badge={t('pages.remediationAnalytics.badge')}
       badgeColor="#22d3ee"
       icon={<Activity />}
       actions={<ShellScanActions onRefresh={load} refreshLoading={loading} exportDisabled />}
@@ -137,10 +137,10 @@ export default function RemediationAnalytics() {
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-white/45 font-mono">
-            {t('pages.remediationAnalytics.intro', { defaultValue: 'Live auto-heal telemetry from GET /api/clients/:id/heal-stats and /heal-requests.' })}
+            {t('pages.remediationAnalytics.intro')}
           </p>
           <Link to="/remediation" className="text-xs text-cyan-300 hover:text-cyan-200">
-            {t('pages.remediationAnalytics.open_hub', { defaultValue: 'Remediation Hub →' })}
+            {t('pages.remediationAnalytics.open_hub')}
           </Link>
         </div>
 
@@ -159,8 +159,8 @@ export default function RemediationAnalytics() {
           <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             {partial
-              ? t('pages.remediationAnalytics.partial', { defaultValue: 'Some client telemetry could not be loaded — the totals below are partial.' })
-              : t('pages.remediationAnalytics.bounded', { defaultValue: 'Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client.' })}
+              ? t('pages.remediationAnalytics.partial')
+              : t('pages.remediationAnalytics.bounded')}
           </div>
         )}
 
@@ -172,8 +172,8 @@ export default function RemediationAnalytics() {
           <EmptyState
             compact
             icon="shield"
-            title={t('pages.remediationAnalytics.empty_title', { defaultValue: 'No auto-heal runs yet.' })}
-            body={t('pages.remediationAnalytics.empty_hint', { defaultValue: 'Trigger a heal from the Remediation Hub to populate analytics.' })}
+            title={t('pages.remediationAnalytics.empty_title')}
+            body={t('pages.remediationAnalytics.empty_hint')}
           />
         )}
 
@@ -181,7 +181,7 @@ export default function RemediationAnalytics() {
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <GitPullRequest className="w-4 h-4 text-cyan-400" />
-            {t('pages.remediationAnalytics.recent_heals', { defaultValue: 'Recent heals' })}
+            {t('pages.remediationAnalytics.recent_heals')}
           </h3>
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
@@ -200,7 +200,7 @@ export default function RemediationAnalytics() {
                       <span style={{ color: vm ? vm.color : 'rgba(255,255,255,0.3)' }}>●</span>
                       <span className="text-white/70 font-mono truncate max-w-[220px]">{h.finding_id || '—'}</span>
                       <span className="text-white/60 truncate">
-                        {vm ? t(`pages.remediationHub.${vm.key}`, { defaultValue: h.verdict }) : (h.verification_status || h.status || '—')}
+                        {vm ? t(`pages.remediationHub.${vm.key}`) : (h.verification_status || h.status || '—')}
                       </span>
                       {h.channel && <span className="text-[10px] text-white/35 font-mono">{h.channel}</span>}
                       {h.attempts > 1 && <span className="text-[10px] text-amber-300/70 font-mono">×{h.attempts}</span>}

@@ -99,10 +99,10 @@ function SlaBadge({ sla, t }) {
   const Icon = v.key === 'overdue' ? AlertTriangle : v.key === 'on_track' ? CheckCircle2 : Clock
   const label =
     v.key === 'overdue'
-      ? t('pages.remediationHub.program_sla_overdue', { days: v.days ?? '?', defaultValue: 'Overdue {{days}}d' })
+      ? t('pages.remediationHub.program_sla_overdue', { days: v.days ?? '?' })
       : v.key === 'unknown'
-      ? t('pages.remediationHub.program_sla_unknown', { defaultValue: 'No SLA clock' })
-      : t('pages.remediationHub.program_sla_due', { days: v.days ?? '?', defaultValue: 'Due in {{days}}d' })
+      ? t('pages.remediationHub.program_sla_unknown')
+      : t('pages.remediationHub.program_sla_due', { days: v.days ?? '?' })
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border ${TONE_CLASS[v.tone]}`}>
       <Icon className="w-3 h-3" />
@@ -172,11 +172,11 @@ export default function FixFirstProgram() {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Target className="w-4 h-4 text-cyan-400" />
-          {t('pages.remediationHub.program_heading', { defaultValue: 'Fix-First Program' })}
+          {t('pages.remediationHub.program_heading')}
         </h3>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-white/35 font-mono hidden sm:inline">
-            {t('pages.remediationHub.program_caption', { defaultValue: 'Backend-ranked · root-cause deduplicated · EPSS/KEV + choke points + SLA' })}
+            {t('pages.remediationHub.program_caption')}
           </span>
           <button
             type="button"
@@ -185,40 +185,40 @@ export default function FixFirstProgram() {
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            {t('pages.remediationHub.program_export', { defaultValue: 'Export CSV' })}
+            {t('pages.remediationHub.program_export')}
           </button>
         </div>
       </div>
 
       {clientId == null ? (
         <div className="p-4">
-          <EmptyState compact icon="shield" title={t('pages.remediationHub.program_no_client', { defaultValue: 'Select a client to load its prioritized remediation program.' })} />
+          <EmptyState compact icon="shield" title={t('pages.remediationHub.program_no_client')} />
         </div>
       ) : error ? (
         <div className="p-4 text-sm text-rose-300 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          {t('pages.remediationHub.program_error', { error, defaultValue: "Couldn't load the remediation program: {{error}}." })}
+          {t('pages.remediationHub.program_error', { error })}
         </div>
       ) : loading ? (
         <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
       ) : program.length === 0 ? (
         <div className="p-4">
-          <EmptyState compact icon="shield" title={t('pages.remediationHub.program_empty', { defaultValue: 'No open findings to prioritize for this client.' })} />
+          <EmptyState compact icon="shield" title={t('pages.remediationHub.program_empty')} />
         </div>
       ) : (
         <>
           <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 border-b border-white/5">
-            <SummaryStat label={t('pages.remediationHub.program_stat_actions', { defaultValue: 'Actions' })} value={data.remediation_actions ?? program.length} />
-            <SummaryStat label={t('pages.remediationHub.program_stat_overdue', { defaultValue: 'Overdue' })} value={data.overdue_actions ?? 0} color="#f43f5e" />
-            <SummaryStat label={t('pages.remediationHub.program_stat_due_soon', { defaultValue: 'Due soon' })} value={data.due_soon_actions ?? 0} color="#fbbf24" />
-            <SummaryStat label={t('pages.remediationHub.program_stat_kev', { defaultValue: 'KEV' })} value={data.kev_actions ?? 0} color="#fb923c" />
-            <SummaryStat label={t('pages.remediationHub.program_stat_choke', { defaultValue: 'Choke points' })} value={data.choke_point_actions ?? 0} color="#a78bfa" />
-            <SummaryStat label={t('pages.remediationHub.program_stat_crown', { defaultValue: 'Crown jewels' })} value={data.crown_jewel_actions ?? 0} color="#f0abfc" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_actions')} value={data.remediation_actions ?? program.length} />
+            <SummaryStat label={t('pages.remediationHub.program_stat_overdue')} value={data.overdue_actions ?? 0} color="#f43f5e" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_due_soon')} value={data.due_soon_actions ?? 0} color="#fbbf24" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_kev')} value={data.kev_actions ?? 0} color="#fb923c" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_choke')} value={data.choke_point_actions ?? 0} color="#a78bfa" />
+            <SummaryStat label={t('pages.remediationHub.program_stat_crown')} value={data.crown_jewel_actions ?? 0} color="#f0abfc" />
           </div>
 
           {frameworks.length > 0 && (
             <div className="px-4 py-2 border-b border-white/5 flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] uppercase tracking-wider text-white/35">{t('pages.remediationHub.program_frameworks', { defaultValue: 'Frameworks' })}</span>
+              <span className="text-[10px] uppercase tracking-wider text-white/35">{t('pages.remediationHub.program_frameworks')}</span>
               {frameworks.map((fw) => <Chip key={fw} color="#22d3ee">{fw}</Chip>)}
             </div>
           )}
@@ -232,18 +232,18 @@ export default function FixFirstProgram() {
                     <div className="text-lg font-bold tabular-nums text-white/30 w-8 shrink-0 text-right">{item.rank}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="text-sm font-semibold text-white truncate">{item.title || item.cwe || t('pages.remediationHub.program_untitled', { defaultValue: 'Untitled finding' })}</h4>
+                        <h4 className="text-sm font-semibold text-white truncate">{item.title || item.cwe || t('pages.remediationHub.program_untitled')}</h4>
                         <SlaBadge sla={item.sla} t={t} />
                         {item.kev_ransomware ? (
-                          <Chip color="#f43f5e" title="Ransomware-associated KEV"><Flame className="w-3 h-3" />{t('pages.remediationHub.program_ransomware', { defaultValue: 'Ransomware' })}</Chip>
+                          <Chip color="#f43f5e" title="Ransomware-associated KEV"><Flame className="w-3 h-3" />{t('pages.remediationHub.program_ransomware')}</Chip>
                         ) : item.kev ? (
                           <Chip color="#fb923c" title="CISA Known Exploited Vulnerability"><ShieldAlert className="w-3 h-3" />KEV</Chip>
                         ) : null}
                         {item.on_choke_point && (
-                          <Chip color="#a78bfa" title="On an attack-path choke point"><GitBranch className="w-3 h-3" />{t('pages.remediationHub.program_choke', { defaultValue: 'Choke point' })}</Chip>
+                          <Chip color="#a78bfa" title="On an attack-path choke point"><GitBranch className="w-3 h-3" />{t('pages.remediationHub.program_choke')}</Chip>
                         )}
                         {item.crown_jewel && (
-                          <Chip color="#f0abfc" title="Affects a business-critical crown-jewel asset"><Gem className="w-3 h-3" />{t('pages.remediationHub.program_crown', { defaultValue: 'Crown jewel' })}</Chip>
+                          <Chip color="#f0abfc" title="Affects a business-critical crown-jewel asset"><Gem className="w-3 h-3" />{t('pages.remediationHub.program_crown')}</Chip>
                         )}
                         {formatUsd(item.business_value_usd) && (
                           <Chip color="#f0abfc" title="Estimated financial blast radius">{formatUsd(item.business_value_usd)}</Chip>
@@ -255,13 +255,13 @@ export default function FixFirstProgram() {
                           <div className="h-full bg-gradient-to-r from-cyan-500 to-rose-500" style={{ width: `${scoreFraction(item.priority_score) * 100}%` }} />
                         </div>
                         <span className="text-[10px] font-mono text-white/40 whitespace-nowrap tabular-nums">
-                          {t('pages.remediationHub.program_score', { defaultValue: 'score' })} {Number(item.priority_score).toFixed(1)}
-                          {Number.isFinite(risk) ? ` · ${t('pages.remediationHub.program_risk', { defaultValue: 'risk' })} ${risk.toFixed(1)}` : ''}
+                          {t('pages.remediationHub.program_score')} {Number(item.priority_score).toFixed(1)}
+                          {Number.isFinite(risk) ? ` · ${t('pages.remediationHub.program_risk')} ${risk.toFixed(1)}` : ''}
                         </span>
                       </div>
                       {item.closes_findings > 1 && (
                         <div className="text-[11px] text-cyan-300/80 mb-1">
-                          {t('pages.remediationHub.program_closes', { count: item.closes_findings, defaultValue: 'One fix closes {{count}} findings' })}
+                          {t('pages.remediationHub.program_closes', { count: item.closes_findings })}
                         </div>
                       )}
                       {Array.isArray(item.compliance) && item.compliance.length > 0 && (

@@ -91,7 +91,7 @@ export default function AttackExposurePanel({ clientId }) {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-rose-400" />
-          {t('pages.threatAnalysis.exposure_heading', { defaultValue: 'ATT&CK Exposure' })}
+          {t('pages.threatAnalysis.exposure_heading')}
         </h3>
         <button
           type="button"
@@ -100,23 +100,23 @@ export default function AttackExposurePanel({ clientId }) {
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Download className="w-3.5 h-3.5" />
-          {t('pages.threatAnalysis.exposure_export', { defaultValue: 'Export CSV' })}
+          {t('pages.threatAnalysis.exposure_export')}
         </button>
       </div>
 
       {clientId == null ? (
-        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_no_client', { defaultValue: 'Select a client to load ATT&CK exposure.' })} /></div>
+        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_no_client')} /></div>
       ) : error ? (
-        <div className="p-4 text-sm text-rose-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{t('pages.threatAnalysis.exposure_error', { error, defaultValue: "Couldn't load ATT&CK exposure: {{error}}." })}</div>
+        <div className="p-4 text-sm text-rose-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{t('pages.threatAnalysis.exposure_error', { error })}</div>
       ) : loading ? (
         <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
       ) : techniques.length === 0 ? (
-        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_empty', { defaultValue: 'No ATT&CK-tagged findings for this client yet.' })} /></div>
+        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_empty')} /></div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
           {/* Tactic rollup */}
           <div className="p-4 border-b lg:border-b-0 lg:border-r border-white/5">
-            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_tactics', { defaultValue: 'Tactics' })}</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_tactics')}</div>
             <div className="space-y-2">
               {tactics.map((ta) => (
                 <div key={ta.tactic} className="flex items-center gap-2">
@@ -134,7 +134,7 @@ export default function AttackExposurePanel({ clientId }) {
 
           {/* Top techniques */}
           <div className="p-4">
-            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_top', { defaultValue: 'Top techniques' })}</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_top')}</div>
             <div className="space-y-2.5">
               {topTechniques.map((tech) => (
                 <div key={tech.technique} className="flex items-center gap-2">

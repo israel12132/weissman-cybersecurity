@@ -92,7 +92,7 @@ function StatusBadge({ status, t }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${colors[status] || colors.pending}`}>
       <Icon className={`w-3.5 h-3.5 ${status === 'running' ? 'animate-spin' : ''}`} />
-      {t(`pages.remediationHub.status_${status}`, { defaultValue: status })}
+      {t(`pages.remediationHub.status_${status}`)}
     </span>
   )
 }
@@ -254,18 +254,18 @@ export default function RemediationHub() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04]">
               <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-300/80 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics', { defaultValue: 'Auto-heal' })}
+                <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics')}
               </span>
-              <HealStat label={t('pages.remediationHub.heal_runs', { defaultValue: 'runs' })} value={healStats.total} />
-              <HealStat label={t('pages.remediationHub.heal_fix_rate', { defaultValue: 'fix rate' })} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
-              <HealStat label={t('pages.remediationHub.heal_avg_attempts', { defaultValue: 'avg attempts' })} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
-              <HealStat label={t('pages.remediationHub.heal_attested', { defaultValue: 'attested' })} value={healStats.attested} color="#34d399" />
+              <HealStat label={t('pages.remediationHub.heal_runs')} value={healStats.total} />
+              <HealStat label={t('pages.remediationHub.heal_fix_rate')} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
+              <HealStat label={t('pages.remediationHub.heal_avg_attempts')} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
+              <HealStat label={t('pages.remediationHub.heal_attested')} value={healStats.attested} color="#34d399" />
               <button
                 type="button"
                 onClick={() => setShowAnalytics((v) => !v)}
                 className="ml-auto text-[10px] font-mono px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
               >
-                {showAnalytics ? t('pages.remediationHub.hide_analytics', { defaultValue: 'Hide analytics' }) : t('pages.remediationHub.show_analytics', { defaultValue: 'Analytics ▾' })}
+                {showAnalytics ? t('pages.remediationHub.hide_analytics') : t('pages.remediationHub.show_analytics')}
               </button>
             </div>
             {showAnalytics && <RemediationAnalyticsPanel stats={healStats} />}
@@ -383,7 +383,7 @@ export default function RemediationHub() {
                               className="text-[11px] px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-1.5"
                             >
                               <Wrench className="w-3 h-3" />
-                              {t('pages.remediationHub.batch_heal_open', { defaultValue: 'Heal all fixable ({{n}})', n: w.items.filter((f) => f.has_patch).length })}
+                              {t('pages.remediationHub.batch_heal_open', { n: w.items.filter((f) => f.has_patch).length })}
                             </button>
                           )}
                         </div>
@@ -401,7 +401,7 @@ export default function RemediationHub() {
                             className="px-2.5 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-md text-[11px] font-medium hover:bg-cyan-500/30 transition-colors shrink-0 flex items-center gap-1"
                           >
                             <Sparkles className="w-3 h-3" />
-                            {t('pages.remediationHub.view_fix', { defaultValue: 'View fix' })}
+                            {t('pages.remediationHub.view_fix')}
                           </button>
                         </div>
                       ))}
