@@ -9,7 +9,6 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 import { SkeletonBar } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
-import { apiFetch } from '../lib/apiBase';
 import Button from '../components/ui/Button'
 
 const NS = 'pages.systemConfiguration';
@@ -512,8 +511,7 @@ function MfaSelfServicePanel() {
 
   const refresh = React.useCallback(async () => {
     try {
-      const r = await apiFetch('/api/auth/mfa/status');
-      const d = await r.json().catch(() => ({}));
+      const d = await api.get('/api/auth/mfa/status');
       setStatus(d);
     } catch (e) {
       setErr(e?.message || t(`${NS}.mfa.errors.status_fetch_failed`));
@@ -528,9 +526,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await apiFetch('/api/auth/mfa/setup', { method: 'POST' });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.setup_failed`));
+      const d = await api.post('/api/auth/mfa/setup');
       setSetup(d);
     } catch (e) {
       setErr(e?.message || t(`${NS}.mfa.errors.setup_failed`));
@@ -543,13 +539,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await apiFetch('/api/auth/mfa/enable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.enable_failed`));
+      await api.post('/api/auth/mfa/enable', { code: code.trim() });
       setSetup(null);
       setCode('');
       await refresh();
@@ -564,13 +554,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await apiFetch('/api/auth/mfa/disable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.disable_failed`));
+      await api.post('/api/auth/mfa/disable', { code: code.trim() });
       setCode('');
       await refresh();
     } catch (e) {
