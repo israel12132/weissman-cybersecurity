@@ -663,8 +663,17 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_REQUIRE_DB_TESTS: "1"
         run: |
-          cargo llvm-cov --workspace --ignore-run-fail \
-            --lcov --output-path lcov.info --fail-under-lines 40
+          # Run the instrumented suite ONCE (tolerating the server-only contract
+          # failures via --ignore-run-fail), keep the raw profdata (--no-report), then
+          # emit two reports from that same data:
+          #   1. the lcov artifact (consumed by the upload step below), and
+          #   2. a human-readable summary printed to THIS log — so the true coverage %
+          #      is visible in CI, not buried inside lcov.info. The summary carries
+          #      --fail-under-lines 40, so the honest floor is still the job's verdict
+          #      (kept at 40 on purpose; see docs/Coverage_Deficit_Analysis.md).
+          cargo llvm-cov --workspace --ignore-run-fail --no-report
+          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo llvm-cov report --summary-only --fail-under-lines 40
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
