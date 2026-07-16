@@ -235,7 +235,10 @@ async function main() {
   // in routeChunks.js the exclusion has gone stale — it would silently hide a real routed
   // surface from the forensic standard. Fail loudly so the exclusion list is kept honest.
   const routedBasenames = new Set(
-    [...lazyMap.values()].map((spec) => `${spec.split('/').pop()}.jsx`),
+    [...lazyMap.values()].map((spec) => {
+      const base = spec.split('/').pop()
+      return base.endsWith('.jsx') ? base : `${base}.jsx`
+    }),
   )
   const leakedEmbedded = [...EMBEDDED_SUBCOMPONENTS].filter((f) => routedBasenames.has(f))
   if (leakedEmbedded.length) {
