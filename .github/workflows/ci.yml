@@ -55,8 +55,18 @@ jobs:
   rust-audit:
     name: Rust — audit, lint, test
     runs-on: ubuntu-latest
+    # Trim DWARF to line tables in CI: the workspace pulls ~250 AWS-SDK + crypto
+    # crates, and full debuginfo on that many object files exhausted the runner's
+    # disk mid-link (ld SIGBUS). Line tables keep test backtraces mapped to source
+    # while shrinking target/ several-fold. Not a lint/test/security threshold.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free up runner disk space
+        run: bash scripts/ci-free-disk-space.sh
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.91.1
@@ -69,7 +79,6 @@ jobs:
           # Distinct cache scope for the lint/test job (separate from the
           # instrumented coverage build) so target/ artifacts don't collide.
           shared-key: rust-audit
-          cache-all-crates: true
 
       - name: Install cargo-audit
         # Prebuilt binary (taiki-e/install-action) instead of `cargo install`
@@ -222,6 +231,11 @@ jobs:
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
+    # See rust-audit: trim CI debuginfo so the full-workspace build + Docker image
+    # builds + live stack fit the runner disk.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -255,6 +269,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Free up runner disk space
+        run: bash scripts/ci-free-disk-space.sh
+
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@1.91.1
         with:
@@ -264,7 +281,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: engine-wiring
-          cache-all-crates: true
 
       - name: Verify engine wiring coverage
         run: node scripts/verify_engine_wiring.mjs
@@ -578,8 +594,16 @@ jobs:
   rust-coverage:
     name: Rust — coverage (llvm-cov)
     runs-on: ubuntu-latest
+    # Coverage needs line tables to map instrumentation back to source; full DWARF
+    # is unnecessary and blew the runner's disk at link time. line-tables-only keeps
+    # accurate coverage while shrinking the instrumented target/ dir.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
+      - name: Free up runner disk space
+        run: bash scripts/ci-free-disk-space.sh
       - uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: llvm-tools-preview
@@ -589,7 +613,6 @@ jobs:
           # Instrumented coverage build differs from the plain lint/test build,
           # so keep it on its own cache scope.
           shared-key: rust-coverage
-          cache-all-crates: true
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
