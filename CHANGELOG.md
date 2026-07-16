@@ -5,6 +5,30 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ---
 
+## [2026.07.3] — Unified compliance-mapping integrity + dynamic framework onboarding — 2026-07-16
+
+### Added
+
+- **Dynamic framework catalog** — new `compliance_frameworks` table is now the authoritative,
+  database-driven list of supported frameworks; `GET /api/compliance/frameworks` reads from it
+  (falling back to the historical hardcoded list only if the table is unavailable, reported via a
+  `dynamic` flag). Replaces the hardcoded Rust vec.
+- **Verified onboarding of six frameworks** — SOC2, NIS2, GDPR, IEC62443, PCI, CSA-CCM each have
+  their canonical controls mapped to audit-traceable, evidence-only platform sources (Postgres RLS,
+  audit hash chain, distributed lockout, startup-enforced TLS policy, agentless cloud posture, live
+  vulnerability management). Previously listed but unmapped — silent rot — now fully gated.
+
+### Changed
+
+- **Single unified enforcement gate.** The parallel integrity work is consolidated: the
+  dead-predicate detector (`compliance_mappings` rows with no cloud rule and no vuln predicate,
+  ported as `find_dead_predicate_controls`) now feeds the same `report_gate` and diagonal `Tm`
+  watermark as the control→evidence coverage check — one gate, one watermark, not two. A new
+  **listed-but-unmapped** rule fails (409) any framework the catalog lists that carries no live
+  control mapping. Applied to both the framework PDF report and the signed evidence pack.
+
+---
+
 ## [2026.06.2] — Liminal Boundary Engine — 2026-06-10
 
 ### Added
