@@ -554,6 +554,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/compliance/control-mappings",
             get(api_compliance_control_mappings),
         )
+        .route(
+            "/api/compliance/control-mappings/coverage",
+            get(api_compliance_control_mappings_coverage),
+        )
         // UI aliases: SystemConfiguration page + ComplianceFrameworks page expect these paths.
         .route(
             "/api/system/config",
