@@ -147,9 +147,8 @@
     "billing": "Billing & Usage",
     "system_config": "System Config",
     "status": "Status",
-    "reports": "Reports",
-    "audit_log": "Audit Log",
     "reports": "Report History",
+    "audit_log": "Audit Log",
     "ask_weissman": "Ask Weissman",
     "playbooks": "Playbooks",
     "threat_intel": "Threat Intel",
@@ -191,7 +190,6 @@
     "incident_response": "Incident Response",
     "threat_emulation": "APT Emulation",
     "kill_chain": "Kill Chain",
-    "attack_paths": "Attack Paths",
     "ai_analysis": "AI Analysis",
     "exploit_lab": "Exploit Lab",
     "council_queue": "Council Queue",
@@ -1845,7 +1843,9 @@
       "empty_title": "No auto-heal runs yet.",
       "empty_hint": "Trigger a heal from the Remediation Hub to populate analytics.",
       "partial": "Some client telemetry could not be loaded — the totals below are partial.",
-      "bounded": "Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client."
+      "bounded": "Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client.",
+      "search_placeholder": "Search heals…",
+      "no_match": "No heals match your search."
     },
     "remediationHub": {
       "title": "Remediation Hub",
@@ -3972,7 +3972,7 @@
       "preview": "Preview",
       "preview_empty": "Generate mutations to preview structure-aware variants.",
       "search_mutations": "Filter mutations…",
-      "no_match": "No mutations match the filter.",
+      "no_match": "No mutations match your filter.",
       "mutations": "Mutations",
       "count": "Count:",
       "preview_failed": "Preview failed",
@@ -3987,7 +3987,6 @@
       "copy_all": "Copy all",
       "download": "Download",
       "search_placeholder": "Filter mutations…",
-      "no_match": "No mutations match your filter.",
       "showing_count": "{{shown}} of {{total}}",
       "evidence_notice": "AST-guided fuzz campaigns enqueue through POST /api/command-center/scan with grammar-aware payloads. Crashes and anomalies persist as standard tenant findings."
     },
@@ -4638,12 +4637,30 @@
       "attack_reference": "Attack reference",
       "remediation": "Remediation",
       "attack_ref": {
-        "alg_none": { "id": "alg:none", "desc": "Unsigned token acceptance" },
-        "alg_confusion": { "id": "RS256→HS256", "desc": "Algorithm confusion (public key as HMAC secret)" },
-        "weak_hmac": { "id": "Weak HMAC", "desc": "Brute-forced shared secret → forgery" },
-        "kid_injection": { "id": "kid injection", "desc": "Path traversal / SQLi / key substitution" },
-        "jku_ssrf": { "id": "jku / x5u SSRF", "desc": "Attacker-hosted key set" },
-        "jwks_hygiene": { "id": "JWKS hygiene", "desc": "Weak RSA / leaked private params" }
+        "alg_none": {
+          "id": "alg:none",
+          "desc": "Unsigned token acceptance"
+        },
+        "alg_confusion": {
+          "id": "RS256→HS256",
+          "desc": "Algorithm confusion (public key as HMAC secret)"
+        },
+        "weak_hmac": {
+          "id": "Weak HMAC",
+          "desc": "Brute-forced shared secret → forgery"
+        },
+        "kid_injection": {
+          "id": "kid injection",
+          "desc": "Path traversal / SQLi / key substitution"
+        },
+        "jku_ssrf": {
+          "id": "jku / x5u SSRF",
+          "desc": "Attacker-hosted key set"
+        },
+        "jwks_hygiene": {
+          "id": "JWKS hygiene",
+          "desc": "Weak RSA / leaked private params"
+        }
       }
     },
     "iacSecurityCenter": {
@@ -5897,7 +5914,6 @@
         "noAssets": "No deception assets. Generate tokens, then deploy to AWS above.",
         "canaryAkia": "canary AKIA: {{id}}",
         "liveOastBadge": "Live OAST",
-        "liveAwsBadge": "Live AWS",
         "refresh": "Refresh"
       },
       "containmentRules": {
@@ -6882,7 +6898,9 @@
       "idn": "idn",
       "homographRisk": "homograph risk",
       "resolvedIps": "resolved ips"
-    }
+    },
+    "evidence_notice": "Live target profile from GET /api/intel/target-profile — provenance, service fingerprint, and engine selection.",
+    "search_placeholder": "Filter engines…"
   },
   "stealthOps": {
     "title": "Stealth Operations",
@@ -6922,7 +6940,9 @@
     "identitiesDispensed": "Identities dispensed",
     "activeTargets": "Active targets · live load",
     "showing": "showing {{n}}",
-    "noRequests": "No requests in flight. Launch a scan to see the queue shape traffic per target."
+    "noRequests": "No requests in flight. Launch a scan to see the queue shape traffic per target.",
+    "evidence_notice": "Live pacing telemetry from GET /api/stealth/status — concurrency caps, saturation, and per-host admission.",
+    "search_placeholder": "Filter hosts…"
   },
   "engineAccounting": {
     "title": "Capability accounting · honest count",

@@ -30,6 +30,7 @@ export default function RemediationAnalytics() {
   const [findings, setFindings] = useState([])
   const [healStats, setHealStats] = useState(null)
   const [heals, setHeals] = useState([])
+  const [healSearch, setHealSearch] = useState('')
   const [loading, setLoading] = useState(true)
   // Separate loading flag for the per-client heal-stats fan-out so the "no runs yet" empty state
   // doesn't flash before those requests resolve.
@@ -125,6 +126,15 @@ export default function RemediationAnalytics() {
     return () => { cancelled = true }
   }, [clientIds])
 
+  const filteredHeals = useMemo(() => {
+    const q = healSearch.trim().toLowerCase()
+    if (!q) return heals
+    return heals.filter((h) =>
+      [h.finding_id, h.verdict, h.channel, h.verification_status, h.status]
+        .some((v) => String(v || '').toLowerCase().includes(q)),
+    )
+  }, [heals, healSearch])
+
   return (
     <PageShell
       title={t('pages.remediationAnalytics.title')}
@@ -179,17 +189,31 @@ export default function RemediationAnalytics() {
 
         {/* Recent heals feed */}
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <GitPullRequest className="w-4 h-4 text-cyan-400" />
-            {t('pages.remediationAnalytics.recent_heals')}
-          </h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <GitPullRequest className="w-4 h-4 text-cyan-400" />
+              {t('pages.remediationAnalytics.recent_heals')}
+            </h3>
+            {heals.length > 0 && (
+              <input
+                type="search"
+                value={healSearch}
+                onChange={(e) => setHealSearch(e.target.value)}
+                aria-label={t('pages.remediationAnalytics.search_placeholder')}
+                placeholder={t('pages.remediationAnalytics.search_placeholder')}
+                className="w-full sm:w-64 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+            )}
+          </div>
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
           ) : heals.length === 0 ? (
             <div className="text-xs text-white/30 font-mono">—</div>
+          ) : filteredHeals.length === 0 ? (
+            <div className="text-xs text-white/30 font-mono px-1 py-3">{t('pages.remediationAnalytics.no_match')}</div>
           ) : (
             <div className="divide-y divide-white/5 rounded-xl border border-white/10 overflow-hidden bg-black/40">
-              {heals.map((h) => {
+              {filteredHeals.map((h) => {
                 const vm = h.verdict ? VERDICT_META[h.verdict] : null
                 return (
                   <div

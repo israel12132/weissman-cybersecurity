@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  RefreshCw,
   Play,
   Power,
   CheckCircle2,
@@ -11,6 +10,7 @@ import {
   GitPullRequest,
 } from 'lucide-react'
 import PageShell from './PageShell'
+import ShellScanActions from '../components/engine/ShellScanActions'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch'
@@ -75,6 +75,30 @@ export default function SelfImprovementConsole() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filteredItems = items.filter((it) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return [it.title, it.rationale, it.category, it.source, String(it.id)]
+      .some((v) => String(v || '').toLowerCase().includes(q))
+  })
+
+  const exportCsv = () => {
+    const rows = [
+      ['id', 'category', 'source', 'status', 'title'],
+      ...filteredItems.map((it) => [it.id, it.category, it.source, it.status, it.title]),
+    ]
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'self-improvement-proposals.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const load = useCallback(async () => {
     try {
@@ -165,14 +189,12 @@ export default function SelfImprovementConsole() {
             <Power className="w-4 h-4" />
             {enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
           </button>
-          <button
-            onClick={load}
-            disabled={busy}
-            className="inline-flex items-center rounded-lg border border-white/15 bg-white/5 p-1.5 text-white/70 hover:bg-white/10 disabled:opacity-50"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} />
-          </button>
+          <ShellScanActions
+            onRefresh={load}
+            onExport={exportCsv}
+            refreshLoading={busy}
+            exportDisabled={!filteredItems.length}
+          />
         </div>
       }
     >
@@ -225,9 +247,17 @@ export default function SelfImprovementConsole() {
                 {s.replace('_', ' ').toLowerCase()}
               </button>
             ))}
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search proposals"
+              placeholder="Search proposals…"
+              className="ml-auto w-full sm:w-56 bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1 text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/40"
+            />
           </div>
 
-          {items.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <EmptyState
               title="No proposals in this view"
               description={
@@ -239,7 +269,7 @@ export default function SelfImprovementConsole() {
           ) : (
             <div className="space-y-3">
               <AnimatePresence>
-                {items.map((it) => {
+                {filteredItems.map((it) => {
                   const files = Array.isArray(it.affected_files) ? it.affected_files : []
                   return (
                     <motion.div

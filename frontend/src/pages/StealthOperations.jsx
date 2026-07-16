@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
 
 // Live-load tint by saturation ratio.
 function loadColor(ratio) {
@@ -46,7 +48,19 @@ export default function StealthOperations() {
   const [pacing, setPacing] = useState(null) // editable draft, seeded once from status
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [hostSearch, setHostSearch] = useState('')
   const timer = useRef(null)
+
+  const exportJson = () => {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(data ?? {}, null, 2)], { type: 'application/json' }),
+    )
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'stealth-status.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const load = useCallback(async () => {
     try {
@@ -152,14 +166,16 @@ export default function StealthOperations() {
             <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
             {live ? t('stealthOps.live') : t('stealthOps.paused')}
           </button>
-          <button
-            onClick={load}
-            className="rounded-lg border border-white/15 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/60"
-          >
-            {t('stealthOps.refresh')}
-          </button>
+          <ShellScanActions
+            onRefresh={load}
+            onExport={exportJson}
+            refreshLoading={loading}
+            exportDisabled={!data}
+          />
         </div>
       </header>
+
+      <EvidenceNotice>{t('stealthOps.evidence_notice')}</EvidenceNotice>
 
       {error && (
         <div className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-4 py-3 text-sm text-rose-300 mb-4">
@@ -304,13 +320,25 @@ export default function StealthOperations() {
 
           {/* ── Active hosts ── */}
           <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mt-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
                 {t('stealthOps.activeTargets')}
               </h2>
-              <span className="text-xs font-mono text-slate-500">
-                {t('stealthOps.showing', { n: l.active_hosts.length })}
-              </span>
+              <div className="flex items-center gap-3">
+                {l.active_hosts.length > 0 && (
+                  <input
+                    type="search"
+                    value={hostSearch}
+                    onChange={(e) => setHostSearch(e.target.value)}
+                    aria-label={t('stealthOps.search_placeholder')}
+                    placeholder={t('stealthOps.search_placeholder')}
+                    className="w-40 sm:w-56 bg-slate-900/60 border border-white/10 rounded-lg px-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/40"
+                  />
+                )}
+                <span className="text-xs font-mono text-slate-500">
+                  {t('stealthOps.showing', { n: l.active_hosts.length })}
+                </span>
+              </div>
             </div>
             {l.active_hosts.length === 0 ? (
               <div className="text-sm text-slate-500 py-6 text-center">
@@ -318,7 +346,13 @@ export default function StealthOperations() {
               </div>
             ) : (
               <ul className="space-y-2">
-                {l.active_hosts.map((h) => (
+                {l.active_hosts
+                  .filter(
+                    (h) =>
+                      !hostSearch.trim() ||
+                      String(h.host || '').toLowerCase().includes(hostSearch.trim().toLowerCase()),
+                  )
+                  .map((h) => (
                   <li key={h.host} className="flex items-center gap-3">
                     <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
                       {h.host}

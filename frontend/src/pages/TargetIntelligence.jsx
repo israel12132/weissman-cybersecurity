@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
 
 // Sensitivity tint.
 const SEV = {
@@ -58,6 +60,18 @@ export default function TargetIntelligence() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [engineSearch, setEngineSearch] = useState('')
+
+  const exportJson = () => {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(data ?? {}, null, 2)], { type: 'application/json' }),
+    )
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `target-intel-${(target || 'profile').replace(/[^a-z0-9.-]/gi, '_')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const analyze = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
@@ -88,12 +102,22 @@ export default function TargetIntelligence() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
-          <span aria-hidden>🎯</span> {t('targetIntel.title')}
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">{t('targetIntel.subtitle')}</p>
+      <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
+            <span aria-hidden>🎯</span> {t('targetIntel.title')}
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">{t('targetIntel.subtitle')}</p>
+        </div>
+        <ShellScanActions
+          onRefresh={analyze}
+          onExport={exportJson}
+          refreshLoading={loading}
+          exportDisabled={!data}
+        />
       </header>
+
+      <EvidenceNotice>{t('targetIntel.evidence_notice')}</EvidenceNotice>
 
       <form onSubmit={analyze} className="mb-6">
         <div className="flex gap-2">
@@ -261,11 +285,29 @@ export default function TargetIntelligence() {
               )}
             </div>
 
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-              {t('targetIntel.rankedTop', { n: Math.min(40, (sel.ranked || []).length) })}
+            <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500">
+                {t('targetIntel.rankedTop', { n: Math.min(40, (sel.ranked || []).length) })}
+              </div>
+              {(sel.ranked || []).length > 0 && (
+                <input
+                  type="search"
+                  value={engineSearch}
+                  onChange={(e) => setEngineSearch(e.target.value)}
+                  aria-label={t('targetIntel.search_placeholder')}
+                  placeholder={t('targetIntel.search_placeholder')}
+                  className="w-40 sm:w-56 bg-slate-900/60 border border-white/10 rounded-lg px-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/40"
+                />
+              )}
             </div>
             <ol className="space-y-1 max-h-[26rem] overflow-y-auto pr-1">
-              {(sel.ranked || []).map((c) => (
+              {(sel.ranked || [])
+                .filter(
+                  (c) =>
+                    !engineSearch.trim() ||
+                    String(c.engine_id || '').toLowerCase().includes(engineSearch.trim().toLowerCase()),
+                )
+                .map((c) => (
                 <li
                   key={c.engine_id}
                   className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5"
