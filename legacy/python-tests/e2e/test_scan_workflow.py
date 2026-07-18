@@ -11,10 +11,9 @@ Run with: pytest tests/e2e/test_scan_workflow.py -v
 import pytest
 import time
 import asyncio
-from typing import Dict, Any
 
 # Mock imports - replace with actual API client
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 try:
     import websockets

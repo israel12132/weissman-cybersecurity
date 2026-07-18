@@ -13,9 +13,8 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.engines._rust_runner import (
     run_rust_engine,
@@ -40,7 +39,7 @@ class TestBinaryPath:
         fake_binary.parent.mkdir(parents=True)
         fake_binary.touch()
 
-        with patch.object(Path, "exists") as mock_exists:
+        with patch.object(Path, "exists"):
             # Make only the release binary "exist"
             def exists_side_effect(self_path=None):
                 return str(fake_binary) in str(self_path or "")

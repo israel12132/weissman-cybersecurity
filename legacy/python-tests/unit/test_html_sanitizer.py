@@ -6,7 +6,6 @@ Unit tests for HTML sanitization module.
 Run with: pytest tests/unit/test_html_sanitizer.py -v
 """
 
-import pytest
 from src.html_sanitizer import (
     sanitise_text,
     sanitise_url,

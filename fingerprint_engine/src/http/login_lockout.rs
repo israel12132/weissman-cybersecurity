@@ -41,7 +41,7 @@ fn key(tenant_id: i64, email: &str) -> String {
 fn check_lockout_mem(tenant_id: i64, email: &str) -> Option<u64> {
     let k = key(tenant_id, email);
     let cell = store().get(&k)?;
-    let mut entry = cell.lock().expect("login lockout lock");
+    let mut entry = cell.lock().unwrap_or_else(|poison| poison.into_inner());
     if let Some(until) = entry.locked_until {
         if Instant::now() < until {
             return Some(
@@ -61,7 +61,7 @@ fn check_lockout_mem(tenant_id: i64, email: &str) -> Option<u64> {
 fn record_failure_mem(tenant_id: i64, email: &str) {
     let k = key(tenant_id, email);
     let cell = store().entry(k).or_default();
-    let mut entry = cell.lock().expect("login lockout lock");
+    let mut entry = cell.lock().unwrap_or_else(|poison| poison.into_inner());
     entry.failures = entry.failures.saturating_add(1);
     if u64::from(entry.failures) >= LOCKOUT_MAX_FAILURES {
         entry.locked_until = Some(Instant::now() + LOCKOUT_DURATION);

@@ -135,7 +135,12 @@ fn default_rules() -> Vec<PayloadSignatureRule> {
     ]
 }
 
-/// Find the first rule whose payload is contained in the fuzzer payload (or exact match).
+/// Find the first rule whose marker payload is contained in the fuzzer payload.
+///
+/// The match is one-directional: the rule's marker must appear IN the fuzzer
+/// payload. The reverse direction (rule payload containing the fuzzer payload) is
+/// wrong — a short mutation like "." would spuriously match the "../" rule — so it
+/// is not tested.
 pub fn find_matching_rule<'a>(
     fuzzer_payload: &str,
     rules: &'a [PayloadSignatureRule],
@@ -146,7 +151,7 @@ pub fn find_matching_rule<'a>(
         if rp.is_empty() {
             continue;
         }
-        if lower.contains(&rp) || rp.contains(&lower) {
+        if lower.contains(&rp) {
             return Some(rule);
         }
     }

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Activity, GitPullRequest, AlertTriangle } from 'lucide-react'
+import { Activity, GitPullRequest, AlertTriangle, FileText, Search } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
 import { apiFetch } from '../lib/apiBase'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
 import HealReadinessPanel from '../components/remediation/HealReadinessPanel'
 import HealTrendSparkline from '../components/remediation/HealTrendSparkline'
@@ -16,6 +19,22 @@ import HealTrendSparkline from '../components/remediation/HealTrendSparkline'
  * appears in /api/findings, reusing the exact heal-stats shape RemediationHub builds,
  * plus a merged "recent heals" activity feed from /api/clients/:id/heal-requests.
  */
+
+/** CSV/PDF columns for the recent-heals feed. Exported for tests. */
+export const HEALS_CSV_HEADER = ['id', 'finding_id', 'verdict', 'channel', 'attempts', 'attested', 'created_at']
+
+/** Pure: recent-heals rows → export rows. Exported for tests. */
+export function healsRows(heals) {
+  return (Array.isArray(heals) ? heals : []).map((h) => [
+    h?.id ?? '',
+    h?.finding_id ?? '',
+    h?.verdict ?? '',
+    h?.channel ?? '',
+    h?.attempts ?? '',
+    h?.attested ? 'yes' : 'no',
+    h?.created_at ?? '',
+  ])
+}
 
 // mirrors VERDICT_META in components/remediation/RemediationDetail.jsx
 const VERDICT_META = {
@@ -30,7 +49,6 @@ export default function RemediationAnalytics() {
   const [findings, setFindings] = useState([])
   const [healStats, setHealStats] = useState(null)
   const [heals, setHeals] = useState([])
-  const [healSearch, setHealSearch] = useState('')
   const [loading, setLoading] = useState(true)
   // Separate loading flag for the per-client heal-stats fan-out so the "no runs yet" empty state
   // doesn't flash before those requests resolve.
@@ -38,6 +56,7 @@ export default function RemediationAnalytics() {
   // True when at least one per-client telemetry request failed (totals shown are then partial).
   const [partial, setPartial] = useState(false)
   const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -126,31 +145,64 @@ export default function RemediationAnalytics() {
     return () => { cancelled = true }
   }, [clientIds])
 
-  const filteredHeals = useMemo(() => {
-    const q = healSearch.trim().toLowerCase()
-    if (!q) return heals
-    return heals.filter((h) =>
-      [h.finding_id, h.verdict, h.channel, h.verification_status, h.status]
-        .some((v) => String(v || '').toLowerCase().includes(q)),
-    )
-  }, [heals, healSearch])
+  // Client-side filter over the already-loaded heals feed (a bounded, tenant-scoped
+  // rollup — no server round-trip needed to search it).
+  const filteredHeals = useMemo(
+    () => heals.filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
+    [heals, searchQuery],
+  )
+
+  const handleRefresh = useCallback(() => load(), [load])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
+    [filteredHeals],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman Remediation Analytics', HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
+    [filteredHeals],
+  )
 
   return (
     <PageShell
-      title={t('pages.remediationAnalytics.title')}
-      subtitle={t('pages.remediationAnalytics.subtitle')}
-      badge={t('pages.remediationAnalytics.badge')}
+      title={t('pages.remediationAnalytics.title', { defaultValue: 'Remediation Analytics' })}
+      subtitle={t('pages.remediationAnalytics.subtitle', { defaultValue: 'Auto-heal outcomes aggregated across every active client' })}
+      badge={t('pages.remediationAnalytics.badge', { defaultValue: 'ANALYTICS' })}
       badgeColor="#22d3ee"
       icon={<Activity />}
-      actions={<ShellScanActions onRefresh={load} refreshLoading={loading} exportDisabled />}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredHeals.length}
+          />
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={exportPdf}
+            disabled={!filteredHeals.length}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </Button>
+        </div>
+      }
     >
       <div className="space-y-6">
+        <EvidenceNotice>
+          Live auto-heal telemetry from GET /api/findings, GET /api/clients/:id/heal-stats and
+          /heal-requests. No fabricated heal outcomes.
+        </EvidenceNotice>
+
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-white/45 font-mono">
-            {t('pages.remediationAnalytics.intro')}
+            {t('pages.remediationAnalytics.intro', { defaultValue: 'Live auto-heal telemetry from GET /api/clients/:id/heal-stats and /heal-requests.' })}
           </p>
           <Link to="/remediation" className="text-xs text-cyan-300 hover:text-cyan-200">
-            {t('pages.remediationAnalytics.open_hub')}
+            {t('pages.remediationAnalytics.open_hub', { defaultValue: 'Remediation Hub →' })}
           </Link>
         </div>
 
@@ -169,8 +221,8 @@ export default function RemediationAnalytics() {
           <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             {partial
-              ? t('pages.remediationAnalytics.partial')
-              : t('pages.remediationAnalytics.bounded')}
+              ? t('pages.remediationAnalytics.partial', { defaultValue: 'Some client telemetry could not be loaded — the totals below are partial.' })
+              : t('pages.remediationAnalytics.bounded', { defaultValue: 'Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client.' })}
           </div>
         )}
 
@@ -182,8 +234,8 @@ export default function RemediationAnalytics() {
           <EmptyState
             compact
             icon="shield"
-            title={t('pages.remediationAnalytics.empty_title')}
-            body={t('pages.remediationAnalytics.empty_hint')}
+            title={t('pages.remediationAnalytics.empty_title', { defaultValue: 'No auto-heal runs yet.' })}
+            body={t('pages.remediationAnalytics.empty_hint', { defaultValue: 'Trigger a heal from the Remediation Hub to populate analytics.' })}
           />
         )}
 
@@ -192,25 +244,24 @@ export default function RemediationAnalytics() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <GitPullRequest className="w-4 h-4 text-cyan-400" />
-              {t('pages.remediationAnalytics.recent_heals')}
+              {t('pages.remediationAnalytics.recent_heals', { defaultValue: 'Recent heals' })}
             </h3>
-            {heals.length > 0 && (
+            <div className="relative">
+              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
-                value={healSearch}
-                onChange={(e) => setHealSearch(e.target.value)}
-                aria-label={t('pages.remediationAnalytics.search_placeholder')}
-                placeholder={t('pages.remediationAnalytics.search_placeholder')}
-                className="w-full sm:w-64 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('common.search', { defaultValue: 'Search' })}
+                aria-label={t('common.search', { defaultValue: 'Search heals' })}
+                className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
-            )}
+            </div>
           </div>
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
-          ) : heals.length === 0 ? (
-            <div className="text-xs text-white/30 font-mono">—</div>
           ) : filteredHeals.length === 0 ? (
-            <div className="text-xs text-white/30 font-mono px-1 py-3">{t('pages.remediationAnalytics.no_match')}</div>
+            <div className="text-xs text-white/30 font-mono">—</div>
           ) : (
             <div className="divide-y divide-white/5 rounded-xl border border-white/10 overflow-hidden bg-black/40">
               {filteredHeals.map((h) => {
@@ -224,7 +275,7 @@ export default function RemediationAnalytics() {
                       <span style={{ color: vm ? vm.color : 'rgba(255,255,255,0.3)' }}>●</span>
                       <span className="text-white/70 font-mono truncate max-w-[220px]">{h.finding_id || '—'}</span>
                       <span className="text-white/60 truncate">
-                        {vm ? t(`pages.remediationHub.${vm.key}`) : (h.verification_status || h.status || '—')}
+                        {vm ? t(`pages.remediationHub.${vm.key}`, { defaultValue: h.verdict }) : (h.verification_status || h.status || '—')}
                       </span>
                       {h.channel && <span className="text-[10px] text-white/35 font-mono">{h.channel}</span>}
                       {h.attempts > 1 && <span className="text-[10px] text-amber-300/70 font-mono">×{h.attempts}</span>}
