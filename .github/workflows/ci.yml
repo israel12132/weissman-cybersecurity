@@ -433,6 +433,17 @@ jobs:
           WEISSMAN_ADMIN_PASSWORD: changeme
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
+          # each polled up to 180s). The default access-token TTL is 15 min, so the token
+          # expires mid-run and later scan submits/polls 401. Give the CI token room to
+          # outlive the whole smoke sweep.
+          WEISSMAN_ACCESS_TOKEN_MINUTES: "120"
+          # CI runs server AND worker against ONE shared Postgres (default max_connections
+          # =100). The app pool defaults to 48 each, so under scan load both pools grow
+          # toward 48 → ~96/100 → new acquisitions time out ("claim/reserve failed: pool
+          # timed out") and jobs never get claimed. Cap each pool so server+worker fit with
+          # headroom (30+30=60 < 100).
+          WEISSMAN_APP_POOL_MAX: "30"
           PORT: "18000"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
@@ -444,6 +455,10 @@ jobs:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
+          # Match the server's pool cap so server(30)+worker(30) fit under the shared CI
+          # Postgres max_connections=100 (see the Start weissman-server step). Without this
+          # the worker exhausts connections and can't claim scan jobs.
+          WEISSMAN_APP_POOL_MAX: "30"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
