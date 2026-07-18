@@ -100,9 +100,29 @@ export async function pollJobTerminal(
 }
 
 export async function uiLogin(page: Page) {
+  // Diagnostic capture: if the SPA fails to mount (login form never renders),
+  // surface the browser-side cause on stdout — CI logs don't otherwise expose
+  // console/pageerror or the rendered DOM.
+  const consoleMsgs: string[] = []
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') consoleMsgs.push(`[${m.type()}] ${m.text()}`)
+  })
+  page.on('pageerror', (e) => consoleMsgs.push(`[pageerror] ${e.message}`))
+  page.on('requestfailed', (r) => consoleMsgs.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText ?? ''}`))
   await page.goto('/command-center/login', { waitUntil: 'domcontentloaded' })
   await page.locator('script[type="module"]').first().waitFor({ state: 'attached', timeout: 15_000 })
-  await page.locator('#email').waitFor({ state: 'visible', timeout: 45_000 })
+  try {
+    await page.locator('#email').waitFor({ state: 'visible', timeout: 45_000 })
+  } catch (err) {
+    const html = await page.content().catch(() => '(page.content failed)')
+    // eslint-disable-next-line no-console
+    console.log(
+      `\n===== uiLogin DIAGNOSTIC (#email never visible) =====\nURL: ${page.url()}\n` +
+        `--- console/pageerror/requestfailed (${consoleMsgs.length}) ---\n${consoleMsgs.join('\n') || '(none captured)'}\n` +
+        `--- page.content() [first 4000 chars] ---\n${html.slice(0, 4000)}\n===== END DIAGNOSTIC =====\n`,
+    )
+    throw err
+  }
   await page.locator('#email').fill(ADMIN_EMAIL)
   await page.locator('#password').fill(ADMIN_PASSWORD)
   const loginWait = page.waitForResponse(
