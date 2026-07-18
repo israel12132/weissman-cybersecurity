@@ -4,7 +4,8 @@ import {
   X, Wrench, Sparkles, ShieldCheck, AlertTriangle, Download, GitPullRequest,
   Loader2, CheckCircle, XCircle, Languages, ChevronRight, Clock, FileText,
 } from 'lucide-react'
-import { apiFetch, apiUrl } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
+import { apiUrl } from '../../lib/apiBase'
 
 /**
  * RemediationDetail — the "wow" surface. For a single finding it shows a bilingual (he/en)
@@ -108,11 +109,9 @@ export default function RemediationDetail({ finding, onClose }) {
     setBriefError(null)
     try {
       const q = refresh ? '?refresh=1' : ''
-      const r = await apiFetch(`/api/clients/${clientId}/findings/${encodeURIComponent(findingId)}/brief${q}`, {
+      const d = await apiFetch(`/api/clients/${clientId}/findings/${encodeURIComponent(findingId)}/brief${q}`, {
         method: refresh ? 'POST' : 'GET',
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
       setBrief(d.brief || null)
       setPatch(d.generated_patch || '')
     } catch (e) {
@@ -130,7 +129,7 @@ export default function RemediationDetail({ finding, onClose }) {
     if (!clientId || !findingId) return undefined
     let cancelled = false
     apiFetch(`/api/clients/${clientId}/heal-requests`)
-      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .catch(() => null)
       .then((d) => {
         if (cancelled) return
         const all = Array.isArray(d?.requests) ? d.requests : []
@@ -145,12 +144,15 @@ export default function RemediationDetail({ finding, onClose }) {
     let active = true
     const tick = async () => {
       try {
-        const [sr, st] = await Promise.all([
-          apiFetch(`/api/heal-verify/${jobId}/steps`),
-          apiFetch(`/api/heal-verify/${jobId}`),
+        // Tolerate a per-slot HTTP error (return {} for that call) but RE-THROW a
+        // network error (no e.status) so Promise.all rejects into the outer
+        // "transient; keep polling" catch — preserving the old behavior where a
+        // transient network blip left the last-known status on screen instead of
+        // wiping it with td={} for a tick.
+        const [sd, td] = await Promise.all([
+          apiFetch(`/api/heal-verify/${jobId}/steps`).catch((e) => { if (e?.status) return {}; throw e }),
+          apiFetch(`/api/heal-verify/${jobId}`).catch((e) => { if (e?.status) return {}; throw e }),
         ])
-        const sd = await sr.json().catch(() => ({}))
-        const td = await st.json().catch(() => ({}))
         if (!active) return
         if (Array.isArray(sd.steps)) setSteps(sd.steps)
         setJobStatus(td)
@@ -187,20 +189,18 @@ export default function RemediationDetail({ finding, onClose }) {
       const headers = { 'Content-Type': 'application/json' }
       if (destructiveConfirm.trim()) headers['X-Weissman-Destructive-Confirm'] = destructiveConfirm.trim()
       if (dualApprove.trim()) headers['X-Weissman-Dual-Approve'] = dualApprove.trim()
-      const r = await apiFetch(`/api/clients/${clientId}/auto-heal`, {
+      const d = await apiFetch(`/api/clients/${clientId}/auto-heal`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
+        body: {
           finding_id: findingId,
           repo_slug: repoSlug.trim() || undefined,
           git_token: gitToken.trim() || undefined,
           base_branch: baseBranch.trim() || 'main',
           channel,
           health_check_curl: healthCurl.trim() || undefined,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
       if (d.job_id) {
         setJobId(d.job_id) // triggers the polling effect
       } else {
@@ -225,19 +225,17 @@ export default function RemediationDetail({ finding, onClose }) {
       const headers = { 'Content-Type': 'application/json' }
       if (destructiveConfirm.trim()) headers['X-Weissman-Destructive-Confirm'] = destructiveConfirm.trim()
       if (dualApprove.trim()) headers['X-Weissman-Dual-Approve'] = dualApprove.trim()
-      const r = await apiFetch(`/api/clients/${clientId}/heal-revert`, {
+      await apiFetch(`/api/clients/${clientId}/heal-revert`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
+        body: {
           finding_id: findingId,
           repo_slug: repoSlug.trim(),
           git_token: gitToken.trim(),
           channel,
           delete_branch: true,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
       setReverted(true)
     } catch (e) {
       setHealError(e.message || 'revert failed')

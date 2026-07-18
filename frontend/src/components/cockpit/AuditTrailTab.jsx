@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 const NS = 'components.cockpitTabs.auditTrail'
 
@@ -18,14 +18,8 @@ export default function AuditTrailTab() {
       setLoading(true)
       setErr(null)
       try {
-        const r = await apiFetch('/api/audit-logs')
+        const data = await apiFetch('/api/audit-logs')
         if (cancelled) return
-        if (!r.ok) {
-          setRows([])
-          setErr(await formatApiErrorResponse(r))
-          return
-        }
-        const data = await r.json()
         if (!Array.isArray(data)) {
           setRows([])
           setErr(t(`${NS}.unexpectedResponse`))
@@ -35,7 +29,7 @@ export default function AuditTrailTab() {
       } catch (e) {
         if (!cancelled) {
           setRows([])
-          setErr(e?.message || t(`${NS}.loadFailed`))
+          setErr(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || t(`${NS}.loadFailed`)))
         }
       } finally {
         if (!cancelled) setLoading(false)

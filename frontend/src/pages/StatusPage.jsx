@@ -12,7 +12,8 @@ import {
   Cpu,
   Radio,
 } from 'lucide-react'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
+import { apiUrl } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -387,21 +388,24 @@ export default function StatusPage() {
     }
 
     try {
-      const r = await apiFetch('/api/agents/status')
-      if (r.ok) {
-        const d = await r.json()
-        result.agents = {
-          ok: true,
-          total: d.agents?.length || 0,
-          online: d.online_count || 0,
-        }
-      } else if (r.status === 401) {
-        result.agents = { ok: true, online_visible: false, detail: t('status.agents_auth_required') }
-      } else {
-        result.agents = { ok: false, status: r.status }
+      const d = await apiFetch('/api/agents/status')
+      // A 2xx with a non-JSON body (utils returns the raw Response) is NOT a
+      // healthy signal on a status page — reproduce the old r.json()-throws path
+      // so it lands in the catch as an error rather than a false "0 online".
+      if (d instanceof Response) throw new Error('non-JSON status response')
+      result.agents = {
+        ok: true,
+        total: d.agents?.length || 0,
+        online: d.online_count || 0,
       }
     } catch (e) {
-      result.agents = { ok: false, error: e.message }
+      if (e?.status === 401) {
+        result.agents = { ok: true, online_visible: false, detail: t('status.agents_auth_required') }
+      } else if (e?.status != null) {
+        result.agents = { ok: false, status: e.status }
+      } else {
+        result.agents = { ok: false, error: e.message }
+      }
     }
 
     setState(result)

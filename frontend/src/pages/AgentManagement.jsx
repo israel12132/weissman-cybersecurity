@@ -11,7 +11,8 @@ import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
+import { apiUrl } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useApiQuery } from '../hooks/useApiQuery'
@@ -74,20 +75,21 @@ export default function AgentManagement() {
 
   const refresh = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/agents/status')
-      if (r.status === 404) {
+      const d = await apiFetch('/api/agents/status')
+      setAgents(Array.isArray(d.agents) ? d.agents : [])
+      setErr(null)
+    } catch (e) {
+      if (e?.status === 404) {
         setAgents([])
         setErr(null)
         return
       }
-      const txt = await r.text()
-      let d = {}
-      try { d = txt ? JSON.parse(txt) : {} } catch { d = {} }
-      if (!r.ok) throw new Error(d.detail || t('agents.load_failed', { status: r.status }))
-      setAgents(Array.isArray(d.agents) ? d.agents : [])
-      setErr(null)
-    } catch (e) {
-      setErr(e.message || String(e))
+      if (e?.status != null) {
+        const b = e?.response ? await e.response.json().catch(() => ({})) : {}
+        setErr(b.detail || t('agents.load_failed', { status: e.status }))
+      } else {
+        setErr(e.message || String(e))
+      }
       setAgents([])
     } finally {
       setLoading(false)
@@ -110,13 +112,10 @@ export default function AgentManagement() {
       return
     }
     try {
-      const r = await apiFetch('/api/agents/enrollment-tokens', {
+      const d = await apiFetch('/api/agents/enrollment-tokens', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: cid, valid_minutes: Number(tokenValidity) || 60 }),
+        body: { client_id: cid, valid_minutes: Number(tokenValidity) || 60 },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
       setGeneratedToken(d)
     } catch (e) {
       setActionErr(e.message)
@@ -132,13 +131,10 @@ export default function AgentManagement() {
     setFleetBusy(true)
     setActionErr(null)
     try {
-      const r = await apiFetch('/api/agents/dispatch', {
+      await apiFetch('/api/agents/dispatch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: cid, engine: 'process_inventory', fleet_broadcast: true }),
+        body: { client_id: cid, engine: 'process_inventory', fleet_broadcast: true },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
       await refresh()
     } catch (e) {
       setActionErr(e.message)

@@ -6,7 +6,7 @@ import DigitalEvidenceHUD from '../warroom/DigitalEvidenceHUD'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import SeverityBadge from '../ui/SeverityBadge'
 import { SkeletonTable } from '../ui/Skeleton'
 import EmptyState from '../ui/EmptyState'
@@ -203,20 +203,18 @@ export default function FindingsTab() {
     setLoading(true)
     setFindingsError(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/findings`)
-      if (r.ok) {
-        const d = await r.json()
-        setFindings(Array.isArray(d.findings) ? d.findings : [])
-        if (!Array.isArray(d.findings)) {
-          setFindingsError(t('components.cockpitTabs.findings.unexpected_response'))
-        }
-      } else {
-        setFindings([])
-        setFindingsError(await formatApiErrorResponse(r))
+      const d = await apiFetch(`/api/clients/${selectedClientId}/findings`)
+      setFindings(Array.isArray(d.findings) ? d.findings : [])
+      if (!Array.isArray(d.findings)) {
+        setFindingsError(t('components.cockpitTabs.findings.unexpected_response'))
       }
     } catch (e) {
       setFindings([])
-      setFindingsError(e?.message || t('components.cockpitTabs.findings.network_error'))
+      setFindingsError(
+        e?.response
+          ? await formatApiErrorResponse(e.response)
+          : e?.message || t('components.cockpitTabs.findings.network_error'),
+      )
     } finally {
       setLoading(false)
     }
@@ -230,20 +228,19 @@ export default function FindingsTab() {
     if (!selectedClientId) return
     const url = `/api/clients/${selectedClientId}/report/pdf`
     try {
-      const r = await apiFetch(url)
-      const contentType = r.headers.get('Content-Type') || ''
-      if (!r.ok) {
-        setFindingsError(await formatApiErrorResponse(r))
-        return
-      }
+      // raw:true so utils returns the unparsed Response even for a JSON body,
+      // so a non-PDF response reports its ACTUAL Content-Type (matching the old
+      // r.headers.get('Content-Type')) rather than a hardcoded 'application/json'.
+      const res = await apiFetch(url, { raw: true })
+      const contentType = res.headers.get('Content-Type') || ''
       if (!contentType.includes('application/pdf')) {
         setFindingsError(
           t('components.cockpitTabs.findings.report_unexpected_type', { type: contentType || 'unknown' }),
         )
         return
       }
-      const blob = await r.blob()
-      const disposition = r.headers.get('Content-Disposition') || ''
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') || ''
       const match = disposition.match(/filename="?([^";\n]+)"?/)
       let filename = match ? match[1].trim() : 'Weissman_Report.pdf'
       if (!filename.toLowerCase().endsWith('.pdf')) filename = `${filename.replace(/\.[^.]+$/, '')}.pdf`
@@ -256,7 +253,11 @@ export default function FindingsTab() {
       document.body.removeChild(a)
       URL.revokeObjectURL(objectUrl)
     } catch (e) {
-      setFindingsError(e?.message || t('components.cockpitTabs.findings.pdf_download_failed'))
+      setFindingsError(
+        e?.response
+          ? await formatApiErrorResponse(e.response)
+          : e?.message || t('components.cockpitTabs.findings.pdf_download_failed'),
+      )
     }
   }
 

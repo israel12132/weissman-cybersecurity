@@ -22,7 +22,7 @@ import {
   Globe,
   Cloud,
 } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import LiveActivityFeed from './LiveActivityFeed'
 import MitreCoverageHeatmap from './MitreCoverageHeatmap'
 import TopMoversPanel from './TopMoversPanel'
@@ -158,15 +158,17 @@ export default function OverviewTab() {
     const load = async (isBackground = false) => {
       if (!isBackground) setLoading(true)
       try {
-        const [statsRes, findingsRes, kpisRes, incidentsRes] = await Promise.all([
-          apiFetch('/api/dashboard/stats'),
-          selectedClientId ? apiFetch(`/api/clients/${selectedClientId}/findings`) : null,
-          apiFetch('/api/dashboard/exec-kpis'),
-          apiFetch('/api/soc/incidents'),
+        const [statsData, findingsData, kpisData, incidentsData] = await Promise.all([
+          apiFetch('/api/dashboard/stats').catch(() => null),
+          selectedClientId
+            ? apiFetch(`/api/clients/${selectedClientId}/findings`).catch(() => null)
+            : null,
+          apiFetch('/api/dashboard/exec-kpis').catch(() => null),
+          apiFetch('/api/soc/incidents').catch(() => null),
         ])
         if (cancelled) return
-        if (statsRes.ok) {
-          const d = await statsRes.json()
+        if (statsData) {
+          const d = statsData
           setStats({
             total_vulnerabilities: d.total_vulnerabilities ?? 0,
             security_score: d.security_score ?? 0,
@@ -175,14 +177,14 @@ export default function OverviewTab() {
             attack_surface_paths: d.attack_surface_paths ?? 0,
           })
         }
-        if (findingsRes?.ok) {
-          const d = await findingsRes.json()
+        if (findingsData) {
+          const d = findingsData
           setFindings(d.findings ?? [])
         } else {
           setFindings([])
         }
-        if (kpisRes.ok) {
-          const k = await kpisRes.json()
+        if (kpisData) {
+          const k = kpisData
           const discovered = k?.trend?.discovered
           const resolved = k?.trend?.resolved
           if (Array.isArray(discovered) && discovered.length > 1) {
@@ -196,8 +198,8 @@ export default function OverviewTab() {
             setResolvedSpark([])
           }
         }
-        if (incidentsRes.ok) {
-          const inc = await incidentsRes.json()
+        if (incidentsData) {
+          const inc = incidentsData
           const list = Array.isArray(inc?.incidents) ? inc.incidents : []
           setIncidentCount(list.filter((i) => (i.status || '').toLowerCase() !== 'closed').length)
         } else {

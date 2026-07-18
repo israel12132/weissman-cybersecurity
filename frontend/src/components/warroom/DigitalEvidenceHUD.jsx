@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import RuntimeExecutionFlow from '../cockpit/RuntimeExecutionFlow'
 import { formatApiErrorFromBody } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
 import Button from '../ui/Button'
 
@@ -138,19 +138,19 @@ export default function DigitalEvidenceHUD({ clientId, finding, onClose, onVerif
     setDecryptBusy(true)
     setDecryptErr('')
     try {
-      const r = await apiFetch(
+      const d = await apiFetch(
         `/api/clients/${clientId}/vulnerabilities/${finding.id}/decrypt-poc`,
         { method: 'POST' },
       )
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setDecryptErr(formatApiErrorFromBody(d, r.status))
-        return
-      }
       setDecryptedCurl(d.poc_exploit || '')
       setPhase('revealed')
     } catch (e) {
-      setDecryptErr(String(e.message || e))
+      if (e?.status) {
+        const b = e?.response ? await e.response.json().catch(() => ({})) : {}
+        setDecryptErr(formatApiErrorFromBody(b, e.status))
+      } else {
+        setDecryptErr(String(e.message || e))
+      }
     } finally {
       setDecryptBusy(false)
     }

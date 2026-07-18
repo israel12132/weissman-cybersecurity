@@ -26,7 +26,7 @@ import WarRoomSoundscape from '../warroom/WarRoomSoundscape'
 import CockpitTabErrorBoundary from './CockpitTabErrorBoundary'
 const CeoMissionControlTab = lazy(() => import('./CeoMissionControlTab'))
 import { useContainerChartSize } from '../../hooks/useViewportChartSize'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import { useToast } from '../ui/Toaster'
 import Button from '../ui/Button'
 
@@ -101,7 +101,6 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   useEffect(() => {
     const loadHealth = () => {
       apiFetch('/api/health')
-        .then((r) => (r.ok ? r.json() : null))
         .then((d) => d && setHealthSummary(d))
         .catch(() => {})
     }
@@ -112,7 +111,6 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
 
   useEffect(() => {
     apiFetch('/api/enterprise/settings')
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setSafeMode(!!d.global_safe_mode))
       .catch(() => {})
   }, [])
@@ -121,12 +119,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
     setSafeSaving(true)
     const next = !safeMode
     try {
-      const r = await apiFetch('/api/enterprise/settings', {
+      await apiFetch('/api/enterprise/settings', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ global_safe_mode: next }),
+        body: { global_safe_mode: next },
       })
-      if (r.ok) setSafeMode(next)
+      setSafeMode(next)
     } catch (_) {}
     setSafeSaving(false)
   }, [safeMode])
@@ -135,14 +132,10 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
     setBoardReportLoading(true)
     try {
       const q = selectedClientId ? `?client_id=${encodeURIComponent(selectedClientId)}` : ''
-      const r = await apiFetch(`/api/reports/executive${q}`)
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}))
-        toast.error(err.detail || err.error || t('components.cockpit.board_failed'))
-        return
-      }
-      const blob = await r.blob()
-      const dispo = r.headers.get('Content-Disposition')
+      const res = await apiFetch(`/api/reports/executive${q}`)
+      if (!(res instanceof Response)) return
+      const blob = await res.blob()
+      const dispo = res.headers.get('Content-Disposition')
       let filename = 'Weissman_Board_Report.pdf'
       if (dispo) {
         const m = dispo.match(/filename="([^"]+)"/)
@@ -157,31 +150,36 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error(t('components.cockpit.board_network_error'))
+    } catch (e) {
+      if (e?.response) {
+        const err = await e.response.json().catch(() => ({}))
+        toast.error(err.detail || err.error || t('components.cockpit.board_failed'))
+      } else {
+        toast.error(t('components.cockpit.board_network_error'))
+      }
+    } finally {
+      // finally (not a trailing statement) so the early `return` on a non-Response
+      // 2xx still clears the loading flag instead of stranding the button.
+      setBoardReportLoading(false)
     }
-    setBoardReportLoading(false)
   }
 
   const runFullScan = async () => {
     setEngageLoading(true)
     try {
-      const r = await apiFetch('/api/scan/run-all', { method: 'POST' })
-      if (r.ok) {
-        const d = await r.json().catch(() => ({}))
+      try {
+        const d = await apiFetch('/api/scan/run-all', { method: 'POST' })
         if (d && d.message) refreshClients()
+      } catch (_) {
+        /* run-all is best-effort; poe-scan still runs even if it fails */
       }
       const targetUrl = targetUrlFromClient(selectedClient)
       if (targetUrl && selectedClientId) {
-        const pr = await apiFetch('/api/poe-scan/run', {
+        const pd = await apiFetch('/api/poe-scan/run', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_id: String(selectedClientId), target_url: targetUrl }),
+          body: { client_id: String(selectedClientId), target_url: targetUrl },
         })
-        if (pr.ok) {
-          const pd = await pr.json().catch(() => ({}))
-          if (pd && pd.job_id) setPoeJobId(pd.job_id)
-        }
+        if (pd && pd.job_id) setPoeJobId(pd.job_id)
       }
     } catch (_) {}
     setEngageLoading(false)

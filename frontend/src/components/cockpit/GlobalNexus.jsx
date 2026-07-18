@@ -30,7 +30,7 @@ import { PRIMARY_NAV } from '../../lib/appNav'
 import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import { useProductionEngines } from '../../lib/useProductionEngines'
 import TacticalNavLink from '../nav/TacticalNavLink'
 import Logo from '../Logo'
@@ -251,9 +251,8 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     let cancelled = false
     const load = async () => {
       try {
-        const r = await apiFetch('/api/dashboard/stats')
-        if (r.ok && !cancelled) {
-          const d = await r.json()
+        const d = await apiFetch('/api/dashboard/stats')
+        if (!cancelled) {
           setStats({
             total_vulnerabilities: d.total_vulnerabilities ?? 0,
             security_score: d.security_score ?? 0,
@@ -399,15 +398,15 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                       if (!(await confirmDialog(t(`${GN}.delete_client_confirm`, { name: c.name || id })))) return
                       setDeletingId(id)
                       try {
-                        const r = await apiFetch(`/api/clients/${id}`, { method: 'DELETE' })
-                        if (r.ok || r.status === 204) {
-                          if (String(selectedClientId) === id) setSelectedClientId(null)
-                          await refreshClients()
-                        } else {
-                          toast.error(await formatApiErrorResponse(r))
-                        }
+                        await apiFetch(`/api/clients/${id}`, { method: 'DELETE' })
+                        if (String(selectedClientId) === id) setSelectedClientId(null)
+                        await refreshClients()
                       } catch (err) {
-                        toast.error(err?.message || t(`${GN}.network_error`))
+                        if (err?.response) {
+                          toast.error(await formatApiErrorResponse(err.response))
+                        } else {
+                          toast.error(err?.message || t(`${GN}.network_error`))
+                        }
                       }
                       setDeletingId(null)
                     }}
