@@ -487,13 +487,20 @@ jobs:
           # and retry past the poll window. 3 keeps that background work bounded well clear of the
           # pool used by live scan execution.
           WEISSMAN_POST_PERSIST_DB_CONCURRENCY: "3"
-          # Leave heavy concurrency at its default (2). With the periodic bulk scanner disabled
-          # (WEISSMAN_SCANNING_ENABLED=0 on the server) the only heavy jobs are the smoke's own
-          # SEQUENTIAL command_center scans plus their deduplicated (<=1 in-flight per client)
-          # superposition follow-ups — at most 2 heavy at once. So 2 permits never starve the
-          # smoke, and keeping heavy concurrency low bounds concurrent DB-connection demand so
-          # completion writes always get a connection. (The earlier heavy=4 override was insurance
-          # against a tenant_full_scan flood that WEISSMAN_SCANNING_ENABLED=0 already removes.)
+          # Serialize heavy scan execution (heavy=1). The smoke submits one command_center scan
+          # per group and waits for it, so at heavy=2 the only reason two scans overlap is timing
+          # jitter between a finishing scan and the next submit — and that overlap is exactly what
+          # exhausts CI's single small Postgres pool and made one high-DB engine
+          # (bgp_dns_hijacking) retry past the poll window while the other 13 passed. With heavy=1
+          # each scan runs alone against the full app pool, so there is no cross-scan contention.
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
+          # With heavy=1, a background auto-superposition-collapse follow-up (also a heavy job)
+          # could hold the single permit and head-of-line-block the next smoke scan. It is a
+          # best-effort cross-finding fusion that NONE of the live-scan contracts assert on
+          # (step 41 checks per-finding risk fields written during findings_persist, not the
+          # collapse output), so disable it for CI to keep the single heavy lane free for the
+          # scans under test.
+          WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "0"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
