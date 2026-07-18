@@ -53,10 +53,17 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         return;
     }
     let pool = PgPoolOptions::new()
-        .max_connections(2)
+        .max_connections(1)
         .connect(url.trim())
         .await
         .expect("connect TEST_DATABASE_URL");
+    // Pin the whole contract to ONE connection. `SET ROLE weissman_app` and the
+    // `app.current_tenant_id` GUC are per-connection session state; running the
+    // seed / role / GUC / SELECT statements over a multi-connection pool let the
+    // SELECT land on a still-superuser connection and bypass RLS (flaky under the
+    // full `cargo test --workspace` connection contention). Hold one connection
+    // explicitly and run every statement on it.
+    let mut conn = pool.acquire().await.expect("acquire dedicated connection");
 
     sqlx::query(
         r#"INSERT INTO tenants (slug, name) VALUES ($1, 'rls_contract_a'), ($2, 'rls_contract_b')
@@ -64,49 +71,49 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     )
     .bind(T1_SLUG)
     .bind(T2_SLUG)
-    .execute(&pool)
+    .execute(&mut *conn)
     .await
     .expect("seed tenants");
 
     let t1: i64 = sqlx::query_scalar("SELECT id FROM tenants WHERE slug = $1")
         .bind(T1_SLUG)
-        .fetch_one(&pool)
+        .fetch_one(&mut *conn)
         .await
         .expect("resolve t1 id");
     let t2: i64 = sqlx::query_scalar("SELECT id FROM tenants WHERE slug = $1")
         .bind(T2_SLUG)
-        .fetch_one(&pool)
+        .fetch_one(&mut *conn)
         .await
         .expect("resolve t2 id");
 
     sqlx::query("SET ROLE weissman_app")
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("SET ROLE weissman_app (GRANT weissman_app TO your test role if this fails)");
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
         .bind(t2.to_string())
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("set GUC t2");
 
     sqlx::query("DELETE FROM clients WHERE tenant_id = $1 AND name = $2")
         .bind(t2)
         .bind(PROBE_NAME)
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .ok();
 
     sqlx::query(r#"INSERT INTO clients (tenant_id, name) VALUES ($1, $2)"#)
         .bind(t2)
         .bind(PROBE_NAME)
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("insert probe client under tenant B");
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
         .bind(t1.to_string())
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("set GUC t1");
 
@@ -115,7 +122,7 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     )
     .bind(t2)
     .bind(PROBE_NAME)
-    .fetch_one(&pool)
+    .fetch_one(&mut *conn)
     .await
     .expect("count cross-tenant");
 
@@ -124,9 +131,9 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         "weissman_app with app.current_tenant_id=A must not see tenant B rows"
     );
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
         .bind(t2.to_string())
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("set GUC t2 again");
 
@@ -135,15 +142,15 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     )
     .bind(t2)
     .bind(PROBE_NAME)
-    .fetch_one(&pool)
+    .fetch_one(&mut *conn)
     .await
     .expect("count same-tenant");
 
     assert_eq!(same, 1, "sanity: same tenant must still see its own row");
 
-    let _ = sqlx::query("RESET ROLE").execute(&pool).await;
+    let _ = sqlx::query("RESET ROLE").execute(&mut *conn).await;
     let _ = sqlx::query("DELETE FROM clients WHERE name = $1")
         .bind(PROBE_NAME)
-        .execute(&pool)
+        .execute(&mut *conn)
         .await;
 }
