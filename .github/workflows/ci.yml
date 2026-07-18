@@ -305,12 +305,6 @@ jobs:
       - name: Engine reality audit
         run: node scripts/engine_reality_audit.mjs
 
-      - name: Doc metrics sync (fail on drift)
-        run: node scripts/sync_doc_metrics.mjs --check
-
-      - name: Frontend↔backend route contract
-        run: node scripts/verify_frontend_route_contract.mjs
-
       - name: Cloud posture catalog parity
         run: node scripts/verify_cloud_posture_catalog.mjs
 

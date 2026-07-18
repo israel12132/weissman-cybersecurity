@@ -239,7 +239,10 @@ fn window_count(
 }
 
 fn record_violation(tenant_id: Option<i64>, kind: &'static str, endpoint: &str) {
-    let mut v = store().violations.lock().unwrap_or_else(|poison| poison.into_inner());
+    let mut v = store()
+        .violations
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     v.push_back(ViolationRow {
         at: Utc::now(),
         tenant_id,
