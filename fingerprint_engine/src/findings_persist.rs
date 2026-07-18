@@ -26,6 +26,49 @@ use crate::intel_epss;
 use crate::intel_kev;
 use crate::pentest_memory;
 
+/// Global concurrency cap for detached background DB tasks spawned *per finding*
+/// (SOAR playbook dispatch, pentest-memory record).
+///
+/// Without a bound, a single finding-heavy scan spawns one/two detached tasks per
+/// finding (up to `WEISSMAN_MAX_PERSIST_FINDINGS`, default 5000). Each task
+/// independently acquires pooled connections and stays alive across webhook /
+/// embedding I/O, so thousands pile onto `pool.acquire()` at once, blow past the
+/// pool's slots, and — because they are detached — keep the pool saturated for the
+/// full `acquire_timeout` window *after* the job returns, starving the worker's
+/// claim loop and the job's own completion write ("pool timed out while waiting for
+/// an open connection"). Bounding the concurrency makes peak background connection
+/// demand `O(permits)`, independent of finding count. Override with
+/// `WEISSMAN_BG_DB_CONCURRENCY` (default 8).
+fn background_db_semaphore() -> &'static tokio::sync::Semaphore {
+    static SEM: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    SEM.get_or_init(|| {
+        let permits = std::env::var("WEISSMAN_BG_DB_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(8);
+        tokio::sync::Semaphore::new(permits)
+    })
+}
+
+/// Spawn a detached background task that touches the DB, gated by the global
+/// [`background_db_semaphore`]. The permit is held for the whole task lifetime, so
+/// excess tasks queue on the semaphore instead of storming `pool.acquire()`. This
+/// preserves fire-and-forget semantics (the scan never blocks on webhooks) while
+/// hard-capping concurrent pooled-connection demand regardless of finding count.
+pub fn spawn_bounded_db_task<Fut>(task: Fut)
+where
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
+    tokio::spawn(async move {
+        // If the semaphore is ever closed (never in practice) just drop the task.
+        let Ok(_permit) = background_db_semaphore().acquire().await else {
+            return;
+        };
+        task.await;
+    });
+}
+
 /// Lower-case severity from an arbitrary value, defaulting to `info`.
 fn normalize_severity(raw: Option<&str>) -> String {
     let s = raw.unwrap_or("info").trim().to_ascii_lowercase();
@@ -674,7 +717,7 @@ pub async fn persist_engine_findings(
             let eng = engine.to_string();
             let cwe_mem = cwe.clone();
             let sig_mem = vuln_signature.clone();
-            tokio::spawn(async move {
+            spawn_bounded_db_task(async move {
                 let _ = pentest_memory::record_win(
                     &pool_mem,
                     tenant_id,
@@ -722,7 +765,7 @@ pub async fn persist_engine_findings(
             internet_exposed,
         };
         let pool_for_dispatch: PgPool = (*pool).clone();
-        tokio::spawn(async move {
+        spawn_bounded_db_task(async move {
             crate::soar::dispatch_record::record_post_persist_dispatch(
                 &pool_for_dispatch,
                 tenant_id,
