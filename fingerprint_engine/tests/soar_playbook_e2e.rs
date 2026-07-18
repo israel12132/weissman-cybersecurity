@@ -94,6 +94,20 @@ async fn isolate_dry_run_verify_and_revert_chain() {
             .await
             .expect("seed soar e2e client");
 
+    // Register an aws_ec2 integration for the tenant so the isolate_host action can
+    // resolve a provider. Without it execute_armored_action returns "skipped" with
+    // "no integration registered". The dry-run adapter path needs no real creds.
+    sqlx::query(
+        "INSERT INTO system_configs (tenant_id, key, value) \
+         VALUES ($1, 'integrations_registry', $2) \
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
+    )
+    .bind(tenant_id)
+    .bind(r#"[{"id":"aws_ec2","type":"aws_ec2","config":{}}]"#)
+    .execute(&pool)
+    .await
+    .expect("seed integrations_registry");
+
     let evidence = ThreatEvidence {
         finding_id: Some(1),
         title: "SOAR E2E contract probe".into(),
@@ -188,6 +202,12 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .bind(execution_id)
         .execute(&pool)
         .await;
+    let _ = sqlx::query(
+        "DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
+    )
+    .bind(tenant_id)
+    .execute(&pool)
+    .await;
     // Remove the seeded client last (its FK children above are already gone).
     let _ = sqlx::query("DELETE FROM clients WHERE id = $1")
         .bind(client_id)
