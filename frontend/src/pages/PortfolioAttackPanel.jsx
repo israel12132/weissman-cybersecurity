@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Crosshair, FileText, Search } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
@@ -121,7 +122,8 @@ export default function PortfolioAttackPanel() {
             refreshLoading={loading}
             exportDisabled={!filteredTechniques.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredTechniques.length}
@@ -130,7 +132,7 @@ export default function PortfolioAttackPanel() {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       </div>
 

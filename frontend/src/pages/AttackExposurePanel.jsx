@@ -7,6 +7,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import Button from '../components/ui/Button'
 import { exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
 /**
@@ -130,7 +131,8 @@ export default function AttackExposurePanel({ clientId }) {
             refreshLoading={loading}
             exportDisabled={!filteredTechniques.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredTechniques.length}
@@ -139,7 +141,7 @@ export default function AttackExposurePanel({ clientId }) {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       </div>
 

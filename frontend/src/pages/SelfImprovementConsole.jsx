@@ -19,6 +19,7 @@ import { api } from '../utils/apiFetch'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
+import Button from '../components/ui/Button'
 
 /** CSV/PDF columns for the self-improvement proposal queue. Exported for tests. */
 export const SELF_IMPROVE_CSV_HEADER = ['id', 'category', 'source', 'title', 'status']
@@ -53,7 +54,7 @@ const CATEGORY_COLOR = {
   wiring: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
   sync: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30',
   gap: 'text-rose-300 bg-rose-500/10 border-rose-500/30',
-  cleanliness: 'text-slate-300 bg-slate-500/10 border-slate-500/30',
+  cleanliness: 'text-text-secondary bg-slate-500/10 border-slate-500/30',
 }
 
 const LEVEL_COLOR = {
@@ -184,14 +185,16 @@ export default function SelfImprovementConsole() {
       icon={<Cpu className="w-5 h-5 text-emerald-400" strokeWidth={1.75} />}
       actions={
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="unstyled"
             onClick={runNow}
             disabled={busy}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/80 hover:bg-white/10 disabled:opacity-50"
           >
             <Play className="w-4 h-4" /> Run now
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
             onClick={toggle}
             disabled={busy}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
@@ -202,22 +205,24 @@ export default function SelfImprovementConsole() {
           >
             <Power className="w-4 h-4" />
             {enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
             onClick={load}
             disabled={busy}
             className="inline-flex items-center rounded-lg border border-white/15 bg-white/5 p-1.5 text-white/70 hover:bg-white/10 disabled:opacity-50"
             aria-label="Refresh"
           >
             <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} />
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={handleRefresh}
             onExport={exportCsv}
             refreshLoading={loading}
             exportDisabled={!filteredItems.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredItems.length}
@@ -225,7 +230,7 @@ export default function SelfImprovementConsole() {
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10 disabled:opacity-50"
           >
             <FileText className="w-4 h-4" /> PDF
-          </button>
+          </Button>
         </div>
       }
     >
@@ -273,7 +278,8 @@ export default function SelfImprovementConsole() {
 
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             {['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'APPLIED'].map((s) => (
-              <button
+              <Button
+                variant="unstyled"
                 key={s}
                 onClick={() => setFilter(s)}
                 className={`rounded-full px-3 py-1 text-xs font-medium border ${
@@ -283,7 +289,7 @@ export default function SelfImprovementConsole() {
                 }`}
               >
                 {s.replace('_', ' ').toLowerCase()}
-              </button>
+              </Button>
             ))}
             <div className="relative ml-auto">
               <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -367,20 +373,22 @@ export default function SelfImprovementConsole() {
                         </div>
                         {it.status === 'PENDING_APPROVAL' && (
                           <div className="flex flex-col gap-2 shrink-0">
-                            <button
+                            <Button
+                              variant="unstyled"
                               onClick={() => review(it.id, 'approve')}
                               disabled={busy}
                               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 text-sm hover:bg-emerald-500/25 disabled:opacity-50"
                             >
                               <CheckCircle2 className="w-4 h-4" /> Approve → PR
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="unstyled"
                               onClick={() => review(it.id, 'reject')}
                               disabled={busy}
                               className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 text-white/60 border border-white/15 px-3 py-1.5 text-sm hover:bg-white/10 disabled:opacity-50"
                             >
                               <XCircle className="w-4 h-4" /> Reject
-                            </button>
+                            </Button>
                           </div>
                         )}
                         {it.status !== 'PENDING_APPROVAL' && (

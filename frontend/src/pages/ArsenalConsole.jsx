@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Swords, Rocket, ShieldAlert, CheckCircle2, XCircle, Loader2, FileText, Search } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
+import Button from '../components/ui/Button'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
@@ -189,7 +190,8 @@ export default function ArsenalConsole({ clientId }) {
             refreshLoading={loading}
             exportDisabled={!filteredRecommended.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredRecommended.length}
@@ -198,9 +200,10 @@ export default function ArsenalConsole({ clientId }) {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
           {plan.length > 0 && (
-            <button
+            <Button
+              variant="unstyled"
               type="button"
               onClick={deploy}
               disabled={deploying}
@@ -208,7 +211,7 @@ export default function ArsenalConsole({ clientId }) {
             >
               {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
               {t('pages.threatAnalysis.arsenal_deploy', { count: plan.length, defaultValue: 'Deploy recommended ({{count}})' })}
-            </button>
+            </Button>
           )}
         </div>
       </div>

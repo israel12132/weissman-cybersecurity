@@ -7,6 +7,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
 import { apiFetch } from '../lib/apiBase'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
@@ -176,7 +177,8 @@ export default function RemediationAnalytics() {
             refreshLoading={loading}
             exportDisabled={!filteredHeals.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredHeals.length}
@@ -185,7 +187,7 @@ export default function RemediationAnalytics() {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       }
     >

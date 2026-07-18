@@ -6,6 +6,7 @@ import { apiFetch } from '../lib/apiBase'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
@@ -211,7 +212,8 @@ export default function FixFirstProgram() {
             refreshLoading={loading}
             exportDisabled={!filteredProgram.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredProgram.length}
@@ -220,7 +222,7 @@ export default function FixFirstProgram() {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       </div>
 

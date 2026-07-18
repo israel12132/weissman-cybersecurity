@@ -6,6 +6,7 @@ import { apiFetch } from '../lib/apiBase'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf } from '../lib/pageExport'
+import Button from '../components/ui/Button'
 
 /** CSV/PDF columns for the age-bucket backlog. Exported for tests. */
 export const BACKLOG_AGING_CSV_HEADER = ['label', 'total', 'critical', 'high', 'medium', 'low']
@@ -135,7 +136,8 @@ export default function BacklogAgingPanel() {
             refreshLoading={loading}
             exportDisabled={!buckets.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!buckets.length}
@@ -144,7 +146,7 @@ export default function BacklogAgingPanel() {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       </div>
 

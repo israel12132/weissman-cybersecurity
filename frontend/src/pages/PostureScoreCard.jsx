@@ -4,6 +4,7 @@ import { Gauge, AlertTriangle, FileText } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf } from '../lib/pageExport'
@@ -158,7 +159,8 @@ export default function PostureScoreCard() {
             refreshLoading={loading}
             exportDisabled={!data}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!data}
@@ -167,7 +169,7 @@ export default function PostureScoreCard() {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { Boxes, Search, Play, Loader2, CheckCircle2, XCircle, Rocket, FileText }
 import { apiFetch } from '../lib/apiBase'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf } from '../lib/pageExport'
 import { parseFirstDomain } from './ArsenalConsole'
@@ -223,7 +224,8 @@ export default function ArsenalInventory({ clientId }) {
             refreshLoading={loading}
             exportDisabled={!filtered.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filtered.length}
@@ -232,9 +234,10 @@ export default function ArsenalInventory({ clientId }) {
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
           {clientId != null && batchIds.length > 0 && (
-            <button
+            <Button
+              variant="unstyled"
               type="button"
               onClick={runAll}
               disabled={deploying}
@@ -243,7 +246,7 @@ export default function ArsenalInventory({ clientId }) {
             >
               {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
               {t('pages.threatAnalysis.inv_runall', { count: batchIds.length, defaultValue: 'Run all ({{count}}) — stealth' })}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -263,31 +266,34 @@ export default function ArsenalInventory({ clientId }) {
 
       {/* Category filter */}
       <div className="px-4 py-2 border-b border-white/5 flex items-center gap-1.5 flex-wrap">
-        <button
+        <Button
+          variant="unstyled"
           type="button"
           onClick={() => setDistinctOnly((v) => !v)}
           title={t('pages.threatAnalysis.inv_distinct_hint', { defaultValue: 'Hide duplicate aliases — show only distinct operations' })}
           className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${distinctOnly ? 'text-emerald-200 border-emerald-500/40 bg-emerald-500/10' : 'text-white/45 border-white/10 hover:border-white/25'}`}
         >
           {t('pages.threatAnalysis.inv_distinct', { defaultValue: 'Distinct only' })}
-        </button>
+        </Button>
         <span className="w-px h-4 bg-white/10 mx-0.5" />
-        <button
+        <Button
+          variant="unstyled"
           type="button"
           onClick={() => setCategory('')}
           className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === '' ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/10'}`}
         >
           {t('pages.threatAnalysis.inv_all', { defaultValue: 'All' })}
-        </button>
+        </Button>
         {categories.map((c) => (
-          <button
+          <Button
+            variant="unstyled"
             key={c}
             type="button"
             onClick={() => setCategory((p) => (p === c ? '' : c))}
             className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${category === c ? 'text-cyan-200 border-cyan-500/40 bg-cyan-500/10' : 'text-white/45 border-white/10 hover:border-white/25'}`}
           >
             {c} <span className="text-white/30">{byCategory[c]}</span>
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -311,7 +317,8 @@ export default function ArsenalInventory({ clientId }) {
                 <span className="hidden lg:block text-[9px] font-mono text-white/30 w-10 text-right shrink-0" title={e.techniques.join(', ')}>{e.techniques.length}T</span>
               )}
               {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${STATUS_TONE[st]} ${st === 'running' ? 'animate-spin' : ''}`} />}
-              <button
+              <Button
+                variant="unstyled"
                 type="button"
                 onClick={() => run(e.id)}
                 disabled={clientId == null || st === 'running'}
@@ -320,7 +327,7 @@ export default function ArsenalInventory({ clientId }) {
               >
                 <Play className="w-3 h-3" />
                 {t('pages.threatAnalysis.inv_run', { defaultValue: 'Run' })}
-              </button>
+              </Button>
             </div>
           )
         })}
