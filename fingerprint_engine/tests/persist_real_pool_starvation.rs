@@ -65,14 +65,13 @@ async fn real_persist_survives_starved_pool() {
         .execute(&pool)
         .await
         .ok();
-    let client_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id"#,
-    )
-    .bind(tenant_id)
-    .bind("persist-starve-client")
-    .fetch_one(&pool)
-    .await
-    .expect("seed client");
+    let client_id: i64 =
+        sqlx::query_scalar(r#"INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id"#)
+            .bind(tenant_id)
+            .bind("persist-starve-client")
+            .fetch_one(&pool)
+            .await
+            .expect("seed client");
 
     // 1000 distinct, gate-passing findings (info severity + explicit proof).
     let findings: Vec<serde_json::Value> = (0..N)
@@ -89,9 +88,15 @@ async fn real_persist_survives_starved_pool() {
 
     // THE CONTRACT: must return Ok (no "pool timed out") through a 3-slot pool.
     let started = std::time::Instant::now();
-    let result =
-        persist_engine_findings(&pool, tenant_id, Some(client_id), "starve_engine", "https://example.com", &findings)
-            .await;
+    let result = persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "starve_engine",
+        "https://example.com",
+        &findings,
+    )
+    .await;
     let elapsed = started.elapsed();
 
     let inserted = result.unwrap_or_else(|e| {
