@@ -367,7 +367,25 @@ jobs:
             --skip isolate_dry_run_verify_and_revert_chain \
             --skip weissman_app_cannot_read_other_tenant_clients
 
+      - name: Free runner disk before Docker image build
+        # By this point the job has a full debug target/, node_modules, and a built
+        # frontend on the stock runner; building three production Docker images on top
+        # risks exhausting the root filesystem. Reclaim the unused language toolchains
+        # first (same remedy the rust-audit + rust-coverage jobs use).
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
       - name: Build Docker production images
+        # `docker compose build` interpolates the ENTIRE compose file at load time, so the
+        # two runtime-only required secrets — ${WEISSMAN_JWT_SECRET:?} and
+        # ${WEISSMAN_ADMIN_PASSWORD:?} in docker-compose.yml — must be present even though a
+        # build never consumes them. Supply CI-throwaway values purely to satisfy parse-time
+        # interpolation; the :? runtime hardening in the compose file is left intact.
+        env:
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
+          WEISSMAN_ADMIN_PASSWORD: changeme
         run: docker compose build backend worker gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
