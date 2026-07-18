@@ -130,6 +130,11 @@ async function main() {
     const label = `${entry.group}/${entry.engine}`
     const body = { engine: entry.engine, client_id: Number(clientId) }
     if (entry.target) body.target = entry.target
+    // Per-engine job_params (ArsenalConfig) passed straight through the scan
+    // body as extras. Live-network engines (jwt_attack, bgp_dns_hijacking) use
+    // this to fail fast in the sandboxed runner so they finish inside the poll
+    // window instead of stalling on unreachable third-party infrastructure.
+    if (entry.params && typeof entry.params === 'object') Object.assign(body, entry.params)
 
     // Refresh the access token before each engine so a long run (many engines,
     // each polled for minutes) never outlives the token TTL — previously the
