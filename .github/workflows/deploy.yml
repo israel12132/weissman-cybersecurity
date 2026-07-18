@@ -35,6 +35,11 @@ jobs:
         uses: sigstore/cosign-installer@v3
 
       - name: Verify image signature (fail closed)
+        # Pass the workflow input through the environment (never interpolate
+        # `${{ inputs.* }}` straight into a run script — that is a shell-injection
+        # sink). As a shell var it is a quoted value, not expanded into the script.
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
           cosign verify \
@@ -43,6 +48,8 @@ jobs:
             "${IMAGE}@${IMAGE_DIGEST}"
 
       - name: Pin the verified digest into the k8s manifests
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
           DIGEST_REF="${IMAGE}@${IMAGE_DIGEST}"
