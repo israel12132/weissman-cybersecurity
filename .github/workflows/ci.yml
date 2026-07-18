@@ -465,6 +465,15 @@ jobs:
         # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
         # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
         # container itself — target the runner's docker-bridge gateway to reach the host.
+        #
+        # continue-on-error: the scan itself is already non-blocking (fail_action:false), but
+        # action-baseline@v0.12.0 bundles the deprecated v1 artifact uploader, which the
+        # current GitHub artifact backend rejects with HTTP 400 ("artifact name ... is not
+        # valid") AFTER a clean scan (FAIL-NEW: 0). That action-internal upload error is not a
+        # security finding and must not gate the PR (nor skip the live E2E contracts below);
+        # this keeps the informational DAST truly non-blocking. TODO: bump action-baseline to a
+        # release using upload-artifact@v4 to make the step green rather than tolerated-red.
+        continue-on-error: true
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: http://172.17.0.1:18000/api/health
