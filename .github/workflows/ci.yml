@@ -386,7 +386,17 @@ jobs:
         env:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_ADMIN_PASSWORD: changeme
-        run: docker compose build backend worker gateway
+        # Override the release profile for THIS CI validation build only: the committed
+        # profile.release (lto=fat, codegen-units=1) makes the in-Docker release build of three
+        # binaries over the 350k-LOC workspace OOM-kill the runner (exit 143 mid-link). Disable
+        # LTO + parallelize codegen so it fits in the runner's memory; the published image (via
+        # the publish job, which passes no build-args) keeps the full fat-LTO profile. The image
+        # here only needs to build + be Trivy-scanned; it never runs the live stack.
+        run: |
+          docker compose build \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=false \
+            --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+            backend worker gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the

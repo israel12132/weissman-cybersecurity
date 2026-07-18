@@ -32,6 +32,16 @@ COPY backend ./backend
 COPY crates ./crates
 COPY scripts ./scripts
 COPY shared ./shared
+# Release-profile knobs, overridable at build time. Defaults reproduce the committed
+# profile.release (lto=fat, codegen-units=1), so production/publish images are byte-for-byte
+# unchanged. CI overrides them (thin/no LTO + parallel codegen) because the fat-LTO link of
+# three release binaries over the ~350k-LOC workspace exhausts a hosted runner's memory and
+# gets SIGKILL/143'd — and the CI image only needs to build + be Trivy-scannable, never to
+# run (the live-stack boots the debug binary). Cargo env vars override the Cargo.toml profile.
+ARG CARGO_PROFILE_RELEASE_LTO=fat
+ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+ENV CARGO_PROFILE_RELEASE_LTO=${CARGO_PROFILE_RELEASE_LTO} \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=${CARGO_PROFILE_RELEASE_CODEGEN_UNITS}
 RUN cargo build -p weissman-server -p weissman-worker -p weissman-agent \
     --release --locked
 
