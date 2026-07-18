@@ -126,13 +126,14 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         .execute(&mut *conn)
         .await
         .expect("scope GUC to tenant A");
-    let cross: i64 =
-        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1 AND name = $2")
-            .bind(t2)
-            .bind(PROBE_NAME)
-            .fetch_one(&mut *conn)
-            .await
-            .expect("count cross-tenant");
+    let cross: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1 AND name = $2",
+    )
+    .bind(t2)
+    .bind(PROBE_NAME)
+    .fetch_one(&mut *conn)
+    .await
+    .expect("count cross-tenant");
     sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
     assert_eq!(
         cross, 0,
@@ -153,13 +154,14 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         .execute(&mut *conn)
         .await
         .expect("scope GUC to tenant B");
-    let same: i64 =
-        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1 AND name = $2")
-            .bind(t2)
-            .bind(PROBE_NAME)
-            .fetch_one(&mut *conn)
-            .await
-            .expect("count same-tenant");
+    let same: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1 AND name = $2",
+    )
+    .bind(t2)
+    .bind(PROBE_NAME)
+    .fetch_one(&mut *conn)
+    .await
+    .expect("count same-tenant");
     sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
     assert_eq!(same, 1, "sanity: same tenant must still see its own row");
 
