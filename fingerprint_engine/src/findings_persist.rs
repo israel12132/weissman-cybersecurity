@@ -17,6 +17,8 @@
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+use std::sync::LazyLock;
+use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
 use crate::findings_correlator::{self, ClusterAttrs};
@@ -25,6 +27,29 @@ use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
 use crate::pentest_memory;
+
+/// Bounds the fan-out of the per-finding, fire-and-forget DB side-effects (pentest-memory win
+/// recording + SOAR post-persist dispatch). Each such task clones the app pool and acquires a
+/// connection; without a cap, a single high-finding scan spawns hundreds of detached tasks that
+/// OUTLIVE the scan, saturate the pool, and starve the next scan's `begin_tenant_tx` — surfacing
+/// as "database: pool timed out while waiting for an open connection". A small shared cap keeps
+/// total background-DB concurrency bounded regardless of finding volume. These are best-effort
+/// side effects, so pacing them changes nothing the caller observes. Tunable via
+/// `WEISSMAN_POST_PERSIST_DB_CONCURRENCY` (default 6).
+static POST_PERSIST_DB_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
+    let n = std::env::var("WEISSMAN_POST_PERSIST_DB_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(6);
+    Semaphore::new(n)
+});
+
+/// Acquire a permit that bounds background post-persist DB work; held for the spawned task's life.
+/// `None` only if the (never-closed) semaphore were closed — in which case the task simply proceeds.
+async fn post_persist_db_permit() -> Option<SemaphorePermit<'static>> {
+    POST_PERSIST_DB_SEM.acquire().await.ok()
+}
 
 /// Lower-case severity from an arbitrary value, defaulting to `info`.
 fn normalize_severity(raw: Option<&str>) -> String {
@@ -675,6 +700,7 @@ pub async fn persist_engine_findings(
             let cwe_mem = cwe.clone();
             let sig_mem = vuln_signature.clone();
             tokio::spawn(async move {
+                let _permit = post_persist_db_permit().await;
                 let _ = pentest_memory::record_win(
                     &pool_mem,
                     tenant_id,
@@ -723,6 +749,7 @@ pub async fn persist_engine_findings(
         };
         let pool_for_dispatch: PgPool = (*pool).clone();
         tokio::spawn(async move {
+            let _permit = post_persist_db_permit().await;
             crate::soar::dispatch_record::record_post_persist_dispatch(
                 &pool_for_dispatch,
                 tenant_id,
