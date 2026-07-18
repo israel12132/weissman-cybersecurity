@@ -412,6 +412,17 @@ jobs:
           WEISSMAN_ADMIN_PASSWORD: changeme
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          # Disable the scheduled orchestrator scan cycle for the live-stack gates.
+          # By default (WEISSMAN_ENV=production) the leader dispatches continuous
+          # tenant_full_scan cycles (every ~15-60s, 6-8 engines per tenant). Against
+          # the CI Postgres (max_connections=100) those concurrent full scans saturate
+          # the worker's app pool and starve the on-demand jobs the gates actually test
+          # — the smoke's command_center_engine job then fails its completion write with
+          # "pool timed out while waiting for an open connection" and never reaches
+          # 'completed'. Every live gate below submits and polls its OWN scans via the
+          # API, so the scheduled cycle is pure contention here, not part of the contract.
+          # On-demand jobs are still executed by the worker regardless of this toggle.
+          WEISSMAN_SCANNING_ENABLED: "0"
           PORT: "18000"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
@@ -423,6 +434,9 @@ jobs:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
+          # Match the server: no scheduled full-tenant scan cycles competing for the
+          # DB pool with the on-demand jobs the live gates submit (see note above).
+          WEISSMAN_SCANNING_ENABLED: "0"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
