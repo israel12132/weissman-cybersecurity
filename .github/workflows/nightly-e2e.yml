@@ -33,6 +33,19 @@ jobs:
       WEISSMAN_APP_POOL_MAX: "24"
       WEISSMAN_AUTH_POOL_MAX: "6"
       WEISSMAN_INTEL_POOL_MAX: "4"
+      # Raise the per-IP API rate limit for the single-source load generator.
+      # The k6 SLO smoke drives ~60-75 req/s from ONE IP (127.0.0.1); the edge +
+      # inner per-IP limiters default to 30/s (burst 60) and correctly 429 that
+      # single hammering IP — which is anti-abuse behavior, NOT a backend
+      # availability defect. The SLO gate itself is the k6 latency/error budget
+      # (http_req_failed<1%, p95 read<800ms), and those thresholds still apply in
+      # full. In production the 99.9% SLA is measured across thousands of client
+      # IPs, none individually exceeding 30/s, so the per-IP throttle never fires.
+      # Lift it to the clamp ceiling here so the load test measures true backend
+      # throughput/latency instead of the abuse limiter (same spirit as the
+      # ephemeral-DB fsync tuning: CI infra config, not a change to the gate).
+      WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+      WEISSMAN_RATE_LIMIT_BURST: "2000"
     services:
       postgres:
         image: pgvector/pgvector:pg16
