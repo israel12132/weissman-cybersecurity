@@ -80,6 +80,21 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .await
         .expect("tenant row");
 
+    // Seed a real client so the FK on soar_action_executions.client_id is honestly
+    // satisfied. This test runs against a freshly-migrated (empty) DB in the
+    // engine-wiring job's pre-boot `cargo test --workspace` step, so no client
+    // exists yet; hard-coding client_id=1 previously violated
+    // soar_action_executions_client_id_fkey. We connect as the superuser test role,
+    // so this direct insert is RLS-exempt (same pattern as the tenant lookup above).
+    let client_id: i64 = sqlx::query_scalar(
+        "INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind("soar-e2e-contract-client")
+    .fetch_one(&pool)
+    .await
+    .expect("seed soar e2e client");
+
     let evidence = ThreatEvidence {
         finding_id: Some(1),
         title: "SOAR E2E contract probe".into(),
@@ -98,7 +113,7 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     let cmd = build_command(
         "isolate_host",
         tenant_id,
-        Some(1),
+        Some(client_id),
         None,
         "i-test123456789".into(),
         json!({ "pre_approved": true, "blast_radius_override": true }),
@@ -172,6 +187,11 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .await;
     let _ = sqlx::query("DELETE FROM soar_action_executions WHERE id = $1")
         .bind(execution_id)
+        .execute(&pool)
+        .await;
+    // Remove the seeded client last (its FK children above are already gone).
+    let _ = sqlx::query("DELETE FROM clients WHERE id = $1")
+        .bind(client_id)
         .execute(&pool)
         .await;
 }
