@@ -84,13 +84,22 @@ export default function SelfImprovementConsole() {
       .some((v) => String(v || '').toLowerCase().includes(q))
   })
 
+  // CSV injection guard: a cell that starts with = + - @ (or a leading tab/CR that
+  // spreadsheets strip) is treated as a formula by Excel/Sheets. Prefix such cells
+  // with a single quote before quoting so exported proposal text can't execute.
+  const csvCell = (c) => {
+    let s = String(c ?? '')
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+    return `"${s.replace(/"/g, '""')}"`
+  }
+
   const exportCsv = () => {
     const rows = [
       ['id', 'category', 'source', 'status', 'title'],
       ...filteredItems.map((it) => [it.id, it.category, it.source, it.status, it.title]),
     ]
     const csv = rows
-      .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+      .map((r) => r.map(csvCell).join(','))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
     const a = document.createElement('a')

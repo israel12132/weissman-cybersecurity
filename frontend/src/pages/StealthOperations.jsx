@@ -143,6 +143,14 @@ export default function StealthOperations() {
 
   const cfg = data && data.config
   const l = data && data.live
+  // Filter active hosts once so the count label and the list stay in sync when searching.
+  const filteredHosts = (l?.active_hosts || []).filter(
+    (h) =>
+      !hostSearch.trim() ||
+      String(h.host || '')
+        .toLowerCase()
+        .includes(hostSearch.trim().toLowerCase()),
+  )
   const id = data && data.identity
 
   return (
@@ -169,6 +177,7 @@ export default function StealthOperations() {
           <ShellScanActions
             onRefresh={load}
             onExport={exportJson}
+            exportLabel={t('weissmanFindings.export_json')}
             refreshLoading={loading}
             exportDisabled={!data}
           />
@@ -336,7 +345,7 @@ export default function StealthOperations() {
                   />
                 )}
                 <span className="text-xs font-mono text-slate-500">
-                  {t('stealthOps.showing', { n: l.active_hosts.length })}
+                  {t('stealthOps.showing', { n: filteredHosts.length })}
                 </span>
               </div>
             </div>
@@ -344,15 +353,13 @@ export default function StealthOperations() {
               <div className="text-sm text-slate-500 py-6 text-center">
                 {t('stealthOps.noRequests')}
               </div>
+            ) : filteredHosts.length === 0 ? (
+              <div className="text-sm text-slate-500 py-6 text-center">
+                {t('stealthOps.no_match')}
+              </div>
             ) : (
               <ul className="space-y-2">
-                {l.active_hosts
-                  .filter(
-                    (h) =>
-                      !hostSearch.trim() ||
-                      String(h.host || '').toLowerCase().includes(hostSearch.trim().toLowerCase()),
-                  )
-                  .map((h) => (
+                {filteredHosts.map((h) => (
                   <li key={h.host} className="flex items-center gap-3">
                     <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
                       {h.host}

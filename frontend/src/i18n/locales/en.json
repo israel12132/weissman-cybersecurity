@@ -1122,7 +1122,8 @@
     "ready_body": "Configure target and parameters, then launch the assessment.",
     "filtered_title": "No matches",
     "filtered_body": "No findings match the current search or severity filter.",
-    "confidence": "Risk confidence ×{{value}}"
+    "confidence": "Risk confidence ×{{value}}",
+    "export_json": "Export JSON"
   },
   "nexusSwarm": {
     "save_preset_title": "Save preset",
@@ -6942,7 +6943,8 @@
     "showing": "showing {{n}}",
     "noRequests": "No requests in flight. Launch a scan to see the queue shape traffic per target.",
     "evidence_notice": "Live pacing telemetry from GET /api/stealth/status — concurrency caps, saturation, and per-host admission.",
-    "search_placeholder": "Filter hosts…"
+    "search_placeholder": "Filter hosts…",
+    "no_match": "No matching hosts"
   },
   "engineAccounting": {
     "title": "Capability accounting · honest count",

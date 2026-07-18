@@ -11,6 +11,9 @@ export default function ShellScanActions({
   refreshLoading = false,
   refreshDisabled = false,
   exportDisabled = false,
+  // Defaults to the CSV label; pass an explicit label (e.g. "Export JSON") on
+  // pages whose onExport produces a non-CSV file so the toolbar isn't mislabeled.
+  exportLabel,
 }) {
   const { t } = useTranslation()
   return (
@@ -31,7 +34,7 @@ export default function ShellScanActions({
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/35 text-[11px] font-mono text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
       >
         <Download className="w-3.5 h-3.5" />
-        {t('weissmanFindings.export_csv')}
+        {exportLabel || t('weissmanFindings.export_csv')}
       </Button>
     </div>
   )

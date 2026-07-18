@@ -1122,7 +1122,8 @@
     "ready_body": "הגדר יעד ופרמטרים, ואז הפעל את ההערכה.",
     "filtered_title": "אין התאמות",
     "filtered_body": "אין ממצאים התואמים לחיפוש או לסינון החומרה הנוכחיים.",
-    "confidence": "ביטחון סיכון ×{{value}}"
+    "confidence": "ביטחון סיכון ×{{value}}",
+    "export_json": "ייצוא JSON"
   },
   "nexusSwarm": {
     "save_preset_title": "שמירת קונפיגורציה",
@@ -6942,7 +6943,8 @@
     "showing": "מציג {{n}}",
     "noRequests": "אין בקשות בטיסה. הפעל סריקה כדי לראות את התור מעצב תעבורה לכל מטרה.",
     "evidence_notice": "נתוני קצב חיים מ-GET /api/stealth/status — תקרות מקביליות, רוויה, וקבלת מארחים.",
-    "search_placeholder": "סינון מארחים…"
+    "search_placeholder": "סינון מארחים…",
+    "no_match": "לא נמצאו מארחים תואמים"
   },
   "engineAccounting": {
     "title": "חשבונאות יכולות · ספירה ישרה",

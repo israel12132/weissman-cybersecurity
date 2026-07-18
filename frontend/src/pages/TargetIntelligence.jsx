@@ -63,12 +63,15 @@ export default function TargetIntelligence() {
   const [engineSearch, setEngineSearch] = useState('')
 
   const exportJson = () => {
+    // Name the file after the analyzed result's host, not the live input — the user
+    // may have edited `target` after analyzing without re-running.
+    const analyzedTarget = data?.profile?.host || 'profile'
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(data ?? {}, null, 2)], { type: 'application/json' }),
     )
     const a = document.createElement('a')
     a.href = url
-    a.download = `target-intel-${(target || 'profile').replace(/[^a-z0-9.-]/gi, '_')}.json`
+    a.download = `target-intel-${analyzedTarget.replace(/[^a-z0-9.-]/gi, '_')}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -112,6 +115,7 @@ export default function TargetIntelligence() {
         <ShellScanActions
           onRefresh={analyze}
           onExport={exportJson}
+          exportLabel={t('weissmanFindings.export_json')}
           refreshLoading={loading}
           exportDisabled={!data}
         />
