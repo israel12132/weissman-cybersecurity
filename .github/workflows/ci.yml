@@ -367,6 +367,14 @@ jobs:
         run: cargo test --workspace --all-targets
 
       - name: Build Docker production images
+        # `docker compose build` interpolates the ENTIRE compose file — including the
+        # runtime `environment:` block — so the two required (${VAR:?}) secrets must be
+        # present or parsing fails before any image is built. These are runtime env
+        # (never baked into the image at build time), so parse-only dummies are safe
+        # and correct here; real secrets come from the environment at `up` time.
+        env:
+          WEISSMAN_JWT_SECRET: ci-build-parse-only-not-baked-into-image
+          WEISSMAN_ADMIN_PASSWORD: ci-build-parse-only-not-baked-into-image
         run: docker compose build backend worker gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
