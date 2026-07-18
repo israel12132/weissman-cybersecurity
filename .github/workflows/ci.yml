@@ -353,6 +353,31 @@ jobs:
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
 
+      - name: Raise Postgres connection ceiling for the live stack
+        # The app pools are sized for a production Postgres: per process, app 48 +
+        # auth 12 + intel 12, and the server + worker together can demand ~144
+        # connections. A single command_center_engine job also fans out DB writes
+        # that need well over the 48-conn app-pool default. The CI pgvector service
+        # defaults to max_connections=100 — too low for this live stack — so the
+        # worker's app pool saturates and its completion writes fail with
+        # "pool timed out while waiting for an open connection", timing out the smoke.
+        # Raise the ceiling to match the app's design (ALTER SYSTEM persists to
+        # postgresql.auto.conf across the restart). GitHub Actions service containers
+        # can't set a startup command, so reconfigure + restart the running container.
+        run: |
+          PG_ID='${{ job.services.postgres.id }}'
+          docker exec "$PG_ID" psql -U postgres -d weissman -c "ALTER SYSTEM SET max_connections = 300;"
+          docker restart "$PG_ID"
+          for i in $(seq 1 60); do
+            if docker exec "$PG_ID" pg_isready -U postgres -d weissman >/dev/null 2>&1; then
+              echo "postgres back up; max_connections now:"
+              docker exec "$PG_ID" psql -U postgres -d weissman -tAc "SHOW max_connections;"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "postgres did not become ready after restart"; exit 1
+
       - name: Apply database migrations
         env:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
@@ -437,6 +462,12 @@ jobs:
           # Match the server: no scheduled full-tenant scan cycles competing for the
           # DB pool with the on-demand jobs the live gates submit (see note above).
           WEISSMAN_SCANNING_ENABLED: "0"
+          # A single command_center_engine job fans out DB writes concurrently; the
+          # 48-conn app-pool default was saturating and starving both the claim loop
+          # and the job's own completion write (smoke step-33 failure). Give the worker
+          # real headroom — the raised Postgres max_connections=300 (see the ceiling
+          # step above) affords it: worker app 96 + server app 48 + auth/intel « 300.
+          WEISSMAN_APP_POOL_MAX: "96"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
