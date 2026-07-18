@@ -24,6 +24,21 @@ const JWT_ATTACK_CI_PARAMS = {
   attack_paths: false,
 }
 const BGP_DNS_CI_PARAMS = { intensity: 'light', timeout_ms: 2000, concurrency: 8 }
+//   * pki_tls — TLS posture scan. The core cert/protocol/cipher findings come
+//     from the port-443 handshake, but the engine also fetches crt.sh CT logs
+//     (fixed 10s client, can hang) and OCSP, and scans a port budget — on the
+//     slow CI runner this intermittently pushed total runtime past the poll
+//     window (recurring 'job timeout' victim). Bound it: light intensity +
+//     tight handshake timeout + skip the slow external CT/OCSP fetches + a hard
+//     port budget. The TLS handshake to :443 (and its ~dozen findings) is
+//     unaffected, so the findings pipeline is still exercised end-to-end.
+const PKI_TLS_CI_PARAMS = {
+  intensity: 'light',
+  timeout_ms: 2500,
+  check_ct_logs: false,
+  check_ocsp: false,
+  port_budget_secs: 15,
+}
 
 /** Shared one-engine-per-group smoke / findings E2E plan. */
 export const GROUP_SMOKE_PLAN = [
@@ -33,7 +48,7 @@ export const GROUP_SMOKE_PLAN = [
   { group: 'cloud', engine: 'cloud_audit_evasion', target: 'https://example.com' },
   { group: 'ot', engine: 'iot_firmware', target: 'example.com' },
   { group: 'stealth', engine: 'antiforensics', target: 'https://example.com' },
-  { group: 'crypto', engine: 'pki_tls', target: 'https://example.com' },
+  { group: 'crypto', engine: 'pki_tls', target: 'https://example.com', params: PKI_TLS_CI_PARAMS },
   { group: 'network', engine: 'bgp_dns_hijacking', target: 'example.com', params: BGP_DNS_CI_PARAMS },
   { group: 'supply_chain', engine: 'supply_chain', target: 'https://github.com/octocat/Hello-World' },
   { group: 'apt', engine: 'kill_chain', target: 'https://example.com' },

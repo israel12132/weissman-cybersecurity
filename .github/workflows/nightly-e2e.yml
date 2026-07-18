@@ -145,7 +145,12 @@ jobs:
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_FINDINGS_E2E_FULL: "1"
           WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
-          WEISSMAN_FINDINGS_E2E_POLL_MAX: "120"
+          # 160 * 2.5s = 400s per engine. The runner's slow disk causes 40-84s
+          # postgres checkpoint stalls; a fast engine whose DB persist lands
+          # inside a stall can momentarily exceed the old 300s window even
+          # though it completes. 400s absorbs that variance without masking a
+          # genuinely hung engine (those are bounded via job_params).
+          WEISSMAN_FINDINGS_E2E_POLL_MAX: "160"
         run: node scripts/verify_engine_groups_findings_e2e.mjs
 
       # True-Live UI feature specs against the same production-mode backend: the
