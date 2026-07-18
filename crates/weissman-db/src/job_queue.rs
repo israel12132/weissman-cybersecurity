@@ -39,6 +39,35 @@ pub async fn enqueue(
     Ok(id)
 }
 
+/// Enqueue a job that is **not immediately claimable**: `run_after` is set `hold_secs` in the
+/// future so a worker cannot claim it in the window before the caller finishes preparing the row
+/// (e.g. attaching a signed job-bus envelope). The caller MUST release it by setting `run_after`
+/// back to `now()` once preparation is done. If the caller crashes before releasing it, the hold
+/// lapses after `hold_secs` and normal claim/dead-letter handling resumes — so the hold is a
+/// safety window, not a permanent block.
+pub async fn enqueue_hold(
+    pool: &PgPool,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+    hold_secs: i64,
+) -> Result<Uuid, sqlx::Error> {
+    let id: Uuid = sqlx::query_scalar(
+        r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id, run_after)
+           VALUES ($1, $2, $3, 'pending', $4, now() + ($5::bigint * interval '1 second'))
+           RETURNING id"#,
+    )
+    .bind(tenant_id)
+    .bind(kind)
+    .bind(Json(payload))
+    .bind(trace_id)
+    .bind(hold_secs.max(1))
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
 /// Enqueue with a custom retry cap (e.g. `auto_heal` must not re-run after secrets are cleared).
 pub async fn enqueue_with_max_attempts(
     pool: &PgPool,

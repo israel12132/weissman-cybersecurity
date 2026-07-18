@@ -480,6 +480,13 @@ jobs:
           WEISSMAN_APP_POOL_MAX: "30"
           WEISSMAN_AUTH_POOL_MAX: "4"
           WEISSMAN_INTEL_POOL_MAX: "4"
+          # Tighten the per-finding background-DB fan-out cap (default 6) further for CI's single
+          # small Postgres: findings_persist fires best-effort side-effect tasks (pentest-memory +
+          # SOAR dispatch) per finding, and a high-finding scan's fan-out otherwise pressures the
+          # app pool enough that a couple of engines' scans transiently fail to acquire a connection
+          # and retry past the poll window. 3 keeps that background work bounded well clear of the
+          # pool used by live scan execution.
+          WEISSMAN_POST_PERSIST_DB_CONCURRENCY: "3"
           # Leave heavy concurrency at its default (2). With the periodic bulk scanner disabled
           # (WEISSMAN_SCANNING_ENABLED=0 on the server) the only heavy jobs are the smoke's own
           # SEQUENTIAL command_center scans plus their deduplicated (<=1 in-flight per client)
@@ -539,7 +546,10 @@ jobs:
           WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
           WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
           WEISSMAN_TENANT_SLUG: default
-          WEISSMAN_SMOKE_POLL_TIMEOUT_MS: "180000"
+          # Real multi-engine scans against the CI single-Postgres stack can need a couple of retry
+          # attempts under transient connection pressure; give the poller headroom beyond one 180s
+          # attempt so a scan that succeeds on retry still reports before the client gives up.
+          WEISSMAN_SMOKE_POLL_TIMEOUT_MS: "240000"
         run: node scripts/smoke_engine_groups.mjs
 
       - name: Audit UI scan button paths
