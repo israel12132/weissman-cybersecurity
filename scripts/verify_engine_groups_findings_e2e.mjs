@@ -153,6 +153,18 @@ async function main() {
     if (!job) { fail(`${label}: job timeout`); continue }
     if (String(job.status).toLowerCase() !== 'completed') {
       fail(`${label}: terminal ${job.status} ${job.last_error || ''}`)
+      // The worker-log dump is unreliable (block-buffered, truncated on live
+      // processes), so surface the real terminal error on the reliable step
+      // stdout: dump the diagnostic fields of the job row itself.
+      const diag = {
+        status: job.status,
+        last_error: job.last_error,
+        attempt_count: job.attempt_count,
+        max_attempts: job.max_attempts,
+        result: job.result,
+        error: job.error,
+      }
+      console.error(`  ↳ ${label} job detail: ${JSON.stringify(diag).slice(0, 2000)}`)
       continue
     }
     ok(`${label}: completed`)

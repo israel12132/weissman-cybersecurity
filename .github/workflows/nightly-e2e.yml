@@ -29,11 +29,10 @@ jobs:
       # ~68 connections (app 48 + auth 12 + intel 8); two processes exceeded 100,
       # so sqlx acquire timed out under scan load ("pool timed out while waiting
       # for an open connection") and engine jobs failed to record completion.
-      # Server ~34 + worker ~42 = ~76 here, leaving headroom.
+      # Each process opens app+auth+intel = 24+6+4 = 34; two processes = 68 < 100.
       WEISSMAN_APP_POOL_MAX: "24"
       WEISSMAN_AUTH_POOL_MAX: "6"
       WEISSMAN_INTEL_POOL_MAX: "4"
-      WEISSMAN_WORKER_POOL: "8"
     services:
       postgres:
         image: pgvector/pgvector:pg16

@@ -481,6 +481,27 @@ pub async fn dead_letter_job(pool: &PgPool, job_id: Uuid, err: &str) -> Result<(
     Ok(())
 }
 
+/// Annotate `last_error` on a job row WITHOUT touching `status`. The event-sourced
+/// DLQ projection records only the failure *class* (e.g. `execution_failure`) in
+/// `last_error`; this overlays the raw error message so a dead job is
+/// self-explanatory when inspected via `GET /api/jobs/:id` (the worker log is
+/// unreliable — buffered and truncated when the process is killed).
+pub async fn annotate_last_error(
+    pool: &PgPool,
+    job_id: Uuid,
+    err: &str,
+) -> Result<(), sqlx::Error> {
+    let msg: String = err.chars().take(4000).collect();
+    sqlx::query(
+        r#"UPDATE weissman_async_jobs SET last_error = $2, updated_at = now() WHERE id = $1"#,
+    )
+    .bind(job_id)
+    .bind(&msg)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// When zero-trust claim fails after [`reserve_next`], clear the reservation and backoff
 /// so workers do not hot-loop the same row (lease storm / stack overflow).
 pub async fn release_reserved_job(
