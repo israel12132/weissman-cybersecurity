@@ -198,11 +198,12 @@ mod tests {
     }
 
     #[test]
-    fn find_matching_rule_reverse_containment() {
-        // Rule payload contains the (shorter) fuzzer payload.
+    fn find_matching_rule_is_forward_containment_only() {
+        // Matching is forward-only: a rule fires when the fuzzer payload CONTAINS the
+        // rule payload — not the reverse. A short input that is merely a substring of a
+        // longer rule payload (here "cd" inside "abcdef") does not match.
         let rules = vec![rule("abcdef", "s")];
-        let m = find_matching_rule("cd", &rules).unwrap();
-        assert_eq!(m.payload, "abcdef");
+        assert!(find_matching_rule("cd", &rules).is_none());
     }
 
     #[test]
