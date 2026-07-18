@@ -289,6 +289,49 @@ pub async fn persist_engine_findings(
         findings
     };
 
+    // ── Architectural law: never hold a pooled connection across network I/O ──
+    // Warm the EPSS cache with ONE batched FIRST.org fetch BEFORE opening the write
+    // transaction below. `fetch_epss_for_cves` upserts the results into the local
+    // `epss_intel` mirror, so the per-finding `enrich_with_epss` calls *inside* the
+    // transaction resolve against fresh cache rows and never perform a network
+    // `.await` while a pooled connection is held. (Batching also collapses N
+    // per-finding HTTP round-trips into a single one.) KEV and internet-exposed
+    // lookups are short local reads, not network, so they stay in the loop.
+    {
+        let mut cves: Vec<String> = findings
+            .iter()
+            .map(|f| extract_cve_from_finding(f))
+            .filter(|c| !c.is_empty())
+            .collect();
+        cves.sort();
+        cves.dedup();
+        if !cves.is_empty() {
+            let _ = intel_epss::fetch_epss_for_cves(pool, &cves).await;
+        }
+    }
+
+    // Same law, second acquisition: `resolve_internet_exposed` opens its OWN pooled
+    // connection (a risk_graph_nodes lookup). Resolve it for every finding HERE,
+    // before the batch write transaction is opened, so the loop never acquires a
+    // second connection while the batch tx is held (that N+1 nesting is what let a
+    // single scan pin two pool slots per finding). Indexed by original position;
+    // the write loop reads it back. Gating is deterministic, so the index aligns.
+    let internet_exposed_pre: Vec<bool> = {
+        let mut v = Vec::with_capacity(findings.len());
+        for raw in findings.iter() {
+            let exposed = match gate_finding(engine, target, raw.clone()) {
+                Some(gated) => {
+                    let f = gated.json();
+                    let target_url = extract_target(f, target);
+                    resolve_internet_exposed(pool, tenant_id, client_id, &target_url, f).await
+                }
+                None => false,
+            };
+            v.push(exposed);
+        }
+        v
+    };
+
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -320,7 +363,7 @@ pub async fn persist_engine_findings(
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
-    for raw in findings.iter().cloned() {
+    for (finding_index, raw) in findings.iter().cloned().enumerate() {
         let Some(gated) = gate_finding(engine, target, raw) else {
             tracing::warn!(
                 target: "findings_persist",
@@ -734,8 +777,8 @@ pub async fn persist_engine_findings(
             });
         }
 
-        let internet_exposed =
-            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, &f).await;
+        // Pre-resolved above (before the batch tx) so we hold no second connection here.
+        let internet_exposed = internet_exposed_pre[finding_index];
 
         // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
         // Built outside the tx so a slow webhook doesn't extend the DB lock.
