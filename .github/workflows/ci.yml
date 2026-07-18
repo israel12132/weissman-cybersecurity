@@ -470,18 +470,23 @@ jobs:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
-          # Cap all three worker pools (app + auth + intel) to match the repo's E2E harness
-          # (scripts/run_e2e_stack.sh); together with the server's pools this keeps the shared-
-          # Postgres footprint far under max_connections=100 (see the Start weissman-server
-          # step) so the worker never exhausts connections and can't claim scan jobs.
-          WEISSMAN_APP_POOL_MAX: "16"
+          # Cap the worker's auth+intel pools, but give the APP pool real headroom: each
+          # in-flight scan AND its completion write both need a connection. A prior iteration
+          # shrank this to 16 while raising heavy concurrency to 4 — with the connection-hungry
+          # superposition-collapse follow-up that every smoke scan spawns, 4 concurrent heavy
+          # jobs drained the 16-connection pool and the FINISHED jobs' completion DB-writes
+          # failed with "database: pool timed out", so they never reached 'completed' and the
+          # smoke polled them to the 180s timeout. app=30 + server(24+6+4) = 72 << max_conn=100.
+          WEISSMAN_APP_POOL_MAX: "30"
           WEISSMAN_AUTH_POOL_MAX: "4"
           WEISSMAN_INTEL_POOL_MAX: "4"
-          # Extra headroom on the heavy lane so any residual background heavy job (e.g. the
-          # deduplicated superposition-collapse follow-up that a smoke scan's own findings
-          # trigger) can never monopolise the 2 default heavy permits and head-of-line-block
-          # the on-demand command_center scans the live-stack is verifying.
-          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "4"
+          # Leave heavy concurrency at its default (2). With the periodic bulk scanner disabled
+          # (WEISSMAN_SCANNING_ENABLED=0 on the server) the only heavy jobs are the smoke's own
+          # SEQUENTIAL command_center scans plus their deduplicated (<=1 in-flight per client)
+          # superposition follow-ups — at most 2 heavy at once. So 2 permits never starve the
+          # smoke, and keeping heavy concurrency low bounds concurrent DB-connection demand so
+          # completion writes always get a connection. (The earlier heavy=4 override was insurance
+          # against a tenant_full_scan flood that WEISSMAN_SCANNING_ENABLED=0 already removes.)
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
