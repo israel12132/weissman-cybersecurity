@@ -39,6 +39,60 @@ pub async fn enqueue(
     Ok(id)
 }
 
+/// Enqueue a job that is NOT yet claimable: it is inserted `pending` but with a
+/// future `run_after`, and `reserve_next`/`claim_next` skip rows whose
+/// `run_after` is in the future. The caller must finalize it with
+/// [`release_hold`] once any post-insert setup is durable (e.g. attaching the
+/// zero-trust signed envelope to the payload). This closes the race where a
+/// worker could claim a `pending` job in the window between the row insert and
+/// a follow-up envelope UPDATE, find no envelope, and permanently dead-letter
+/// it ("missing signed envelope — zero-trust claim rejected").
+pub async fn enqueue_held(
+    pool: &PgPool,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+    hold_secs: i64,
+) -> Result<Uuid, sqlx::Error> {
+    let hold = hold_secs.clamp(1, 300);
+    let id: Uuid = sqlx::query_scalar(
+        r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id, run_after)
+           VALUES ($1, $2, $3, 'pending', $4, now() + ($5::bigint * interval '1 second'))
+           RETURNING id"#,
+    )
+    .bind(tenant_id)
+    .bind(kind)
+    .bind(Json(payload))
+    .bind(trace_id)
+    .bind(hold)
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Finalize a [`enqueue_held`] job: replace its payload (now carrying the signed
+/// envelope) and clear `run_after` so it becomes immediately claimable — in one
+/// atomic UPDATE, so a worker never observes a claimable job without its
+/// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
+/// late finalize cannot resurrect a job that was already failed.
+pub async fn release_hold(
+    pool: &PgPool,
+    job_id: Uuid,
+    payload: Value,
+) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET payload = $2, run_after = NULL, updated_at = now()
+            WHERE id = $1 AND status = 'pending' AND run_after IS NOT NULL"#,
+    )
+    .bind(job_id)
+    .bind(Json(payload))
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 /// Enqueue with a custom retry cap (e.g. `auto_heal` must not re-run after secrets are cleared).
 pub async fn enqueue_with_max_attempts(
     pool: &PgPool,
