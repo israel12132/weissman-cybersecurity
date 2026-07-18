@@ -465,12 +465,24 @@ jobs:
           # Match the server: no scheduled full-tenant scan cycles competing for the
           # DB pool with the on-demand jobs the live gates submit (see note above).
           WEISSMAN_SCANNING_ENABLED: "0"
-          # A single command_center_engine job fans out DB writes concurrently; the
-          # 48-conn app-pool default was saturating and starving both the claim loop
-          # and the job's own completion write (smoke step-33 failure). Give the worker
-          # real headroom — the raised Postgres max_connections=300 (see the ceiling
-          # step above) affords it: worker app 96 + server app 48 + auth/intel « 300.
-          WEISSMAN_APP_POOL_MAX: "96"
+          # Root cause of the smoke step-33/34 failures: the worker runs up to
+          # light_concurrency=8 jobs at once, and each engine (plus the follow-up jobs
+          # a scan auto-enqueues) fans out heavy concurrent DB writes. Several engines
+          # in flight together drain even a large app pool — the claim loop and the
+          # completing job's own write then time out ("pool timed out"), so the job
+          # never reaches 'completed' and the smoke's 180s poll expires. Raising the
+          # pool + Postgres ceiling alone didn't fix it because the contention is
+          # between concurrent jobs, not a fixed ceiling.
+          #
+          # The live-stack gates submit ONE engine per group and poll it sequentially —
+          # they never require concurrent worker execution. Serialize the worker so a
+          # single engine has the whole pool to itself (no inter-job contention), and
+          # keep generous headroom (worker app 128 + server app 48 + auth/intel « the
+          # raised max_connections=300). This changes CI execution shape only; every
+          # engine still runs its real end-to-end scan.
+          WEISSMAN_WORKER_LIGHT_CONCURRENCY: "1"
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
+          WEISSMAN_APP_POOL_MAX: "128"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
