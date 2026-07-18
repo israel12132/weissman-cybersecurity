@@ -88,6 +88,11 @@ jobs:
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: nightly@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: nightly-e2e-password
           PORT: "18000"
+          # Disable the orchestrator's 60s auto-dispatch loop: otherwise it floods
+          # the worker's heavy slots with tenant_full_scan jobs, starving the
+          # findings-E2E's explicit per-engine scans (they timed out). The E2E
+          # drives scans itself via /api/command-center/scan.
+          WEISSMAN_SCANNING_ENABLED: "0"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
       - name: Start weissman-worker

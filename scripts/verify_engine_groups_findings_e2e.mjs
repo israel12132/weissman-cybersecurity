@@ -108,15 +108,19 @@ async function findingsForEngine(token, clientId, engine) {
   return rows.filter((row) => String(row.source || '').toLowerCase() === engine.toLowerCase())
 }
 
+async function login() {
+  const r = await api('POST', '/api/login', {
+    body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
+  })
+  return r.status === 200 ? r.data?.access_token || null : null
+}
+
 async function main() {
   console.log(`verify_engine_groups_findings_e2e: ${BASE}`)
   if (!PASSWORD) { fail('credentials missing'); process.exit(1) }
 
-  const login = await api('POST', '/api/login', {
-    body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
-  })
-  const token = login.data?.access_token
-  if (login.status !== 200 || !token) { fail('login'); process.exit(1) }
+  let token = await login()
+  if (!token) { fail('login'); process.exit(1) }
   ok(`login ${EMAIL}`)
 
   const clientId = await ensureClient(token)
@@ -126,6 +130,12 @@ async function main() {
     const label = `${entry.group}/${entry.engine}`
     const body = { engine: entry.engine, client_id: Number(clientId) }
     if (entry.target) body.target = entry.target
+
+    // Refresh the access token before each engine so a long run (many engines,
+    // each polled for minutes) never outlives the token TTL — previously the
+    // later engines failed to enqueue with HTTP 401 once the token expired.
+    const fresh = await login()
+    if (fresh) token = fresh
 
     const scan = await api('POST', '/api/command-center/scan', { token, body })
     if (scan.status !== 202 || !scan.data?.job_id) {
