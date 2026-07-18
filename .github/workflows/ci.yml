@@ -606,11 +606,17 @@ jobs:
           components: llvm-tools-preview
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
-      - name: Coverage (workspace lib tests) with a floor
+      - name: Coverage (workspace lib tests) — per-crate ratchet
         # Security-critical code should carry measured coverage, not just green tests.
-        # Start the floor conservative and ratchet up; lcov is uploaded for inspection.
+        # Per-crate floors live in scripts/coverage-floors.json: a fixed 40% for the maintained
+        # crates (weissman-core, weissman-ui-provenance, weissman-ast-cap) and a current-coverage
+        # quarantine for the legacy crates. Coverage may only go up, never down. Collect once,
+        # then emit both lcov (artifact) and json (ratchet input) from the cached profdata.
         run: |
-          cargo llvm-cov --workspace --lib --lcov --output-path lcov.info --fail-under-lines 40
+          cargo llvm-cov --workspace --lib --no-report
+          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo llvm-cov report --json --output-path cov.json
+          node scripts/coverage_ratchet.mjs cov.json
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
