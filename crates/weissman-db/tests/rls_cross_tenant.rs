@@ -79,34 +79,45 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         .await
         .expect("resolve t2 id");
 
+    // Pin the whole role/GUC/query sequence to ONE connection. `SET ROLE` and the
+    // `app.current_tenant_id` GUC are connection state; running these through the
+    // pool (as separate autocommit statements) lets a later statement land on a
+    // different pooled connection — one still acting as the superuser test role,
+    // which BYPASSES RLS and makes the isolation assertion see the cross-tenant
+    // row (a false failure). Acquiring a dedicated connection guarantees the
+    // COUNT executes as weissman_app under the intended GUC, exercising the real
+    // policy. We also set the GUC at session scope (is_local=false) so it persists
+    // across these autocommit statements on this connection.
+    let mut conn = pool.acquire().await.expect("acquire dedicated connection");
+
     sqlx::query("SET ROLE weissman_app")
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("SET ROLE weissman_app (GRANT weissman_app TO your test role if this fails)");
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
         .bind(t2.to_string())
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("set GUC t2");
 
     sqlx::query("DELETE FROM clients WHERE tenant_id = $1 AND name = $2")
         .bind(t2)
         .bind(PROBE_NAME)
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .ok();
 
     sqlx::query(r#"INSERT INTO clients (tenant_id, name) VALUES ($1, $2)"#)
         .bind(t2)
         .bind(PROBE_NAME)
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("insert probe client under tenant B");
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
         .bind(t1.to_string())
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("set GUC t1");
 
@@ -115,7 +126,7 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     )
     .bind(t2)
     .bind(PROBE_NAME)
-    .fetch_one(&pool)
+    .fetch_one(&mut *conn)
     .await
     .expect("count cross-tenant");
 
@@ -124,9 +135,9 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         "weissman_app with app.current_tenant_id=A must not see tenant B rows"
     );
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
         .bind(t2.to_string())
-        .execute(&pool)
+        .execute(&mut *conn)
         .await
         .expect("set GUC t2 again");
 
@@ -135,15 +146,20 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     )
     .bind(t2)
     .bind(PROBE_NAME)
-    .fetch_one(&pool)
+    .fetch_one(&mut *conn)
     .await
     .expect("count same-tenant");
 
     assert_eq!(same, 1, "sanity: same tenant must still see its own row");
 
-    let _ = sqlx::query("RESET ROLE").execute(&pool).await;
+    // Reset connection state before it returns to the pool, then clean up the
+    // probe row as the superuser test role (RLS no longer scoping us).
+    let _ = sqlx::query("RESET ROLE").execute(&mut *conn).await;
+    let _ = sqlx::query("SELECT set_config('app.current_tenant_id', '', false)")
+        .execute(&mut *conn)
+        .await;
     let _ = sqlx::query("DELETE FROM clients WHERE name = $1")
         .bind(PROBE_NAME)
-        .execute(&pool)
+        .execute(&mut *conn)
         .await;
 }
