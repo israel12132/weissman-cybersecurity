@@ -834,8 +834,9 @@ mod control_coverage_tests {
     // re-orphans a control fails the build rather than silently re-arming the 409 in production.
     const PHASE2_SQL: &str =
         include_str!("../migrations/20260702120000_security_hardening_phase2.sql");
-    const ISO_CIS_COMPLETION_SQL: &str =
-        include_str!("../migrations/20260715120000_compliance_control_mappings_iso_cis_completion.sql");
+    const ISO_CIS_COMPLETION_SQL: &str = include_str!(
+        "../migrations/20260715120000_compliance_control_mappings_iso_cis_completion.sql"
+    );
 
     /// Extract seeded `control_id`s for a framework from a migration's `VALUES` rows. Each row is a
     /// single line of the form `('FRAMEWORK', 'CONTROL_ID', ...`.
@@ -868,7 +869,10 @@ mod control_coverage_tests {
             ("A.13", "Communications security"),
         ]);
         let ids = seeded_control_ids("ISO27001");
-        assert!(!ids.is_empty(), "ISO27001 must be onboarded to live mapping");
+        assert!(
+            !ids.is_empty(),
+            "ISO27001 must be onboarded to live mapping"
+        );
         let orphans = find_orphaned_controls(&controls, &ids);
         assert!(orphans.is_empty(), "ISO27001 still orphaned: {orphans:?}");
         assert_eq!(report_gate(&orphans, false), ReportGate::Allow);
@@ -987,12 +991,24 @@ mod control_coverage_tests {
     #[test]
     fn merge_orphaned_controls_dedupes_by_id_and_sorts() {
         let coverage = vec![
-            OrphanedControl { control_id: "A.9".into(), control_title: "Access".into() },
-            OrphanedControl { control_id: "A.5".into(), control_title: "Org".into() },
+            OrphanedControl {
+                control_id: "A.9".into(),
+                control_title: "Access".into(),
+            },
+            OrphanedControl {
+                control_id: "A.5".into(),
+                control_title: "Org".into(),
+            },
         ];
         let dead = vec![
-            OrphanedControl { control_id: "A.9".into(), control_title: "Access (dead)".into() },
-            OrphanedControl { control_id: "A.12".into(), control_title: "Ops".into() },
+            OrphanedControl {
+                control_id: "A.9".into(),
+                control_title: "Access (dead)".into(),
+            },
+            OrphanedControl {
+                control_id: "A.12".into(),
+                control_title: "Ops".into(),
+            },
         ];
         let merged = merge_orphaned_controls(coverage, dead);
         let ids: Vec<&str> = merged.iter().map(|o| o.control_id.as_str()).collect();

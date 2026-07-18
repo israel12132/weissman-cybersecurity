@@ -49,6 +49,25 @@ const KPI_DASHBOARDS = new Set([
 ])
 const PREMIUM_TABLE = new Set(['FindingsCommandCenter.jsx'])
 
+/**
+ * Non-routed widgets that physically live in pages/ but are composed into a parent
+ * command-center page which carries the audited evidence / refresh / search chrome.
+ * They are not standalone routes, so they are audited via their parent, not on their
+ * own. Each entry notes the page that mounts it. (Verified: none appear in routeChunks.)
+ */
+const COMPOSED_PANELS = new Set([
+  'ArsenalConsole.jsx', // ← ArsenalInventory, ThreatAnalysisCenter
+  'ArsenalInventory.jsx', // ← ThreatAnalysisCenter
+  'AttackExposurePanel.jsx', // ← ThreatAnalysisCenter
+  'BacklogAgingPanel.jsx', // ← RemediationHub
+  'CompliancePosturePanel.jsx', // ← ComplianceFrameworks
+  'FixFirstProgram.jsx', // ← RemediationHub
+  'PortfolioAttackPanel.jsx', // ← Clients
+  'PortfolioPosturePanel.jsx', // ← Clients
+  'PostureScoreCard.jsx', // ← RemediationHub
+  'SlaForecastStrip.jsx', // ← RemediationHub
+])
+
 const FORENSIC_MARKERS = [
   'PageShell',
   'MorphingEngineChrome',
@@ -202,7 +221,8 @@ async function main() {
       f.endsWith('.jsx') &&
       !f.endsWith('.test.jsx') &&
       !f.endsWith('.spec.jsx') &&
-      f !== 'PageShell.jsx',
+      f !== 'PageShell.jsx' &&
+      !COMPOSED_PANELS.has(f),
   )
   const pageResults = []
   for (const file of pageFiles) {

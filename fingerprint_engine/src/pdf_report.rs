@@ -1080,7 +1080,10 @@ pub fn build_compliance_framework_pdf(
 
     if let Some(orphans) = invalid_orphans {
         b.set_fill_rgb(0.85, 0.16, 0.16);
-        b.text(15, "*** REPORT VOID — INCONSISTENT CONTROL-MAPPING STATE ***");
+        b.text(
+            15,
+            "*** REPORT VOID — INCONSISTENT CONTROL-MAPPING STATE ***",
+        );
         b.set_fill_rgb(0.9, 0.6, 0.6);
         b.text(
             10,
@@ -1090,7 +1093,10 @@ pub fn build_compliance_framework_pdf(
             10,
             "with no live evidence mapping; their status cannot be asserted. Complete the mapping",
         );
-        b.text(10, "catalog and regenerate before relying on this document.");
+        b.text(
+            10,
+            "catalog and regenerate before relying on this document.",
+        );
         b.y -= 4.0;
         b.set_fill_rgb(0.95, 0.75, 0.75);
         for (id, title) in orphans {
@@ -1442,8 +1448,9 @@ mod watermark_tests {
 
     #[test]
     fn valid_report_has_no_watermark() {
-        let pdf = build_compliance_framework_pdf("Acme", "ISO/IEC 27001:2022", 80, &controls(), None)
-            .expect("pdf builds");
+        let pdf =
+            build_compliance_framework_pdf("Acme", "ISO/IEC 27001:2022", 80, &controls(), None)
+                .expect("pdf builds");
         let body = String::from_utf8_lossy(&pdf);
         assert!(!body.contains("INVALID - INCONSISTENT STATE"));
         assert!(!body.contains("REPORT VOID"));
