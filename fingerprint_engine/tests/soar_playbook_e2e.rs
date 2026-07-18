@@ -93,6 +93,24 @@ async fn isolate_dry_run_verify_and_revert_chain() {
             .await
             .expect("seed probe client");
 
+    // Hermetic seed: the armored engine resolves a provider adapter from this
+    // tenant's `integrations_registry` (system_configs) via load_integrations +
+    // pick_provider. Without a registered isolate provider the dry-run returns
+    // "skipped" ("no integration registered for isolate_host") — never assume the
+    // default tenant already has one. Seed an aws_ec2 provider (empty config: the
+    // adapter short-circuits before touching AWS when cmd.dry_run is true, so no
+    // real credentials are needed). ON CONFLICT keeps the seed idempotent.
+    sqlx::query(
+        r#"INSERT INTO system_configs (tenant_id, key, value)
+           VALUES ($1, 'integrations_registry', $2)
+           ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value"#,
+    )
+    .bind(tenant_id)
+    .bind(r#"[{"id":"aws_ec2","type":"aws_ec2","config":{}}]"#)
+    .execute(&pool)
+    .await
+    .expect("seed soar integrations registry");
+
     let evidence = ThreatEvidence {
         finding_id: Some(1),
         title: "SOAR E2E contract probe".into(),
