@@ -77,6 +77,35 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Tune Postgres for CI (ephemeral DB — disable durability to kill checkpoint I/O stalls)
+        run: |
+          # ROOT CAUSE of the live-E2E flakiness: this runner's disk is slow, so
+          # postgres checkpoints fsync dirty buffers for 40-80s. During that
+          # window queries stall (I/O starvation), connections stay checked out
+          # past the 30s sqlx acquire_timeout, and the pool exhausts — surfacing
+          # as "pool timed out while waiting for an open connection" (worker
+          # claim + event-sourced completion) and "unexpected EOF on client
+          # connection with an open transaction". Each run a random engine's job
+          # failed to record completion and the E2E timed out.
+          # The CI database is thrown away at job end, so durability is
+          # irrelevant: turning fsync off makes checkpoints near-instant and
+          # removes the stalls entirely. fsync/full_page_writes/checkpoint_timeout
+          # are SIGHUP-reloadable, so pg_reload_conf() applies them with no
+          # restart (max_connections would need a restart; we don't touch it).
+          for i in $(seq 1 30); do
+            PGPASSWORD=postgres pg_isready -h 127.0.0.1 -U postgres -d weissman && break
+            sleep 2
+          done
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET checkpoint_timeout = '30min';
+          ALTER SYSTEM SET max_wal_size = '4GB';
+          SELECT pg_reload_conf();
+          SHOW fsync;
+          SQL
+
       - name: Apply database migrations
         env:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
