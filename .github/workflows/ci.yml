@@ -155,6 +155,11 @@ jobs:
         run: cargo build --workspace
 
       - name: Run Rust tests (blocking gate)
+        # Fail-fast: this DB-backed `cargo test --workspace --all-targets` normally runs ~5-7 min.
+        # A hung test (parallel-test deadlock / connection-pool leak) must not ride GitHub's 360-min
+        # default timeout and silently burn a runner — 15 min is >2x the legitimate upper bound yet
+        # kills a hang decisively. See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 15
         run: cargo test --workspace --all-targets
 
   security-scan:
@@ -360,6 +365,11 @@ jobs:
         run: cargo run -q -p weissman-db --example run_migrate
 
       - name: Run Rust workspace tests (blocking gate)
+        # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Normal runtime
+        # is ~5-7 min (same DB-backed `cargo test --workspace --all-targets`); 15 min is >2x margin
+        # yet kills a deadlock/pool-leak hang fast instead of riding GitHub's 360-min default.
+        # See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 15
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
@@ -534,6 +544,13 @@ jobs:
           # (step 41 checks per-finding risk fields written during findings_persist, not the
           # collapse output), so disable it for CI to keep the single heavy lane free for the
           # scans under test.
+          #
+          # CI-ONLY — DO NOT REPLICATE TO PRODUCTION. This =0 is a CI-scoped opt-OUT. Superposition
+          # collapse is the client-facing dedup/intelligence engine; auto_superposition_enabled()
+          # (fingerprint_engine/src/superposition_followup.rs) DEFAULTS TO ENABLED when the var is
+          # unset, so production must leave it unset. Setting it to 0/false/no in any production
+          # config (docker-compose*.yml, PRODUCTION.env.template, deploy/k8s, deploy/systemd,
+          # *.Dockerfile, start_*.sh) would silently disable dedup and cause client alert fatigue.
           WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "0"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
@@ -833,6 +850,10 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
       - name: Coverage (workspace incl. integration tests) with a floor
+        # Fail-fast: the instrumented llvm-cov workspace build+run is variable (~6-16 min), so 30 min
+        # (~1.9x the observed upper bound) avoids false-killing a slow-but-legit run while still
+        # bounding a hung DB-backed test. See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 30
         # --workspace (not --lib): includes integration tests. TEST_DATABASE_URL +
         # WEISSMAN_REQUIRE_DB_TESTS make the DB-backed contract tests run (not skip)
         # against the Postgres service, so their coverage counts. Floor kept at 40%.
