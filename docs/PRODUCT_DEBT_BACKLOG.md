@@ -16,8 +16,9 @@ step in `.github/workflows/ci.yml`) — **quarantined** (`continue-on-error: tru
 visible as a warning, non-blocking.
 
 **Origin:** PR #181's "Command Center affordance campaign" landed evidence /
-refresh / CSV-PDF / search affordances across 14 pages using inline English
-fallbacks — `t('some.key', { defaultValue: 'English text' })`. The gate forbids
+refresh / CSV-PDF / search affordances using inline English fallbacks —
+`t('some.key', { defaultValue: 'English text' })`. The gate flags **13 pages**
+(the authoritative offender table below, 150 occurrences total). The gate forbids
 inline defaults: every key must live in `frontend/src/i18n/locales/{en,he}.json`.
 Keying them requires **Hebrew** translations, which is a translation campaign,
 not a mechanical codemod.
