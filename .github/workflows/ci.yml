@@ -364,8 +364,11 @@ jobs:
         # Raise the ceiling to match the app's design (ALTER SYSTEM persists to
         # postgresql.auto.conf across the restart). GitHub Actions service containers
         # can't set a startup command, so reconfigure + restart the running container.
+        # PG_ID comes via env (not inline ${{ }} interpolation) per GitHub Actions
+        # best practice — keeps the expression out of the shell script body.
+        env:
+          PG_ID: ${{ job.services.postgres.id }}
         run: |
-          PG_ID='${{ job.services.postgres.id }}'
           docker exec "$PG_ID" psql -U postgres -d weissman -c "ALTER SYSTEM SET max_connections = 300;"
           docker restart "$PG_ID"
           for i in $(seq 1 60); do
