@@ -11,7 +11,7 @@ should link here rather than copying figures.
 | — real live probes | 303 | same (295 distinct impls) |
 | — aliases | 212 | same |
 | — agent-required | 48 | same |
-| Rust test fns (`#[test]`/`#[tokio::test]`) | 1243 | grep over workspace |
+| Rust test fns (`#[test]`/`#[tokio::test]`) | 1246 | grep over workspace |
 | HTTP route registrations (`.route(`) | 334 | grep over `fingerprint_engine/src` + `backend` |
 | Migrations — `crates/weissman-db/migrations` | 90 |
 | Migrations — `fingerprint_engine/migrations` | 90 |
