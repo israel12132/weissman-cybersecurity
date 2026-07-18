@@ -86,14 +86,13 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     // exists yet; hard-coding client_id=1 previously violated
     // soar_action_executions_client_id_fkey. We connect as the superuser test role,
     // so this direct insert is RLS-exempt (same pattern as the tenant lookup above).
-    let client_id: i64 = sqlx::query_scalar(
-        "INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(tenant_id)
-    .bind("soar-e2e-contract-client")
-    .fetch_one(&pool)
-    .await
-    .expect("seed soar e2e client");
+    let client_id: i64 =
+        sqlx::query_scalar("INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id")
+            .bind(tenant_id)
+            .bind("soar-e2e-contract-client")
+            .fetch_one(&pool)
+            .await
+            .expect("seed soar e2e client");
 
     let evidence = ThreatEvidence {
         finding_id: Some(1),
