@@ -90,20 +90,15 @@ jobs:
         #                      — via genpdf→printpdf→lopdf 0.26, pinned by genpdf.
         #                      We GENERATE PDFs, never parse untrusted ones, so the
         #                      parser DoS is out of our surface. Tracked with genpdf.
-        #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
-        #                      point). tokio-tungstenite bumped 0.21 → 0.24 (rustls 0.23),
-        #                      removing the 0.22 path; any residual is via aws-config's
-        #                      rustls 0.21. We don't configure CRL revocation on WS/TLS
-        #                      clients, so the CRL-matching bug is out of our surface. Tracked
-        #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
+        # RUSTSEC-2026-0049 (rustls-webpki CRL) was removed once the vulnerable
+        # rustls-webpki 0.101.x path left the tree (tokio-tungstenite 0.24 / rustls 0.23).
         run: |
           cargo audit \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2026-0098 \
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104 \
-            --ignore RUSTSEC-2026-0187 \
-            --ignore RUSTSEC-2026-0049
+            --ignore RUSTSEC-2026-0187
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
