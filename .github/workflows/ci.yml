@@ -438,12 +438,27 @@ jobs:
           # expires mid-run and later scan submits/polls 401. Give the CI token room to
           # outlive the whole smoke sweep.
           WEISSMAN_ACCESS_TOKEN_MINUTES: "120"
-          # CI runs server AND worker against ONE shared Postgres (default max_connections
-          # =100). The app pool defaults to 48 each, so under scan load both pools grow
-          # toward 48 → ~96/100 → new acquisitions time out ("claim/reserve failed: pool
-          # timed out") and jobs never get claimed. Cap each pool so server+worker fit with
-          # headroom (30+30=60 < 100).
-          WEISSMAN_APP_POOL_MAX: "30"
+          # Disable the periodic bulk-scan orchestrator for CI. It dispatches a HEAVY
+          # `tenant_full_scan` per active tenant every 60s (60-min job timeout). Those jobs
+          # share the worker's 2-slot heavy semaphore with the smoke's on-demand
+          # `command_center_engine` scans, and the worker's claim loop reserves a job and then
+          # BLOCKS acquiring its heavy permit before it can claim the next. So once two
+          # long-running tenant scans hold both heavy permits, the claim loop freezes on the
+          # permit and the smoke's on-demand scans are never claimed (attempt_count stays 0 →
+          # each group 180s-poll-times-out). Every live-scan E2E step below triggers its OWN
+          # on-demand scan (POST /api/command-center/scan), so none of them need the periodic
+          # dispatcher — turning it off keeps the heavy lane free for the scans we verify.
+          # (The bulk-vs-interactive head-of-line starvation is a real product concern tracked
+          # separately from this CI-scoping change.)
+          WEISSMAN_SCANNING_ENABLED: "0"
+          # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
+          # pools (app + auth + intel), so capping only the app pool leaves auth(12)+intel(12)
+          # each uncounted. Cap all three to the sizes the repo's own E2E harness uses
+          # (scripts/run_e2e_stack.sh) so the combined footprint stays far under the ceiling
+          # (server 24+6+4 + worker 16+4+4 = 58 << 100) with no acquire-timeout pressure.
+          WEISSMAN_APP_POOL_MAX: "24"
+          WEISSMAN_AUTH_POOL_MAX: "6"
+          WEISSMAN_INTEL_POOL_MAX: "4"
           PORT: "18000"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
@@ -455,10 +470,18 @@ jobs:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
-          # Match the server's pool cap so server(30)+worker(30) fit under the shared CI
-          # Postgres max_connections=100 (see the Start weissman-server step). Without this
-          # the worker exhausts connections and can't claim scan jobs.
-          WEISSMAN_APP_POOL_MAX: "30"
+          # Cap all three worker pools (app + auth + intel) to match the repo's E2E harness
+          # (scripts/run_e2e_stack.sh); together with the server's pools this keeps the shared-
+          # Postgres footprint far under max_connections=100 (see the Start weissman-server
+          # step) so the worker never exhausts connections and can't claim scan jobs.
+          WEISSMAN_APP_POOL_MAX: "16"
+          WEISSMAN_AUTH_POOL_MAX: "4"
+          WEISSMAN_INTEL_POOL_MAX: "4"
+          # Extra headroom on the heavy lane so any residual background heavy job (e.g. the
+          # deduplicated superposition-collapse follow-up that a smoke scan's own findings
+          # trigger) can never monopolise the 2 default heavy permits and head-of-line-block
+          # the on-demand command_center scans the live-stack is verifying.
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "4"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
