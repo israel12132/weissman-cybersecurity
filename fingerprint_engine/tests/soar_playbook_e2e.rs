@@ -85,14 +85,13 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     // tenant so the dry-run isolate's execution insert resolves — never assume a
     // hard-coded client_id=1 exists. Connected as the superuser test role, so this
     // INSERT is not RLS-gated.
-    let client_id: i64 = sqlx::query_scalar(
-        "INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(tenant_id)
-    .bind("SOAR E2E contract probe client")
-    .fetch_one(&pool)
-    .await
-    .expect("seed probe client");
+    let client_id: i64 =
+        sqlx::query_scalar("INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id")
+            .bind(tenant_id)
+            .bind("SOAR E2E contract probe client")
+            .fetch_one(&pool)
+            .await
+            .expect("seed probe client");
 
     let evidence = ThreatEvidence {
         finding_id: Some(1),
