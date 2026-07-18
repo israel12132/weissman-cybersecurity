@@ -49,11 +49,33 @@ async function login() {
   if (!token) {
     throw new Error('login did not return access_token');
   }
-  return token;
+  // The SOAR engine records an execution row whose client_id is a FK to clients(id).
+  // Firing with a hard-coded client_id that was never seeded violates that FK, so we
+  // seed a real client below and fire against the *actual* tenant/client ids.
+  const tenantId = res.tenant_id;
+  if (!tenantId) {
+    throw new Error('login did not return tenant_id');
+  }
+  return { token, tenantId };
+}
+
+// Hermetic seed: create the client the playbook fire will reference, so the SOAR
+// execution's client_id foreign key (clients.id) resolves. Returns the created id.
+async function ensureClient(headers) {
+  const created = await api('/api/clients', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: 'SOAR E2E contract probe client' }),
+  });
+  const clientId = created.id ?? created.client_id;
+  if (!clientId) {
+    throw new Error(`client create did not return an id: ${JSON.stringify(created)}`);
+  }
+  return clientId;
 }
 
 async function main() {
-  const token = await login();
+  const { token, tenantId } = await login();
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const integ = await api('/api/integrations', { headers });
@@ -64,6 +86,11 @@ async function main() {
   }
   console.log(`SOAR adapters OK (${adapters.length} registered)`);
 
+  // Atomically seed the tenant/client BEFORE firing so the execution record's
+  // client_id FK is satisfied — the test is fully hermetic (no hard-coded id=1).
+  const clientId = await ensureClient(headers);
+  console.log(`Seeded probe client id=${clientId} (tenant ${tenantId}) for hermetic SOAR fire`);
+
   const fire = await api('/api/playbooks/fire', {
     method: 'POST',
     headers,
@@ -71,8 +98,8 @@ async function main() {
       dry_run: true,
       event: {
         kind: 'finding_persisted',
-        tenant_id: 1,
-        client_id: 1,
+        tenant_id: tenantId,
+        client_id: clientId,
         finding_id: 1,
         title: 'SOAR E2E contract probe',
         severity: 'critical',

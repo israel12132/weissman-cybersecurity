@@ -20,6 +20,24 @@ debt and restores the step to blocking.
 
 ---
 
+## P1 — Rust test-coverage floor (`llvm-cov`) not met
+
+The `Rust — coverage (llvm-cov)` job enforces
+`cargo llvm-cov --workspace --lib --fail-under-lines 40` and currently **fails** — the
+workspace library line-coverage is below the 40% floor. This is a **standalone check,
+not part of the merge-gate `needs:` list**, so it does not block merges; it is tracked
+here as **P1 product debt** for a dedicated coverage campaign.
+
+**Decision (explicit): the 40% floor is NOT lowered.** Standards are not reduced to
+turn a check green. The floor stays at 40 and coverage is raised to meet it in a
+dedicated effort (prioritise security-critical modules: auth/JWT, RLS, SOAR, crypto,
+compliance).
+
+**Exit criteria:** `cargo llvm-cov --workspace --lib --fail-under-lines 40` exits 0
+with the floor unchanged (then ratchet the floor upward).
+
+---
+
 ## i18n `defaultValue` fallbacks — needs real en.json + he.json keys
 
 `verify_i18n_no_default_values.mjs` fails on inline `t('key', { defaultValue: '...' })`
