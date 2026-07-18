@@ -60,3 +60,23 @@ only the defaultValue gate is quarantined.
    re-arm it as blocking.
 
 **Exit criterion:** gate green with zero `defaultValue` occurrences, then re-armed.
+
+---
+
+## 2. DAST (OWASP ZAP baseline) — informational, not yet blocking
+
+**Gate:** `DAST — OWASP ZAP baseline against the live stack` step in
+`.github/workflows/ci.yml` — **informational** (`-I`, `fail_action: false`, now
+also `continue-on-error: true`).
+
+**Origin:** the `zaproxy/action-baseline` step can exit non-zero at the step
+level (report/issue plumbing, or target reachability from the ZAP container to
+the host `172.17.0.1:18000`) even with `fail_action: false`, which was skipping
+the real live-stack gates that run after it (live RLS, smoke, Playwright-live,
+E2E). The step is designed to be informational until the baseline is tuned, so
+it is made non-blocking to match that intent.
+
+**Resolution plan (on `claude/ops-ci-stabilization`):** confirm ZAP↔host
+reachability, add a tuned `.zap/rules.tsv`, get a clean baseline, then drop
+`continue-on-error` (and flip `fail_action` to true) to promote DAST to a
+blocking gate.
