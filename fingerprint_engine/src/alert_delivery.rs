@@ -142,6 +142,10 @@ fn pagerduty_severity(severity: &str) -> &str {
 }
 
 async fn post_json(client: &Client, url: &str, payload: &Value) -> bool {
+    if let Err(e) = crate::security_hardening::validate_outbound_url(url).await {
+        tracing::warn!(target: "alert_delivery", error = %e, "webhook URL blocked by SSRF guard");
+        return false;
+    }
     match client.post(url).json(payload).send().await {
         Ok(resp) if resp.status().is_success() => true,
         Ok(resp) => {
@@ -172,6 +176,10 @@ fn sign_notification_body(body: &str) -> (String, Option<String>) {
 /// `X-Weissman-Digest` (sha256 of the body) and, when signing is enabled, `X-Weissman-Signature`
 /// (`v1=<hmac>`), so the receiver can verify the notification is a genuine, untampered Weissman event.
 async fn post_json_signed(client: &Client, url: &str, payload: &Value) -> bool {
+    if let Err(e) = crate::security_hardening::validate_outbound_url(url).await {
+        tracing::warn!(target: "alert_delivery", error = %e, "signed webhook URL blocked by SSRF guard");
+        return false;
+    }
     let body = payload.to_string();
     let (digest, sig) = sign_notification_body(&body);
     let mut req = client
@@ -351,6 +359,7 @@ pub async fn deliver_alert(
     let config = load_delivery_config(pool, tenant_id).await;
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| Client::new());
 
@@ -383,6 +392,7 @@ pub async fn notify_soar_dispatch_failure(
     let config = load_delivery_config(pool, tenant_id).await;
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| Client::new());
 
@@ -444,6 +454,7 @@ pub async fn notify_heal_completed(
     let config = load_delivery_config(pool, tenant_id).await;
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| Client::new());
 
@@ -513,6 +524,7 @@ pub async fn notify_regression(
     let config = load_delivery_config(pool, tenant_id).await;
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| Client::new());
     let text = format!(
@@ -713,6 +725,7 @@ pub async fn post_heal_slack(
 
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| Client::new());
 

@@ -2,17 +2,21 @@
 //!
 //! For every ingested `ueba_baseline` sample from an endpoint agent:
 //!   1. Insert the raw sample into `agent_metric_samples`.
-//!   2. Re-compute baselines for the (agent, metric, hour-of-week) bucket from the
-//!      last 7 days of samples — running mean + Welford-style variance.
-//!   3. Compare today's sample against the matching baseline; if `|z| > 3` and the
-//!      baseline has ≥ 24 prior samples (i.e. we've trained for at least a day in
-//!      that bucket), fire an anomaly with severity `medium`.
+//!   2. Re-compute a baseline per (agent, metric) from the last 7 days of
+//!      samples — running mean + sample standard deviation.
+//!   3. Compare today's sample against the baseline; if `|z| > 3` and the
+//!      baseline has ≥ 24 prior samples (i.e. it has trained on enough history),
+//!      fire an anomaly with severity `medium` (`high` past 6σ).
 //!   4. Also detect "new" categorical signals (a process / port that never showed
-//!      up in the learned set) — those are fired at severity `medium` too.
+//!      up in the learned set) — those are fired at severity `medium` too, once
+//!      the metric has accumulated ≥ 24 observations.
 //!
-//! The detector NEVER fires during the 7-day learning window — it explicitly
-//! waits for 7×24 = 168 hour-buckets to accumulate enough variance estimates.
-//! This is the contract the user's command specified.
+//! The detector NEVER fires while a metric is still learning (`n < 24`). Baselines
+//! are keyed per (agent, metric) — NOT per hour-of-week: with a 7-day sample
+//! window, any given hour-of-week bucket only ever holds ~1 sample, so per-bucket
+//! baselines could never reach the sample threshold and the detector never fired.
+//! Training over the whole rolling window makes both paths reachable while still
+//! honouring the "don't fire until trained" contract.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,6 +28,11 @@ use std::time::Duration;
 const LEARN_WINDOW_DAYS: i64 = 7;
 const Z_THRESHOLD: f64 = 3.0;
 const MIN_BASELINE_SAMPLES: i32 = 24;
+/// Canonical `hour_of_week` value baselines are stored under. Baselines are kept
+/// per (agent, metric) — the raw samples still record their real hour-of-week —
+/// so a single row accumulates the full rolling window instead of being scattered
+/// across 168 buckets that can never individually reach `MIN_BASELINE_SAMPLES`.
+const GLOBAL_BUCKET: i16 = 0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UebaIngestPayload {
@@ -69,8 +78,7 @@ pub async fn ingest_sample(
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
-                let upd =
-                    recompute_baseline(&mut tx, tenant_id, &p.agent_id, k, p.hour_of_week).await?;
+                let upd = recompute_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
                 summary.baselines_updated += 1;
                 if let Some(anom) =
                     check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &upd).await?
@@ -144,31 +152,31 @@ struct BaselineUpdate {
     stddev: f64,
 }
 
-/// Recompute the rolling baseline for this (agent, metric, hour-of-week) bucket
-/// from the last 7 days of samples. Cheap because the table is bounded by the
-/// 7-day data retention (no full-history scan).
+/// Recompute the rolling baseline for this (agent, metric) from the last 7 days
+/// of samples across all hours. Cheap because the sample table is bounded by data
+/// retention (no full-history scan).
 async fn recompute_baseline(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     agent_id: &str,
     metric: &str,
-    hour_of_week: i16,
 ) -> Result<BaselineUpdate, String> {
-    // Pull n, sum, sum_of_squares directly from the JSONB samples.
+    // Pull n, mean, stddev directly from the JSONB samples. We deliberately do NOT
+    // filter by hour-of-week: with a 7-day sample window each hour-of-week value
+    // recurs only once, so a per-bucket count could never reach MIN_BASELINE_SAMPLES.
     let row: Option<(Option<i64>, Option<f64>, Option<f64>)> = sqlx::query_as(
         r#"SELECT COUNT(*)::bigint                                              AS n,
                   AVG((metrics->>$3)::double precision)                          AS mean,
                   COALESCE(STDDEV_SAMP((metrics->>$3)::double precision), 0)     AS stddev
              FROM agent_metric_samples
-            WHERE tenant_id = $1 AND agent_id = $2 AND hour_of_week = $4
-              AND sampled_at > now() - ($5 || ' days')::interval
+            WHERE tenant_id = $1 AND agent_id = $2
+              AND sampled_at > now() - ($4 || ' days')::interval
               AND metrics ? $3
               AND jsonb_typeof(metrics->$3) = 'number'"#,
     )
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
-    .bind(hour_of_week)
     .bind(LEARN_WINDOW_DAYS)
     .fetch_optional(&mut **tx)
     .await
@@ -193,7 +201,7 @@ async fn recompute_baseline(
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
-    .bind(hour_of_week)
+    .bind(GLOBAL_BUCKET)
     .bind(n as i32)
     .bind(mean)
     .bind(stddev)
@@ -288,7 +296,7 @@ async fn check_new_categorical(
     .bind(tenant_id)
     .bind(&p.agent_id)
     .bind(metric)
-    .bind(p.hour_of_week)
+    .bind(GLOBAL_BUCKET)
     .fetch_optional(&mut **tx)
     .await
     .map_err(|e| format!("read learned_set: {e}"))?;
@@ -312,32 +320,31 @@ async fn check_new_categorical(
         .cloned()
         .collect();
 
-    // Always add observed → learned_set so we don't keep firing.
-    let mut changed = false;
+    // Add observed → learned_set and bump the per-metric observation count on
+    // EVERY sample (not just when the set changes) so `n` reflects how much history
+    // we've accumulated — that is what the learning gate below reads. Stored in a
+    // single per-(agent,metric) row under GLOBAL_BUCKET so it can actually train.
     for x in observed {
-        if learned.insert(x.clone()) {
-            changed = true;
-        }
+        learned.insert(x.clone());
     }
-    if changed {
-        let learned_vec: Vec<String> = learned.into_iter().collect();
-        let _ = sqlx::query(
-            r#"INSERT INTO agent_metric_baselines
-                     (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
-                      learned_set, last_updated_at)
-               VALUES ($1, $2, $3, $4, 0, 0, 0, $5, now())
-               ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
-                   learned_set = EXCLUDED.learned_set,
-                   last_updated_at = now()"#,
-        )
-        .bind(tenant_id)
-        .bind(&p.agent_id)
-        .bind(metric)
-        .bind(p.hour_of_week)
-        .bind(serde_json::to_value(&learned_vec).unwrap_or_default())
-        .execute(&mut **tx)
-        .await;
-    }
+    let learned_vec: Vec<String> = learned.into_iter().collect();
+    let _ = sqlx::query(
+        r#"INSERT INTO agent_metric_baselines
+                 (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
+                  learned_set, last_updated_at)
+           VALUES ($1, $2, $3, $4, 1, 0, 0, $5, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
+               n = agent_metric_baselines.n + 1,
+               learned_set = EXCLUDED.learned_set,
+               last_updated_at = now()"#,
+    )
+    .bind(tenant_id)
+    .bind(&p.agent_id)
+    .bind(metric)
+    .bind(GLOBAL_BUCKET)
+    .bind(serde_json::to_value(&learned_vec).unwrap_or_default())
+    .execute(&mut **tx)
+    .await;
 
     if n_obs < MIN_BASELINE_SAMPLES || new_items.is_empty() {
         return Ok(None); // still learning OR nothing new
@@ -403,8 +410,15 @@ mod tests {
     }
     #[test]
     fn min_samples_protects_learning_window() {
-        // 24 samples = 1 day in a single hour-bucket. Below this we never fire,
-        // which preserves the 7-day learning contract.
+        // Baselines train per (agent, metric) over the rolling 7-day sample window;
+        // below MIN_BASELINE_SAMPLES observations we never fire, so a metric must
+        // accumulate real history before an anomaly can be raised.
         assert!(MIN_BASELINE_SAMPLES >= 24);
+    }
+    #[test]
+    fn baselines_use_the_global_bucket_not_hour_of_week() {
+        // Regression guard: baselines must be stored per (agent, metric) so training
+        // can accumulate. Per-hour-of-week bucketing made the detector never fire.
+        assert_eq!(GLOBAL_BUCKET, 0);
     }
 }

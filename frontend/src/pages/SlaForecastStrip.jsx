@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CalendarClock, AlertTriangle } from 'lucide-react'
+import { CalendarClock, AlertTriangle, FileText } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../lib/apiBase'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import Button from '../components/ui/Button'
+import { exportRowsCsv, exportRowsPdf } from '../lib/pageExport'
 
 /**
  * SlaForecastStrip — proactive view of upcoming SLA breaches for the selected client.
@@ -11,6 +15,18 @@ import { apiFetch } from '../lib/apiBase'
  * day horizons (KEV subset called out), plus what is already overdue. Lets a team get ahead of the
  * curve instead of only reacting to breaches after the fact.
  */
+
+/** CSV/PDF columns for the SLA breach-forecast buckets. Exported for tests. */
+export const SLA_FORECAST_CSV_HEADER = ['within_days', 'breached', 'kev_breached']
+
+/** Pure: forecast buckets → export rows. Exported for tests. */
+export function slaForecastRows(forecast) {
+  return (Array.isArray(forecast) ? forecast : []).map((b) => [
+    b?.within_days ?? '',
+    Number(b?.breached) || 0,
+    Number(b?.kev_breached) || 0,
+  ])
+}
 
 /** Pure: largest cumulative breach count across buckets; >=1 to avoid a zero bar denominator. */
 export function maxBreached(forecast) {
@@ -50,8 +66,18 @@ export default function SlaForecastStrip() {
 
   useEffect(() => { load(clientId) }, [clientId, load])
 
-  const forecast = Array.isArray(data?.forecast) ? data.forecast : []
+  const forecast = useMemo(() => (Array.isArray(data?.forecast) ? data.forecast : []), [data])
   const barMax = maxBreached(forecast)
+
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(SLA_FORECAST_CSV_HEADER, slaForecastRows(forecast), 'weissman-sla-forecast'),
+    [forecast],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman SLA Breach Forecast', SLA_FORECAST_CSV_HEADER, slaForecastRows(forecast), 'weissman-sla-forecast'),
+    [forecast],
+  )
 
   if (clientId == null || loading) return null
   if (error) return null
@@ -59,17 +85,42 @@ export default function SlaForecastStrip() {
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live forecast from GET /api/remediation/sla-forecast/:clientId — cumulative SLA-breach
+          counts by horizon (KEV subset called out) for the selected tenant. No fabricated telemetry.
+        </EvidenceNotice>
+      </div>
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <CalendarClock className="w-4 h-4 text-amber-400" />
           {t('pages.remediationHub.forecast_heading', { defaultValue: 'SLA Breach Forecast' })}
         </h3>
-        {Number(data?.overdue_now) > 0 && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 font-medium">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            {t('pages.remediationHub.forecast_overdue_now', { count: data.overdue_now, defaultValue: '{{count}} already overdue' })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {Number(data?.overdue_now) > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-rose-300 font-medium">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {t('pages.remediationHub.forecast_overdue_now', { count: data.overdue_now, defaultValue: '{{count}} already overdue' })}
+            </span>
+          )}
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!forecast.length}
+          />
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={exportPdf}
+            disabled={!forecast.length}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 grid grid-cols-5 gap-3">

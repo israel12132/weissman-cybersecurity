@@ -11,7 +11,6 @@ Run with: pytest tests/unit/test_auth_enterprise.py -v
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
 
 from src.auth_enterprise import (
     validate_password,
@@ -20,7 +19,7 @@ from src.auth_enterprise import (
     check_role_hierarchy,
     ROLE_HIERARCHY,
 )
-from src.exceptions import InvalidPasswordError, InsufficientRoleError
+from src.exceptions import InvalidPasswordError
 
 
 class TestValidatePassword:
