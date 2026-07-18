@@ -80,6 +80,20 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .await
         .expect("tenant row");
 
+    // Hermetic seed: the SOAR execution row's client_id is a FK to clients(id)
+    // (see 20260627150000_soar_action_engine.sql). Seed a real client under this
+    // tenant so the dry-run isolate's execution insert resolves — never assume a
+    // hard-coded client_id=1 exists. Connected as the superuser test role, so this
+    // INSERT is not RLS-gated.
+    let client_id: i64 = sqlx::query_scalar(
+        "INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind("SOAR E2E contract probe client")
+    .fetch_one(&pool)
+    .await
+    .expect("seed probe client");
+
     let evidence = ThreatEvidence {
         finding_id: Some(1),
         title: "SOAR E2E contract probe".into(),
@@ -98,7 +112,7 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     let cmd = build_command(
         "isolate_host",
         tenant_id,
-        Some(1),
+        Some(client_id),
         None,
         "i-test123456789".into(),
         json!({ "pre_approved": true, "blast_radius_override": true }),
