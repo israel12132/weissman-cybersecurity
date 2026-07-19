@@ -353,34 +353,6 @@ jobs:
       - name: Build weissman-server + worker (warm compile for health check)
         run: cargo build -p weissman-server -p weissman-worker
 
-      - name: Raise Postgres connection ceiling for the live stack
-        # The app pools are sized for a production Postgres: per process, app 48 +
-        # auth 12 + intel 12, and the server + worker together can demand ~144
-        # connections. A single command_center_engine job also fans out DB writes
-        # that need well over the 48-conn app-pool default. The CI pgvector service
-        # defaults to max_connections=100 — too low for this live stack — so the
-        # worker's app pool saturates and its completion writes fail with
-        # "pool timed out while waiting for an open connection", timing out the smoke.
-        # Raise the ceiling to match the app's design (ALTER SYSTEM persists to
-        # postgresql.auto.conf across the restart). GitHub Actions service containers
-        # can't set a startup command, so reconfigure + restart the running container.
-        # PG_ID comes via env (not inline ${{ }} interpolation) per GitHub Actions
-        # best practice — keeps the expression out of the shell script body.
-        env:
-          PG_ID: ${{ job.services.postgres.id }}
-        run: |
-          docker exec "$PG_ID" psql -U postgres -d weissman -c "ALTER SYSTEM SET max_connections = 300;"
-          docker restart "$PG_ID"
-          for i in $(seq 1 60); do
-            if docker exec "$PG_ID" pg_isready -U postgres -d weissman >/dev/null 2>&1; then
-              echo "postgres back up; max_connections now:"
-              docker exec "$PG_ID" psql -U postgres -d weissman -tAc "SHOW max_connections;"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "postgres did not become ready after restart"; exit 1
-
       - name: Apply database migrations
         env:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
@@ -465,24 +437,11 @@ jobs:
           # Match the server: no scheduled full-tenant scan cycles competing for the
           # DB pool with the on-demand jobs the live gates submit (see note above).
           WEISSMAN_SCANNING_ENABLED: "0"
-          # Root cause of the smoke step-33/34 failures: the worker runs up to
-          # light_concurrency=8 jobs at once, and each engine (plus the follow-up jobs
-          # a scan auto-enqueues) fans out heavy concurrent DB writes. Several engines
-          # in flight together drain even a large app pool — the claim loop and the
-          # completing job's own write then time out ("pool timed out"), so the job
-          # never reaches 'completed' and the smoke's 180s poll expires. Raising the
-          # pool + Postgres ceiling alone didn't fix it because the contention is
-          # between concurrent jobs, not a fixed ceiling.
-          #
-          # The live-stack gates submit ONE engine per group and poll it sequentially —
-          # they never require concurrent worker execution. Serialize the worker so a
-          # single engine has the whole pool to itself (no inter-job contention), and
-          # keep generous headroom (worker app 128 + server app 48 + auth/intel « the
-          # raised max_connections=300). This changes CI execution shape only; every
-          # engine still runs its real end-to-end scan.
-          WEISSMAN_WORKER_LIGHT_CONCURRENCY: "1"
-          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
-          WEISSMAN_APP_POOL_MAX: "128"
+          # Runs at the worker's real defaults (light/heavy concurrency, app pool 48,
+          # stock Postgres max_connections). The earlier serialization + pool/ceiling
+          # raises were band-aids for the pool-storm root cause (per-job current_thread
+          # runtimes orphaning sqlx connections, since fixed in engine_stack_runtime.rs);
+          # the live stack now holds up under unthrottled concurrent load without them.
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
