@@ -42,8 +42,10 @@ async function collect() {
   const files = await walk(SRC)
   const counts = {}
   for (const file of files) {
-    const rel = file.replace(`${SRC}/`, '')
-    if (ALLOWLIST.has(rel) || rel.endsWith('.test.js') || rel.endsWith('.test.jsx')) continue
+    // slice + normalize keeps the relative key POSIX-shaped on Windows (backslash
+    // paths would otherwise leak absolute prefixes into the baseline).
+    const rel = file.slice(SRC.length + 1).replaceAll('\\', '/')
+    if (ALLOWLIST.has(rel) || /\.(test|spec)\.(js|jsx|ts|tsx)$/.test(rel)) continue
     const src = await readFile(file, 'utf8')
     const matches = src.match(PATTERN)
     if (matches?.length) counts[rel] = matches.length

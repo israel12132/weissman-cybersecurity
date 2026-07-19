@@ -41,12 +41,16 @@ if (!jsonPath) {
 const meta = JSON.parse(
   execSync('cargo metadata --no-deps --format-version 1', { maxBuffer: 64 * 1024 * 1024 }).toString(),
 )
+// Normalize to POSIX separators so prefix matching holds on Windows too, where
+// `cargo metadata` and `cargo llvm-cov --json` emit backslash paths that would
+// otherwise never match the hardcoded `/` boundary (silently attributing nothing).
 const crateDirs = meta.packages
-  .map((p) => ({ name: p.name, dir: `${dirname(p.manifest_path)}/` }))
+  .map((p) => ({ name: p.name, dir: `${dirname(p.manifest_path).replaceAll('\\', '/')}/` }))
   .sort((a, b) => b.dir.length - a.dir.length)
 
 function crateOf(file) {
-  for (const c of crateDirs) if (file.startsWith(c.dir)) return c.name
+  const normalized = file.replaceAll('\\', '/')
+  for (const c of crateDirs) if (normalized.startsWith(c.dir)) return c.name
   return null
 }
 
