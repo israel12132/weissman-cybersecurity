@@ -30,6 +30,9 @@ fn job_kind_timeout(kind: &str) -> Duration {
         "tenant_full_scan" | "onboarding_tenant_scan" => Duration::from_secs(60 * 60),
         "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => Duration::from_secs(30 * 60),
         "command_center_engine" => Duration::from_secs(15 * 60),
+        // Fans out to every top-tier engine sequentially (each with its own 180s ceiling),
+        // so the whole probe needs a budget on the order of the summed per-engine timeouts.
+        "top_tier_health_probe" => Duration::from_secs(60 * 60),
         "scan_all_engines" | "scan_discovered_domains" => Duration::from_secs(45 * 60),
         "pipeline_scan" | "threat_intel_run" | "council_debate" => Duration::from_secs(20 * 60),
         "noop" | "ping" => Duration::from_secs(30),
@@ -59,6 +62,12 @@ fn job_is_heavy(kind: &str) -> bool {
             | "genesis_eternal_fuzz"
             | "genesis_knowledge_match"
             | "command_center_engine"
+            // Fans out to every top-tier engine via `engine_dispatch::run_engine` (the deep
+            // monolithic engine future). Like `command_center_engine`/`scan_all_engines`, it
+            // MUST run on the 32 MiB large stack — dispatching it inline on the ~2 MiB Tokio
+            // worker stack overflows and aborts the whole worker process (fatal runtime error:
+            // stack overflow), which then makes the swarm coordinator orphan its in-flight jobs.
+            | "top_tier_health_probe"
             | "scan_all_engines"
             | "scan_discovered_domains"
     )
@@ -536,4 +545,43 @@ async fn main() {
         }
     }
     info!(target: "weissman_worker", "shutdown");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Every job kind whose executor arm dispatches the deep monolithic engine future
+    // (`engine_dispatch::run_engine` / `dispatch_engine_match`) MUST be classified heavy so
+    // `process_one` drives it on the 32 MiB large stack. Running such a future inline on the
+    // ~2 MiB Tokio worker stack overflows and aborts the whole worker process — a `fatal
+    // runtime error: stack overflow` that then makes the swarm coordinator orphan every
+    // in-flight job on that worker. `top_tier_health_probe` regressed exactly this way.
+    #[test]
+    fn deep_engine_dispatch_kinds_run_on_large_stack() {
+        for kind in [
+            "command_center_engine",
+            "top_tier_health_probe",
+            "scan_all_engines",
+            "scan_discovered_domains",
+        ] {
+            assert!(
+                job_is_heavy(kind),
+                "{kind} dispatches deep engine futures and must be heavy (32 MiB large stack), \
+                 else the worker stack-overflows and aborts"
+            );
+        }
+    }
+
+    // A 20-engine sequential fan-out must not be capped at the 5-minute default, which would
+    // spuriously time out a legitimately long probe.
+    #[test]
+    fn top_tier_health_probe_has_generous_timeout() {
+        let default_budget = job_kind_timeout("some_unknown_kind");
+        assert!(
+            job_kind_timeout("top_tier_health_probe") > default_budget,
+            "top_tier_health_probe fans out to every top-tier engine and needs more than the \
+             default per-job budget"
+        );
+    }
 }
