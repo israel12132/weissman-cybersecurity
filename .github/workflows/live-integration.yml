@@ -119,7 +119,36 @@ jobs:
           WEISSMAN_REQUIRE_DB_TESTS: "1"
         run: cargo test --workspace --all-targets
 
+      - name: Add swap for the memory-heavy release LTO build
+        # The production image compiles the whole workspace with the Cargo.toml release
+        # profile (lto = "fat", codegen-units = 1) — the most memory-hungry config. Fat
+        # LTO holds the entire fingerprint_engine workspace IR in one process while
+        # linking weissman-server/-worker, which peaks past the ~16 GB runner (also
+        # hosting the Postgres/Redis service containers) and the kernel kills the VM
+        # (exit 143, "runner received shutdown signal"). Add a large swapfile on the
+        # roomy /mnt volume so the LTO link has headroom. Infra-only: the image and its
+        # optimization profile are unchanged.
+        run: |
+          set -euo pipefail
+          # dd (not fallocate): a fallocate'd file can have holes that swapon rejects
+          # ("skipping - it appears to have holes"); dd writes a contiguous file.
+          sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=14336 status=progress
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          echo "--- memory after adding swap ---"
+          free -h
+
       - name: Build Docker production images
+        # `docker compose build` interpolates the whole compose file — including the
+        # runtime `environment:` blocks — before building, so docker-compose.yml's
+        # `:?` required-variable guards (WEISSMAN_JWT_SECRET, WEISSMAN_ADMIN_PASSWORD)
+        # fire at build time even though the images bake none of them (no ARG consumes
+        # these). Supply the same throwaway CI values the runtime start steps use so
+        # interpolation resolves; the production-safety `:?` guards stay intact.
+        env:
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
+          WEISSMAN_ADMIN_PASSWORD: changeme
         run: docker compose build backend worker gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
@@ -189,6 +218,15 @@ jobs:
         # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
         # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
         # container itself — target the runner's docker-bridge gateway to reach the host.
+        #
+        # `-I` + `fail_action: false` suppress ZAP's alert-driven exit code, but the action
+        # can still mark the step failed on other non-zero exits, which aborts the job and
+        # skips the *real* live-stack contract gates below (RLS, engine smoke, scan E2E,
+        # Playwright, pytest, SOAR, FP/TP). `continue-on-error: true` enforces the documented
+        # "informational / non-blocking" intent: the ZAP HTML report is still generated and
+        # uploaded as an artifact for triage; only the pipeline gating is lifted. Same pattern
+        # as the i18n informational gate above. Promote to blocking once the baseline is tuned.
+        continue-on-error: true
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: http://172.17.0.1:18000/api/health
