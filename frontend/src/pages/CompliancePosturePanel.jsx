@@ -138,7 +138,7 @@ export default function CompliancePosturePanel() {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <ClipboardCheck className="w-4 h-4 text-emerald-400" />
-          {t('pages.complianceFrameworks.posture_heading', { defaultValue: 'Live Compliance Exposure' })}
+          {t('pages.complianceFrameworks.posture_heading')}
         </h3>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative">
@@ -147,8 +147,8 @@ export default function CompliancePosturePanel() {
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('common.search', { defaultValue: 'Search' })}
-              aria-label={t('common.search', { defaultValue: 'Search controls' })}
+              placeholder={t('common.search')}
+              aria-label={t('common.search')}
               className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-emerald-500/40"
             />
           </div>
@@ -163,25 +163,25 @@ export default function CompliancePosturePanel() {
             type="button"
             onClick={exportPdf}
             disabled={filteredFrameworks.length === 0}
-            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
-            {t('common.export_pdf', { defaultValue: 'PDF' })}
+            {t('common.export_pdf')}
           </Button>
         </div>
       </div>
 
       {clientId == null ? (
-        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.complianceFrameworks.posture_no_client', { defaultValue: 'Select a client to load live compliance exposure.' })} /></div>
+        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.complianceFrameworks.posture_no_client')} /></div>
       ) : error ? (
-        <div className="p-4 text-sm text-rose-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{t('pages.complianceFrameworks.posture_error', { error, defaultValue: "Couldn't load compliance exposure: {{error}}." })}</div>
+        <div className="p-4 text-sm text-rose-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{t('pages.complianceFrameworks.posture_error', { error })}</div>
       ) : loading ? (
         <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
       ) : frameworks.length === 0 ? (
-        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.complianceFrameworks.posture_empty', { defaultValue: 'No open findings map to a tracked control for this client.' })} /></div>
+        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.complianceFrameworks.posture_empty')} /></div>
       ) : filteredFrameworks.length === 0 ? (
-        <div className="p-4 text-[11px] text-white/35">{t('pages.complianceFrameworks.posture_no_match', { defaultValue: 'No controls matched this search.' })}</div>
+        <div className="p-4 text-[11px] text-white/35">{t('pages.complianceFrameworks.posture_no_match')}</div>
       ) : (
         <div className="divide-y divide-white/5">
           {filteredFrameworks.map((g) => (
@@ -192,7 +192,6 @@ export default function CompliancePosturePanel() {
                   {t('pages.complianceFrameworks.posture_summary', {
                     controls: g.control_count,
                     findings: g.finding_count,
-                    defaultValue: '{{controls}} controls · {{findings}} findings',
                   })}
                 </span>
               </div>

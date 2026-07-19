@@ -61,7 +61,8 @@
     "clear_filters": "נקה מסננים",
     "export_csv": "ייצוא CSV",
     "show_filters": "מסננים",
-    "hide_filters": "הסתר מסננים"
+    "hide_filters": "הסתר מסננים",
+    "export_pdf": "ייצוא PDF"
   },
   "a11y": {
     "skip_to_content": "דלג לתוכן הראשי",
@@ -142,9 +143,8 @@
     "billing": "חיוב ושימוש",
     "system_config": "הגדרות מערכת",
     "status": "סטטוס",
-    "reports": "דוחות",
-    "audit_log": "יומן ביקורת",
     "reports": "היסטוריית דוחות",
+    "audit_log": "יומן ביקורת",
     "ask_weissman": "שאל את Weissman",
     "playbooks": "מדריכי SOAR",
     "threat_intel": "מודיעין איומים",
@@ -189,7 +189,6 @@
     "incident_response": "תגובה לאירועים",
     "threat_emulation": "APT Emulation",
     "kill_chain": "שרשרת הריג",
-    "attack_paths": "נתיבי תקיפה",
     "ai_analysis": "ניתוח AI",
     "exploit_lab": "מעבדת exploit",
     "council_queue": "Council Queue",
@@ -418,7 +417,9 @@
     "view": "View",
     "manage": "Manage →",
     "delete_client": "Delete",
-    "evidence_notice": "רoster לקוחות מ-GET /api/clients. blast-radius FAIR מ-GET /api/financial-risk/:clientId (חישוב מחדש: ?recompute=1). סריקות baseline נשלחות לתור ב-POST /api/clients/:id/scan/run-all — רק רשומות חיות מוגבלות ל-tenant."
+    "evidence_notice": "רoster לקוחות מ-GET /api/clients. blast-radius FAIR מ-GET /api/financial-risk/:clientId (חישוב מחדש: ?recompute=1). סריקות baseline נשלחות לתור ב-POST /api/clients/:id/scan/run-all — רק רשומות חיות מוגבלות ל-tenant.",
+    "fleet_attack_none": "לא נמצאו טכניקות התואמות לחיפוש.",
+    "portfolio_worst_none": "לא נמצאו לקוחות תואמים."
   },
   "auth": {
     "tenant_slug": "מזהה ארגון",
@@ -1984,7 +1985,9 @@
       "program_risk": "סיכון",
       "program_sla_overdue": "באיחור {{days}} ימים",
       "program_sla_due": "עד {{days}} ימים",
-      "program_sla_unknown": "אין שעון SLA"
+      "program_sla_unknown": "אין שעון SLA",
+      "program_search": "חיפוש לפי כותרת או נכס",
+      "program_no_match": "אין פעולות תיקון התואמות לחיפוש שלך."
     },
     "alertRulesEngine": {
       "title": "מנוע כללי התראה",
@@ -2105,7 +2108,8 @@
       "framework_score": "{{score}}% תואם",
       "gap_title": "ניתוח פערים",
       "gap_body": "{{count}} בקרות לא תואמות ב-{{framework}}. טיפול בפערים אלה קריטי להיערכות להסמכה.",
-      "open_remediation": "פתח מרכז Remediation"
+      "open_remediation": "פתח מרכז Remediation",
+      "posture_no_match": "לא נמצאו בקרות התואמות לחיפוש."
     },
     "clientNew": {
       "title": "הוסף לקוח חדש",
@@ -3972,7 +3976,7 @@
       "preview": "תצוגה מקדימה",
       "preview_empty": "צור מוטציות לתצוגה מקדימה של וריאנטים.",
       "search_mutations": "סינון מוטציות…",
-      "no_match": "אין מוטציות שתואמות לסינון.",
+      "no_match": "אין מוטציות התואמות לסינון.",
       "mutations": "מוטציות",
       "count": "כמות:",
       "preview_failed": "התצוגה המקדימה נכשלה",
@@ -3987,7 +3991,6 @@
       "copy_all": "העתק הכול",
       "download": "הורד",
       "search_placeholder": "סנן מוטציות…",
-      "no_match": "אין מוטציות התואמות לסינון.",
       "showing_count": "{{shown}} מתוך {{total}}",
       "evidence_notice": "קמפיינים fuzz מונחי-AST נשלחים לתור ב-POST /api/command-center/scan עם payloads מודעים ל-grammar. crashes ו-anomalies נשמרים כממצאי tenant רגילים."
     },
@@ -4638,12 +4641,30 @@
       "attack_reference": "ייחוס התקפות",
       "remediation": "תיקון",
       "attack_ref": {
-        "alg_none": { "id": "alg:none", "desc": "קבלת token לא חתום" },
-        "alg_confusion": { "id": "RS256→HS256", "desc": "בלבול אלגוריתם (מפתח ציבורי כסוד HMAC)" },
-        "weak_hmac": { "id": "Weak HMAC", "desc": "פיצוח סוד משותף → זיוף" },
-        "kid_injection": { "id": "kid injection", "desc": "Path traversal / SQLi / החלפת מפתח" },
-        "jku_ssrf": { "id": "jku / x5u SSRF", "desc": "ערכת מפתחות ממארח תוקף" },
-        "jwks_hygiene": { "id": "JWKS hygiene", "desc": "RSA חלש / פרמטרים פרטיים דולפים" }
+        "alg_none": {
+          "id": "alg:none",
+          "desc": "קבלת token לא חתום"
+        },
+        "alg_confusion": {
+          "id": "RS256→HS256",
+          "desc": "בלבול אלגוריתם (מפתח ציבורי כסוד HMAC)"
+        },
+        "weak_hmac": {
+          "id": "Weak HMAC",
+          "desc": "פיצוח סוד משותף → זיוף"
+        },
+        "kid_injection": {
+          "id": "kid injection",
+          "desc": "Path traversal / SQLi / החלפת מפתח"
+        },
+        "jku_ssrf": {
+          "id": "jku / x5u SSRF",
+          "desc": "ערכת מפתחות ממארח תוקף"
+        },
+        "jwks_hygiene": {
+          "id": "JWKS hygiene",
+          "desc": "RSA חלש / פרמטרים פרטיים דולפים"
+        }
       }
     },
     "iacSecurityCenter": {
@@ -5260,7 +5281,8 @@
       "inv_runall": "הרץ הכל ({{count}}) — חמקן",
       "inv_runall_hint": "שיגור חמקן של כל מנוע תואם (מוגבל-קצב, jitter, בטוח מול WAF)",
       "inv_batch_ok": "אצווה חמקנית בתור: {{count}} מנועים · {{waves}} גלים · ~{{eta}} טפטוף",
-      "inv_batch_err": "הפריסה נכשלה: {{detail}}"
+      "inv_batch_err": "הפריסה נכשלה: {{detail}}",
+      "exposure_no_match": "לא נמצאו טכניקות התואמות לחיפוש."
     },
     "engineReliability": {
       "evidence_notice": "SLO מנועים, error budgets ומצב circuit-breaker מ-GET /api/engines/telemetry ו-GET /api/engines/capabilities. מונים משקפים ביצוע worker אמיתי — ללא theater של uptime."
@@ -5897,7 +5919,6 @@
         "noAssets": "אין נכסי הטעיה. צור אסימונים, ואז פרוס ל-AWS למעלה.",
         "canaryAkia": "canary AKIA: {{id}}",
         "liveOastBadge": "OAST חי",
-        "liveAwsBadge": "AWS חי",
         "refresh": "רענן"
       },
       "containmentRules": {
@@ -6882,7 +6903,8 @@
       "idn": "IDN",
       "homographRisk": "סיכון הומוגרף",
       "resolvedIps": "כתובות IP שנפתרו"
-    }
+    },
+    "searchEngines": "סינון מנועים לפי מזהה, קבוצה או סיבה"
   },
   "stealthOps": {
     "title": "תפעול חמקני",
@@ -6922,7 +6944,8 @@
     "identitiesDispensed": "זהויות שחולקו",
     "activeTargets": "מטרות פעילות · עומס חי",
     "showing": "מציג {{n}}",
-    "noRequests": "אין בקשות בטיסה. הפעל סריקה כדי לראות את התור מעצב תעבורה לכל מטרה."
+    "noRequests": "אין בקשות בטיסה. הפעל סריקה כדי לראות את התור מעצב תעבורה לכל מטרה.",
+    "noMatch": "אין מארחים פעילים התואמים לחיפוש שלך."
   },
   "engineAccounting": {
     "title": "חשבונאות יכולות · ספירה ישרה",

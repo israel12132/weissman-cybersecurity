@@ -164,9 +164,9 @@ export default function RemediationAnalytics() {
 
   return (
     <PageShell
-      title={t('pages.remediationAnalytics.title', { defaultValue: 'Remediation Analytics' })}
-      subtitle={t('pages.remediationAnalytics.subtitle', { defaultValue: 'Auto-heal outcomes aggregated across every active client' })}
-      badge={t('pages.remediationAnalytics.badge', { defaultValue: 'ANALYTICS' })}
+      title={t('pages.remediationAnalytics.title')}
+      subtitle={t('pages.remediationAnalytics.subtitle')}
+      badge={t('pages.remediationAnalytics.badge')}
       badgeColor="#22d3ee"
       icon={<Activity />}
       actions={
@@ -182,11 +182,11 @@ export default function RemediationAnalytics() {
             type="button"
             onClick={exportPdf}
             disabled={!filteredHeals.length}
-            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
-            {t('common.export_pdf', { defaultValue: 'PDF' })}
+            {t('common.export_pdf')}
           </Button>
         </div>
       }
@@ -199,10 +199,10 @@ export default function RemediationAnalytics() {
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-white/45 font-mono">
-            {t('pages.remediationAnalytics.intro', { defaultValue: 'Live auto-heal telemetry from GET /api/clients/:id/heal-stats and /heal-requests.' })}
+            {t('pages.remediationAnalytics.intro')}
           </p>
           <Link to="/remediation" className="text-xs text-cyan-300 hover:text-cyan-200">
-            {t('pages.remediationAnalytics.open_hub', { defaultValue: 'Remediation Hub →' })}
+            {t('pages.remediationAnalytics.open_hub')}
           </Link>
         </div>
 
@@ -221,8 +221,8 @@ export default function RemediationAnalytics() {
           <div className="text-[11px] text-amber-300/70 font-mono flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             {partial
-              ? t('pages.remediationAnalytics.partial', { defaultValue: 'Some client telemetry could not be loaded — the totals below are partial.' })
-              : t('pages.remediationAnalytics.bounded', { defaultValue: 'Bounded sample: aggregated across the first 25 clients seen in recent findings, not every client.' })}
+              ? t('pages.remediationAnalytics.partial')
+              : t('pages.remediationAnalytics.bounded')}
           </div>
         )}
 
@@ -234,8 +234,8 @@ export default function RemediationAnalytics() {
           <EmptyState
             compact
             icon="shield"
-            title={t('pages.remediationAnalytics.empty_title', { defaultValue: 'No auto-heal runs yet.' })}
-            body={t('pages.remediationAnalytics.empty_hint', { defaultValue: 'Trigger a heal from the Remediation Hub to populate analytics.' })}
+            title={t('pages.remediationAnalytics.empty_title')}
+            body={t('pages.remediationAnalytics.empty_hint')}
           />
         )}
 
@@ -244,7 +244,7 @@ export default function RemediationAnalytics() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <GitPullRequest className="w-4 h-4 text-cyan-400" />
-              {t('pages.remediationAnalytics.recent_heals', { defaultValue: 'Recent heals' })}
+              {t('pages.remediationAnalytics.recent_heals')}
             </h3>
             <div className="relative">
               <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -252,8 +252,8 @@ export default function RemediationAnalytics() {
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('common.search', { defaultValue: 'Search' })}
-                aria-label={t('common.search', { defaultValue: 'Search heals' })}
+                placeholder={t('common.search')}
+                aria-label={t('common.search')}
                 className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
             </div>

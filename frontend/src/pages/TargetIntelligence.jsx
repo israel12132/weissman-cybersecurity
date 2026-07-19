@@ -309,11 +309,11 @@ export default function TargetIntelligence() {
                   type="button"
                   onClick={exportPdf}
                   disabled={!filteredRanked.length}
-                  title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+                  title={t('common.export_pdf')}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-slate-300 hover:bg-white/10 disabled:opacity-40 transition-colors"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  {t('common.export_pdf', { defaultValue: 'PDF' })}
+                  {t('common.export_pdf')}
                 </button>
               </div>
             </div>
@@ -326,8 +326,8 @@ export default function TargetIntelligence() {
                 type="search"
                 value={searchQuery}
                 onChange={(ev) => setSearchQuery(ev.target.value)}
-                placeholder={t('targetIntel.searchEngines', { defaultValue: 'Filter engines by id, group, or reason' })}
-                aria-label={t('targetIntel.searchEngines', { defaultValue: 'Filter engines' })}
+                placeholder={t('targetIntel.searchEngines')}
+                aria-label={t('targetIntel.searchEngines')}
                 className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs font-mono bg-slate-900/60 border border-white/10 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
             </div>

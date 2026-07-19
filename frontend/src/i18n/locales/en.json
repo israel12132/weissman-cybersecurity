@@ -61,7 +61,8 @@
     "saving": "Saving…",
     "on": "on",
     "off": "off",
-    "enabled": "Enabled"
+    "enabled": "Enabled",
+    "export_pdf": "Export PDF"
   },
   "a11y": {
     "skip_to_content": "Skip to main content",
@@ -147,9 +148,8 @@
     "billing": "Billing & Usage",
     "system_config": "System Config",
     "status": "Status",
-    "reports": "Reports",
-    "audit_log": "Audit Log",
     "reports": "Report History",
+    "audit_log": "Audit Log",
     "ask_weissman": "Ask Weissman",
     "playbooks": "Playbooks",
     "threat_intel": "Threat Intel",
@@ -191,7 +191,6 @@
     "incident_response": "Incident Response",
     "threat_emulation": "APT Emulation",
     "kill_chain": "Kill Chain",
-    "attack_paths": "Attack Paths",
     "ai_analysis": "AI Analysis",
     "exploit_lab": "Exploit Lab",
     "council_queue": "Council Queue",
@@ -423,7 +422,9 @@
     "scan_confirm_full": "Queue the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) for \"{{name}}\"?",
     "track_suffix": "once scans complete.",
     "compute_title": "Compute the FAIR-aligned blast-radius now",
-    "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only."
+    "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only.",
+    "fleet_attack_none": "No techniques matched this search.",
+    "portfolio_worst_none": "No clients matched."
   },
   "auth": {
     "tenant_slug": "Tenant slug",
@@ -1984,7 +1985,9 @@
       "program_risk": "risk",
       "program_sla_overdue": "Overdue {{days}}d",
       "program_sla_due": "Due in {{days}}d",
-      "program_sla_unknown": "No SLA clock"
+      "program_sla_unknown": "No SLA clock",
+      "program_search": "Search title or asset",
+      "program_no_match": "No remediation actions match your search."
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -2105,7 +2108,8 @@
       "framework_score": "{{score}}% compliant",
       "gap_title": "Gap Analysis",
       "gap_body": "{{count}} controls are non-compliant in {{framework}}. Address these gaps to improve certification readiness.",
-      "open_remediation": "Open Remediation Hub"
+      "open_remediation": "Open Remediation Hub",
+      "posture_no_match": "No controls matched this search."
     },
     "clientNew": {
       "title": "Add New Client",
@@ -3972,7 +3976,7 @@
       "preview": "Preview",
       "preview_empty": "Generate mutations to preview structure-aware variants.",
       "search_mutations": "Filter mutations…",
-      "no_match": "No mutations match the filter.",
+      "no_match": "No mutations match your filter.",
       "mutations": "Mutations",
       "count": "Count:",
       "preview_failed": "Preview failed",
@@ -3987,7 +3991,6 @@
       "copy_all": "Copy all",
       "download": "Download",
       "search_placeholder": "Filter mutations…",
-      "no_match": "No mutations match your filter.",
       "showing_count": "{{shown}} of {{total}}",
       "evidence_notice": "AST-guided fuzz campaigns enqueue through POST /api/command-center/scan with grammar-aware payloads. Crashes and anomalies persist as standard tenant findings."
     },
@@ -4638,12 +4641,30 @@
       "attack_reference": "Attack reference",
       "remediation": "Remediation",
       "attack_ref": {
-        "alg_none": { "id": "alg:none", "desc": "Unsigned token acceptance" },
-        "alg_confusion": { "id": "RS256→HS256", "desc": "Algorithm confusion (public key as HMAC secret)" },
-        "weak_hmac": { "id": "Weak HMAC", "desc": "Brute-forced shared secret → forgery" },
-        "kid_injection": { "id": "kid injection", "desc": "Path traversal / SQLi / key substitution" },
-        "jku_ssrf": { "id": "jku / x5u SSRF", "desc": "Attacker-hosted key set" },
-        "jwks_hygiene": { "id": "JWKS hygiene", "desc": "Weak RSA / leaked private params" }
+        "alg_none": {
+          "id": "alg:none",
+          "desc": "Unsigned token acceptance"
+        },
+        "alg_confusion": {
+          "id": "RS256→HS256",
+          "desc": "Algorithm confusion (public key as HMAC secret)"
+        },
+        "weak_hmac": {
+          "id": "Weak HMAC",
+          "desc": "Brute-forced shared secret → forgery"
+        },
+        "kid_injection": {
+          "id": "kid injection",
+          "desc": "Path traversal / SQLi / key substitution"
+        },
+        "jku_ssrf": {
+          "id": "jku / x5u SSRF",
+          "desc": "Attacker-hosted key set"
+        },
+        "jwks_hygiene": {
+          "id": "JWKS hygiene",
+          "desc": "Weak RSA / leaked private params"
+        }
       }
     },
     "iacSecurityCenter": {
@@ -5260,7 +5281,8 @@
       "inv_runall": "Run all ({{count}}) — stealth",
       "inv_runall_hint": "Stealth-dispatch every matching engine (rate-limited, jittered, WAF-safe)",
       "inv_batch_ok": "Stealth batch queued: {{count}} engines · {{waves}} waves · ~{{eta}} drip",
-      "inv_batch_err": "Deploy failed: {{detail}}"
+      "inv_batch_err": "Deploy failed: {{detail}}",
+      "exposure_no_match": "No techniques matched this search."
     },
     "engineReliability": {
       "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater."
@@ -5897,7 +5919,6 @@
         "noAssets": "No deception assets. Generate tokens, then deploy to AWS above.",
         "canaryAkia": "canary AKIA: {{id}}",
         "liveOastBadge": "Live OAST",
-        "liveAwsBadge": "Live AWS",
         "refresh": "Refresh"
       },
       "containmentRules": {
@@ -6882,7 +6903,8 @@
       "idn": "idn",
       "homographRisk": "homograph risk",
       "resolvedIps": "resolved ips"
-    }
+    },
+    "searchEngines": "Filter engines by id, group, or reason"
   },
   "stealthOps": {
     "title": "Stealth Operations",
@@ -6922,7 +6944,8 @@
     "identitiesDispensed": "Identities dispensed",
     "activeTargets": "Active targets · live load",
     "showing": "showing {{n}}",
-    "noRequests": "No requests in flight. Launch a scan to see the queue shape traffic per target."
+    "noRequests": "No requests in flight. Launch a scan to see the queue shape traffic per target.",
+    "noMatch": "No active hosts match your search."
   },
   "engineAccounting": {
     "title": "Capability accounting · honest count",
