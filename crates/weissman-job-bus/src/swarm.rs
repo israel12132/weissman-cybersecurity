@@ -174,7 +174,7 @@ impl SwarmCoordinator {
             );
             let _ = DistributedLease::force_release(&self.redis, job_id).await;
             self.bus
-                .on_worker_terminated(&worker_id, "liveness_expired")
+                .on_worker_terminated(tenant_id, &worker_id, "liveness_expired")
                 .await?;
             self.bus
                 .on_job_orphaned(job_id, tenant_id, &worker_id, "swarm_liveness_expired")
