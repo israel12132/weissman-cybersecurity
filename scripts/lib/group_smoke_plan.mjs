@@ -91,20 +91,40 @@ const BGP_DNS_CI_PARAMS = {
   check_resolver_timing: false,
   check_dnssec_ad_divergence: false,
 }
-//   * pki_tls — TLS posture scan. The core cert/protocol/cipher findings come
-//     from the port-443 handshake, but the engine also fetches crt.sh CT logs
-//     (fixed 10s client, can hang) and OCSP, and scans a port budget — on the
-//     slow CI runner this intermittently pushed total runtime past the poll
-//     window (recurring 'job timeout' victim). Bound it: light intensity +
-//     tight handshake timeout + skip the slow external CT/OCSP fetches + a hard
-//     port budget. The TLS handshake to :443 (and its ~dozen findings) is
-//     unaffected, so the findings pipeline is still exercised end-to-end.
+//   * pki_tls — performs LIVE OpenSSL handshakes to :443. The protocol matrix
+//     (one handshake per SSLv3 / TLS 1.0-1.3) and especially cipher enumeration
+//     (an iterative handshake per accepted suite) fire dozens of raw TCP
+//     connects. On the sandboxed CI runner, direct outbound TCP to :443 is
+//     intermittently slow/blocked (unlike HTTPS, which flows through the agent
+//     proxy), so that fan-out ran ~6.4 min and blew the poll window ('job
+//     timeout') even with CT/OCSP already disabled. Each connect is bounded by
+//     connect_timeout(timeout_ms), so the fix is to cut the NUMBER of
+//     handshakes to one: keep a single certificate-grab handshake (+ offline
+//     posture scoring over it) and disable the multi-handshake enumeration and
+//     every external DNS/HTTP/CT/OCSP probe. Worst case (a blocked connect) now
+//     completes in ~timeout_ms with 0 findings instead of hanging; when :443 is
+//     reachable the cert findings still drive the pipeline end-to-end.
 const PKI_TLS_CI_PARAMS = {
   intensity: 'light',
-  timeout_ms: 2500,
-  check_ct_logs: false,
+  ports: [443],
+  timeout_ms: 2000,
+  port_budget_secs: 10,
+  // Single cert-grab handshake + offline scoring — kept on.
+  check_certificate: true,
+  check_posture_score: true,
+  // Multi-handshake enumeration + external (DNS/HTTP/CT/OCSP) probes — off.
+  check_protocols: false,
+  check_ciphers: false,
+  check_forward_secrecy: false,
+  check_vulnerabilities: false,
+  check_chain_trust: false,
+  check_hostname: false,
   check_ocsp: false,
-  port_budget_secs: 15,
+  check_http_headers: false,
+  check_security_headers: false,
+  check_ct_logs: false,
+  check_caa: false,
+  check_dane: false,
 }
 
 /** Shared one-engine-per-group smoke / findings E2E plan. */
