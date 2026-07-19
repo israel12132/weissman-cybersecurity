@@ -668,13 +668,37 @@ mod tests {
         assert!(err.is_err());
     }
 
+    // Round-robin tolerance: a target that still resolves to a PUBLIC address is accepted even
+    // when that address is not in the submission-time pin set. Rotating/anycast/CDN hosts
+    // (github.com, Cloudflare-fronted sites) hand out different public A-records per lookup, so
+    // requiring an exact pin match would permanently break legitimate public scans. The pin's
+    // job is anti-rebinding into internal space — enforced by the test below — not freezing a
+    // single public IP.
     #[tokio::test]
-    async fn execution_scope_pin_rejects_unpinned_ip() {
+    async fn execution_scope_pin_allows_unpinned_public_ip() {
         let scope = serde_json::json!({
             "host": "1.1.1.1",
             "resolved_ips": ["8.8.8.8"]
         });
-        let err = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
-        assert!(err.is_err());
+        let ok = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
+        assert!(
+            ok.is_ok(),
+            "a public address outside the pin set must be tolerated (round-robin), got {ok:?}"
+        );
+    }
+
+    // Retained SSRF property: if the (name-matched) host resolves to a private/reserved address
+    // at execution while the pin was public, reject it as a possible DNS rebind.
+    #[tokio::test]
+    async fn execution_scope_pin_rejects_rebind_to_private_ip() {
+        let scope = serde_json::json!({
+            "host": "10.0.0.1",
+            "resolved_ips": ["8.8.8.8"]
+        });
+        let err = enforce_execution_scope_pin("https://10.0.0.1", &scope).await;
+        assert!(
+            err.is_err(),
+            "a host resolving into private/reserved space must be rejected (rebind), got {err:?}"
+        );
     }
 }
