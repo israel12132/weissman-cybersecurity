@@ -167,8 +167,7 @@ fn finding_internet_exposed(f: &Value) -> Option<bool> {
 
 /// Best-effort: finding JSON → risk_graph_nodes lookup for SOAR `exposed:` triggers.
 async fn resolve_internet_exposed(
-    pool: &PgPool,
-    tenant_id: i64,
+    conn: &mut sqlx::PgConnection,
     client_id: i64,
     target_url: &str,
     f: &Value,
@@ -189,10 +188,11 @@ async fn resolve_internet_exposed(
     if host.is_empty() {
         return false;
     }
-    let Ok(mut tx) = db::begin_tenant_tx(pool, tenant_id).await else {
-        return false;
-    };
-    let exposed = sqlx::query_scalar::<_, bool>(
+    // Run on the caller's already tenant-scoped batch transaction connection instead of acquiring a
+    // SEPARATE pooled connection + `begin_tenant_tx` (BEGIN + SET LOCAL ROLE + set_config + commit)
+    // per finding. A high-finding scan otherwise multiplies the persist path's pool churn by the
+    // finding count — strict-bounding the per-finding DB footprint to the single batch connection.
+    sqlx::query_scalar::<_, bool>(
         r#"SELECT COALESCE(bool_or(internet_exposed), false)
              FROM risk_graph_nodes
             WHERE client_id = $1
@@ -200,11 +200,9 @@ async fn resolve_internet_exposed(
     )
     .bind(client_id)
     .bind(format!("%{host}%"))
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await
-    .unwrap_or(false);
-    let _ = tx.commit().await;
-    exposed
+    .unwrap_or(false)
 }
 
 fn extract_array(f: &Value, keys: &[&str]) -> Value {
@@ -270,6 +268,23 @@ pub async fn persist_engine_findings(
     } else {
         findings
     };
+
+    // ── Batch threat-intel enrichment BEFORE opening the write transaction ──────────────────
+    // EPSS/KEV used to be resolved one CVE at a time *inside* the per-finding loop, each call a
+    // separate pool round-trip — and, for EPSS, a live FIRST.org fetch (20s timeout) on a cold
+    // cache. A high-finding engine therefore fanned out N sequential network+DB stalls while the
+    // write transaction was held open, pinning a connection for minutes and starving the next
+    // scan's `begin_tenant_tx` ("pool timed out"). We now resolve ALL of this scan's CVEs in a
+    // single batched EPSS fetch + a single `WHERE cve = ANY(...)` KEV query, executed *before* the
+    // write tx exists, then look results up from in-memory maps in the loop — zero per-finding
+    // network/DB fan-out, and the write tx only ever does fast local DB work.
+    let scan_cves: Vec<String> = findings
+        .iter()
+        .map(extract_cve_from_finding)
+        .filter(|c| !c.is_empty())
+        .collect();
+    let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
+    let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves).await;
 
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
@@ -390,12 +405,24 @@ pub async fn persist_engine_findings(
             "raw": f.clone(),
         });
         if !cve.is_empty() {
-            if let Some(s) =
-                intel_epss::enrich_with_epss(pool, &mut raw_data_enriched, Some(&cve)).await
-            {
+            // Look up the pre-resolved batch maps (built once before the tx) — no per-finding
+            // network fetch or pool round-trip. Key matches both modules' normalization
+            // (trim + upper-case for a `CVE-` identifier).
+            let cve_key = cve.trim().to_ascii_uppercase();
+            if let Some(s) = epss_map.get(&cve_key) {
                 epss_score = Some(s.score);
+                if let Value::Object(obj) = &mut raw_data_enriched {
+                    obj.insert(
+                        "epss".to_string(),
+                        json!({
+                            "score": s.score,
+                            "percentile": s.percentile,
+                            "date": s.date.to_string(),
+                        }),
+                    );
+                }
             }
-            if let Some(k) = intel_kev::is_kev_listed(pool, &cve).await {
+            if let Some(k) = kev_map.get(&cve_key) {
                 kev_listed = true;
                 kev_known_ransomware = k.known_ransomware_use;
                 kev_due_date = k.due_date;
@@ -717,8 +744,9 @@ pub async fn persist_engine_findings(
             });
         }
 
-        let internet_exposed =
-            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, &f).await;
+        // Reuse the batch tenant transaction's connection (already RLS-scoped to this tenant)
+        // instead of acquiring a separate pooled connection + tenant tx per finding.
+        let internet_exposed = resolve_internet_exposed(&mut *tx, client_id, &target_url, &f).await;
 
         // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
         // Built outside the tx so a slow webhook doesn't extend the DB lock.
