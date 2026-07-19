@@ -33,13 +33,6 @@ function serveDeployPublicHtml() {
   }
 }
 
-const VENDOR_REACT = ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler']
-const VENDOR_I18N = ['i18next', 'react-i18next', 'i18next-browser-languagedetector']
-
-function matchVendor(id, needles) {
-  return needles.some((n) => id.includes(`/node_modules/${n}`))
-}
-
 function manualChunkForId(id) {
   if (!id.includes('node_modules')) {
     // Single shared chunk for React contexts — prevents duplicate createContext instances
@@ -65,16 +58,26 @@ function manualChunkForId(id) {
     return undefined
   }
 
-  if (matchVendor(id, VENDOR_REACT)) return 'vendor-react'
-  if (matchVendor(id, VENDOR_I18N)) return 'vendor-i18n'
-  if (id.includes('three')) return 'vendor-three'
-  if (id.includes('recharts')) return 'vendor-recharts'
-  if (id.includes('@xyflow')) return 'vendor-xyflow'
-  if (id.includes('framer-motion')) return 'vendor-motion'
-  if (id.includes('lucide-react')) return 'vendor-lucide'
-  if (id.includes('@tanstack/react-table')) return 'vendor-table'
-  if (id.includes('react-window')) return 'vendor-window'
-  if (id.includes('react-simple-maps')) return 'vendor-maps'
+  // three.js is large and genuinely independent (no React namespace use).
+  if (id.includes('/node_modules/three')) return 'vendor-three'
+
+  // The React ecosystem is a tightly interconnected graph: @xyflow imports
+  // recharts, recharts + framer-motion + lucide + react-window all import
+  // react, etc. Splitting these into sibling chunks forces cross-chunk cycles
+  // that break CJS init order at runtime ("Cannot access 'X' before
+  // initialization" / "reading 'forwardRef' of undefined", leaving the SPA
+  // unmounted). Co-locating the whole ecosystem in ONE chunk keeps every one of
+  // those edges intra-chunk, where Rollup orders modules topologically and
+  // initializes react before its consumers. (The prerequisite source fix —
+  // lib/cn no longer sharing the `clsx` module with these libs — means no app
+  // chunk is dragged into this vendor chunk.)
+  if (
+    /\/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|recharts|@xyflow|framer-motion|lucide-react|@tanstack\/react-table|react-window|react-simple-maps|i18next|react-i18next|i18next-browser-languagedetector)\//.test(
+      id,
+    )
+  ) {
+    return 'vendor-react'
+  }
 
   return undefined
 }

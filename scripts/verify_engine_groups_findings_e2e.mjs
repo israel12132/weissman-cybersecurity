@@ -108,15 +108,19 @@ async function findingsForEngine(token, clientId, engine) {
   return rows.filter((row) => String(row.source || '').toLowerCase() === engine.toLowerCase())
 }
 
+async function login() {
+  const r = await api('POST', '/api/login', {
+    body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
+  })
+  return r.status === 200 ? r.data?.access_token || null : null
+}
+
 async function main() {
   console.log(`verify_engine_groups_findings_e2e: ${BASE}`)
   if (!PASSWORD) { fail('credentials missing'); process.exit(1) }
 
-  const login = await api('POST', '/api/login', {
-    body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
-  })
-  const token = login.data?.access_token
-  if (login.status !== 200 || !token) { fail('login'); process.exit(1) }
+  let token = await login()
+  if (!token) { fail('login'); process.exit(1) }
   ok(`login ${EMAIL}`)
 
   const clientId = await ensureClient(token)
@@ -126,6 +130,17 @@ async function main() {
     const label = `${entry.group}/${entry.engine}`
     const body = { engine: entry.engine, client_id: Number(clientId) }
     if (entry.target) body.target = entry.target
+    // Per-engine job_params (ArsenalConfig) passed straight through the scan
+    // body as extras. Live-network engines (jwt_attack, bgp_dns_hijacking) use
+    // this to fail fast in the sandboxed runner so they finish inside the poll
+    // window instead of stalling on unreachable third-party infrastructure.
+    if (entry.params && typeof entry.params === 'object') Object.assign(body, entry.params)
+
+    // Refresh the access token before each engine so a long run (many engines,
+    // each polled for minutes) never outlives the token TTL — previously the
+    // later engines failed to enqueue with HTTP 401 once the token expired.
+    const fresh = await login()
+    if (fresh) token = fresh
 
     const scan = await api('POST', '/api/command-center/scan', { token, body })
     if (scan.status !== 202 || !scan.data?.job_id) {
@@ -138,6 +153,18 @@ async function main() {
     if (!job) { fail(`${label}: job timeout`); continue }
     if (String(job.status).toLowerCase() !== 'completed') {
       fail(`${label}: terminal ${job.status} ${job.last_error || ''}`)
+      // The worker-log dump is unreliable (block-buffered, truncated on live
+      // processes), so surface the real terminal error on the reliable step
+      // stdout: dump the diagnostic fields of the job row itself.
+      const diag = {
+        status: job.status,
+        last_error: job.last_error,
+        attempt_count: job.attempt_count,
+        max_attempts: job.max_attempts,
+        result: job.result,
+        error: job.error,
+      }
+      console.error(`  ↳ ${label} job detail: ${JSON.stringify(diag).slice(0, 2000)}`)
       continue
     }
     ok(`${label}: completed`)
