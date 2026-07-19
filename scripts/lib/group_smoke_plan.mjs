@@ -8,10 +8,11 @@
 //     past the poll window. We disable the live-probe loops (harvest / alg /
 //     jwks / attack-paths) so the engine runs its deterministic offline
 //     analysis and still exercises the full findings pipeline.
-//   * bgp_dns_hijacking — fans out to public DoH/UDP resolvers, crt.sh CT logs
-//     and authoritative NS across many phases (8s default per op). We pass a
-//     tight timeout_ms + light intensity so every phase fails fast, bounding
-//     total runtime to well under the poll window.
+//   * bgp_dns_hijacking — fans out to public DoH/UDP resolvers, crt.sh CT logs,
+//     RDAP/RIPEstat and authoritative NS across ~45 phases with no overall time
+//     budget. We disable autonomous mode and every fan-out/external probe (see
+//     BGP_DNS_CI_PARAMS) so only the fast apex resolver-consensus + DNSSEC DoH
+//     checks run, bounding total runtime to seconds instead of minutes.
 // Every engine's `job_params` are read live from the scan body via
 // ArsenalConfig, so this is pure request tuning — no engine code changes.
 const JWT_ATTACK_CI_PARAMS = {
@@ -23,7 +24,73 @@ const JWT_ATTACK_CI_PARAMS = {
   check_jwks: false,
   attack_paths: false,
 }
-const BGP_DNS_CI_PARAMS = { intensity: 'light', timeout_ms: 2000, concurrency: 8 }
+const BGP_DNS_CI_PARAMS = {
+  // The engine has NO overall wall-clock budget: total runtime is the sum of
+  // ~45 external-network probes (multi-resolver DoH, DNSSEC, crt.sh CT-log
+  // enumeration + per-subdomain takeover, RDAP, RIPEstat BGP/RPKI/IRR, UDP/53
+  // cross-checks, TLS/HSTS/HTTP). On the sandboxed CI runner those reach slow or
+  // unreachable third parties, and against example.com's huge CT footprint the
+  // scan intermittently ran ~11 minutes — far past the E2E poll window ('job
+  // timeout'). Tight per-op timeout/concurrency alone can't bound it because the
+  // fan-out multiplies. So instead of throttling, disable the fan-out: turn OFF
+  // autonomous mode (otherwise the adaptive plan re-enables probes from live
+  // discovery) and switch off every external/fan-out check, keeping only the
+  // fast apex resolver-consensus + DNSSEC checks over DoH (a couple of ~1.5s
+  // requests). The engine still completes a real scan and drives the findings
+  // pipeline; 0 persisted findings is an accepted terminal state for the smoke.
+  autonomous_mode: false,
+  force_all_probes: false,
+  timeout_ms: 1500,
+  concurrency: 8,
+  max_ct_hosts: 0,
+  // Fast DoH core — kept on.
+  check_resolver_consensus: true,
+  check_dnssec: true,
+  // Fan-out / slow-external checks — off.
+  check_ct: false,
+  check_ct_discovery: false,
+  check_takeover: false,
+  check_discovered_tls: false,
+  check_tls_identity: false,
+  check_rpki: false,
+  check_rpki_maxlength: false,
+  check_bgp: false,
+  check_bgp_visibility: false,
+  check_routing_history: false,
+  check_more_specific: false,
+  check_irr: false,
+  check_rdap: false,
+  check_dane: false,
+  check_udp_doh_cross: false,
+  check_hsts: false,
+  check_http_redirect: false,
+  check_fcrdns: false,
+  check_caa: false,
+  check_caa_ct_cross: false,
+  check_ns: false,
+  check_ns_lame: false,
+  check_glue: false,
+  check_parent_ns: false,
+  check_delegation_walk: false,
+  check_auth_recursive: false,
+  check_mx_origin: false,
+  check_dmarc: false,
+  check_spf_apex: false,
+  check_soa: false,
+  check_soa_serial: false,
+  check_cds_cdnskey: false,
+  check_orphan_ds: false,
+  check_cname_chain: false,
+  check_wildcard: false,
+  check_aaaa: false,
+  check_dual_stack: false,
+  check_bogon: false,
+  check_ttl: false,
+  check_geo: false,
+  check_baseline_delta: false,
+  check_resolver_timing: false,
+  check_dnssec_ad_divergence: false,
+}
 //   * pki_tls — TLS posture scan. The core cert/protocol/cipher findings come
 //     from the port-443 handshake, but the engine also fetches crt.sh CT logs
 //     (fixed 10s client, can hang) and OCSP, and scans a port budget — on the
