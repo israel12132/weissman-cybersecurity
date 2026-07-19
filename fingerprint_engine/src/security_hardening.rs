@@ -243,6 +243,18 @@ fn is_private_or_reserved_ip(ip: &IpAddr) -> bool {
     }
 }
 
+/// True only when EVERY address string parses to a publicly-routable IP — i.e. none is
+/// private/loopback/link-local/reserved/CGNAT. Unparseable entries are treated as unsafe so the
+/// caller fails closed. Used by the execution-time scope pin to tell a legitimate public CDN
+/// rotation (allowed) apart from a DNS rebind to an internal address (rejected).
+fn all_ips_public<'a>(ips: impl Iterator<Item = &'a String>) -> bool {
+    ips.map(|s| s.parse::<IpAddr>()).all(|parsed| {
+        parsed
+            .map(|ip| !is_private_or_reserved_ip(&ip))
+            .unwrap_or(false)
+    })
+}
+
 fn normalize_scope_domain(s: &str) -> Option<String> {
     let raw = s.trim().trim_matches('.').trim_start_matches("*.").trim();
     if raw.is_empty() {
@@ -427,6 +439,7 @@ pub async fn enforce_execution_scope_pin(
         ));
     }
 
+    let target_is_ip_literal = target_host.parse::<IpAddr>().is_ok();
     let current_ips: HashSet<String> = if let Ok(ip) = target_host.parse::<IpAddr>() {
         std::iter::once(ip.to_string()).collect()
     } else {
@@ -444,8 +457,24 @@ pub async fn enforce_execution_scope_pin(
         return Ok(());
     }
 
-    // Dual-stack drift: allow new A/AAAA records on the same host when pinned anchors
-    // still resolve (blocks DNS rebind to a wholly different address set).
+    // An IP-literal target has no DNS indirection and therefore cannot legitimately "rotate":
+    // the resolved address must be exactly one of the pinned anchors. Keep the pin strict.
+    if target_is_ip_literal {
+        return Err(
+            "validated_scope pin mismatch: IP-literal target outside pinned address set"
+                .to_string(),
+        );
+    }
+
+    // Hostname target whose execution-time resolution diverged from the pinned anchors. This is
+    // legitimate for CDN / load-balanced hosts (github.com, cloud fronts) whose short-TTL A/AAAA
+    // records rotate among a large *public* edge pool between the enqueue-time pin and execution —
+    // especially across retries minutes apart. The pin defends against a post-validation DNS
+    // *rebind to an internal/reserved address* (SSRF) on the same already-approved hostname, not
+    // against a host rotating among its own public IPs. Re-resolve for a corroborating view: if a
+    // pinned anchor still appears, the host is unmistakably unchanged. Otherwise (full rotation)
+    // fail CLOSED unless EVERY current- and fresh-resolved address is publicly routable — any
+    // private/loopback/link-local/reserved/CGNAT answer is treated as a rebind and rejected.
     let fresh_ips: HashSet<String> = lookup_host((target_host.as_str(), 80))
         .await
         .map_err(|_| format!("failed to re-resolve target host '{target_host}'"))?
@@ -454,18 +483,16 @@ pub async fn enforce_execution_scope_pin(
     if fresh_ips.is_empty() {
         return Err(format!("failed to re-resolve target host '{target_host}'"));
     }
-    if !current_ips.iter().all(|ip| fresh_ips.contains(ip)) {
-        return Err(
-            "validated_scope pin mismatch: current resolution outside fresh DNS set".to_string(),
-        );
+    if !fresh_ips.is_disjoint(&pinned_ips) {
+        return Ok(());
     }
-    if fresh_ips.is_disjoint(&pinned_ips) {
-        return Err(
-            "validated_scope pin mismatch: pinned DNS anchors no longer resolve for host"
-                .to_string(),
-        );
+    if all_ips_public(current_ips.iter().chain(fresh_ips.iter())) {
+        return Ok(());
     }
-    Ok(())
+    Err(
+        "validated_scope pin mismatch: host rebound outside pinned anchors to a private/reserved address"
+            .to_string(),
+    )
 }
 
 /// Finding IDs become Git branch suffixes — restrict charset.
@@ -603,5 +630,22 @@ mod tests {
         });
         let err = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn all_ips_public_allows_public_rotation_blocks_internal_rebind() {
+        // A fully public CDN rotation (e.g. github.com edge IPs) is safe to accept.
+        let rotated = vec!["140.82.121.3".to_string(), "20.205.243.166".to_string()];
+        assert!(all_ips_public(rotated.iter()));
+        // Any private/loopback/reserved answer is a rebind → must fail closed.
+        let rebind_loopback = vec!["140.82.121.3".to_string(), "127.0.0.1".to_string()];
+        assert!(!all_ips_public(rebind_loopback.iter()));
+        let rebind_rfc1918 = vec!["10.0.0.5".to_string()];
+        assert!(!all_ips_public(rebind_rfc1918.iter()));
+        let rebind_cgnat = vec!["100.64.1.1".to_string()];
+        assert!(!all_ips_public(rebind_cgnat.iter()));
+        // Unparseable entries are unsafe.
+        let junk = vec!["not-an-ip".to_string()];
+        assert!(!all_ips_public(junk.iter()));
     }
 }
