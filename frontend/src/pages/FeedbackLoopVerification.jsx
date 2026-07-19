@@ -9,7 +9,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 const DEFAULT_TEMPLATE = 'multi_step_state_chain'
@@ -35,7 +35,6 @@ export default function FeedbackLoopVerification() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => {})
   }, [])
@@ -44,7 +43,6 @@ export default function FeedbackLoopVerification() {
 
   useEffect(() => {
     apiFetch('/api/template-engine/templates')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         if (!Array.isArray(d)) return
         setTemplates(d)
@@ -60,9 +58,7 @@ export default function FeedbackLoopVerification() {
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
-      .then(async (r) => {
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.feedbackLoopVerification.load_failed'))
+      .then((d) => {
         setYaml(String(d?.yaml || ''))
       })
       .catch((e) => setError(e?.message || t('pages.feedbackLoopVerification.load_failed')))
@@ -75,17 +71,14 @@ export default function FeedbackLoopVerification() {
     setError('')
     setResult(null)
     try {
-      const r = await apiFetch('/api/template-engine/run', {
+      const d = await apiFetch('/api/template-engine/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           target_url: targetUrl.trim(),
           template_yaml: yaml,
           max_body_bytes: 200000,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.feedbackLoopVerification.run_failed'))
       setResult(d)
     } catch (e) {
       setError(e?.message || t('pages.feedbackLoopVerification.run_failed'))

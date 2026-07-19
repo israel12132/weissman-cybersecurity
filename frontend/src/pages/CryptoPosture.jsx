@@ -18,15 +18,12 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 const NS = 'pages.cryptoPosture'
 
 async function getJson(path) {
-  const r = await apiFetch(path)
-  const d = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
-  return d
+  return await apiFetch(path)
 }
 
 export default function CryptoPosture() {

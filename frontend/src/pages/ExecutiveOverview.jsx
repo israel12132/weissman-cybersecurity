@@ -16,7 +16,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd, postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
 
 const NS = 'pages.executiveOverview'
@@ -37,10 +37,7 @@ function freshnessColor(iso) {
   return '#f97316'
 }
 async function getJson(path) {
-  const r = await apiFetch(path)
-  const d = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
-  return d
+  return await apiFetch(path)
 }
 
 /** A metric tile linking to its detail page. */

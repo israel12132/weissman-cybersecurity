@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Download } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { SkeletonBar } from '../components/ui/Skeleton'
 
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
@@ -226,7 +226,6 @@ export default function DomainDiscovery() {
   // Load clients
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         if (Array.isArray(d)) setClients(d)
       })
@@ -263,19 +262,13 @@ export default function DomainDiscovery() {
     setSelectedDomains(new Set())
     
     try {
-      const r = await apiFetch('/api/discovery/domains', {
+      const d = await apiFetch('/api/discovery/domains', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           target: target.trim(),
           company_name: companyName.trim() || null,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        showToast('error', d.detail || `Discovery failed (${r.status})`)
-        return
-      }
       setResult(d)
       setLastSync(new Date())
       showToast('info', t('pages.domainDiscovery.discovered_toast', { total: d.total_discovered, live: d.live_domains }))
@@ -321,19 +314,13 @@ export default function DomainDiscovery() {
     }
     setScanAllLoading(true)
     try {
-      const r = await apiFetch('/api/scan/discovered-domains', {
+      const d = await apiFetch('/api/scan/discovered-domains', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           client_id: Number(selectedClientId),
           domains: Array.from(selectedDomains),
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        showToast('error', d.detail || `Scan failed (${r.status})`)
-        return
-      }
       showToast('info', t('pages.domainDiscovery.scan_queued', { count: d.domains_count, jobId: d.job_id }))
     } catch (e) {
       showToast('error', e?.message ?? t('pages.domainDiscovery.network_error'))

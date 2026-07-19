@@ -10,7 +10,7 @@ import PageShell from './PageShell';
 import ShellScanActions from '../components/engine/ShellScanActions';
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
@@ -62,14 +62,9 @@ export default function SocialEngineering() {
     try {
       setLoading(true);
       setError('');
-      const response = await apiFetch('/api/soc/social-engineering');
-      if (response.ok) {
-        const data = await response.json();
-        setCampaigns(data.campaigns || []);
-        setStats(data.stats || null);
-      } else {
-        setError(t('pages.socialEngineering.load_failed'));
-      }
+      const data = await apiFetch('/api/soc/social-engineering');
+      setCampaigns(data.campaigns || []);
+      setStats(data.stats || null);
     } catch (err) {
       setError(err?.message || t('pages.socialEngineering.load_failed'));
     } finally {
@@ -80,7 +75,6 @@ export default function SocialEngineering() {
   useEffect(() => {
     fetchSocialEngineering();
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         const list = Array.isArray(data) ? data : data?.clients || [];
         setClients(list);
@@ -154,21 +148,15 @@ export default function SocialEngineering() {
     setCreating(true);
     setCreateError('');
     try {
-      const response = await apiFetch('/api/soc/social-engineering/campaigns', {
+      await apiFetch('/api/soc/social-engineering/campaigns', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           name,
           client_id: clientId,
           template: createTemplate,
           campaign_type: 'email_phishing',
-        }),
+        },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setCreateError(data.detail || data.error || t('pages.socialEngineering.create_failed'));
-        return;
-      }
       setCreateOpen(false);
       await fetchSocialEngineering();
     } catch (err) {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 // Live-load tint by saturation ratio.
 function loadColor(ratio) {
@@ -50,12 +50,8 @@ export default function StealthOperations() {
 
   const load = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/stealth/status')
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}))
-        throw new Error(j.detail || j.error || `HTTP ${r.status}`)
-      }
-      setData(await r.json())
+      const d = await apiFetch('/api/stealth/status')
+      setData(d)
       setError('')
     } catch (err) {
       setError((err && err.message) || 'request failed')
@@ -95,16 +91,10 @@ export default function StealthOperations() {
     setSaving(true)
     setSaveMsg('')
     try {
-      const r = await apiFetch('/api/stealth/config', {
+      const fresh = await apiFetch('/api/stealth/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pacing),
+        body: pacing,
       })
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}))
-        throw new Error(j.detail || j.error || `HTTP ${r.status}`)
-      }
-      const fresh = await r.json()
       setData(fresh)
       setPacing({
         jitter_min_ms: fresh.config.jitter_min_ms,
