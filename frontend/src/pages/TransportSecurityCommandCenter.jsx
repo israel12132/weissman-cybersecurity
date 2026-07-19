@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -279,9 +279,7 @@ export default function TransportSecurityCommandCenter() {
   }, [])
 
   useEffect(() => {
-    apiFetch('/api/clients').then(async (r) => {
-      if (!r.ok) return
-      const d = await r.json()
+    apiFetch('/api/clients').then((d) => {
       setClients(Array.isArray(d) ? d : d.clients || [])
     }).catch(() => {})
   }, [])

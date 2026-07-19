@@ -12,7 +12,7 @@ import PageShell from './PageShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
 import { summarizePostureChecks, orderPostureChecks } from '../lib/postureScore'
 import Button from '../components/ui/Button'
@@ -65,9 +65,8 @@ export default function SecurityPosture() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/security/posture-score')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.error) throw new Error(d.error || d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/security/posture-score')
+      if (d?.error) throw new Error(d.error || d.detail || 'load failed')
       setData(d)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
