@@ -207,6 +207,20 @@ async function login() {
   return body.access_token
 }
 
+// This audit runs ~40+ scan scenarios sequentially and can run well past the access
+// token's TTL (WEISSMAN_ACCESS_TOKEN_MINUTES, default 15). Without refreshing, late
+// scenarios 401 on job polling and time out. Refresh the bearer proactively before it
+// can expire, and reactively on any 401, mutating the shared `headers` object in place
+// so every in-flight caller (queue POST + waitForJob poll) picks up the new token.
+let lastAuthMs = 0
+async function reauth(headers) {
+  headers.authorization = `Bearer ${await login()}`
+  lastAuthMs = Date.now()
+}
+async function ensureFreshAuth(headers) {
+  if (Date.now() - lastAuthMs > 10 * 60 * 1000) await reauth(headers)
+}
+
 async function ensureClient(headers) {
   const neededDomains = [...new Set(UI_BUTTON_SCENARIOS
     .map((scenario) => extractHost(scenario.payload?.target))
@@ -262,6 +276,8 @@ async function waitForJob(headers, jobId) {
     const { response, body } = await api(`/api/jobs/${jobId}`, { headers })
     if (!response.ok) {
       last = { status: `http_${response.status}`, error: JSON.stringify(body) }
+      // Token likely expired mid-run — refresh and keep polling with the new bearer.
+      if (response.status === 401) await reauth(headers)
       continue
     }
     last = body
@@ -316,16 +332,17 @@ async function runScenario(headers, clientId, scenario) {
 }
 
 async function main() {
-  const token = await login()
   const headers = {
     'content-type': 'application/json',
-    authorization: `Bearer ${token}`,
+    authorization: '',
   }
+  await reauth(headers)
   const clientId = await ensureClient(headers)
   const results = []
   const failures = []
 
   for (const scenario of UI_BUTTON_SCENARIOS) {
+    await ensureFreshAuth(headers)
     try {
       const summary = await runScenario(headers, clientId, scenario)
       results.push(summary)
