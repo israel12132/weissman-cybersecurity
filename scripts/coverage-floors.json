@@ -1,0 +1,12 @@
+{
+  "fingerprint_engine": 19,
+  "fuzz_core": 0,
+  "weissman-ast-cap": 40,
+  "weissman-core": 40,
+  "weissman-db": 15,
+  "weissman-engines": 0,
+  "weissman-fleet-shaping": 19,
+  "weissman-job-bus": 10,
+  "weissman-server": 0,
+  "weissman-ui-provenance": 40
+}
