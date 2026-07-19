@@ -40,14 +40,8 @@ pub async fn enqueue(
         )
         .await?
     } else {
-        weissman_db::job_queue::enqueue(
-            pool,
-            tenant_id,
-            kind,
-            payload.clone(),
-            trace_id.as_deref(),
-        )
-        .await?
+        weissman_db::job_queue::enqueue(pool, tenant_id, kind, payload.clone(), trace_id.as_deref())
+            .await?
     };
 
     if bus_enabled {
