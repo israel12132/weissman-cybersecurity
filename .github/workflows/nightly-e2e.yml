@@ -12,6 +12,40 @@ jobs:
   findings-e2e-full:
     name: Full engine groups findings E2E
     runs-on: ubuntu-latest
+    # Ephemeral CI-only secrets. Production boot gates in
+    # fingerprint_engine::security_startup refuse to start unless these are all
+    # present and strong (JWT >=48 chars; orchestrator/metrics/destructive >=32;
+    # vault key 64 hex). Shared at job scope so weissman-server and
+    # weissman-worker sign/verify the job bus and decrypt vault data with the
+    # SAME values. These are throwaway values for the ephemeral runner DB only.
+    env:
+      WEISSMAN_JWT_SECRET: nightly-e2e-jwt-secret-min-48-chars-rotate-in-real-prod-0123456789
+      WEISSMAN_JOB_ORCHESTRATOR_SECRET: nightly-e2e-orchestrator-secret-min-32-chars-0123456789
+      WEISSMAN_METRICS_TOKEN: nightly-e2e-metrics-token-min-32-chars-0123456789
+      WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: nightly-e2e-destructive-confirm-min-32-chars-0123456789
+      WEISSMAN_VAULT_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      # Cap DB pools so weissman-server + weissman-worker together stay well under
+      # postgres max_connections (default 100). At defaults each process opens
+      # ~68 connections (app 48 + auth 12 + intel 8); two processes exceeded 100,
+      # so sqlx acquire timed out under scan load ("pool timed out while waiting
+      # for an open connection") and engine jobs failed to record completion.
+      # Each process opens app+auth+intel = 24+6+4 = 34; two processes = 68 < 100.
+      WEISSMAN_APP_POOL_MAX: "24"
+      WEISSMAN_AUTH_POOL_MAX: "6"
+      WEISSMAN_INTEL_POOL_MAX: "4"
+      # Raise the per-IP API rate limit for the single-source load generator.
+      # The k6 SLO smoke drives ~60-75 req/s from ONE IP (127.0.0.1); the edge +
+      # inner per-IP limiters default to 30/s (burst 60) and correctly 429 that
+      # single hammering IP — which is anti-abuse behavior, NOT a backend
+      # availability defect. The SLO gate itself is the k6 latency/error budget
+      # (http_req_failed<1%, p95 read<800ms), and those thresholds still apply in
+      # full. In production the 99.9% SLA is measured across thousands of client
+      # IPs, none individually exceeding 30/s, so the per-IP throttle never fires.
+      # Lift it to the clamp ceiling here so the load test measures true backend
+      # throughput/latency instead of the abuse limiter (same spirit as the
+      # ephemeral-DB fsync tuning: CI infra config, not a change to the gate).
+      WEISSMAN_RATE_LIMIT_PER_SEC: "500"
+      WEISSMAN_RATE_LIMIT_BURST: "2000"
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -58,6 +92,35 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Tune Postgres for CI (ephemeral DB — disable durability to kill checkpoint I/O stalls)
+        run: |
+          # ROOT CAUSE of the live-E2E flakiness: this runner's disk is slow, so
+          # postgres checkpoints fsync dirty buffers for 40-80s. During that
+          # window queries stall (I/O starvation), connections stay checked out
+          # past the 30s sqlx acquire_timeout, and the pool exhausts — surfacing
+          # as "pool timed out while waiting for an open connection" (worker
+          # claim + event-sourced completion) and "unexpected EOF on client
+          # connection with an open transaction". Each run a random engine's job
+          # failed to record completion and the E2E timed out.
+          # The CI database is thrown away at job end, so durability is
+          # irrelevant: turning fsync off makes checkpoints near-instant and
+          # removes the stalls entirely. fsync/full_page_writes/checkpoint_timeout
+          # are SIGHUP-reloadable, so pg_reload_conf() applies them with no
+          # restart (max_connections would need a restart; we don't touch it).
+          for i in $(seq 1 30); do
+            PGPASSWORD=postgres pg_isready -h 127.0.0.1 -U postgres -d weissman && break
+            sleep 2
+          done
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET checkpoint_timeout = '30min';
+          ALTER SYSTEM SET max_wal_size = '4GB';
+          SELECT pg_reload_conf();
+          SHOW fsync;
+          SQL
+
       - name: Apply database migrations
         env:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
@@ -72,12 +135,17 @@ jobs:
           WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_JWT_SECRET: nightly-e2e-secret-min-32-chars
           WEISSMAN_ENV: production
+          RUST_LOG: info,weissman_server=debug,fingerprint_engine=info,weissman_db=info
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: nightly@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: nightly-e2e-password
           PORT: "18000"
+          # Disable the orchestrator's 60s auto-dispatch loop: otherwise it floods
+          # the worker's heavy slots with tenant_full_scan jobs, starving the
+          # findings-E2E's explicit per-engine scans (they timed out). The E2E
+          # drives scans itself via /api/command-center/scan.
+          WEISSMAN_SCANNING_ENABLED: "0"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
       - name: Start weissman-worker
@@ -85,8 +153,22 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_JWT_SECRET: nightly-e2e-secret-min-32-chars
           WEISSMAN_ENV: production
+          RUST_LOG: info,weissman_server=debug,fingerprint_engine=info,weissman_db=info
+          # The worker is where engines actually run, and a single command_center
+          # engine fans out many concurrent DB ops (findings persist, telemetry,
+          # intelligence bus) on top of the job lease/heartbeat + claim loop.
+          # This runner's postgres checkpoints are slow (40-80s writes on slow
+          # disk); a checkpoint stalls in-flight queries that pin connections, so
+          # a 24-connection pool exhausted and the CLAIM LOOP ITSELF starved
+          # ("pool timed out while waiting for an open connection") — the pending
+          # engine job was never picked up and timed out. Give the worker a large
+          # pool (40) and serialize heavy engines (heavy=1; the E2E drives scans
+          # one at a time anyway) so the claim/lease tasks always keep headroom.
+          # Budget: server 24+6+4=34 + worker 40+6+4=50 = 84 < postgres max 100.
+          WEISSMAN_APP_POOL_MAX: "40"
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
+          WEISSMAN_WORKER_LIGHT_CONCURRENCY: "2"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
@@ -107,7 +189,12 @@ jobs:
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_FINDINGS_E2E_FULL: "1"
           WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
-          WEISSMAN_FINDINGS_E2E_POLL_MAX: "120"
+          # 160 * 2.5s = 400s per engine. The runner's slow disk causes 40-84s
+          # postgres checkpoint stalls; a fast engine whose DB persist lands
+          # inside a stall can momentarily exceed the old 300s window even
+          # though it completes. 400s absorbs that variance without masking a
+          # genuinely hung engine (those are bounded via job_params).
+          WEISSMAN_FINDINGS_E2E_POLL_MAX: "160"
         run: node scripts/verify_engine_groups_findings_e2e.mjs
 
       # True-Live UI feature specs against the same production-mode backend: the

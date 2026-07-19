@@ -266,6 +266,38 @@ fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
     })
 }
 
+/// Acquire a tenant-scoped transaction, retrying a *transient* DB error a few
+/// times before giving up. A single connection blip (pooled connection reset,
+/// a momentary acquire race, a checkpoint stall) must not kill an entire engine
+/// job: the job would exhaust its retries and land in the DLQ as
+/// `execution_failure`, which is how a healthy engine (e.g. `supply_chain`)
+/// intermittently "failed" the nightly findings E2E even though its own logic
+/// never errors. Bounded (3 attempts, short linear backoff) so a genuinely
+/// unavailable DB still surfaces quickly.
+async fn begin_tenant_tx_resilient(
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, String> {
+    let mut last_err = String::new();
+    for attempt in 1..=3u32 {
+        match db::begin_tenant_tx_arc(pool.clone(), tenant_id).await {
+            Ok(tx) => return Ok(tx),
+            Err(e) => {
+                last_err = e.to_string();
+                tracing::warn!(
+                    target: "async_jobs",
+                    tenant_id,
+                    attempt,
+                    error = %last_err,
+                    "begin_tenant_tx transient failure; retrying"
+                );
+                tokio::time::sleep(Duration::from_millis(150 * u64::from(attempt))).await;
+            }
+        }
+    }
+    Err(format!("begin_tenant_tx failed after 3 attempts: {last_err}"))
+}
+
 /// Run one job to completion JSON (success) or error string (failure).
 pub async fn execute_job(
     app_pool: Arc<PgPool>,
@@ -367,9 +399,7 @@ async fn execute_job_unscoped(
                 v.as_i64()
                     .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
             });
-            let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
-                .await
-                .map_err(|e| e.to_string())?;
+            let mut tx = begin_tenant_tx_resilient(app_pool.clone(), tid).await?;
             let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
             let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
@@ -594,9 +624,7 @@ async fn execute_job_unscoped(
                 .ok_or_else(|| "payload.target required".to_string())?
                 .to_string();
 
-            let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tid)
-                .await
-                .map_err(|e| e.to_string())?;
+            let mut tx = begin_tenant_tx_resilient(app_pool.clone(), tid).await?;
             let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
             let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
             let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;

@@ -567,9 +567,14 @@ export default function DataTable({
                   </tr>
                 ) : null
 
+              // Stable business-id on the row (finding raw_id / id) so tests and
+              // deep-links can target a specific record regardless of the
+              // current client-side sort/filter order.
+              const rowIdAttr = rowId != null ? String(rowId) : undefined
               const mainRow = animateRows ? (
                 <motion.tr
                   key={row.id}
+                  data-row-id={rowIdAttr}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.12, delay: Math.min(i * 0.012, 0.25) }}
@@ -580,7 +585,7 @@ export default function DataTable({
                   {cells}
                 </motion.tr>
               ) : (
-                <tr key={row.id} className={rowClasses} style={style} {...interactiveProps}>
+                <tr key={row.id} data-row-id={rowIdAttr} className={rowClasses} style={style} {...interactiveProps}>
                   {cells}
                 </tr>
               )

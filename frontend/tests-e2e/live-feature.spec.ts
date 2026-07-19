@@ -153,19 +153,23 @@ test('bulk status update persists to Postgres (real DB round-trip)', async ({ pa
   const { auth, findings } = await ensureLiveFindings(request)
   expect(findings.length).toBeGreaterThan(0)
 
-  // The findings API and the table share ORDER BY (kev, epss, discovered_at) and
-  // status does not participate in it — so the first table row is the first API
-  // row deterministically. Pick a NEW status distinct from its current one.
-  const target = findings[0]
-  const newStatus = target.status === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
-  expect(VALID_STATUSES).toContain(newStatus)
-
   await gotoFindings(page)
   const table = page.locator('#findings-command-table')
   await expect(table).toBeVisible({ timeout: 30_000 })
 
-  // Select the first row and drive the bulk-status bar.
-  await table.locator('tbody input[type="checkbox"]').first().check()
+  // The table applies its own client-side sort (default: severity), which is NOT
+  // the findings API order (kev, epss, discovered_at) — so the first table row is
+  // NOT necessarily findings[0]. Read the finding id the first row actually
+  // represents (each row carries data-row-id = the raw finding id) so the record
+  // we assert on is exactly the one the bulk action targets, regardless of order.
+  const firstRow = table.locator('tbody tr[data-row-id]').first()
+  const firstRowId = await firstRow.getAttribute('data-row-id')
+  const target = findings.find((f) => String(f.id) === firstRowId) ?? findings[0]
+  const newStatus = target.status === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
+  expect(VALID_STATUSES).toContain(newStatus)
+
+  // Select that same first row and drive the bulk-status bar.
+  await firstRow.locator('input[type="checkbox"]').first().check()
   await expect(page.getByText(/1 selected/i)).toBeVisible()
 
   // The <select> options carry raw status values — language-independent.
