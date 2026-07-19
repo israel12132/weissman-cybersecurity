@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import SupremeIntelligencePanels, { extractSupremeFromFindings } from '../components/engine/SupremeIntelligencePanels'
 import Button from '../components/ui/Button'
@@ -289,9 +289,7 @@ export default function JwtAttackLab() {
   const loadLastRun = useCallback(async () => {
     setHistoryLoading(true)
     try {
-      const r = await apiFetch('/api/engines/history/jwt_attack?limit=1')
-      if (!r.ok) return
-      const d = await r.json()
+      const d = await apiFetch('/api/engines/history/jwt_attack?limit=1')
       const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
       const last = runs[0]
       if (!last) return
@@ -321,7 +319,7 @@ export default function JwtAttackLab() {
   })
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
     loadLastRun()
   }, [loadLastRun])
 

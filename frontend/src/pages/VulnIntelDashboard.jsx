@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -145,12 +145,7 @@ export default function VulnIntelDashboard() {
     const qs = new URLSearchParams({ limit: '1000' })
     if (severityFilter !== 'all') qs.set('severity', severityFilter)
     try {
-      const r = await apiFetch(`/api/findings?${qs.toString()}`)
-      if (!r.ok) {
-        const data = await r.json().catch(() => ({}))
-        throw new Error(data.detail || data.error || `HTTP ${r.status}`)
-      }
-      const data = await r.json()
+      const data = await apiFetch(`/api/findings?${qs.toString()}`)
       const arr = Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : []
       setFindings(arr)
       setTotal(Number(data?.total ?? arr.length))

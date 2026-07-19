@@ -22,7 +22,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useToast } from '../components/ui/Toaster'
 import { usePermissions } from '../context/AuthContext'
 import { confirmDialog } from '../utils/confirmDialog'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { isExpired, isExpiringSoon } from '../lib/suppressionStatus'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import Button from '../components/ui/Button'
@@ -55,9 +55,8 @@ export default function FindingSuppressions() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/intel/suppressions')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/intel/suppressions')
+      if (d?.ok === false) throw new Error(d.detail || 'load failed')
       setRows(Array.isArray(d.suppressions) ? d.suppressions : [])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
@@ -82,9 +81,8 @@ export default function FindingSuppressions() {
       if (!ok) return
       setDeletingId(s.id)
       try {
-        const r = await apiFetch(`/api/intel/suppressions/${encodeURIComponent(s.id)}`, { method: 'DELETE' })
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+        const d = await apiFetch(`/api/intel/suppressions/${encodeURIComponent(s.id)}`, { method: 'DELETE' })
+        if (d?.ok === false) throw new Error(d.detail || 'delete failed')
         setRows((prev) => prev.filter((x) => x.id !== s.id))
         toast.success(t(`${NS}.delete_ok`))
       } catch (e) {

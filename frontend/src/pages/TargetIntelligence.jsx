@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 // Sensitivity tint.
 const SEV = {
@@ -68,12 +68,8 @@ export default function TargetIntelligence() {
     setData(null)
     try {
       const qs = `target=${encodeURIComponent(tgt)}${enrich ? '&enrich=1' : ''}`
-      const r = await apiFetch(`/api/intel/target-profile?${qs}`)
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}))
-        throw new Error(j.error || `HTTP ${r.status}`)
-      }
-      setData(await r.json())
+      const d = await apiFetch(`/api/intel/target-profile?${qs}`)
+      setData(d)
     } catch (err) {
       setError((err && err.message) || 'request failed')
     } finally {

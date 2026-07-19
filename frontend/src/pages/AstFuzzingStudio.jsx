@@ -9,7 +9,7 @@ import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundar
 import AstTreeViewer from '../engineC2/modules/AstTreeViewer'
 import { useResolvedEngineManifest } from '../engineC2/EngineManifestContext'
 import { useLocation } from 'react-router-dom'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 const PRESETS = [
@@ -68,14 +68,11 @@ function AstFuzzingStudioBody() {
     setResult(null)
     try {
       const clamped = Math.min(Math.max(Number(maxMutations) || 200, 1), MAX_LIMIT)
-      const r = await apiFetch('/api/fuzz/ast-preview', {
+      const d = await apiFetch('/api/fuzz/ast-preview', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload, max_mutations: clamped }),
+        body: { payload, max_mutations: clamped },
         signal,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d?.error || d?.detail || t('pages.astFuzzingStudio.preview_failed'))
       setResult(d)
     } catch (e) {
       setError(e?.message || t('pages.astFuzzingStudio.preview_failed'))

@@ -17,7 +17,7 @@ import CeoProtectedRoute from '../components/ceo/CeoProtectedRoute'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import DataTable from '../components/ui/DataTable'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 
@@ -94,12 +94,8 @@ function SupremeNerveCenterInner() {
 
   const load = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/ceo/supreme/nerve-center')
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}))
-        throw new Error(body.detail || `HTTP ${r.status}`)
-      }
-      setSnap(await r.json())
+      const d = await apiFetch('/api/ceo/supreme/nerve-center')
+      setSnap(d)
       setError(null)
       setLastRefresh(new Date())
     } catch (e) {

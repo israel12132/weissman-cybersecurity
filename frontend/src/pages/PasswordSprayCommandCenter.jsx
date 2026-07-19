@@ -12,7 +12,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
 import Button from '../components/ui/Button'
@@ -394,7 +394,7 @@ export default function PasswordSprayCommandCenter() {
   const set = (k, v) => setParams((p) => ({ ...p, [k]: v }))
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {

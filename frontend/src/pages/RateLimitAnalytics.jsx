@@ -10,7 +10,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton';
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import Button from '../components/ui/Button'
 
@@ -72,9 +72,7 @@ export default function RateLimitAnalytics() {
   const fetchAnalytics = useCallback(async () => {
     setError(null);
     try {
-      const response = await apiFetch(`/api/rate-limits/analytics?range=${timeRange}`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setData(await response.json());
+      setData(await apiFetch(`/api/rate-limits/analytics?range=${timeRange}`));
     } catch (err) {
       setError(err?.message || 'error');
     } finally {

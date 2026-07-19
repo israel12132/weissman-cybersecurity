@@ -29,7 +29,7 @@ import {
   X,
 } from 'lucide-react'
 import { ENGINES_REGISTRY, ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -85,9 +85,7 @@ function useApiResource(path, autoRefreshMs) {
       if (!silent) setLoading(true)
       setError(null)
       try {
-        const r = await apiFetch(path)
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        const d = await r.json()
+        const d = await apiFetch(path)
         setData(d)
         setUpdatedAt(Date.now())
       } catch (e) {
