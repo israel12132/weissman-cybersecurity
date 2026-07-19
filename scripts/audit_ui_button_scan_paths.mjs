@@ -86,10 +86,28 @@ const UI_BUTTON_SCENARIOS_BASE = [
   },
 ]
 
+/**
+ * Known scan-engine IDs, loaded from the generated catalog. Used to reject engine
+ * strings the discovery heuristic scrapes out of demo/config text (e.g. a Terraform
+ * `engine = "postgres"` snippet rendered in the IaC page, or an `EXPLOIT_LAB_ENGINE`
+ * namespace constant) rather than fabricating a scan the API rejects with 400. If the
+ * catalog can't be read, fall back to accepting any derived engine (old behaviour).
+ */
+function loadKnownEngineIds() {
+  try {
+    const catalog = JSON.parse(readFileSync(join(process.cwd(), 'shared/engine_requirements.json'), 'utf8'))
+    const ids = Object.keys(catalog?.engines || {})
+    return ids.length ? new Set(ids) : null
+  } catch {
+    return null
+  }
+}
+
 /** Auto-discover scan-wired hub pages not listed explicitly above. */
 function discoverScanHubScenarios() {
   const pagesDir = join(process.cwd(), 'frontend/src/pages')
   const existing = new Set(UI_BUTTON_SCENARIOS_BASE.map((s) => s.source))
+  const knownEngines = loadKnownEngineIds()
   const extra = []
   for (const file of readdirSync(pagesDir)) {
     if (!file.endsWith('.jsx') || file === 'PageShell.jsx') continue
@@ -97,9 +115,24 @@ function discoverScanHubScenarios() {
     if (existing.has(source)) continue
     const src = readFileSync(join(pagesDir, file), 'utf8')
     if (!/useCommandCenterScan|useLaunchEngineScan|launchEngineScan|postEngineScan/.test(src)) continue
-    const engineMatch = src.match(/engine(?:Id)?\s*[:=]\s*['"]([a-z0-9_]+)['"]/i)
-      || src.match(/ENGINE_ID\s*=\s*['"]([a-z0-9_]+)['"]/)
+    // Prefer the page's canonical `ENGINE_ID = '...'` declaration over any inline
+    // `engine: '...'` / `engine = '...'` occurrence — the latter also matches demo
+    // config text (e.g. a rendered Terraform `engine = "postgres"` block), which is
+    // not the page's real scan engine.
+    const engineMatch = src.match(/ENGINE_ID\s*=\s*['"]([a-z0-9_]+)['"]/)
+      || src.match(/engine(?:Id)?\s*[:=]\s*['"]([a-z0-9_]+)['"]/i)
     const engine = engineMatch?.[1] || 'recon'
+    // A page that declares an engine string which isn't a real catalog engine is a
+    // discovery false-positive (scraped text / namespace constant), not a scan target —
+    // skip it rather than submitting a fabricated engine that 400s. Pages with no engine
+    // declaration keep the 'recon' default (they exercise a real scan path).
+    if (engineMatch && knownEngines && !knownEngines.has(engine)) {
+      console.warn(
+        `[audit] skipping ${source}: derived engine '${engine}' is not a known scan engine `
+          + '(likely demo/config text or a namespace constant, not the page\'s scan target)',
+      )
+      continue
+    }
     extra.push({
       source,
       kind: 'command-center-scan',
