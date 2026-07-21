@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useAuth } from '../context/AuthContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import PageShell from './PageShell'
 import DataTable from '../components/ui/DataTable'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -47,12 +47,7 @@ export default function AdminManagement() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/admin/users')
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}))
-        throw new Error(d.detail || `HTTP ${r.status}`)
-      }
-      const data = await r.json()
+      const data = await apiFetch('/api/admin/users')
       setUsers(Array.isArray(data) ? data : data.users || [])
       setLastUpdated(new Date())
     } catch (err) {
@@ -76,20 +71,15 @@ export default function AdminManagement() {
     setError(null)
     setSuccessMsg(null)
     try {
-      const r = await apiFetch('/api/admin/users', {
+      await apiFetch('/api/admin/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           email: newEmail.trim(),
           password: newPassword,
           role: newRole,
           is_superadmin: newIsSuperadmin,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        throw new Error(d.detail || 'Failed to create user')
-      }
       setSuccessMsg(`User ${newEmail} created successfully`)
       setNewEmail('')
       setNewPassword('')
@@ -97,7 +87,12 @@ export default function AdminManagement() {
       setNewIsSuperadmin(false)
       await loadUsers()
     } catch (err) {
-      setError(err.message)
+      if (err?.response) {
+        const d = await err.response.json().catch(() => ({}))
+        setError(d.detail || 'Failed to create user')
+      } else {
+        setError(err.message)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -108,23 +103,23 @@ export default function AdminManagement() {
     setSubmitting(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/admin/users/${editingUser.id}`, {
+      await apiFetch(`/api/admin/users/${editingUser.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           role: editRole,
           is_superadmin: editIsSuperadmin,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        throw new Error(d.detail || 'Failed to update user')
-      }
       setSuccessMsg(`User ${editingUser.email} updated`)
       setEditingUser(null)
       await loadUsers()
     } catch (err) {
-      setError(err.message)
+      if (err?.response) {
+        const d = await err.response.json().catch(() => ({}))
+        setError(d.detail || 'Failed to update user')
+      } else {
+        setError(err.message)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -140,17 +135,18 @@ export default function AdminManagement() {
     })
     if (!ok) return
     try {
-      const r = await apiFetch(`/api/admin/users/${userId}/deactivate`, {
+      await apiFetch(`/api/admin/users/${userId}/deactivate`, {
         method: 'POST',
       })
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}))
-        throw new Error(d.detail || 'Failed to deactivate')
-      }
       setSuccessMsg(`User ${email} deactivated`)
       await loadUsers()
     } catch (err) {
-      setError(err.message)
+      if (err?.response) {
+        const d = await err.response.json().catch(() => ({}))
+        setError(d.detail || 'Failed to deactivate')
+      } else {
+        setError(err.message)
+      }
     }
   }
 
