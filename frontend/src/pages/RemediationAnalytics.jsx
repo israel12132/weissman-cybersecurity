@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Activity, GitPullRequest, AlertTriangle } from 'lucide-react'
+import { Activity, GitPullRequest, AlertTriangle, FileText, Search } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
 import { apiFetch } from '../utils/apiFetch'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
 import HealReadinessPanel from '../components/remediation/HealReadinessPanel'
 import HealTrendSparkline from '../components/remediation/HealTrendSparkline'
@@ -16,6 +19,22 @@ import HealTrendSparkline from '../components/remediation/HealTrendSparkline'
  * appears in /api/findings, reusing the exact heal-stats shape RemediationHub builds,
  * plus a merged "recent heals" activity feed from /api/clients/:id/heal-requests.
  */
+
+/** CSV/PDF columns for the recent-heals feed. Exported for tests. */
+export const HEALS_CSV_HEADER = ['id', 'finding_id', 'verdict', 'channel', 'attempts', 'attested', 'created_at']
+
+/** Pure: recent-heals rows → export rows. Exported for tests. */
+export function healsRows(heals) {
+  return (Array.isArray(heals) ? heals : []).map((h) => [
+    h?.id ?? '',
+    h?.finding_id ?? '',
+    h?.verdict ?? '',
+    h?.channel ?? '',
+    h?.attempts ?? '',
+    h?.attested ? 'yes' : 'no',
+    h?.created_at ?? '',
+  ])
+}
 
 // mirrors VERDICT_META in components/remediation/RemediationDetail.jsx
 const VERDICT_META = {
@@ -37,6 +56,7 @@ export default function RemediationAnalytics() {
   // True when at least one per-client telemetry request failed (totals shown are then partial).
   const [partial, setPartial] = useState(false)
   const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -122,6 +142,23 @@ export default function RemediationAnalytics() {
     return () => { cancelled = true }
   }, [clientIds])
 
+  // Client-side filter over the already-loaded heals feed (a bounded, tenant-scoped
+  // rollup — no server round-trip needed to search it).
+  const filteredHeals = useMemo(
+    () => heals.filter((h) => rowMatchesQuery(searchQuery, [h?.finding_id, h?.verdict, h?.channel])),
+    [heals, searchQuery],
+  )
+
+  const handleRefresh = useCallback(() => load(), [load])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
+    [filteredHeals],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman Remediation Analytics', HEALS_CSV_HEADER, healsRows(filteredHeals), 'weissman-remediation-analytics'),
+    [filteredHeals],
+  )
+
   return (
     <PageShell
       title={t('pages.remediationAnalytics.title', { defaultValue: 'Remediation Analytics' })}
@@ -129,9 +166,34 @@ export default function RemediationAnalytics() {
       badge={t('pages.remediationAnalytics.badge', { defaultValue: 'ANALYTICS' })}
       badgeColor="#22d3ee"
       icon={<Activity />}
-      actions={<ShellScanActions onRefresh={load} refreshLoading={loading} exportDisabled />}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredHeals.length}
+          />
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={exportPdf}
+            disabled={!filteredHeals.length}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 text-[11px] font-mono text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </Button>
+        </div>
+      }
     >
       <div className="space-y-6">
+        <EvidenceNotice>
+          Live auto-heal telemetry from GET /api/findings, GET /api/clients/:id/heal-stats and
+          /heal-requests. No fabricated heal outcomes.
+        </EvidenceNotice>
+
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-white/45 font-mono">
             {t('pages.remediationAnalytics.intro', { defaultValue: 'Live auto-heal telemetry from GET /api/clients/:id/heal-stats and /heal-requests.' })}
@@ -176,17 +238,30 @@ export default function RemediationAnalytics() {
 
         {/* Recent heals feed */}
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <GitPullRequest className="w-4 h-4 text-cyan-400" />
-            {t('pages.remediationAnalytics.recent_heals', { defaultValue: 'Recent heals' })}
-          </h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <GitPullRequest className="w-4 h-4 text-cyan-400" />
+              {t('pages.remediationAnalytics.recent_heals', { defaultValue: 'Recent heals' })}
+            </h3>
+            <div className="relative">
+              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('common.search', { defaultValue: 'Search' })}
+                aria-label={t('common.search', { defaultValue: 'Search heals' })}
+                className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
+          </div>
           {loading ? (
             <SkeletonTable rows={5} cols={4} />
-          ) : heals.length === 0 ? (
+          ) : filteredHeals.length === 0 ? (
             <div className="text-xs text-white/30 font-mono">—</div>
           ) : (
             <div className="divide-y divide-white/5 rounded-xl border border-white/10 overflow-hidden bg-black/40">
-              {heals.map((h) => {
+              {filteredHeals.map((h) => {
                 const vm = h.verdict ? VERDICT_META[h.verdict] : null
                 return (
                   <div

@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 
-from src.database import Base, UserModel, get_session_factory
+from src.database import Base, UserModel
 from src.auth_enterprise import hash_password, get_user_by_email
 
 

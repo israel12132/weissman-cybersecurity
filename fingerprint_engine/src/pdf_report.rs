@@ -149,6 +149,8 @@ struct PdfBuilder {
     page_streams: Vec<String>,
     current: String,
     y: f64,
+    /// When set, a rotated full-page watermark is stamped underneath every page in `finish()`.
+    watermark: Option<String>,
 }
 
 impl PdfBuilder {
@@ -157,7 +159,42 @@ impl PdfBuilder {
             page_streams: Vec::new(),
             current: String::new(),
             y: PAGE_H - MARGIN,
+            watermark: None,
         }
+    }
+
+    /// Enable a true diagonal (45°) watermark rendered under the content of every page — used to
+    /// visibly void an official artifact whose control-mapping state is inconsistent. A horizontal
+    /// banner can be cropped; a full-page rotated stamp across the body cannot be mistaken.
+    fn set_watermark(&mut self, text: &str) {
+        self.watermark = Some(text.to_string());
+    }
+
+    /// Build the content-stream operators for one diagonal watermark impression, centred on the
+    /// page. Rotation is applied via the PDF text matrix (`Tm`): for angle θ the matrix is
+    /// `cosθ sinθ -sinθ cosθ tx ty`. Font size scales down for long strings so the impression
+    /// always fits along the page diagonal, and `tx/ty` are derived to centre the baseline.
+    fn watermark_ops(text: &str) -> String {
+        // cos(45°) == sin(45°) == 1/√2.
+        let c = std::f64::consts::FRAC_1_SQRT_2;
+        let len = text.chars().count().max(1) as f64;
+        // Approximate Helvetica advance width ~0.5em; keep the diagonal extent under ~900pt.
+        let font: f64 = (900.0 / (len * 0.5)).clamp(20.0, 60.0);
+        let width = len * font * 0.5;
+        let half_h = width * c / 2.0;
+        let tx = PAGE_W / 2.0 - half_h;
+        let ty = PAGE_H / 2.0 - half_h;
+        format!(
+            "q\n0.92 0.55 0.55 rg\nBT /F1 {:.0} Tf {:.4} {:.4} {:.4} {:.4} {:.2} {:.2} Tm ({}) Tj ET\nQ\n",
+            font,
+            c,
+            c,
+            -c,
+            c,
+            tx,
+            ty,
+            pdf_escape(text),
+        )
     }
 
     fn ensure_space(&mut self, need: f64) {
@@ -175,7 +212,18 @@ impl PdfBuilder {
 
     fn finish(mut self) -> Vec<String> {
         if !self.current.is_empty() {
-            self.page_streams.push(self.current);
+            self.page_streams.push(std::mem::take(&mut self.current));
+        }
+        if let Some(text) = self.watermark.take() {
+            // Prepend the impression so page content draws on top and stays legible; every page
+            // (including any that were empty and thus never pushed) carries the stamp.
+            if self.page_streams.is_empty() {
+                self.page_streams.push(String::new());
+            }
+            let ops = Self::watermark_ops(&text);
+            for page in self.page_streams.iter_mut() {
+                page.insert_str(0, &ops);
+            }
         }
         self.page_streams
     }
@@ -997,14 +1045,25 @@ pub fn build_executive_board_pdf(
 }
 
 /// Framework-specific compliance audit PDF from live control status rows.
+/// Build a compliance framework audit PDF.
+///
+/// When `invalid_orphans` is `Some`, the report's control-mapping state is inconsistent: the listed
+/// controls are compliance requirements with no live evidence mapping. The document is then stamped
+/// with a full-page diagonal watermark, carries a prominent notice enumerating the orphaned
+/// controls, and its footer is voided — so an acknowledged-but-inconsistent copy can never be
+/// mistaken for an authoritative report.
 pub fn build_compliance_framework_pdf(
     org_label: &str,
     framework_label: &str,
     compliance_pct: u8,
     controls: &[(String, String, bool)],
+    invalid_orphans: Option<&[(String, String)]>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
+    if invalid_orphans.is_some() {
+        b.set_watermark("INVALID - INCONSISTENT STATE");
+    }
     b.set_fill_rgb(0.06, 0.09, 0.14);
     b.text(22, "WEISSMAN — COMPLIANCE AUDIT REPORT");
     b.set_fill_rgb(0.55, 0.62, 0.72);
@@ -1018,6 +1077,41 @@ pub fn build_compliance_framework_pdf(
     );
     b.text(10, &format!("Generated (Israel): {}", date));
     b.y -= 8.0;
+
+    if let Some(orphans) = invalid_orphans {
+        b.set_fill_rgb(0.85, 0.16, 0.16);
+        b.text(
+            15,
+            "*** REPORT VOID — INCONSISTENT CONTROL-MAPPING STATE ***",
+        );
+        b.set_fill_rgb(0.9, 0.6, 0.6);
+        b.text(
+            10,
+            "This report is NOT valid for audit. The controls below are compliance requirements",
+        );
+        b.text(
+            10,
+            "with no live evidence mapping; their status cannot be asserted. Complete the mapping",
+        );
+        b.text(
+            10,
+            "catalog and regenerate before relying on this document.",
+        );
+        b.y -= 4.0;
+        b.set_fill_rgb(0.95, 0.75, 0.75);
+        for (id, title) in orphans {
+            b.ensure_space(20.0);
+            b.text(
+                10,
+                &format!(
+                    "  UNMAPPED: {} — {}",
+                    truncate_ascii(id, 24),
+                    truncate_ascii(title, 60)
+                ),
+            );
+        }
+        b.y -= 8.0;
+    }
 
     b.set_fill_rgb(0.2, 0.75, 0.95);
     b.text(14, "Executive summary");
@@ -1062,6 +1156,13 @@ pub fn build_compliance_framework_pdf(
     }
 
     b.y -= 14.0;
+    if invalid_orphans.is_some() {
+        b.set_fill_rgb(0.85, 0.16, 0.16);
+        b.text(
+            9,
+            "VOID: generated in an inconsistent control-mapping state — not valid for audit or attestation.",
+        );
+    }
     b.set_fill_rgb(0.45, 0.5, 0.58);
     b.text(
         9,
@@ -1332,4 +1433,56 @@ fn escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod watermark_tests {
+    use super::*;
+
+    fn controls() -> Vec<(String, String, bool)> {
+        vec![
+            ("A.5".into(), "Organizational controls".into(), true),
+            ("A.9".into(), "Access control".into(), false),
+        ]
+    }
+
+    #[test]
+    fn valid_report_has_no_watermark() {
+        let pdf =
+            build_compliance_framework_pdf("Acme", "ISO/IEC 27001:2022", 80, &controls(), None)
+                .expect("pdf builds");
+        let body = String::from_utf8_lossy(&pdf);
+        assert!(!body.contains("INVALID - INCONSISTENT STATE"));
+        assert!(!body.contains("REPORT VOID"));
+        assert!(body.starts_with("%PDF-1.4"));
+    }
+
+    #[test]
+    fn invalid_report_is_watermarked_and_voided() {
+        let orphans = vec![("A.9".to_string(), "Access control".to_string())];
+        let pdf = build_compliance_framework_pdf(
+            "Acme",
+            "ISO/IEC 27001:2022",
+            80,
+            &controls(),
+            Some(&orphans),
+        )
+        .expect("pdf builds");
+        let body = String::from_utf8_lossy(&pdf);
+        // Diagonal watermark text present...
+        assert!(body.contains("INVALID - INCONSISTENT STATE"));
+        // ...rendered via a rotated text matrix (Tm), not an axis-aligned Td.
+        assert!(body.contains(" Tm ("));
+        // Prominent in-body void notice + the orphaned control enumerated.
+        assert!(body.contains("REPORT VOID"));
+        assert!(body.contains("UNMAPPED: A.9"));
+    }
+
+    #[test]
+    fn watermark_matrix_encodes_45_degree_rotation() {
+        let ops = PdfBuilder::watermark_ops("VOID");
+        // cos(45)=sin(45)=0.7071; matrix is `c c -c c tx ty` — assert the rotation cells.
+        assert!(ops.contains("0.7071 0.7071 -0.7071 0.7071"));
+        assert!(ops.contains("(VOID) Tj"));
+    }
 }

@@ -139,6 +139,7 @@ async fn process_one(
                     let _ = job_queue::release_reserved_job(
                         pool,
                         job.id,
+                        &wid,
                         &format!("claim rejected: {e}"),
                         backoff,
                     )
@@ -312,7 +313,16 @@ async fn process_one(
             } else if let Err(e) = job_queue::fail_job(pool, &job, &msg, BASE_BACKOFF_SECS).await {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
                 let _ =
-                    job_queue::force_requeue_running(pool, job.id, &format!("fail_job: {e}")).await;
+                    job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
+                        .await;
+            }
+            // Overlay the raw error onto the dead row AFTER the event-sourced DLQ
+            // projection (which stores only the failure class). Runs last so the
+            // human-readable cause survives on `GET /api/jobs/:id` for triage.
+            if exhausted {
+                if let Err(e) = job_queue::annotate_last_error(pool, job.id, &msg).await {
+                    error!(target: "weissman_worker", job_id = %job.id, error = %e, "annotate_last_error failed");
+                }
             }
         }
     }

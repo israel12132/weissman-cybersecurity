@@ -3787,6 +3787,90 @@ async fn api_compliance_control_mappings(
     }
 }
 
+/// GET /api/compliance/control-mappings/coverage — per-framework coverage rollup plus a live
+/// integrity check that every mapped `engine_id` still resolves to a known platform engine.
+/// This is what keeps the "live" mapping honest: if the engine fleet changes underneath the
+/// catalog, orphaned bindings surface here instead of silently degrading a compliance report.
+async fn api_compliance_control_mappings_coverage(
+    State(state): State<Arc<AppState>>,
+    Extension(_auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let framework = q.get("framework").map(|s| s.trim().to_string());
+    let rows = match crate::compliance_engine::load_control_mappings(
+        state.app_pool.as_ref(),
+        framework.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "ok": false, "error": scrub_internal_error(&e) })),
+            )
+                .into_response();
+        }
+    };
+
+    let is_known = weissman_core::models::engine::is_known_engine_id;
+    let coverage = crate::compliance_engine::summarize_control_coverage(&rows, is_known);
+    // Non-blocking data-quality diagnostic: mapping rows pointing at engines the registry no
+    // longer knows. Stale references never void an artifact — see the enforcement gate below.
+    let stale_engine_refs = crate::compliance_engine::find_stale_engine_references(&rows, is_known);
+
+    // The real consistency verdict: compliance requirements a report would assert on that have no
+    // covering row in the live catalog. Reconciled per framework against its canonical control set,
+    // and only for frameworks already onboarded to live mapping (>=1 row).
+    let mut orphaned_controls: Vec<Value> = Vec::new();
+    for cov in &coverage {
+        let Some(slug) = crate::compliance_engine::framework_slug_for_db(&cov.framework) else {
+            continue;
+        };
+        let expected: Vec<(String, String)> = static_framework_controls(slug)
+            .into_iter()
+            .map(|(id, title)| (id.to_string(), title.to_string()))
+            .collect();
+        if expected.is_empty() {
+            continue;
+        }
+        let mapping_ids: Vec<String> = rows
+            .iter()
+            .filter(|m| m.framework == cov.framework)
+            .map(|m| m.control_id.clone())
+            .collect();
+        for o in crate::compliance_engine::find_orphaned_controls(&expected, &mapping_ids) {
+            orphaned_controls.push(json!({
+                "framework": cov.framework,
+                "control_id": o.control_id,
+                "control_title": o.control_title,
+            }));
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "coverage": coverage,
+            "integrity": {
+                // Consistency is a control-side verdict only.
+                "consistent": orphaned_controls.is_empty(),
+                "orphaned_controls": orphaned_controls,
+                "orphaned_control_count": orphaned_controls.len(),
+            },
+            "diagnostics": {
+                // Engine-side signal, explicitly non-blocking.
+                "stale_engine_references": stale_engine_refs,
+                "stale_engine_reference_count": stale_engine_refs.len(),
+            },
+            "total_mappings": rows.len(),
+            "source": "compliance_control_mappings",
+        })),
+    )
+        .into_response()
+}
+
 /// GET /api/compliance/evidence-pack/:client_id — live findings → auditor evidence pack.
 async fn api_compliance_evidence_pack(
     State(state): State<Arc<AppState>>,
@@ -3796,6 +3880,36 @@ async fn api_compliance_evidence_pack(
 ) -> Response {
     let tid = auth.tenant_id;
     let framework_filter = q.get("framework").map(|s| s.trim().to_string());
+
+    // --- Live control-mapping enforcement gate (orphaned controls only) ---
+    // The pack is cross-framework, so its validity depends on the whole live-mapping catalog being
+    // consistent: any onboarded framework with orphaned controls voids the pack.
+    let orphaned_controls = match compliance_orphaned_controls_across(&state, COMPLIANCE_UI_SLUGS).await
+    {
+        Ok(o) => o,
+        Err(resp) => return resp,
+    };
+    let orphaned_control_count = orphaned_controls.len();
+    let consistent = orphaned_control_count == 0;
+    let acknowledged = q
+        .get("acknowledge_inconsistent")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    if !consistent && !acknowledged {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok": false,
+                "reason": "inconsistent_control_mappings",
+                "detail": "Evidence pack blocked: compliance requirements have no live control mapping.",
+                "orphaned_controls": orphaned_controls,
+                "orphaned_control_count": orphaned_control_count,
+                "hint": "Re-request with acknowledge_inconsistent=true for a VOID-marked pack for internal triage.",
+            })),
+        )
+            .into_response();
+    }
+
     let rows: Vec<(String, String, String, Value)> = match sqlx::query_as(
         r#"SELECT COALESCE(title,''), COALESCE(severity,'info'), COALESCE(source,''),
                   COALESCE(raw_data, '{}'::jsonb)
@@ -3926,8 +4040,18 @@ async fn api_compliance_evidence_pack(
                     .map(|s| s.trim().len() >= 32)
                     .unwrap_or(false),
         },
+        "integrity": {
+            // Control-mapping consistency is part of the signed, persisted pack: a VOID pack keeps
+            // its mark through the sha256 and the snapshot row.
+            "consistent": consistent,
+            "voided": !consistent,
+            "watermark": if consistent { Value::Null } else { json!("INVALID - INCONSISTENT CONTROL-MAPPING STATE") },
+            "orphaned_controls": orphaned_controls,
+            "orphaned_control_count": orphaned_control_count,
+        },
         "generated_at": chrono::Utc::now().to_rfc3339(),
-        "audit_ready": !rows.is_empty()
+        "audit_ready": consistent
+            && !rows.is_empty()
             && rows.iter().all(|(_, sev, _, _)| sev != "critical")
             && audit_chain_intact,
     });

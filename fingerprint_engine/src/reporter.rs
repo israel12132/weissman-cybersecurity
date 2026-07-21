@@ -109,7 +109,13 @@ fn truncate_for_llm(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else {
-        format!("{}… [truncated {} chars]", &s[..max], s.len() - max)
+        // Round down to a char boundary — slicing mid-codepoint panics, which would
+        // otherwise drop the report for an otherwise-confirmed finding.
+        let mut end = max;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}… [truncated {} chars]", &s[..end], s.len() - end)
     }
 }
 

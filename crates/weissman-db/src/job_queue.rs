@@ -39,6 +39,60 @@ pub async fn enqueue(
     Ok(id)
 }
 
+/// Enqueue a job that is NOT yet claimable: it is inserted `pending` but with a
+/// future `run_after`, and `reserve_next`/`claim_next` skip rows whose
+/// `run_after` is in the future. The caller must finalize it with
+/// [`release_hold`] once any post-insert setup is durable (e.g. attaching the
+/// zero-trust signed envelope to the payload). This closes the race where a
+/// worker could claim a `pending` job in the window between the row insert and
+/// a follow-up envelope UPDATE, find no envelope, and permanently dead-letter
+/// it ("missing signed envelope — zero-trust claim rejected").
+pub async fn enqueue_held(
+    pool: &PgPool,
+    tenant_id: i64,
+    kind: &str,
+    payload: Value,
+    trace_id: Option<&str>,
+    hold_secs: i64,
+) -> Result<Uuid, sqlx::Error> {
+    let hold = hold_secs.clamp(1, 300);
+    let id: Uuid = sqlx::query_scalar(
+        r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id, run_after)
+           VALUES ($1, $2, $3, 'pending', $4, now() + ($5::bigint * interval '1 second'))
+           RETURNING id"#,
+    )
+    .bind(tenant_id)
+    .bind(kind)
+    .bind(Json(payload))
+    .bind(trace_id)
+    .bind(hold)
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Finalize a [`enqueue_held`] job: replace its payload (now carrying the signed
+/// envelope) and clear `run_after` so it becomes immediately claimable — in one
+/// atomic UPDATE, so a worker never observes a claimable job without its
+/// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
+/// late finalize cannot resurrect a job that was already failed.
+pub async fn release_hold(
+    pool: &PgPool,
+    job_id: Uuid,
+    payload: Value,
+) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET payload = $2, run_after = NULL, updated_at = now()
+            WHERE id = $1 AND status = 'pending' AND run_after IS NOT NULL"#,
+    )
+    .bind(job_id)
+    .bind(Json(payload))
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 /// Enqueue with a custom retry cap (e.g. `auto_heal` must not re-run after secrets are cleared).
 pub async fn enqueue_with_max_attempts(
     pool: &PgPool,
@@ -481,24 +535,51 @@ pub async fn dead_letter_job(pool: &PgPool, job_id: Uuid, err: &str) -> Result<(
     Ok(())
 }
 
+/// Annotate `last_error` on a job row WITHOUT touching `status`. The event-sourced
+/// DLQ projection records only the failure *class* (e.g. `execution_failure`) in
+/// `last_error`; this overlays the raw error message so a dead job is
+/// self-explanatory when inspected via `GET /api/jobs/:id` (the worker log is
+/// unreliable — buffered and truncated when the process is killed).
+pub async fn annotate_last_error(
+    pool: &PgPool,
+    job_id: Uuid,
+    err: &str,
+) -> Result<(), sqlx::Error> {
+    let msg: String = err.chars().take(4000).collect();
+    sqlx::query(
+        r#"UPDATE weissman_async_jobs SET last_error = $2, updated_at = now() WHERE id = $1"#,
+    )
+    .bind(job_id)
+    .bind(&msg)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// When zero-trust claim fails after [`reserve_next`], clear the reservation and backoff
 /// so workers do not hot-loop the same row (lease storm / stack overflow).
 pub async fn release_reserved_job(
     pool: &PgPool,
     job_id: Uuid,
+    worker_id: &str,
     note: &str,
     backoff_secs: i64,
 ) -> Result<u64, sqlx::Error> {
     let msg: String = note.chars().take(4000).collect();
     let backoff = backoff_secs.clamp(1, 300);
+    // Ownership predicate: only requeue the row if THIS worker still owns it. Under
+    // sustained saturation a lapsed reservation can be re-reserved (or claimed) by
+    // another worker; without `worker_id = $4` this release would clobber that
+    // worker's freshly-`running` job back to `pending`, discarding its result.
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
-           WHERE id = $1 AND status IN ('pending', 'running')"#,
+           WHERE id = $1 AND worker_id = $4 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)
     .bind(&msg)
     .bind(backoff)
+    .bind(worker_id)
     .execute(pool)
     .await?;
     Ok(r.rows_affected())
@@ -509,16 +590,20 @@ pub async fn release_reserved_job(
 pub async fn force_requeue_running(
     pool: &PgPool,
     job_id: Uuid,
+    worker_id: &str,
     note: &str,
 ) -> Result<u64, sqlx::Error> {
     let msg: String = note.chars().take(4000).collect();
+    // Ownership predicate: only requeue a row THIS worker still owns, so a transient
+    // cleanup on one worker cannot reset a job another worker is actively running.
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now(), updated_at = now()
-           WHERE id = $1 AND status IN ('pending', 'running')"#,
+           WHERE id = $1 AND worker_id = $3 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)
     .bind(&msg)
+    .bind(worker_id)
     .execute(pool)
     .await?;
     Ok(r.rows_affected())

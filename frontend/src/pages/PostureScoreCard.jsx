@@ -1,9 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Gauge, AlertTriangle } from 'lucide-react'
+import { Gauge, AlertTriangle, FileText } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import Button from '../components/ui/Button'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf } from '../lib/pageExport'
+
+/** CSV/PDF columns for the posture score card. Exported for tests. */
+export const POSTURE_CSV_HEADER = ['metric', 'value']
+
+/** Pure: posture (score + sub_scores + drivers) → metric/value export rows. Exported for tests. */
+export function postureRows(posture) {
+  const p = posture && typeof posture === 'object' ? posture : null
+  if (!p) return []
+  const rows = [
+    ['score', p.score ?? ''],
+    ['grade', p.grade ?? ''],
+  ]
+  const sub = p.sub_scores && typeof p.sub_scores === 'object' ? p.sub_scores : {}
+  for (const [k, v] of Object.entries(sub)) rows.push([k, v ?? ''])
+  const drivers = Array.isArray(p.drivers) ? p.drivers : []
+  drivers.forEach((d, i) => rows.push([`driver_${i + 1}`, d ?? '']))
+  return rows
+}
 
 /**
  * PostureScoreCard — board-level security posture at a glance.
@@ -103,13 +125,50 @@ export default function PostureScoreCard() {
 
   useEffect(() => { load(clientId) }, [clientId, load])
 
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(POSTURE_CSV_HEADER, postureRows(data), 'weissman-posture-score'),
+    [data],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman Security Posture', POSTURE_CSV_HEADER, postureRows(data), 'weissman-posture-score'),
+    [data],
+  )
+
   if (clientId == null) return null
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-white/10 flex items-center gap-2">
-        <Gauge className="w-4 h-4 text-cyan-400" />
-        <h3 className="text-sm font-semibold text-white">{t('pages.remediationHub.posture_heading', { defaultValue: 'Security Posture' })}</h3>
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live posture from GET /api/posture/score/:clientId — score, sub-scores and drivers computed
+          server-side from the tenant-scoped fix-first program. No fabricated metrics.
+        </EvidenceNotice>
+      </div>
+      <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <Gauge className="w-4 h-4 text-cyan-400" />
+          {t('pages.remediationHub.posture_heading', { defaultValue: 'Security Posture' })}
+        </h3>
+        <div className="flex items-center gap-3">
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!data}
+          />
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={exportPdf}
+            disabled={!data}
+            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf', { defaultValue: 'PDF' })}
+          </Button>
+        </div>
       </div>
 
       {error ? (

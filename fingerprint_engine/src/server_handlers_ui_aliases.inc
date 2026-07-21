@@ -323,6 +323,71 @@ fn merge_control_statuses(
         .collect()
 }
 
+/// UI framework slugs that carry a canonical control set (see `static_framework_controls`). These
+/// are the frameworks a compliance artifact can be reconciled against for orphaned controls.
+const COMPLIANCE_UI_SLUGS: &[&str] = &[
+    "iso27001", "soc2", "nis2", "gdpr", "iec62443", "pci", "csa-ccm", "cis", "nist", "hipaa",
+    "fedramp",
+];
+
+/// Orphaned controls for one framework slug: canonical requirements with no covering row in the
+/// live control-mapping catalog. Returns a 503 `Response` if the catalog cannot be loaded (fail
+/// closed on the artifact rather than assert an unverifiable clean state). An unsupported or
+/// not-yet-onboarded framework yields an empty list.
+async fn compliance_orphaned_controls(
+    state: &Arc<AppState>,
+    framework_slug: &str,
+) -> Result<Vec<crate::compliance_engine::OrphanedControl>, Response> {
+    let expected: Vec<(String, String)> = static_framework_controls(framework_slug)
+        .into_iter()
+        .map(|(id, title)| (id.to_string(), title.to_string()))
+        .collect();
+    if expected.is_empty() {
+        return Ok(Vec::new());
+    }
+    let db_fw = crate::compliance_engine::normalize_framework_slug(framework_slug)
+        .unwrap_or_else(|| framework_slug.to_uppercase());
+    let mapping_ids: Vec<String> = match crate::compliance_engine::load_control_mappings(
+        state.app_pool.as_ref(),
+        Some(&db_fw),
+    )
+    .await
+    {
+        Ok(m) => m.into_iter().map(|r| r.control_id).collect(),
+        Err(_) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "ok": false, "detail": "Control-mapping catalog unavailable" })),
+            )
+                .into_response());
+        }
+    };
+    Ok(crate::compliance_engine::find_orphaned_controls(
+        &expected,
+        &mapping_ids,
+    ))
+}
+
+/// Aggregate orphaned controls across several framework slugs, tagged with the owning framework.
+/// Used to gate the cross-framework evidence pack: its validity depends on the whole live-mapping
+/// catalog being consistent, so any onboarded framework with gaps voids the pack.
+async fn compliance_orphaned_controls_across(
+    state: &Arc<AppState>,
+    slugs: &[&str],
+) -> Result<Vec<Value>, Response> {
+    let mut out: Vec<Value> = Vec::new();
+    for slug in slugs {
+        for o in compliance_orphaned_controls(state, slug).await? {
+            out.push(json!({
+                "framework": slug,
+                "control_id": o.control_id,
+                "control_title": o.control_title,
+            }));
+        }
+    }
+    Ok(out)
+}
+
 /// GET /api/compliance/frameworks — UI expects a list of supported frameworks. Map from posture.
 async fn api_compliance_frameworks_list(
     State(state): State<Arc<AppState>>,
@@ -399,10 +464,15 @@ async fn api_compliance_frameworks_controls(
 }
 
 /// GET /api/compliance/frameworks/:framework_id/report — PDF audit report (application/pdf).
+///
+/// Enforcement: a report is refused (409) when the framework has orphaned controls — compliance
+/// requirements with no live control mapping. `?acknowledge_inconsistent=true` downgrades the
+/// refusal to a watermarked (VOID) copy for internal triage.
 async fn api_compliance_frameworks_report(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(framework_id): Path<String>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
     if !framework_slug_known(&framework_id) {
         return (
@@ -428,6 +498,41 @@ async fn api_compliance_frameworks_report(
         )
             .into_response();
     }
+
+    // --- Live control-mapping enforcement gate (orphaned controls only) ---
+    let orphaned = match compliance_orphaned_controls(&state, &framework_id).await {
+        Ok(o) => o,
+        Err(resp) => return resp,
+    };
+    let acknowledged = q
+        .get("acknowledge_inconsistent")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    let invalid_orphans: Option<Vec<(String, String)>> =
+        match crate::compliance_engine::report_gate(&orphaned, acknowledged) {
+            crate::compliance_engine::ReportGate::Allow => None,
+            crate::compliance_engine::ReportGate::Block => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "ok": false,
+                        "reason": "inconsistent_control_mappings",
+                        "detail": "Report generation blocked: compliance requirements have no live control mapping.",
+                        "orphaned_controls": orphaned,
+                        "orphaned_control_count": orphaned.len(),
+                        "hint": "Re-request with acknowledge_inconsistent=true for a watermarked (VOID) copy for internal triage.",
+                    })),
+                )
+                    .into_response();
+            }
+            crate::compliance_engine::ReportGate::Watermark => Some(
+                orphaned
+                    .iter()
+                    .map(|o| (o.control_id.clone(), o.control_title.clone()))
+                    .collect(),
+            ),
+        };
+
     let compliant = rows.iter().filter(|r| r.status == "compliant").count();
     let compliance_pct = if rows.is_empty() {
         100u8
@@ -450,6 +555,7 @@ async fn api_compliance_frameworks_report(
         framework_label,
         compliance_pct,
         &pdf_controls,
+        invalid_orphans.as_deref(),
     ) {
         Ok(b) => b,
         Err(e) => {
@@ -464,7 +570,11 @@ async fn api_compliance_frameworks_report(
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
-    let filename = format!("{safe_id}-compliance-report.pdf");
+    let filename = if invalid_orphans.is_some() {
+        format!("{safe_id}-compliance-report-VOID.pdf")
+    } else {
+        format!("{safe_id}-compliance-report.pdf")
+    };
     let mut res = Response::new(Body::from(pdf));
     res.headers_mut().insert(
         CONTENT_TYPE,

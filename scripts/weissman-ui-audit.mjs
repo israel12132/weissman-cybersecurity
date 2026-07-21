@@ -37,7 +37,16 @@ const EVIDENCE_ONLY_ROUTE_PREFIXES = [
 ]
 
 const EMBEDDED_PANELS = new Set(['KubernetesSecurityPanel.jsx'])
-const KPI_DASHBOARDS = new Set(['Billing.jsx', 'MetricsDashboard.jsx'])
+// KPI / single-value / fixed-bucket dashboards: they render a computed score or a small
+// set of fixed buckets, not a list of records, so a free-text search box would be
+// affordance theater. They are still required to cite evidence and expose refresh+export.
+const KPI_DASHBOARDS = new Set([
+  'Billing.jsx',
+  'MetricsDashboard.jsx',
+  'PostureScoreCard.jsx', // board-level posture score + sub-scores; no record list
+  'SlaForecastStrip.jsx', // five fixed SLA horizons; no record list
+  'BacklogAgingPanel.jsx', // fixed age buckets; no record list
+])
 const PREMIUM_TABLE = new Set(['FindingsCommandCenter.jsx'])
 
 const FORENSIC_MARKERS = [
@@ -188,7 +197,13 @@ function extractTacticalRoutes(tacticalSrc, lazyMap) {
 }
 
 async function main() {
-  const pageFiles = (await readdir(PAGES_DIR)).filter((f) => f.endsWith('.jsx') && f !== 'PageShell.jsx')
+  const pageFiles = (await readdir(PAGES_DIR)).filter(
+    (f) =>
+      f.endsWith('.jsx') &&
+      !f.endsWith('.test.jsx') &&
+      !f.endsWith('.spec.jsx') &&
+      f !== 'PageShell.jsx',
+  )
   const pageResults = []
   for (const file of pageFiles) {
     const src = await readFile(join(PAGES_DIR, file), 'utf8')
