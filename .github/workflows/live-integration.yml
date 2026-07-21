@@ -17,10 +17,18 @@ jobs:
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
-    # Backstop: the whole live suite (build + Docker + audit + Playwright + E2E
-    # contracts) completes well within this on a healthy runner; without it, a single
-    # stalled live step could otherwise hold the runner until the 6-hour default cap.
-    timeout-minutes: 90
+    # Backstop against a single stalled live step holding the runner until the
+    # 6-hour default cap. Sized to the real cold-runner workload, not a healthy
+    # best case: this one job compiles the Rust workspace host-side for the
+    # health-check + workspace tests (~20 min), then the Docker build recompiles
+    # the whole workspace release-mode across three images with no warm cache
+    # (~35 min), and only then runs Trivy + the full live-E2E contract suite +
+    # Playwright browser install and specs. Observed cold end-to-end lands around
+    # ~100 min, so 90 clipped the suite mid-contract (a false "timeout" that is
+    # really just an under-sized budget, not a stuck step). 150 leaves headroom
+    # while still tripping long before the 6-hour cap. (Per-step timeouts below
+    # remain the real guard against an individually hung step.)
+    timeout-minutes: 150
     services:
       postgres:
         image: pgvector/pgvector:pg16
