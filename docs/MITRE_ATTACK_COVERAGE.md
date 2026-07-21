@@ -13,8 +13,12 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 
 ## Headline
 
-- **192 distinct ATT&CK techniques** covered by
-  **563 mapped engines** (85 of them sub-techniques).
+- **226 distinct ATT&CK techniques** covered by
+  **563 mapped engines** (101 of them sub-techniques).
+- That is **192 primary** engine mappings plus **34
+  code-grounded secondary** techniques — the extra ATT&CK T-codes each engine's own implementation
+  tags on the findings it emits (`mitre: "Txxxx"` / kill-chain `mitre_path`). Secondary techniques
+  are extracted from source, not asserted: if the code doesn't perform it, it isn't counted.
 - Spans **Enterprise, Mobile, ICS** ATT&CK — every technique validated against the current
   release, **0 stale / 0 invented**.
 - Coverage is broad *and* current: mappings track the latest ATT&CK, not a frozen snapshot.
@@ -24,25 +28,25 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 *"Techniques covered" counts distinct ATT&CK techniques the catalog maps within that tactic;
 "% of tactic" is against the total techniques MITRE lists for that tactic in the current release.*
 
-### Enterprise ATT&CK — 171 techniques, 15/15 tactics
+### Enterprise ATT&CK — 198 techniques, 15/15 tactics
 
 | Tactic | Techniques covered | % of tactic | Engines |
 |--------|-------------------:|------------:|--------:|
-| Reconnaissance | 18 / 46 | 39% | 44 |
-| Resource Development | 11 / 50 | 22% | 23 |
-| Initial Access | 18 / 22 | 82% | 120 |
-| Execution | 9 / 64 | 14% | 44 |
-| Persistence | 14 / 113 | 12% | 32 |
-| Privilege Escalation | 13 / 96 | 14% | 30 |
-| Stealth | 23 / 148 | 16% | 48 |
-| Defense Impairment | 10 / 56 | 18% | 42 |
-| Credential Access | 26 / 67 | 39% | 73 |
-| Discovery | 12 / 49 | 24% | 21 |
-| Lateral Movement | 10 / 23 | 43% | 27 |
-| Collection | 12 / 41 | 29% | 47 |
-| Command and Control | 12 / 45 | 27% | 17 |
-| Exfiltration | 7 / 19 | 37% | 20 |
-| Impact | 11 / 33 | 33% | 31 |
+| Reconnaissance | 21 / 46 | 46% | 69 |
+| Resource Development | 15 / 50 | 30% | 33 |
+| Initial Access | 19 / 22 | 86% | 163 |
+| Execution | 15 / 64 | 23% | 59 |
+| Persistence | 15 / 113 | 13% | 53 |
+| Privilege Escalation | 14 / 96 | 15% | 52 |
+| Stealth | 26 / 148 | 18% | 68 |
+| Defense Impairment | 10 / 56 | 18% | 51 |
+| Credential Access | 28 / 67 | 42% | 93 |
+| Discovery | 16 / 49 | 33% | 31 |
+| Lateral Movement | 12 / 23 | 52% | 31 |
+| Collection | 15 / 41 | 37% | 58 |
+| Command and Control | 12 / 45 | 27% | 30 |
+| Exfiltration | 7 / 19 | 37% | 21 |
+| Impact | 12 / 33 | 36% | 38 |
 
 ### Mobile ATT&CK — 9 techniques, 7/12 tactics
 
@@ -51,7 +55,7 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 | Initial Access | 2 / 11 | 18% | 2 |
 | Execution | 0 / 5 | 0% | 0 |
 | Persistence | 0 / 10 | 0% | 0 |
-| Privilege Escalation | 1 / 5 | 20% | 2 |
+| Privilege Escalation | 1 / 5 | 20% | 3 |
 | Defense Evasion | 2 / 33 | 6% | 3 |
 | Credential Access | 1 / 10 | 10% | 5 |
 | Discovery | 1 / 13 | 8% | 2 |
@@ -61,21 +65,21 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 | Exfiltration | 0 / 3 | 0% | 0 |
 | Impact | 0 / 11 | 0% | 0 |
 
-### ICS ATT&CK — 12 techniques, 9/12 tactics
+### ICS ATT&CK — 19 techniques, 10/12 tactics
 
 | Tactic | Techniques covered | % of tactic | Engines |
 |--------|-------------------:|------------:|--------:|
-| Initial Access | 3 / 12 | 25% | 4 |
+| Initial Access | 5 / 12 | 42% | 8 |
 | Execution | 1 / 10 | 10% | 1 |
 | Persistence | 1 / 10 | 10% | 1 |
 | Privilege Escalation | 0 / 2 | 0% | 0 |
-| Evasion | 2 / 9 | 22% | 9 |
-| Discovery | 0 / 8 | 0% | 0 |
-| Lateral Movement | 1 / 11 | 9% | 1 |
-| Collection | 1 / 11 | 9% | 1 |
+| Evasion | 2 / 9 | 22% | 13 |
+| Discovery | 2 / 8 | 25% | 2 |
+| Lateral Movement | 2 / 11 | 18% | 13 |
+| Collection | 2 / 11 | 18% | 2 |
 | Command and Control | 0 / 3 | 0% | 0 |
-| Inhibit Response Function | 1 / 20 | 5% | 1 |
-| Impair Process Control | 3 / 8 | 38% | 19 |
+| Inhibit Response Function | 2 / 20 | 10% | 4 |
+| Impair Process Control | 3 / 8 | 38% | 23 |
 | Impact | 2 / 12 | 17% | 4 |
 
 ## Why this is the bar
