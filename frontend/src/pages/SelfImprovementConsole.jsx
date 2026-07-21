@@ -54,7 +54,7 @@ const CATEGORY_COLOR = {
   wiring: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
   sync: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30',
   gap: 'text-rose-300 bg-rose-500/10 border-rose-500/30',
-  cleanliness: 'text-text-secondary bg-slate-500/10 border-slate-500/30',
+  cleanliness: 'text-text-secondary bg-bg-3 border-border-strong',
 }
 
 const LEVEL_COLOR = {

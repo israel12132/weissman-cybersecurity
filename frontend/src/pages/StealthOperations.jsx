@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FileText, Search } from 'lucide-react'
 import { apiFetch } from '../lib/apiBase'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
@@ -23,15 +24,15 @@ function loadColor(ratio) {
   if (ratio >= 0.85) return 'bg-rose-500'
   if (ratio >= 0.6) return 'bg-amber-500'
   if (ratio > 0) return 'bg-emerald-500'
-  return 'bg-slate-600'
+  return 'bg-text-muted'
 }
 
 function Stat({ label, value, sub }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-slate-900/40 px-3 py-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+    <div className="rounded-lg border border-white/10 bg-bg-2 px-3 py-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-text-muted">{label}</div>
       <div className="text-xl font-semibold text-white tabular-nums font-mono">{value}</div>
-      {sub && <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -46,7 +47,7 @@ function LoadBar({ inFlight, capacity }) {
       <div className="h-2 flex-1 rounded-full bg-white/10 overflow-hidden">
         <div className={`h-full ${loadColor(ratio)} transition-all`} style={{ width: `${ratio * 100}%` }} />
       </div>
-      <span className="text-[11px] font-mono text-slate-300 tabular-nums w-12 text-right">
+      <span className="text-[11px] font-mono text-text-secondary tabular-nums w-12 text-right">
         {cur}/{cap}
       </span>
     </div>
@@ -171,48 +172,51 @@ export default function StealthOperations() {
   )
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 text-slate-200">
+    <div className="mx-auto max-w-6xl px-4 py-6 text-text-secondary">
       <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white flex items-center gap-2">
             <span aria-hidden>🛡️</span> {t('stealthOps.title')}
           </h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">{t('stealthOps.subtitle')}</p>
+          <p className="text-sm text-text-tertiary mt-1 max-w-2xl">{t('stealthOps.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="unstyled"
             onClick={() => setLive((v) => !v)}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
               live
                 ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                : 'border-white/15 bg-slate-900/60 text-slate-400'
+                : 'border-white/15 bg-bg-2 text-text-tertiary'
             }`}
           >
-            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${live ? 'bg-emerald-400 animate-pulse' : 'bg-text-muted'}`} />
             {live ? t('stealthOps.live') : t('stealthOps.paused')}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
             onClick={load}
-            className="rounded-lg border border-white/15 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800/60"
+            className="rounded-lg border border-white/15 bg-bg-2 px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-bg-3"
           >
             {t('stealthOps.refresh')}
-          </button>
+          </Button>
           <ShellScanActions
             onRefresh={handleRefresh}
             onExport={exportCsv}
             refreshLoading={loading}
             exportDisabled={!filteredHosts.length}
           />
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={exportPdf}
             disabled={!filteredHosts.length}
             title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/15 text-slate-300 hover:bg-white/10 disabled:opacity-40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/15 text-text-secondary hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
             {t('common.export_pdf', { defaultValue: 'PDF' })}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -228,7 +232,7 @@ export default function StealthOperations() {
       )}
 
       {loading && !data && (
-        <div className="rounded-xl border border-dashed border-white/10 bg-slate-900/20 px-6 py-12 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-white/10 bg-bg-2 px-6 py-12 text-center text-sm text-text-muted">
           {t('stealthOps.loading')}
         </div>
       )}
@@ -262,7 +266,7 @@ export default function StealthOperations() {
           </div>
 
           <div className="mb-5">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+            <div className="text-[11px] uppercase tracking-wider text-text-muted mb-1">
               {t('stealthOps.globalSaturation')}
             </div>
             <LoadBar inFlight={l.global_in_flight} capacity={cfg.global_capacity} />
@@ -270,15 +274,15 @@ export default function StealthOperations() {
 
           <div className="grid gap-5 md:grid-cols-2">
             {/* ── Config ── */}
-            <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
+            <section className="rounded-xl border border-white/10 bg-bg-2 p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary mb-3">
                 {t('stealthOps.effectiveConfig')}
               </h2>
               {/* Protection floor — env-only, read-only. */}
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+              <div className="text-[11px] uppercase tracking-wider text-text-muted mb-1">
                 {t('stealthOps.concurrencyCaps')}
               </div>
-              <p className="text-xs text-slate-500 mb-2">{t('stealthOps.capsNote')}</p>
+              <p className="text-xs text-text-muted mb-2">{t('stealthOps.capsNote')}</p>
               <dl className="space-y-2 mb-4">
                 {[
                   [t('stealthOps.perTarget'), cfg.per_target, cfg.env_keys.per_target],
@@ -286,10 +290,10 @@ export default function StealthOperations() {
                 ].map(([k, v, env]) => (
                   <div key={k} className="flex items-baseline justify-between gap-3 border-b border-white/5 pb-2 last:border-0">
                     <div className="min-w-0">
-                      <div className="text-sm text-slate-200">{k}</div>
-                      <div className="text-[10px] font-mono text-slate-600 truncate">{env}</div>
+                      <div className="text-sm text-text-secondary">{k}</div>
+                      <div className="text-[10px] font-mono text-text-muted truncate">{env}</div>
                     </div>
-                    <span className="text-lg font-mono font-semibold text-slate-300 tabular-nums shrink-0">
+                    <span className="text-lg font-mono font-semibold text-text-secondary tabular-nums shrink-0">
                       {v}
                     </span>
                   </div>
@@ -297,10 +301,10 @@ export default function StealthOperations() {
               </dl>
 
               {/* Pacing — live-tunable within the enforced envelope (operator+). */}
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+              <div className="text-[11px] uppercase tracking-wider text-text-muted mb-1">
                 {t('stealthOps.pacingTitle')}
               </div>
-              <p className="text-xs text-slate-500 mb-3">{t('stealthOps.pacingNote')}</p>
+              <p className="text-xs text-text-muted mb-3">{t('stealthOps.pacingNote')}</p>
               <div className="space-y-2">
                 {pacing &&
                   [
@@ -309,7 +313,7 @@ export default function StealthOperations() {
                     [t('stealthOps.minInterval'), 'min_interval_ms'],
                   ].map(([k, key]) => (
                     <label key={key} htmlFor={`pacing-${key}`} className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-slate-200">{k}</span>
+                      <span className="text-sm text-text-secondary">{k}</span>
                       <input
                         id={`pacing-${key}`}
                         type="number"
@@ -318,19 +322,20 @@ export default function StealthOperations() {
                         aria-label={k}
                         value={pacing[key]}
                         onChange={setP(key)}
-                        className="w-28 rounded-md border border-white/10 bg-slate-950/60 px-2 py-1 text-right text-sm font-mono text-cyan-300 tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                        className="w-28 rounded-md border border-white/10 bg-bg-1 px-2 py-1 text-right text-sm font-mono text-cyan-300 tabular-nums focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                       />
                     </label>
                   ))}
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <button
+                <Button
+                  variant="unstyled"
                   onClick={savePacing}
                   disabled={!pacingDirty || saving}
                   className="rounded-lg bg-cyan-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {saving ? t('stealthOps.applying') : t('stealthOps.applyPacing')}
-                </button>
+                </Button>
                 {saveMsg && (
                   <span
                     className={`text-xs font-mono ${saveMsg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}
@@ -342,18 +347,18 @@ export default function StealthOperations() {
             </section>
 
             {/* ── Rotating identity ── */}
-            <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">
+            <section className="rounded-xl border border-white/10 bg-bg-2 p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary mb-3">
                 {t('stealthOps.rotatingIdentity')}
               </h2>
-              <p className="text-xs text-slate-500 mb-3">{t('stealthOps.identityNote')}</p>
+              <p className="text-xs text-text-muted mb-3">{t('stealthOps.identityNote')}</p>
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <Stat label={t('stealthOps.userAgents')} value={id.user_agent_pool} />
                 <Stat label={t('stealthOps.acceptLang')} value={id.accept_language_pool} />
                 <Stat label={t('stealthOps.platforms')} value={id.platform_pool} />
               </div>
               <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                <div className="text-[10px] uppercase tracking-wider text-text-muted">
                   {t('stealthOps.identitiesDispensed')}
                 </div>
                 <div className="text-lg font-mono font-semibold text-white tabular-nums">
@@ -364,41 +369,41 @@ export default function StealthOperations() {
           </div>
 
           {/* ── Active hosts ── */}
-          <section className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mt-5">
+          <section className="rounded-xl border border-white/10 bg-bg-2 p-4 mt-5">
             <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-text-tertiary">
                 {t('stealthOps.activeTargets')}
               </h2>
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <Search className="w-3 h-3 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Search className="w-3 h-3 text-text-muted absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('common.search', { defaultValue: 'Search host' })}
                     aria-label={t('common.search', { defaultValue: 'Search host' })}
-                    className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-slate-950/60 border border-white/10 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                    className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-bg-1 border border-white/10 text-text-secondary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                   />
                 </div>
-                <span className="text-xs font-mono text-slate-500">
+                <span className="text-xs font-mono text-text-muted">
                   {t('stealthOps.showing', { n: filteredHosts.length })}
                 </span>
               </div>
             </div>
             {activeHosts.length === 0 ? (
-              <div className="text-sm text-slate-500 py-6 text-center">
+              <div className="text-sm text-text-muted py-6 text-center">
                 {t('stealthOps.noRequests')}
               </div>
             ) : filteredHosts.length === 0 ? (
-              <div className="text-sm text-slate-500 py-6 text-center">
+              <div className="text-sm text-text-muted py-6 text-center">
                 {t('stealthOps.noMatch', { defaultValue: 'No active hosts match your search.' })}
               </div>
             ) : (
               <ul className="space-y-2">
                 {filteredHosts.map((h) => (
                   <li key={h.host} className="flex items-center gap-3">
-                    <span className="text-sm font-mono text-slate-200 truncate w-56 shrink-0" title={h.host}>
+                    <span className="text-sm font-mono text-text-secondary truncate w-56 shrink-0" title={h.host}>
                       {h.host}
                     </span>
                     <span className="flex-1">

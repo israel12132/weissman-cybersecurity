@@ -5,6 +5,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
+import Button from '../components/ui/Button'
 import { SkeletonCard } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import { confirmDialog } from '../utils/confirmDialog'
@@ -233,14 +234,15 @@ export default function ClientDetail() {
           <Link to={`/findings?client_id=${client.id}`} className={navBtnClass}>
             {t('client_detail.view_findings')}
           </Link>
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={launchScan}
             disabled={launchingScan}
             className="px-4 py-2 rounded-xl text-[11px] font-mono border border-violet-500/35 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
           >
             {launchingScan ? t('client_detail.launching') : t('client_detail.launch_scan')}
-          </button>
+          </Button>
         </PremiumPageHeader>
 
         <div className="flex flex-wrap gap-2">
