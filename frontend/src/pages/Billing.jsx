@@ -16,7 +16,7 @@ import StatCard from '../components/ui/StatCard'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 const PLAN_TIERS = ['starter', 'professional', 'enterprise']
@@ -92,11 +92,7 @@ export default function Billing() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/billing/usage')
-      const body = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        throw new Error(body.detail || `HTTP ${r.status}`)
-      }
+      const body = await apiFetch('/api/billing/usage')
       if (body.ok === false) {
         throw new Error(body.detail || t('pages.billing.load_failed'))
       }
@@ -130,21 +126,23 @@ export default function Billing() {
     setCheckoutLoading(true)
     setCheckoutError(null)
     try {
-      const r = await apiFetch('/api/billing/checkout-session', {
+      const body = await apiFetch('/api/billing/checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_slug: upgradeSlug }),
+        body: { plan_slug: upgradeSlug },
       })
-      const body = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        throw new Error(body.detail || body.hint || `HTTP ${r.status}`)
-      }
       if (!body.checkout_url) {
         throw new Error(t('pages.billing.checkout_url_missing'))
       }
       window.location.assign(body.checkout_url)
     } catch (err) {
-      setCheckoutError(err.message || t('pages.billing.checkout_failed'))
+      // Preserve the server's actionable `hint` when present (utils error.message
+      // only carries detail/message/error, not hint).
+      let msg = err.message
+      if (err.response) {
+        const b = await err.response.json().catch(() => ({}))
+        msg = b.detail || b.hint || msg
+      }
+      setCheckoutError(msg || t('pages.billing.checkout_failed'))
     } finally {
       setCheckoutLoading(false)
     }

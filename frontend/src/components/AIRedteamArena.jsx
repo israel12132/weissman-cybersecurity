@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
 
@@ -33,7 +33,6 @@ export default function AIRedteamArena() {
   const fetchClient = useCallback(() => {
     if (!clientId) return
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((list) => {
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
@@ -68,10 +67,8 @@ export default function AIRedteamArena() {
 
     apiFetch('/api/ai-redteam/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Start failed'))))
       .then(() => {
         const wsUrl = `${WS_BASE()}/ws/ai-redteam`
         const ws = new WebSocket(wsUrl)

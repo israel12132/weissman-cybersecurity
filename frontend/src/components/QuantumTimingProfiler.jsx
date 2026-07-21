@@ -16,7 +16,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
 
@@ -49,7 +49,6 @@ export default function QuantumTimingProfiler() {
   const fetchClient = useCallback(() => {
     if (!clientId) return
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((list) => {
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
@@ -90,10 +89,8 @@ export default function QuantumTimingProfiler() {
 
     apiFetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Start failed'))))
       .then((data) => {
         if (data.detail) setError('')
         const wsUrl = `${WS_BASE()}/ws/timing`

@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
@@ -482,7 +482,7 @@ export default function CicdPipelineSecurityCommandCenter() {
   const appendLine = useCallback((msg) => setLines((prev) => [...prev.slice(-400), msg]), [])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -529,7 +529,6 @@ export default function CicdPipelineSecurityCommandCenter() {
             es.close()
             setRunning(false)
             apiFetch(`/api/jobs/${jobId}`)
-              .then((jr) => (jr.ok ? jr.json() : null))
               .then((job) => {
                 const res = job?.result_json || job?.result
                 const f = res?.findings || []

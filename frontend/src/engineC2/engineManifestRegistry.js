@@ -2,7 +2,7 @@
  * Engine UI manifest registry — capability-based routing (replaces static ROUTE_ENGINE_ID).
  */
 import seed from '../lib/engineUiManifests.seed.json' with { type: 'json' }
-import { apiFetch } from '../lib/apiBase.js'
+import { apiFetch } from '../utils/apiFetch.js'
 
 /** @type {import('./types').EngineUiManifest[]} */
 let manifests = Array.isArray(seed.manifests) ? seed.manifests : []
@@ -53,7 +53,6 @@ function ingestEnvelope(envelope) {
 export async function loadEngineManifests(force = false) {
   if (!force && fetchPromise) return fetchPromise
   fetchPromise = apiFetch('/api/engines/ui-manifests')
-    .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (data?.manifests?.length) ingestEnvelope(data)
       return { manifests, provenance }

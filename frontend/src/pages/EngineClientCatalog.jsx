@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import { useEngineCapabilities } from '../lib/useEngineCapabilities'
 import { useJobPoll, normalizeJobStatus } from '../lib/useJobPoll'
@@ -345,25 +345,21 @@ export default function EngineClientCatalog() {
     }
     let cancelled = false
     apiFetch(`/api/clients/${selectedClientId}/readiness`)
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setClientReadiness(d?.readiness || null) })
       .catch(() => { if (!cancelled) setClientReadiness(null) })
     apiFetch(`/api/clients/${selectedClientId}/integrations`)
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setClientIntegrations(normalizeIntegrations(d)) })
       .catch(() => { if (!cancelled) setClientIntegrations(null) })
     return () => { cancelled = true }
   }, [selectedClientId])
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch((err) => { if (import.meta.env.DEV) console.warn('[EngineClientCatalog] clients load failed:', err) })
   }, [])
 
   useEffect(() => {
     apiFetch('/api/engines/telemetry')
-      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data?.engines) return
         const map = {}
@@ -428,18 +424,15 @@ export default function EngineClientCatalog() {
     setCapsRefreshing(true)
     try {
       await refreshCapabilities()
-      const r = await apiFetch('/api/engines/telemetry')
-      if (r.ok) {
-        const data = await r.json()
-        if (data?.engines) {
-          const map = {}
-          for (const row of data.engines) {
-            if (row.engine_id) map[row.engine_id] = row
-          }
-          setTelemetryById(map)
+      const data = await apiFetch('/api/engines/telemetry')
+      if (data?.engines) {
+        const map = {}
+        for (const row of data.engines) {
+          if (row.engine_id) map[row.engine_id] = row
         }
+        setTelemetryById(map)
       }
-    } finally {
+    } catch { /* keep prior telemetry on transient refresh failure */ } finally {
       setCapsRefreshing(false)
     }
   }, [refreshCapabilities])
@@ -555,20 +548,13 @@ export default function EngineClientCatalog() {
     }
     setRunAllLoading(true)
     try {
-      const r = await apiFetch('/api/scan/all-engines', {
+      const d = await apiFetch('/api/scan/all-engines', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           client_id: Number(selectedClientId),
           engines: runnable,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        showToast('error', d.detail || `Scan failed (${r.status})`)
-        setRunAllLoading(false)
-        return
-      }
       showToast('info', `✅ Queued ${d.engines_queued ?? runnable.length} engines (Job: ${d.job_id ?? '—'})`)
       setEngineStates((prev) => {
         const next = { ...prev }
