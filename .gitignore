@@ -60,6 +60,11 @@ fingerprint_engine/target/
 data/
 reports/
 
+# ...but scripts/data holds version-controlled vendored data (the MITRE ATT&CK index
+# + migration ledger the coverage gate reads), not runtime output — keep it tracked.
+!scripts/data/
+!scripts/data/**
+
 # Company legal details (copy from deploy/company.details.example.json)
 deploy/company.details.json
 

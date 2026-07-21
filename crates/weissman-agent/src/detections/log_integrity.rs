@@ -58,7 +58,7 @@ pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
             engine,
             if exists { "Security.evtx present" } else { "Security.evtx not accessible" },
             if exists { "info" } else { "high" },
-            "T1070.001",
+            "T1685.005",
             "Agent attempted to inspect the Security event log. If absent or 0 B, an actor may have cleared / disabled audit on this host.",
             extras,
         ));

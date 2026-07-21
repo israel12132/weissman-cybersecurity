@@ -6,6 +6,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import Button from '../components/ui/Button'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../lib/apiBase'
 import RemediationDetail from '../components/remediation/RemediationDetail'
@@ -86,7 +87,7 @@ function StatusBadge({ status, t }) {
   const colors = {
     completed: 'text-green-400 bg-green-500/10 border-green-500/30',
     running: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
-    pending: 'text-gray-400 bg-gray-500/10 border-gray-500/30',
+    pending: 'text-text-tertiary bg-bg-3 border-border-strong',
   }
   const Icon = status === 'completed' ? CheckCircle : status === 'running' ? Clock : AlertTriangle
   return (
@@ -281,12 +282,20 @@ export default function RemediationHub() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.remediationHub.search_placeholder')}
+              aria-label={t('pages.remediationHub.search_placeholder')}
               className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
             />
             {search && (
-              <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+              <Button
+                variant="unstyled"
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label={t('common.clear', { defaultValue: 'Clear search' })}
+                title={t('common.clear', { defaultValue: 'Clear search' })}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+              >
                 <X className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
@@ -351,7 +360,7 @@ export default function RemediationHub() {
                             {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
                           </span>
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-text-tertiary">
                           {w.total === 1
                             ? t('pages.remediationHub.findings_count', { count: w.total })
                             : t('pages.remediationHub.findings_count_plural', { count: w.total })}{' '}
@@ -427,7 +436,8 @@ export default function RemediationHub() {
 
 function Pill({ active, color = '#22d3ee', onClick, children }) {
   return (
-    <button
+    <Button
+      variant="unstyled"
       type="button"
       onClick={onClick}
       className="px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider border transition-colors"
@@ -438,7 +448,7 @@ function Pill({ active, color = '#22d3ee', onClick, children }) {
       }}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -455,7 +465,7 @@ function StatCard({ label, value, icon, color, loading }) {
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-text-tertiary">{label}</span>
         {icon}
       </div>
       <div className="text-2xl font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>

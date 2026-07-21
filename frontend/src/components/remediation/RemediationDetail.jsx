@@ -5,6 +5,7 @@ import {
   Loader2, CheckCircle, XCircle, Languages, ChevronRight, Clock, FileText,
 } from 'lucide-react'
 import { apiFetch, apiUrl } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 /**
  * RemediationDetail — the "wow" surface. For a single finding it shows a bilingual (he/en)
@@ -266,17 +267,17 @@ export default function RemediationDetail({ finding, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setLangMode((m) => (m === 'both' ? 'current' : 'both'))}
               className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25"
               title={t('pages.remediationHub.show_both_languages')}
             >
               <Languages className="w-4 h-4" />
-            </button>
-            <button type="button" onClick={onClose} className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25">
+            </Button>
+            <Button variant="unstyled" type="button" onClick={onClose} className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25">
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -288,7 +289,7 @@ export default function RemediationDetail({ finding, onClose }) {
                 <Sparkles className="w-4 h-4 text-cyan-400" />
                 {t('pages.remediationHub.detail_title')}
               </h3>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => loadBrief(true)}
                 disabled={briefLoading}
@@ -296,7 +297,7 @@ export default function RemediationDetail({ finding, onClose }) {
               >
                 {briefLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 {t('pages.remediationHub.generate_brief')}
-              </button>
+              </Button>
             </div>
 
             {briefError && (
@@ -342,7 +343,7 @@ export default function RemediationDetail({ finding, onClose }) {
                 const Icon = c.icon
                 const active = channel === c.id
                 return (
-                  <button
+                  <Button variant="unstyled"
                     key={c.id}
                     type="button"
                     onClick={() => setChannel(c.id)}
@@ -350,7 +351,7 @@ export default function RemediationDetail({ finding, onClose }) {
                   >
                     <Icon className="w-4 h-4 shrink-0" />
                     <span>{t(`pages.remediationHub.${c.labelKey}`)}</span>
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -398,7 +399,7 @@ export default function RemediationDetail({ finding, onClose }) {
               </div>
             )}
 
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={runHeal}
               disabled={healing}
@@ -406,7 +407,7 @@ export default function RemediationDetail({ finding, onClose }) {
             >
               {healing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
               {healing ? t('pages.remediationHub.healing') : t('pages.remediationHub.heal_now')}
-            </button>
+            </Button>
           </section>
 
           {/* Live verification timeline + verdict */}
@@ -453,7 +454,7 @@ export default function RemediationDetail({ finding, onClose }) {
                       <X className="w-3.5 h-3.5" /> {t('pages.remediationHub.reverted')}
                     </span>
                   ) : (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={runRevert}
                       disabled={reverting}
@@ -462,7 +463,7 @@ export default function RemediationDetail({ finding, onClose }) {
                     >
                       {reverting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                       {t('pages.remediationHub.revert')}
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
