@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { apiFetch } from '../../lib/apiBase'
 import Button from '../ui/Button'
+import DataTable from '../ui/DataTable'
+
+const columnHelper = createColumnHelper()
+const NS = 'components.ceo.sovereignLab'
 
 export default function CeoSovereignLab() {
   const { t } = useTranslation()
@@ -31,28 +36,69 @@ export default function CeoSovereignLab() {
     load()
   }, [load])
 
-  const trigger = async (bufferId) => {
-    setBusyId(bufferId)
-    setToast('')
-    try {
-      const r = await apiFetch('/api/ceo/sovereign/trigger', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          buffer_id: bufferId,
-          trace: 'ceo-sovereign-shadow-preflight',
-        }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
-      setToast(t('components.ceo.sovereignLab.enqueuedJob', { jobId: d.job_id || '' }))
-      await load()
-    } catch (e) {
-      setToast(e.message || t('components.ceo.sovereignLab.enqueueFailed'))
-    } finally {
-      setBusyId(null)
-    }
-  }
+  const trigger = useCallback(
+    async (bufferId) => {
+      setBusyId(bufferId)
+      setToast('')
+      try {
+        const r = await apiFetch('/api/ceo/sovereign/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            buffer_id: bufferId,
+            trace: 'ceo-sovereign-shadow-preflight',
+          }),
+        })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.detail || r.statusText)
+        setToast(t(`${NS}.enqueuedJob`, { jobId: d.job_id || '' }))
+        await load()
+      } catch (e) {
+        setToast(e.message || t(`${NS}.enqueueFailed`))
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [t, load],
+  )
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('id', {
+        header: t(`${NS}.colId`),
+        cell: (info) => <span className="text-violet-300">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor('target_fingerprint', {
+        header: t(`${NS}.colTargetFp`),
+        cell: (info) => (
+          <span className="max-w-[200px] truncate block" title={info.getValue()}>
+            {info.getValue()}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('status', { header: t(`${NS}.colStatus`) }),
+      columnHelper.accessor('updated_at', {
+        header: t(`${NS}.colUpdated`),
+        cell: (info) => <span className="text-[var(--text-muted)]">{info.getValue()}</span>,
+      }),
+      columnHelper.display({
+        id: 'action',
+        header: t(`${NS}.colAction`),
+        cell: ({ row }) => (
+          <Button
+            variant="unstyled"
+            type="button"
+            disabled={busyId === row.original.id}
+            onClick={() => trigger(row.original.id)}
+            className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-violet-900/60 border border-violet-400/35 text-violet-100 disabled:opacity-40"
+          >
+            {busyId === row.original.id ? '…' : t(`${NS}.triggerPreflight`)}
+          </Button>
+        ),
+      }),
+    ],
+    [t, busyId, trigger],
+  )
 
   return (
     <div className="rounded-lg border border-violet-500/25 bg-violet-950/10 overflow-hidden">
@@ -82,41 +128,15 @@ export default function CeoSovereignLab() {
         <p className="p-4 text-xs text-[var(--text-muted)] font-mono">{t('components.ceo.sovereignLab.loading')}</p>
       )}
       {err && <p className="p-4 text-xs text-red-400 font-mono">{err}</p>}
-      <div className="overflow-x-auto max-h-[min(480px,55vh)] overflow-y-auto">
-        <table className="w-full text-left text-xs font-mono text-[var(--text-secondary)]">
-          <thead className="sticky top-0 bg-[var(--bg-0)]/95 border-b border-white/10 text-[10px] uppercase text-[var(--text-muted)]">
-            <tr>
-              <th className="p-2 pl-4">{t('components.ceo.sovereignLab.colId')}</th>
-              <th className="p-2">{t('components.ceo.sovereignLab.colTargetFp')}</th>
-              <th className="p-2">{t('components.ceo.sovereignLab.colStatus')}</th>
-              <th className="p-2">{t('components.ceo.sovereignLab.colUpdated')}</th>
-              <th className="p-2 pr-4">{t('components.ceo.sovereignLab.colAction')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-b border-white/5">
-                <td className="p-2 pl-4 text-violet-300">{row.id}</td>
-                <td className="p-2 max-w-[200px] truncate" title={row.target_fingerprint}>
-                  {row.target_fingerprint}
-                </td>
-                <td className="p-2">{row.status}</td>
-                <td className="p-2 text-[var(--text-muted)]">{row.updated_at}</td>
-                <td className="p-2 pr-4">
-                  <Button variant="unstyled"
-                    type="button"
-                    disabled={busyId === row.id}
-                    onClick={() => trigger(row.id)}
-                    className="text-[10px] font-mono uppercase px-2 py-1 rounded bg-violet-900/60 border border-violet-400/35 text-violet-100 disabled:opacity-40"
-                  >
-                    {busyId === row.id ? '…' : t('components.ceo.sovereignLab.triggerPreflight')}
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {!loading && !err && (
+        <DataTable
+          id="ceo-sovereign-lab-table"
+          columns={columns}
+          data={rows}
+          getRowId={(r) => r.id}
+          animateRows={false}
+        />
+      )}
     </div>
   )
 }
