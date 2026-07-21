@@ -20,6 +20,9 @@ ignore = [
     "RUSTSEC-2026-0099", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
     "RUSTSEC-2026-0104", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
     "RUSTSEC-2026-0187", # lopdf parse-DoS via genpdf->printpdf — we generate, never parse untrusted PDFs
+    # RUSTSEC-2026-0049 (rustls-webpki CRL matching) removed: the advisory is no longer
+    # present in the dependency tree (cargo-deny reported advisory-not-detected), so the
+    # ignore was stale. Re-add if a future dependency reintroduces the affected rustls path.
 ]
 
 [licenses]

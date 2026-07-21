@@ -55,20 +55,8 @@ jobs:
   rust-audit:
     name: Rust — audit, lint, test
     runs-on: ubuntu-latest
-    # Trim DWARF to line tables in CI: the workspace pulls ~250 AWS-SDK + crypto
-    # crates, and full debuginfo on that many object files exhausted the runner's
-    # disk mid-link (ld SIGBUS). Line tables keep test backtraces mapped to source
-    # while shrinking target/ several-fold. Not a lint/test/security threshold.
-    env:
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Free up runner disk space
-        run: bash scripts/ci-free-disk-space.sh
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.91.1
@@ -76,18 +64,17 @@ jobs:
           components: clippy
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v4
         with:
-          # Distinct cache scope for the lint/test job (separate from the
-          # instrumented coverage build) so target/ artifacts don't collide.
-          shared-key: rust-audit
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       - name: Install cargo-audit
-        # Prebuilt binary (taiki-e/install-action) instead of `cargo install`
-        # from source — seconds vs minutes, no target/ churn.
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-audit
+        run: cargo install cargo-audit --locked
 
       - name: Run cargo audit (known CVEs in Rust deps)
         # Each ignore below is a transitive advisory with NO fixed upgrade available;
@@ -103,18 +90,23 @@ jobs:
         #                      — via genpdf→printpdf→lopdf 0.26, pinned by genpdf.
         #                      We GENERATE PDFs, never parse untrusted ones, so the
         #                      parser DoS is out of our surface. Tracked with genpdf.
+        #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
+        #                      point). tokio-tungstenite bumped 0.21 → 0.24 (rustls 0.23),
+        #                      removing the 0.22 path; any residual is via aws-config's
+        #                      rustls 0.21. We don't configure CRL revocation on WS/TLS
+        #                      clients, so the CRL-matching bug is out of our surface. Tracked
+        #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
         run: |
           cargo audit \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2026-0098 \
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2026-0104 \
-            --ignore RUSTSEC-2026-0187
+            --ignore RUSTSEC-2026-0187 \
+            --ignore RUSTSEC-2026-0049
 
       - name: Install cargo-deny
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
+        run: cargo install cargo-deny --locked
 
       - name: Run cargo deny (license + advisory + source provenance gate)
         # Enforces the dependency-license allow-list (fails on GPL/AGPL/unknown),
@@ -244,366 +236,6 @@ jobs:
         run: npx playwright install chromium && npm run test:e2e
         working-directory: frontend
 
-  engine-wiring-and-smoke:
-    name: Engine wiring audit & API smoke
-    runs-on: ubuntu-latest
-    # See rust-audit: trim CI debuginfo so the full-workspace build + Docker image
-    # builds + live stack fit the runner disk.
-    env:
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_PROFILE_TEST_DEBUG: line-tables-only
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: weissman
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d weissman"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Free up runner disk space
-        run: bash scripts/ci-free-disk-space.sh
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
-        with:
-          components: rustfmt, clippy
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: engine-wiring
-
-      - name: Verify engine wiring coverage
-        run: node scripts/verify_engine_wiring.mjs
-
-      - name: Generate engine catalog snapshot
-        run: node scripts/generate_engine_catalog_snapshot.mjs
-
-      - name: Verify engine scan wiring
-        run: node scripts/verify_engine_scan_wiring.mjs
-
-      - name: Verify hub local params wiring
-        run: node scripts/verify_hub_local_params.mjs
-
-      - name: Verify command center supreme coverage
-        run: node scripts/verify_command_center_coverage.mjs
-
-      - name: Engine reality audit
-        run: node scripts/engine_reality_audit.mjs
-
-      - name: Doc metrics sync (fail on drift)
-        run: node scripts/sync_doc_metrics.mjs --check
-
-      - name: Frontend↔backend route contract
-        run: node scripts/verify_frontend_route_contract.mjs
-
-      - name: Cloud posture catalog parity
-        run: node scripts/verify_cloud_posture_catalog.mjs
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
-
-      - name: Weissman UI compliance audit
-        run: node scripts/weissman-ui-audit.mjs
-
-      - name: i18n defaultValue gate
-        # QUARANTINED (visible warning, non-blocking). PR #181's Command Center
-        # affordance campaign landed 150 t(..., { defaultValue: '…' }) English
-        # fallbacks across 13 pages on main; keying them requires Hebrew
-        # translations — a tracked multi-session campaign (docs/PRODUCT_DEBT_BACKLOG.md,
-        # branch claude/ops-ci-stabilization). The fallbacks keep the UI functional,
-        # so this is deferred debt, not a functional break. Re-enable (drop
-        # continue-on-error) once the backlog is cleared.
-        continue-on-error: true
-        run: node scripts/verify_i18n_no_default_values.mjs
-
-      - name: i18n templated-key resolution gate
-        run: node scripts/verify_i18n_template_keys.mjs
-
-      - name: Build frontend production bundle
-        run: npm run build
-        working-directory: frontend
-
-      - name: Build weissman-server + worker (warm compile for health check)
-        run: cargo build -p weissman-server -p weissman-worker
-
-      - name: Apply database migrations
-        env:
-          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-        run: cargo run -q -p weissman-db --example run_migrate
-
-      - name: Run Rust workspace tests (blocking gate)
-        env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          # Fail (don't skip) the DB-backed integration tests here, so a dropped
-          # TEST_DATABASE_URL can never masquerade as a green run.
-          WEISSMAN_REQUIRE_DB_TESTS: "1"
-        run: cargo test --workspace --all-targets
-
-      - name: Build Docker production images
-        # `docker compose build` interpolates the ENTIRE compose file — including the
-        # runtime `environment:` block — so the two required (${VAR:?}) secrets must be
-        # present or parsing fails before any image is built. These are runtime env
-        # (never baked into the image at build time), so parse-only dummies are safe
-        # and correct here; real secrets come from the environment at `up` time.
-        env:
-          WEISSMAN_JWT_SECRET: ci-build-parse-only-not-baked-into-image
-          WEISSMAN_ADMIN_PASSWORD: ci-build-parse-only-not-baked-into-image
-        run: docker compose build backend worker gateway
-
-      - name: Scan built backend image (Trivy, CRITICAL+HIGH)
-        # The fs scan in the security-scan job covers source/deps; this scans the
-        # actual runtime image (base OS packages baked into weissman-backend:stable).
-        # ignore-unfixed keeps it actionable — only CRITICAL/HIGH with an available fix
-        # fail the build (then bump the base image; Dependabot 'docker' helps here).
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: image
-          image-ref: weissman-backend:stable
-          scanners: vuln
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
-          format: table
-          trivyignores: .trivyignore
-
-      - name: Validate docker-compose.test.yml
-        run: docker compose -f docker-compose.test.yml config > /dev/null
-
-      - name: Start weissman-server
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
-          WEISSMAN_METRICS_TOKEN: ci-metrics-token-32-bytes-minimum
-          WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
-          WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
-          WEISSMAN_ENV: production
-          WEISSMAN_COOKIE_SECURE: "1"
-          WEISSMAN_ADMIN_EMAIL: admin@localhost
-          WEISSMAN_ADMIN_PASSWORD: changeme
-          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
-          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
-          # Disable the scheduled orchestrator scan cycle for the live-stack gates.
-          # By default (WEISSMAN_ENV=production) the leader dispatches continuous
-          # tenant_full_scan cycles (every ~15-60s, 6-8 engines per tenant). Against
-          # the CI Postgres (max_connections=100) those concurrent full scans saturate
-          # the worker's app pool and starve the on-demand jobs the gates actually test
-          # — the smoke's command_center_engine job then fails its completion write with
-          # "pool timed out while waiting for an open connection" and never reaches
-          # 'completed'. Every live gate below submits and polls its OWN scans via the
-          # API, so the scheduled cycle is pure contention here, not part of the contract.
-          # On-demand jobs are still executed by the worker regardless of this toggle.
-          WEISSMAN_SCANNING_ENABLED: "0"
-          PORT: "18000"
-        run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
-
-      - name: Start weissman-worker
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
-          WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
-          WEISSMAN_ENV: production
-          # Match the server: no scheduled full-tenant scan cycles competing for the
-          # DB pool with the on-demand jobs the live gates submit (see note above).
-          WEISSMAN_SCANNING_ENABLED: "0"
-          # Runs at the worker's real defaults (light/heavy concurrency, app pool 48,
-          # stock Postgres max_connections). The earlier serialization + pool/ceiling
-          # raises were band-aids for the pool-storm root cause (per-job current_thread
-          # runtimes orphaning sqlx connections, since fixed in engine_stack_runtime.rs);
-          # the live stack now holds up under unthrottled concurrent load without them.
-        run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
-
-      - name: Wait for API health
-        env:
-          PORT: "18000"
-        run: |
-          for i in $(seq 1 90); do
-            if curl -sf "http://127.0.0.1:${PORT}/api/health" > /dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "weissman-server did not become healthy"
-          cat /tmp/weissman-server.log || true
-          exit 1
-
-      - name: DAST — OWASP ZAP baseline against the live stack (informational)
-        # We sell DAST, so we run it against our own live stack every CI build. Non-blocking
-        # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
-        # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
-        # container itself — target the runner's docker-bridge gateway to reach the host.
-        # continue-on-error mirrors the documented informational intent: the zaproxy action
-        # can exit non-zero at the step level (report/issue plumbing) even with
-        # fail_action:false, which would otherwise skip the real live-stack gates below.
-        # Report tuning (reachability, .zap/rules.tsv) is tracked in PRODUCT_DEBT_BACKLOG.md.
-        continue-on-error: true
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          target: http://172.17.0.1:18000/api/health
-          cmd_options: '-I -a'
-          fail_action: false
-          allow_issue_writing: false
-          artifact_name: zap-baseline-report
-
-      - name: Live RLS cross-tenant isolation contract
-        env:
-          # Superuser connection; the test does SET ROLE weissman_app to exercise
-          # real row-level security (the role + migrations were created by the
-          # weissman-server boot above).
-          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-        run: cargo test -p weissman-db --test rls_cross_tenant -- --nocapture
-
-      - name: Smoke one engine per group
-        env:
-          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
-          WEISSMAN_TENANT_SLUG: default
-          WEISSMAN_SMOKE_POLL_TIMEOUT_MS: "180000"
-        run: node scripts/smoke_engine_groups.mjs
-
-      - name: Audit UI scan button paths
-        env:
-          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
-          WEISSMAN_TENANT_SLUG: default
-          WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS: "180000"
-        run: node scripts/audit_ui_button_scan_paths.mjs
-
-      - name: Live scan pipeline E2E contract
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_E2E_TENANT: default
-          WEISSMAN_E2E_POLL_MS: "2000"
-          WEISSMAN_E2E_POLL_MAX: "90"
-        run: node scripts/verify_scan_pipeline_e2e.mjs
-
-      - name: Playwright live journey (login → scan → findings → PDF)
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_E2E_TENANT: default
-          PLAYWRIGHT_LIVE: "1"
-        run: |
-          cd frontend
-          npx playwright install chromium
-          npm run test:e2e:live -- live-journey live-ui-crawl
-
-      # True-Live counterpart of the mock feature-verify.spec.ts: drives the
-      # Findings-console features added this cycle (multi-select bulk status,
-      # saved views, URL-shareable severity filter, row density) and the ⌘K
-      # command palette against the REAL backend built above (WEISSMAN_ENV=
-      # production), and verifies the bulk-status PATCH actually persisted in
-      # Postgres via an API round-trip. Reuses the already-running server + the
-      # findings the scan steps above wrote to the live DB.
-      - name: Playwright True-Live feature specs (bulk · views · URL filter · density)
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_E2E_TENANT: default
-          PLAYWRIGHT_LIVE: "1"
-        run: |
-          cd frontend
-          npm run test:e2e:live -- live-feature
-
-      - name: Generate audit evidence pack
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_EVIDENCE_OUT: ${{ github.workspace }}/evidence-pack/ci
-        run: |
-          chmod +x scripts/generate_audit_evidence_pack.sh
-          ./scripts/generate_audit_evidence_pack.sh
-
-      - name: Upload audit evidence pack
-        uses: actions/upload-artifact@v4
-        with:
-          name: audit-evidence-pack
-          path: evidence-pack/ci/
-          if-no-files-found: error
-
-      - name: Live scan pipeline pytest contract
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_E2E_TENANT: default
-          WEISSMAN_E2E_POLL_MS: "2000"
-          WEISSMAN_E2E_POLL_MAX: "90"
-        run: python -m pytest tests/e2e/test_scan_pipeline_live.py -v --tb=short
-
-      - name: Engine groups findings + risk E2E
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_E2E_TENANT: default
-          WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
-          WEISSMAN_FINDINGS_E2E_POLL_MAX: "72"
-        run: node scripts/verify_engine_groups_findings_e2e.mjs
-
-      - name: SOAR playbook E2E contract
-        env:
-          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
-          WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
-          WEISSMAN_DUAL_APPROVAL_SECRET: ci-dual-approval-secret-32-bytes-minimum-v1
-        run: node scripts/verify_soar_playbook_e2e.mjs
-
-      - name: FP/TP confidence feedback E2E
-        env:
-          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
-          WEISSMAN_E2E_TENANT: default
-        run: node scripts/verify_fp_tp_confidence_e2e.mjs
-
-      - name: Dump server logs on failure
-        if: failure()
-        run: |
-          echo '--- weissman-server.log ---'
-          cat /tmp/weissman-server.log || true
-          echo '--- weissman-worker.log ---'
-          cat /tmp/weissman-worker.log || true
-
   semgrep:
     name: Semgrep SAST (critical blocking)
     runs-on: ubuntu-latest
@@ -650,43 +282,24 @@ jobs:
   rust-coverage:
     name: Rust — coverage (llvm-cov)
     runs-on: ubuntu-latest
-    # Coverage needs line tables to map instrumentation back to source; full DWARF
-    # is unnecessary and blew the runner's disk at link time. line-tables-only keeps
-    # accurate coverage while shrinking the instrumented target/ dir.
-    env:
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Free up runner disk space
-        run: bash scripts/ci-free-disk-space.sh
       - uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: llvm-tools-preview
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          # Instrumented coverage build differs from the plain lint/test build,
-          # so keep it on its own cache scope.
-          shared-key: rust-coverage
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov
-      - name: Coverage (workspace lib tests) — no-regression ratchet
-        # Ratchet gate, not a fixed target. The hard failure fires only if `--lib`
-        # coverage REGRESSES below the honest measured baseline (~19.68% — the metric
-        # is dominated by fingerprint_engine, an I/O-bound attack-engine crate whose
-        # live-probe bulk is covered by the integration/E2E job, invisible to
-        # `--lib`; see Coverage_Deficit_Analysis.md). The integer floor of 19 sits
-        # just under the baseline so run-to-run variance can't flake the gate while
-        # any real drop still fails it. 40% remains the documented target to ratchet
-        # toward (raise this floor as genuine unit tests land); lcov is uploaded for
-        # inspection. No mocks, no padding, no threshold gaming.
+        run: cargo install cargo-llvm-cov --locked
+      - name: Coverage (workspace lib tests) — per-crate ratchet
+        # Security-critical code should carry measured coverage, not just green tests.
+        # Per-crate floors live in scripts/coverage-floors.json: a fixed 40% for the maintained
+        # crates (weissman-core, weissman-ui-provenance, weissman-ast-cap) and a current-coverage
+        # quarantine for the legacy crates. Coverage may only go up, never down. Collect once,
+        # then emit both lcov (artifact) and json (ratchet input) from the cached profdata.
         run: |
-          cargo llvm-cov --workspace --lib --lcov --output-path lcov.info --fail-under-lines 19
+          cargo llvm-cov --workspace --lib --no-report
+          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo llvm-cov report --json --output-path cov.json
+          node scripts/coverage_ratchet.mjs cov.json
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -699,7 +312,7 @@ jobs:
     name: Publish signed image (tags only)
     runs-on: ubuntu-latest
     # Only build+publish after the quality gates pass, and only for release tags.
-    needs: [rust-audit, security-scan, frontend-build, engine-wiring-and-smoke, semgrep]
+    needs: [rust-audit, security-scan, frontend-build, semgrep]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read

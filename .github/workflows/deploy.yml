@@ -20,6 +20,9 @@ permissions:
 
 env:
   IMAGE: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend
+  # Bind the workflow input to an env var so it is never interpolated as ${{ }} inside a
+  # run: shell (which Semgrep flags as a code-injection sink). Shells read it as "$IMAGE_DIGEST".
+  IMAGE_DIGEST: ${{ inputs.image_digest }}
 
 jobs:
   deploy:
