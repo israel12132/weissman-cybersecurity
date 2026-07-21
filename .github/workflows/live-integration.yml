@@ -198,6 +198,11 @@ jobs:
         # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
         # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
         # container itself — target the runner's docker-bridge gateway to reach the host.
+        # continue-on-error so this informational step can never fail the job: fail_action
+        # only suppresses *findings*, but the action can still exit non-zero on a warn-level
+        # baseline or a container/report hiccup, which would otherwise skip every live
+        # contract below it (exactly what happened before this guard).
+        continue-on-error: true
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: http://172.17.0.1:18000/api/health
