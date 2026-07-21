@@ -281,7 +281,8 @@ docker compose exec postgres psql -U postgres -d weissman -c "
 1. `cargo check --workspace` — green
 2. `cargo test  --workspace` — green (current baseline: 14 weissman-db + 58
    fingerprint_engine + agent build)
-3. `docker compose build backend gateway` — green
+3. `docker compose -f docker-compose.build.yml build backend gateway` — green
+   (the build-only model; no runtime secrets needed to build)
 4. Migration smoke: `docker compose up postgres -d`, then point a clean DB
    at `WEISSMAN_MIGRATE_URL` and run the backend — should boot and report
    `applied N no-transaction migrations` and then sqlx applies the rest.

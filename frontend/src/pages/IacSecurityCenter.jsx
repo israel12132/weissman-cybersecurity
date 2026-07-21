@@ -1195,9 +1195,9 @@ function RiskHeatmap({ heatmap }) {
       <table className="w-full text-[10px] font-mono">
         <thead>
           <tr className="text-[var(--text-muted)]">
-            <th className="text-left py-1 pr-2">Framework</th>
-            {['critical', 'high', 'medium', 'low'].map((s) => <th key={s} className="px-2 py-1 uppercase" style={{ color: SEV_COLOR[s] }}>{s}</th>)}
-            <th className="px-2 py-1">Σ</th>
+            <th scope="col" className="text-left py-1 pr-2">Framework</th>
+            {['critical', 'high', 'medium', 'low'].map((s) => <th key={s} scope="col" className="px-2 py-1 uppercase" style={{ color: SEV_COLOR[s] }}>{s}</th>)}
+            <th scope="col" className="px-2 py-1">Σ</th>
           </tr>
         </thead>
         <tbody>

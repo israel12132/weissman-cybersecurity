@@ -286,9 +286,9 @@ export default function UebaAnomalies() {
             </div>
 
             {anomalies.length === 0 ? (
-              <EmptyState icon="📈" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+              <EmptyState icon="chart" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
             ) : filtered.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <DataTable
                 id="ueba-anomalies-table"

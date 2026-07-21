@@ -26,6 +26,49 @@ use crate::intel_epss;
 use crate::intel_kev;
 use crate::pentest_memory;
 
+/// Global concurrency cap for detached background DB tasks spawned *per finding*
+/// (SOAR playbook dispatch, pentest-memory record).
+///
+/// Without a bound, a single finding-heavy scan spawns one/two detached tasks per
+/// finding (up to `WEISSMAN_MAX_PERSIST_FINDINGS`, default 5000). Each task
+/// independently acquires pooled connections and stays alive across webhook /
+/// embedding I/O, so thousands pile onto `pool.acquire()` at once, blow past the
+/// pool's slots, and — because they are detached — keep the pool saturated for the
+/// full `acquire_timeout` window *after* the job returns, starving the worker's
+/// claim loop and the job's own completion write ("pool timed out while waiting for
+/// an open connection"). Bounding the concurrency makes peak background connection
+/// demand `O(permits)`, independent of finding count. Override with
+/// `WEISSMAN_BG_DB_CONCURRENCY` (default 8).
+fn background_db_semaphore() -> &'static tokio::sync::Semaphore {
+    static SEM: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    SEM.get_or_init(|| {
+        let permits = std::env::var("WEISSMAN_BG_DB_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(8);
+        tokio::sync::Semaphore::new(permits)
+    })
+}
+
+/// Spawn a detached background task that touches the DB, gated by the global
+/// [`background_db_semaphore`]. The permit is held for the whole task lifetime, so
+/// excess tasks queue on the semaphore instead of storming `pool.acquire()`. This
+/// preserves fire-and-forget semantics (the scan never blocks on webhooks) while
+/// hard-capping concurrent pooled-connection demand regardless of finding count.
+pub fn spawn_bounded_db_task<Fut>(task: Fut)
+where
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
+    tokio::spawn(async move {
+        // If the semaphore is ever closed (never in practice) just drop the task.
+        let Ok(_permit) = background_db_semaphore().acquire().await else {
+            return;
+        };
+        task.await;
+    });
+}
+
 /// Lower-case severity from an arbitrary value, defaulting to `info`.
 fn normalize_severity(raw: Option<&str>) -> String {
     let s = raw.unwrap_or("info").trim().to_ascii_lowercase();
@@ -246,6 +289,49 @@ pub async fn persist_engine_findings(
         findings
     };
 
+    // ── Architectural law: never hold a pooled connection across network I/O ──
+    // Warm the EPSS cache with ONE batched FIRST.org fetch BEFORE opening the write
+    // transaction below. `fetch_epss_for_cves` upserts the results into the local
+    // `epss_intel` mirror, so the per-finding `enrich_with_epss` calls *inside* the
+    // transaction resolve against fresh cache rows and never perform a network
+    // `.await` while a pooled connection is held. (Batching also collapses N
+    // per-finding HTTP round-trips into a single one.) KEV and internet-exposed
+    // lookups are short local reads, not network, so they stay in the loop.
+    {
+        let mut cves: Vec<String> = findings
+            .iter()
+            .map(|f| extract_cve_from_finding(f))
+            .filter(|c| !c.is_empty())
+            .collect();
+        cves.sort();
+        cves.dedup();
+        if !cves.is_empty() {
+            let _ = intel_epss::fetch_epss_for_cves(pool, &cves).await;
+        }
+    }
+
+    // Same law, second acquisition: `resolve_internet_exposed` opens its OWN pooled
+    // connection (a risk_graph_nodes lookup). Resolve it for every finding HERE,
+    // before the batch write transaction is opened, so the loop never acquires a
+    // second connection while the batch tx is held (that N+1 nesting is what let a
+    // single scan pin two pool slots per finding). Indexed by original position;
+    // the write loop reads it back. Gating is deterministic, so the index aligns.
+    let internet_exposed_pre: Vec<bool> = {
+        let mut v = Vec::with_capacity(findings.len());
+        for raw in findings.iter() {
+            let exposed = match gate_finding(engine, target, raw.clone()) {
+                Some(gated) => {
+                    let f = gated.json();
+                    let target_url = extract_target(f, target);
+                    resolve_internet_exposed(pool, tenant_id, client_id, &target_url, f).await
+                }
+                None => false,
+            };
+            v.push(exposed);
+        }
+        v
+    };
+
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -277,7 +363,7 @@ pub async fn persist_engine_findings(
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
-    for raw in findings.iter().cloned() {
+    for (finding_index, raw) in findings.iter().cloned().enumerate() {
         let Some(gated) = gate_finding(engine, target, raw) else {
             tracing::warn!(
                 target: "findings_persist",
@@ -674,7 +760,7 @@ pub async fn persist_engine_findings(
             let eng = engine.to_string();
             let cwe_mem = cwe.clone();
             let sig_mem = vuln_signature.clone();
-            tokio::spawn(async move {
+            spawn_bounded_db_task(async move {
                 let _ = pentest_memory::record_win(
                     &pool_mem,
                     tenant_id,
@@ -691,8 +777,8 @@ pub async fn persist_engine_findings(
             });
         }
 
-        let internet_exposed =
-            resolve_internet_exposed(pool, tenant_id, client_id, &target_url, &f).await;
+        // Pre-resolved above (before the batch tx) so we hold no second connection here.
+        let internet_exposed = internet_exposed_pre[finding_index];
 
         // ── SOAR playbook dispatch (fire-and-forget) ────────────────────────
         // Built outside the tx so a slow webhook doesn't extend the DB lock.
@@ -722,7 +808,7 @@ pub async fn persist_engine_findings(
             internet_exposed,
         };
         let pool_for_dispatch: PgPool = (*pool).clone();
-        tokio::spawn(async move {
+        spawn_bounded_db_task(async move {
             crate::soar::dispatch_record::record_post_persist_dispatch(
                 &pool_for_dispatch,
                 tenant_id,

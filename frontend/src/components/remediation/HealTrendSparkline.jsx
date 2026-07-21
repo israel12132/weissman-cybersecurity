@@ -76,17 +76,17 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-cyan-400" />
-          {t('pages.healTrends.title', { defaultValue: 'Heal trends' })}
+          {t('pages.healTrends.title')}
           <span className="text-[11px] text-white/35 font-mono">· {days}d</span>
         </h3>
         <div className="flex items-center gap-4 text-xs">
-          <span className="text-white/60">{t('pages.healTrends.total', { defaultValue: 'Heals' })} <b className="text-white tabular-nums">{data.total}</b></span>
-          <span className="text-emerald-300/90">{t('pages.healTrends.success', { defaultValue: 'Success' })} <b className="tabular-nums">{pct(data.rate)}</b></span>
-          <span className="text-amber-300/80">{t('pages.healTrends.avg_attempts', { defaultValue: 'Avg attempts' })} <b className="tabular-nums">{data.avgAttempts.toFixed(1)}</b></span>
+          <span className="text-white/60">{t('pages.healTrends.total')} <b className="text-white tabular-nums">{data.total}</b></span>
+          <span className="text-emerald-300/90">{t('pages.healTrends.success')} <b className="tabular-nums">{pct(data.rate)}</b></span>
+          <span className="text-amber-300/80">{t('pages.healTrends.avg_attempts')} <b className="tabular-nums">{data.avgAttempts.toFixed(1)}</b></span>
         </div>
       </div>
       <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 320, height: 96 }} role="img" aria-label={t('pages.healTrends.aria_chart', { defaultValue: 'daily heal volume and success rate' })}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 320, height: 96 }} role="img" aria-label={t('pages.healTrends.aria_chart')}>
           <defs>
             <linearGradient id="htg" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.35" />
@@ -103,8 +103,8 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
         </svg>
       </div>
       <div className="flex items-center gap-4 mt-1.5 text-[10px] text-white/40">
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-cyan-400" /> {t('pages.healTrends.volume', { defaultValue: 'Daily volume' })}</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-emerald-400" /> {t('pages.healTrends.success_rate', { defaultValue: 'Success rate' })}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-cyan-400" /> {t('pages.healTrends.volume')}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-emerald-400" /> {t('pages.healTrends.success_rate')}</span>
       </div>
     </section>
   )

@@ -1617,6 +1617,7 @@ async fn execute_job_unscoped(
                 baseline_sample_size: n,
                 payload_sample_size: n.min(100),
                 z_score_threshold: z,
+                ..Default::default()
             };
             let (tx_stream, mut rx_stream) =
                 tokio::sync::mpsc::unbounded_channel::<crate::timing_engine::TimingStreamEvent>();

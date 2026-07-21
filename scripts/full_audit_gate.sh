@@ -77,6 +77,12 @@ gate_g4_wiring() {
 
 gate_g5_reality() {
   node scripts/engine_reality_audit.mjs >/dev/null
+  # Breadth + FP-accuracy proof: every attack domain has a live probe, every engine maps to
+  # MITRE, and the FP/TP suppression mechanism is present in source. Also refreshes and
+  # gate-checks docs/ENGINE_COVERAGE_AND_ACCURACY.md.
+  node scripts/engine_coverage_accuracy_report.mjs --check >/dev/null
+  # ATT&CK currency: every technique ID resolves to a live technique in the current release.
+  node scripts/mitre_attack_coverage.mjs --check >/dev/null
   local no_path
   no_path="$(node scripts/engine_reality_audit.mjs | node -e "
     let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{

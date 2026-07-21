@@ -36,7 +36,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 const ENGINE_ID: &str = "edr_evasion";
-const MITRE_IMPAIR: &str = "T1562";
+const MITRE_IMPAIR: &str = "T1685";
 const MITRE_APP: &str = "T1071";
 
 // ── Configuration ────────────────────────────────────────────────────────────

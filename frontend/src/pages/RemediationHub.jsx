@@ -6,6 +6,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
+import Button from '../components/ui/Button'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import RemediationDetail from '../components/remediation/RemediationDetail'
@@ -86,13 +87,13 @@ function StatusBadge({ status, t }) {
   const colors = {
     completed: 'text-green-400 bg-green-500/10 border-green-500/30',
     running: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
-    pending: 'text-gray-400 bg-gray-500/10 border-gray-500/30',
+    pending: 'text-text-tertiary bg-bg-3 border-border-strong',
   }
   const Icon = status === 'completed' ? CheckCircle : status === 'running' ? Clock : AlertTriangle
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${colors[status] || colors.pending}`}>
       <Icon className={`w-3.5 h-3.5 ${status === 'running' ? 'animate-spin' : ''}`} />
-      {t(`pages.remediationHub.status_${status}`, { defaultValue: status })}
+      {t(`pages.remediationHub.status_${status}`)}
     </span>
   )
 }
@@ -252,18 +253,18 @@ export default function RemediationHub() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04]">
               <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-300/80 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics', { defaultValue: 'Auto-heal' })}
+                <ShieldCheck className="w-3.5 h-3.5" /> {t('pages.remediationHub.heal_analytics')}
               </span>
-              <HealStat label={t('pages.remediationHub.heal_runs', { defaultValue: 'runs' })} value={healStats.total} />
-              <HealStat label={t('pages.remediationHub.heal_fix_rate', { defaultValue: 'fix rate' })} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
-              <HealStat label={t('pages.remediationHub.heal_avg_attempts', { defaultValue: 'avg attempts' })} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
-              <HealStat label={t('pages.remediationHub.heal_attested', { defaultValue: 'attested' })} value={healStats.attested} color="#34d399" />
+              <HealStat label={t('pages.remediationHub.heal_runs')} value={healStats.total} />
+              <HealStat label={t('pages.remediationHub.heal_fix_rate')} value={`${Math.round((healStats.fixed / Math.max(1, healStats.total)) * 100)}%`} color="#22c55e" />
+              <HealStat label={t('pages.remediationHub.heal_avg_attempts')} value={(healStats.attemptsSum / Math.max(1, healStats.total)).toFixed(1)} />
+              <HealStat label={t('pages.remediationHub.heal_attested')} value={healStats.attested} color="#34d399" />
               <button
                 type="button"
                 onClick={() => setShowAnalytics((v) => !v)}
                 className="ml-auto text-[10px] font-mono px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
               >
-                {showAnalytics ? t('pages.remediationHub.hide_analytics', { defaultValue: 'Hide analytics' }) : t('pages.remediationHub.show_analytics', { defaultValue: 'Analytics ▾' })}
+                {showAnalytics ? t('pages.remediationHub.hide_analytics') : t('pages.remediationHub.show_analytics')}
               </button>
             </div>
             {showAnalytics && <RemediationAnalyticsPanel stats={healStats} />}
@@ -279,12 +280,20 @@ export default function RemediationHub() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('pages.remediationHub.search_placeholder')}
+              aria-label={t('pages.remediationHub.search_placeholder')}
               className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white/80 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40"
             />
             {search && (
-              <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+              <Button
+                variant="unstyled"
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label={t('common.clear', { defaultValue: 'Clear search' })}
+                title={t('common.clear', { defaultValue: 'Clear search' })}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+              >
                 <X className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
@@ -349,7 +358,7 @@ export default function RemediationHub() {
                             {SEVERITY_KEYS.filter((k) => w.severities[k] > 0).map((k) => `${t(`pages.remediationHub.sev_${k}`)} ${w.severities[k]}`).join(' · ')}
                           </span>
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-text-tertiary">
                           {w.total === 1
                             ? t('pages.remediationHub.findings_count', { count: w.total })
                             : t('pages.remediationHub.findings_count_plural', { count: w.total })}{' '}
@@ -381,7 +390,7 @@ export default function RemediationHub() {
                               className="text-[11px] px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-1.5"
                             >
                               <Wrench className="w-3 h-3" />
-                              {t('pages.remediationHub.batch_heal_open', { defaultValue: 'Heal all fixable ({{n}})', n: w.items.filter((f) => f.has_patch).length })}
+                              {t('pages.remediationHub.batch_heal_open', { n: w.items.filter((f) => f.has_patch).length })}
                             </button>
                           )}
                         </div>
@@ -399,7 +408,7 @@ export default function RemediationHub() {
                             className="px-2.5 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-md text-[11px] font-medium hover:bg-cyan-500/30 transition-colors shrink-0 flex items-center gap-1"
                           >
                             <Sparkles className="w-3 h-3" />
-                            {t('pages.remediationHub.view_fix', { defaultValue: 'View fix' })}
+                            {t('pages.remediationHub.view_fix')}
                           </button>
                         </div>
                       ))}
@@ -425,7 +434,8 @@ export default function RemediationHub() {
 
 function Pill({ active, color = '#22d3ee', onClick, children }) {
   return (
-    <button
+    <Button
+      variant="unstyled"
       type="button"
       onClick={onClick}
       className="px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider border transition-colors"
@@ -436,7 +446,7 @@ function Pill({ active, color = '#22d3ee', onClick, children }) {
       }}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -453,7 +463,7 @@ function StatCard({ label, value, icon, color, loading }) {
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-400">{label}</span>
+        <span className="text-xs text-text-tertiary">{label}</span>
         {icon}
       </div>
       <div className="text-2xl font-bold tabular-nums" style={color ? { color } : { color: '#fff' }}>

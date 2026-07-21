@@ -204,7 +204,7 @@ export default function FinancialRisk() {
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
         {selectedClientId == null && (
-          <EmptyState icon="🏢" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
+          <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
         )}
 
         {selectedClientId != null && loading && <SkeletonWidgetGrid count={4} />}
@@ -217,7 +217,7 @@ export default function FinancialRisk() {
 
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
-            icon="💵"
+            icon="dollar"
             title={t(`${NS}.no_snapshot_title`)}
             body={t(`${NS}.no_snapshot_body`)}
             action={
@@ -276,7 +276,7 @@ export default function FinancialRisk() {
                 {t(`${NS}.top_contributors`)}
               </h2>
               {contributors.length === 0 ? (
-                <EmptyState icon="📊" title={t(`${NS}.no_contributors_title`)} body={t(`${NS}.no_contributors_body`)} />
+                <EmptyState icon="chart" title={t(`${NS}.no_contributors_title`)} body={t(`${NS}.no_contributors_body`)} />
               ) : (
                 <DataTable
                   id="financial-risk-contributors"

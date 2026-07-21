@@ -224,6 +224,22 @@ jobs:
       - name: UI-primitive adoption ratchet (no new raw <table>/<button>)
         run: node scripts/report-ui-primitives.mjs --check
 
+      - name: Engine coverage & accuracy gate (breadth + FP mechanism, from source)
+        run: node scripts/engine_coverage_accuracy_report.mjs --check
+
+      - name: MITRE ATT&CK currency gate (no stale/revoked technique IDs)
+        run: node scripts/mitre_attack_coverage.mjs --check
+
+      - name: Engine coverage & ATT&CK docs are in sync with source
+        run: |
+          node scripts/engine_coverage_accuracy_report.mjs >/dev/null
+          node scripts/mitre_attack_coverage.mjs >/dev/null
+          git diff --exit-code \
+            docs/ENGINE_COVERAGE_AND_ACCURACY.md \
+            docs/MITRE_ATTACK_COVERAGE.md \
+            docs/attack-navigator/ \
+            || { echo "::error::A generated coverage artifact is stale — run: node scripts/engine_coverage_accuracy_report.mjs && node scripts/mitre_attack_coverage.mjs"; exit 1; }
+
       - name: Unit tests with coverage (Vitest ≥60% critical paths)
         run: npm run test:coverage
         working-directory: frontend

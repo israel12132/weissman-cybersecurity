@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import { apiUrl } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 /**
  * RemediationDetail — the "wow" surface. For a single finding it shows a bilingual (he/en)
@@ -181,7 +182,7 @@ export default function RemediationDetail({ finding, onClose }) {
     setJobStatus(null)
     setJobId(null)
     if (selectedChannelMeta.touchesRepo && (!repoSlug.trim() || !gitToken.trim())) {
-      setHealError(t('pages.remediationHub.repo_token_required', { defaultValue: 'repo_slug and git_token are required for this channel' }))
+      setHealError(t('pages.remediationHub.repo_token_required'))
       return
     }
     setHealing(true)
@@ -216,7 +217,7 @@ export default function RemediationDetail({ finding, onClose }) {
   const runRevert = useCallback(async () => {
     if (!clientId || !findingId) return
     if (!repoSlug.trim() || !gitToken.trim()) {
-      setHealError(t('pages.remediationHub.repo_token_required', { defaultValue: 'repo_slug and git_token are required' }))
+      setHealError(t('pages.remediationHub.repo_token_required'))
       return
     }
     setReverting(true)
@@ -265,17 +266,17 @@ export default function RemediationDetail({ finding, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={() => setLangMode((m) => (m === 'both' ? 'current' : 'both'))}
               className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25"
-              title={t('pages.remediationHub.show_both_languages', { defaultValue: 'Show both languages' })}
+              title={t('pages.remediationHub.show_both_languages')}
             >
               <Languages className="w-4 h-4" />
-            </button>
-            <button type="button" onClick={onClose} className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25">
+            </Button>
+            <Button variant="unstyled" type="button" onClick={onClose} className="p-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/25">
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -285,36 +286,36 @@ export default function RemediationDetail({ finding, onClose }) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-cyan-400" />
-                {t('pages.remediationHub.detail_title', { defaultValue: 'Remediation brief' })}
+                {t('pages.remediationHub.detail_title')}
               </h3>
-              <button
+              <Button variant="unstyled"
                 type="button"
                 onClick={() => loadBrief(true)}
                 disabled={briefLoading}
                 className="text-xs px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-50 flex items-center gap-1.5"
               >
                 {briefLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                {t('pages.remediationHub.generate_brief', { defaultValue: 'Generate brief' })}
-              </button>
+                {t('pages.remediationHub.generate_brief')}
+              </Button>
             </div>
 
             {briefError && (
               <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-900/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                {t('pages.remediationHub.brief_error', { defaultValue: 'Could not generate the brief', error: briefError })}: {briefError}
+                {t('pages.remediationHub.brief_error', { error: briefError })}: {briefError}
               </div>
             )}
 
             {briefLoading && !brief && (
-              <div className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.brief_loading', { defaultValue: 'Generating bilingual brief…' })}</div>
+              <div className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.brief_loading')}</div>
             )}
 
             {brief && (
               <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/30">
-                <BilingualBlock title={t('pages.remediationHub.brief_problem', { defaultValue: 'The problem' })} value={brief.problem} mode={langMode} curLang={curLang} />
-                <BilingualBlock title={t('pages.remediationHub.brief_root_cause', { defaultValue: 'Root cause' })} value={brief.root_cause} mode={langMode} curLang={curLang} />
-                <BilingualBlock title={t('pages.remediationHub.brief_impact', { defaultValue: 'Impact' })} value={brief.impact} mode={langMode} curLang={curLang} />
-                <BilingualBlock title={t('pages.remediationHub.brief_fix', { defaultValue: 'The fix' })} value={brief.fix_explanation} mode={langMode} curLang={curLang} />
+                <BilingualBlock title={t('pages.remediationHub.brief_problem')} value={brief.problem} mode={langMode} curLang={curLang} />
+                <BilingualBlock title={t('pages.remediationHub.brief_root_cause')} value={brief.root_cause} mode={langMode} curLang={curLang} />
+                <BilingualBlock title={t('pages.remediationHub.brief_impact')} value={brief.impact} mode={langMode} curLang={curLang} />
+                <BilingualBlock title={t('pages.remediationHub.brief_fix')} value={brief.fix_explanation} mode={langMode} curLang={curLang} />
               </div>
             )}
           </section>
@@ -324,7 +325,7 @@ export default function RemediationDetail({ finding, onClose }) {
             <section className="space-y-2">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <GitPullRequest className="w-4 h-4 text-cyan-400" />
-                {t('pages.remediationHub.diff_after', { defaultValue: 'Proposed fix (unified diff)' })}
+                {t('pages.remediationHub.diff_after')}
               </h3>
               <DiffView patch={patch} />
             </section>
@@ -334,30 +335,30 @@ export default function RemediationDetail({ finding, onClose }) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <ChevronRight className="w-4 h-4 text-cyan-400" />
-              {t('pages.remediationHub.channel_label', { defaultValue: 'Delivery channel' })}
+              {t('pages.remediationHub.channel_label')}
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {CHANNELS.map((c) => {
                 const Icon = c.icon
                 const active = channel === c.id
                 return (
-                  <button
+                  <Button variant="unstyled"
                     key={c.id}
                     type="button"
                     onClick={() => setChannel(c.id)}
                     className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs text-left transition-colors ${active ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200' : 'border-white/10 text-white/60 hover:border-white/25'}`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span>{t(`pages.remediationHub.${c.labelKey}`, { defaultValue: c.id })}</span>
-                  </button>
+                    <span>{t(`pages.remediationHub.${c.labelKey}`)}</span>
+                  </Button>
                 )
               })}
             </div>
 
             {channelHowTo && (
               <div className="space-y-3 p-3 rounded-lg border border-white/10 bg-black/30">
-                <BilingualBlock title={t('pages.remediationHub.channel_connect', { defaultValue: 'How to connect' })} value={channelHowTo.connect} mode={langMode} curLang={curLang} />
-                <BilingualBlock title={t('pages.remediationHub.channel_apply', { defaultValue: 'How to apply' })} value={channelHowTo.apply} mode={langMode} curLang={curLang} />
+                <BilingualBlock title={t('pages.remediationHub.channel_connect')} value={channelHowTo.connect} mode={langMode} curLang={curLang} />
+                <BilingualBlock title={t('pages.remediationHub.channel_apply')} value={channelHowTo.apply} mode={langMode} curLang={curLang} />
               </div>
             )}
           </section>
@@ -366,28 +367,28 @@ export default function RemediationDetail({ finding, onClose }) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-white flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              {t('pages.remediationHub.heal_now', { defaultValue: 'Heal now' })}
+              {t('pages.remediationHub.heal_now')}
             </h3>
             {selectedChannelMeta.touchesRepo ? (
               <div className="grid grid-cols-1 gap-2">
-                <Field label={t('pages.remediationHub.repo_slug', { defaultValue: 'Repository (owner/repo)' })} value={repoSlug} onChange={setRepoSlug} placeholder="owner/repo" />
-                <Field label={t('pages.remediationHub.git_token', { defaultValue: 'GitHub token (repo scope)' })} value={gitToken} onChange={setGitToken} type="password" placeholder="ghp_…" />
-                <Field label={t('pages.remediationHub.base_branch', { defaultValue: 'Base branch' })} value={baseBranch} onChange={setBaseBranch} placeholder="main" />
+                <Field label={t('pages.remediationHub.repo_slug')} value={repoSlug} onChange={setRepoSlug} placeholder="owner/repo" />
+                <Field label={t('pages.remediationHub.git_token')} value={gitToken} onChange={setGitToken} type="password" placeholder="ghp_…" />
+                <Field label={t('pages.remediationHub.base_branch')} value={baseBranch} onChange={setBaseBranch} placeholder="main" />
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2">
-                <p className="text-[11px] text-white/45">{t('pages.remediationHub.channel_no_repo', { defaultValue: 'This channel does not modify your repository. Sandbox verification still needs read access below.' })}</p>
-                <Field label={t('pages.remediationHub.repo_slug', { defaultValue: 'Repository (owner/repo)' })} value={repoSlug} onChange={setRepoSlug} placeholder="owner/repo" />
-                <Field label={t('pages.remediationHub.git_token', { defaultValue: 'GitHub token (repo scope)' })} value={gitToken} onChange={setGitToken} type="password" placeholder="ghp_…" />
+                <p className="text-[11px] text-white/45">{t('pages.remediationHub.channel_no_repo')}</p>
+                <Field label={t('pages.remediationHub.repo_slug')} value={repoSlug} onChange={setRepoSlug} placeholder="owner/repo" />
+                <Field label={t('pages.remediationHub.git_token')} value={gitToken} onChange={setGitToken} type="password" placeholder="ghp_…" />
               </div>
             )}
-            <Field label={t('pages.remediationHub.health_curl', { defaultValue: 'Health check curl (optional)' })} value={healthCurl} onChange={setHealthCurl} placeholder="curl http://localhost:3000/health" />
+            <Field label={t('pages.remediationHub.health_curl')} value={healthCurl} onChange={setHealthCurl} placeholder="curl http://localhost:3000/health" />
             <details className="text-[11px] text-white/50">
-              <summary className="cursor-pointer text-white/60">{t('pages.remediationHub.dual_auth_required', { defaultValue: 'Destructive / dual-approval headers (if enforced)' })}</summary>
+              <summary className="cursor-pointer text-white/60">{t('pages.remediationHub.dual_auth_required')}</summary>
               <div className="grid grid-cols-1 gap-2 mt-2">
                 <Field label="X-Weissman-Destructive-Confirm" value={destructiveConfirm} onChange={setDestructiveConfirm} type="password" />
                 <Field label="X-Weissman-Dual-Approve" value={dualApprove} onChange={setDualApprove} type="password" />
-                <p className="text-white/35">{t('pages.remediationHub.dual_auth_hint', { defaultValue: 'Required only when the server sets the corresponding secrets (production). Requires admin role.' })}</p>
+                <p className="text-white/35">{t('pages.remediationHub.dual_auth_hint')}</p>
               </div>
             </details>
 
@@ -397,15 +398,15 @@ export default function RemediationDetail({ finding, onClose }) {
               </div>
             )}
 
-            <button
+            <Button variant="unstyled"
               type="button"
               onClick={runHeal}
               disabled={healing}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 font-medium hover:bg-cyan-500/30 disabled:opacity-50"
             >
               {healing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-              {healing ? t('pages.remediationHub.healing', { defaultValue: 'Healing…' }) : t('pages.remediationHub.heal_now', { defaultValue: 'Heal now' })}
-            </button>
+              {healing ? t('pages.remediationHub.healing') : t('pages.remediationHub.heal_now')}
+            </Button>
           </section>
 
           {/* Live verification timeline + verdict */}
@@ -414,12 +415,12 @@ export default function RemediationDetail({ finding, onClose }) {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                  {t('pages.remediationHub.verification_steps', { defaultValue: 'Sandbox verification' })}
+                  {t('pages.remediationHub.verification_steps')}
                 </h3>
                 <div className="flex items-center gap-2 flex-wrap">
                   {jobStatus?.attempts > 1 && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/25">
-                      {t('pages.remediationHub.self_repair_attempts', { defaultValue: 'self-repair ×{{n}}', n: jobStatus.attempts })}
+                      {t('pages.remediationHub.self_repair_attempts', { n: jobStatus.attempts })}
                     </span>
                   )}
                   {jobStatus?.attested && (
@@ -427,16 +428,16 @@ export default function RemediationDetail({ finding, onClose }) {
                       href={apiUrl(`/api/heal-verify/${jobId}/attestation`)}
                       target="_blank"
                       rel="noreferrer"
-                      title={t('pages.remediationHub.verify_attestation', { defaultValue: 'Verify signed receipt' })}
+                      title={t('pages.remediationHub.verify_attestation')}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20"
                     >
-                      🔏 {t('pages.remediationHub.attested', { defaultValue: 'attested' })}
+                      🔏 {t('pages.remediationHub.attested')}
                     </a>
                   )}
                   {verdictMeta && (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium" style={{ color: verdictMeta.color, background: `${verdictMeta.color}18`, border: `1px solid ${verdictMeta.color}44` }}>
                       <verdictMeta.Icon className="w-3.5 h-3.5" />
-                      {t(`pages.remediationHub.${verdictMeta.key}`, { defaultValue: verdict })}
+                      {t(`pages.remediationHub.${verdictMeta.key}`)}
                     </span>
                   )}
                 </div>
@@ -445,44 +446,44 @@ export default function RemediationDetail({ finding, onClose }) {
               {jobStatus?.pr_url && (
                 <div className="flex items-center gap-3 flex-wrap">
                   <a href={jobStatus.pr_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">
-                    <GitPullRequest className="w-3.5 h-3.5" /> {t('pages.remediationHub.view_pr', { defaultValue: 'View pull request' })}
+                    <GitPullRequest className="w-3.5 h-3.5" /> {t('pages.remediationHub.view_pr')}
                   </a>
                   {reverted ? (
                     <span className="inline-flex items-center gap-1 text-xs text-white/40">
-                      <X className="w-3.5 h-3.5" /> {t('pages.remediationHub.reverted', { defaultValue: 'reverted' })}
+                      <X className="w-3.5 h-3.5" /> {t('pages.remediationHub.reverted')}
                     </span>
                   ) : (
-                    <button
+                    <Button variant="unstyled"
                       type="button"
                       onClick={runRevert}
                       disabled={reverting}
                       className="inline-flex items-center gap-1.5 text-xs text-rose-300/80 hover:text-rose-200 disabled:opacity-50"
-                      title={t('pages.remediationHub.revert_hint', { defaultValue: 'Close the auto-opened PR/MR' })}
+                      title={t('pages.remediationHub.revert_hint')}
                     >
                       {reverting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                      {t('pages.remediationHub.revert', { defaultValue: 'Revert' })}
-                    </button>
+                      {t('pages.remediationHub.revert')}
+                    </Button>
                   )}
                 </div>
               )}
               <div className="flex items-center gap-4 flex-wrap">
                 {jobId && (jobStatus?.channel === 'diff_download' || jobStatus?.channel === 'virtual_patch') && jobStatus?.status === 'completed' && (
                   <a href={apiUrl(`/api/heal-verify/${jobId}/patch`)} className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200">
-                    <Download className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_patch', { defaultValue: 'Download patch' })}
+                    <Download className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_patch')}
                   </a>
                 )}
                 {jobId && jobStatus?.status === 'completed' && (
-                  <a href={apiUrl(`/api/heal-verify/${jobId}/report`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200" title={t('pages.remediationHub.report_hint', { defaultValue: 'Open a printable bilingual remediation report' })}>
-                    <FileText className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_report', { defaultValue: 'Remediation report' })}
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/report`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200" title={t('pages.remediationHub.report_hint')}>
+                    <FileText className="w-3.5 h-3.5" /> {t('pages.remediationHub.download_report')}
                   </a>
                 )}
                 {jobId && jobStatus?.status === 'completed' && (
-                  <a href={apiUrl(`/api/heal-verify/${jobId}/report.json`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_json_hint', { defaultValue: 'Machine-readable JSON (weissman-heal-report/v1)' })}>
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/report.json`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_json_hint')}>
                     <FileText className="w-3.5 h-3.5" /> JSON
                   </a>
                 )}
                 {jobId && jobStatus?.status === 'completed' && (
-                  <a href={apiUrl(`/api/heal-verify/${jobId}/sarif`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_sarif_hint', { defaultValue: 'SARIF 2.1.0 for GitHub code scanning / SAST' })}>
+                  <a href={apiUrl(`/api/heal-verify/${jobId}/sarif`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80" title={t('pages.remediationHub.report_sarif_hint')}>
                     <FileText className="w-3.5 h-3.5" /> SARIF
                   </a>
                 )}
@@ -496,7 +497,7 @@ export default function RemediationDetail({ finding, onClose }) {
                   </li>
                 ))}
                 {healing && steps.length === 0 && (
-                  <li className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.step_waiting', { defaultValue: 'Waiting for the worker…' })}</li>
+                  <li className="text-xs text-white/40 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('pages.remediationHub.step_waiting')}</li>
                 )}
               </ol>
             </section>
@@ -507,7 +508,7 @@ export default function RemediationDetail({ finding, onClose }) {
             <section className="space-y-2">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-cyan-400" />
-                {t('pages.remediationHub.heal_history', { defaultValue: 'Heal history' })}
+                {t('pages.remediationHub.heal_history')}
               </h3>
               <div className="divide-y divide-white/5 rounded-lg border border-white/10 overflow-hidden">
                 {history.map((h) => {

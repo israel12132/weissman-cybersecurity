@@ -244,7 +244,7 @@ export default function AttackPaths() {
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
         {selectedClientId == null && (
-          <EmptyState icon="🏢" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
+          <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
         )}
 
         {selectedClientId != null && loading && <SkeletonWidgetGrid count={4} />}
@@ -257,7 +257,7 @@ export default function AttackPaths() {
 
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
-            icon="🕸"
+            icon="network"
             title={t(`${NS}.no_snapshot_title`)}
             body={t(`${NS}.no_snapshot_body`)}
             action={
@@ -293,7 +293,7 @@ export default function AttackPaths() {
               </h2>
               <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.choke_points_hint`)}</p>
               {chokePoints.length === 0 ? (
-                <EmptyState icon="📊" title={t(`${NS}.no_choke_title`)} body={t(`${NS}.no_choke_body`)} />
+                <EmptyState icon="chart" title={t(`${NS}.no_choke_title`)} body={t(`${NS}.no_choke_body`)} />
               ) : (
                 <DataTable
                   id="attack-choke-points"
@@ -312,7 +312,7 @@ export default function AttackPaths() {
                 {t(`${NS}.top_paths`)}
               </h2>
               {paths.length === 0 ? (
-                <EmptyState icon="🛡" title={t(`${NS}.no_paths_title`)} body={t(`${NS}.no_paths_body`)} />
+                <EmptyState icon="shield" title={t(`${NS}.no_paths_title`)} body={t(`${NS}.no_paths_body`)} />
               ) : (
                 <div className="space-y-3">
                   {paths.slice(0, 15).map((p, i) => (

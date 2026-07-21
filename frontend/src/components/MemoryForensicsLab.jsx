@@ -33,13 +33,13 @@ function EntropyGauge({ value, isLeak }) {
   const c = colors[zone]
   return (
     <div className="relative flex flex-col items-center">
-      <svg viewBox="0 0 120 80" className="w-full max-w-[200px] h-24 text-slate-700" aria-label={`Entropy ${v.toFixed(1)}`}>
+      <svg viewBox="0 0 120 80" className="w-full max-w-[200px] h-24 text-text-muted" aria-label={`Entropy ${v.toFixed(1)}`}>
         <defs>
           <linearGradient id="gaugeSafe" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#1e3a5f" /><stop offset="100%" stopColor="#3b82f6" /></linearGradient>
           <linearGradient id="gaugeWarn" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#713f12" /><stop offset="100%" stopColor="#eab308" /></linearGradient>
           <linearGradient id="gaugeCrit" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#7f1d1d" /><stop offset="100%" stopColor="#dc2626" /></linearGradient>
         </defs>
-        <path d="M 10 70 A 50 50 0 0 1 110 70" fill="none" stroke="currentColor" strokeWidth="12" className="text-slate-700" />
+        <path d="M 10 70 A 50 50 0 0 1 110 70" fill="none" stroke="currentColor" strokeWidth="12" className="text-text-muted" />
         <path d="M 10 70 A 50 50 0 0 1 60 22" fill="none" stroke="url(#gaugeSafe)" strokeWidth="12" strokeLinecap="round" />
         <path d="M 60 22 A 50 50 0 0 1 95 52" fill="none" stroke="url(#gaugeWarn)" strokeWidth="12" strokeLinecap="round" />
         <path d="M 95 52 A 50 50 0 0 1 110 70" fill="none" stroke="url(#gaugeCrit)" strokeWidth="12" strokeLinecap="round" />

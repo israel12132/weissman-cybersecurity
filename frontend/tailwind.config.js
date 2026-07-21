@@ -1,4 +1,15 @@
 /** @type {import('tailwindcss').Config} */
+/**
+ * Token color helper: design tokens are defined as `var(--x)` (full hex/rgba values), which
+ * Tailwind cannot split for its `/opacity` modifier — so `bg-bg-2/80` used to silently emit
+ * nothing. This returns the plain var for solid usages (unchanged CSS, zero risk) and a
+ * `color-mix` for an explicit numeric alpha, making `/opacity` work on every token.
+ */
+const tok = (v) => ({ opacityValue } = {}) =>
+  opacityValue === undefined || opacityValue === '1' || String(opacityValue).includes('--tw-')
+    ? `var(${v})`
+    : `color-mix(in srgb, var(${v}) calc(${opacityValue} * 100%), transparent)`
+
 export default {
   content: [
     './index.html',
@@ -22,96 +33,96 @@ export default {
 
         /* Design-system surfaces */
         bg: {
-          0: 'var(--bg-0)',
-          1: 'var(--bg-1)',
-          2: 'var(--bg-2)',
-          3: 'var(--bg-3)',
-          4: 'var(--bg-4)',
-          elevated: 'var(--bg-elevated)',
-          overlay: 'var(--bg-overlay)',
-          glass: 'var(--bg-glass)',
-          'glass-elevated': 'var(--bg-glass-elevated)',
+          0: tok('--bg-0'),
+          1: tok('--bg-1'),
+          2: tok('--bg-2'),
+          3: tok('--bg-3'),
+          4: tok('--bg-4'),
+          elevated: tok('--bg-elevated'),
+          overlay: tok('--bg-overlay'),
+          glass: tok('--bg-glass'),
+          'glass-elevated': tok('--bg-glass-elevated'),
         },
 
         /* Text hierarchy */
         text: {
-          primary: 'var(--text-primary)',
-          secondary: 'var(--text-secondary)',
-          tertiary: 'var(--text-tertiary)',
-          muted: 'var(--text-muted)',
-          disabled: 'var(--text-disabled)',
-          inverse: 'var(--text-inverse)',
-          accent: 'var(--text-accent)',
-          'accent-violet': 'var(--text-accent-violet)',
+          primary: tok('--text-primary'),
+          secondary: tok('--text-secondary'),
+          tertiary: tok('--text-tertiary'),
+          muted: tok('--text-muted'),
+          disabled: tok('--text-disabled'),
+          inverse: tok('--text-inverse'),
+          accent: tok('--text-accent'),
+          'accent-violet': tok('--text-accent-violet'),
         },
 
         /* Borders */
         border: {
-          subtle: 'var(--border-subtle)',
-          DEFAULT: 'var(--border-default)',
-          strong: 'var(--border-strong)',
-          accent: 'var(--border-accent)',
-          'accent-violet': 'var(--border-accent-violet)',
-          danger: 'var(--border-danger)',
+          subtle: tok('--border-subtle'),
+          DEFAULT: tok('--border-default'),
+          strong: tok('--border-strong'),
+          accent: tok('--border-accent'),
+          'accent-violet': tok('--border-accent-violet'),
+          danger: tok('--border-danger'),
         },
 
         /* Brand accent */
         accent: {
-          cyan: 'var(--accent-cyan)',
-          'cyan-soft': 'var(--accent-cyan-soft)',
-          'cyan-muted': 'var(--accent-cyan-muted)',
-          violet: 'var(--accent-violet)',
-          'violet-soft': 'var(--accent-violet-soft)',
-          'violet-muted': 'var(--accent-violet-muted)',
+          cyan: tok('--accent-cyan'),
+          'cyan-soft': tok('--accent-cyan-soft'),
+          'cyan-muted': tok('--accent-cyan-muted'),
+          violet: tok('--accent-violet'),
+          'violet-soft': tok('--accent-violet-soft'),
+          'violet-muted': tok('--accent-violet-muted'),
         },
 
         /* Severity */
         severity: {
-          critical: 'var(--severity-critical)',
-          'critical-bg': 'var(--severity-critical-bg)',
-          'critical-border': 'var(--severity-critical-border)',
-          high: 'var(--severity-high)',
-          'high-bg': 'var(--severity-high-bg)',
-          'high-border': 'var(--severity-high-border)',
-          medium: 'var(--severity-medium)',
-          'medium-bg': 'var(--severity-medium-bg)',
-          'medium-border': 'var(--severity-medium-border)',
-          low: 'var(--severity-low)',
-          'low-bg': 'var(--severity-low-bg)',
-          'low-border': 'var(--severity-low-border)',
-          info: 'var(--severity-info)',
-          'info-bg': 'var(--severity-info-bg)',
-          'info-border': 'var(--severity-info-border)',
+          critical: tok('--severity-critical'),
+          'critical-bg': tok('--severity-critical-bg'),
+          'critical-border': tok('--severity-critical-border'),
+          high: tok('--severity-high'),
+          'high-bg': tok('--severity-high-bg'),
+          'high-border': tok('--severity-high-border'),
+          medium: tok('--severity-medium'),
+          'medium-bg': tok('--severity-medium-bg'),
+          'medium-border': tok('--severity-medium-border'),
+          low: tok('--severity-low'),
+          'low-bg': tok('--severity-low-bg'),
+          'low-border': tok('--severity-low-border'),
+          info: tok('--severity-info'),
+          'info-bg': tok('--severity-info-bg'),
+          'info-border': tok('--severity-info-border'),
         },
 
         /* Status */
         status: {
-          active: 'var(--status-active)',
-          'active-bg': 'var(--status-active-bg)',
-          pending: 'var(--status-pending)',
-          'pending-bg': 'var(--status-pending-bg)',
-          resolved: 'var(--status-resolved)',
-          'resolved-bg': 'var(--status-resolved-bg)',
-          offline: 'var(--status-offline)',
-          'offline-bg': 'var(--status-offline-bg)',
-          error: 'var(--status-error)',
-          'error-bg': 'var(--status-error-bg)',
+          active: tok('--status-active'),
+          'active-bg': tok('--status-active-bg'),
+          pending: tok('--status-pending'),
+          'pending-bg': tok('--status-pending-bg'),
+          resolved: tok('--status-resolved'),
+          'resolved-bg': tok('--status-resolved-bg'),
+          offline: tok('--status-offline'),
+          'offline-bg': tok('--status-offline-bg'),
+          error: tok('--status-error'),
+          'error-bg': tok('--status-error-bg'),
         },
 
         /* Intel badges */
         kev: {
-          DEFAULT: 'var(--kev)',
-          bg: 'var(--kev-bg)',
-          border: 'var(--kev-border)',
+          DEFAULT: tok('--kev'),
+          bg: tok('--kev-bg'),
+          border: tok('--kev-border'),
         },
         epss: {
-          high: 'var(--epss-high)',
-          'high-bg': 'var(--epss-high-bg)',
-          'high-border': 'var(--epss-high-border)',
-          mid: 'var(--epss-mid)',
-          'mid-bg': 'var(--epss-mid-bg)',
-          low: 'var(--epss-low)',
-          'low-bg': 'var(--epss-low-bg)',
+          high: tok('--epss-high'),
+          'high-bg': tok('--epss-high-bg'),
+          'high-border': tok('--epss-high-border'),
+          mid: tok('--epss-mid'),
+          'mid-bg': tok('--epss-mid-bg'),
+          low: tok('--epss-low'),
+          'low-bg': tok('--epss-low-bg'),
         },
       },
 

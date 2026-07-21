@@ -111,3 +111,39 @@ pub fn expanded_path_wordlist() -> Vec<String> {
     ];
     paths.into_iter().map(String::from).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_normalizes_and_dedups() {
+        let seeds = vec!["api".to_string(), "/api/".to_string()];
+        let out = expand_recursive_directory_paths(&seeds, 1000);
+        assert!(out.contains(&"/api/v1".to_string()));
+        let v1s = out.iter().filter(|p| p.as_str() == "/api/v1").count();
+        assert_eq!(v1s, 1);
+    }
+
+    #[test]
+    fn expand_respects_cap() {
+        let seeds = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let out = expand_recursive_directory_paths(&seeds, 5);
+        assert_eq!(out.len(), 5);
+    }
+
+    #[test]
+    fn expand_skips_blank_seeds() {
+        let seeds = vec!["  ".to_string(), String::new()];
+        let out = expand_recursive_directory_paths(&seeds, 100);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn wordlist_has_known_paths() {
+        let w = expanded_path_wordlist();
+        assert!(w.contains(&"/graphql".to_string()));
+        assert!(w.contains(&"/.env".to_string()));
+        assert!(w.len() > 20);
+    }
+}

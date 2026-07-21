@@ -78,10 +78,10 @@ export default function RemediationAnalyticsPanel({ stats }) {
     <div className="p-4 rounded-xl border border-white/10 bg-black/40 space-y-5">
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi icon={<CheckCircle className="w-4 h-4 text-green-400" />} label={t('pages.remediationHub.heal_fix_rate', { defaultValue: 'fix rate' })} value={`${successPct}%`} color="#22c55e" />
-        <Kpi icon={<Repeat className="w-4 h-4 text-amber-400" />} label={t('pages.remediationHub.heal_avg_attempts', { defaultValue: 'avg attempts' })} value={avgAttempts} />
-        <Kpi icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />} label={t('pages.remediationHub.heal_attested', { defaultValue: 'attested' })} value={stats?.attested || 0} color="#34d399" />
-        <Kpi icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} label={t('pages.remediationHub.verdict_broke_app', { defaultValue: 'broke app' })} value={stats?.broke_app || 0} color="#f43f5e" />
+        <Kpi icon={<CheckCircle className="w-4 h-4 text-green-400" />} label={t('pages.remediationHub.heal_fix_rate')} value={`${successPct}%`} color="#22c55e" />
+        <Kpi icon={<Repeat className="w-4 h-4 text-amber-400" />} label={t('pages.remediationHub.heal_avg_attempts')} value={avgAttempts} />
+        <Kpi icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />} label={t('pages.remediationHub.heal_attested')} value={stats?.attested || 0} color="#34d399" />
+        <Kpi icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} label={t('pages.remediationHub.verdict_broke_app')} value={stats?.broke_app || 0} color="#f43f5e" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -92,7 +92,7 @@ export default function RemediationAnalyticsPanel({ stats }) {
             {segments.map((s) => (
               <div key={s.key} className="flex items-center gap-2 text-xs">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
-                <span className="text-white/70">{t(`pages.remediationHub.${s.labelKey}`, { defaultValue: s.label })}</span>
+                <span className="text-white/70">{t(`pages.remediationHub.${s.labelKey}`)}</span>
                 <span className="text-white/40 tabular-nums ml-auto">{s.value}</span>
               </div>
             ))}
@@ -102,7 +102,7 @@ export default function RemediationAnalyticsPanel({ stats }) {
         {/* Channel bars */}
         <div className="space-y-2">
           <div className="text-xs font-semibold text-white/70 flex items-center gap-1.5">
-            <GitPullRequest className="w-3.5 h-3.5 text-cyan-400" /> {t('pages.remediationHub.channel_label', { defaultValue: 'Delivery channel' })}
+            <GitPullRequest className="w-3.5 h-3.5 text-cyan-400" /> {t('pages.remediationHub.channel_label')}
           </div>
           {channels.length === 0 ? (
             <div className="text-xs text-white/30">—</div>

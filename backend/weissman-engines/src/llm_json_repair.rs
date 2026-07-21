@@ -103,3 +103,77 @@ pub fn deserialize_llm_json<T: DeserializeOwned>(raw: &str) -> Result<T, String>
 pub fn parse_value_from_llm(raw: &str) -> Result<Value, String> {
     deserialize_llm_json(raw)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Demo {
+        name: String,
+        count: u32,
+    }
+
+    #[test]
+    fn strip_fences_returns_inner_json_block() {
+        let raw = "```json\n{\"name\":\"a\",\"count\":1}\n```";
+        assert_eq!(strip_fences_and_trim(raw), "{\"name\":\"a\",\"count\":1}");
+    }
+
+    #[test]
+    fn strip_fences_noop_without_fences() {
+        assert_eq!(strip_fences_and_trim("  {\"x\":1}  "), "{\"x\":1}");
+    }
+
+    #[test]
+    fn extract_balanced_object_ignores_braces_inside_strings() {
+        let raw = "prefix {\"a\":{\"b\":\"}\"}} suffix";
+        assert_eq!(
+            extract_balanced_object(raw).unwrap(),
+            "{\"a\":{\"b\":\"}\"}}"
+        );
+    }
+
+    #[test]
+    fn extract_balanced_object_none_when_unbalanced() {
+        assert!(extract_balanced_object("{\"a\":1").is_none());
+    }
+
+    #[test]
+    fn deserialize_strict_json() {
+        let v: Demo = deserialize_llm_json("{\"name\":\"a\",\"count\":2}").unwrap();
+        assert_eq!(
+            v,
+            Demo {
+                name: "a".into(),
+                count: 2
+            }
+        );
+    }
+
+    #[test]
+    fn deserialize_recovers_from_fences_and_trailing_comma() {
+        let raw = "here you go:\n```json\n{\"name\":\"z\",\"count\":3,}\n```\nthanks";
+        let v: Demo = deserialize_llm_json(raw).unwrap();
+        assert_eq!(
+            v,
+            Demo {
+                name: "z".into(),
+                count: 3
+            }
+        );
+    }
+
+    #[test]
+    fn deserialize_errors_on_garbage() {
+        let r: Result<Demo, String> = deserialize_llm_json("not json at all");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn parse_value_reads_generic_object() {
+        let v = parse_value_from_llm("{\"k\": [1,2,3]}").unwrap();
+        assert_eq!(v["k"][2], serde_json::json!(3));
+    }
+}

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, XCircle, ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
+import Button from '../ui/Button'
 
 /**
  * HealReadinessPanel — bilingual auto-heal readiness self-diagnostics from GET /api/heal-readiness.
@@ -38,17 +39,18 @@ export default function HealReadinessPanel() {
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-cyan-400" />
-          {t('pages.healReadiness.title', { defaultValue: 'Auto-heal readiness' })}
+          {t('pages.healReadiness.title')}
         </h3>
-        <button
+        <Button
+          variant="unstyled"
           type="button"
           onClick={load}
           disabled={loading}
           className="inline-flex items-center gap-1.5 text-[11px] text-white/50 hover:text-white/80 disabled:opacity-40"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {t('pages.healReadiness.refresh', { defaultValue: 'Refresh' })}
-        </button>
+          {t('pages.healReadiness.refresh')}
+        </Button>
       </div>
 
       {error && (
@@ -78,8 +80,8 @@ export default function HealReadinessPanel() {
                   : <XCircle className="w-4 h-4 text-rose-400 shrink-0" />}
                 <span className={`text-sm font-semibold ${report.ready ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {report.ready
-                    ? t('pages.healReadiness.ready', { defaultValue: 'Ready to auto-heal' })
-                    : t('pages.healReadiness.not_ready', { defaultValue: 'Not ready' })}
+                    ? t('pages.healReadiness.ready')
+                    : t('pages.healReadiness.not_ready')}
                 </span>
               </div>
               <p className="text-xs text-white/50 mt-1">{pick(report.summary_en, report.summary_he)}</p>
@@ -98,7 +100,7 @@ export default function HealReadinessPanel() {
                       <span className="text-xs font-medium text-white/85">{pick(c.label_en, c.label_he)}</span>
                       {c.required && (
                         <span className="text-[9px] uppercase tracking-wide text-rose-300/70 border border-rose-400/30 rounded px-1">
-                          {t('pages.healReadiness.required', { defaultValue: 'required' })}
+                          {t('pages.healReadiness.required')}
                         </span>
                       )}
                     </div>

@@ -482,7 +482,7 @@ export default function AIAnalysisEngine() {
 
                 {!loading && filtered.length === 0 && (
                   <EmptyState
-                    icon="🤖"
+                    icon="bot"
                     title={t('pages.aiAnalysisEngine.no_patterns_title')}
                     body={t('pages.aiAnalysisEngine.no_patterns_body')}
                     action={(
@@ -678,7 +678,7 @@ export default function AIAnalysisEngine() {
 
               {!loading && correlations.length === 0 && (
                 <EmptyState
-                  icon="🔗"
+                  icon="link"
                   title={t('pages.aiAnalysisEngine.no_correlations_title')}
                   body={t('pages.aiAnalysisEngine.no_correlations_body')}
                 />

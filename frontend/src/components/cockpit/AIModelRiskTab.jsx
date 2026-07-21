@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
+import DataTable from '../ui/DataTable'
 
 const NS = 'components.cockpitTabs.aiModelRisk'
+const columnHelper = createColumnHelper()
 
 export default function AIModelRiskTab() {
   const { t } = useTranslation()
@@ -19,6 +22,43 @@ export default function AIModelRiskTab() {
   const [endpoints, setEndpoints] = useState([{ url: '', model: '', authorization: '' }])
 
   const vectorLabel = (key) => t(`${NS}.vectors.${key}`, key)
+
+  const eventColumns = useMemo(
+    () => [
+      columnHelper.accessor('attack_vector', {
+        header: t(`${NS}.colVector`),
+        cell: (info) => (
+          <span className="text-violet-300 font-mono max-w-[140px] truncate block" title={info.getValue()}>
+            {t(`${NS}.vectors.${info.getValue()}`, info.getValue())}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('endpoint_url', {
+        header: t(`${NS}.colEndpoint`),
+        cell: (info) => (
+          <span className="text-white/70 font-mono max-w-[200px] truncate block" title={info.getValue()}>
+            {info.getValue()}
+          </span>
+        ),
+      }),
+      columnHelper.accessor((e) => e.leakage_score ?? 0, {
+        id: 'leakage_score',
+        header: t(`${NS}.colLeak`),
+        cell: (info) => <span className="text-red-300">{Number(info.getValue()).toFixed(2)}</span>,
+      }),
+      columnHelper.accessor((e) => e.hallucination_score ?? 0, {
+        id: 'hallucination_score',
+        header: t(`${NS}.colHalluc`),
+        cell: (info) => <span className="text-amber-300">{Number(info.getValue()).toFixed(2)}</span>,
+      }),
+      columnHelper.accessor((e) => Boolean(e.blocked), {
+        id: 'blocked',
+        header: t(`${NS}.colBlocked`),
+        cell: (info) => <span>{info.getValue() ? t(`${NS}.blockedYes`) : '—'}</span>,
+      }),
+    ],
+    [t],
+  )
 
   const loadEndpoints = useCallback(async () => {
     if (!selectedClientId) return
@@ -245,35 +285,15 @@ export default function AIModelRiskTab() {
         <div className="px-4 py-3 border-b border-white/10 bg-white/5">
           <h3 className="text-xs font-mono uppercase tracking-wider text-cyan-400">{t(`${NS}.recentEvents`)}</h3>
         </div>
-        <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-black/90 text-[10px] uppercase text-white/40">
-              <tr>
-                <th className="p-2">{t(`${NS}.colVector`)}</th>
-                <th className="p-2">{t(`${NS}.colEndpoint`)}</th>
-                <th className="p-2">{t(`${NS}.colLeak`)}</th>
-                <th className="p-2">{t(`${NS}.colHalluc`)}</th>
-                <th className="p-2">{t(`${NS}.colBlocked`)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={5} className="p-4 text-white/40">{t(`${NS}.noEvents`)}</td>
-                </tr>
-              )}
-              {events.map((e) => (
-                <tr key={e.id} className="border-t border-white/5 hover:bg-white/5">
-                  <td className="p-2 text-violet-300 font-mono max-w-[140px] truncate" title={e.attack_vector}>{vectorLabel(e.attack_vector)}</td>
-                  <td className="p-2 text-white/70 font-mono max-w-[200px] truncate" title={e.endpoint_url}>{e.endpoint_url}</td>
-                  <td className="p-2 text-red-300">{(e.leakage_score ?? 0).toFixed(2)}</td>
-                  <td className="p-2 text-amber-300">{(e.hallucination_score ?? 0).toFixed(2)}</td>
-                  <td className="p-2">{e.blocked ? t(`${NS}.blockedYes`) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          id="ai-model-risk-events-table"
+          columns={eventColumns}
+          data={events}
+          loading={loading}
+          getRowId={(e) => e.id}
+          animateRows={false}
+          emptyState={<span className="text-white/40">{t(`${NS}.noEvents`)}</span>}
+        />
       </div>
     </div>
   )
