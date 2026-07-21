@@ -1,11 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { motion } from 'framer-motion'
 import { ShieldAlert, UserPlus, Trash2, ArrowRight, Zap, Sparkles } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
 import Button from '../ui/Button'
+import DataTable from '../ui/DataTable'
+
+const columnHelper = createColumnHelper()
+const IM = 'components.cockpitTabs.identityMatrix'
 
 export default function IdentityMatrixTab() {
   const { t } = useTranslation()
@@ -98,15 +103,56 @@ export default function IdentityMatrixTab() {
     setSubmitting(false)
   }
 
-  const handleDelete = async (ctxId) => {
-    if (!selectedClientId) return
-    try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts/${ctxId}`, {
-        method: 'DELETE',
-      })
-      if (r.ok) await fetchContexts()
-    } catch (_) {}
-  }
+  const handleDelete = useCallback(
+    async (ctxId) => {
+      if (!selectedClientId) return
+      try {
+        const r = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts/${ctxId}`, {
+          method: 'DELETE',
+        })
+        if (r.ok) await fetchContexts()
+      } catch (_) {}
+    },
+    [selectedClientId, fetchContexts],
+  )
+
+  const contextColumns = useMemo(
+    () => [
+      columnHelper.accessor('role_name', {
+        header: t(`${IM}.table.role`),
+        cell: (info) => <span className="font-medium text-white/90">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor('privilege_order', {
+        header: t(`${IM}.table.privilege_order`),
+        cell: (info) => <span className="text-white/70">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor('token_type', {
+        header: t(`${IM}.table.token_type`),
+        cell: (info) => <span className="text-white/70">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor((c) => c.token_masked || '—', {
+        id: 'token_masked',
+        header: t(`${IM}.table.token`),
+        cell: (info) => <span className="font-mono text-[10px] text-white/50">{info.getValue()}</span>,
+      }),
+      columnHelper.display({
+        id: 'delete',
+        header: '',
+        cell: ({ row }) => (
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={() => handleDelete(row.original.id)}
+            className="p-1.5 rounded text-red-400/80 hover:bg-red-500/20 hover:text-red-400"
+            aria-label={t(`${IM}.delete`)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        ),
+      }),
+    ],
+    [t, handleDelete],
+  )
 
   if (!selectedClientId) {
     return (
@@ -252,54 +298,14 @@ export default function IdentityMatrixTab() {
             </Button>
           )}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-white/10 bg-white/5">
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
-                  {t('components.cockpitTabs.identityMatrix.table.role')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
-                  {t('components.cockpitTabs.identityMatrix.table.privilege_order')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
-                  {t('components.cockpitTabs.identityMatrix.table.token_type')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-white/50">
-                  {t('components.cockpitTabs.identityMatrix.table.token')}
-                </th>
-                <th className="w-20" />
-              </tr>
-            </thead>
-            <tbody>
-              {contexts.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-white/50">
-                    {t('components.cockpitTabs.identityMatrix.empty_contexts')}
-                  </td>
-                </tr>
-              )}
-              {contexts.map((ctx) => (
-                <tr key={ctx.id} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="py-3 px-4 font-medium text-white/90">{ctx.role_name}</td>
-                  <td className="py-3 px-4 text-white/70">{ctx.privilege_order}</td>
-                  <td className="py-3 px-4 text-white/70">{ctx.token_type}</td>
-                  <td className="py-3 px-4 font-mono text-[10px] text-white/50">{ctx.token_masked || '—'}</td>
-                  <td className="py-3 px-4">
-                    <Button variant="unstyled"
-                      type="button"
-                      onClick={() => handleDelete(ctx.id)}
-                      className="p-1.5 rounded text-red-400/80 hover:bg-red-500/20 hover:text-red-400"
-                      aria-label={t('components.cockpitTabs.identityMatrix.delete')}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          id="identity-matrix-contexts-table"
+          columns={contextColumns}
+          data={contexts}
+          getRowId={(c) => c.id}
+          animateRows={false}
+          emptyState={<span className="text-white/50">{t(`${IM}.empty_contexts`)}</span>}
+        />
       </div>
 
       {/* Privilege Escalation Graph */}
