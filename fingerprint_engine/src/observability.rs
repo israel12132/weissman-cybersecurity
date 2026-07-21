@@ -123,11 +123,23 @@ pub fn init_tracing_from_env() {
 }
 
 /// Spawns background inserts into `tenant_llm_usage` for each LLM completion (see `weissman_engines::openai_chat`).
+///
+/// Architectural law (same as `findings_persist`): fire-and-forget DB tasks must not
+/// storm `pool.acquire()`. This reporter fires once per LLM/embedding completion, and
+/// LLM-heavy engines (council debate, generative fuzz, red-team) emit many completions
+/// concurrently — a raw `tokio::spawn` per call would spawn a burst of detached tasks
+/// that each open a tenant tx (`log_tenant_llm_usage` → `begin_tenant_tx`) and
+/// collectively drain the shared app pool, starving the worker's claim/reserve loop
+/// ("pool timed out while waiting for an open connection"). Routing every metering
+/// insert through the SAME global `spawn_bounded_db_task` semaphore as the persistence
+/// background tasks makes total background pooled-connection demand `O(permits)`
+/// (`WEISSMAN_BG_DB_CONCURRENCY`, default 8) regardless of LLM call volume — the storm
+/// is queued on the semaphore instead of on the connection pool.
 pub fn register_llm_tenant_metering(app_pool: Arc<sqlx::PgPool>) {
     weissman_engines::openai_chat::set_llm_usage_reporter(Arc::new(
         move |tenant_id, prompt_tokens, completion_tokens, model, operation| {
             let pool = app_pool.clone();
-            tokio::spawn(async move {
+            crate::findings_persist::spawn_bounded_db_task(async move {
                 if let Err(e) = weissman_db::llm_usage::log_tenant_llm_usage(
                     pool.as_ref(),
                     tenant_id,

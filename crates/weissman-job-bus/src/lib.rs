@@ -291,13 +291,19 @@ impl JobBus {
 
     pub async fn on_worker_terminated(
         &self,
+        tenant_id: i64,
         worker_id: &str,
         reason: &str,
     ) -> Result<(), JobBusError> {
+        // tenant_id must be a real tenant: weissman_job_events.tenant_id is a NOT NULL
+        // FK to tenants(id). The prior hardcoded 0 sentinel violated that FK on every
+        // worker-liveness expiry, which aborted the swarm coordinator's tick before it
+        // could orphan/requeue the stalled job (see swarm.rs) — so the job was retried
+        // forever. The caller already holds the affected job's tenant; thread it in.
         let record = append_event(
             &self.pool,
             Uuid::nil(),
-            0,
+            tenant_id,
             JobEventKind::WorkerTerminated,
             json!({ "worker_id": worker_id, "reason": reason }),
         )

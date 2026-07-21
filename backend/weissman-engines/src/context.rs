@@ -47,3 +47,33 @@ impl EngineRunOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn llm_base_resolved_falls_back_to_default_when_blank() {
+        let c = ScanContext {
+            llm_base_url: "   ".into(),
+            ..Default::default()
+        };
+        assert_eq!(c.llm_base_resolved(), DEFAULT_LLM_BASE_URL);
+    }
+
+    #[test]
+    fn llm_base_resolved_trims_and_returns_set_value() {
+        let c = ScanContext {
+            llm_base_url: "  http://h:1/v1 ".into(),
+            ..Default::default()
+        };
+        assert_eq!(c.llm_base_resolved(), "http://h:1/v1");
+    }
+
+    #[test]
+    fn engine_run_outcome_with_result_has_no_reasoning_log() {
+        let o = EngineRunOutcome::with_result(EngineResult::ok(vec![], "done"));
+        assert!(o.semantic_reasoning_log.is_none());
+        assert_eq!(o.result.status, "ok");
+    }
+}

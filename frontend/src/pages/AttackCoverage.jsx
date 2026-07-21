@@ -151,7 +151,7 @@ export default function AttackCoverage() {
             {loading ? (
               <SkeletonCard lines={8} />
             ) : filteredTactics.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredTactics.map((tac, i) => {

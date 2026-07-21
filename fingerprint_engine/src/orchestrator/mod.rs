@@ -882,6 +882,7 @@ async fn load_timing_config(
         baseline_sample_size: n,
         payload_sample_size: n.min(100),
         z_score_threshold: z,
+        ..Default::default()
     }
 }
 

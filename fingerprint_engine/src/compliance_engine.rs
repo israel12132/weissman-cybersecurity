@@ -489,7 +489,7 @@ fn control_covered(control_id: &str, mapped_id: &str) -> bool {
     let is_child = |child: &str, parent: &str| {
         child.len() > parent.len()
             && child.starts_with(parent)
-            && matches!(child.as_bytes()[parent.len()], b'.' | b' ')
+            && matches!(child.as_bytes()[parent.len()], b'.' | b' ' | b'(')
     };
     is_child(b, a) || is_child(a, b)
 }
@@ -681,6 +681,7 @@ mod control_coverage_tests {
         assert!(control_covered("A.8", "A.8.15")); // family covered by sub-control
         assert!(control_covered("A.8.5", "A.8")); // sub-control covered by family
         assert!(control_covered("164.312(a)", "164.312(a)")); // exact
+        assert!(control_covered("164.312(a)", "164.312")); // HIPAA sub-control covered by family
         assert!(!control_covered("A.8", "A.85")); // not a dotted child — no false match
         assert!(!control_covered("A.9", "A.8.15"));
         assert!(!control_covered("", "A.8"));

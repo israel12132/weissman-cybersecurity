@@ -111,6 +111,12 @@ async function submitScan(headers, clientId, entry) {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        // Forward the per-engine CI bounding params the plan carries (e.g.
+        // PKI_TLS_CI_PARAMS / BGP_DNS_CI_PARAMS disable the unbounded live-network
+        // fan-out that otherwise runs for minutes). These are read live from the
+        // scan body as job_params; without them the slow engines blow the 180s
+        // poll window. Spread first so the identity/timeout fields below always win.
+        ...(entry.params && typeof entry.params === 'object' ? entry.params : {}),
         engine: entry.engine,
         client_id: clientId,
         target: entry.target,
@@ -169,6 +175,19 @@ async function main() {
   const failures = []
 
   for (const entry of GROUP_SMOKE_PLAN) {
+    // Refresh the access token before each engine so a long sequential run (many
+    // engines, each polled for up to POLL_TIMEOUT_MS) can never outlive the
+    // ~15-min access-token TTL — otherwise the later engines' submits/polls fail
+    // with HTTP 401 once the token expires mid-run (observed as a cascade of
+    // "scan submit failed (401)" after the first few slow engines).
+    try {
+      const fresh = await login()
+      if (fresh) headers.authorization = `Bearer ${fresh}`
+    } catch {
+      // Keep the existing token if a transient re-login blips; the submit below
+      // still surfaces a real auth failure if the token is genuinely dead.
+    }
+
     try {
       const queued = await submitScan(headers, client.id, entry)
       const jobId = queued?.job_id
