@@ -1,0 +1,18 @@
+{
+  "note": "MITRE ATT&CK v19.1 (released 2026-05-12) currency migration. The v17+ restructure revoked/renamed a number of techniques (notably splitting the Defense Evasion tactic into Stealth + Defense Impairment and revoking T1562 'Impair Defenses'). Engine ATT&CK mappings that pointed at a revoked ID were updated to MITRE's own authoritative revoked-by replacement. Deprecated IDs with no MITRE replacement were mapped to the closest current technique and marked curator_choice.",
+  "attack_version": "19.1",
+  "source": "mitre-attack/attack-stix-data (Enterprise + Mobile + ICS)",
+  "applied_on": "2026-07-21",
+  "migrations": [
+    { "from": "T1562", "to": "T1685", "reason": "revoked-by", "name": "Disable or Modify Tools" },
+    { "from": "T1562.001", "to": "T1685", "reason": "revoked-by", "name": "Disable or Modify Tools" },
+    { "from": "T1562.006", "to": "T1685", "reason": "revoked-by", "name": "Disable or Modify Tools" },
+    { "from": "T1562.008", "to": "T1685.002", "reason": "revoked-by", "name": "Disable or Modify Cloud Log" },
+    { "from": "T0855", "to": "T1692.001", "reason": "revoked-by", "name": "Command Message" },
+    { "from": "T0856", "to": "T1692.002", "reason": "revoked-by", "name": "Reporting Message" },
+    { "from": "T1465", "to": "T1638", "reason": "revoked-by", "name": "Adversary-in-the-Middle" },
+    { "from": "T1574.002", "to": "T1574.001", "reason": "revoked-by", "name": "DLL" },
+    { "from": "T1070.001", "to": "T1685.005", "reason": "revoked-by", "name": "Clear Windows Event Logs" },
+    { "from": "T1475", "to": "T1661", "reason": "curator_choice (deprecated, no MITRE revoked-by)", "name": "Application Versioning" }
+  ]
+}
