@@ -26,7 +26,7 @@ Regenerate: `node scripts/engine_coverage_accuracy_report.mjs` · Gate: `--check
 ## 2. Breadth spans every attack domain
 
 The catalog covers **15 attack domains** and maps to
-**191 distinct MITRE ATT&CK techniques**, with
+**192 distinct MITRE ATT&CK techniques**, with
 **0 engines unmapped**. Every domain carries live probes — no domain
 is pure-alias "coverage theater".
 
@@ -37,7 +37,7 @@ is pure-alias "coverage theater".
 | Network / Protocol | 56 | 21 | 24 | 11 | 31 |
 | Stealth / Evasion | 53 | 16 | 25 | 12 | 35 |
 | Cloud / Infra | 48 | 25 | 23 | 0 | 24 |
-| AI / LLM | 46 | 28 | 18 | 0 | 21 |
+| AI / LLM | 46 | 28 | 18 | 0 | 22 |
 | Recon & OSINT | 44 | 23 | 21 | 0 | 27 |
 | Crypto / Identity | 43 | 21 | 19 | 3 | 24 |
 | OT / ICS / IoT | 42 | 30 | 10 | 2 | 19 |
@@ -65,7 +65,7 @@ False positives are handled by a per-`(tenant, engine, signature_hash)` feedback
 ## 4. Why this matters against XSOAR / Splunk SOAR / Torq / Tines / Swimlane
 
 Those platforms orchestrate *other people's* detections. Weissman ships **303 in-house
-offensive probes across 15 domains and 191 ATT&CK
+offensive probes across 15 domains and 192 ATT&CK
 techniques**, each wired to real I/O and each discounted by a live accuracy loop — offensive
 coverage plus in-house threat intelligence in one backend, not a workflow engine bolted onto
 third-party feeds.

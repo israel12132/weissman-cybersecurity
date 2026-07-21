@@ -13,8 +13,8 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 
 ## Headline
 
-- **191 distinct ATT&CK techniques** covered by
-  **563 mapped engines** (84 of them sub-techniques).
+- **192 distinct ATT&CK techniques** covered by
+  **563 mapped engines** (85 of them sub-techniques).
 - Spans **Enterprise, Mobile, ICS** ATT&CK — every technique validated against the current
   release, **0 stale / 0 invented**.
 - Coverage is broad *and* current: mappings track the latest ATT&CK, not a frozen snapshot.
@@ -24,14 +24,14 @@ layers (one per domain): [`docs/attack-navigator/`](attack-navigator/) — uploa
 *"Techniques covered" counts distinct ATT&CK techniques the catalog maps within that tactic;
 "% of tactic" is against the total techniques MITRE lists for that tactic in the current release.*
 
-### Enterprise ATT&CK — 170 techniques, 15/15 tactics
+### Enterprise ATT&CK — 171 techniques, 15/15 tactics
 
 | Tactic | Techniques covered | % of tactic | Engines |
 |--------|-------------------:|------------:|--------:|
 | Reconnaissance | 18 / 46 | 39% | 44 |
 | Resource Development | 11 / 50 | 22% | 23 |
 | Initial Access | 18 / 22 | 82% | 120 |
-| Execution | 8 / 64 | 13% | 44 |
+| Execution | 9 / 64 | 14% | 44 |
 | Persistence | 14 / 113 | 12% | 32 |
 | Privilege Escalation | 13 / 96 | 14% | 30 |
 | Stealth | 23 / 148 | 16% | 48 |

@@ -82,8 +82,8 @@
     },
     {
       "techniqueID": "T1059",
-      "score": 13,
-      "comment": "ai_adversarial_redteam, deserialization_java, deserialization_net, file_inclusion_rfi, iac_misconfig, llm_agent_hijack, llm_jailbreak, llm_redteam, multimodal_ai_attack, rce_deserialization, semantic_ai_fuzz, serverless_injection, template_injection_adv",
+      "score": 19,
+      "comment": "ai_adversarial_redteam, deserialization_java, deserialization_net, file_inclusion_rfi, gpt_plugin_attack, iac_misconfig, llm_agent_hijack, llm_function_call_hijack, llm_guardrail_bypass, llm_jailbreak, llm_red_team_advanced, llm_redteam, multi_agent_subversion, multimodal_ai_attack, prompt_injection_chain, rce_deserialization, semantic_ai_fuzz, serverless_injection, template_injection_adv",
       "enabled": true
     },
     {
@@ -789,15 +789,15 @@
       "enabled": true
     },
     {
-      "techniqueID": "T1059.008",
-      "score": 9,
-      "comment": "agentic_framework_attack, autonomous_ai_escape, gpt_plugin_attack, llm_function_call_hijack, llm_guardrail_bypass, llm_red_team_advanced, mcp_server_exploit, multi_agent_subversion, prompt_injection_chain",
-      "enabled": true
-    },
-    {
       "techniqueID": "T1588.005",
       "score": 3,
       "comment": "model_inversion_attack, model_stealing_engine, neural_backdoor_detect",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1059.004",
+      "score": 2,
+      "comment": "autonomous_ai_escape, mcp_server_exploit",
       "enabled": true
     },
     {
@@ -1020,6 +1020,12 @@
       "techniqueID": "T1090",
       "score": 1,
       "comment": "nat_traversal_attack",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1059.006",
+      "score": 1,
+      "comment": "agentic_framework_attack",
       "enabled": true
     },
     {
