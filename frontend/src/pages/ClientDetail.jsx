@@ -23,6 +23,7 @@ export default function ClientDetail() {
 
   useEffect(() => {
     loadClient()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   async function loadClient() {

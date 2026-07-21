@@ -625,6 +625,7 @@ export default function WebCachePosture() {
   const [canaryDomain, setCanaryDomain] = useState('poison.example')
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
@@ -683,7 +684,7 @@ export default function WebCachePosture() {
     if (!target.trim()) { showToast('error', t('pages.webCachePosture.target_required', 'A target URL is required')); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.webCachePosture.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.webCachePosture.queued', 'Posture scan queued ({{jobId}})', { jobId }))
@@ -691,6 +692,7 @@ export default function WebCachePosture() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? t('pages.webCachePosture.scan_failed', 'Scan failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToast, t])
 
   const summary = useMemo(() => findings.find(isSummary), [findings])

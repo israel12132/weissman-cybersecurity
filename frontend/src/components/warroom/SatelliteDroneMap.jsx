@@ -117,6 +117,7 @@ export default function SatelliteDroneMap() {
           coord: [targetCoord[0] + (i - count / 2) * 0.08, targetCoord[1]], // [lng, lat]
         })))
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [zoomPhase, selectedClientId, targetCoord, setVulnMarkers])
 

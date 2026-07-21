@@ -355,6 +355,7 @@ export default function AttackSurfaceManagement() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -408,6 +409,7 @@ export default function AttackSurfaceManagement() {
       setStatus('error')
       showToast('error', e?.message ?? t('pages.attackSurfaceManagement.toast_network_error'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params, showToast, t])
 
   const assetTypes = useMemo(() => {

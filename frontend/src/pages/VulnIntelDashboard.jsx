@@ -158,6 +158,7 @@ export default function VulnIntelDashboard() {
   }, [severityFilter])
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     load().catch(() => {})
   }, [load])
 

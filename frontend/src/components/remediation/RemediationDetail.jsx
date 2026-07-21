@@ -249,6 +249,7 @@ export default function RemediationDetail({ finding, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- modal backdrop click-to-dismiss; Escape/close button provide keyboard path */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-2xl h-full bg-[#0b0f14] border-l border-white/10 overflow-y-auto shadow-2xl">
         {/* Header */}

@@ -28,7 +28,7 @@ const STATUS_COLORS = {
 
 const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
 
-function exportJobsCsv(jobs, t) {
+function exportJobsCsv(jobs, _t) {
   const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [

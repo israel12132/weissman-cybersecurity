@@ -65,6 +65,7 @@ function TemplateEngineWorkbenchBody() {
   useEffect(() => {
     apiFetch('/api/template-engine/templates')
       .then((d) => { if (Array.isArray(d)) setTemplates(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -110,6 +111,7 @@ function TemplateEngineWorkbenchBody() {
   const loadTemplates = useCallback(() => {
     apiFetch('/api/template-engine/templates')
       .then((d) => { if (Array.isArray(d)) setTemplates(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

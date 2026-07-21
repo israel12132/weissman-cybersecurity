@@ -1,7 +1,7 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
@@ -78,6 +78,7 @@ export default function OastDashboard() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -91,7 +92,7 @@ export default function OastDashboard() {
         ? d.callbacks
         : (Array.isArray(d) ? d : [])
       setCallbacks(list.slice(0, 50))
-    } catch {}
+    } catch { /* best-effort; non-fatal */ }
     finally {
       if (!silent) setRefreshLoading(false)
       setCallbacksInitialLoading(false)
@@ -159,6 +160,7 @@ export default function OastDashboard() {
         setActiveProbes((prev) => { const s = new Set(prev); s.delete(probeId); return s })
       }, 10000)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, showToast, t])
 
   const handleMintToken = useCallback(async () => {

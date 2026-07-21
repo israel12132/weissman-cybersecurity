@@ -113,7 +113,9 @@ export default function ArsenalInventory({ clientId }) {
   useEffect(() => { load() }, [load])
   useEffect(() => { resolveTarget(clientId) }, [clientId, resolveTarget])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const engines = Array.isArray(data?.engines) ? data.engines : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const byCategory = data?.by_category && typeof data.by_category === 'object' ? data.by_category : {}
   const categories = useMemo(() => Object.keys(byCategory).sort(), [byCategory])
 

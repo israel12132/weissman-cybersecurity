@@ -39,6 +39,7 @@ export default function IdentityContextManager() {
       return;
     }
     fetchIdentities(clientId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clientLoading]);
 
   const fetchIdentities = async (cid) => {

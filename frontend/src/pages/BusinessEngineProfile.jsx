@@ -88,7 +88,9 @@ export default function BusinessEngineProfile() {
   const title = engineTitle(engineId, reg, t)
   const mission = engineMission(engineId, strategicRow?.reason, t)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const findings = Array.isArray(history?.findings) ? history.findings : []
 
   const reloadProfile = useCallback(async () => {

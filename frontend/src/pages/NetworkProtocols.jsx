@@ -35,6 +35,7 @@ export default function NetworkProtocols() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d); })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {});
   }, []);
 
@@ -55,6 +56,7 @@ export default function NetworkProtocols() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     loadProtocols().catch(() => {});
   }, [loadProtocols]);
 

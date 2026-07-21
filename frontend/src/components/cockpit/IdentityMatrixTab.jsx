@@ -24,7 +24,7 @@ export default function IdentityMatrixTab() {
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
       setContexts(d.contexts || [])
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
   }, [selectedClientId])
 
   const fetchEvents = useCallback(async () => {
@@ -32,7 +32,7 @@ export default function IdentityMatrixTab() {
     try {
       const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
       setEvents(d.events || [])
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
   }, [selectedClientId])
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export default function IdentityMatrixTab() {
       })
       setForm({ role_name: '', privilege_order: 0, token_type: 'bearer', token_value: '' })
       await fetchContexts()
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
     setSubmitting(false)
   }
 
@@ -96,7 +96,7 @@ export default function IdentityMatrixTab() {
         method: 'DELETE',
       })
       await fetchContexts()
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
   }
 
   if (!selectedClientId) {

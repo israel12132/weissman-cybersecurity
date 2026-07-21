@@ -123,6 +123,7 @@ export default function SystemCore() {
         try {
           setPoeGadgetChains(typeof chains === 'string' ? JSON.stringify(JSON.parse(chains), null, 2) : '{}')
         } catch (_) {
+          /* invalid stored JSON; ignore and keep default */
         }
         // Threat Intel Feed status and payloads
         apiFetch(`/api/payload-sync/status`)
@@ -132,9 +133,11 @@ export default function SystemCore() {
             setLivePayloadsCount(data?.live_payloads_count ?? 0)
             setActiveEphemeralCount(data?.active_ephemeral_count ?? 0)
           })
+          // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
           .catch(() => {})
         apiFetch(`/api/payload-sync/payloads`)
           .then((data) => setRecentPayloads(Array.isArray(data?.payloads) ? data.payloads : []))
+          // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
           .catch(() => {})
       })
       .catch(() => setError(t('components.systemCore.load_failed')))
@@ -903,7 +906,7 @@ export default function SystemCore() {
                 try {
                   const parsed = JSON.parse(poeGadgetChains)
                   if (typeof parsed === 'object' && parsed !== null) saveConfig('poe_gadget_chains', JSON.stringify(parsed))
-                } catch (_) {}
+                } catch (_) { /* invalid JSON on blur; ignore */ }
               }}
               className="w-full min-h-[120px] rounded-lg border border-[var(--border-strong)] bg-[var(--bg-3)]/80 px-3 py-2 text-[var(--text-secondary)] font-mono text-sm"
               placeholder={t('components.systemCore.gadget_chains_placeholder')}

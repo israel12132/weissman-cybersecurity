@@ -259,7 +259,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             active_scans: d.active_scans ? 1 : 0,
           })
         }
-      } catch (_) {}
+      } catch { /* best-effort; non-fatal */ }
     }
     load()
     const interval = setInterval(load, 15000)

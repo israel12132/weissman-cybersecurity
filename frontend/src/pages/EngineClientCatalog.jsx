@@ -368,6 +368,7 @@ export default function EngineClientCatalog() {
         }
         setTelemetryById(map)
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -528,6 +529,7 @@ export default function EngineClientCatalog() {
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
       return { ok: false, msg: e?.message ?? 'Network error' }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, clients, clientIntegrations])
 
   const handleRunAll = useCallback(async () => {

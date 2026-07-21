@@ -482,6 +482,7 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal overlay captures Escape to dismiss; dialog role is on the inner panel
     <div
       className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
@@ -502,8 +503,9 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Schedule Name</label>
+            <label htmlFor="schedule-name" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Schedule Name</label>
             <input
+              id="schedule-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -513,8 +515,9 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
+            <label htmlFor="schedule-description" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
             <input
+              id="schedule-description"
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -525,8 +528,9 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Frequency</label>
+              <label htmlFor="schedule-frequency" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Frequency</label>
               <select
+                id="schedule-frequency"
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -540,8 +544,9 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Status</label>
+              <label htmlFor="schedule-status" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Status</label>
               <select
+                id="schedule-status"
                 value={formData.enabled ? 'enabled' : 'disabled'}
                 onChange={(e) =>
                   setFormData({ ...formData, enabled: e.target.value === 'enabled' })
@@ -556,10 +561,11 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
 
           {formData.type === 'custom' && (
             <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+              <label htmlFor="schedule-cron" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                 Cron Expression
               </label>
               <input
+                id="schedule-cron"
                 type="text"
                 value={formData.cron}
                 onChange={(e) => setFormData({ ...formData, cron: e.target.value })}
@@ -573,10 +579,11 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            <label htmlFor="schedule-client" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Target Client
             </label>
             <select
+              id="schedule-client"
               value={formData.client_id}
               onChange={(e) =>
                 setFormData({ ...formData, client_id: e.target.value, target_client: '' })

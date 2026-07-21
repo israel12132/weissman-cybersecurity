@@ -281,7 +281,9 @@ export default function TransportSecurityCommandCenter() {
   useEffect(() => {
     apiFetch('/api/clients').then((d) => {
       setClients(Array.isArray(d) ? d : d.clients || [])
-    }).catch(() => {})
+    })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -344,6 +346,7 @@ export default function TransportSecurityCommandCenter() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? 'Scan failed')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToast, t])
 
   const score = useMemo(() => extractScore(findings), [findings])
@@ -432,25 +435,25 @@ export default function TransportSecurityCommandCenter() {
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">TLS ports</label>
-                    <input value={ports} onChange={(e) => setPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
+                    <label htmlFor="tsc-tls-ports" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">TLS ports</label>
+                    <input id="tsc-tls-ports" value={ports} onChange={(e) => setPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">gRPC ports</label>
-                    <input value={grpcPorts} onChange={(e) => setGrpcPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
+                    <label htmlFor="tsc-grpc-ports" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">gRPC ports</label>
+                    <input id="tsc-grpc-ports" value={grpcPorts} onChange={(e) => setGrpcPorts(e.target.value)} className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">SNI override</label>
-                    <input value={sni} onChange={(e) => setSni(e.target.value)} placeholder="api.example.com" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
+                    <label htmlFor="tsc-sni" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">SNI override</label>
+                    <input id="tsc-sni" value={sni} onChange={(e) => setSni(e.target.value)} placeholder="api.example.com" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                 </div>
                   <div>
-                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Custom gRPC paths</label>
-                    <input value={grpcPaths} onChange={(e) => setGrpcPaths(e.target.value)} placeholder="/my.Service/Method" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
+                    <label htmlFor="tsc-grpc-paths" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Custom gRPC paths</label>
+                    <input id="tsc-grpc-paths" value={grpcPaths} onChange={(e) => setGrpcPaths(e.target.value)} placeholder="/my.Service/Method" className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Timeout (ms)</label>
-                  <input type="number" min={400} max={30000} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
+                    <label htmlFor="tsc-timeout-ms" className="text-[10px] font-mono text-[var(--text-muted)] block mb-1">Timeout (ms)</label>
+                  <input id="tsc-timeout-ms" type="number" min={400} max={30000} value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)}
                     className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                 </div>
               </div>

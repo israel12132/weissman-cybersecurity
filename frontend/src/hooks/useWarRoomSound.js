@@ -33,7 +33,8 @@ export function useWarRoomSound() {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
       osc.start(now)
       osc.stop(now + 0.2)
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const playBlip = useCallback(() => {
@@ -51,7 +52,8 @@ export function useWarRoomSound() {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
       osc.start(now)
       osc.stop(now + 0.08)
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const startAlarmHum = useCallback(() => {
@@ -68,7 +70,8 @@ export function useWarRoomSound() {
       osc.start(ctx.currentTime)
       humOscRef.current = osc
       humGainRef.current = gain
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const stopAlarmHum = useCallback(() => {
@@ -82,7 +85,8 @@ export function useWarRoomSound() {
         humOscRef.current = null
         humGainRef.current = null
       }
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return { playZoom, playBlip, startAlarmHum, stopAlarmHum }

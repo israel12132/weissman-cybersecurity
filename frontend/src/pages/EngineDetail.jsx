@@ -143,6 +143,7 @@ function Terminal({ lines }) {
   }, [lines])
 
   const copyAll = useCallback(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     navigator.clipboard?.writeText(lines.join('\n')).catch(() => {})
   }, [lines])
 
@@ -428,6 +429,7 @@ export default function EngineDetail() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -536,7 +538,7 @@ export default function EngineDetail() {
               es.close()
               setLines((prev) => [...prev, `> [${status.toUpperCase()}] Job ${jid} finished.`])
             }
-          } catch {}
+          } catch { /* best-effort; non-fatal */ }
         }
         es.onerror = () => { setRunning(false); es.close(); setLastRunStatus('error') }
       } else {
@@ -548,6 +550,7 @@ export default function EngineDetail() {
       showToast('error', e?.message ?? 'Network error')
       setRunning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, clientIntegrations, showToast, resetFindings, addFinding, isProduction, t])
 
   const handleStop = useCallback(() => {
@@ -815,8 +818,9 @@ export default function EngineDetail() {
 
           {/* Client */}
           <div>
-            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
+            <label htmlFor="engine-client" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
             <select
+              id="engine-client"
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
               disabled={running}

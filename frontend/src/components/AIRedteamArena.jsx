@@ -40,7 +40,7 @@ export default function AIRedteamArena() {
           try {
             const domains = JSON.parse(c.domains_json)
             if (domains?.[0]) setTarget(domains[0])
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
       })
       .catch(() => setClient(null))
@@ -97,7 +97,7 @@ export default function AIRedteamArena() {
             if (e.status === 'ANALYZING_RESPONSE') {
               setCenterStatus((prev) => ({ ...prev, status: 'ANALYZING_RESPONSE' }))
             }
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
         ws.onclose = () => setRunning(false)
         ws.onerror = () => setRunning(false)

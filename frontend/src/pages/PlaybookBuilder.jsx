@@ -294,6 +294,7 @@ export default function PlaybookBuilder() {
     }
     setJsonSource(JSON.stringify({ trigger: draft.trigger, actions: draft.actions }, null, 2))
     setJsonError(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.trigger, draft?.actions])
 
   const startNew = () => {

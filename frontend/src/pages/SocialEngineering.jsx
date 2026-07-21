@@ -84,6 +84,7 @@ export default function SocialEngineering() {
           setScanClientId(id);
         }
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {});
   }, [fetchSocialEngineering]);
 
@@ -408,6 +409,7 @@ export default function SocialEngineering() {
       </div>
 
       {createOpen && (
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal backdrop; onKeyDown only handles Escape, not a UI control
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-3)] p-4"
           onKeyDown={(e) => { if (e.key === 'Escape') setCreateOpen(false) }}

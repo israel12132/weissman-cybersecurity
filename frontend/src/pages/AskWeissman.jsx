@@ -104,7 +104,7 @@ export default function AskWeissman() {
   const visibleHistory = useMemo(() => {
     if (!searchQuery.trim()) return history
     const ids = new Set(filteredFindings.map((f) => f.id))
-    return history.filter((turn, i) => {
+    return history.filter((turn, _i) => {
       if (turn.pending) return true
       const idx = completedTurns.indexOf(turn)
       return idx >= 0 && ids.has(idx)
@@ -358,6 +358,7 @@ export default function AskWeissman() {
           placeholder={t('ask_weissman.placeholder')}
           aria-label={t('ask_weissman.placeholder')}
           className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focus the primary question input on this dedicated Q&A page
           autoFocus
         />
         <Button variant="unstyled"

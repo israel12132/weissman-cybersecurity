@@ -86,7 +86,7 @@ export default function ZeroDayRadar() {
               setExposure(e.finding)
               setSynthesisLog((prev) => [...prev, `ZERO-DAY EXPOSURE: ${e.finding?.title ?? e.finding?.cve_id}`])
             }
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
         ws.onclose = () => setRunning(false)
         ws.onerror = () => setRunning(false)

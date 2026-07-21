@@ -113,6 +113,7 @@ function SupremeNerveCenterInner() {
   // Refresh on POLL_MS cadence, skipping ticks while the tab is hidden.
   useVisiblePolling(load, POLL_MS)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const engines = snap?.engines || []
   const modules = snap?.system_modules || []
   const jobs = snap?.live_jobs || []

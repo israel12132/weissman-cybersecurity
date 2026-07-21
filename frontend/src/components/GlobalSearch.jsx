@@ -247,6 +247,7 @@ export default function GlobalSearch() {
               onKeyDown={onInputKeyDown}
               placeholder={t('components.globalSearch.placeholder')}
               className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none text-lg"
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional focus for global search modal input
               autoFocus
               role="combobox"
               aria-expanded="true"

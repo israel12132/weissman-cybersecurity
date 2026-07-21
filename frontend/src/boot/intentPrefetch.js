@@ -40,6 +40,7 @@ export function prefetchRoute(path) {
   const loader = matchRouteChunk(normalized)
   if (!loader || inflight.has(normalized)) return
   inflight.add(normalized)
+  // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
   const p = loader().catch(() => {}).finally(() => inflight.delete(normalized))
   void p
 }

@@ -39,7 +39,7 @@ async function clickIfVisible(page, selector, label) {
     await page.waitForTimeout(900)
     console.log(`[click] ${label || selector}`)
     return true
-  } catch (e) {
+  } catch {
     console.log(`[skip] ${label || selector} — not visible`)
     return false
   }
@@ -68,11 +68,11 @@ ctx.on('console', (msg) => {
 const page = await ctx.newPage()
 await page.addInitScript((lang) => {
   // Pre-seed language so the very first paint is in the chosen locale.
-  try { localStorage.setItem('weissman_lang', lang) } catch (_) {}
+  try { localStorage.setItem('weissman_lang', lang) } catch {}
   const real = console.error
   window.__captured_console_errors = []
   console.error = function (...args) {
-    try { window.__captured_console_errors.push(args.map(String).join(' ')) } catch (_) {}
+    try { window.__captured_console_errors.push(args.map(String).join(' ')) } catch {}
     real.apply(console, args)
   }
 }, LANG)

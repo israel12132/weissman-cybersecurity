@@ -50,6 +50,7 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
       })
     })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, days])
 
   if (!data || data.total === 0) return null

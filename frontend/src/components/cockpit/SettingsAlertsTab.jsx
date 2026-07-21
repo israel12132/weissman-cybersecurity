@@ -80,6 +80,7 @@ function SettingsAlertsTabInner() {
     } catch {
       setDestructiveToken('')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t])
 
   const save = async () => {

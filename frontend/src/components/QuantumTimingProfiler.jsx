@@ -56,7 +56,7 @@ export default function QuantumTimingProfiler() {
           try {
             const domains = JSON.parse(c.domains_json)
             if (domains?.[0]) setTarget(domains[0])
-          } catch (_) {}
+          } catch { /* best-effort; non-fatal */ }
         }
       })
       .catch(() => setClient(null))
@@ -116,7 +116,7 @@ export default function QuantumTimingProfiler() {
             }
             dataRef.current = [...dataRef.current, point].slice(-MAX_POINTS)
             setChartData([...dataRef.current])
-          } catch (_) {}
+          } catch { /* best-effort; non-fatal */ }
         }
         ws.onclose = () => setRunning(false)
         ws.onerror = () => setRunning(false)

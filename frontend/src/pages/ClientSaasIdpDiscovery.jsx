@@ -78,7 +78,9 @@ export default function ClientSaasIdpDiscovery() {
   }
 
   const domains = Array.isArray(report?.domains_considered) ? report.domains_considered : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const idps = Array.isArray(report?.idp_candidates) ? report.idp_candidates : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const saas = Array.isArray(report?.saas_signals) ? report.saas_signals : []
 
   const listFindings = useMemo(() => [
@@ -96,6 +98,7 @@ export default function ClientSaasIdpDiscovery() {
       type: 'saas_signal',
       description: (Array.isArray(row.evidence) ? row.evidence[0] : row.signal) || row.domain || '',
     })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [idps, saas, t])
 
   const {

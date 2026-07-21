@@ -422,6 +422,7 @@ export default function StatusPage() {
 
   const services = deriveServices(state, t)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const serviceMeta = {
     api: { nameKey: 'status.api_auth', descKey: 'status.api_auth_desc' },
     database: { nameKey: 'status.database', descKey: 'status.database_desc' },

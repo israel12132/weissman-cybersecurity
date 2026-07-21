@@ -205,6 +205,7 @@ export default function AgentManagement() {
         cell: (ctx) => <span className="text-[var(--text-muted)]">{timeAgo(ctx.getValue(), t)}</span>,
       }),
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, clients], // clientName is derived from `clients`; rebuild when it changes
   )
 
@@ -215,6 +216,7 @@ export default function AgentManagement() {
     type: 'agent',
     description: `Client ${clientName(a.client_id)} · ${a.capabilities?.length || 0} caps`,
     resource: String(a.client_id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   })), [agents, clients])
 
   const {

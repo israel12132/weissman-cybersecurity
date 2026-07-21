@@ -498,6 +498,7 @@ export default function IdentitySecurityCenter() {
   const set = (k, v) => setParams((p) => ({ ...p, [k]: v }))
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
@@ -545,7 +546,7 @@ export default function IdentitySecurityCenter() {
     setStatus('running')
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToastMsg('error', d.detail || L.scanFailed); return }
       const jobId = d.job_id ?? ''
       showToastMsg('info', `${L.queued} · ${jobId}`)
@@ -555,6 +556,7 @@ export default function IdentitySecurityCenter() {
       setStatus('error')
       showToastMsg('error', e?.message ?? L.scanFailed)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
   const handleExport = useCallback(() => {

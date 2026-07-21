@@ -158,6 +158,7 @@ export default function CloudControlTower() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

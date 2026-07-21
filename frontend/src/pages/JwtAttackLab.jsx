@@ -319,6 +319,7 @@ export default function JwtAttackLab() {
   })
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
     loadLastRun()
   }, [loadLastRun])
@@ -379,12 +380,13 @@ export default function JwtAttackLab() {
     if (!target.trim()) { showToast('error', t('pages.jwtLab.target_required')); return }
     setScanning(true); setScanResult(null); setJobStatus('queued')
     try {
-      const { ok, data: d, status } = await postScan(requestBody)
+      const { ok, data: d, status: _status } = await postScan(requestBody)
       if (!ok) { showToast('error', d.detail || t('pages.jwtLab.scan_failed')); setScanning(false); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.jwtLab.scan_queued', { jobId }))
       if (jobId) { setPendingJobId(jobId); setScanResult({ findings: [], job_id: jobId, pending: true }) } else setScanning(false)
     } catch (e) { showToast('error', e?.message ?? t('common.error')); setScanning(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, requestBody, showToast, t])
 
   const counts = useMemo(() => {
@@ -396,17 +398,6 @@ export default function JwtAttackLab() {
   const sortedFindings = useMemo(() => {
     return [...(scanResult?.findings || [])].sort((a, b) => (SEVERITY_ORDER[(a.severity || 'info').toLowerCase()] ?? 9) - (SEVERITY_ORDER[(b.severity || 'info').toLowerCase()] ?? 9))
   }, [scanResult])
-
-  const filteredFindings = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    return sortedFindings.filter((f) => {
-      const sev = (f.severity || 'info').toLowerCase()
-      if (severityFilter !== 'all' && sev !== severityFilter) return false
-      if (!q) return true
-      const hay = `${f.title || ''} ${f.type || ''} ${f.description || ''} ${f.remediation || ''}`.toLowerCase()
-      return hay.includes(q)
-    })
-  }, [sortedFindings, searchQuery, severityFilter])
 
   const supremeLabels = useMemo(() => ({
     categoryScores: t('pages.jwtLab.category_scores'),

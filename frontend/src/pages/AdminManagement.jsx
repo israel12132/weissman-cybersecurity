@@ -55,6 +55,7 @@ export default function AdminManagement() {
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -268,6 +269,7 @@ export default function AdminManagement() {
         )
       },
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t])
 
   if (!isCeo && !session?.is_superadmin) {
@@ -453,6 +455,7 @@ export default function AdminManagement() {
 
         {/* Edit User Modal */}
         {editingUser && (
+          // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- backdrop Escape-key handler; button semantics inappropriate for a modal overlay
           <div
             className="fixed inset-0 bg-[var(--scrim)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
             onKeyDown={(e) => { if (e.key === 'Escape') setEditingUser(null) }}

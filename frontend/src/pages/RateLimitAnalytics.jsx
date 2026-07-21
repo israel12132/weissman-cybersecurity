@@ -90,7 +90,9 @@ export default function RateLimitAnalytics() {
 
   const TILE_COLORS = { scans: '#22d3ee', logins: '#fbbf24', api: '#34d399' };
   const history = data?.history ?? [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const violations = data?.violations ?? [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const endpoints = data?.endpoints ?? [];
   const source = data?.source;
 

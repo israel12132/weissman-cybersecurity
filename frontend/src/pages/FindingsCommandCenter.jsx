@@ -479,6 +479,7 @@ export default function FindingsCommandCenter() {
     loadFindings()
     apiFetch('/api/config/public')
       .then((d) => { if (d?.region) setRegion(d.region) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [loadFindings])
 

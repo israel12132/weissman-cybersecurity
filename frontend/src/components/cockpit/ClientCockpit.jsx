@@ -102,6 +102,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
     const loadHealth = () => {
       apiFetch('/api/health')
         .then((d) => d && setHealthSummary(d))
+        // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
         .catch(() => {})
     }
     loadHealth()
@@ -112,6 +113,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   useEffect(() => {
     apiFetch('/api/enterprise/settings')
       .then((d) => d && setSafeMode(!!d.global_safe_mode))
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -124,7 +126,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         body: { global_safe_mode: next },
       })
       setSafeMode(next)
-    } catch (_) {}
+    } catch { /* best-effort; non-fatal */ }
     setSafeSaving(false)
   }, [safeMode])
 
@@ -181,7 +183,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
         })
         if (pd && pd.job_id) setPoeJobId(pd.job_id)
       }
-    } catch (_) {}
+    } catch { /* best-effort; non-fatal */ }
     setEngageLoading(false)
   }
 

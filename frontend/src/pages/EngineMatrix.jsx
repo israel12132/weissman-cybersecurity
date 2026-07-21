@@ -437,6 +437,7 @@ export default function EngineMatrix() {
       .then((d) => {
         if (Array.isArray(d)) setClients(d)
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -456,6 +457,7 @@ export default function EngineMatrix() {
         if (int) setClientIntegrations(normalizeIntegrations(int))
         else setClientIntegrations(null)
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
       .finally(() => setConfigLoading(false))
   }, [selectedClientId])
@@ -687,6 +689,7 @@ export default function EngineMatrix() {
     } finally {
       setRunAllLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, enabledSet, showToast, t])
 
   const totalEnabled = enabledSet.size

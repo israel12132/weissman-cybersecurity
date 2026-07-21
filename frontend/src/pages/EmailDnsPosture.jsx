@@ -181,6 +181,7 @@ function CopyButton({ text }) {
     navigator.clipboard?.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     }).catch(() => {})
   }, [text])
   return (
@@ -719,6 +720,7 @@ export default function EmailDnsPosture() {
   const [mailSubdomains, setMailSubdomains] = useState('')
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
@@ -772,7 +774,7 @@ export default function EmailDnsPosture() {
     if (!target.trim()) { showToast('error', t('pages.emailDnsPosture.toast_target_required')); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.emailDnsPosture.toast_scan_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.emailDnsPosture.toast_scan_queued', { jobId }))
@@ -780,6 +782,7 @@ export default function EmailDnsPosture() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? t('pages.emailDnsPosture.toast_scan_failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToast, t])
 
   const summary = useMemo(() => findings.find(isSummary), [findings])

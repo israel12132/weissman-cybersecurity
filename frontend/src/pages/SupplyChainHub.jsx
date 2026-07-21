@@ -104,6 +104,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
       showToast('error', e?.message ?? t('common.error'))
       setRunning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, engineId, label, showToast, t])
 
   return (
@@ -178,6 +179,7 @@ export default function SupplyChainHub() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

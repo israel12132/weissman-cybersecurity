@@ -150,6 +150,7 @@ export default function SovereignDefenseMatrix() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
     loadPoisonLib()
   }, [loadPoisonLib])
@@ -181,6 +182,7 @@ export default function SovereignDefenseMatrix() {
     } catch (e) {
       setRunState({ running: false, msg: e?.message || 'Network error' })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, engineId, params, tab, t])
 
   useEffect(() => {

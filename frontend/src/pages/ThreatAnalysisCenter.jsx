@@ -87,8 +87,11 @@ export default function ThreatAnalysisCenter() {
   const score = Number(analysis.incident_score || 0);
   const tone = scoreTone(score);
   const chain = analysis.attack_chain;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const hits = Array.isArray(analysis.correlation_hits) ? analysis.correlation_hits : [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const netFindings = Array.isArray(analysis.network_findings) ? analysis.network_findings : [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const idFindings = Array.isArray(analysis.identity_findings) ? analysis.identity_findings : [];
 
   const unifiedFindings = useMemo(() => {

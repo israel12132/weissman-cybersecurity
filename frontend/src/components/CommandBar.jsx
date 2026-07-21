@@ -30,7 +30,7 @@ function getFirstTarget(client) {
   try {
     const arr = typeof client.domains === 'string' ? JSON.parse(client.domains) : client.domains
     if (Array.isArray(arr) && arr.length) return arr[0]
-  } catch (_) {}
+  } catch (_) { /* best-effort; non-fatal */ }
   return client?.name || ''
 }
 

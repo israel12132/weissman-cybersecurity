@@ -44,7 +44,7 @@ export default function SwarmMindTab() {
         if (msg.type === 'swarm') {
           setEvents((prev) => [...prev.slice(-200), msg])
         }
-      } catch (_) {}
+      } catch (_) { /* best-effort; non-fatal */ }
     }
     return () => {
       ws.close()
@@ -62,7 +62,7 @@ export default function SwarmMindTab() {
       await apiFetch(`/api/clients/${selectedClientId}/swarm/run`, {
         method: 'POST',
       })
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
     setTimeout(() => setRunning(false), 500)
   }, [selectedClientId])
 

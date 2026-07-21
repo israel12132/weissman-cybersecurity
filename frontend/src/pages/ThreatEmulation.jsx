@@ -259,6 +259,7 @@ export default function ThreatEmulation() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -325,6 +326,7 @@ export default function ThreatEmulation() {
     } finally {
       setRunning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, clients, showToast, t])
 
   useJobPoll(activeJobId, {

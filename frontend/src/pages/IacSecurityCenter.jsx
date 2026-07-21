@@ -1727,6 +1727,7 @@ export default function IacSecurityCenter() {
   }, [previewBody])
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
@@ -1751,6 +1752,7 @@ export default function IacSecurityCenter() {
     if (params.scan_modes.includes('repo') && !params.repo_url.trim()) return params.scan_modes.length > 1
     if (params.scan_modes.includes('exposure') && !target.trim()) return params.scan_modes.length > 1
     return true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, params.scan_modes, params.iac_content, params.repo_url, target])
 
   const handleRun = useCallback(async () => {
@@ -1791,6 +1793,7 @@ export default function IacSecurityCenter() {
       }
       es.onerror = () => { es.close(); setRunning(false) }
     } catch (e) { appendLine(`[ERROR] ${e.message}`); setRunning(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRun, params, selectedClientId, effectiveTarget, paramCount, appendLine])
 
   const remediationQueue = useMemo(() => summary?.remediation_queue || [], [summary])

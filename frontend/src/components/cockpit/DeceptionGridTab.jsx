@@ -81,7 +81,7 @@ export default function DeceptionGridTab() {
         body: { types: typesToGenerate, tech_hint: 'generic' },
       })
       await fetchAssets()
-    } catch (_) {}
+    } catch (_) { /* best-effort; non-fatal */ }
     setGenerating(false)
   }
 

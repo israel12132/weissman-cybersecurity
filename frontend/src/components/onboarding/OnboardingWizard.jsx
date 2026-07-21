@@ -217,6 +217,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={t('components.onboarding.client_placeholder')}
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional focus on first field of onboarding wizard
                     autoFocus
                     className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                   />

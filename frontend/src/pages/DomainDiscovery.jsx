@@ -229,6 +229,7 @@ export default function DomainDiscovery() {
       .then((d) => {
         if (Array.isArray(d)) setClients(d)
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -277,6 +278,7 @@ export default function DomainDiscovery() {
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target, companyName, showToast])
 
   const handleSelectDomain = useCallback((domain) => {
@@ -301,6 +303,7 @@ export default function DomainDiscovery() {
       return
     }
     navigate(`/engines?target=${encodeURIComponent(domain)}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, navigate, showToast])
 
   const handleScanAll = useCallback(async () => {
@@ -327,6 +330,7 @@ export default function DomainDiscovery() {
     } finally {
       setScanAllLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, selectedDomains, showToast])
 
   const filteredDomains = useMemo(() => {

@@ -36,6 +36,7 @@ export default function FeedbackLoopVerification() {
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -50,6 +51,7 @@ export default function FeedbackLoopVerification() {
         if (preferred) setSelectedId(preferred.id)
         else if (d[0]?.id) setSelectedId(d[0].id)
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

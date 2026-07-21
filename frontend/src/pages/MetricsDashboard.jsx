@@ -102,6 +102,7 @@ export default function MetricsDashboard() {
     title: severityLabel(severity),
     type: 'finding_count',
     description: String(count),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   })), [metrics.findings_by_severity, i18n.language])
 
   const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {

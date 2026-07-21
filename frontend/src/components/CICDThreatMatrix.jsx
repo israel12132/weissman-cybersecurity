@@ -126,10 +126,12 @@ export default function CICDThreatMatrix() {
         )}
 
         {modalFinding && (
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop click-to-dismiss; contains interactive children
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
             onClick={() => setModalFinding(null)}
           >
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- stopPropagation guard on modal content; contains interactive children */}
             <div
               className="rounded-xl bg-[var(--bg-1)] border-2 border-[var(--border-strong)] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}

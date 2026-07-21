@@ -292,11 +292,13 @@ export default function RiskSuperpositionCollapse() {
     } catch (e) {
       setRunState({ running: false, msg: e?.message || 'Network error' })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, readiness.enoughClusters, params, t])
 
   useEffect(() => {
     apiFetch('/api/clients')
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

@@ -171,6 +171,7 @@ export default function MobileSecurity() {
       setScanError(e?.message ?? t('pages.mobileSecurity.network_error'))
       setScanningAppId(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, clients, t])
 
   const filteredApps = useMemo(

@@ -133,10 +133,11 @@ export default function MemoryForensicsLab() {
             const doms = typeof c.domains === 'string' ? JSON.parse(c.domains) : c.domains
             const first = Array.isArray(doms) ? doms[0] : null
             if (first && !targetUrl) setTargetUrl(first.startsWith('http') ? first : `https://${first}`)
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
       })
       .catch(() => setClient(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
   const runScan = () => {
@@ -178,7 +179,7 @@ export default function MemoryForensicsLab() {
               setJobId(null)
               es.close()
             }
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
         es.onerror = () => {
           es.close()

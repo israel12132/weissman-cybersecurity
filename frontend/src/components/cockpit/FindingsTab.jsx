@@ -366,6 +366,7 @@ export default function FindingsTab() {
                       className="py-2.5 px-4"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
+                      // eslint-disable-next-line jsx-a11y/no-interactive-element-to-noninteractive-role -- td handlers only stop propagation to isolate the actions cell; interactive controls inside remain keyboard-accessible
                       role="presentation"
                     >
                       <div className="flex items-center gap-1.5">

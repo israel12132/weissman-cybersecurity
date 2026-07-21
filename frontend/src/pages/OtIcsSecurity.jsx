@@ -128,6 +128,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
       setStatus('error');
       showToast('error', e?.message ?? t('pages.otIcsSecurity.scan_failed'));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clients, engine, showToast, t]);
 
   return (

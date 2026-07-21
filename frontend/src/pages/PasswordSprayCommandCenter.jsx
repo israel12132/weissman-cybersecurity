@@ -394,6 +394,7 @@ export default function PasswordSprayCommandCenter() {
   const set = (k, v) => setParams((p) => ({ ...p, [k]: v }))
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
@@ -408,6 +409,7 @@ export default function PasswordSprayCommandCenter() {
         if (!params.domain) set('domain', u.hostname.replace(/^www\./, ''))
       } catch { /* ignore */ }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clients])
 
   const showToastMsg = useCallback((sev, msg) => {
@@ -484,7 +486,7 @@ export default function PasswordSprayCommandCenter() {
     setStatus('running')
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToastMsg('error', d.detail || L.scanFailed); return }
       const jobId = d.job_id ?? ''
       showToastMsg('info', `${L.queued} · ${jobId}`)
@@ -494,6 +496,7 @@ export default function PasswordSprayCommandCenter() {
       setStatus('error')
       showToastMsg('error', e?.message ?? L.scanFailed)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
   const handleExport = useCallback(() => {

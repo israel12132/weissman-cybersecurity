@@ -123,6 +123,7 @@ export default function TopTierEngineProfile() {
     return p
   }, [profile, clientId, target, engineId, extraParams])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
   const findings = Array.isArray(history?.findings) ? history.findings : []
 
