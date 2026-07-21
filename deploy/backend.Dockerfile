@@ -1,6 +1,6 @@
 # Production API + async job worker binaries (workspace build).
 # `fingerprint_engine serve` was removed — use `weissman-server` (see fingerprint_engine/src/main.rs).
-# Build: docker compose build backend
+# Build: docker compose -f docker-compose.build.yml build backend
 #
 # OT/ICS critical-infra engines: enabled via `high_risk_engines` on the fingerprint_engine
 # dependency in weissman-server / weissman-worker Cargo.toml (transitive for this build).

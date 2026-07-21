@@ -120,7 +120,12 @@ jobs:
         run: cargo test --workspace --all-targets
 
       - name: Build Docker production images
-        run: docker compose build backend worker gateway
+        # Build through the build-only compose model (docker-compose.build.yml) so the
+        # image build is never gated on the runtime `:?` secret guards in
+        # docker-compose.yml. Those secrets are irrelevant at build time (no ARG bakes
+        # them in) and belong to `up`; requiring them to build is a lifecycle violation.
+        # The runtime compose keeps its guards intact for real deployments.
+        run: docker compose -f docker-compose.build.yml build backend worker gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the
