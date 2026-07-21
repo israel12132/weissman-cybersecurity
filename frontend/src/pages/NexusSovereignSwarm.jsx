@@ -8,7 +8,8 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
+import { apiUrl } from '../lib/apiBase'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
@@ -1299,9 +1300,8 @@ export default function NexusSovereignSwarm() {
 
   const loadAgents = useCallback(() => {
     apiFetch('/api/agents/status')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setEndpointAgents(d) })
-      .catch(() => {})
+      .catch((e) => { if (e?.status) setEndpointAgents([]) })
   }, [])
 
   useEffect(() => {
@@ -1344,7 +1344,6 @@ export default function NexusSovereignSwarm() {
 
   useEffect(() => {
     apiFetch('/api/engines/nexus_sovereign_swarm/schema')
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d?.parameters) return
         const backendKeys = new Set(d.parameters.map((p) => p.key))
@@ -1364,7 +1363,6 @@ export default function NexusSovereignSwarm() {
 
   const handleShowSchema = useCallback(() => {
     apiFetch('/api/engines/nexus_sovereign_swarm/schema')
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d) setConfigSchema(d) })
       .catch(() => appendLine('[ERROR] Failed to load NSSI schema'))
   }, [appendLine])
@@ -1468,26 +1466,25 @@ export default function NexusSovereignSwarm() {
     setFleetBusy(true)
     appendLine('[NSSI] Broadcasting fleet to all endpoint agents…')
     try {
-      const r = await apiFetch('/api/agents/dispatch', {
+      const data = await apiFetch('/api/agents/dispatch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           client_id: Number(selectedClientId),
           engine: 'process_inventory',
           target: target.trim(),
           fleet_broadcast: true,
           params: { nssi_bridge: true, source: 'nexus_sovereign_swarm' },
-        }),
+        },
       })
-      const data = await r.json()
-      if (r.ok) {
-        appendLine(`[NSSI] Fleet broadcast: ${data.live_dispatched ?? 0} live / ${data.engines_dispatched ?? 0} engines`)
-      } else {
-        appendLine(`[FLEET] ${data.detail || 'dispatch failed'}`)
-      }
+      appendLine(`[NSSI] Fleet broadcast: ${data.live_dispatched ?? 0} live / ${data.engines_dispatched ?? 0} engines`)
       await apiFetch(`/api/clients/${selectedClientId}/swarm/run`, { method: 'POST' }).catch(() => {})
     } catch (e) {
-      appendLine(`[FLEET] ${e.message}`)
+      if (e?.status) {
+        const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        appendLine(`[FLEET] ${b.detail || 'dispatch failed'}`)
+      } else {
+        appendLine(`[FLEET] ${e.message}`)
+      }
     } finally {
       setFleetBusy(false)
       loadAgents()
@@ -1508,9 +1505,8 @@ export default function NexusSovereignSwarm() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch(() => {})
+      .catch((e) => { if (e?.status) setClients([]) })
   }, [])
 
   useEffect(() => () => {
@@ -1525,7 +1521,6 @@ export default function NexusSovereignSwarm() {
       // Skip the 2.5s swarm-events poll while the tab is hidden (no background hammering).
       if (typeof document !== 'undefined' && document.hidden) return
       apiFetch(`/api/swarm/events?client_id=${selectedClientId}&since_id=${lastEventId}`)
-        .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (!d?.events?.length) return
           setLiveEvents((prev) => {
@@ -1590,7 +1585,6 @@ export default function NexusSovereignSwarm() {
             es.close()
             setRunning(false)
             apiFetch(`/api/jobs/${jobId}`)
-              .then((jr) => (jr.ok ? jr.json() : null))
               .then((job) => {
                 const res = job?.result_json || job?.result
                 const f = res?.findings || []

@@ -17,7 +17,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useProductionEngines } from '../lib/useProductionEngines'
 import Button from '../components/ui/Button'
@@ -366,18 +366,16 @@ export default function KillChainOrchestrator() {
     setLoading(true)
     setError(null)
     try {
-      const [chainsRes, findingsRes, kpisRes] = await Promise.all([
-        apiFetch('/api/soc/kill-chains'),
-        apiFetch('/api/findings?limit=2000'),
-        apiFetch('/api/dashboard/exec-kpis'),
+      const FAILED = Symbol('failed')
+      const [chainsData, findingsData, kpisData] = await Promise.all([
+        apiFetch('/api/soc/kill-chains').catch(() => null),
+        apiFetch('/api/findings?limit=2000').catch(() => FAILED),
+        apiFetch('/api/dashboard/exec-kpis').catch(() => null),
       ])
-      const chainsData = chainsRes.ok ? await chainsRes.json() : null
       const apiChains = normalizeApiChains(chainsData?.chains)
-      if (!findingsRes.ok && !apiChains.length) throw new Error(`Findings HTTP ${findingsRes.status}`)
-      const findingsData = findingsRes.ok ? await findingsRes.json() : null
-      const kpisData = kpisRes.ok ? await kpisRes.json() : null
+      if (findingsData === FAILED && !apiChains.length) throw new Error(t('pages.killChainOrchestrator.load_error', { error: '' }))
       setChainsFromApi(apiChains.length ? apiChains : null)
-      setFindings(parseFindingsResponse(findingsData))
+      setFindings(parseFindingsResponse(findingsData === FAILED ? null : findingsData))
       setExecKpis(kpisData)
     } catch (e) {
       setError(e.message || t('pages.killChainOrchestrator.load_error', { error: '' }))

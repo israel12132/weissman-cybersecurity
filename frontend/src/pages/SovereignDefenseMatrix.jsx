@@ -10,7 +10,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
 
@@ -134,22 +134,21 @@ export default function SovereignDefenseMatrix() {
 
   const loadDashboard = useCallback(async () => {
     if (!clientId) return
-    const r = await apiFetch(`/api/sovereign-defense/${clientId}/dashboard`)
-    if (r.ok) setDashboard(await r.json())
-    const ce = await apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`)
-    if (ce.ok) setChronosEvents(await ce.json())
-    const cs = await apiFetch(`/api/sovereign-defense/${clientId}/cognitive/sessions`)
-    if (cs.ok) setCognitiveSessions(await cs.json())
+    const dash = await apiFetch(`/api/sovereign-defense/${clientId}/dashboard`).catch(() => null)
+    if (dash) setDashboard(dash)
+    const ce = await apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`).catch(() => null)
+    if (ce) setChronosEvents(ce)
+    const cs = await apiFetch(`/api/sovereign-defense/${clientId}/cognitive/sessions`).catch(() => null)
+    if (cs) setCognitiveSessions(cs)
   }, [clientId])
 
   const loadPoisonLib = useCallback(async () => {
-    const r = await apiFetch('/api/sovereign-defense/poison-library')
-    if (r.ok) setPoisonLib(await r.json())
+    const lib = await apiFetch('/api/sovereign-defense/poison-library').catch(() => null)
+    if (lib) setPoisonLib(lib)
   }, [])
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => {})
     loadPoisonLib()
@@ -200,19 +199,20 @@ export default function SovereignDefenseMatrix() {
     if (!jobId || !runState.running) return undefined
     let cancelled = false
     const iv = setInterval(async () => {
-      const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
-      const d = await r.json().catch(() => null)
-      if (cancelled || !r.ok || !d) return
-      const status = String(d.status || '').toLowerCase()
-      if (status === 'completed') {
-        const raw = d.result_json || d.result || {}
-        setFindings(Array.isArray(raw.findings) ? raw.findings : [])
-        setLastUpdated(new Date().toISOString())
-        setRunState({ running: false, msg: t('pages.sovereignDefense.complete') })
-        loadDashboard()
-      } else if (status === 'failed' || status === 'dead') {
-        setRunState({ running: false, msg: d.error || status })
-      }
+      try {
+        const d = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
+        if (cancelled || !d) return
+        const status = String(d.status || '').toLowerCase()
+        if (status === 'completed') {
+          const raw = d.result_json || d.result || {}
+          setFindings(Array.isArray(raw.findings) ? raw.findings : [])
+          setLastUpdated(new Date().toISOString())
+          setRunState({ running: false, msg: t('pages.sovereignDefense.complete') })
+          loadDashboard()
+        } else if (status === 'failed' || status === 'dead') {
+          setRunState({ running: false, msg: d.error || status })
+        }
+      } catch { /* transient job poll error — retry next interval tick */ }
     }, 2500)
     // No setState from a tick that resolves after unmount / after `running` flips.
     return () => { cancelled = true; clearInterval(iv) }
@@ -220,16 +220,17 @@ export default function SovereignDefenseMatrix() {
 
   const rotateLiquid = async () => {
     if (!clientId) return
-    const r = await apiFetch(`/api/sovereign-defense/${clientId}/liquid-matrix/rotate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rotation_step_secs: Number(params.liquid.rotation_step_secs),
-        port_pool_min: Number(params.liquid.port_pool_min),
-        port_pool_max: Number(params.liquid.port_pool_max),
-      }),
-    })
-    if (r.ok) loadDashboard()
+    try {
+      await apiFetch(`/api/sovereign-defense/${clientId}/liquid-matrix/rotate`, {
+        method: 'POST',
+        body: {
+          rotation_step_secs: Number(params.liquid.rotation_step_secs),
+          port_pool_min: Number(params.liquid.port_pool_min),
+          port_pool_max: Number(params.liquid.port_pool_max),
+        },
+      })
+      loadDashboard()
+    } catch { /* rotate failed — leave dashboard as-is */ }
   }
 
   const liquid = dashboard?.liquid_matrix

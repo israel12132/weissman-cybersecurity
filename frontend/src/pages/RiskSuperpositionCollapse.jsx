@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
 
@@ -296,7 +296,6 @@ export default function RiskSuperpositionCollapse() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => {})
   }, [])
@@ -317,11 +316,12 @@ export default function RiskSuperpositionCollapse() {
     if (!clientId) return
     setClustersLoading(true)
     try {
-      const r = await apiFetch(`/api/findings/clusters?limit=40&client_id=${encodeURIComponent(clientId)}`)
-      const d = await r.json().catch(() => ({}))
-      if (r.ok && Array.isArray(d?.clusters)) setClusters(d.clusters)
-      else if (r.ok && Array.isArray(d?.items)) setClusters(d.items)
+      const d = await apiFetch(`/api/findings/clusters?limit=40&client_id=${encodeURIComponent(clientId)}`)
+      if (Array.isArray(d?.clusters)) setClusters(d.clusters)
+      else if (Array.isArray(d?.items)) setClusters(d.items)
       else setClusters([])
+    } catch {
+      setClusters([])
     } finally {
       setClustersLoading(false)
     }
@@ -342,11 +342,12 @@ export default function RiskSuperpositionCollapse() {
   useEffect(() => {
     refreshFromHistory().then(async (run) => {
       if (applyHistoryFindings(run, setFindings, { setLastUpdated, setJobId })) return
-      const fr = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
-      const hist = await fr.json().catch(() => ({}))
-      if (Array.isArray(hist?.findings) && hist.findings.length) {
-        setFindings(hist.findings)
-      }
+      try {
+        const hist = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
+        if (Array.isArray(hist?.findings) && hist.findings.length) {
+          setFindings(hist.findings)
+        }
+      } catch { /* no history fallback available */ }
     })
   }, [refreshFromHistory])
 
@@ -369,27 +370,30 @@ export default function RiskSuperpositionCollapse() {
     if (!jobId || !runState.running) return undefined
     let cancelled = false
     const iv = setInterval(async () => {
-      const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
-      const d = await r.json().catch(() => null)
-      if (cancelled || !r.ok || !d) return
-      const status = String(d.status || '').toLowerCase()
-      if (status === 'completed') {
-        const raw = d.result_json || d.result || {}
-        const jobFindings = Array.isArray(raw.findings) ? raw.findings : []
-        if (jobFindings.length > 0) {
-          setFindings(jobFindings)
-        } else {
-          const fr = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
-          const hist = await fr.json().catch(() => ({}))
-          if (cancelled) return
-          setFindings(Array.isArray(hist?.findings) ? hist.findings : [])
+      try {
+        const d = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
+        if (cancelled || !d) return
+        const status = String(d.status || '').toLowerCase()
+        if (status === 'completed') {
+          const raw = d.result_json || d.result || {}
+          const jobFindings = Array.isArray(raw.findings) ? raw.findings : []
+          if (jobFindings.length > 0) {
+            setFindings(jobFindings)
+          } else {
+            let hist = {}
+            try {
+              hist = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=1`)
+            } catch { hist = {} }
+            if (cancelled) return
+            setFindings(Array.isArray(hist?.findings) ? hist.findings : [])
+          }
+          setLastUpdated(new Date().toISOString())
+          setRunState({ running: false, msg: t('pages.superpositionCollapse.complete') })
+          loadClusters()
+        } else if (status === 'failed' || status === 'dead') {
+          setRunState({ running: false, msg: d.error || status })
         }
-        setLastUpdated(new Date().toISOString())
-        setRunState({ running: false, msg: t('pages.superpositionCollapse.complete') })
-        loadClusters()
-      } else if (status === 'failed' || status === 'dead') {
-        setRunState({ running: false, msg: d.error || status })
-      }
+      } catch { /* transient job poll error — retry next interval tick */ }
     }, 2500)
     // Guard against a tick that resolves after unmount / after `running` flips —
     // no setState on a torn-down effect, and no chained second fetch either.

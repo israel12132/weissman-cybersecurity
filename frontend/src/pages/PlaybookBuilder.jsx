@@ -20,7 +20,7 @@ import {
   Search,
   Download,
 } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { downloadBytes } from '../lib/pdfExport'
@@ -260,17 +260,16 @@ export default function PlaybookBuilder() {
     setLoading(true)
     setLoadError(null)
     try {
-      const r = await apiFetch('/api/playbooks')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setList([])
-        setLoadError(formatApiErrorFromBody(d, r.status))
-        return
-      }
+      const d = await apiFetch('/api/playbooks')
       setList(Array.isArray(d?.playbooks) ? d.playbooks : [])
     } catch (e) {
       setList([])
-      setLoadError(e?.message || t('ask_weissman.network_error'))
+      if (e?.status) {
+        const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        setLoadError(formatApiErrorFromBody(b, e.status))
+      } else {
+        setLoadError(e?.message || t('ask_weissman.network_error'))
+      }
     } finally {
       setLoading(false)
     }
@@ -282,7 +281,6 @@ export default function PlaybookBuilder() {
     if (!selected) { setRuns([]); return }
     let abort = false
     apiFetch(`/api/playbooks/${selected.id}/runs?limit=20`)
-      .then((r) => r.json())
       .then((d) => { if (!abort) setRuns(d?.runs || []) })
       .catch(() => { if (!abort) setRuns([]) })
     return () => { abort = true }
@@ -335,35 +333,31 @@ export default function PlaybookBuilder() {
     if (!draft?.name?.trim()) { setStatusMsg({ kind: 'err', text: t('playbooks.name_required') }); return }
     setSaving(true)
     setStatusMsg(null)
-    const body = JSON.stringify({
+    const body = {
       name: draft.name.trim(),
       description: draft.description || '',
       enabled: !!draft.enabled,
       trigger: draft.trigger || {},
       actions: draft.actions || [],
-    })
+    }
     try {
       const url = selected ? `/api/playbooks/${selected.id}` : '/api/playbooks'
       const method = selected ? 'PATCH' : 'POST'
-      const r = await apiFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setStatusMsg({ kind: 'err', text: d?.detail || `HTTP ${r.status}` })
-      } else {
-        setStatusMsg({ kind: 'ok', text: selected ? t('playbooks.save_changes') : `${t('playbooks.create_playbook')} (${d.id})` })
-        await refresh()
-        if (!selected && d.id) {
-          const r2 = await apiFetch('/api/playbooks').then((x) => x.json()).catch(() => ({}))
-          const fresh = (r2?.playbooks || []).find((p) => p.id === d.id)
-          if (fresh) startEdit(fresh)
-        }
+      const d = await apiFetch(url, { method, body })
+      setStatusMsg({ kind: 'ok', text: selected ? t('playbooks.save_changes') : `${t('playbooks.create_playbook')} (${d.id})` })
+      await refresh()
+      if (!selected && d.id) {
+        const r2 = await apiFetch('/api/playbooks').catch(() => ({}))
+        const fresh = (r2?.playbooks || []).find((p) => p.id === d.id)
+        if (fresh) startEdit(fresh)
       }
     } catch (e) {
-      setStatusMsg({ kind: 'err', text: e?.message || t('ask_weissman.network_error') })
+      if (e?.status) {
+        const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        setStatusMsg({ kind: 'err', text: b?.detail || `HTTP ${e.status}` })
+      } else {
+        setStatusMsg({ kind: 'err', text: e?.message || t('ask_weissman.network_error') })
+      }
     } finally {
       setSaving(false)
     }
@@ -373,15 +367,15 @@ export default function PlaybookBuilder() {
     if (!selected) return
     if (!(await confirmDialog(t('playbooks.delete_confirm', { name: selected.name })))) return
     try {
-      const r = await apiFetch(`/api/playbooks/${selected.id}`, { method: 'DELETE' })
-      if (r.ok) {
-        setSelected(null); setDraft(null)
-        await refresh()
-      } else {
-        setStatusMsg({ kind: 'err', text: await formatApiErrorResponse(r) })
-      }
+      await apiFetch(`/api/playbooks/${selected.id}`, { method: 'DELETE' })
+      setSelected(null); setDraft(null)
+      await refresh()
     } catch (e) {
-      setStatusMsg({ kind: 'err', text: e?.message || t('ask_weissman.network_error') })
+      if (e?.status && e.response) {
+        setStatusMsg({ kind: 'err', text: await formatApiErrorResponse(e.response) })
+      } else {
+        setStatusMsg({ kind: 'err', text: e?.message || t('ask_weissman.network_error') })
+      }
     }
   }
 
@@ -409,15 +403,18 @@ export default function PlaybookBuilder() {
       internet_exposed: !!draft.trigger?.exposed,
     }
     try {
-      const r = await apiFetch('/api/playbooks/fire', {
+      const d = await apiFetch('/api/playbooks/fire', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: sampleEvent, dry_run: true }),
+        body: { event: sampleEvent, dry_run: true },
       })
-      const d = await r.json()
-      setFireResult({ loading: false, ok: r.ok, ...d })
+      setFireResult({ loading: false, ok: true, ...d })
     } catch (e) {
-      setFireResult({ loading: false, ok: false, detail: e?.message || t('ask_weissman.network_error') })
+      if (e?.status) {
+        const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        setFireResult({ loading: false, ok: false, ...b })
+      } else {
+        setFireResult({ loading: false, ok: false, detail: e?.message || t('ask_weissman.network_error') })
+      }
     }
   }
 

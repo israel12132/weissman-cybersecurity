@@ -10,7 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton, { CopyableField } from '../components/ui/CopyButton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { normalizeJobStatus } from '../lib/useJobPoll'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
@@ -76,21 +76,14 @@ export default function JobsDashboard() {
       const qs = new URLSearchParams({ limit: '100' })
       if (statusFilter !== 'all') qs.set('status', statusFilter)
 
-      let response = await apiFetch(`/api/jobs?${qs.toString()}`)
-
-      if (!response.ok && isCeo) {
-        response = await apiFetch('/api/ceo/jobs/live')
+      let data
+      try {
+        data = await apiFetch(`/api/jobs?${qs.toString()}`)
+      } catch (primaryErr) {
+        if (!isCeo) throw primaryErr
+        data = await apiFetch('/api/ceo/jobs/live')
       }
 
-      if (!response.ok) {
-        if (hasLoadedRef.current) return
-        const text = await response.text().catch(() => 'Failed to load jobs')
-        setError(t('pages.jobsDashboard.load_failed', { detail: text }))
-        setLoading(false)
-        return
-      }
-
-      const data = await response.json()
       const jobsList = Array.isArray(data) ? data : (data.jobs || data.items || [])
       setJobs(jobsList)
       setTotal(data.total ?? jobsList.length)
@@ -99,7 +92,12 @@ export default function JobsDashboard() {
       hasLoadedRef.current = true
     } catch (err) {
       if (hasLoadedRef.current) return
-      setError(t('pages.jobsDashboard.load_error', { detail: err.message }))
+      if (err?.response) {
+        const text = await err.response.text().catch(() => 'Failed to load jobs')
+        setError(t('pages.jobsDashboard.load_failed', { detail: text }))
+      } else {
+        setError(t('pages.jobsDashboard.load_error', { detail: err.message }))
+      }
     } finally {
       setLoading(false)
     }

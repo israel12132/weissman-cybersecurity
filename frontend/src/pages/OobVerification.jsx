@@ -10,7 +10,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import CopyButton from '../components/ui/CopyButton'
 import DataTable from '../components/ui/DataTable'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 const columnHelper = createColumnHelper()
@@ -66,21 +66,19 @@ export default function OobVerification() {
     setError('')
     setCallbacks([])
     try {
-      const r = await apiFetch('/api/oast/probe', {
+      const data = await apiFetch('/api/oast/probe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           target_url: targetUrl.trim(),
           probe_type: probeType,
           label: label.trim() || undefined,
-        }),
+        },
       })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data?.error || data?.detail || t('pages.oobVerification.mint_failed'))
       setProbe(data)
       setAutoPoll(true)
     } catch (e) {
-      setError(e.message || t('pages.oobVerification.mint_failed'))
+      const body = e?.response ? await e.response.json().catch(() => ({})) : {}
+      setError(body?.error || body?.detail || e.message || t('pages.oobVerification.mint_failed'))
     } finally {
       setMinting(false)
     }
@@ -91,22 +89,20 @@ export default function OobVerification() {
     if (!token) return
     setPolling(true)
     try {
-      const [verifyRes, cbRes] = await Promise.all([
+      const [data, cbData] = await Promise.all([
         apiFetch(`/api/oast/verify/${token}`),
-        apiFetch('/api/oast/callbacks'),
+        apiFetch('/api/oast/callbacks').catch(() => null),
       ])
-      const data = await verifyRes.json().catch(() => ({}))
-      if (!verifyRes.ok) throw new Error(data?.error || data?.detail || t('pages.oobVerification.poll_failed'))
       setProbe((prev) => ({ ...(prev || {}), ...data }))
 
-      if (cbRes.ok) {
-        const cbData = await cbRes.json().catch(() => ({}))
+      if (cbData) {
         const all = Array.isArray(cbData.callbacks) ? cbData.callbacks : []
         setRecentHits(all.slice(0, 20))
         setCallbacks(all.filter((c) => c.interaction_token === token))
       }
     } catch (e) {
-      setError(e.message || t('pages.oobVerification.poll_failed'))
+      const body = e?.response ? await e.response.json().catch(() => ({})) : {}
+      setError(body?.error || body?.detail || e.message || t('pages.oobVerification.poll_failed'))
     } finally {
       setPolling(false)
     }
