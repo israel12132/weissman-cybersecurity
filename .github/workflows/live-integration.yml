@@ -174,6 +174,16 @@ jobs:
           WEISSMAN_ADMIN_PASSWORD: changeme
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          # Disable the background orchestrator auto-scan loop for the live suite.
+          # With it on (the production default) the server enqueues a heavy
+          # `tenant_full_scan` for every tenant once a minute; over a ~20-min
+          # contract run that is ~90 heavy jobs which saturate the single worker
+          # and starve the contracts' own explicitly-submitted engine jobs — they
+          # then never get a worker slot inside their 180s poll window and fail as
+          # "job timeout" (every smoke failure was exactly 180s apart = never
+          # picked up). The contracts drive their own scans, so the background
+          # loop is pure noise here. Manual /api/command-center/scan is unaffected.
+          WEISSMAN_SCANNING_ENABLED: "0"
           PORT: "18000"
         run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
 
