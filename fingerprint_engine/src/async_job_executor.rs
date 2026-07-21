@@ -295,7 +295,9 @@ async fn begin_tenant_tx_resilient(
             }
         }
     }
-    Err(format!("begin_tenant_tx failed after 3 attempts: {last_err}"))
+    Err(format!(
+        "begin_tenant_tx failed after 3 attempts: {last_err}"
+    ))
 }
 
 /// Run one job to completion JSON (success) or error string (failure).

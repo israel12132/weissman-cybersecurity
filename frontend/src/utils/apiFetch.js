@@ -4,7 +4,7 @@
  * via lib/apiBase so both API clients show the same global rate-limit toast.
  */
 
-import { apiFetch as baseApiFetch, setRateLimitToastCallback } from '../lib/apiBase'
+import { apiFetch as baseApiFetch, setRateLimitToastCallback } from '../lib/apiBase.js'
 
 export { setRateLimitToastCallback }
 
