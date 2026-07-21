@@ -33,6 +33,8 @@ const TABLE_EXCEPTIONS = new Set([
   //                    a lightweight inline transcript grid — not a sortable/filterable data table
   'IacSecurityCenter.jsx', // RiskHeatmap: a framework × severity matrix with per-cell severity
   //                          coloring (a heatmap visualization), which DataTable would regress
+  'ReportView.jsx', // board-ready client report exported to PDF — a static bordered findings table;
+  //                   DataTable's interactive toolbar (search/density/CSV) is wrong for a print report
 ])
 
 // Recursively list every non-test .jsx under src/ (pages AND components — modals, drawers, nav…).
