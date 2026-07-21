@@ -26,6 +26,10 @@ const pagesDir = path.join(root, 'frontend', 'src', 'pages')
  */
 const TABLE_EXCEPTIONS = new Set([
   'AuditLog.jsx', // server-side offset pagination + expandable JSON payload rows
+  'AskWeissman.jsx', // dynamic NL→SQL result preview: columns are arbitrary (Object.keys(rows[0])),
+  //                    a lightweight inline transcript grid — not a sortable/filterable data table
+  'IacSecurityCenter.jsx', // RiskHeatmap: a framework × severity matrix with per-cell severity
+  //                          coloring (a heatmap visualization), which DataTable would regress
 ])
 
 function listPages() {

@@ -305,7 +305,7 @@ export default function AskWeissman() {
                           <thead>
                             <tr className="text-[var(--text-tertiary)]">
                               {Object.keys(turn.rows[0]).map((k) => (
-                                <th key={k} className="px-2 py-1.5 font-normal border-b border-[var(--border-default)]">
+                                <th key={k} scope="col" className="px-2 py-1.5 font-normal border-b border-[var(--border-default)]">
                                   {k}
                                 </th>
                               ))}
