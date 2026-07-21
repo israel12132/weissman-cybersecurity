@@ -12,6 +12,12 @@ const DEFAULT_BASELINE_N: usize = 100;
 const DEFAULT_PAYLOAD_N: usize = 50;
 const DEFAULT_Z_THRESHOLD: f64 = 3.0;
 const REQUEST_TIMEOUT_SECS: u64 = 15;
+/// Number of built-in heavy payloads probed per URL by default (the full set).
+const DEFAULT_PAYLOAD_VARIANTS: usize = 8;
+
+fn default_payload_variants() -> usize {
+    DEFAULT_PAYLOAD_VARIANTS
+}
 
 /// Payloads designed to cause server-side CPU load when interpreted (SQL heavy math, regex backtracking).
 /// No SLEEP/WAITFOR to evade WAF.
@@ -31,6 +37,19 @@ pub struct TimingConfig {
     pub baseline_sample_size: usize,
     pub payload_sample_size: usize,
     pub z_score_threshold: f64,
+    /// How many of the built-in heavy payloads to probe per URL (each with
+    /// `payload_sample_size` samples). Defaults to the full set; a caller can
+    /// trade payload coverage for speed. Clamped to `1..=TIMING_PAYLOADS.len()`.
+    #[serde(default = "default_payload_variants")]
+    pub payload_variants: usize,
+    /// Overall wall-clock budget in seconds for the whole run (baseline +
+    /// payload sweep across every URL). `0` means unlimited (the default, so
+    /// production scans are unchanged). When set, the sequential per-request
+    /// loop stops probing further payloads/URLs once the budget is exhausted
+    /// and returns whatever it has found — a hard ceiling so a large URL/sample
+    /// fan-out can never run away past a caller's deadline.
+    #[serde(default)]
+    pub budget_secs: u64,
 }
 
 impl Default for TimingConfig {
@@ -39,6 +58,8 @@ impl Default for TimingConfig {
             baseline_sample_size: DEFAULT_BASELINE_N,
             payload_sample_size: DEFAULT_PAYLOAD_N,
             z_score_threshold: DEFAULT_Z_THRESHOLD,
+            payload_variants: DEFAULT_PAYLOAD_VARIANTS,
+            budget_secs: 0,
         }
     }
 }
@@ -217,12 +238,18 @@ pub async fn run_timing_attack_urls(
     if url_list.is_empty() {
         return EngineResult::error("target required");
     }
+    let deadline = (config.budget_secs > 0)
+        .then(|| Instant::now() + std::time::Duration::from_secs(config.budget_secs));
     for url in url_list.clone() {
+        if deadline.is_some_and(|d| Instant::now() >= d) {
+            break;
+        }
         let r = run_timing_attack_impl(
             url,
             stealth_owned.clone(),
             config.clone(),
             stream_tx.as_ref(),
+            deadline,
         )
         .await;
         for f in r.findings {
@@ -243,6 +270,7 @@ async fn run_timing_attack_impl(
     stealth: Option<stealth_engine::StealthConfig>,
     config: TimingConfig,
     stream_tx: Option<&tokio::sync::mpsc::UnboundedSender<TimingStreamEvent>>,
+    deadline: Option<Instant>,
 ) -> EngineResult {
     let stealth: Option<Arc<stealth_engine::StealthConfig>> = stealth.map(Arc::new);
     let client = if let Some(s) = stealth.as_deref() {
@@ -255,14 +283,21 @@ async fn run_timing_attack_impl(
     let n_baseline = config.baseline_sample_size.max(10).min(500);
     let n_payload = config.payload_sample_size.max(20).min(500);
     let z_threshold = config.z_score_threshold.max(1.0).min(10.0);
+    let n_variants = config.payload_variants.clamp(1, TIMING_PAYLOADS.len());
 
     let (baseline_mean, baseline_std) =
         baseline_profile(url.clone(), n_baseline, &client, stealth.clone(), stream_tx).await;
 
     let mut findings = Vec::new();
-    for payload in TIMING_PAYLOADS.iter().take(8).copied() {
+    for payload in TIMING_PAYLOADS.iter().take(n_variants).copied() {
+        if deadline.is_some_and(|d| Instant::now() >= d) {
+            break;
+        }
         let mut payload_samples = Vec::with_capacity(n_payload);
         for i in 0..n_payload {
+            if deadline.is_some_and(|d| Instant::now() >= d) {
+                break;
+            }
             if let Some(s) = stealth.as_deref() {
                 stealth_engine::apply_jitter(s).await;
             }
@@ -341,5 +376,48 @@ pub async fn run_timing_attack(
     }
     let stealth_owned: Option<stealth_engine::StealthConfig> = stealth.cloned();
     let config = config.clone();
-    run_timing_attack_impl(url, stealth_owned, config, stream_tx.as_ref()).await
+    let deadline = (config.budget_secs > 0)
+        .then(|| Instant::now() + std::time::Duration::from_secs(config.budget_secs));
+    run_timing_attack_impl(url, stealth_owned, config, stream_tx.as_ref(), deadline).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_matches_built_in_budget() {
+        let cfg = TimingConfig::default();
+        assert_eq!(cfg.baseline_sample_size, DEFAULT_BASELINE_N);
+        assert_eq!(cfg.payload_sample_size, DEFAULT_PAYLOAD_N);
+        assert_eq!(cfg.payload_variants, TIMING_PAYLOADS.len());
+        // 0 == unlimited: a normal production scan keeps its historical behaviour.
+        assert_eq!(cfg.budget_secs, 0);
+    }
+
+    #[test]
+    fn partial_job_params_fill_new_fields_from_defaults() {
+        // Mirrors how a scan body drives the engine: only some knobs are set, the
+        // rest must fall back to the engine defaults (serde `default`) so a caller
+        // never has to spell out every field.
+        let cfg: TimingConfig =
+            serde_json::from_value(serde_json::json!({ "baseline_sample_size": 12,
+                "payload_sample_size": 20, "z_score_threshold": 3.0 }))
+            .expect("partial config deserializes");
+        assert_eq!(cfg.baseline_sample_size, 12);
+        assert_eq!(cfg.payload_sample_size, 20);
+        assert_eq!(cfg.payload_variants, DEFAULT_PAYLOAD_VARIANTS);
+        assert_eq!(cfg.budget_secs, 0);
+    }
+
+    #[test]
+    fn payload_variants_clamp_bounds_the_probe_set() {
+        // 0 and absurdly large both resolve to a legal 1..=len probe count, so a
+        // hostile/empty job param can neither skip every payload nor overrun the set.
+        assert_eq!(0usize.clamp(1, TIMING_PAYLOADS.len()), 1);
+        assert_eq!(
+            999usize.clamp(1, TIMING_PAYLOADS.len()),
+            TIMING_PAYLOADS.len()
+        );
+    }
 }
