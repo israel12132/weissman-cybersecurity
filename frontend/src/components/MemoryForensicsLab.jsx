@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { FixedSizeList as List } from 'react-window'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
@@ -113,7 +113,6 @@ export default function MemoryForensicsLab() {
     if (!clientId) return
     setLoading(true)
     apiFetch(`/api/clients/${clientId}/poe-findings`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setFindings(data?.findings ?? []))
       .catch(() => setFindings([]))
       .finally(() => setLoading(false))
@@ -126,7 +125,6 @@ export default function MemoryForensicsLab() {
   useEffect(() => {
     if (!clientId) return
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((list) => {
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
@@ -147,9 +145,9 @@ export default function MemoryForensicsLab() {
     setJobId(null)
     setJobStatus(null)
     apiFetch('/api/poe-scan/run', {
+      raw: true,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, target_url: targetUrl.trim() }),
+      body: { client_id: clientId, target_url: targetUrl.trim() },
     })
       .then((r) => {
         if (r.status !== 202) return r.json().then((d) => Promise.reject(new Error(d?.detail || 'Start failed')))

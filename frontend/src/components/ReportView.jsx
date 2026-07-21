@@ -5,7 +5,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation, Trans } from 'react-i18next'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
+import { apiUrl } from '../lib/apiBase'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 
 export default function ReportView() {
@@ -20,9 +21,9 @@ export default function ReportView() {
   useEffect(() => {
     if (!clientId) return
     Promise.all([
-      apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])),
-      apiFetch('/api/findings').then((r) => (r.ok ? r.json() : [])),
-      apiFetch(`/api/clients/${clientId}/report/crypto-proof`).then((r) => (r.ok ? r.json() : null)),
+      apiFetch('/api/clients').catch(() => []),
+      apiFetch('/api/findings').catch(() => []),
+      apiFetch(`/api/clients/${clientId}/report/crypto-proof`).catch(() => null),
     ])
       .then(([clients, findingsList, proof]) => {
         const c = Array.isArray(clients) ? clients.find((x) => String(x?.id) === String(clientId)) : null

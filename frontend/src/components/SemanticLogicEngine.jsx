@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
 
@@ -72,8 +72,8 @@ export default function SemanticLogicEngine() {
     if (!clientId) return
     setLoading(true)
     Promise.all([
-      apiFetch(`/api/clients/${clientId}/semantic-state-machine`).then((r) => r.json()),
-      apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`).then((r) => r.json()),
+      apiFetch(`/api/clients/${clientId}/semantic-state-machine`),
+      apiFetch(`/api/clients/${clientId}/semantic-logic/reasoning`),
     ])
       .then(([sm, log]) => {
         setStateMachine(sm)

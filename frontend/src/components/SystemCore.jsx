@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { isHttpUrl } from '../utils/safeUrl'
 import AppShell from './layout/AppShell'
 import LabForensicEvidence from './ui/LabForensicEvidence'
@@ -64,7 +64,6 @@ export default function SystemCore() {
 
   useEffect(() => {
     apiFetch(`/api/system/configs`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Failed to load configs'))))
       .then((list) => {
         const enableVal = list?.find((c) => c.key === 'enable_rfc3161_signing')?.value ?? 'true'
         setRfc3161Enabled(enableVal === 'true' || enableVal === '1')
@@ -127,7 +126,6 @@ export default function SystemCore() {
         }
         // Threat Intel Feed status and payloads
         apiFetch(`/api/payload-sync/status`)
-          .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then((data) => {
             setPayloadSyncActive(!!data?.auto_sync_active)
             setPayloadSyncLastAt(data?.last_synced ?? '')
@@ -136,7 +134,6 @@ export default function SystemCore() {
           })
           .catch(() => {})
         apiFetch(`/api/payload-sync/payloads`)
-          .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then((data) => setRecentPayloads(Array.isArray(data?.payloads) ? data.payloads : []))
           .catch(() => {})
       })
@@ -149,10 +146,8 @@ export default function SystemCore() {
     setError('')
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ configs: { [key]: value } }),
+      body: { configs: { [key]: value } },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => {
         setError(t('components.systemCore.save_failed'))
@@ -177,12 +172,10 @@ export default function SystemCore() {
     Promise.all([
       apiFetch(`/api/system/configs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ configs: { jitter_min_ms: String(minMs), jitter_max_ms: String(maxMs), proxy_swarm: proxySwarm.trim(), enable_identity_morphing: identityMorphing ? 'true' : 'false' } }),
+        body: { configs: { jitter_min_ms: String(minMs), jitter_max_ms: String(maxMs), proxy_swarm: proxySwarm.trim(), enable_identity_morphing: identityMorphing ? 'true' : 'false' } },
       }),
     ])
-      .then(([r]) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => { setJitterMinMs(minMs); setJitterMaxMs(maxMs); setSaving(false) })
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -213,10 +206,8 @@ export default function SystemCore() {
     if (gh && gh !== '••••••••') configs.github_token = gh
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ configs }),
+      body: { configs },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -227,15 +218,13 @@ export default function SystemCore() {
     const urls = customFeedUrls.trim().split(/\n/).map((u) => u.trim()).filter(Boolean)
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         configs: {
           enable_zero_day_probing: enableZeroDayProbing ? 'true' : 'false',
           custom_feed_urls: JSON.stringify(urls),
         },
-      }),
+      },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -250,15 +239,13 @@ export default function SystemCore() {
     setError('')
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         configs: {
           ai_redteam_endpoint: aiRedteamEndpoint.trim(),
           adversarial_strategy: adversarialStrategy,
         },
-      }),
+      },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -274,10 +261,8 @@ export default function SystemCore() {
     if (key && key !== '••••••••') configs.oast_api_key = key
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ configs }),
+      body: { configs },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -289,15 +274,18 @@ export default function SystemCore() {
       const body = { listener_url: oastListenerUrl.trim() }
       const k = oastApiKey.trim()
       if (k && k !== '••••••••') body.api_key = k
-      const r = await apiFetch('/api/onboarding/oast-test', {
+      const d = await apiFetch('/api/onboarding/oast-test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body,
       })
-      const d = await r.json().catch(() => ({}))
-      setOastTestResult(r.ok ? { ok: true, msg: d.url || 'OK' } : { ok: false, msg: d.detail || `HTTP ${r.status}` })
+      setOastTestResult({ ok: true, msg: d.url || 'OK' })
     } catch (e) {
-      setOastTestResult({ ok: false, msg: e.message })
+      if (e?.response) {
+        const d = await e.response.json().catch(() => ({}))
+        setOastTestResult({ ok: false, msg: d.detail || `HTTP ${e.status}` })
+      } else {
+        setOastTestResult({ ok: false, msg: e.message })
+      }
     } finally {
       setOastTesting(false)
     }
@@ -313,15 +301,13 @@ export default function SystemCore() {
     setError('')
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         configs: {
           timing_sample_size: String(timingSampleSize),
           z_score_sensitivity: String(Number(zScoreSensitivity.toFixed(1))),
         },
-      }),
+      },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -331,17 +317,15 @@ export default function SystemCore() {
     setError('')
     apiFetch(`/api/system/configs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         configs: {
           llm_base_url: llmBaseUrl.trim(),
           llm_model: llmModel.trim(),
           llm_temperature: String(Number(llmTemperature.toFixed(2))),
           max_sequence_depth: String(maxSequenceDepth),
         },
-      }),
+      },
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then(() => setSaving(false))
       .catch(() => { setError(t('components.systemCore.save_failed')); setSaving(false) })
   }
@@ -851,16 +835,17 @@ export default function SystemCore() {
                 onClick={async () => {
                   setPayloadSyncRunning(true)
                   try {
-                    const r = await apiFetch(`/api/payload-sync/run`, { method: 'POST' })
-                    if (r.ok) setError('')
-                    else setError(t('components.systemCore.sync_failed'))
+                    await apiFetch(`/api/payload-sync/run`, { method: 'POST' })
+                    setError('')
+                  } catch {
+                    setError(t('components.systemCore.sync_failed'))
                   } finally {
                     setPayloadSyncRunning(false)
-                    const st = await apiFetch(`/api/payload-sync/status`).then((res) => res.ok ? res.json() : {})
+                    const st = await apiFetch(`/api/payload-sync/status`).catch(() => ({}))
                     if (st.last_synced) setPayloadSyncLastAt(st.last_synced)
                     if (typeof st.live_payloads_count === 'number') setLivePayloadsCount(st.live_payloads_count)
                     if (typeof st.active_ephemeral_count === 'number') setActiveEphemeralCount(st.active_ephemeral_count)
-                    const pl = await apiFetch(`/api/payload-sync/payloads`).then((res) => res.ok ? res.json() : { payloads: [] })
+                    const pl = await apiFetch(`/api/payload-sync/payloads`).catch(() => ({ payloads: [] }))
                     if (Array.isArray(pl.payloads)) setRecentPayloads(pl.payloads)
                   }
                 }}

@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { launchEngineScan } from '../lib/launchEngineScan'
 import Button from './ui/Button'
 
@@ -47,20 +47,14 @@ export default function CommandBar({ onScanLaunched, onError }) {
     let cancelled = false
     ;(async () => {
       try {
-        const r = await apiFetch('/api/clients')
+        const list = await apiFetch('/api/clients')
         if (cancelled) return
-        if (r.ok) {
-          const list = await r.json()
-          setClients(Array.isArray(list) ? list : [])
-          setClientsError(Array.isArray(list) ? null : t('components.commandBar.clients_error'))
-        } else {
-          setClients([])
-          setClientsError(await formatApiErrorResponse(r))
-        }
+        setClients(Array.isArray(list) ? list : [])
+        setClientsError(Array.isArray(list) ? null : t('components.commandBar.clients_error'))
       } catch (e) {
         if (!cancelled) {
           setClients([])
-          setClientsError(e?.message || t('components.commandBar.network_error'))
+          setClientsError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || t('components.commandBar.network_error')))
         }
       }
     })()
@@ -79,23 +73,12 @@ export default function CommandBar({ onScanLaunched, onError }) {
     setLoading('run-all')
     setLastResult(null)
     try {
-      const r = await apiFetch('/api/scan/run-all', { method: 'POST' })
-      let data = null
-      try {
-        data = await r.json()
-      } catch {
-        data = null
-      }
-      if (!r.ok) {
-        const msg = formatApiErrorFromBody(data, r.status)
-        if (onError) onError(msg)
-        setLastResult({ engine: 'run-all', error: msg })
-        return
-      }
+      const data = await apiFetch('/api/scan/run-all', { method: 'POST' })
       setLastResult({ engine: 'run-all', job_id: 'all', status: 'started' })
       if (onScanLaunched) onScanLaunched('run-all', data)
     } catch (e) {
-      const msg = e?.message || t('components.commandBar.network_error')
+      const b = e?.response ? await e.response.json().catch(() => null) : null
+      const msg = formatApiErrorFromBody(b, e?.status)
       if (onError) onError(msg)
       setLastResult({ engine: 'run-all', error: msg })
     } finally {
