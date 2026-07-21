@@ -561,7 +561,7 @@ export default function AuditLog() {
           getRowCanExpand={(row) => Boolean(row.original.details)}
           expandLabel={t('audit.expand_payload')}
           collapseLabel={t('audit.collapse_payload')}
-          emptyState={{ icon: '📋', title: t('audit.empty_title'), body: t('audit.empty_body') }}
+          emptyState={{ icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
         />
 
         {total > 0 && (

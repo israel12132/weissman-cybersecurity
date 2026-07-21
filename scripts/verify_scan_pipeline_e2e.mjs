@@ -245,7 +245,13 @@ async function main() {
     fail('intel_enqueue', `HTTP ${intel.status}`)
   }
 
-  // timing_scan — scope + masked hub param stripped/redacted
+  // timing_scan — scope + masked hub param stripped/redacted.
+  // The timing engine fires a long sequence of blocking HTTP requests per URL;
+  // at its defaults (500 req/URL) the single-URL scan runs right at the E2E poll
+  // window against example.com. These `timing_*` extras are read live by the
+  // engine (like every other job_param) to keep the run fast and bounded — a
+  // trimmed baseline/payload sweep over one URL with a hard 45s ceiling — while
+  // still exercising the full enqueue → worker → findings pipeline.
   const timing = await req('POST', '/api/command-center/scan', {
     ...auth,
     body: {
@@ -253,6 +259,11 @@ async function main() {
       client_id: Number(clientId),
       target: 'https://example.com',
       github_token: MASK,
+      timing_baseline_samples: 12,
+      timing_payload_samples: 20,
+      timing_payload_variants: 2,
+      timing_max_urls: 1,
+      timing_budget_secs: 45,
     },
   })
   if (timing.status === 202 && timing.data?.job_id) {

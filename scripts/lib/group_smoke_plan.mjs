@@ -126,6 +126,25 @@ const PKI_TLS_CI_PARAMS = {
   check_caa: false,
   check_dane: false,
 }
+//   * microsecond_timing — profiles latency by firing a baseline sweep plus a
+//     heavy-payload sweep of SEQUENTIAL HTTP requests per URL. At its defaults
+//     that is 100 baseline + 8 payloads × 50 samples = 500 requests per URL with
+//     no concurrency and no wall-clock budget; against example.com through the
+//     runner's egress each request is ~0.1-0.5s, so the single-URL scan ran
+//     right at (and intermittently past) the E2E poll window ('job timeout').
+//     Every knob below is read live from the scan body by the engine, so this is
+//     pure request tuning — cut the baseline/payload sample counts, probe only 2
+//     of the 8 payloads, cap the path fan-out to one URL, and set a hard 45s
+//     wall-clock ceiling. Worst case now completes in well under a minute (~52
+//     requests) with the same statistical pipeline, and the budget guarantees
+//     termination regardless of egress latency.
+const MICROSECOND_TIMING_CI_PARAMS = {
+  timing_baseline_samples: 12,
+  timing_payload_samples: 20,
+  timing_payload_variants: 2,
+  timing_max_urls: 1,
+  timing_budget_secs: 45,
+}
 
 /** Shared one-engine-per-group smoke / findings E2E plan. */
 export const GROUP_SMOKE_PLAN = [
@@ -152,7 +171,7 @@ export const FINDINGS_E2E_PLAN = [
   { group: 'network', engine: 'bgp_dns_hijacking', target: 'example.com', params: BGP_DNS_CI_PARAMS },
   { group: 'apt', engine: 'kill_chain', target: 'https://example.com' },
   { group: 'intel', engine: 'zero_day_radar', target: null },
-  { group: 'timing', engine: 'microsecond_timing', target: 'https://example.com' },
+  { group: 'timing', engine: 'microsecond_timing', target: 'https://example.com', params: MICROSECOND_TIMING_CI_PARAMS },
 ]
 
 export function extractHost(target) {

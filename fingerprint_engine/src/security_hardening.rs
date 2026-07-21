@@ -508,8 +508,16 @@ pub async fn enforce_execution_scope_pin(
         return Ok(());
     }
 
-    // Dual-stack drift: allow new A/AAAA records on the same host when pinned anchors
-    // still resolve (blocks DNS rebind to a wholly different address set).
+    // The exact pin no longer matches. This is legitimate for round-robin / rotating hosts —
+    // e.g. github.com hands out a *different single A-record per lookup* (140.82.113.x today,
+    // 140.82.114.x on the next query), so two consecutive resolutions rarely agree and an
+    // exact-IP match cannot be required without permanently breaking real public targets
+    // (supply-chain scans of GitHub repos, CDN-fronted sites, anycast hosts). The security
+    // property we MUST still enforce is anti-rebinding into INTERNAL space (SSRF): a host that
+    // was public at submission must not resolve to a private/reserved address at execution.
+    // Re-resolve and reject only on that condition; rotation among public addresses of the same
+    // (name-matched) host is allowed. `allow_private_scan_targets()` (operator opt-in) keeps the
+    // escape hatch consistent with submission-time validation.
     let fresh_ips: HashSet<String> = lookup_host((target_host.as_str(), 80))
         .await
         .map_err(|_| format!("failed to re-resolve target host '{target_host}'"))?
@@ -518,16 +526,17 @@ pub async fn enforce_execution_scope_pin(
     if fresh_ips.is_empty() {
         return Err(format!("failed to re-resolve target host '{target_host}'"));
     }
-    if !current_ips.iter().all(|ip| fresh_ips.contains(ip)) {
-        return Err(
-            "validated_scope pin mismatch: current resolution outside fresh DNS set".to_string(),
-        );
-    }
-    if fresh_ips.is_disjoint(&pinned_ips) {
-        return Err(
-            "validated_scope pin mismatch: pinned DNS anchors no longer resolve for host"
-                .to_string(),
-        );
+    if !allow_private_scan_targets() {
+        for ip_s in current_ips.iter().chain(fresh_ips.iter()) {
+            if let Ok(ip) = ip_s.parse::<IpAddr>() {
+                if is_private_or_reserved_ip(&ip) {
+                    return Err(format!(
+                        "validated_scope pin mismatch: host '{target_host}' now resolves to a \
+                         private/reserved address ({ip_s}) — possible DNS rebind"
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -659,13 +668,37 @@ mod tests {
         assert!(err.is_err());
     }
 
+    // Round-robin tolerance: a target that still resolves to a PUBLIC address is accepted even
+    // when that address is not in the submission-time pin set. Rotating/anycast/CDN hosts
+    // (github.com, Cloudflare-fronted sites) hand out different public A-records per lookup, so
+    // requiring an exact pin match would permanently break legitimate public scans. The pin's
+    // job is anti-rebinding into internal space — enforced by the test below — not freezing a
+    // single public IP.
     #[tokio::test]
-    async fn execution_scope_pin_rejects_unpinned_ip() {
+    async fn execution_scope_pin_allows_unpinned_public_ip() {
         let scope = serde_json::json!({
             "host": "1.1.1.1",
             "resolved_ips": ["8.8.8.8"]
         });
-        let err = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
-        assert!(err.is_err());
+        let ok = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
+        assert!(
+            ok.is_ok(),
+            "a public address outside the pin set must be tolerated (round-robin), got {ok:?}"
+        );
+    }
+
+    // Retained SSRF property: if the (name-matched) host resolves to a private/reserved address
+    // at execution while the pin was public, reject it as a possible DNS rebind.
+    #[tokio::test]
+    async fn execution_scope_pin_rejects_rebind_to_private_ip() {
+        let scope = serde_json::json!({
+            "host": "10.0.0.1",
+            "resolved_ips": ["8.8.8.8"]
+        });
+        let err = enforce_execution_scope_pin("https://10.0.0.1", &scope).await;
+        assert!(
+            err.is_err(),
+            "a host resolving into private/reserved space must be rejected (rebind), got {err:?}"
+        );
     }
 }

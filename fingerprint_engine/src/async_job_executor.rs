@@ -295,7 +295,9 @@ async fn begin_tenant_tx_resilient(
             }
         }
     }
-    Err(format!("begin_tenant_tx failed after 3 attempts: {last_err}"))
+    Err(format!(
+        "begin_tenant_tx failed after 3 attempts: {last_err}"
+    ))
 }
 
 /// Run one job to completion JSON (success) or error string (failure).
@@ -1615,6 +1617,7 @@ async fn execute_job_unscoped(
                 baseline_sample_size: n,
                 payload_sample_size: n.min(100),
                 z_score_threshold: z,
+                ..Default::default()
             };
             let (tx_stream, mut rx_stream) =
                 tokio::sync::mpsc::unbounded_channel::<crate::timing_engine::TimingStreamEvent>();

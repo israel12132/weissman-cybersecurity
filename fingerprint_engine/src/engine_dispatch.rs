@@ -478,6 +478,14 @@ async fn dispatch_engine_match(
         }
         "threat_emulation" => crate::threat_emulation_engine::run_threat_emulation_result(target).await,
         "microsecond_timing" => {
+            // Path fan-out is caller-tunable (`timing_max_urls`) so a live scan can
+            // bound its total request budget; defaults to the historical cap of 80.
+            let jp = &ctx.job_params;
+            let max_urls = jp
+                .get("timing_max_urls")
+                .and_then(|v| v.as_u64())
+                .map(|n| n.clamp(1, 80) as usize)
+                .unwrap_or(80);
             let urls: Vec<String> = tl
                 .iter()
                 .flat_map(|b| {
@@ -491,14 +499,34 @@ async fn dispatch_engine_match(
                         }
                     })
                 })
-                .take(80)
+                .take(max_urls)
                 .collect();
             let urls_for = if urls.is_empty() {
                 vec![tl.first().cloned().unwrap_or_else(|| target.to_string())]
             } else {
                 urls
             };
-            let cfg = crate::timing_engine::TimingConfig::default();
+            // Sample sizes, payload breadth and an overall wall-clock budget are all
+            // read live from the scan body (falling back to the engine defaults), so
+            // an E2E/smoke caller can keep the run inside its poll window without
+            // weakening a normal production scan. `run_timing_attack_urls` clamps
+            // each field to a safe range.
+            let mut cfg = crate::timing_engine::TimingConfig::default();
+            if let Some(n) = jp.get("timing_baseline_samples").and_then(|v| v.as_u64()) {
+                cfg.baseline_sample_size = n as usize;
+            }
+            if let Some(n) = jp.get("timing_payload_samples").and_then(|v| v.as_u64()) {
+                cfg.payload_sample_size = n as usize;
+            }
+            if let Some(n) = jp.get("timing_payload_variants").and_then(|v| v.as_u64()) {
+                cfg.payload_variants = n as usize;
+            }
+            if let Some(z) = jp.get("timing_z_threshold").and_then(|v| v.as_f64()) {
+                cfg.z_score_threshold = z;
+            }
+            if let Some(b) = jp.get("timing_budget_secs").and_then(|v| v.as_u64()) {
+                cfg.budget_secs = b;
+            }
             crate::timing_engine::run_timing_attack_urls(&urls_for, stealth, &cfg, None).await
         }
         "http_feedback_fuzz" => {

@@ -1,0 +1,47 @@
+# Build-only Compose model — image builds decoupled from runtime configuration.
+#
+# WHY THIS FILE EXISTS
+# `docker compose build` loads and interpolates the ENTIRE compose model, including
+# every service's runtime `environment:` block. The runtime model (docker-compose.yml)
+# correctly fail-closes on its required secrets —
+#     WEISSMAN_JWT_SECRET:      "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env ...}"
+#     WEISSMAN_ADMIN_PASSWORD:  "${WEISSMAN_ADMIN_PASSWORD:?Set WEISSMAN_ADMIN_PASSWORD in .env}"
+# so an operator can never `up` the stack without them. But those secrets are a *runtime*
+# concern: nothing is baked into the images at build time (neither Dockerfile consumes
+# them as ARG — verified), so requiring them merely to BUILD is a lifecycle-layer
+# violation. It breaks every `docker compose build` — CI, local dev, release — unless
+# each caller injects throwaway values, a band-aid that has to be repeated in every
+# workflow and script and silently rots when a new one is added.
+#
+# This file is the single, canonical BUILD model: the same build coordinates as
+# docker-compose.yml (context + Dockerfile + image tag) with none of the runtime
+# environment. Building through it can never be gated on runtime secrets.
+#
+#   docker compose -f docker-compose.build.yml build backend worker gateway
+#
+# The runtime docker-compose.yml is unchanged and keeps its `:?` guards fully intact
+# for `up` / `up --build`, so production safety and the operator-facing "set your
+# secrets" error are preserved. Build-time and run-time concerns are simply separated,
+# each in the file that owns it. Keep the build coordinates below in sync with
+# docker-compose.yml (they intentionally mirror only the `build:`/`image:` keys).
+services:
+  # HTTP API. Image is Trivy-scanned in CI by this exact tag.
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    image: weissman-backend:stable
+
+  # Async job worker — same image/Dockerfile as backend; listed so `build worker`
+  # is a valid target and layer caching is shared.
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    image: weissman-backend:stable
+
+  # Front-end + reverse proxy.
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile

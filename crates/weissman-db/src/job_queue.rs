@@ -76,11 +76,7 @@ pub async fn enqueue_held(
 /// atomic UPDATE, so a worker never observes a claimable job without its
 /// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
 /// late finalize cannot resurrect a job that was already failed.
-pub async fn release_hold(
-    pool: &PgPool,
-    job_id: Uuid,
-    payload: Value,
-) -> Result<u64, sqlx::Error> {
+pub async fn release_hold(pool: &PgPool, job_id: Uuid, payload: Value) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
               SET payload = $2, run_after = NULL, updated_at = now()

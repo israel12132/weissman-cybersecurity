@@ -9,7 +9,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 import { SkeletonBar } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
-import { apiUrl, authHeaders } from '../lib/apiBase';
+import { apiFetch } from '../lib/apiBase';
 import Button from '../components/ui/Button'
 
 const NS = 'pages.systemConfiguration';
@@ -512,7 +512,7 @@ function MfaSelfServicePanel() {
 
   const refresh = React.useCallback(async () => {
     try {
-      const r = await fetch(apiUrl('/api/auth/mfa/status'), { credentials: 'include', headers: authHeaders() });
+      const r = await apiFetch('/api/auth/mfa/status');
       const d = await r.json().catch(() => ({}));
       setStatus(d);
     } catch (e) {
@@ -528,7 +528,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await fetch(apiUrl('/api/auth/mfa/setup'), { method: 'POST', credentials: 'include', headers: authHeaders() });
+      const r = await apiFetch('/api/auth/mfa/setup', { method: 'POST' });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.setup_failed`));
       setSetup(d);
@@ -543,10 +543,9 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await fetch(apiUrl('/api/auth/mfa/enable'), {
+      const r = await apiFetch('/api/auth/mfa/enable', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.trim() }),
       });
       const d = await r.json().catch(() => ({}));
@@ -565,10 +564,9 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await fetch(apiUrl('/api/auth/mfa/disable'), {
+      const r = await apiFetch('/api/auth/mfa/disable', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.trim() }),
       });
       const d = await r.json().catch(() => ({}));
