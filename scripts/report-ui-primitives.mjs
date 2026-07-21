@@ -18,11 +18,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const pagesDir = path.join(root, 'frontend', 'src', 'pages')
+const srcDir = path.join(root, 'frontend', 'src')
+// The shared design-system primitives legitimately render raw <button>/<table> (they ARE the
+// Button / DataTable everyone else adopts), so they're exempt from the button/table checks.
+const PRIMITIVE_DIR = path.join(srcDir, 'components', 'ui')
 
 /**
- * Pages intentionally kept on a hand-rolled table because DataTable would
- * regress real behavior (server-side pagination, expandable rows, etc.).
+ * Files intentionally kept on a hand-rolled table because DataTable would
+ * regress real behavior (server-side pagination, expandable rows, heatmaps, etc.).
  */
 const TABLE_EXCEPTIONS = new Set([
   'AuditLog.jsx', // server-side offset pagination + expandable JSON payload rows
@@ -32,12 +35,18 @@ const TABLE_EXCEPTIONS = new Set([
   //                          coloring (a heatmap visualization), which DataTable would regress
 ])
 
-function listPages() {
-  return fs
-    .readdirSync(pagesDir)
-    .filter((f) => f.endsWith('.jsx') && !f.endsWith('.test.jsx'))
+// Recursively list every non-test .jsx under src/ (pages AND components — modals, drawers, nav…).
+function listFiles(dir) {
+  const out = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...listFiles(full))
+    else if (entry.name.endsWith('.jsx') && !entry.name.endsWith('.test.jsx')) out.push(full)
+  }
+  return out
 }
 
+const allFiles = listFiles(srcDir)
 const rawTablePages = []
 const rawButtonCounts = []
 const colorCounts = []
@@ -48,14 +57,19 @@ const colorCounts = []
 const NEUTRAL_COLOR_RE =
   /\b(?:text|bg|border|from|to|via|ring|divide|placeholder|outline)-(?:slate|gray|zinc|neutral|stone)-\d{2,3}\b/g
 
-for (const file of listPages()) {
-  const src = fs.readFileSync(path.join(pagesDir, file), 'utf8')
-  if (/<table[\s>]/.test(src) && !TABLE_EXCEPTIONS.has(file)) {
+for (const full of allFiles) {
+  const file = path.relative(srcDir, full)
+  const base = path.basename(full)
+  const isPrimitive = full.startsWith(PRIMITIVE_DIR + path.sep)
+  const src = fs.readFileSync(full, 'utf8')
+  if (!isPrimitive && /<table[\s>]/.test(src) && !TABLE_EXCEPTIONS.has(base)) {
     rawTablePages.push(file)
   }
-  const btnMatches = src.match(/<button\b[^>]*className=/g)
-  if (btnMatches && btnMatches.length) {
-    rawButtonCounts.push({ file, count: btnMatches.length })
+  if (!isPrimitive) {
+    const btnMatches = src.match(/<button\b[^>]*className=/g)
+    if (btnMatches && btnMatches.length) {
+      rawButtonCounts.push({ file, count: btnMatches.length })
+    }
   }
   const colorMatches = src.match(NEUTRAL_COLOR_RE)
   if (colorMatches && colorMatches.length) {
@@ -66,9 +80,9 @@ for (const file of listPages()) {
 rawButtonCounts.sort((a, b) => b.count - a.count)
 colorCounts.sort((a, b) => b.count - a.count)
 
-const totalPages = listPages().length
+const totalPages = allFiles.length
 console.log('── UI primitive adoption report ──────────────────────────────')
-console.log(`Pages scanned: ${totalPages}`)
+console.log(`Files scanned (src/**, excl tests + ui/ primitives): ${totalPages}`)
 console.log('')
 console.log(`Raw <table> (candidates for DataTable): ${rawTablePages.length}`)
 for (const f of rawTablePages) console.log(`  • ${f}`)

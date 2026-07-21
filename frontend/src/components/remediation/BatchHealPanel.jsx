@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Wrench, Loader2, X, CheckCircle, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '../../lib/apiBase'
+import Button from '../ui/Button'
 
 const CHANNELS = ['github_pr', 'github_direct_commit', 'gitlab_mr', 'bitbucket_pr', 'azure_repos_pr', 'diff_download', 'virtual_patch']
 
@@ -72,7 +73,7 @@ export default function BatchHealPanel({ findings, onClose }) {
           <Wrench className="w-3.5 h-3.5" />
           {t('pages.remediationHub.batch_heal_title', { defaultValue: 'Heal all fixable ({{n}})', n: healable.length })}
         </span>
-        <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></button>
+        <Button variant="unstyled" type="button" onClick={onClose} aria-label={t('common.close', { defaultValue: 'Close' })} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></Button>
       </div>
 
       {result ? (
@@ -104,11 +105,11 @@ export default function BatchHealPanel({ findings, onClose }) {
           {error && (
             <div className="text-xs text-rose-300 flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5" /> {error}</div>
           )}
-          <button type="button" onClick={submit} disabled={submitting || healable.length === 0}
+          <Button variant="unstyled" type="button" onClick={submit} disabled={submitting || healable.length === 0}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-50">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
             {t('pages.remediationHub.batch_heal_go', { defaultValue: 'Heal all fixable ({{n}})', n: healable.length })}
-          </button>
+          </Button>
         </>
       )}
     </div>

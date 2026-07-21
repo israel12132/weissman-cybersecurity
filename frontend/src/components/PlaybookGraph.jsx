@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { ReactFlow, Background, Controls, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import Button from './ui/Button'
 
 const ACTION_COLORS = {
   set_status: '#22d3ee',
@@ -80,18 +81,19 @@ export default function PlaybookGraph({ trigger, actions = [], onSelectAction, o
           }}
         >
           <Background color="#1e293b" gap={18} />
-          <Controls className="bg-slate-800/90 border-slate-600" showInteractive={false} />
+          <Controls className="bg-bg-3/90 border-border-strong" showInteractive={false} />
         </ReactFlow>
       </div>
       {onDryRun && (
         <div className="p-2 border-t border-white/10 flex justify-end">
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={onDryRun}
             className="text-[11px] font-mono px-2 py-1 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
           >
             Dry-run playbook
-          </button>
+          </Button>
         </div>
       )}
     </div>
