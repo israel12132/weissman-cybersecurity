@@ -25,7 +25,7 @@ RUN rustup target add wasm32-unknown-unknown \
     && bash scripts/build-ast-cap-wasm.sh
 
 # Stage 2 — Vite production bundle (engine param defs + SPA)
-FROM node:22-bookworm-slim AS vite-build
+FROM node:26-bookworm-slim AS vite-build
 # Lockfile is generated with npm 11; bookworm-slim ships npm 10 — align before `npm ci`.
 RUN npm install -g npm@11.12.1
 WORKDIR /build
