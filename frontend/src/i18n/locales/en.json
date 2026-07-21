@@ -4,6 +4,8 @@
     "toggle_theme": "Toggle light/dark theme",
     "theme_light": "Light",
     "theme_dark": "Dark",
+    "theme_high_contrast": "High Contrast",
+    "cycle_theme": "Cycle theme (dark, light, high-contrast)",
     "switch": "Switch",
     "loading": "Loading…",
     "save": "Save",

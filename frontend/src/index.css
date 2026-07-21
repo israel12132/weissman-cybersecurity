@@ -233,6 +233,10 @@ textarea:focus-visible {
   from { transform: scaleX(1); }
   to   { transform: scaleX(0); }
 }
+@keyframes wm-progress-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
 
 .animate-fade-in {
   animation: wm-fade-in var(--duration-standard) var(--ease-out-expo) both;
@@ -254,6 +258,13 @@ textarea:focus-visible {
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
+/* Indeterminate progress bar — a partial fill sweeping across the track.
+   Consumed by the Progress primitive (indeterminate mode). The element should
+   be sized to ~40% of the track width; this animates its horizontal position. */
+.animate-progress-indeterminate {
+  width: 40%;
+  animation: wm-progress-indeterminate 1.15s var(--ease-in-out-smooth) infinite;
+}
 
 /* ── Reduced motion ───────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
@@ -271,6 +282,7 @@ textarea:focus-visible {
   .animate-shimmer,
   .animate-pulse-subtle,
   .animate-toast-progress,
+  .animate-progress-indeterminate,
   .skeleton-shimmer,
   .animate-glitch,
   .animate-pulse,
@@ -330,6 +342,28 @@ textarea:focus-visible {
   mask-composite: exclude;
   pointer-events: none;
   opacity: 0.5;
+}
+
+/* ── High-Contrast theme adjustments (WCAG 2.2 AAA aim) ───────────────────────
+   High-contrast mode flattens translucent/blurred surfaces to solid tokens so
+   text never fights a busy backdrop, and thickens borders. The token values
+   themselves live in tokens.css (:root[data-theme='high-contrast']); these
+   rules handle the effect-level treatments Tailwind tokens can't express. */
+:root[data-theme='high-contrast'] .glass-panel,
+:root[data-theme='high-contrast'] .glass-elevated {
+  background: var(--bg-2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: var(--border-strong);
+}
+:root[data-theme='high-contrast'] .glass-panel::before,
+:root[data-theme='high-contrast'] .glass-elevated::before {
+  opacity: 0;
+}
+/* Force a visible outline on every focusable element, in addition to the ring. */
+:root[data-theme='high-contrast'] :focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 /* ── Brand gradient text utility ──────────────────────────────────────────── */
