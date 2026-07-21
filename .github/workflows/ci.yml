@@ -224,6 +224,14 @@ jobs:
       - name: UI-primitive adoption ratchet (no new raw <table>/<button>)
         run: node scripts/report-ui-primitives.mjs --check
 
+      - name: Engine coverage & accuracy gate (breadth + FP mechanism, from source)
+        run: node scripts/engine_coverage_accuracy_report.mjs --check
+
+      - name: Engine coverage doc is in sync with source
+        run: |
+          git diff --exit-code docs/ENGINE_COVERAGE_AND_ACCURACY.md \
+            || { echo "::error::docs/ENGINE_COVERAGE_AND_ACCURACY.md is stale — run: node scripts/engine_coverage_accuracy_report.mjs"; exit 1; }
+
       - name: Unit tests with coverage (Vitest ≥60% critical paths)
         run: npm run test:coverage
         working-directory: frontend
