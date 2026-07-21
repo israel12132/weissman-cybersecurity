@@ -15,8 +15,7 @@ import CopyButton from '../components/ui/CopyButton';
 import { SkeletonWidgetGrid, SkeletonTable } from '../components/ui/Skeleton';
 import { useClient } from '../context/ClientContext';
 import { useToast } from '../components/ui/Toaster';
-import { api } from '../utils/apiFetch';
-import { apiFetch } from '../lib/apiBase';
+import { api, apiFetch } from '../utils/apiFetch';
 import Button from '../components/ui/Button'
 
 const FRAMEWORK_ICONS = {
@@ -115,8 +114,7 @@ export default function ComplianceFrameworks() {
   const generateReport = async (frameworkId) => {
     try {
       setExporting(true);
-      const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`);
-      if (!r.ok) throw new Error(`Report failed (${r.status})`);
+      const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`, { raw: true });
       const blob = await r.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -139,9 +137,8 @@ export default function ComplianceFrameworks() {
     setPackLoading(true);
     try {
       const fw = selectedFramework?.id ? `?framework=${encodeURIComponent(selectedFramework.id)}` : '';
-      const r = await apiFetch(`/api/compliance/evidence-pack/${encodeURIComponent(selectedClientId)}${fw}`);
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || d.error) throw new Error(d.error || d.detail || `HTTP ${r.status}`);
+      const d = await apiFetch(`/api/compliance/evidence-pack/${encodeURIComponent(selectedClientId)}${fw}`);
+      if (d.error) throw new Error(d.error || d.detail);
       setPack(d);
       toast.success(t('pages.complianceFrameworks.pack_ready'));
     } catch (err) {
@@ -181,10 +178,8 @@ export default function ComplianceFrameworks() {
     setSoarDetail(null);
     setSoarLoading(true);
     try {
-      const r = await apiFetch(`/api/soar/executions/${encodeURIComponent(execId)}`);
-      const d = await r.json().catch(() => ({}));
-      if (r.ok && d.ok !== false) setSoarDetail(d.execution || d);
-      else setSoarDetail({ _error: d.detail || `HTTP ${r.status}` });
+      const d = await apiFetch(`/api/soar/executions/${encodeURIComponent(execId)}`);
+      setSoarDetail(d.ok !== false ? (d.execution || d) : { _error: d.detail });
     } catch (e) {
       setSoarDetail({ _error: e.message });
     } finally {
@@ -203,13 +198,11 @@ export default function ComplianceFrameworks() {
     setMappingsLoading(true);
     try {
       const fw = selectedFramework?.id ? `?framework=${encodeURIComponent(selectedFramework.id)}` : '';
-      const r = await apiFetch(`/api/compliance/control-mappings${fw}`);
-      const d = await r.json().catch(() => ({}));
+      const d = await apiFetch(`/api/compliance/control-mappings${fw}`);
       let list = Array.isArray(d.mappings) ? d.mappings : [];
       // If the framework filter returned nothing (naming mismatch), fall back to all.
       if (list.length === 0 && fw) {
-        const rAll = await apiFetch('/api/compliance/control-mappings');
-        const dAll = await rAll.json().catch(() => ({}));
+        const dAll = await apiFetch('/api/compliance/control-mappings');
         list = Array.isArray(dAll.mappings) ? dAll.mappings : [];
       }
       setMappings(list);

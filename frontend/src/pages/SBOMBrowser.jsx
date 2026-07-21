@@ -7,8 +7,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton';
-import { api } from '../utils/apiFetch';
-import { apiFetch } from '../lib/apiBase';
+import { api, apiFetch } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
 
@@ -67,8 +66,7 @@ export default function SBOMBrowser() {
   const exportSBOM = async (format) => {
     if (clientId == null) return;
     try {
-      const r = await apiFetch(withClientId(`/api/sbom/export?format=${format}`, clientId));
-      if (!r.ok) throw new Error(`Export failed (${r.status})`);
+      const r = await apiFetch(withClientId(`/api/sbom/export?format=${format}`, clientId), { raw: true });
       const blob = await r.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

@@ -12,7 +12,10 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { ENGINES_BY_ID, ENGINE_GROUP_DEFS, ENGINE_GROUPS } from '../lib/enginesRegistry'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
+// bulkUpdateFindingStatus expects a raw-Response apiFetch (reads r.ok / r.json()),
+// so keep the legacy lib/apiBase client for that helper only.
+import { apiFetch as rawApiFetch } from '../lib/apiBase'
 import { bulkUpdateFindingStatus } from '../lib/bulkFindingStatus'
 import { useSavedViews } from '../hooks/useSavedViews'
 import { encodeFindingsFilters, decodeFindingsFilters } from '../lib/findingsUrlState'
@@ -462,10 +465,6 @@ export default function FindingsCommandCenter() {
     setLoading(true)
     setError(null)
     return apiFetch('/api/findings?limit=2000')
-      .then((r) => {
-        if (!r.ok) throw new Error(`Server returned HTTP ${r.status}`)
-        return r.json()
-      })
       .then((d) => {
         const list = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
         setRawFindings(list)
@@ -479,7 +478,6 @@ export default function FindingsCommandCenter() {
   useEffect(() => {
     loadFindings()
     apiFetch('/api/config/public')
-      .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.region) setRegion(d.region) })
       .catch(() => {})
   }, [loadFindings])
@@ -489,10 +487,8 @@ export default function FindingsCommandCenter() {
     const matchesId = (f) => Number(f.raw_id) === Number(rawId)
     apiFetch(`/api/findings/${rawId}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
+      body: { status: newStatus },
     })
-      .then((r) => r.json())
       .then((d) => {
         if (d.ok) {
           setRawFindings((prev) =>
@@ -518,7 +514,7 @@ export default function FindingsCommandCenter() {
     if (!status || targets.filter((id) => id != null).length === 0) return
     setBulkBusy(true)
     const { ok, failed } = await bulkUpdateFindingStatus(targets, status, {
-      apiFetch,
+      apiFetch: rawApiFetch,
       onSuccess: (rawId, serverStatus) => {
         // Match on both keys: targets are `raw_id ?? id`, so a finding without a
         // raw_id was PATCHed by its id and must be matched by id here too, else
@@ -537,9 +533,8 @@ export default function FindingsCommandCenter() {
   }, [bulkStatus, selectedRows, toast, t])
 
   const handleExportCsv = useCallback(() => {
-    apiFetch('/api/findings/export/csv')
+    apiFetch('/api/findings/export/csv', { raw: true })
       .then((r) => {
-        if (!r.ok) throw new Error(`Export failed (HTTP ${r.status})`)
         const disposition = r.headers.get('content-disposition') || ''
         const match = disposition.match(/filename="?([^";\s]+)"?/)
         const filename = match?.[1] ?? `Weissman_findings_${new Date().toISOString().slice(0, 10)}.csv`

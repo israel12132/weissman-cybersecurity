@@ -2,7 +2,7 @@ import { firstClientTarget } from '../lib/clientTarget'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { strategicEnginesNeedingDedicatedPage } from '../lib/strategicEngineProgram'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
@@ -95,9 +95,10 @@ export default function BusinessEngineProfile() {
     if (!def) return
     setProfileLoading(true)
     try {
-      const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=100`)
-      const d = await r.json().catch(() => null)
-      if (r.ok) setHistory(d)
+      const d = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=100`)
+      setHistory(d)
+    } catch {
+      // history load failed — keep prior state
     } finally {
       setProfileLoading(false)
     }
@@ -110,9 +111,12 @@ export default function BusinessEngineProfile() {
   useEffect(() => {
     let cancelled = false
     async function loadClients() {
-      const r = await apiFetch('/api/clients')
-      const d = await r.json().catch(() => [])
-      if (!cancelled && r.ok && Array.isArray(d)) setClients(d)
+      try {
+        const d = await apiFetch('/api/clients')
+        if (!cancelled && Array.isArray(d)) setClients(d)
+      } catch {
+        // clients load failed — leave list unchanged
+      }
     }
     loadClients()
     return () => { cancelled = true }
@@ -125,8 +129,7 @@ export default function BusinessEngineProfile() {
     }
     let cancelled = false
     ;(async () => {
-      const r = await apiFetch(`/api/clients/${clientId}/integrations`)
-      const d = r.ok ? await r.json() : null
+      const d = await apiFetch(`/api/clients/${clientId}/integrations`).catch(() => null)
       if (cancelled) return
       setClientIntegrations(normalizeIntegrations(d))
     })()
@@ -137,9 +140,8 @@ export default function BusinessEngineProfile() {
     if (!activeJobId) return undefined
     let cancelled = false
     const iv = setInterval(async () => {
-      const r = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`)
-      const d = await r.json().catch(() => null)
-      if (cancelled || !r.ok || !d) return
+      const d = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`).catch(() => null)
+      if (cancelled || !d) return
       setLiveJob(d)
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
@@ -244,14 +246,13 @@ export default function BusinessEngineProfile() {
   }
 
   async function exportJson() {
-    const r = await apiFetch(`/api/engines/export/${encodeURIComponent(engineId)}?limit=140${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
-    const d = await r.json().catch(() => null)
-    if (!r.ok || !d) {
-      setRunState((prev) => ({ ...prev, msg: t('pages.businessEngineProfile.export_failed', { status: r.status }) }))
-      return
+    try {
+      const d = await apiFetch(`/api/engines/export/${encodeURIComponent(engineId)}?limit=140${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
+      const bytes = new TextEncoder().encode(JSON.stringify(d, null, 2))
+      downloadBytes(bytes, `${engineId}-business-export.json`, 'application/json')
+    } catch (e) {
+      setRunState((prev) => ({ ...prev, msg: t('pages.businessEngineProfile.export_failed', { status: e?.status ?? '' }) }))
     }
-    const bytes = new TextEncoder().encode(JSON.stringify(d, null, 2))
-    downloadBytes(bytes, `${engineId}-business-export.json`, 'application/json')
   }
 
   function exportPdf() {

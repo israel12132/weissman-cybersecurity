@@ -12,7 +12,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
@@ -239,17 +239,15 @@ export default function ThreatEmulation() {
     setError('')
     try {
       const q = clientId ? `?client_id=${clientId}&limit=1000` : '?limit=1000'
-      const [findingsRes, histRes] = await Promise.all([
-        apiFetch(`/api/findings${q}`),
-        apiFetch('/api/engines/history/threat_emulation?limit=20'),
+      const [findingsData, histData] = await Promise.all([
+        apiFetch(`/api/findings${q}`).catch(() => null),
+        apiFetch('/api/engines/history/threat_emulation?limit=20').catch(() => null),
       ])
-      if (findingsRes.ok) {
-        const d = await findingsRes.json()
-        setEmulationFindings(parseFindingsList(d).filter(isThreatEmulationFinding))
+      if (findingsData) {
+        setEmulationFindings(parseFindingsList(findingsData).filter(isThreatEmulationFinding))
       }
-      if (histRes.ok) {
-        const h = await histRes.json()
-        setHistory(Array.isArray(h?.jobs) ? h.jobs : [])
+      if (histData) {
+        setHistory(Array.isArray(histData?.jobs) ? histData.jobs : [])
       }
     } catch (e) {
       setError(e?.message || t('pages.threatEmulation.load_failed'))
@@ -260,7 +258,6 @@ export default function ThreatEmulation() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => {})
   }, [])

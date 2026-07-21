@@ -8,7 +8,7 @@ import {
   ENGINE_GROUPS,
   ENGINES_BY_ID,
 } from '../lib/enginesRegistry'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { firstClientTarget } from '../lib/clientTarget'
 import { useRegisterHubClient } from '../context/EngineHubContext'
@@ -434,7 +434,6 @@ export default function EngineMatrix() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         if (Array.isArray(d)) setClients(d)
       })
@@ -449,12 +448,12 @@ export default function EngineMatrix() {
     }
     setConfigLoading(true)
     Promise.all([
-      apiFetch(`/api/clients/${selectedClientId}/config`),
-      apiFetch(`/api/clients/${selectedClientId}/integrations`),
+      apiFetch(`/api/clients/${selectedClientId}/config`).catch(() => null),
+      apiFetch(`/api/clients/${selectedClientId}/integrations`).catch(() => null),
     ])
-      .then(async ([cfgR, intR]) => {
-        if (cfgR.ok) setClientConfig(await cfgR.json())
-        if (intR.ok) setClientIntegrations(normalizeIntegrations(await intR.json()))
+      .then(([cfg, int]) => {
+        if (cfg) setClientConfig(cfg)
+        if (int) setClientIntegrations(normalizeIntegrations(int))
         else setClientIntegrations(null)
       })
       .catch(() => {})
@@ -509,20 +508,14 @@ export default function EngineMatrix() {
       return false
     }
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/config`, {
+      const d = await apiFetch(`/api/clients/${selectedClientId}/config`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled_engines: nextList }),
+        body: { enabled_engines: nextList },
       })
-      if (r.ok) {
-        const d = await r.json().catch(() => ({}))
-        setClientConfig((prev) => ({ ...prev, enabled_engines: d.enabled_engines ?? nextList }))
-        return true
-      }
-      showToast('error', `Config update failed (${r.status})`)
-      return false
+      setClientConfig((prev) => ({ ...prev, enabled_engines: d.enabled_engines ?? nextList }))
+      return true
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
+      showToast('error', e?.status ? `Config update failed (${e.status})` : (e?.message ?? 'Network error'))
       return false
     }
   }, [selectedClientId, showToast, t])
@@ -605,11 +598,8 @@ export default function EngineMatrix() {
     setMatrixRefreshing(true)
     try {
       await refreshProduction()
-      const r = await apiFetch('/api/clients')
-      if (r.ok) {
-        const d = await r.json()
-        if (Array.isArray(d)) setClients(d)
-      }
+      const d = await apiFetch('/api/clients').catch(() => null)
+      if (Array.isArray(d)) setClients(d)
       setEngineStates({})
       invalidateEngineHistorySummary()
       setHistoryReloadKey((k) => k + 1)
@@ -672,19 +662,13 @@ export default function EngineMatrix() {
     }
     setRunAllLoading(true)
     try {
-      const r = await apiFetch('/api/scan/all-engines', {
+      const d = await apiFetch('/api/scan/all-engines', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           client_id: Number(selectedClientId),
           engines: Array.from(runnableEnabledSet),
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        showToast('error', d.detail || `Scan failed (${r.status})`)
-        return
-      }
       showToast('info', `Queued ${d.engines_queued} engines (Job: ${d.job_id})`)
       setEngineStates((prev) => {
         const next = { ...prev }
@@ -694,7 +678,12 @@ export default function EngineMatrix() {
         return next
       })
     } catch (e) {
-      showToast('error', e?.message ?? 'Network error')
+      if (e?.status) {
+        const body = e?.response ? await e.response.json().catch(() => ({})) : {}
+        showToast('error', body.detail || `Scan failed (${e.status})`)
+      } else {
+        showToast('error', e?.message ?? 'Network error')
+      }
     } finally {
       setRunAllLoading(false)
     }
