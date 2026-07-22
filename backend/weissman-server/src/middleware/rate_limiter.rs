@@ -77,6 +77,21 @@ fn limiter_default() -> Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, De
     .clone()
 }
 
+/// The default per-IP edge limiter guards the general **API** surface only. It must exclude:
+/// - `/api/health` — liveness/readiness probes (load balancer, CI health-wait) must never be
+///   throttled, or a probe burst self-inflicts a 429 and marks the stack unhealthy; and
+/// - every non-`/api/` path — the static SPA bundle (`/command-center/assets/*` hashed chunks),
+///   the SPA shell, legal static pages, favicon/manifest, the service worker, and WS upgrades.
+///   These are cheap, cacheable and non-sensitive, and a code-split front end legitimately
+///   fetches dozens of chunks in a single navigation burst. Throttling them 429s the app's own
+///   JavaScript, so `import()` fails and the route renders its "This view crashed" boundary — a
+///   real, user-facing outage on first load, not just a test artifact. Edge throttling of static
+///   files belongs at the CDN / reverse proxy, not the API rate limiter.
+#[must_use]
+fn is_default_limited_api(path: &str) -> bool {
+    path.starts_with("/api/") && path != "/api/health"
+}
+
 fn client_ip<B>(req: &Request<B>) -> Option<IpAddr> {
     let peer = req
         .extensions()
@@ -120,7 +135,10 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
             limiter_signup().check_key(&key).is_err()
         }
         ("POST", "/api/webhooks/paddle") => limiter_paddle().check_key(&key).is_err(),
-        _ => {
+        // Default per-IP limiter — API surface only. Static SPA assets, the SPA shell, legal
+        // pages, health probes and WS upgrades fall through to the exempt arm below so the
+        // app's own code-split bundle is never 429'd (see `is_default_limited_api`).
+        _ if is_default_limited_api(&path) => {
             if limiter_default().check_key(&key).is_err() {
                 fingerprint_engine::http::rate_limit_metrics::record_api_denied(&ip_str);
                 true
@@ -129,6 +147,8 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
                 false
             }
         }
+        // Non-API, non-sensitive traffic (static assets, SPA shell, legal, health, WS): exempt.
+        _ => false,
     };
     if limited {
         tracing::warn!(
@@ -151,4 +171,45 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
 
 pub fn apply_global_rate_limit(router: axum::Router) -> axum::Router {
     router.layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_default_limited_api;
+
+    #[test]
+    fn static_spa_assets_are_exempt_from_default_limiter() {
+        // A code-split SPA fetches these in bursts on navigation; throttling them 429s the app's
+        // own JavaScript and crashes the route. They must never hit the default API limiter.
+        for p in [
+            "/command-center/assets/CloudPostureCommandCenter-Bv4HCP5O.js",
+            "/command-center/assets/index-DjceKEF_.js",
+            "/command-center/assets/style-CKZedZbh.css",
+            "/command-center/",
+            "/command-center/operations",
+            "/command-center/login",
+            "/tactical-chunk-sw.js",
+            "/favicon.ico",
+            "/signup.html",
+            "/",
+            "/dashboard",
+            "/api/health",
+            "/ws",
+        ] {
+            assert!(!is_default_limited_api(p), "{p} must be exempt");
+        }
+    }
+
+    #[test]
+    fn api_surface_is_default_limited() {
+        for p in [
+            "/api/clients",
+            "/api/findings",
+            "/api/jobs/123",
+            "/api/command-center/scan",
+            "/api/rate-limits/status",
+        ] {
+            assert!(is_default_limited_api(p), "{p} must be rate limited");
+        }
+    }
 }
