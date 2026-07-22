@@ -616,6 +616,19 @@ jobs:
           npx playwright install chromium
           npm run test:e2e:live -- live-journey live-ui-crawl
 
+      - name: Dump Playwright live error-context on failure
+        if: failure()
+        # Surfaces the page's accessibility snapshot (what actually rendered at the failing
+        # assertion) into the CI log so a live-journey failure is diagnosable without downloading
+        # artifacts. Also tails any live-server log for correlation. Best-effort; never fails the job.
+        run: |
+          echo "=== Playwright live error-context snapshots ==="
+          find frontend/test-results -name 'error-context.md' 2>/dev/null | while read -r f; do
+            echo "----- $f -----"; sed -n '1,120p' "$f" 2>/dev/null || true; echo
+          done
+          echo "=== Playwright result dirs ==="
+          find frontend/test-results -maxdepth 2 -type d 2>/dev/null | head -40 || true
+
       # True-Live counterpart of the mock feature-verify.spec.ts: drives the
       # Findings-console features added this cycle (multi-select bulk status,
       # saved views, URL-shareable severity filter, row density) and the ⌘K
