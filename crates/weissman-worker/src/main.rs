@@ -505,6 +505,42 @@ async fn async_main() {
         }
     });
 
+    // App-pool saturation telemetry. Engine scans acquire `app_pool` connections for the duration of
+    // a run; if an engine holds them across long network I/O or leaks them, later scans time out
+    // acquiring one ("pool timed out while waiting for an open connection"). Log pool occupancy every
+    // few seconds so a saturating engine is pinpointed by correlating occupancy with the adjacent
+    // `engine_exec` "run_engine begin engine=" breadcrumb. Tunable via
+    // `WEISSMAN_WORKER_POOL_METRICS_SECS` (default 5; 0 disables).
+    let pool_metrics_secs = std::env::var("WEISSMAN_WORKER_POOL_METRICS_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(5);
+    if pool_metrics_secs > 0 {
+        let m_app = app_pool.clone();
+        let m_ctrl = ctrl_pool.clone();
+        let m_intel = intel_pool.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(pool_metrics_secs));
+            interval.tick().await; // consume the immediate first tick
+            loop {
+                interval.tick().await;
+                let app_size = m_app.size();
+                let app_idle = m_app.num_idle();
+                info!(
+                    target: "pool_metrics",
+                    app_size,
+                    app_idle,
+                    app_in_use = app_size.saturating_sub(app_idle as u32),
+                    ctrl_size = m_ctrl.size(),
+                    ctrl_idle = m_ctrl.num_idle(),
+                    intel_size = m_intel.size(),
+                    intel_idle = m_intel.num_idle(),
+                    "worker pool occupancy"
+                );
+            }
+        });
+    }
+
     while !stop.load(Ordering::SeqCst) {
         let claim_result = if bus.is_enabled() {
             job_queue::reserve_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
