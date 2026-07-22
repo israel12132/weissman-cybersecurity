@@ -497,3 +497,37 @@ pub fn spawn_swarm_run(
         .await;
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shannon_entropy_empty_is_zero() {
+        assert_eq!(shannon_entropy(&[]), 0.0);
+    }
+
+    #[test]
+    fn shannon_entropy_single_symbol_is_zero() {
+        // A run of one identical byte carries no information.
+        assert_eq!(shannon_entropy(&[7, 7, 7, 7]), 0.0);
+    }
+
+    #[test]
+    fn shannon_entropy_known_distributions() {
+        let approx = |x: f64, y: f64| (x - y).abs() < 1e-9;
+        // Two equally likely symbols -> exactly 1 bit/byte.
+        assert!(approx(shannon_entropy(&[0, 1]), 1.0));
+        // Four equally likely symbols -> 2 bits/byte.
+        assert!(approx(shannon_entropy(&[0, 0, 1, 1, 2, 2, 3, 3]), 2.0));
+        // All 256 byte values once each -> maximal 8 bits/byte.
+        let all: Vec<u8> = (0..=255u16).map(|x| x as u8).collect();
+        assert!(approx(shannon_entropy(&all), 8.0));
+    }
+
+    #[test]
+    fn now_ms_is_after_2020() {
+        // Deterministic lower-bound property: wall clock is well past epoch.
+        assert!(now_ms() > 1_600_000_000_000);
+    }
+}

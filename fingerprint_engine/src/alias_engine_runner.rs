@@ -3099,3 +3099,141 @@ async fn run_http_fuzz_alias(
         ),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ---- is_alias_engine ----
+
+    #[test]
+    fn is_alias_engine_true_for_known_aliases() {
+        // Each of these maps to a *different* canonical id in resolve_engine_id.
+        assert!(is_alias_engine("sqli_advanced")); // -> http_feedback_fuzz
+        assert!(is_alias_engine("rce_chain")); // -> kill_chain
+        assert!(is_alias_engine("active_directory")); // -> kerberos_attack_suite
+        assert!(is_alias_engine("mobile_attack")); // -> mobile_mitm
+        assert!(is_alias_engine("quantum_attack")); // -> quantum_key_attack
+        assert!(is_alias_engine("s3_bucket_enum")); // -> aws_attack
+        assert!(is_alias_engine("ntlm_relay")); // -> smb_netbios
+        assert!(is_alias_engine("graphql_injection")); // -> graphql_attack
+    }
+
+    #[test]
+    fn is_alias_engine_false_for_canonical_passthrough() {
+        // Canonical ids are absent from the alias table and resolve to themselves.
+        assert!(!is_alias_engine("http_feedback_fuzz"));
+        assert!(!is_alias_engine("kill_chain"));
+        assert!(!is_alias_engine("botnet_c2_engine"));
+        assert!(!is_alias_engine("kerberos_attack_suite"));
+    }
+
+    #[test]
+    fn is_alias_engine_false_for_explicit_self_mapping() {
+        // poe_synthesis is mapped explicitly to itself, so it is not an alias.
+        assert!(!is_alias_engine("poe_synthesis"));
+    }
+
+    #[test]
+    fn is_alias_engine_false_for_unknown_id() {
+        assert!(!is_alias_engine("zzz_not_a_real_engine_xyz"));
+    }
+
+    #[test]
+    fn is_alias_engine_false_for_empty_and_whitespace() {
+        assert!(!is_alias_engine(""));
+        assert!(!is_alias_engine("   "));
+        assert!(!is_alias_engine("\t\n"));
+    }
+
+    #[test]
+    fn is_alias_engine_trims_surrounding_whitespace() {
+        // Leading/trailing whitespace is trimmed before resolution.
+        assert!(is_alias_engine("  rce_chain  "));
+        assert!(is_alias_engine("\trce_chain\n"));
+    }
+
+    #[test]
+    fn is_alias_engine_dns_rebinding_is_not_alias() {
+        // dns_rebinding uses a dedicated probe and is deliberately absent from the
+        // resolve table, so it resolves to itself and is not an alias.
+        assert!(!is_alias_engine("dns_rebinding"));
+    }
+
+    #[test]
+    fn is_alias_engine_modbus_exploit_is_not_alias() {
+        // modbus_exploit has no alias entry; it resolves to itself.
+        assert!(!is_alias_engine("modbus_exploit"));
+    }
+
+    // ---- apply_alias_honest_metadata ----
+
+    #[test]
+    fn apply_metadata_inserts_all_four_fields() {
+        let mut obj = serde_json::Map::new();
+        apply_alias_honest_metadata(
+            &mut obj,
+            "sqli_advanced",
+            "http_feedback_fuzz",
+            "http_fuzz_tuned",
+            "SQL injection surface",
+        );
+        assert_eq!(obj.get("alias_engine_id"), Some(&json!("sqli_advanced")));
+        assert_eq!(
+            obj.get("canonical_engine_id"),
+            Some(&json!("http_feedback_fuzz"))
+        );
+        assert_eq!(obj.get("probe_fidelity"), Some(&json!("http_fuzz_tuned")));
+        assert_eq!(
+            obj.get("surface_summary"),
+            Some(&json!("SQL injection surface"))
+        );
+        assert_eq!(obj.len(), 4);
+    }
+
+    #[test]
+    fn apply_metadata_overwrites_existing_keys() {
+        let mut obj = serde_json::Map::new();
+        obj.insert("probe_fidelity".to_string(), json!("stale"));
+        apply_alias_honest_metadata(&mut obj, "a", "b", "fresh_fidelity", "summary");
+        assert_eq!(obj.get("probe_fidelity"), Some(&json!("fresh_fidelity")));
+        // Still exactly the four metadata keys.
+        assert_eq!(obj.len(), 4);
+    }
+
+    #[test]
+    fn apply_metadata_preserves_unrelated_keys() {
+        let mut obj = serde_json::Map::new();
+        obj.insert("title".to_string(), json!("keep me"));
+        apply_alias_honest_metadata(&mut obj, "a", "b", "c", "d");
+        assert_eq!(obj.get("title"), Some(&json!("keep me")));
+        // 1 pre-existing + 4 metadata keys.
+        assert_eq!(obj.len(), 5);
+    }
+
+    #[test]
+    fn apply_metadata_handles_empty_strings() {
+        let mut obj = serde_json::Map::new();
+        apply_alias_honest_metadata(&mut obj, "", "", "", "");
+        assert_eq!(obj.get("alias_engine_id"), Some(&json!("")));
+        assert_eq!(obj.get("canonical_engine_id"), Some(&json!("")));
+        assert_eq!(obj.get("probe_fidelity"), Some(&json!("")));
+        assert_eq!(obj.get("surface_summary"), Some(&json!("")));
+    }
+
+    #[test]
+    fn apply_metadata_values_are_json_strings() {
+        let mut obj = serde_json::Map::new();
+        apply_alias_honest_metadata(&mut obj, "alias", "canon", "specialized_probe", "hint");
+        // All four values serialize as JSON string types.
+        assert!(obj.get("alias_engine_id").unwrap().is_string());
+        assert!(obj.get("canonical_engine_id").unwrap().is_string());
+        assert!(obj.get("probe_fidelity").unwrap().is_string());
+        assert!(obj.get("surface_summary").unwrap().is_string());
+        assert_eq!(
+            obj.get("probe_fidelity").unwrap().as_str(),
+            Some("specialized_probe")
+        );
+    }
+}

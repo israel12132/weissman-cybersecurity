@@ -535,3 +535,120 @@ pub async fn run_graphql_introspection(
     }
     out.into_iter().collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_path_basic_cases() {
+        assert_eq!(normalize_path("foo"), "/foo");
+        assert_eq!(normalize_path("/foo"), "/foo");
+        assert_eq!(normalize_path("//foo"), "/foo");
+        assert_eq!(normalize_path(""), "/");
+        assert_eq!(normalize_path("   "), "/");
+        assert_eq!(normalize_path("  /a/b  "), "/a/b");
+    }
+
+    #[test]
+    fn extract_from_html_finds_href_and_src() {
+        let html = r#"<a href="/admin/users">x</a><script src="/static/app.js"></script>"#;
+        let paths = extract_from_html(html, "");
+        assert!(paths.contains(&"/admin/users".to_string()));
+        assert!(paths.contains(&"/static/app.js".to_string()));
+    }
+
+    #[test]
+    fn extract_from_html_strips_query_and_empty_input() {
+        let paths = extract_from_html(r#"<a href="/search?q=1">"#, "");
+        assert!(paths.contains(&"/search".to_string()));
+        assert!(extract_from_html("", "").is_empty());
+    }
+
+    #[test]
+    fn extract_from_js_finds_fetch_and_literal_paths() {
+        let js = r#"fetch("/api/v1/users"); const p = "/health";"#;
+        let paths = extract_from_js(js);
+        assert!(paths.contains(&"/api/v1/users".to_string()));
+        assert!(paths.contains(&"/health".to_string()));
+    }
+
+    #[test]
+    fn extract_from_headers_location_normalizes_and_strips_query() {
+        let mut h = reqwest::header::HeaderMap::new();
+        h.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("/dashboard?next=1"),
+        );
+        let paths = extract_from_headers(&h);
+        assert_eq!(paths, vec!["/dashboard".to_string()]);
+    }
+
+    #[test]
+    fn extract_from_headers_excludes_protocol_relative_location() {
+        let mut h = reqwest::header::HeaderMap::new();
+        h.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("//evil.example.com/x"),
+        );
+        assert!(extract_from_headers(&h).is_empty());
+    }
+
+    #[test]
+    fn extract_from_headers_parses_link() {
+        let mut h = reqwest::header::HeaderMap::new();
+        h.insert(
+            reqwest::header::LINK,
+            reqwest::header::HeaderValue::from_static("</style.css>; rel=preload"),
+        );
+        let paths = extract_from_headers(&h);
+        assert_eq!(paths, vec!["/style.css".to_string()]);
+    }
+
+    #[test]
+    fn resolve_relative_returns_absolute_url_untouched() {
+        assert_eq!(
+            resolve_relative("http://x.com/a", "https://y.com/z"),
+            "https://y.com/z"
+        );
+    }
+
+    #[test]
+    fn resolve_relative_root_path_uses_origin() {
+        assert_eq!(
+            resolve_relative("https://ex.com/a/b", "/admin"),
+            "https://ex.com/admin"
+        );
+    }
+
+    #[test]
+    fn resolve_relative_relative_path_uses_base_dir() {
+        assert_eq!(
+            resolve_relative("https://ex.com/a/b.html", "c.js"),
+            "https://ex.com/a/c.js"
+        );
+    }
+
+    #[test]
+    fn extract_html_links_skips_anchor_and_js_schemes() {
+        let html =
+            r##"<a href="/ok">1</a><a href="#frag">2</a><a href="javascript:void(0)">3</a>"##;
+        let links = extract_html_links(html, "");
+        assert!(links.contains(&"/ok".to_string()));
+        assert!(!links.iter().any(|l| l.starts_with('#')));
+        assert!(!links.iter().any(|l| l.starts_with("javascript:")));
+    }
+
+    #[test]
+    fn extract_js_refs_finds_script_src() {
+        let html = r#"<script src="/assets/main.js"></script>"#;
+        let refs = extract_js_refs(html);
+        assert_eq!(refs, vec!["/assets/main.js".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn predict_paths_empty_input_returns_empty_without_network() {
+        let out = predict_paths_llm(&[], "", "model", None).await;
+        assert!(out.is_empty());
+    }
+}

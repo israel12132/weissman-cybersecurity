@@ -352,3 +352,65 @@ pub async fn run_iac_supply_chain_result(t: &str) -> EngineResult {
     crate::iac_misconfig_engine::run_iac_misconfig_result_default(t).await
 }
 cli_wrapper!(run_iac_supply_chain, run_iac_supply_chain_result);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn levenshtein_identical_is_zero() {
+        assert_eq!(levenshtein_distance("kitten", "kitten"), 0);
+        assert_eq!(levenshtein_distance("", ""), 0);
+    }
+
+    #[test]
+    fn levenshtein_classic_examples() {
+        assert_eq!(levenshtein_distance("kitten", "sitting"), 3);
+        assert_eq!(levenshtein_distance("flaw", "lawn"), 2);
+        assert_eq!(levenshtein_distance("abc", "abd"), 1);
+    }
+
+    #[test]
+    fn levenshtein_empty_operand_returns_other_len() {
+        assert_eq!(levenshtein_distance("", "abc"), 3);
+        assert_eq!(levenshtein_distance("abcd", ""), 4);
+    }
+
+    #[test]
+    fn levenshtein_large_length_gap_shortcircuits_to_max() {
+        // abs length difference > 6 returns usize::MAX (typosquat check skips these).
+        assert_eq!(levenshtein_distance("a", "aaaaaaaa"), usize::MAX);
+        assert_eq!(levenshtein_distance("aaaaaaaa", "a"), usize::MAX);
+    }
+
+    #[test]
+    fn levenshtein_typosquat_distance_within_threshold() {
+        // e.g. an org token one edit away from a package name.
+        assert_eq!(levenshtein_distance("react", "reakt"), 1);
+        assert_eq!(levenshtein_distance("lodash", "lodahs"), 2);
+    }
+
+    #[tokio::test]
+    async fn registry_probe_empty_target_errors() {
+        // registry_probe short-circuits on empty input before any HTTP call.
+        let r = run_npm_package_attack_result("").await;
+        assert!(!r.success);
+        assert_eq!(r.status, "error");
+        assert!(!run_pypi_supply_chain_result("   ").await.success);
+    }
+
+    #[tokio::test]
+    async fn github_actions_empty_target_errors() {
+        assert!(!run_github_actions_attack_result("").await.success);
+    }
+
+    #[tokio::test]
+    async fn update_hijacking_empty_target_errors() {
+        assert!(!run_update_hijacking_result("  ").await.success);
+    }
+
+    #[tokio::test]
+    async fn compiler_backdoor_empty_target_errors() {
+        assert!(!run_compiler_backdoor_result("").await.success);
+    }
+}

@@ -334,3 +334,86 @@ pub fn ec2_scan_regions_from_env() -> Vec<String> {
     }
     vec!["us-east-1".into(), "us-west-2".into(), "eu-west-1".into()]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_role_arn_empty_is_ok() {
+        assert!(validate_cross_account_role_arn("").is_ok());
+        assert!(validate_cross_account_role_arn("   ").is_ok());
+    }
+
+    #[test]
+    fn validate_role_arn_wrong_prefix_errors() {
+        assert!(validate_cross_account_role_arn("arn:aws:s3:::bucket").is_err());
+    }
+
+    #[test]
+    fn validate_role_arn_requires_role_segment() {
+        assert!(validate_cross_account_role_arn("arn:aws:iam::123456789012:user/bob").is_err());
+    }
+
+    #[test]
+    fn validate_role_arn_valid() {
+        assert!(validate_cross_account_role_arn("arn:aws:iam::123456789012:role/Weissman").is_ok());
+    }
+
+    #[test]
+    fn map_bucket_location_defaults_to_us_east_1() {
+        assert_eq!(map_bucket_location(None), "us-east-1");
+        assert_eq!(map_bucket_location(Some("")), "us-east-1");
+        assert_eq!(map_bucket_location(Some("US")), "us-east-1");
+        assert_eq!(map_bucket_location(Some("  ")), "us-east-1");
+    }
+
+    #[test]
+    fn map_bucket_location_eu_and_other() {
+        assert_eq!(map_bucket_location(Some("EU")), "eu-west-1");
+        assert_eq!(map_bucket_location(Some(" EU ")), "eu-west-1");
+        assert_eq!(map_bucket_location(Some("ap-south-1")), "ap-south-1");
+    }
+
+    #[test]
+    fn is_dangerous_port_exact_match() {
+        assert!(is_dangerous_port(Some(22), Some(22)));
+        assert!(is_dangerous_port(Some(3389), None));
+    }
+
+    #[test]
+    fn is_dangerous_port_range_covers_dangerous() {
+        // 20..=25 spans 22, 23, 25.
+        assert!(is_dangerous_port(Some(20), Some(25)));
+    }
+
+    #[test]
+    fn is_dangerous_port_safe_ports() {
+        assert!(!is_dangerous_port(Some(80), Some(80)));
+        assert!(!is_dangerous_port(None, None));
+    }
+
+    #[test]
+    fn cross_account_config_default_is_empty() {
+        let c = CrossAccountAwsConfig::default();
+        assert!(c.role_arn.is_empty());
+        assert!(c.external_id.is_empty());
+        assert!(c.session_name.is_empty());
+    }
+
+    #[test]
+    fn cloud_integration_error_display() {
+        assert_eq!(
+            CloudIntegrationError::InvalidInput("bad".into()).to_string(),
+            "bad"
+        );
+        assert_eq!(
+            CloudIntegrationError::AssumeRole("denied".into()).to_string(),
+            "STS AssumeRole: denied"
+        );
+        assert_eq!(
+            CloudIntegrationError::Api("boom".into()).to_string(),
+            "AWS API: boom"
+        );
+    }
+}

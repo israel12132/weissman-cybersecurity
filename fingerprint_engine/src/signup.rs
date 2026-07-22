@@ -605,3 +605,91 @@ async fn send_signup_email(to: &str, subject: &str, body: &str) -> Result<(), St
     .map_err(|e| format!("join: {e}"))?;
     res
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_basic() {
+        assert_eq!(slugify("Hello World"), "hello-world");
+        assert_eq!(slugify("My  Cool   Co"), "my-cool-co");
+    }
+
+    #[test]
+    fn slugify_collapses_and_trims_dashes() {
+        assert_eq!(slugify("--Acme!!Corp--"), "acme-corp");
+        assert_eq!(slugify("   spaced   "), "spaced");
+    }
+
+    #[test]
+    fn slugify_empty_when_no_alnum() {
+        assert_eq!(slugify("---"), "");
+        assert_eq!(slugify("!!!"), "");
+    }
+
+    #[test]
+    fn slugify_truncates_to_40() {
+        let long = "a".repeat(60);
+        assert_eq!(slugify(&long).len(), 40);
+    }
+
+    #[test]
+    fn validate_email_ok() {
+        assert_eq!(
+            validate_email("  User@Example.COM ").unwrap(),
+            "user@example.com"
+        );
+        assert_eq!(validate_email("a@b.co").unwrap(), "a@b.co");
+    }
+
+    #[test]
+    fn validate_email_rejects() {
+        assert!(validate_email("abc").is_err()); // no @
+        assert!(validate_email("a@@b.com").is_err()); // two @
+        assert!(validate_email("@b.com").is_err()); // empty local
+        assert!(validate_email("a@bcd").is_err()); // no dot in domain
+        assert!(validate_email("a b@c.com").is_err()); // whitespace
+        assert!(validate_email("a@").is_err()); // too short
+    }
+
+    #[test]
+    fn validate_password_rules() {
+        assert!(validate_password("short").is_err()); // < 12
+        assert!(validate_password("abcdefghijkl").is_err()); // all alpha
+        assert!(validate_password("123456789012").is_err()); // all digits
+        assert!(validate_password("abcdefghij12").is_ok()); // mixed classes
+        assert!(validate_password(&"a1".repeat(200)).is_err()); // > 256 chars
+    }
+
+    #[test]
+    fn validate_workspace_name_rules() {
+        assert!(validate_workspace_name("a").is_err()); // < 2
+        assert_eq!(validate_workspace_name("  Acme  ").unwrap(), "Acme");
+        assert!(validate_workspace_name(&"x".repeat(81)).is_err()); // > 80
+    }
+
+    #[test]
+    fn hash_token_hex_and_trims() {
+        let a = hash_token("tok");
+        let b = hash_token("  tok  ");
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64); // SHA-256 hex
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn generate_token_length_and_charset() {
+        let t = generate_token();
+        assert_eq!(t.len(), 43); // 32 bytes, URL-safe base64 no pad
+        assert!(t
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+    }
+
+    #[test]
+    fn workspace_display_name_fallback() {
+        assert_eq!(workspace_display_name(""), "there");
+        assert_eq!(workspace_display_name("Acme"), "Acme");
+    }
+}

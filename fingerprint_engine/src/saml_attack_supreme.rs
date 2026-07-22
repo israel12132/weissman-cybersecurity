@@ -628,3 +628,377 @@ pub fn build_security_graph(
     let _ = target;
     (nodes, edges)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn cert() -> super::super::CertFacts {
+        super::super::CertFacts {
+            subject: "CN=idp".to_string(),
+            issuer: "CN=idp".to_string(),
+            key_bits: 2048,
+            sig_alg: "sha256WithRSAEncryption".to_string(),
+            days_until_expiry: 100,
+            expired: false,
+            self_signed: true,
+        }
+    }
+
+    #[test]
+    fn category_scores_all_clean_are_100() {
+        let sig = Signals::default();
+        let j = finalize_category_scores(&sig).to_json();
+        for k in [
+            "signing_trust",
+            "assertion_policy",
+            "metadata_hygiene",
+            "transport_binding",
+            "redirect_relay",
+            "parser_disclosure",
+            "slo_surface",
+            "xsw_surface",
+        ] {
+            assert_eq!(j[k].as_u64().unwrap(), 100, "axis {k}");
+        }
+    }
+
+    #[test]
+    fn category_scores_penalize_signing_trust() {
+        let mut sig = Signals::default();
+        sig.weak_sha1 = true;
+        sig.weak_key_cert = true;
+        sig.expired_cert = true;
+        // 3 gaps * 20 = 60 penalty -> 40
+        let j = finalize_category_scores(&sig).to_json();
+        assert_eq!(j["signing_trust"].as_u64().unwrap(), 40);
+    }
+
+    #[test]
+    fn category_scores_assertion_policy_ladder() {
+        let mut a = Signals::default();
+        a.unsigned_assertions = true;
+        assert_eq!(
+            finalize_category_scores(&a).to_json()["assertion_policy"]
+                .as_u64()
+                .unwrap(),
+            20
+        );
+        let mut b = Signals::default();
+        b.missing_encryption = true;
+        assert_eq!(
+            finalize_category_scores(&b).to_json()["assertion_policy"]
+                .as_u64()
+                .unwrap(),
+            70
+        );
+    }
+
+    #[test]
+    fn category_scores_transport_and_xsw() {
+        let mut sig = Signals::default();
+        sig.http_redirect_binding = true;
+        sig.http_acs_urls = vec!["http://a".into(), "http://b".into(), "http://c".into()];
+        // gaps = 1 + min(3,2)=2 => 3 gaps * 22 = 66 -> 34
+        assert_eq!(
+            finalize_category_scores(&sig).to_json()["transport_binding"]
+                .as_u64()
+                .unwrap(),
+            34
+        );
+
+        let mut x = Signals::default();
+        x.xsw_preconditions = 5; // (100 - 5*8)=60 clamped [20,100]
+        assert_eq!(
+            finalize_category_scores(&x).to_json()["xsw_surface"]
+                .as_u64()
+                .unwrap(),
+            60
+        );
+        let mut x2 = Signals::default();
+        x2.xsw_preconditions = 2; // not > 2 -> 100
+        assert_eq!(
+            finalize_category_scores(&x2).to_json()["xsw_surface"]
+                .as_u64()
+                .unwrap(),
+            100
+        );
+    }
+
+    #[test]
+    fn metadata_depth_expired_flags_signal_and_high_finding() {
+        let mut sig = Signals::default();
+        let mut findings = Vec::new();
+        let mut facts = MetadataFacts::default();
+        facts.valid_until = Some("2000-01-01T00:00:00Z".to_string());
+        emit_metadata_depth_findings(
+            "t",
+            "https://idp/meta",
+            &facts,
+            &mut sig,
+            &mut findings,
+            true,
+            true,
+            true,
+            true,
+        );
+        assert!(sig.metadata_expired);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "high");
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("validUntil expired"));
+    }
+
+    #[test]
+    fn metadata_depth_future_expiry_no_finding() {
+        let mut sig = Signals::default();
+        let mut findings = Vec::new();
+        let mut facts = MetadataFacts::default();
+        facts.valid_until = Some("2999-01-01T00:00:00Z".to_string());
+        emit_metadata_depth_findings(
+            "t",
+            "https://idp/meta",
+            &facts,
+            &mut sig,
+            &mut findings,
+            true,
+            true,
+            true,
+            true,
+        );
+        assert!(!sig.metadata_expired);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn metadata_depth_unsigned_authn_requests() {
+        let mut sig = Signals::default();
+        let mut findings = Vec::new();
+        let mut facts = MetadataFacts::default();
+        facts.authn_requests_signed = Some(false);
+        emit_metadata_depth_findings(
+            "t",
+            "https://idp/meta",
+            &facts,
+            &mut sig,
+            &mut findings,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(sig.authn_requests_unsigned);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "medium");
+    }
+
+    #[test]
+    fn metadata_depth_slo_and_redirect_binding_respect_toggles() {
+        let mut facts = MetadataFacts::default();
+        facts.slo_urls = vec!["https://idp/slo".into()];
+        facts.bindings = vec!["HTTP-Redirect".into()];
+
+        // Toggles off -> no findings, no signals.
+        let mut sig = Signals::default();
+        let mut findings = Vec::new();
+        emit_metadata_depth_findings(
+            "t",
+            "u",
+            &facts,
+            &mut sig,
+            &mut findings,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(!sig.slo_exposed);
+        assert!(!sig.http_redirect_binding);
+        assert!(findings.is_empty());
+
+        // Toggles on -> both fire.
+        let mut sig2 = Signals::default();
+        let mut findings2 = Vec::new();
+        emit_metadata_depth_findings(
+            "t",
+            "u",
+            &facts,
+            &mut sig2,
+            &mut findings2,
+            false,
+            true,
+            true,
+            false,
+        );
+        assert!(sig2.slo_exposed);
+        assert!(sig2.http_redirect_binding);
+        assert_eq!(findings2.len(), 2);
+    }
+
+    #[test]
+    fn metadata_depth_http_acs_always_fires() {
+        let mut sig = Signals::default();
+        let mut findings = Vec::new();
+        let mut facts = MetadataFacts::default();
+        facts.http_acs_urls = vec!["http://sp/acs".into()];
+        emit_metadata_depth_findings(
+            "t",
+            "u",
+            &facts,
+            &mut sig,
+            &mut findings,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert_eq!(sig.http_acs_urls.len(), 1);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "high");
+    }
+
+    #[test]
+    fn metadata_depth_xsw_preconditions() {
+        let mut sig = Signals::default();
+        let mut findings = Vec::new();
+        let mut facts = MetadataFacts::default();
+        facts.acs_urls = vec!["https://a".into(), "https://b".into()];
+        facts.certs = vec![cert(), cert()];
+        emit_metadata_depth_findings(
+            "t",
+            "u",
+            &facts,
+            &mut sig,
+            &mut findings,
+            true,
+            false,
+            false,
+            false,
+        );
+        // 2 ACS + 2 certs = 4
+        assert_eq!(sig.xsw_preconditions, 4);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "medium");
+    }
+
+    #[test]
+    fn extend_attack_paths_phishing_combo() {
+        let mut sig = Signals::default();
+        sig.unsigned_assertions = true;
+        sig.open_redirect = Some("https://evil".into());
+        let mut findings = Vec::new();
+        extend_attack_paths("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "critical");
+        assert_eq!(findings[0]["category"], "attack_path");
+    }
+
+    #[test]
+    fn extend_attack_paths_none_when_clean() {
+        let sig = Signals::default();
+        let mut findings = Vec::new();
+        extend_attack_paths("t", &sig, &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn extend_attack_paths_golden_saml() {
+        let mut sig = Signals::default();
+        sig.weak_sha1 = true;
+        sig.idp_metadata = true;
+        sig.ws_fed_exposed = true;
+        let mut findings = Vec::new();
+        extend_attack_paths("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("Golden SAML"));
+    }
+
+    #[test]
+    fn toxic_headline_empty_when_no_combos() {
+        let sig = Signals::default();
+        let mut findings = Vec::new();
+        emit_toxic_headline("t", &sig, &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn toxic_headline_inserts_at_front() {
+        let mut sig = Signals::default();
+        sig.unsigned_assertions = true;
+        let mut findings = vec![json!({"title": "pre-existing"})];
+        emit_toxic_headline("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0]["severity"], "critical");
+        assert_eq!(findings[0]["category"], "toxic_combination");
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .starts_with("TOXIC COMBINATION:"));
+    }
+
+    #[test]
+    fn remediation_roadmap_always_emits_one_finding() {
+        // Even with a clean signal set, P2 monitoring steps are always appended.
+        let sig = Signals::default();
+        let mut findings = Vec::new();
+        emit_remediation_roadmap("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["category"], "remediation_roadmap");
+        let roadmap = findings[0]["evidence"]["roadmap"].as_array().unwrap();
+        assert!(roadmap.len() >= 2);
+        assert_eq!(roadmap[0]["priority"], 1);
+    }
+
+    #[test]
+    fn agent_guidance_emits_six() {
+        let mut findings = Vec::new();
+        emit_agent_guidance("t", &mut findings);
+        assert_eq!(findings.len(), 6);
+        for f in &findings {
+            assert_eq!(f["category"], "agent_guidance");
+            assert_eq!(f["severity"], "info");
+        }
+    }
+
+    #[test]
+    fn security_graph_clean_is_root_only_and_secure() {
+        let sig = Signals::default();
+        let (nodes, edges) = build_security_graph("t", &sig, "idp.example.com");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, "root");
+        assert_eq!(nodes[0].label, "idp.example.com");
+        assert_eq!(nodes[0].status, "secure"); // score 100
+        assert!(edges.is_empty());
+    }
+
+    #[test]
+    fn security_graph_phishing_chain_adds_nodes_and_edge() {
+        let mut sig = Signals::default();
+        sig.unsigned_assertions = true;
+        sig.open_redirect = Some("https://evil".into());
+        let (nodes, edges) = build_security_graph("t", &sig, "h");
+        // root + unsigned + relaystate
+        assert_eq!(nodes.len(), 3);
+        // e_root_unsigned, e_root_relaystate, ap_phish
+        assert_eq!(edges.len(), 3);
+        assert!(edges.iter().any(|e| e.edge_type == "FORGE_TO_PHISH"));
+        // score = 100 - 22 - 14 = 64 -> degraded
+        assert_eq!(nodes[0].status, "degraded");
+    }
+
+    #[test]
+    fn security_graph_golden_edge() {
+        let mut sig = Signals::default();
+        sig.weak_sha1 = true;
+        sig.ws_fed_exposed = true;
+        let (nodes, edges) = build_security_graph("t", &sig, "h");
+        assert_eq!(nodes.len(), 3); // root + weak_sign + wsfed
+        assert!(edges.iter().any(|e| e.edge_type == "GOLDEN_SAML"));
+    }
+}

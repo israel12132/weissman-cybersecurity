@@ -592,4 +592,76 @@ mod tests {
              default per-job budget"
         );
     }
+
+    #[test]
+    fn heavy_jobs_get_long_timeouts() {
+        assert_eq!(
+            job_kind_timeout("tenant_full_scan"),
+            Duration::from_secs(3600)
+        );
+        assert_eq!(
+            job_kind_timeout("onboarding_tenant_scan"),
+            Duration::from_secs(3600)
+        );
+        assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
+        assert_eq!(
+            job_kind_timeout("scan_all_engines"),
+            Duration::from_secs(2700)
+        );
+        assert_eq!(job_kind_timeout("pipeline_scan"), Duration::from_secs(1200));
+    }
+
+    #[test]
+    fn cheap_and_unknown_jobs_get_short_timeouts() {
+        assert_eq!(job_kind_timeout("noop"), Duration::from_secs(30));
+        assert_eq!(job_kind_timeout("ping"), Duration::from_secs(30));
+        // Unknown kinds fall back to the 5-minute default.
+        assert_eq!(job_kind_timeout("something_new"), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn job_is_heavy_classifies_known_kinds() {
+        assert!(job_is_heavy("tenant_full_scan"));
+        assert!(job_is_heavy("ai_redteam"));
+        assert!(job_is_heavy("scan_discovered_domains"));
+        assert!(job_is_heavy("genesis_eternal_fuzz"));
+    }
+
+    #[test]
+    fn job_is_heavy_rejects_light_and_unknown_kinds() {
+        assert!(!job_is_heavy("noop"));
+        assert!(!job_is_heavy("ping"));
+        assert!(!job_is_heavy("unknown_kind"));
+        assert!(!job_is_heavy(""));
+    }
+
+    #[test]
+    fn concurrency_cap_parses_positive_env_value() {
+        let key = "WEISSMAN_TEST_WORKER_CAP_POSITIVE";
+        std::env::set_var(key, "12");
+        assert_eq!(worker_concurrency_cap(key, 4), 12);
+        std::env::remove_var(key);
+    }
+
+    #[test]
+    fn concurrency_cap_falls_back_on_invalid_or_zero() {
+        let key = "WEISSMAN_TEST_WORKER_CAP_INVALID";
+        std::env::remove_var(key);
+        // Unset -> default.
+        assert_eq!(worker_concurrency_cap(key, 7), 7);
+        // Zero rejected -> default.
+        std::env::set_var(key, "0");
+        assert_eq!(worker_concurrency_cap(key, 7), 7);
+        // Non-numeric rejected -> default.
+        std::env::set_var(key, "abc");
+        assert_eq!(worker_concurrency_cap(key, 7), 7);
+        std::env::remove_var(key);
+    }
+
+    #[test]
+    fn worker_id_has_host_and_pid() {
+        let id = worker_id();
+        let (_host, pid) = id.rsplit_once(':').expect("worker id contains a colon");
+        assert_eq!(pid.parse::<u32>().unwrap(), std::process::id());
+    }
 }

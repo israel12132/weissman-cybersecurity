@@ -509,3 +509,124 @@ pub async fn generic_cicd_scan(
     .await;
     gate_response(blocked, &findings)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::{HeaderValue, StatusCode};
+    use hmac::Mac;
+
+    #[test]
+    fn constant_time_str_eq_equal_strings() {
+        assert!(constant_time_str_eq("abc", "abc"));
+        assert!(constant_time_str_eq("", ""));
+        assert!(constant_time_str_eq(
+            "a-long-shared-secret-token-value",
+            "a-long-shared-secret-token-value"
+        ));
+    }
+
+    #[test]
+    fn constant_time_str_eq_rejects_differences() {
+        assert!(!constant_time_str_eq("abc", "abd"));
+        // differing length must fail (padding equalizes bytes; the length bit catches it)
+        assert!(!constant_time_str_eq("abc", "abcd"));
+        assert!(!constant_time_str_eq("abc", ""));
+        assert!(!constant_time_str_eq("", "abc"));
+    }
+
+    #[test]
+    fn verify_gitlab_token_behaviour() {
+        // empty expected always rejected
+        let mut h = HeaderMap::new();
+        h.insert("x-gitlab-token", HeaderValue::from_static("tok"));
+        assert!(!verify_gitlab_token(&h, ""));
+        // correct token accepted
+        assert!(verify_gitlab_token(&h, "tok"));
+        // wrong token rejected
+        assert!(!verify_gitlab_token(&h, "nope"));
+        // missing header rejected
+        let empty = HeaderMap::new();
+        assert!(!verify_gitlab_token(&empty, "tok"));
+    }
+
+    #[test]
+    fn verify_bitbucket_secret_behaviour() {
+        let mut h = HeaderMap::new();
+        h.insert("authorization", HeaderValue::from_static("Bearer sec"));
+        assert!(!verify_bitbucket_secret(&h, "")); // empty expected
+        assert!(verify_bitbucket_secret(&h, "sec"));
+        assert!(!verify_bitbucket_secret(&h, "other"));
+        // raw token without Bearer prefix must not match
+        let mut h2 = HeaderMap::new();
+        h2.insert("authorization", HeaderValue::from_static("sec"));
+        assert!(!verify_bitbucket_secret(&h2, "sec"));
+    }
+
+    #[test]
+    fn verify_github_signature_none_and_wrong() {
+        let secret = "topsecret";
+        let body = b"hello world";
+        assert!(!verify_github_signature(secret, None, body));
+        assert!(!verify_github_signature(
+            secret,
+            Some("sha256=deadbeef"),
+            body
+        ));
+    }
+
+    #[test]
+    fn verify_github_signature_accepts_valid_hmac() {
+        let secret = "topsecret";
+        let body = b"hello world";
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(body);
+        let expected = mac.finalize().into_bytes();
+        let header = format!("sha256={}", hex::encode(expected));
+        assert!(verify_github_signature(secret, Some(&header), body));
+        // without the sha256= prefix the raw hex is still accepted
+        let raw_hex = hex::encode({
+            let mut m = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+            m.update(body);
+            m.finalize().into_bytes()
+        });
+        assert!(verify_github_signature(secret, Some(&raw_hex), body));
+        // tampered body must fail
+        assert!(!verify_github_signature(
+            secret,
+            Some(&header),
+            b"other body"
+        ));
+    }
+
+    #[test]
+    fn gate_response_status_codes() {
+        let findings: Vec<CicdFinding> = Vec::new();
+        assert_eq!(gate_response(false, &findings).status(), StatusCode::OK);
+        assert_eq!(
+            gate_response(true, &findings).status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[test]
+    fn generic_scan_body_deserializes_with_defaults() {
+        let j = r#"{"files":[{"path":"a.rs","content":"let x = 1;"}]}"#;
+        let b: GenericScanBody = serde_json::from_str(j).unwrap();
+        assert_eq!(b.files.len(), 1);
+        assert_eq!(b.files[0].path, "a.rs");
+        assert_eq!(b.files[0].content, "let x = 1;");
+        // #[serde(default)] fills these when absent
+        assert_eq!(b.r#ref, "");
+        assert_eq!(b.commit_sha, "");
+    }
+
+    #[test]
+    fn generic_scan_body_deserializes_full() {
+        let j = r#"{"files":[],"ref":"refs/heads/main","commit_sha":"abc123"}"#;
+        let b: GenericScanBody = serde_json::from_str(j).unwrap();
+        assert!(b.files.is_empty());
+        assert_eq!(b.r#ref, "refs/heads/main");
+        assert_eq!(b.commit_sha, "abc123");
+    }
+}

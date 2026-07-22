@@ -413,3 +413,63 @@ pub async fn run_parent_pid_spoof_result(t: &str) -> EngineResult {
     )
 }
 cli_wrapper!(run_parent_pid_spoof, run_parent_pid_spoof_result);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // These engines short-circuit on empty input before any network/DNS IO, so the error
+    // path is deterministic and safe to assert.
+    #[tokio::test]
+    async fn living_off_land_empty_target_errors() {
+        let r = run_living_off_land_result("").await;
+        assert!(!r.success);
+        assert_eq!(r.status, "error");
+    }
+
+    #[tokio::test]
+    async fn dns_tunneling_empty_target_errors() {
+        assert!(!run_dns_tunneling_c2_result("   ").await.success);
+    }
+
+    #[tokio::test]
+    async fn steganography_empty_target_errors() {
+        assert!(!run_steganography_c2_result("").await.success);
+    }
+
+    #[tokio::test]
+    async fn https_c2_masquerade_empty_target_errors() {
+        assert!(!run_https_c2_masquerade_result("  ").await.success);
+    }
+
+    // Agent-required engines return a single deterministic info finding with no IO.
+    #[tokio::test]
+    async fn process_hollowing_is_agent_required() {
+        let r = run_process_hollowing_result("example.test").await;
+        assert!(r.success);
+        assert_eq!(r.findings.len(), 1);
+        let f = &r.findings[0];
+        assert_eq!(
+            f.get("type").and_then(Value::as_str),
+            Some("process_hollowing")
+        );
+        assert_eq!(f.get("severity").and_then(Value::as_str), Some("info"));
+        assert_eq!(f.get("agent_required").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            f.get("category").and_then(Value::as_str),
+            Some("agent_required")
+        );
+    }
+
+    #[tokio::test]
+    async fn rootkit_simulation_delegates_to_surface_probe() {
+        // Legacy alias delegates to the surface probe, which is agent-required.
+        let r = run_rootkit_simulation_result("example.test").await;
+        assert!(r.success);
+        assert_eq!(r.findings.len(), 1);
+        assert_eq!(
+            r.findings[0].get("type").and_then(Value::as_str),
+            Some("rootkit_surface_probe")
+        );
+    }
+}

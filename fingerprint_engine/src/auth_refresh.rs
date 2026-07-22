@@ -271,3 +271,54 @@ pub fn refresh_cookie_clear_value() -> String {
         refresh_secure_suffix()
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_token_is_deterministic_and_trims() {
+        let a = hash_token("secrettoken");
+        let b = hash_token("  secrettoken  ");
+        assert_eq!(a, b); // trims before hashing
+        assert_eq!(a.len(), 32); // SHA-256 digest length
+    }
+
+    #[test]
+    fn hash_token_differs_for_different_input() {
+        assert_ne!(hash_token("aaa"), hash_token("bbb"));
+    }
+
+    #[test]
+    fn generate_opaque_token_length_and_charset() {
+        let t = generate_opaque_token();
+        // 32 random bytes, URL-safe base64 without padding.
+        assert_eq!(t.len(), 43);
+        assert!(t
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+    }
+
+    #[test]
+    fn refresh_cookie_name_is_stable() {
+        assert_eq!(REFRESH_COOKIE_NAME, "weissman_refresh");
+    }
+
+    #[test]
+    fn refresh_cookie_value_structure() {
+        let c = refresh_cookie_value("abc123");
+        assert!(c.starts_with("weissman_refresh=abc123;"));
+        assert!(c.contains("Path=/api/auth"));
+        assert!(c.contains("HttpOnly"));
+        assert!(c.contains("SameSite=Strict"));
+        assert!(c.contains("Max-Age="));
+    }
+
+    #[test]
+    fn refresh_cookie_clear_has_zero_max_age() {
+        let c = refresh_cookie_clear_value();
+        assert!(c.starts_with("weissman_refresh=;"));
+        assert!(c.contains("Max-Age=0"));
+        assert!(c.contains("Path=/api/auth"));
+    }
+}

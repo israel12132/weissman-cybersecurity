@@ -1514,3 +1514,91 @@ fn headers_blob(probe: &crate::engine_probes::HttpProbe) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine_probes::HttpProbe;
+
+    #[test]
+    fn remote_depth_constant() {
+        assert_eq!(REMOTE_DEPTH, "agent_hybrid_remote_surface");
+    }
+
+    #[test]
+    fn remote_finding_carries_all_fields_and_flags() {
+        let f = remote_finding(
+            "process_hollowing",
+            "Title here",
+            "high",
+            "T1055",
+            "some description",
+            "https://target.example",
+        );
+        assert_eq!(f["type"], "process_hollowing");
+        assert_eq!(f["title"], "Title here");
+        assert_eq!(f["severity"], "high");
+        assert_eq!(f["mitre_attack"], "T1055");
+        assert_eq!(f["description"], "some description");
+        assert_eq!(f["target"], "https://target.example");
+        assert_eq!(f["probe_depth"], "agent_hybrid_remote_surface");
+        assert_eq!(f["remote_surface"], true);
+        assert_eq!(f["agent_validation_recommended"], true);
+    }
+
+    #[test]
+    fn collect_empty_returns_no_signal_message() {
+        let r = collect("dll_hijacking_engine", "tgt.example", vec![]);
+        assert_eq!(r.status, "ok");
+        assert!(r.findings.is_empty());
+        assert!(r
+            .message
+            .contains("dll_hijacking_engine: no live signal observed on tgt.example"));
+    }
+
+    #[test]
+    fn collect_non_empty_summarizes_count() {
+        let f = remote_finding("eng", "t", "high", "T1", "d", "tgt");
+        let r = collect("eng", "tgt", vec![f]);
+        assert_eq!(r.status, "ok");
+        assert_eq!(r.findings.len(), 1);
+        assert!(r.message.contains("eng"));
+        assert!(r.message.contains("1 remote surface finding(s)"));
+    }
+
+    #[test]
+    fn collect_preserves_multiple_findings() {
+        let findings = vec![
+            remote_finding("eng", "a", "low", "T1", "d", "tgt"),
+            remote_finding("eng", "b", "medium", "T2", "d", "tgt"),
+        ];
+        let r = collect("eng", "tgt", findings);
+        assert_eq!(r.findings.len(), 2);
+        assert!(r.message.contains("2 remote surface finding(s)"));
+    }
+
+    #[test]
+    fn headers_blob_joins_key_value_pairs() {
+        let probe = HttpProbe {
+            status: 200,
+            headers: vec![
+                ("Server".to_string(), "nginx".to_string()),
+                ("X-Powered-By".to_string(), "php".to_string()),
+            ],
+            body: String::new(),
+            final_url: String::new(),
+        };
+        assert_eq!(headers_blob(&probe), "Server: nginx\nX-Powered-By: php");
+    }
+
+    #[test]
+    fn headers_blob_empty_is_empty_string() {
+        let probe = HttpProbe {
+            status: 204,
+            headers: vec![],
+            body: String::new(),
+            final_url: String::new(),
+        };
+        assert_eq!(headers_blob(&probe), "");
+    }
+}

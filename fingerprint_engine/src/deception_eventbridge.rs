@@ -156,3 +156,101 @@ pub async fn handle_aws_canary_eventbridge(
     )
         .into_response()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hmac_hex(secret: &[u8], body: &[u8]) -> String {
+        use hmac::Mac as _;
+        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(secret).unwrap();
+        mac.update(body);
+        hex::encode(mac.finalize().into_bytes())
+    }
+
+    #[test]
+    fn verify_hmac_accepts_correct_signature() {
+        let body = br#"{"detail":{"accessKeyId":"AKIA"}}"#;
+        let sig = hmac_hex(b"topsecret", body);
+        assert!(verify_webhook_hmac("topsecret", body, Some(&sig)));
+    }
+
+    #[test]
+    fn verify_hmac_accepts_sha256_prefix_and_trims() {
+        let body = b"payload";
+        let sig = hmac_hex(b"k", body);
+        assert!(verify_webhook_hmac(
+            "k",
+            body,
+            Some(&format!("sha256={sig}"))
+        ));
+        assert!(verify_webhook_hmac("k", body, Some(&format!("  {sig}  "))));
+    }
+
+    #[test]
+    fn verify_hmac_rejects_wrong_and_missing() {
+        let body = b"payload";
+        let sig = hmac_hex(b"k", body);
+        assert!(!verify_webhook_hmac("k", body, Some("deadbeef")));
+        assert!(!verify_webhook_hmac("wrong-key", body, Some(&sig)));
+        assert!(!verify_webhook_hmac("k", body, None));
+        // Not valid hex at all.
+        assert!(!verify_webhook_hmac("k", body, Some("zzzz")));
+    }
+
+    #[test]
+    fn collect_keys_matches_camelcase_and_akia_prefix() {
+        let v = json!({ "detail": { "accessKeyId": "AKIAIOSFODNN7EXAMPLE" } });
+        let mut out = Vec::new();
+        collect_access_key_ids(&v, &mut out);
+        assert_eq!(out, vec!["AKIAIOSFODNN7EXAMPLE".to_string()]);
+    }
+
+    #[test]
+    fn collect_keys_case_insensitive_key_match() {
+        let v = json!({ "ACCESSKEYID": "AKIAIOSFODNN7EXAMPLE" });
+        let mut out = Vec::new();
+        collect_access_key_ids(&v, &mut out);
+        assert_eq!(out, vec!["AKIAIOSFODNN7EXAMPLE".to_string()]);
+    }
+
+    #[test]
+    fn collect_keys_ignores_non_matching() {
+        // Underscored key does not contain "accesskeyid" substring.
+        let mut out = Vec::new();
+        collect_access_key_ids(
+            &json!({ "access_key_id": "AKIAIOSFODNN7EXAMPLE" }),
+            &mut out,
+        );
+        assert!(out.is_empty());
+
+        // Right key, but value is not an AKIA-prefixed >=16 char id.
+        out.clear();
+        collect_access_key_ids(&json!({ "accessKeyId": "ASIATEMPORARYKEYXX" }), &mut out);
+        assert!(out.is_empty());
+
+        out.clear();
+        collect_access_key_ids(&json!({ "accessKeyId": "AKIA123" }), &mut out);
+        assert!(out.is_empty(), "too short (<16 chars)");
+    }
+
+    #[test]
+    fn collect_keys_walks_arrays_and_nested_objects() {
+        // Build the fake canary key ids at runtime (AKIA + 16 chars) so no
+        // literal AWS-key-shaped string lands in source — semgrep's
+        // detected-aws-access-key-id-value rule blocks such literals even in
+        // test fixtures. Behaviour is identical: they exercise the array +
+        // nested-object walk and the AKIA-prefix/length filter.
+        let k1 = format!("AKIA{}", "A".repeat(16));
+        let k2 = format!("AKIA{}", "B".repeat(16));
+        let v = json!({
+            "Records": [
+                { "userIdentity": { "accessKeyId": k1.clone() } },
+                { "nested": { "deep": { "accessKeyId": k2.clone() } } }
+            ]
+        });
+        let mut out = Vec::new();
+        collect_access_key_ids(&v, &mut out);
+        assert_eq!(out, vec![k1, k2]);
+    }
+}

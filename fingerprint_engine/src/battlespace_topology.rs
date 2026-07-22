@@ -242,3 +242,69 @@ pub fn techniques_json() -> Value {
         "techniques": attack_chain_planner::default_technique_library()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provenance_hash_matches_known_sha256_vectors() {
+        // Concatenation of the three empty strings hashes to the SHA-256 of the empty input.
+        assert_eq!(
+            node_provenance_hash("", "", ""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        // "a" || "b" || "c" == "abc", the canonical SHA-256 test vector.
+        assert_eq!(
+            node_provenance_hash("a", "b", "c"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn provenance_hash_is_deterministic_and_input_sensitive() {
+        let a = node_provenance_hash("gk", "host", "{\"k\":1}");
+        let b = node_provenance_hash("gk", "host", "{\"k\":1}");
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+        // Different content produces a different hash.
+        assert_ne!(a, node_provenance_hash("gk", "host", "{\"k\":2}"));
+        // Components are concatenated without a delimiter, so boundary shifts of
+        // the same joined string collide (hash is SHA-256 of the concatenation).
+        assert_eq!(
+            node_provenance_hash("ab", "c", "d"),
+            node_provenance_hash("a", "bc", "d")
+        );
+    }
+
+    #[test]
+    fn default_goal_is_impact_objective() {
+        assert_eq!(default_goal(), "impact:objective");
+    }
+
+    #[test]
+    fn techniques_json_wraps_library_in_array() {
+        let v = techniques_json();
+        assert!(v.get("techniques").is_some());
+        assert!(v["techniques"].is_array());
+    }
+
+    #[test]
+    fn shadow_preview_body_defaults() {
+        let body: ShadowPreviewBody = serde_json::from_str(r#"{"client_id": 7}"#).unwrap();
+        assert_eq!(body.client_id, 7);
+        assert!(body.technique_id.is_none());
+        // #[serde(default = "default_goal")] supplies the goal
+        assert_eq!(body.goal, "impact:objective");
+    }
+
+    #[test]
+    fn shadow_preview_body_full() {
+        let body: ShadowPreviewBody =
+            serde_json::from_str(r#"{"client_id": 3, "technique_id": "T1190", "goal": "lateral"}"#)
+                .unwrap();
+        assert_eq!(body.client_id, 3);
+        assert_eq!(body.technique_id.as_deref(), Some("T1190"));
+        assert_eq!(body.goal, "lateral");
+    }
+}

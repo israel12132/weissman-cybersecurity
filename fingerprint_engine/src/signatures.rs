@@ -170,3 +170,97 @@ pub fn response_matches_signature(body: &str, expected_signature: &str) -> bool 
     }
     body.contains(expected_signature)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rule(payload: &str, sig: &str) -> PayloadSignatureRule {
+        PayloadSignatureRule {
+            payload: payload.to_string(),
+            expected_signature: sig.to_string(),
+        }
+    }
+
+    #[test]
+    fn find_matching_rule_first_match_wins() {
+        let rules = vec![rule("etc/passwd", "s1"), rule("../", "s2")];
+        // Fuzzer payload contains both; first rule in list is returned.
+        let m = find_matching_rule("GET /../../etc/passwd", &rules).unwrap();
+        assert_eq!(m.payload, "etc/passwd");
+    }
+
+    #[test]
+    fn find_matching_rule_case_insensitive() {
+        let rules = vec![rule("etc/passwd", "s")];
+        let m = find_matching_rule("READ ETC/PASSWD NOW", &rules).unwrap();
+        assert_eq!(m.payload, "etc/passwd");
+    }
+
+    #[test]
+    fn find_matching_rule_is_forward_containment_only() {
+        // Matching is forward-only: a rule fires when the fuzzer payload CONTAINS the
+        // rule payload — not the reverse. A short input that is merely a substring of a
+        // longer rule payload (here "cd" inside "abcdef") does not match.
+        let rules = vec![rule("abcdef", "s")];
+        assert!(find_matching_rule("cd", &rules).is_none());
+    }
+
+    #[test]
+    fn find_matching_rule_skips_empty_payload() {
+        let rules = vec![rule("", "s0"), rule("../", "s1")];
+        let m = find_matching_rule("x/../y", &rules).unwrap();
+        assert_eq!(m.payload, "../");
+    }
+
+    #[test]
+    fn find_matching_rule_none() {
+        let rules = vec![rule("etc/passwd", "s")];
+        assert!(find_matching_rule("nothing relevant", &rules).is_none());
+        assert!(find_matching_rule("anything", &[]).is_none());
+    }
+
+    #[test]
+    fn response_matches_empty_signature_is_false() {
+        assert!(!response_matches_signature("any body", ""));
+    }
+
+    #[test]
+    fn response_matches_regex() {
+        assert!(response_matches_signature("root:x:0:0", "root:x:"));
+        // Alternation regex.
+        assert!(response_matches_signature("root:x:0", "root:x:|nope"));
+    }
+
+    #[test]
+    fn response_matches_literal_fallback_on_invalid_regex() {
+        // "[" is an invalid regex => falls back to substring containment.
+        assert!(response_matches_signature("a[b", "["));
+        assert!(!response_matches_signature("abc", "["));
+    }
+
+    #[test]
+    fn response_matches_no_match() {
+        assert!(!response_matches_signature("hello", "world"));
+    }
+
+    #[test]
+    fn default_rules_shape() {
+        let rules = default_rules();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[0].payload, "../");
+        assert_eq!(
+            rules[0].expected_signature,
+            "root:x:|root:\\*:0:0|root::0:0:"
+        );
+        assert_eq!(rules[1].payload, "etc/passwd");
+    }
+
+    #[test]
+    fn payload_rule_deserializes() {
+        let r: PayloadSignatureRule =
+            serde_json::from_str(r#"{"payload":"p","expected_signature":"s"}"#).unwrap();
+        assert_eq!(r.payload, "p");
+        assert_eq!(r.expected_signature, "s");
+    }
+}

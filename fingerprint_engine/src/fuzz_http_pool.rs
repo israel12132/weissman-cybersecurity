@@ -160,3 +160,47 @@ pub async fn batch_jitter_sleep() {
     let ms = rand::random::<u64>() % (high - low + 1) + low;
     tokio::time::sleep(Duration::from_millis(ms)).await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn random_user_agent_is_from_pool() {
+        for _ in 0..20 {
+            let ua = random_fuzz_user_agent();
+            assert!(!ua.is_empty());
+            assert!(USER_AGENTS.contains(&ua));
+        }
+    }
+
+    #[test]
+    fn client_for_probe_single_client_always_returns_it() {
+        let c = Arc::new(reqwest::Client::new());
+        let pool = FuzzHttpPool {
+            clients: vec![Arc::clone(&c)],
+            rotate_every: 5,
+            counter: AtomicUsize::new(0),
+        };
+        for _ in 0..4 {
+            assert!(Arc::ptr_eq(&pool.client_for_probe(), &c));
+        }
+    }
+
+    #[test]
+    fn client_for_probe_rotates_every_n_probes() {
+        let c0 = Arc::new(reqwest::Client::new());
+        let c1 = Arc::new(reqwest::Client::new());
+        let pool = FuzzHttpPool {
+            clients: vec![Arc::clone(&c0), Arc::clone(&c1)],
+            rotate_every: 2,
+            counter: AtomicUsize::new(0),
+        };
+        // idx = (n / rotate_every) % len : n=0,1 -> c0 ; n=2,3 -> c1 ; n=4 -> c0
+        assert!(Arc::ptr_eq(&pool.client_for_probe(), &c0));
+        assert!(Arc::ptr_eq(&pool.client_for_probe(), &c0));
+        assert!(Arc::ptr_eq(&pool.client_for_probe(), &c1));
+        assert!(Arc::ptr_eq(&pool.client_for_probe(), &c1));
+        assert!(Arc::ptr_eq(&pool.client_for_probe(), &c0));
+    }
+}

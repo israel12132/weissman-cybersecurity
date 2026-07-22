@@ -761,3 +761,194 @@ pub fn build_security_graph(
     let _ = target;
     (nodes, edges)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::password_spray_engine::LoginSurface;
+
+    fn strv(n: usize) -> Vec<String> {
+        (0..n).map(|i| format!("s{i}")).collect()
+    }
+
+    #[test]
+    fn category_scores_penalize_per_axis() {
+        let posture = SprayPosture {
+            no_rate_limit: strv(1),
+            no_lockout: strv(1),
+            short_lockout_decay: strv(1),
+            mfa_absent: strv(1),
+            captcha_absent: strv(1),
+            user_enum: strv(1),
+            timing_enum_surfaces: strv(1),
+            breach_oracles: strv(1),
+            verbose_errors: strv(1),
+            federated_exposed: strv(1),
+            saml_exposed: strv(1),
+            m365_federated: true,
+            ropc_enabled: strv(1),
+            device_code_enabled: strv(1),
+            browser_waf_gaps: strv(1),
+            xff_bypassable: strv(1),
+            cors_permissive: strv(1),
+            transport_gaps: strv(1),
+            cookie_gaps: strv(1),
+            ..Default::default()
+        };
+        let s = finalize_category_scores(&posture);
+        assert_eq!(s.rate_limiting, 78.0); // 100 - 1*22
+        assert_eq!(s.lockout_policy, 64.0); // 100 - 2*18
+        assert_eq!(s.mfa_captcha, 70.0); // 100 - 2*15
+        assert_eq!(s.enumeration_resistance, 52.0); // 100 - min(4,4)*12
+        assert_eq!(s.federation_hygiene, 58.0); // 100 - 3*14
+        assert_eq!(s.oidc_token_hygiene, 50.0); // 100 - 2*25
+        assert_eq!(s.automation_resistance, 52.0); // 100 - 3*16
+        assert_eq!(s.transport_session, 60.0); // 100 - 2*20
+
+        let j = s.to_json();
+        assert_eq!(j["rate_limiting"], 78);
+        assert_eq!(j["oidc_token_hygiene"], 50);
+        assert_eq!(j["transport_session"], 60);
+    }
+
+    #[test]
+    fn category_scores_default_posture_is_perfect() {
+        let s = finalize_category_scores(&SprayPosture::default());
+        assert_eq!(s.rate_limiting, 100.0);
+        assert_eq!(s.transport_session, 100.0);
+        assert_eq!(s.to_json()["mfa_captcha"], 100);
+    }
+
+    #[test]
+    fn category_scores_clamp_to_zero_and_cap_gap_count() {
+        // 4 device-code gaps: min(4)*25 == 100 -> clamps to 0.
+        let posture = SprayPosture {
+            device_code_enabled: strv(4),
+            // 10 enumeration gaps still capped at min(4): 100 - 48 == 52.
+            user_enum: strv(10),
+            ..Default::default()
+        };
+        let s = finalize_category_scores(&posture);
+        assert_eq!(s.oidc_token_hygiene, 0.0);
+        assert_eq!(s.enumeration_resistance, 52.0);
+    }
+
+    #[test]
+    fn extend_attack_paths_emits_nothing_without_combos() {
+        let mut findings = Vec::new();
+        extend_attack_paths("tgt", &SprayPosture::default(), "host", &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn extend_attack_paths_emits_timing_plus_spray_chain() {
+        let posture = SprayPosture {
+            timing_enum_surfaces: strv(1),
+            no_rate_limit: strv(1),
+            ..Default::default()
+        };
+        let mut findings = Vec::new();
+        extend_attack_paths("tgt", &posture, "host", &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "critical");
+        assert_eq!(findings[0]["category"], "attack_path");
+        assert_eq!(
+            findings[0]["title"],
+            "Attack path: timing enumeration → unthrottled spray"
+        );
+    }
+
+    #[test]
+    fn toxic_headline_inserts_only_when_combo_present() {
+        let mut findings = Vec::new();
+        emit_toxic_headline("tgt", &SprayPosture::default(), &mut findings);
+        assert!(findings.is_empty());
+
+        let posture = SprayPosture {
+            no_rate_limit: strv(1),
+            user_enum: strv(1),
+            mfa_absent: strv(1),
+            ..Default::default()
+        };
+        emit_toxic_headline("tgt", &posture, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "critical");
+        assert_eq!(findings[0]["category"], "toxic_combination");
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .starts_with("TOXIC COMBINATION:"));
+    }
+
+    #[test]
+    fn agent_guidance_emits_six_info_findings() {
+        let mut findings = Vec::new();
+        emit_agent_guidance("tgt", &mut findings);
+        assert_eq!(findings.len(), 6);
+        assert!(findings
+            .iter()
+            .all(|f| f["severity"] == "info" && f["category"] == "agent_guidance"));
+    }
+
+    #[test]
+    fn remediation_roadmap_always_emits_p2_baseline() {
+        let mut findings = Vec::new();
+        emit_remediation_roadmap("tgt", &SprayPosture::default(), &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["severity"], "info");
+        assert_eq!(findings[0]["category"], "remediation_roadmap");
+        // Only the two unconditional P2 steps for an empty posture.
+        let roadmap = findings[0]["evidence"]["roadmap"].as_array().unwrap();
+        assert_eq!(roadmap.len(), 2);
+        assert_eq!(roadmap[0]["priority"], 1);
+        assert_eq!(roadmap[1]["priority"], 2);
+        assert_eq!(roadmap[0]["tier"], "P2");
+    }
+
+    #[test]
+    fn remediation_roadmap_prepends_p0_when_ropc_present() {
+        let posture = SprayPosture {
+            ropc_enabled: strv(1),
+            ..Default::default()
+        };
+        let mut findings = Vec::new();
+        emit_remediation_roadmap("tgt", &posture, &mut findings);
+        let roadmap = findings[0]["evidence"]["roadmap"].as_array().unwrap();
+        // ROPC P0 step + two P2 baseline steps.
+        assert_eq!(roadmap.len(), 3);
+        assert_eq!(roadmap[0]["tier"], "P0");
+        assert_eq!(roadmap[0]["action"], "Disable OIDC ROPC grant");
+    }
+
+    #[test]
+    fn security_graph_default_posture_secure_root_login_node() {
+        let (nodes, edges) = build_security_graph("tgt", &SprayPosture::default(), "host.io");
+        // root + login_surfaces node only.
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(edges.len(), 1);
+        assert_eq!(nodes[0].id, "root");
+        assert_eq!(nodes[0].label, "host.io");
+        assert_eq!(nodes[0].status, "secure"); // score 100
+        assert_eq!(edges[0].from_id, "root");
+        assert_eq!(edges[0].to_id, "login_surfaces");
+    }
+
+    #[test]
+    fn security_graph_adds_exposure_nodes_and_chain_edge() {
+        let mut posture = SprayPosture {
+            no_rate_limit: strv(1),
+            user_enum: strv(1),
+            ..Default::default()
+        };
+        posture.login_surfaces.push(LoginSurface::default());
+        let (nodes, edges) = build_security_graph("tgt", &posture, "host.io");
+        // root, login_surfaces, no_ratelimit, user_enum.
+        assert_eq!(nodes.len(), 4);
+        // 3 root edges + 1 ENUM_TO_SPRAY chain edge.
+        assert_eq!(edges.len(), 4);
+        assert_eq!(nodes[0].status, "degraded"); // 100-22-12 == 66
+        assert!(edges.iter().any(|e| e.edge_type == "ENUM_TO_SPRAY"
+            && e.from_id == "user_enum"
+            && e.to_id == "no_ratelimit"));
+    }
+}

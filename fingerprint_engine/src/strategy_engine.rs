@@ -600,3 +600,124 @@ pub async fn run_self_defense_audit(
         "llm_assessment": recommendation,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_target_empty_and_whitespace() {
+        assert_eq!(normalize_target(""), "");
+        assert_eq!(normalize_target("   "), "");
+    }
+
+    #[test]
+    fn normalize_target_preserves_scheme() {
+        assert_eq!(normalize_target("http://example.com"), "http://example.com");
+        assert_eq!(
+            normalize_target("https://example.com"),
+            "https://example.com"
+        );
+    }
+
+    #[test]
+    fn normalize_target_adds_https_and_strips_leading_slashes() {
+        assert_eq!(normalize_target("example.com"), "https://example.com");
+        assert_eq!(normalize_target("  example.com  "), "https://example.com");
+        assert_eq!(normalize_target("/example.com"), "https://example.com");
+        assert_eq!(normalize_target("//example.com"), "https://example.com");
+    }
+
+    #[test]
+    fn host_from_target_strips_scheme_and_path() {
+        assert_eq!(host_from_target("https://example.com/admin"), "example.com");
+        assert_eq!(host_from_target("http://example.com"), "example.com");
+        assert_eq!(host_from_target("example.com/foo/bar"), "example.com");
+        assert_eq!(host_from_target("  https://example.com/x  "), "example.com");
+    }
+
+    #[test]
+    fn extract_json_object_finds_outer_braces() {
+        assert_eq!(
+            extract_json_object("prefix {\"a\":1} suffix"),
+            Some("{\"a\":1}")
+        );
+        assert_eq!(
+            extract_json_object("  {\"x\":true}  "),
+            Some("{\"x\":true}")
+        );
+        assert_eq!(extract_json_object("{}"), Some("{}"));
+    }
+
+    #[test]
+    fn extract_json_object_none_cases() {
+        assert_eq!(extract_json_object("no braces here"), None);
+        // closing brace before opening brace -> None
+        assert_eq!(extract_json_object("}{"), None);
+    }
+
+    #[test]
+    fn default_mission_plan_shape() {
+        let p = default_mission_plan("https://t.example");
+        assert_eq!(
+            p.phases,
+            vec!["asm".to_string(), "semantic_fuzz".to_string()]
+        );
+        assert_eq!(p.primary_target, "https://t.example");
+        assert!(!p.run_osint);
+    }
+
+    #[test]
+    fn llm_mission_plan_defaults_from_empty_object() {
+        let p: LlmMissionPlan = serde_json::from_str("{}").unwrap();
+        assert!(p.phases.is_empty());
+        assert_eq!(p.primary_target, "");
+        assert!(!p.run_osint);
+    }
+
+    #[test]
+    fn llm_mission_plan_full_deserialize() {
+        let p: LlmMissionPlan = serde_json::from_str(
+            r#"{"phases":["asm","semantic_fuzz"],"primary_target":"https://x","run_osint":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            p.phases,
+            vec!["asm".to_string(), "semantic_fuzz".to_string()]
+        );
+        assert_eq!(p.primary_target, "https://x");
+        assert!(p.run_osint);
+    }
+
+    #[test]
+    fn llm_refine_fuzz_defaults_from_empty_object() {
+        let r: LlmRefineFuzz = serde_json::from_str("{}").unwrap();
+        assert!(r.priority_paths.is_empty());
+        assert_eq!(r.tech_summary, "");
+        assert_eq!(r.fuzzer_focus, "");
+    }
+
+    #[test]
+    fn paths_from_asm_fingerprint_findings_filters_sorts_dedups() {
+        let findings = vec![
+            serde_json::json!({"asset":"fingerprint","value":"https://x.com/beta"}),
+            serde_json::json!({"asset":"fingerprint","value":"https://x.com/alpha"}),
+            serde_json::json!({"asset":"fingerprint","value":"https://x.com/alpha"}),
+            // wrong asset -> ignored
+            serde_json::json!({"asset":"subdomain","value":"https://x.com/gamma"}),
+            // root path -> skipped
+            serde_json::json!({"asset":"fingerprint","value":"https://x.com/"}),
+            // unparseable url -> skipped
+            serde_json::json!({"asset":"fingerprint","value":"not a url"}),
+            // missing value -> skipped
+            serde_json::json!({"asset":"fingerprint"}),
+        ];
+        let paths = paths_from_asm_fingerprint_findings(&findings);
+        assert_eq!(paths, vec!["/alpha".to_string(), "/beta".to_string()]);
+    }
+
+    #[test]
+    fn paths_from_asm_fingerprint_findings_empty() {
+        assert!(paths_from_asm_fingerprint_findings(&[]).is_empty());
+    }
+}

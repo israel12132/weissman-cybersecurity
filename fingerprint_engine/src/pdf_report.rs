@@ -1486,3 +1486,291 @@ mod watermark_tests {
         assert!(ops.contains("(VOID) Tj"));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(id: i64, title: &str, sev: &str, src: &str, desc: &str, poc: &str) -> FindingRow {
+        (
+            id,
+            title.to_string(),
+            sev.to_string(),
+            src.to_string(),
+            desc.to_string(),
+            poc.to_string(),
+        )
+    }
+
+    #[test]
+    fn pdf_escape_handles_specials() {
+        assert_eq!(pdf_escape("(hello)"), r"\(hello\)");
+        // Backslash is escaped first, then parens.
+        assert_eq!(pdf_escape("a\\b"), r"a\\b");
+        assert_eq!(pdf_escape("plain"), "plain");
+        assert_eq!(pdf_escape(""), "");
+    }
+
+    #[test]
+    fn truncate_ascii_trims_and_caps() {
+        // Trimmed, under limit -> unchanged.
+        assert_eq!(truncate_ascii("  hello  ", 10), "hello");
+        // Exactly at limit -> unchanged.
+        assert_eq!(truncate_ascii("hello", 5), "hello");
+        // Over limit -> takes max chars plus ellipsis.
+        assert_eq!(truncate_ascii("hello", 3), "hel…");
+        // Char (not byte) based truncation.
+        assert_eq!(truncate_ascii("héllo", 2), "hé…");
+    }
+
+    #[test]
+    fn remediation_from_desc_paths() {
+        assert_eq!(remediation_from_desc(""), "—");
+        assert_eq!(remediation_from_desc("   "), "—");
+        assert_eq!(remediation_from_desc("not json at all"), "—");
+        assert_eq!(remediation_from_desc(r#"{"other":"x"}"#), "—");
+        assert_eq!(
+            remediation_from_desc(r#"{"remediation_snippet":"patch now"}"#),
+            "patch now"
+        );
+        assert_eq!(remediation_from_desc(r#"{"remediation":"do X"}"#), "do X");
+        // Empty snippet falls through to remediation.
+        assert_eq!(
+            remediation_from_desc(r#"{"remediation_snippet":"","remediation":"fallback"}"#),
+            "fallback"
+        );
+    }
+
+    #[test]
+    fn derive_remediation_priority_base_and_bonuses() {
+        assert_eq!(
+            derive_remediation_priority_from_signals("low", false, None, 0.0, false),
+            36
+        );
+        assert_eq!(
+            derive_remediation_priority_from_signals("critical", false, None, 0.0, false),
+            82
+        );
+        assert_eq!(
+            derive_remediation_priority_from_signals("high", true, None, 0.0, false),
+            74
+        );
+        // medium base 48 + poc 5 + entropy>=7.5 6 = 59
+        assert_eq!(
+            derive_remediation_priority_from_signals("medium", false, Some(7.5), 0.0, true),
+            59
+        );
+        // entropy 6.0 -> +3
+        assert_eq!(
+            derive_remediation_priority_from_signals("low", false, Some(6.0), 0.0, false),
+            39
+        );
+        // entropy 5.9 -> no bonus
+        assert_eq!(
+            derive_remediation_priority_from_signals("low", false, Some(5.9), 0.0, false),
+            36
+        );
+        // stack_corr 0.5 -> +round(9.0)=9
+        assert_eq!(
+            derive_remediation_priority_from_signals("low", false, None, 0.5, false),
+            45
+        );
+        // Clamps to 100.
+        assert_eq!(
+            derive_remediation_priority_from_signals("critical", true, Some(8.0), 1.0, true),
+            100
+        );
+    }
+
+    #[test]
+    fn priority_score_for_row_explicit_and_derived() {
+        // Explicit score honoured and clamped.
+        assert_eq!(
+            remediation_priority_score_for_row(r#"{"remediation_priority_score": 55}"#, "low", ""),
+            55
+        );
+        assert_eq!(
+            remediation_priority_score_for_row(r#"{"remediation_priority_score": 250}"#, "low", ""),
+            100
+        );
+        assert_eq!(
+            remediation_priority_score_for_row(r#"{"remediation_priority_score": -5}"#, "low", ""),
+            0
+        );
+        // Non-JSON -> derive from severity param, no poc.
+        assert_eq!(
+            remediation_priority_score_for_row("not json", "high", ""),
+            64
+        );
+        // Non-JSON with poc adds +5.
+        assert_eq!(
+            remediation_priority_score_for_row("not json", "low", "curl x"),
+            41
+        );
+        // JSON severity overrides the param severity.
+        assert_eq!(
+            remediation_priority_score_for_row(r#"{"severity":"critical"}"#, "low", ""),
+            82
+        );
+        // JSON signals: medium base 48 + entropy 6.0 (+3) = 51.
+        assert_eq!(
+            remediation_priority_score_for_row(
+                r#"{"verified":false,"entropy_score":6.0,"stack_correlation_score":0.0,"severity":"medium"}"#,
+                "low",
+                ""
+            ),
+            51
+        );
+    }
+
+    #[test]
+    fn should_include_in_detailed_findings_filter() {
+        // high + poc, no remediation -> included
+        assert!(should_include_in_detailed_findings(&row(
+            1,
+            "t",
+            "high",
+            "src",
+            "",
+            "curl http://x"
+        )));
+        // low, no poc, no remediation -> excluded
+        assert!(!should_include_in_detailed_findings(&row(
+            2, "t", "low", "src", "", ""
+        )));
+        // critical, no poc, with remediation -> included
+        assert!(should_include_in_detailed_findings(&row(
+            3,
+            "t",
+            "critical",
+            "src",
+            r#"{"remediation":"fix"}"#,
+            ""
+        )));
+        // critical, no poc, no remediation -> excluded (no meaningful content)
+        assert!(!should_include_in_detailed_findings(&row(
+            4, "t", "critical", "src", "", ""
+        )));
+        // low with poc, no remediation -> included (poc satisfies both clauses)
+        assert!(should_include_in_detailed_findings(&row(
+            5, "t", "low", "src", "", "curl y"
+        )));
+    }
+
+    #[test]
+    fn discovery_noise_count_counts_only_excluded_asm_osint() {
+        let findings = vec![
+            row(1, "t", "low", "asm", "", ""),      // excluded + asm -> count
+            row(2, "t", "low", "osint", "", ""),    // excluded + osint -> count
+            row(3, "t", "high", "asm", "", "curl"), // included -> not counted
+            row(4, "t", "low", "web", "", ""),      // excluded but source not asm/osint
+            row(5, "t", "low", "ASM", "", ""),      // case-insensitive source match
+        ];
+        assert_eq!(discovery_noise_count(&findings), 3);
+    }
+
+    #[test]
+    fn html_escape_escapes_all_entities() {
+        assert_eq!(escape("<b>&\""), "&lt;b&gt;&amp;&quot;");
+        // Ampersand escaped first, so pre-existing entities double-escape.
+        assert_eq!(escape("&lt;"), "&amp;lt;");
+        assert_eq!(escape("safe"), "safe");
+    }
+
+    #[test]
+    fn pdf_builder_new_state_and_text() {
+        let mut b = PdfBuilder::new();
+        assert_eq!(b.y, PAGE_H - MARGIN);
+        assert!(b.page_streams.is_empty());
+        assert!(b.current.is_empty());
+
+        b.text(12, "Hi");
+        assert!(b.current.contains("/F1 12 Tf"));
+        assert!(b.current.contains("(Hi)"));
+        assert_eq!(b.y, PAGE_H - MARGIN - 16.0);
+
+        // Parentheses escaped in emitted operator.
+        b.text(10, "x(y)");
+        assert!(b.current.contains(r"x\(y\)"));
+    }
+
+    #[test]
+    fn pdf_builder_new_page_pushes_only_nonempty() {
+        let mut b = PdfBuilder::new();
+        // Empty current: new_page pushes nothing.
+        b.new_page();
+        assert!(b.page_streams.is_empty());
+        assert_eq!(b.y, PAGE_H - MARGIN);
+
+        b.text(12, "content");
+        b.new_page();
+        assert_eq!(b.page_streams.len(), 1);
+        assert!(b.current.is_empty());
+        assert_eq!(b.y, PAGE_H - MARGIN);
+    }
+
+    #[test]
+    fn pdf_builder_ensure_space_triggers_break() {
+        let mut b = PdfBuilder::new();
+        b.text(12, "content");
+        // y is 742-16=726; need 700 => 26 < PAGE_BREAK_Y(90) => new page.
+        b.ensure_space(700.0);
+        assert_eq!(b.page_streams.len(), 1);
+        assert_eq!(b.y, PAGE_H - MARGIN);
+
+        // Small need does not break.
+        b.text(12, "more");
+        b.ensure_space(10.0);
+        assert_eq!(b.page_streams.len(), 1);
+    }
+
+    #[test]
+    fn pdf_builder_finish_collects_pending() {
+        let mut b = PdfBuilder::new();
+        b.text(12, "a");
+        b.new_page();
+        b.text(12, "b");
+        let streams = b.finish();
+        assert_eq!(streams.len(), 2);
+        assert!(streams[0].contains("(a)"));
+        assert!(streams[1].contains("(b)"));
+    }
+
+    #[test]
+    fn html_report_empty_findings() {
+        let html = build_client_report_html("Acme", &[], None);
+        assert!(html.contains("WEISSMAN CYBERSECURITY"));
+        // No findings -> perfect score 100.
+        assert!(html.contains("100/100"));
+        assert!(html.contains("No findings. Data is live from the database."));
+        // No crypto proof section.
+        assert!(!html.contains("Cryptographic Proof of Integrity"));
+        assert!(html.contains("Digital Integrity Stamp:"));
+    }
+
+    #[test]
+    fn html_report_scores_and_escapes() {
+        let findings = vec![row(7, "<script>", "critical", "engine", "", "")];
+        let html = build_client_report_html("Acme", &findings, None);
+        // 100 - 25 (one critical) = 75.
+        assert!(html.contains("75/100"));
+        // Title is HTML-escaped.
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(html.contains("VLN-7"));
+        // Heatmap reflects a single critical.
+        assert!(html.contains("Risk Heatmap"));
+    }
+
+    #[test]
+    fn html_report_includes_crypto_section() {
+        let cp: CryptoProof = (
+            "deadbeef".to_string(),
+            "data:image/png;base64,AAA".to_string(),
+            "http://verify.example".to_string(),
+        );
+        let html = build_client_report_html("Acme", &[], Some(&cp));
+        assert!(html.contains("Cryptographic Proof of Integrity"));
+        assert!(html.contains("deadbeef"));
+        assert!(html.contains("http://verify.example"));
+    }
+}

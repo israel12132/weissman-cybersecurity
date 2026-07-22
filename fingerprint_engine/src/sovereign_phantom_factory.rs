@@ -200,3 +200,56 @@ pub async fn build_phantom_bundle(
         llm_class_raw: raw,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trap_kind_serializes_snake_case() {
+        assert_eq!(
+            serde_json::to_value(PhantomTrapKind::AdminSshKey).unwrap(),
+            serde_json::json!("admin_ssh_key")
+        );
+        assert_eq!(
+            serde_json::to_value(PhantomTrapKind::LeakedApiConfig).unwrap(),
+            serde_json::json!("leaked_api_config")
+        );
+    }
+
+    #[test]
+    fn trap_oast_url_has_canonical_shape() {
+        let id = Uuid::nil();
+        let url = sovereign_trap_oast_url(&id);
+        assert!(url.starts_with("http://trap-"));
+        assert!(url.contains(&id.as_hyphenated().to_string()));
+        // The /i path variant just appends the OAST listener path.
+        assert_eq!(sovereign_trap_oast_url_with_path(&id), format!("{url}/i"));
+    }
+
+    #[test]
+    fn planted_body_ssh_variant_embeds_key_and_oast() {
+        let body = planted_body(
+            PhantomTrapKind::AdminSshKey,
+            "ssh-ed25519 AAAAPUB",
+            "jwt.token.here",
+            "http://trap-x.example/i",
+        );
+        assert!(body.contains("ssh-ed25519 AAAAPUB weissman-phantom-admin"));
+        assert!(body.contains("# oast http://trap-x.example/i"));
+    }
+
+    #[test]
+    fn planted_body_config_variant_is_valid_json_with_jwt() {
+        let body = planted_body(
+            PhantomTrapKind::LeakedApiConfig,
+            "unused-pub",
+            "jwt.token.here",
+            "http://trap-y.example/i",
+        );
+        let v: serde_json::Value = serde_json::from_str(body.trim()).unwrap();
+        assert_eq!(v["service_jwt"], "jwt.token.here");
+        assert_eq!(v["health_probe"], "http://trap-y.example/i");
+        assert_eq!(v["internal_api_base"], "https://api.internal.invalid");
+    }
+}

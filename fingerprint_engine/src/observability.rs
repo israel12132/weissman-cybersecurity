@@ -555,3 +555,86 @@ pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compact_metrics_path_collapses_client_ids() {
+        assert_eq!(compact_metrics_path("/api/clients/12345"), "/api/clients/*");
+        assert_eq!(compact_metrics_path("/api/clients/"), "/api/clients/*");
+    }
+
+    #[test]
+    fn compact_metrics_path_collapses_known_prefixes() {
+        assert_eq!(
+            compact_metrics_path("/api/verify-audit/abc"),
+            "/api/verify-audit/*"
+        );
+        assert_eq!(
+            compact_metrics_path("/api/poe-scan/status/9"),
+            "/api/poe-scan/*"
+        );
+        assert_eq!(
+            compact_metrics_path("/api/poe-scan/stream/9"),
+            "/api/poe-scan/*"
+        );
+        assert_eq!(
+            compact_metrics_path("/api/heal-verify/x"),
+            "/api/heal-verify/*"
+        );
+        assert_eq!(compact_metrics_path("/ws/tenant/1"), "/ws/*");
+        assert_eq!(
+            compact_metrics_path("/command-center/dash"),
+            "/command-center/*"
+        );
+    }
+
+    #[test]
+    fn compact_metrics_path_passes_through_other_api_paths_verbatim() {
+        // starts with /api/ but matches no specific bucket -> returned unchanged
+        assert_eq!(compact_metrics_path("/api/health"), "/api/health");
+        // /api/poe-scan without status|stream falls through to the generic /api/ branch
+        assert_eq!(
+            compact_metrics_path("/api/poe-scan/other"),
+            "/api/poe-scan/other"
+        );
+    }
+
+    #[test]
+    fn compact_metrics_path_non_api_maps_to_other() {
+        assert_eq!(compact_metrics_path("/health"), "/other");
+        assert_eq!(compact_metrics_path("/"), "/other");
+        assert_eq!(compact_metrics_path("/metrics"), "/other");
+    }
+
+    #[test]
+    fn haversine_identical_points_is_zero() {
+        assert_eq!(haversine_km((0.0, 0.0), (0.0, 0.0)), 0.0);
+        assert_eq!(haversine_km((51.5, -0.12), (51.5, -0.12)), 0.0);
+    }
+
+    #[test]
+    fn haversine_is_symmetric() {
+        let a = (40.0, -74.0);
+        let b = (34.0, -118.0);
+        let d1 = haversine_km(a, b);
+        let d2 = haversine_km(b, a);
+        assert!((d1 - d2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn haversine_one_degree_at_equator_is_about_111km() {
+        // one degree of longitude at the equator is ~111.19 km
+        let d = haversine_km((0.0, 0.0), (0.0, 1.0));
+        assert!((d - 111.19).abs() < 0.5, "got {d}");
+    }
+
+    #[test]
+    fn haversine_quarter_circumference() {
+        // equator to the pole-meridian 90 deg apart is a quarter of Earth's circumference
+        let d = haversine_km((0.0, 0.0), (0.0, 90.0));
+        assert!((d - 10007.5).abs() < 5.0, "got {d}");
+    }
+}

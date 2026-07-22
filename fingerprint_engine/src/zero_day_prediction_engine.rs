@@ -321,3 +321,56 @@ pub async fn run_zero_day_prediction_result(target: &str) -> EngineResult {
 pub async fn run_zero_day_prediction(target: &str) {
     print_result(run_zero_day_prediction_result(target).await);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_target_preserves_scheme() {
+        assert_eq!(normalize_target("http://x"), "http://x");
+        assert_eq!(normalize_target("https://x"), "https://x");
+    }
+
+    #[test]
+    fn normalize_target_adds_https() {
+        assert_eq!(normalize_target("example.com"), "https://example.com");
+        assert_eq!(normalize_target("  example.com  "), "https://example.com");
+    }
+
+    #[test]
+    fn high_risk_components_lookup_matches_code_path() {
+        let mut struts = None;
+        let mut openssl = None;
+        for &(name, cve_count, risk, _pattern) in HIGH_RISK_COMPONENTS {
+            if name == "struts" {
+                struts = Some((cve_count, risk));
+            }
+            if name == "openssl" {
+                openssl = Some((cve_count, risk));
+            }
+        }
+        assert_eq!(struts, Some((52, "critical")));
+        assert_eq!(openssl, Some((85, "critical")));
+    }
+
+    #[test]
+    fn high_risk_components_data_integrity() {
+        // Count during iteration so the "table is populated" assertion is a
+        // runtime check on a local — `!CONST.is_empty()` is denied by clippy's
+        // const_is_empty lint (the emptiness is known at compile time).
+        let mut seen = 0usize;
+        for (name, cve_count, risk, pattern) in HIGH_RISK_COMPONENTS {
+            seen += 1;
+            assert!(!name.is_empty());
+            assert!(*cve_count > 0);
+            assert!(!pattern.is_empty());
+            assert!(
+                matches!(*risk, "critical" | "high" | "medium"),
+                "unexpected risk level: {}",
+                risk
+            );
+        }
+        assert!(seen > 0, "HIGH_RISK_COMPONENTS must be populated");
+    }
+}

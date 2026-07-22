@@ -341,3 +341,168 @@ pub fn scan_many_files(files: &[(String, String)]) -> Vec<CicdFinding> {
 pub fn has_critical(findings: &[CicdFinding]) -> bool {
     findings.iter().any(|f| f.severity == "critical")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_for_value_locates_line_number() {
+        assert_eq!(line_for_value_in_source("", "x"), 1); // empty source
+        assert_eq!(line_for_value_in_source("l1\nl2\nl3", ""), 1); // empty value
+        assert_eq!(line_for_value_in_source("l1\nl2\nTARGET\n", "TARGET"), 3);
+        assert_eq!(line_for_value_in_source("TARGET on line one", "TARGET"), 1);
+        assert_eq!(line_for_value_in_source("l1\nl2", "missing"), 1); // not found
+    }
+
+    #[test]
+    fn scan_regex_detects_aws_access_key() {
+        let f = scan_regex_only("cfg.txt", "let key = \"AKIAIOSFODNN7EXAMPLE\";");
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "aws_access_key_id");
+        assert_eq!(f[0].severity, "critical");
+        assert_eq!(f[0].line, 1);
+    }
+
+    #[test]
+    fn scan_regex_detects_pem_private_key() {
+        let f = scan_regex_only("id_rsa", "-----BEGIN RSA PRIVATE KEY-----");
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "private_key_material");
+        assert_eq!(f[0].severity, "critical");
+    }
+
+    #[test]
+    fn scan_regex_detects_github_token() {
+        let content = format!("token = \"ghp_{}\"", "a".repeat(36));
+        let f = scan_regex_only("app.env", &content);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "github_token");
+        assert_eq!(f[0].severity, "critical");
+    }
+
+    #[test]
+    fn scan_regex_slack_token_is_high_severity() {
+        let f = scan_regex_only("bot.env", "xoxb-1234567890-abcdefghij");
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "slack_token");
+        assert_eq!(f[0].severity, "high");
+    }
+
+    #[test]
+    fn scan_regex_reports_correct_line() {
+        let content = "line1\nline2\nlet key = \"AKIAIOSFODNN7EXAMPLE\";";
+        let f = scan_regex_only("f.txt", content);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].line, 3);
+    }
+
+    #[test]
+    fn scan_regex_clean_content_has_no_findings() {
+        let f = scan_regex_only("clean.txt", "let x = 1;\nprintln!(\"hi\");");
+        assert!(f.is_empty());
+    }
+
+    #[test]
+    fn scan_regex_first_matching_rule_wins_per_line() {
+        // else-if chain: only one finding per line even with two secrets present
+        let f = scan_regex_only(
+            "mixed.txt",
+            "-----BEGIN RSA PRIVATE KEY----- AKIAIOSFODNN7EXAMPLE",
+        );
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "private_key_material");
+    }
+
+    #[test]
+    fn scan_file_large_file_is_skipped() {
+        let big = "a".repeat(2_000_001);
+        let f = scan_file("big.txt", &big);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule, "file_too_large");
+        assert_eq!(f[0].severity, "high");
+        assert_eq!(f[0].line, 0);
+    }
+
+    #[test]
+    fn scan_file_rust_runs_both_regex_and_ast_passes() {
+        let content = "fn f() { let s = \"AKIAIOSFODNN7EXAMPLE\"; }";
+        // A .rs file is scanned by BOTH the regex pass and the syn AST walk; every
+        // finding flags the same AWS-key rule and is critical.
+        let rs = scan_file("secret.rs", content);
+        assert!(!rs.is_empty());
+        assert!(rs.iter().all(|f| f.rule == "aws_access_key_id"));
+        assert!(has_critical(&rs));
+        // A non-Rust file uses the regex pass only -> exactly one finding.
+        let txt = scan_file("secret.txt", content);
+        assert_eq!(txt.len(), 1);
+        assert_eq!(txt[0].rule, "aws_access_key_id");
+        // The AST pass adds coverage on .rs files beyond the regex-only pass.
+        assert!(rs.len() >= txt.len());
+    }
+
+    #[test]
+    fn scan_file_sorts_findings_by_line() {
+        let content =
+            "clean\n-----BEGIN RSA PRIVATE KEY-----\nmore\nlet k=\"AKIAIOSFODNN7EXAMPLE\";";
+        let f = scan_file("multi.txt", content);
+        assert_eq!(f.len(), 2);
+        assert!(f[0].line <= f[1].line);
+        assert_eq!(f[0].line, 2);
+        assert_eq!(f[1].line, 4);
+    }
+
+    #[test]
+    fn scan_many_files_aggregates() {
+        let files = vec![
+            (
+                "a.txt".to_string(),
+                "-----BEGIN RSA PRIVATE KEY-----".to_string(),
+            ),
+            ("b.txt".to_string(), "nothing here".to_string()),
+            (
+                "c.txt".to_string(),
+                "xoxb-1234567890-abcdefghij".to_string(),
+            ),
+        ];
+        let f = scan_many_files(&files);
+        assert_eq!(f.len(), 2);
+    }
+
+    #[test]
+    fn has_critical_detects_severity() {
+        assert!(!has_critical(&[]));
+        let high = CicdFinding {
+            path: "p".into(),
+            line: 1,
+            rule: "slack_token".into(),
+            severity: "high".into(),
+            snippet: "".into(),
+        };
+        assert!(!has_critical(std::slice::from_ref(&high)));
+        let crit = CicdFinding {
+            path: "p".into(),
+            line: 1,
+            rule: "aws_access_key_id".into(),
+            severity: "critical".into(),
+            snippet: "".into(),
+        };
+        assert!(has_critical(&[high, crit]));
+    }
+
+    #[test]
+    fn cicd_finding_serializes_to_json() {
+        let finding = CicdFinding {
+            path: "src/main.rs".into(),
+            line: 42,
+            rule: "aws_access_key_id".into(),
+            severity: "critical".into(),
+            snippet: "AKIA...".into(),
+        };
+        let v = serde_json::to_value(&finding).unwrap();
+        assert_eq!(v["path"], "src/main.rs");
+        assert_eq!(v["line"], 42);
+        assert_eq!(v["rule"], "aws_access_key_id");
+        assert_eq!(v["severity"], "critical");
+    }
+}

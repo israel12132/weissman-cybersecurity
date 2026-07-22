@@ -211,6 +211,97 @@ fn html_escape_attr(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    #[test]
+    fn decode_saml_xml_plain_base64() {
+        let xml = "<Response>hello</Response>";
+        let b64 = STANDARD.encode(xml.as_bytes());
+        assert_eq!(decode_saml_xml(&b64).unwrap(), xml);
+    }
+
+    #[test]
+    fn decode_saml_xml_trims_whitespace() {
+        let xml = "<Root/>";
+        let b64 = STANDARD.encode(xml.as_bytes());
+        let padded = format!("  {}\n", b64);
+        assert_eq!(decode_saml_xml(&padded).unwrap(), xml);
+    }
+
+    #[test]
+    fn decode_saml_xml_rejects_invalid_base64() {
+        assert!(decode_saml_xml("!!!not-base64!!!").is_err());
+    }
+
+    #[test]
+    fn extract_email_from_nameid() {
+        let xml = r#"<saml:NameID Format="urn:emailAddress">user@example.com</saml:NameID>"#;
+        assert_eq!(
+            extract_email_from_saml_xml(xml),
+            Some("user@example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_email_from_unprefixed_nameid() {
+        let xml = "<NameID>bob@corp.io</NameID>";
+        assert_eq!(
+            extract_email_from_saml_xml(xml),
+            Some("bob@corp.io".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_email_from_attribute_when_no_nameid() {
+        let xml = r#"<Attribute Name="Email">joe@dept.com</Attribute>"#;
+        assert_eq!(
+            extract_email_from_saml_xml(xml),
+            Some("joe@dept.com".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_email_none_when_absent() {
+        assert_eq!(
+            extract_email_from_saml_xml("<Response>no email</Response>"),
+            None
+        );
+        // NameID without an '@' is not an email.
+        assert_eq!(
+            extract_email_from_saml_xml("<NameID>notanemail</NameID>"),
+            None
+        );
+    }
+
+    #[test]
+    fn html_escape_attr_escapes_all_specials() {
+        assert_eq!(html_escape_attr(r#"a&b"c<d>e"#), "a&amp;b&quot;c&lt;d&gt;e");
+        // Ampersand is escaped first so no double-encoding occurs.
+        assert_eq!(html_escape_attr("&lt;"), "&amp;lt;");
+        assert_eq!(html_escape_attr("plain"), "plain");
+    }
+
+    #[test]
+    fn saml_relay_serde_round_trip() {
+        let relay = SamlRelay {
+            idp_id: 7,
+            tenant_id: 42,
+            exp: 1234567890,
+        };
+        let v = serde_json::to_value(&relay).unwrap();
+        assert_eq!(v["idp_id"], 7);
+        assert_eq!(v["tenant_id"], 42);
+        assert_eq!(v["exp"], 1234567890);
+        let back: SamlRelay = serde_json::from_value(v).unwrap();
+        assert_eq!(back.idp_id, 7);
+        assert_eq!(back.tenant_id, 42);
+        assert_eq!(back.exp, 1234567890);
+    }
+}
+
 /// POST /api/auth/saml/acs
 pub async fn saml_acs(
     State(state): State<Arc<AppState>>,

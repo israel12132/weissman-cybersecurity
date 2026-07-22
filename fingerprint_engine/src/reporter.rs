@@ -654,3 +654,153 @@ pub async fn generate_bug_report_blocking(
     notify_webhook(&name).await;
     Some(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_code_fence_variants() {
+        // No fence -> trimmed passthrough.
+        assert_eq!(strip_code_fence("plain text"), "plain text");
+        assert_eq!(strip_code_fence("  spaced  "), "spaced");
+        // Fence with a language tag on the first line.
+        assert_eq!(
+            strip_code_fence("```json\n{\"k\":\"v\"}\n```"),
+            "{\"k\":\"v\"}"
+        );
+        // Fence with JSON directly on the opening line.
+        assert_eq!(strip_code_fence("```{\"a\":1}\n```"), "{\"a\":1}");
+        // Fence with no closing marker.
+        assert_eq!(strip_code_fence("```\nno close"), "no close");
+    }
+
+    #[test]
+    fn parse_triage_json_valid_and_invalid() {
+        let ok = parse_triage_json(
+            r#"{"severity":"High","dynamic_impact":"impact","remediation":"fix"}"#,
+        )
+        .expect("valid triage");
+        assert_eq!(ok.severity, "High");
+        assert_eq!(ok.dynamic_impact, "impact");
+        assert_eq!(ok.remediation, "fix");
+
+        // Wrapped in a code fence and with whitespace to trim.
+        let fenced = parse_triage_json(
+            "```json\n{\"severity\":\" Low \",\"dynamic_impact\":\"i\",\"remediation\":\"r\"}\n```",
+        )
+        .expect("valid fenced triage");
+        assert_eq!(fenced.severity, "Low");
+
+        // An empty required field -> None.
+        assert!(
+            parse_triage_json(r#"{"severity":"","dynamic_impact":"i","remediation":"r"}"#)
+                .is_none()
+        );
+        // Missing field -> None.
+        assert!(parse_triage_json(r#"{"severity":"High"}"#).is_none());
+        // Not JSON -> None.
+        assert!(parse_triage_json("just prose").is_none());
+    }
+
+    #[test]
+    fn severity_badge_line_known_and_unknown() {
+        assert_eq!(
+            severity_badge_line("Critical"),
+            "🔴 **CRITICAL** *(automated LLM triage)*"
+        );
+        assert_eq!(
+            severity_badge_line("  high "),
+            "🟠 **HIGH** *(automated LLM triage)*"
+        );
+        assert_eq!(
+            severity_badge_line("medium"),
+            "🟡 **MEDIUM** *(automated LLM triage)*"
+        );
+        assert_eq!(
+            severity_badge_line("low"),
+            "🟢 **LOW** *(automated LLM triage)*"
+        );
+        assert_eq!(
+            severity_badge_line("bogus"),
+            "⚪ **BOGUS** *(automated LLM triage)*"
+        );
+    }
+
+    #[test]
+    fn truncate_for_llm_boundaries() {
+        assert_eq!(truncate_for_llm("hello", 10), "hello");
+        assert_eq!(truncate_for_llm("abc", 3), "abc");
+        assert_eq!(truncate_for_llm("hello", 2), "he… [truncated 3 chars]");
+    }
+
+    #[test]
+    fn report_pdf_filename_swaps_or_appends() {
+        assert_eq!(report_pdf_filename("anomaly_123.md"), "anomaly_123.pdf");
+        assert_eq!(report_pdf_filename("report"), "report.pdf");
+        assert_eq!(report_pdf_filename("a.txt"), "a.txt.pdf");
+    }
+
+    #[test]
+    fn pdf_escape_reporter_specials() {
+        assert_eq!(pdf_escape("a(b)"), r"a\(b\)");
+        assert_eq!(pdf_escape("line1\nline2"), r"line1\nline2");
+        assert_eq!(pdf_escape("tab\tend"), r"tab\tend");
+        assert_eq!(pdf_escape("cr\rlf"), r"cr\rlf");
+        assert_eq!(pdf_escape("a\\b"), r"a\\b");
+        // A non-newline control char becomes a space.
+        assert_eq!(pdf_escape("a\u{07}b"), "a b");
+    }
+
+    #[test]
+    fn cvss_score_from_severity_table() {
+        assert_eq!(cvss_score_from_severity("Critical"), 9.8);
+        assert_eq!(cvss_score_from_severity("high"), 8.2);
+        assert_eq!(cvss_score_from_severity(" medium "), 6.4);
+        assert_eq!(cvss_score_from_severity("low"), 3.7);
+        assert_eq!(cvss_score_from_severity("unknown"), 5.0);
+    }
+
+    #[test]
+    fn wrap_for_pdf_wraps_and_splits() {
+        assert_eq!(wrap_for_pdf("hello world", 100), vec!["hello world"]);
+        assert_eq!(wrap_for_pdf("aaa bbb ccc", 7), vec!["aaa bbb", "ccc"]);
+        // Token longer than max is hard-split.
+        assert_eq!(wrap_for_pdf("abcdefgh", 3), vec!["abc", "def", "gh"]);
+        // Blank lines are preserved as empty entries.
+        assert_eq!(wrap_for_pdf("a\n\nb", 5), vec!["a", "", "b"]);
+        // An empty input yields no lines.
+        assert!(wrap_for_pdf("", 5).is_empty());
+    }
+
+    #[test]
+    fn build_report_markdown_static_fallback() {
+        let md =
+            build_report_markdown("http://t.example", "payload\"x", "SQLi", "base-delta", None);
+        assert!(md.contains("# Security Vulnerability Report"));
+        assert!(md.contains("Anomaly Detected During Fuzzing: SQLi"));
+        assert!(md.contains("http://t.example"));
+        // No triage -> no severity assessment block.
+        assert!(!md.contains("Severity assessment"));
+        // Static remediation text.
+        assert!(md.contains("Apply defense-in-depth"));
+        // curl payload double-quote is backslash-escaped.
+        assert!(md.contains(r#"payload\"x"#));
+    }
+
+    #[test]
+    fn build_report_markdown_with_triage() {
+        let t = BugReportTriage {
+            severity: "High".to_string(),
+            dynamic_impact: "the impact narrative".to_string(),
+            remediation: "patch it now".to_string(),
+        };
+        let md = build_report_markdown("http://t", "p", "XSS", "base", Some(&t));
+        assert!(md.contains("## Severity assessment"));
+        assert!(md.contains("🟠 **HIGH**"));
+        assert!(md.contains("## Remediation"));
+        assert!(md.contains("patch it now"));
+        assert!(md.contains("the impact narrative"));
+        assert!(md.contains("Context-aware risk analysis"));
+    }
+}

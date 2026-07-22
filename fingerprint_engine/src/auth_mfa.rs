@@ -137,4 +137,50 @@ mod tests {
         let code = totp.generate_current().unwrap();
         assert!(verify_code(&recovered, &code));
     }
+
+    #[test]
+    fn normalize_strips_whitespace_and_uppercases() {
+        assert_eq!(normalize_secret_input("jbsw y3dp"), "JBSWY3DP");
+        assert_eq!(normalize_secret_input("  a b\tc\nd "), "ABCD");
+        assert_eq!(normalize_secret_input(""), "");
+    }
+
+    #[test]
+    fn verify_code_rejects_empty_secret() {
+        assert!(!verify_code("", "123456"));
+        assert!(!verify_code("   ", "123456")); // trims to empty
+    }
+
+    #[test]
+    fn verify_code_rejects_bad_format() {
+        // These fail the length/charset gate before any TOTP/time computation.
+        assert!(!verify_code("JBSWY3DPEHPK3PXP", "12345")); // too short
+        assert!(!verify_code("JBSWY3DPEHPK3PXP", "1234567")); // too long
+        assert!(!verify_code("JBSWY3DPEHPK3PXP", "12ab56")); // non-digit
+    }
+
+    #[test]
+    fn verify_code_rejects_invalid_base32_secret() {
+        // '1' is not in the RFC4648 base32 alphabet; decode fails -> false.
+        assert!(!verify_code("1", "123456"));
+    }
+
+    #[test]
+    fn otpauth_uri_builds_for_valid_secret() {
+        // totp-rs enforces a >= 16-byte (128-bit) secret; 32 base32 chars decode to 20 bytes.
+        let uri = otpauth_uri("JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", "user@example.com").unwrap();
+        assert!(uri.starts_with("otpauth://totp/"));
+        assert!(uri.contains("Weissman-Cybersecurity"));
+        assert!(uri.contains("secret="));
+    }
+
+    #[test]
+    fn otpauth_uri_errors_on_invalid_secret() {
+        assert!(otpauth_uri("1", "user@example.com").is_err());
+    }
+
+    #[test]
+    fn generate_secret_is_non_empty() {
+        assert!(!generate_secret().is_empty());
+    }
 }

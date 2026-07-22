@@ -358,3 +358,182 @@ pub async fn discover(domains: &[String]) -> Value {
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_domain_lowercases_and_strips() {
+        assert_eq!(
+            normalize_domain("Example.COM"),
+            Some("example.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain("https://foo.com/path"),
+            Some("foo.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain("http://bar.com:8080/x"),
+            Some("bar.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain("  spaced.com  "),
+            Some("spaced.com".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_domain_rejects_empty_and_oversized() {
+        assert_eq!(normalize_domain(""), None);
+        assert_eq!(normalize_domain("   "), None);
+        assert_eq!(normalize_domain("https://"), None);
+        let big = "a".repeat(256);
+        assert_eq!(normalize_domain(&big), None);
+    }
+
+    #[test]
+    fn host_candidates_covers_prefixes_and_apex() {
+        let c = host_candidates_for_domain("example.com");
+        // 9 prefixes + apex, capped at MAX_HOST_CANDIDATES_PER_DOMAIN (10).
+        assert_eq!(c.len(), 10);
+        assert_eq!(c[0], "login.example.com");
+        assert!(c.contains(&"sso.example.com".to_string()));
+        assert!(c.contains(&"idp.example.com".to_string()));
+        assert!(c.contains(&"example.com".to_string()));
+    }
+
+    #[test]
+    fn classify_idp_from_host() {
+        assert_eq!(
+            classify_idp_from_issuer_or_host("acme.okta.com"),
+            Some("okta")
+        );
+        assert_eq!(classify_idp_from_issuer_or_host("OKTA.COM"), Some("okta"));
+        assert_eq!(
+            classify_idp_from_issuer_or_host("login.microsoftonline.com"),
+            Some("azure_ad")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("sts.windows.net"),
+            Some("azure_ad")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("accounts.google.com"),
+            Some("google")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("auth.pingone.com"),
+            Some("ping")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("x.onelogin.com"),
+            Some("onelogin")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("x.jumpcloud.com"),
+            Some("jumpcloud")
+        );
+        assert_eq!(classify_idp_from_issuer_or_host("api.duo.com"), Some("duo"));
+        assert_eq!(classify_idp_from_issuer_or_host("random.example.net"), None);
+    }
+
+    #[test]
+    fn classify_saas_from_spf() {
+        assert_eq!(
+            classify_saas_from_spf_include("_spf.google.com"),
+            Some("google_workspace")
+        );
+        assert_eq!(
+            classify_saas_from_spf_include("spf.protection.outlook.com"),
+            Some("microsoft_365")
+        );
+        // Exact-match keys are case-insensitive via lowercasing.
+        assert_eq!(
+            classify_saas_from_spf_include("SPF.PROTECTION.OUTLOOK.COM"),
+            Some("microsoft_365")
+        );
+        assert_eq!(
+            classify_saas_from_spf_include("u123.wl.sendgrid.net"),
+            Some("sendgrid")
+        );
+        assert_eq!(
+            classify_saas_from_spf_include("mg.mailgun.org"),
+            Some("mailgun")
+        );
+        assert_eq!(
+            classify_saas_from_spf_include("spf.mandrillapp.com"),
+            Some("mandrill")
+        );
+        assert_eq!(classify_saas_from_spf_include("unknown.example.com"), None);
+    }
+
+    #[test]
+    fn spf_include_regex_captures() {
+        let caps: Vec<String> = spf_include_re()
+            .captures_iter("v=spf1 include:_spf.google.com include:spf.protection.outlook.com ~all")
+            .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+            .collect();
+        assert_eq!(
+            caps,
+            vec![
+                "_spf.google.com".to_string(),
+                "spf.protection.outlook.com".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn detect_vendor_prefers_header_signals() {
+        let mut h = HashMap::new();
+        h.insert("x-okta-request-id".to_string(), "abc123".to_string());
+        assert_eq!(detect_vendor_from_landing("", &h, "host"), Some("okta"));
+
+        let mut h2 = HashMap::new();
+        h2.insert("x-azure-ref".to_string(), "ref".to_string());
+        assert_eq!(
+            detect_vendor_from_landing("", &h2, "host"),
+            Some("azure_ad")
+        );
+    }
+
+    #[test]
+    fn detect_vendor_from_body_keywords() {
+        let empty = HashMap::new();
+        assert_eq!(
+            detect_vendor_from_landing("Welcome to Okta", &empty, "h"),
+            Some("okta")
+        );
+        assert_eq!(
+            detect_vendor_from_landing("Powered by Microsoft Entra", &empty, "h"),
+            Some("azure_ad")
+        );
+        assert_eq!(
+            detect_vendor_from_landing("Sign in with Google", &empty, "h"),
+            Some("google")
+        );
+        assert_eq!(
+            detect_vendor_from_landing("PingOne login", &empty, "h"),
+            Some("ping")
+        );
+        assert_eq!(
+            detect_vendor_from_landing("ADFS sign on", &empty, "h"),
+            Some("adfs")
+        );
+    }
+
+    #[test]
+    fn detect_vendor_falls_back_to_host_then_none() {
+        let empty = HashMap::new();
+        // No header/body signal -> classify by final host.
+        assert_eq!(
+            detect_vendor_from_landing("nothing", &empty, "x.okta.com"),
+            Some("okta")
+        );
+        // No signal anywhere.
+        assert_eq!(
+            detect_vendor_from_landing("nothing", &empty, "plain.example.net"),
+            None
+        );
+    }
+}

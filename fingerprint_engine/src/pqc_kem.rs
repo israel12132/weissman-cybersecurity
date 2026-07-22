@@ -42,3 +42,45 @@ pub fn selftest_json() -> Value {
         Err(e) => json!({ "error": e }),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ML-KEM-768 (FIPS 203) has fixed 1088-byte ciphertexts and 32-byte shared secrets.
+    // Encapsulate/decapsulate MUST agree — a deterministic property despite RNG keygen.
+    #[test]
+    fn selftest_round_trip_and_fixed_sizes() {
+        let r = ml_kem768_selftest().expect("selftest should succeed");
+        assert!(r.round_trip_ok, "encaps/decaps shared secret must match");
+        assert_eq!(r.shared_secret_bytes, 32);
+        assert_eq!(r.ciphertext_bytes, 1088);
+        assert_eq!(r.algorithm, "ML-KEM-768 (FIPS 203)");
+    }
+
+    #[test]
+    fn selftest_json_reports_success() {
+        let j = selftest_json();
+        assert_eq!(j["round_trip_ok"], serde_json::Value::Bool(true));
+        assert_eq!(j["shared_secret_bytes"], serde_json::json!(32));
+        assert_eq!(j["ciphertext_bytes"], serde_json::json!(1088));
+        assert_eq!(j["algorithm"], "ML-KEM-768 (FIPS 203)");
+        assert!(j.get("error").is_none(), "success path has no error key");
+    }
+
+    #[test]
+    fn selftest_json_uses_snake_case_serde_fields() {
+        // MlKemSelfTestResult derives Serialize with default (field-name) keys.
+        let r = MlKemSelfTestResult {
+            algorithm: "X",
+            ciphertext_bytes: 7,
+            shared_secret_bytes: 9,
+            round_trip_ok: false,
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["algorithm"], "X");
+        assert_eq!(v["ciphertext_bytes"], serde_json::json!(7));
+        assert_eq!(v["shared_secret_bytes"], serde_json::json!(9));
+        assert_eq!(v["round_trip_ok"], serde_json::Value::Bool(false));
+    }
+}

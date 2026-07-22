@@ -48,3 +48,28 @@ Be specific: reference which finding enables which step. No markdown, no code bl
     .await
     .ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Only the empty-input guard is exercised here: it returns before constructing any
+    // HTTP client or performing network IO, so the test is fully deterministic.
+    #[tokio::test]
+    async fn returns_none_for_blank_findings() {
+        assert!(
+            synthesize_attack_chain("", "http://target", "http://llm", "model", None)
+                .await
+                .is_none()
+        );
+        assert!(synthesize_attack_chain(
+            "   \n\t  ",
+            "http://target",
+            "http://llm",
+            "model",
+            Some(1)
+        )
+        .await
+        .is_none());
+    }
+}

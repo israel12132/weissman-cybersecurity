@@ -48,3 +48,27 @@ pub async fn run_semantic_fuzz_result(
         reasoning_log: inner.reasoning_log,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_state_machine_via_monolith_wrapper() {
+        let spec = json!({"paths": {"/login": {"post": {"summary": "auth"}}}});
+        let (nodes, edges) = parse_state_machine(&spec);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, "POST_login");
+        assert_eq!(nodes[0].method, "POST");
+        assert!(edges.is_empty());
+    }
+
+    #[test]
+    fn preflight_probe_body_reexport_validates() {
+        assert!(preflight_semantic_probe_body("{\"a\":1}", true).is_ok());
+        assert!(preflight_semantic_probe_body("<r><a/></r>", true).is_ok());
+        assert!(preflight_semantic_probe_body("", true).is_err());
+        assert!(preflight_semantic_probe_body("{bad", true).is_err());
+    }
+}

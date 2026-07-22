@@ -56,3 +56,41 @@ pub fn apply(router: Router) -> Router {
         ]);
     router.layer(cors)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn origins_as_strings() -> Vec<String> {
+        configured_origins()
+            .iter()
+            .map(|h| h.to_str().unwrap().to_string())
+            .collect()
+    }
+
+    // One test owns both env vars to avoid parallel races.
+    #[test]
+    fn configured_origins_precedence_and_fallback() {
+        let cors = "WEISSMAN_CORS_ORIGINS";
+        let base = "WEISSMAN_PUBLIC_BASE_URL";
+        std::env::remove_var(cors);
+        std::env::remove_var(base);
+
+        // Neither set -> hardcoded production default.
+        assert_eq!(origins_as_strings(), vec!["https://weissmancyber.com"]);
+
+        // Falls back to the origin of the public base URL when CORS list is unset.
+        std::env::set_var(base, "https://app.example.com/dashboard?x=1");
+        assert_eq!(origins_as_strings(), vec!["https://app.example.com"]);
+
+        // Explicit CORS list wins and is split/trimmed.
+        std::env::set_var(cors, " https://a.example.com , https://b.example.com ");
+        assert_eq!(
+            origins_as_strings(),
+            vec!["https://a.example.com", "https://b.example.com"]
+        );
+
+        std::env::remove_var(cors);
+        std::env::remove_var(base);
+    }
+}

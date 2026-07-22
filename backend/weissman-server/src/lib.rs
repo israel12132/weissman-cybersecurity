@@ -32,6 +32,29 @@ pub fn resolve_static_dir() -> Option<PathBuf> {
         })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_static_dir_honors_existing_env_path() {
+        let key = "WEISSMAN_STATIC";
+        // An existing directory is returned verbatim.
+        let dir = std::env::temp_dir();
+        std::env::set_var(key, &dir);
+        assert_eq!(resolve_static_dir(), Some(PathBuf::from(&dir)));
+
+        // A non-existent WEISSMAN_STATIC path is filtered out (never returned as-is).
+        std::env::set_var(key, "/nonexistent/weissman/static/xyz");
+        assert_ne!(
+            resolve_static_dir(),
+            Some(PathBuf::from("/nonexistent/weissman/static/xyz"))
+        );
+
+        std::env::remove_var(key);
+    }
+}
+
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // BLOCKER #5: refuse to start with insecure TLS policy in production.
     if let Err(msg) = weissman_core::tls_policy::enforce_production_tls_policy() {

@@ -529,3 +529,179 @@ pub async fn run_zero_day_radar(
     );
     EngineResult::ok(findings, msg)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_default_values() {
+        let c = ThreatIntelConfig::default();
+        assert!(c.enable_zero_day_probing);
+        assert!(c.llm_model.is_empty());
+        assert!(c.custom_feed_urls.is_empty());
+        assert!(!c.llm_base_url.is_empty());
+    }
+
+    #[test]
+    fn extract_tag_basic_cdata_and_missing() {
+        assert_eq!(
+            extract_tag("<title>Hello</title>", "title"),
+            Some("Hello".to_string())
+        );
+        assert_eq!(
+            extract_tag("<title><![CDATA[Hi there]]></title>", "title"),
+            Some("Hi there".to_string())
+        );
+        assert_eq!(
+            extract_tag("<title>  spaced  </title>", "title"),
+            Some("spaced".to_string())
+        );
+        assert_eq!(extract_tag("<a>x</a>", "b"), None);
+    }
+
+    #[test]
+    fn parse_rss_body_rejects_non_feed() {
+        assert!(parse_rss_body("just some plain text", "src").is_empty());
+        assert!(parse_rss_body("<html><body></body></html>", "src").is_empty());
+    }
+
+    #[test]
+    fn parse_rss_body_extracts_item_critical() {
+        let xml = "<rss><channel><item>\
+            <title>Serious bug</title>\
+            <description>A CRITICAL remote issue</description>\
+            <link>http://x/1</link>\
+            <pubDate>2024-01-01</pubDate>\
+            </item></channel></rss>";
+        let items = parse_rss_body(xml, "vendor-feed");
+        assert_eq!(items.len(), 1);
+        let it = &items[0];
+        assert_eq!(it.title, "Serious bug");
+        assert_eq!(it.description, "A CRITICAL remote issue");
+        assert_eq!(it.external_id, "http://x/1");
+        assert_eq!(it.source, "vendor-feed");
+        assert_eq!(it.severity, "CRITICAL");
+        assert_eq!(it.published_at, "2024-01-01");
+    }
+
+    #[test]
+    fn parse_rss_body_severity_high_and_medium() {
+        let high = "<rss><item><title>Note</title><description>a HIGH severity thing</description></item></rss>";
+        assert_eq!(parse_rss_body(high, "s")[0].severity, "HIGH");
+        let med = "<rss><item><title>Note</title><description>informational only</description></item></rss>";
+        assert_eq!(parse_rss_body(med, "s")[0].severity, "MEDIUM");
+    }
+
+    #[test]
+    fn parse_rss_body_id_falls_back_to_title() {
+        let xml =
+            "<rss><item><title>NoLinkItem</title><description>plain</description></item></rss>";
+        let items = parse_rss_body(xml, "s");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].external_id, "NoLinkItem");
+    }
+
+    #[test]
+    fn parse_nvd_recent_value_parses_and_filters() {
+        let data = serde_json::json!({
+            "vulnerabilities": [
+                {"cve": {
+                    "id": "CVE-2024-0001",
+                    "descriptions": [
+                        {"lang": "es", "value": "spanish"},
+                        {"lang": "en", "value": "English description"}
+                    ],
+                    "metrics": {"cvssMetricV31": [{"cvssData": {"baseSeverity": "critical"}}]},
+                    "published": "2024-01-01T00:00:00"
+                }},
+                {"cve": {
+                    "id": "CVE-2024-0002",
+                    "descriptions": [{"lang": "en", "value": "Medium default one"}],
+                    "published": "2024-02-02T00:00:00"
+                }},
+                // empty en description -> skipped
+                {"cve": {"id": "CVE-2024-0003", "descriptions": [{"lang": "en", "value": ""}]}},
+                // no cve object -> skipped
+                {"notcve": true}
+            ]
+        });
+        let out = parse_nvd_recent_value(&data);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].external_id, "CVE-2024-0001");
+        assert_eq!(out[0].title, "CVE: CVE-2024-0001");
+        assert_eq!(out[0].source, "NVD");
+        assert_eq!(out[0].description, "English description");
+        assert_eq!(out[0].severity, "CRITICAL");
+        assert_eq!(out[0].published_at, "2024-01-01T00:00:00");
+        // no metrics -> default MEDIUM
+        assert_eq!(out[1].external_id, "CVE-2024-0002");
+        assert_eq!(out[1].severity, "MEDIUM");
+    }
+
+    #[test]
+    fn parse_nvd_recent_value_empty_when_no_vulns() {
+        assert!(parse_nvd_recent_value(&serde_json::json!({})).is_empty());
+        assert!(parse_nvd_recent_value(&serde_json::json!({"vulnerabilities": []})).is_empty());
+    }
+
+    #[test]
+    fn parse_probe_json_full() {
+        let text = "garbage {\"path\":\"/api\",\"method\":\"post\",\
+            \"headers\":{\"User-Agent\":\"Scanner\"},\
+            \"query_params\":{\"q\":\"1\"},\
+            \"expected_regex\":\"vuln\"} trailing";
+        let p = parse_probe_json(text).unwrap();
+        assert_eq!(p.path, "/api");
+        assert_eq!(p.method, "POST");
+        assert_eq!(
+            p.headers.as_ref().unwrap().get("User-Agent"),
+            Some(&"Scanner".to_string())
+        );
+        assert_eq!(
+            p.query_params.as_ref().unwrap().get("q"),
+            Some(&"1".to_string())
+        );
+        assert_eq!(p.expected_regex.as_deref(), Some("vuln"));
+    }
+
+    #[test]
+    fn parse_probe_json_defaults() {
+        let p = parse_probe_json("{}").unwrap();
+        assert_eq!(p.path, "/");
+        assert_eq!(p.method, "GET");
+        assert!(p.headers.is_none());
+        assert!(p.query_params.is_none());
+        assert!(p.expected_regex.is_none());
+    }
+
+    #[test]
+    fn parse_probe_json_non_post_method_becomes_get() {
+        let p = parse_probe_json("{\"method\":\"PUT\"}").unwrap();
+        assert_eq!(p.method, "GET");
+    }
+
+    #[test]
+    fn parse_probe_json_no_braces_none() {
+        assert!(parse_probe_json("no json here").is_none());
+    }
+
+    #[test]
+    fn safe_probe_serde_roundtrip() {
+        let mut headers = HashMap::new();
+        headers.insert("A".to_string(), "B".to_string());
+        let probe = SafeProbe {
+            path: "/p".to_string(),
+            method: "GET".to_string(),
+            headers: Some(headers),
+            query_params: None,
+            expected_regex: Some("re".to_string()),
+        };
+        let s = serde_json::to_string(&probe).unwrap();
+        let back: SafeProbe = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.path, "/p");
+        assert_eq!(back.method, "GET");
+        assert_eq!(back.expected_regex.as_deref(), Some("re"));
+        assert_eq!(back.headers.unwrap().get("A"), Some(&"B".to_string()));
+    }
+}

@@ -217,3 +217,70 @@ pub async fn run_worker_loop(
         interval.tick().await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_get_template_with_path_array() {
+        let yaml = "http:\n  - method: GET\n    path:\n      - \"{{BaseURL}}/admin\"\n";
+        let row = parse_nuclei_yaml_to_native(yaml, "CVE-2024-0012", "http://src/a.yaml").unwrap();
+        assert_eq!(row.target_library, "Nuclei-CVE-2024-0012");
+        assert_eq!(row.payload_data, "{{BaseURL}}/admin");
+        assert_eq!(row.source, "nuclei-templates");
+        assert_eq!(row.source_url, "http://src/a.yaml");
+    }
+
+    #[test]
+    fn parses_get_template_with_path_string() {
+        let yaml = "http:\n  - method: GET\n    path: \"/direct\"\n";
+        let row = parse_nuclei_yaml_to_native(yaml, "t1", "u").unwrap();
+        assert_eq!(row.payload_data, "/direct");
+    }
+
+    #[test]
+    fn post_with_body_uses_body_as_payload() {
+        let yaml =
+            "http:\n  - method: POST\n    path:\n      - \"/login\"\n    body: \"user=admin&pass=x\"\n";
+        let row = parse_nuclei_yaml_to_native(yaml, "t", "u").unwrap();
+        assert_eq!(row.payload_data, "user=admin&pass=x");
+    }
+
+    #[test]
+    fn post_with_empty_body_falls_back_to_path() {
+        let yaml = "http:\n  - method: POST\n    path: \"/fallback\"\n    body: \"\"\n";
+        let row = parse_nuclei_yaml_to_native(yaml, "t", "u").unwrap();
+        assert_eq!(row.payload_data, "/fallback");
+    }
+
+    #[test]
+    fn missing_path_defaults_to_root() {
+        let yaml = "http:\n  - method: GET\n    matchers: []\n";
+        let row = parse_nuclei_yaml_to_native(yaml, "t", "u").unwrap();
+        assert_eq!(row.payload_data, "/");
+    }
+
+    #[test]
+    fn empty_path_string_yields_none() {
+        let yaml = "http:\n  - method: GET\n    path: \"\"\n";
+        assert!(parse_nuclei_yaml_to_native(yaml, "t", "u").is_none());
+    }
+
+    #[test]
+    fn missing_http_section_yields_none() {
+        let yaml = "id: something\ninfo:\n  name: x\n";
+        assert!(parse_nuclei_yaml_to_native(yaml, "t", "u").is_none());
+    }
+
+    #[test]
+    fn non_array_http_section_yields_none() {
+        let yaml = "http: 5\n";
+        assert!(parse_nuclei_yaml_to_native(yaml, "t", "u").is_none());
+    }
+
+    #[test]
+    fn invalid_yaml_yields_none() {
+        assert!(parse_nuclei_yaml_to_native("::: not yaml :::", "t", "u").is_none());
+    }
+}

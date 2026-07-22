@@ -558,3 +558,138 @@ pub fn spawn_ingest_worker(
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(severity: &str) -> ThreatFeedItem {
+        ThreatFeedItem {
+            source: "test".into(),
+            external_id: "id".into(),
+            title: "t".into(),
+            description: "d".into(),
+            severity: severity.into(),
+            published_at: "".into(),
+        }
+    }
+
+    #[test]
+    fn parse_advisory_full_object() {
+        let arr = json!([{
+            "ghsa_id": "GHSA-aaaa-bbbb-cccc",
+            "summary": "Summary here",
+            "description": "Full description",
+            "severity": "CRITICAL",
+            "published_at": "2024-01-02T03:04:05Z"
+        }]);
+        let out = parse_github_advisory_array(&arr).unwrap();
+        assert_eq!(out.len(), 1);
+        let it = &out[0];
+        assert_eq!(it.source, "github_advisory");
+        assert_eq!(it.external_id, "GHSA-aaaa-bbbb-cccc");
+        assert_eq!(it.title, "Summary here");
+        assert_eq!(it.description, "Full description");
+        assert_eq!(it.severity, "CRITICAL");
+        assert_eq!(it.published_at, "2024-01-02T03:04:05Z");
+    }
+
+    #[test]
+    fn parse_advisory_defaults_for_missing_fields() {
+        let arr = json!([{}]);
+        let out = parse_github_advisory_array(&arr).unwrap();
+        assert_eq!(out.len(), 1);
+        let it = &out[0];
+        assert_eq!(it.external_id, "unknown");
+        assert_eq!(it.title, "");
+        // desc empty => description falls back to (empty) title.
+        assert_eq!(it.description, "");
+        assert_eq!(it.severity, "medium");
+        assert_eq!(it.published_at, "");
+    }
+
+    #[test]
+    fn parse_advisory_title_falls_back_to_description() {
+        // No summary => title comes from description; description field also = desc.
+        let arr = json!([{"description": "Only a description"}]);
+        let out = parse_github_advisory_array(&arr).unwrap();
+        assert_eq!(out[0].title, "Only a description");
+        assert_eq!(out[0].description, "Only a description");
+    }
+
+    #[test]
+    fn parse_advisory_rejects_non_array() {
+        let err = parse_github_advisory_array(&json!({"not": "array"})).unwrap_err();
+        assert!(matches!(err, GitHubAdvisoryFetchError::NotArray));
+    }
+
+    #[test]
+    fn packages_from_signature_normalizes() {
+        let sig = json!({"packages": [" Foo ", "bar", "BAR", "", 123, "  qux"]});
+        // trim + lowercase, drop empties/non-strings, sort, dedup.
+        assert_eq!(packages_from_signature(&sig), vec!["bar", "foo", "qux"]);
+    }
+
+    #[test]
+    fn packages_from_signature_missing_or_wrong_type() {
+        assert!(packages_from_signature(&json!({})).is_empty());
+        assert!(packages_from_signature(&json!({"packages": "notarray"})).is_empty());
+    }
+
+    #[test]
+    fn severity_is_critical_paths() {
+        // item severity contains "critical" (case-insensitive).
+        assert!(severity_is_critical(&item("Critical"), &json!({})));
+        assert!(severity_is_critical(&item("CRITICAL"), &json!({})));
+        // item not critical but signature guess is.
+        assert!(severity_is_critical(
+            &item("high"),
+            &json!({"severity_guess": "Critical"})
+        ));
+        // neither critical.
+        assert!(!severity_is_critical(
+            &item("high"),
+            &json!({"severity_guess": "high"})
+        ));
+        assert!(!severity_is_critical(&item("high"), &json!({})));
+    }
+
+    #[test]
+    fn extract_cve_finds_and_uppercases() {
+        assert_eq!(
+            extract_cve("Text about CVE-2021-44228 here!").as_deref(),
+            Some("CVE-2021-44228")
+        );
+        // Regex is case-sensitive on "CVE"; lowercase does not match.
+        assert_eq!(extract_cve("cve-2021-44228"), None);
+        assert_eq!(extract_cve("no identifier here"), None);
+    }
+
+    #[test]
+    fn fetch_error_display() {
+        assert_eq!(
+            GitHubAdvisoryFetchError::ApiTokenMissing.to_string(),
+            "GITHUB_TOKEN not set"
+        );
+        assert_eq!(
+            GitHubAdvisoryFetchError::HttpStatus(404).to_string(),
+            "HTTP 404"
+        );
+        assert_eq!(
+            GitHubAdvisoryFetchError::NotArray.to_string(),
+            "response was not a JSON array"
+        );
+        assert_eq!(
+            GitHubAdvisoryFetchError::Json("boom".into()).to_string(),
+            "json: boom"
+        );
+        assert_eq!(
+            GitHubAdvisoryFetchError::HttpClient("c".into()).to_string(),
+            "client: c"
+        );
+        assert_eq!(
+            GitHubAdvisoryFetchError::HttpSend("s".into()).to_string(),
+            "request: s"
+        );
+    }
+}

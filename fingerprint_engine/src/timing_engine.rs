@@ -420,4 +420,68 @@ mod tests {
             TIMING_PAYLOADS.len()
         );
     }
+
+    #[test]
+    fn mean_of_empty_is_zero_and_average_otherwise() {
+        assert_eq!(mean(&[]), 0.0);
+        assert_eq!(mean(&[10, 20, 30]), 20.0);
+        assert_eq!(mean(&[5]), 5.0);
+    }
+
+    #[test]
+    fn variance_needs_two_samples() {
+        assert_eq!(variance(&[5], 5.0), 0.0);
+        assert_eq!(variance(&[], 0.0), 0.0);
+        // [2,4,6] mean 4 -> ((4)+(0)+(4))/(3-1) = 4.0 (sample variance).
+        assert_eq!(variance(&[2, 4, 6], 4.0), 4.0);
+    }
+
+    #[test]
+    fn std_dev_is_sqrt_of_variance() {
+        assert_eq!(std_dev(&[2, 4, 6]), 2.0);
+        assert_eq!(std_dev(&[7]), 0.0);
+    }
+
+    #[test]
+    fn z_score_none_when_sigma_nonpositive() {
+        assert_eq!(z_score(10.0, 4.0, 0.0), None);
+        assert_eq!(z_score(10.0, 4.0, -1.0), None);
+        assert_eq!(z_score(10.0, 4.0, 2.0), Some(3.0));
+    }
+
+    #[test]
+    fn confidence_from_z_monotone_and_bounded() {
+        assert_eq!(confidence_from_z(0.0), 50.0);
+        assert_eq!(confidence_from_z(-5.0), 50.0);
+        let c3 = confidence_from_z(3.0);
+        // Z=3 -> ~99.87% one-tailed.
+        assert!((99.8..=99.95).contains(&c3), "z=3 confidence was {c3}");
+        assert!(confidence_from_z(1.0) < confidence_from_z(2.0));
+    }
+
+    #[test]
+    fn timing_full_url_appends_encoded_payload() {
+        assert_eq!(timing_full_url("http://x/", None), "http://x/");
+        assert_eq!(
+            timing_full_url("http://x/", Some("a b")),
+            "http://x/?q=a%20b"
+        );
+        assert_eq!(
+            timing_full_url("http://x/?a=1", Some("v")),
+            "http://x/?a=1&q=v"
+        );
+    }
+
+    #[test]
+    fn normalize_timing_url_adds_https_scheme() {
+        assert_eq!(normalize_timing_url(""), "");
+        assert_eq!(normalize_timing_url("   "), "");
+        assert_eq!(normalize_timing_url("example.com"), "https://example.com");
+        assert_eq!(
+            normalize_timing_url("  example.com "),
+            "https://example.com"
+        );
+        assert_eq!(normalize_timing_url("http://x/"), "http://x/");
+        assert_eq!(normalize_timing_url("https://x/"), "https://x/");
+    }
 }

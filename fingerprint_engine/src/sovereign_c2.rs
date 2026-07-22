@@ -369,3 +369,81 @@ pub fn spawn_sovereign_stack(
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_u64_parses_and_defaults() {
+        let k = "WEISSMAN_TEST_SOVEREIGN_C2_ENV_U64";
+        env::remove_var(k);
+        assert_eq!(env_u64(k, 42), 42);
+        env::set_var(k, "  7 ");
+        assert_eq!(env_u64(k, 42), 7);
+        env::set_var(k, "notnum");
+        assert_eq!(env_u64(k, 42), 42);
+        env::remove_var(k);
+    }
+
+    #[test]
+    fn sign_port_hint_is_deterministic_hex() {
+        let secret = b"unit-test-secret";
+        let a = sign_port_hint(40000, 1_700_000_000, secret).unwrap();
+        let b = sign_port_hint(40000, 1_700_000_000, secret).unwrap();
+        // Deterministic HMAC-SHA256 -> 64 lowercase hex chars.
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+        assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
+        // Different port or timestamp changes the signature.
+        assert_ne!(a, sign_port_hint(40001, 1_700_000_000, secret).unwrap());
+        assert_ne!(a, sign_port_hint(40000, 1_700_000_001, secret).unwrap());
+    }
+
+    #[test]
+    fn swarm_cmd_serializes_with_kind_tag() {
+        let hint = SovereignSwarmCmd::CommandApiPortHint {
+            port: 40123,
+            issued_unix: 1234,
+            hmac_hex: "deadbeef".into(),
+        };
+        let v = serde_json::to_value(&hint).unwrap();
+        assert_eq!(v["kind"], "command_api_port_hint");
+        assert_eq!(v["port"], 40123);
+        assert_eq!(v["hmac_hex"], "deadbeef");
+
+        let rot = SovereignSwarmCmd::HoneytokenRotation {
+            trap_id: "t".into(),
+            jwt_preview: "j".into(),
+            api_key_preview: "k".into(),
+            ed25519_public_openssh: "ssh".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&rot).unwrap()["kind"],
+            "honeytoken_rotation"
+        );
+    }
+
+    #[test]
+    fn swarm_cmd_roundtrips_through_json() {
+        let cmd = SovereignSwarmCmd::CommandApiPortHint {
+            port: 50000,
+            issued_unix: 999,
+            hmac_hex: "abc123".into(),
+        };
+        let s = serde_json::to_string(&cmd).unwrap();
+        let back: SovereignSwarmCmd = serde_json::from_str(&s).unwrap();
+        match back {
+            SovereignSwarmCmd::CommandApiPortHint {
+                port,
+                issued_unix,
+                hmac_hex,
+            } => {
+                assert_eq!(port, 50000);
+                assert_eq!(issued_unix, 999);
+                assert_eq!(hmac_hex, "abc123");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+}

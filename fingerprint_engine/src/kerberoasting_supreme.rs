@@ -1285,3 +1285,262 @@ pub async fn scan_ldaps_tls(
         ));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sig() -> AdSignals {
+        AdSignals::new("corp.example".to_string())
+    }
+
+    #[test]
+    fn nbss_wrap_encodes_length_big_endian() {
+        // Small payload: header carries the 3-byte length.
+        assert_eq!(
+            nbss_wrap(&[0xAA, 0xBB]),
+            vec![0x00, 0x00, 0x00, 0x02, 0xAA, 0xBB]
+        );
+        assert_eq!(nbss_wrap(&[]), vec![0x00, 0x00, 0x00, 0x00]);
+        // 300 bytes = 0x00012C -> out[1]=0, out[2]=1, out[3]=0x2C.
+        let payload = vec![0u8; 300];
+        let wrapped = nbss_wrap(&payload);
+        assert_eq!(wrapped.len(), 304);
+        assert_eq!(&wrapped[0..4], &[0x00, 0x00, 0x01, 0x2C]);
+    }
+
+    #[test]
+    fn smb2_negotiate_req_shape() {
+        let req = smb2_negotiate_req();
+        // 4 (NBSS) + 64 (header) + 36 (body) + 8 (4 dialects) = 112.
+        assert_eq!(req.len(), 112);
+        // NBSS length header for a 108-byte SMB message.
+        assert_eq!(&req[0..4], &[0x00, 0x00, 0x00, 108]);
+        // SMB2 magic follows the NBSS header.
+        assert_eq!(&req[4..8], &[0xFE, b'S', b'M', b'B']);
+        // Dialect list trailer: 0x0202, 0x0210, 0x0300, 0x0302 (LE).
+        assert_eq!(
+            &req[104..112],
+            &[0x02, 0x02, 0x10, 0x02, 0x00, 0x03, 0x02, 0x03]
+        );
+    }
+
+    #[test]
+    fn parse_smb2_security_mode_flags() {
+        let mut resp = vec![0u8; 72];
+        resp[4..8].copy_from_slice(&[0xFE, b'S', b'M', b'B']);
+        // SecurityMode lives at smb[66..68] == resp[70..72].
+        resp[70] = 0x03;
+        assert_eq!(parse_smb2_security_mode(&resp), Some((true, true)));
+        resp[70] = 0x01;
+        assert_eq!(parse_smb2_security_mode(&resp), Some((true, false)));
+        resp[70] = 0x02;
+        assert_eq!(parse_smb2_security_mode(&resp), Some((false, true)));
+        resp[70] = 0x00;
+        assert_eq!(parse_smb2_security_mode(&resp), Some((false, false)));
+    }
+
+    #[test]
+    fn parse_smb2_security_mode_rejects_bad_input() {
+        // Too short.
+        assert_eq!(parse_smb2_security_mode(&[0u8; 71]), None);
+        // Long enough but wrong SMB magic.
+        let resp = vec![0u8; 72];
+        assert_eq!(parse_smb2_security_mode(&resp), None);
+    }
+
+    #[test]
+    fn as_req_for_principal_exact_encoding() {
+        // Deterministic DER-ish AS-REQ for realm "R", user "ab".
+        let expected: Vec<u8> = vec![
+            0x6a, 0x1d, 0x02, 0x01, 0x05, 0x02, 0x01, 0x0a, 0x30, 0x00, 0x02, 0x01, 0x05, 0x02,
+            0x01, 0x0a, 0xa3, 0x0f, 0x30, 0x08, 0x02, 0x01, 0x01, 0x30, 0x04, 0x02, 0x61, 0x62,
+            0x1b, 0x01, 0x52, 0x30, 0x00,
+        ];
+        assert_eq!(as_req_for_principal("R", "ab"), expected);
+    }
+
+    #[test]
+    fn as_req_for_principal_embeds_identifiers() {
+        let req = as_req_for_principal("EXAMPLE.COM", "svc_sql");
+        // Outer application tag.
+        assert_eq!(req[0], 0x6a);
+        // The username bytes appear verbatim.
+        assert!(req.windows(7).any(|w| w == b"svc_sql"));
+        // The realm bytes appear verbatim.
+        assert!(req.windows(11).any(|w| w == b"EXAMPLE.COM"));
+    }
+
+    #[test]
+    fn krb_error_code_extracts_and_defaults() {
+        // 0x7e KRB-ERROR marker, INTEGER (0x02 len 1) -> value 25 (PREAUTH_REQUIRED).
+        assert_eq!(
+            krb_error_code(&[0x7e, 0x00, 0x02, 0x01, 25, 0, 0, 0]),
+            Some(25)
+        );
+        // Marker not at index 0.
+        assert_eq!(
+            krb_error_code(&[0x00, 0x7e, 0x00, 0x02, 0x01, 6, 0, 0, 0]),
+            Some(6)
+        );
+        // No marker -> None.
+        assert_eq!(krb_error_code(&[0x00, 0x01, 0x02, 0x03]), None);
+        // Marker present but too near the end (bounds check fails) -> None.
+        assert_eq!(krb_error_code(&[0x7e, 0x00, 0x02, 0x01, 25]), None);
+    }
+
+    #[test]
+    fn domain_functionality_label_mapping() {
+        assert_eq!(domain_functionality_label(0), "Windows 2000 mixed/native");
+        assert_eq!(domain_functionality_label(2), "Windows Server 2003");
+        assert_eq!(domain_functionality_label(3), "Windows Server 2008");
+        assert_eq!(domain_functionality_label(7), "Windows Server 2016");
+        assert_eq!(domain_functionality_label(10), "Windows Server 2025");
+        // Values >= 7 that are not explicitly mapped fall to the generic bucket.
+        assert_eq!(domain_functionality_label(8), "Windows Server 2016+");
+        assert_eq!(domain_functionality_label(9), "Windows Server 2016+");
+    }
+
+    #[test]
+    fn emit_toxic_headline_no_combos_is_noop() {
+        let s = sig();
+        let mut findings: Vec<Value> = Vec::new();
+        emit_toxic_headline("t", &s, &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn emit_toxic_headline_asrep_combo() {
+        let mut s = sig();
+        s.asrep_accounts = vec!["u1".to_string(), "u2".to_string()];
+        let mut findings: Vec<Value> = Vec::new();
+        emit_toxic_headline("t", &s, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].get("severity").and_then(Value::as_str),
+            Some("critical")
+        );
+        assert!(findings[0]
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap()
+            .contains("TOXIC COMBINATION"));
+        assert_eq!(
+            findings[0].get("category").and_then(Value::as_str),
+            Some("toxic_combination")
+        );
+    }
+
+    #[test]
+    fn emit_remediation_roadmap_always_emits() {
+        // Two unconditional P2 steps guarantee a roadmap even with no exposures.
+        let s = sig();
+        let mut findings: Vec<Value> = Vec::new();
+        emit_remediation_roadmap("t", &s, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].get("severity").and_then(Value::as_str),
+            Some("info")
+        );
+        assert_eq!(
+            findings[0].get("category").and_then(Value::as_str),
+            Some("remediation_roadmap")
+        );
+    }
+
+    #[test]
+    fn finalize_category_scores_applies_penalty() {
+        let mut s = sig();
+        let findings = vec![json!({"category": "adcs_exposure", "severity": "critical"})];
+        finalize_category_scores(&mut s, &findings);
+        // 100 - 40 (critical penalty) = 60.
+        assert_eq!(s.scores.adcs_exposure, 60.0);
+    }
+
+    #[test]
+    fn finalize_category_scores_ldap_and_relay() {
+        let mut s = sig();
+        let findings = vec![json!({"category": "ldap_anonymous", "severity": "high"})];
+        finalize_category_scores(&mut s, &findings);
+        // high penalty 22 -> 78.
+        assert_eq!(s.scores.ldap_hardening, 78.0);
+
+        let mut s2 = sig();
+        s2.smb_signing_required = Some(false);
+        finalize_category_scores(&mut s2, &[]);
+        assert_eq!(s2.scores.relay_preconditions, 10.0);
+
+        let mut s3 = sig();
+        s3.smb_signing_required = Some(true);
+        finalize_category_scores(&mut s3, &[]);
+        assert_eq!(s3.scores.relay_preconditions, 85.0);
+    }
+
+    #[test]
+    fn extend_graph_adds_nodes_for_exposures() {
+        let mut s = sig();
+        let mut nodes: Vec<GraphNode> = Vec::new();
+        let mut edges: Vec<GraphEdge> = Vec::new();
+        // No exposures -> nothing added.
+        extend_graph(&mut nodes, &mut edges, &s);
+        assert!(nodes.is_empty());
+        assert!(edges.is_empty());
+
+        s.adcs_exposed = true;
+        extend_graph(&mut nodes, &mut edges, &s);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, "adcs");
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].edge_type, "ADCS_ESC");
+    }
+
+    #[test]
+    fn extend_graph_relay_edge_without_node() {
+        let mut s = sig();
+        s.smb_signing_required = Some(false);
+        let mut nodes: Vec<GraphNode> = Vec::new();
+        let mut edges: Vec<GraphEdge> = Vec::new();
+        extend_graph(&mut nodes, &mut edges, &s);
+        assert!(nodes.is_empty());
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].id, "ap_relay");
+        assert_eq!(edges[0].edge_type, "NTLM_RELAY");
+    }
+
+    #[test]
+    fn extend_attack_paths_adcs_ldap() {
+        let mut s = sig();
+        let mut findings: Vec<Value> = Vec::new();
+        extend_attack_paths("t", &s, &mut findings);
+        assert!(findings.is_empty());
+
+        s.adcs_exposed = true;
+        s.ldap_reachable = true;
+        extend_attack_paths("t", &s, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].get("severity").and_then(Value::as_str),
+            Some("critical")
+        );
+        assert!(findings[0].get("attack_path").is_some());
+    }
+
+    #[test]
+    fn enrich_posture_evidence_reports_counts() {
+        let s = sig();
+        let v = enrich_posture_evidence(Evidence::new(), &s).into_value();
+        assert_eq!(v["adcs_exposed"].as_bool(), Some(false));
+        assert_eq!(v["rbcd_count"].as_u64(), Some(0));
+        assert_eq!(v["unconstrained_delegation_count"].as_u64(), Some(0));
+        assert!(v["smb_signing_required"].is_null());
+
+        let mut s2 = sig();
+        s2.adcs_exposed = true;
+        s2.unconstrained_delegation = vec!["svc$".to_string()];
+        s2.smb_signing_required = Some(true);
+        let v2 = enrich_posture_evidence(Evidence::new(), &s2).into_value();
+        assert_eq!(v2["adcs_exposed"].as_bool(), Some(true));
+        assert_eq!(v2["unconstrained_delegation_count"].as_u64(), Some(1));
+        assert_eq!(v2["smb_signing_required"].as_bool(), Some(true));
+    }
+}

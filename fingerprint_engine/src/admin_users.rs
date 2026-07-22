@@ -625,3 +625,68 @@ pub async fn api_admin_users_deactivate(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_role_is_viewer() {
+        assert_eq!(default_role(), "viewer");
+    }
+
+    #[test]
+    fn create_user_body_applies_defaults() {
+        let b: CreateUserBody = serde_json::from_value(json!({
+            "email": "x@y.com",
+            "password": "password123"
+        }))
+        .unwrap();
+        assert_eq!(b.email, "x@y.com");
+        assert_eq!(b.role, "viewer"); // default_role
+        assert!(!b.is_superadmin); // default false
+    }
+
+    #[test]
+    fn create_user_body_explicit_fields() {
+        let b: CreateUserBody = serde_json::from_value(json!({
+            "email": "a@b.com",
+            "password": "pw",
+            "role": "admin",
+            "is_superadmin": true
+        }))
+        .unwrap();
+        assert_eq!(b.role, "admin");
+        assert!(b.is_superadmin);
+    }
+
+    #[test]
+    fn update_user_body_all_optional() {
+        let empty: UpdateUserBody = serde_json::from_value(json!({})).unwrap();
+        assert!(empty.role.is_none());
+        assert!(empty.is_superadmin.is_none());
+
+        let some: UpdateUserBody = serde_json::from_value(json!({"role": "ceo"})).unwrap();
+        assert_eq!(some.role.as_deref(), Some("ceo"));
+        assert!(some.is_superadmin.is_none());
+    }
+
+    #[test]
+    fn user_info_serializes_expected_fields() {
+        let u = UserInfo {
+            id: 7,
+            email: "u@e.com".to_string(),
+            role: "analyst".to_string(),
+            is_superadmin: false,
+            is_active: true,
+            created_at: None,
+        };
+        let v = serde_json::to_value(&u).unwrap();
+        assert_eq!(v["id"], json!(7));
+        assert_eq!(v["email"], json!("u@e.com"));
+        assert_eq!(v["role"], json!("analyst"));
+        assert_eq!(v["is_superadmin"], json!(false));
+        assert_eq!(v["is_active"], json!(true));
+        assert_eq!(v["created_at"], serde_json::Value::Null);
+    }
+}

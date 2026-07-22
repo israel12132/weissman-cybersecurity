@@ -261,3 +261,106 @@ pub async fn build_live_aws_decoy_content(
         oast_with_path,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_placeholders_substitutes_all_three() {
+        let template = format!("{PLACEHOLDER_AK}|{PLACEHOLDER_SK}|{PLACEHOLDER_OAST}");
+        assert_eq!(
+            apply_placeholders(&template, "AKID", "SEKRET", "http://oast/i"),
+            "AKID|SEKRET|http://oast/i"
+        );
+    }
+
+    #[test]
+    fn apply_placeholders_leaves_unrelated_text_intact() {
+        assert_eq!(
+            apply_placeholders("no tokens here", "a", "b", "c"),
+            "no tokens here"
+        );
+    }
+
+    #[test]
+    fn ghost_decoy_fallback_yaml_shape() {
+        let out = ghost_decoy_fallback("yaml", "AKID", "SEKRET", "http://oast/i");
+        assert_eq!(
+            out,
+            "# internal (do not commit)\naws:\n  access_key_id: AKID\n  secret_access_key: SEKRET\nmonitoring_endpoint: http://oast/i\n"
+        );
+    }
+
+    #[test]
+    fn ghost_decoy_fallback_non_yaml_is_bash() {
+        // Any style other than "yaml" produces the shell-history variant.
+        let out = ghost_decoy_fallback("bash", "AKID", "SEKRET", "http://oast/i");
+        assert_eq!(
+            out,
+            "# accidental history\naws configure set aws_access_key_id AKID\naws configure set aws_secret_access_key SEKRET\ncurl -sS http://oast/i >/dev/null\n"
+        );
+        // "anything" also falls through to the bash branch.
+        assert_eq!(
+            ghost_decoy_fallback("something-else", "AKID", "SEKRET", "http://oast/i"),
+            out
+        );
+    }
+
+    #[test]
+    fn ensure_key_material_present_keeps_body_when_both_keys_present() {
+        let body = "line with AKID and SEKRET inside";
+        assert_eq!(
+            ensure_key_material_present(body, "AKID", "SEKRET", "http://oast/i"),
+            body
+        );
+    }
+
+    #[test]
+    fn ensure_key_material_present_appends_when_missing() {
+        // Body has AK but not SK -> material is appended.
+        let body = "only AKID here";
+        let out = ensure_key_material_present(body, "AKID", "SEKRET", "http://oast/i");
+        assert_ne!(out, body);
+        assert!(out.starts_with(body));
+        assert!(out.contains("export AWS_ACCESS_KEY_ID=AKID"));
+        assert!(out.contains("export AWS_SECRET_ACCESS_KEY=SEKRET"));
+        assert!(out.contains("export WEISSMAN_INTERNAL_MONITOR=http://oast/i"));
+    }
+
+    #[test]
+    fn pick_asm_location_nil_seed_client_zero() {
+        // seed=nil -> as_u128()=0, byte[0]=0 (even) -> "/.bash_history"; idx 0 -> paths[0]="".
+        let loc = pick_asm_virtual_deployment_location(0, &uuid::Uuid::nil());
+        assert_eq!(loc, "asm_virtual:/.bash_history");
+    }
+
+    #[test]
+    fn pick_asm_location_indexes_by_client_id() {
+        // client_id=2, seed nil -> idx=(0+2)%35=2 -> paths[2]="/api"; even byte -> bash_history tail.
+        let loc = pick_asm_virtual_deployment_location(2, &uuid::Uuid::nil());
+        assert_eq!(loc, "asm_virtual:/api/.bash_history");
+    }
+
+    #[test]
+    fn pick_asm_location_odd_first_byte_yields_yaml_tail() {
+        // First byte = 1 (odd) -> "/internal/aws-monitor.yaml"; high u128 truncates to 0 in idx.
+        let mut bytes = [0u8; 16];
+        bytes[0] = 1;
+        let seed = uuid::Uuid::from_bytes(bytes);
+        let loc = pick_asm_virtual_deployment_location(0, &seed);
+        assert_eq!(loc, "asm_virtual:/internal/aws-monitor.yaml");
+    }
+
+    #[test]
+    fn pick_asm_location_always_has_prefix_and_known_tail() {
+        for cid in 0..40i64 {
+            let loc = pick_asm_virtual_deployment_location(cid, &uuid::Uuid::nil());
+            assert!(loc.starts_with("asm_virtual:"));
+            assert!(
+                loc.ends_with("/.bash_history") || loc.ends_with("/internal/aws-monitor.yaml"),
+                "unexpected tail: {loc}"
+            );
+        }
+    }
+}

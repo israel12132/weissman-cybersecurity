@@ -120,3 +120,56 @@ pub fn spawn(
     });
     EdgeHeartbeatBatcher { tx }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(region: &str, pop: &str) -> PendingHeartbeat {
+        PendingHeartbeat {
+            tenant_id: 1,
+            region_code: region.to_string(),
+            pop_label: pop.to_string(),
+            latitude: Some(51.5),
+            longitude: Some(-0.12),
+            wasm_revision: "rev-1".to_string(),
+            provider: "cloudflare".to_string(),
+            active_jobs: 3,
+        }
+    }
+
+    #[test]
+    fn enqueue_forwards_message_to_channel() {
+        let (tx, mut rx) = mpsc::unbounded_channel::<PendingHeartbeat>();
+        let batcher = EdgeHeartbeatBatcher { tx };
+        batcher.enqueue(sample("eu-west", "lhr"));
+        let got = rx.try_recv().expect("message should be queued");
+        assert_eq!(got.tenant_id, 1);
+        assert_eq!(got.region_code, "eu-west");
+        assert_eq!(got.pop_label, "lhr");
+        assert_eq!(got.active_jobs, 3);
+        assert_eq!(got.provider, "cloudflare");
+    }
+
+    #[test]
+    fn enqueue_preserves_order_of_multiple_sends() {
+        let (tx, mut rx) = mpsc::unbounded_channel::<PendingHeartbeat>();
+        let batcher = EdgeHeartbeatBatcher { tx };
+        batcher.enqueue(sample("us-east", "iad"));
+        batcher.enqueue(sample("ap-south", "bom"));
+        assert_eq!(rx.try_recv().unwrap().pop_label, "iad");
+        assert_eq!(rx.try_recv().unwrap().pop_label, "bom");
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn pending_heartbeat_clone_matches_source() {
+        let p = sample("eu-central", "fra");
+        let c = p.clone();
+        assert_eq!(c.region_code, p.region_code);
+        assert_eq!(c.pop_label, p.pop_label);
+        assert_eq!(c.latitude, p.latitude);
+        assert_eq!(c.longitude, p.longitude);
+        assert_eq!(c.wasm_revision, p.wasm_revision);
+    }
+}

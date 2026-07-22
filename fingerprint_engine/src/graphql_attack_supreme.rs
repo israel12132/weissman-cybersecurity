@@ -440,3 +440,169 @@ pub fn build_security_graph(
     let _ = target;
     (nodes, edges)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_signals_empty_defaults() {
+        let sig = collect_signals(&[], 0);
+        assert_eq!(sig.endpoints_found, 0);
+        assert!(!sig.introspection_enabled);
+        let s = finalize_category_scores(&sig);
+        assert_eq!(s.authorization, 100.0);
+        assert_eq!(s.business_flows, 100.0);
+    }
+
+    #[test]
+    fn collect_signals_detects_various() {
+        let findings = vec![
+            json!({"vuln_class": "Introspection"}),
+            json!({"title": "Sensitive field password exposed"}),
+            json!({"vuln_class": "BOLA"}),
+            json!({"vuln_class": "cors_wildcard"}),
+            json!({"vuln_class": "batch_alias_dos"}),
+        ];
+        let sig = collect_signals(&findings, 1);
+        assert!(sig.introspection_enabled);
+        assert!(sig.sensitive_fields);
+        assert!(sig.bola_surface);
+        assert!(sig.cors_permissive);
+        assert!(sig.dos_unbounded);
+        assert_eq!(sig.endpoints_found, 1);
+    }
+
+    #[test]
+    fn collect_signals_component_bola() {
+        let findings = vec![json!({"component": "user-BOLA-resolver"})];
+        let sig = collect_signals(&findings, 0);
+        assert!(sig.bola_surface);
+    }
+
+    #[test]
+    fn category_scores_json_shape() {
+        let findings = vec![
+            json!({"vuln_class": "introspection"}),
+            json!({"title": "sensitive field"}),
+            json!({"vuln_class": "bola"}),
+            json!({"vuln_class": "cors"}),
+        ];
+        let sig = collect_signals(&findings, 1);
+        let v = finalize_category_scores(&sig).to_json();
+        assert_eq!(v["authorization"], json!(60));
+        assert_eq!(v["schema_exposure"], json!(55));
+        assert_eq!(v["transport_hygiene"], json!(75));
+        assert_eq!(v["resource_limits"], json!(100));
+        assert_eq!(v["error_disclosure"], json!(100));
+    }
+
+    #[test]
+    fn business_flows_penalized_only_without_auth_diff() {
+        let leak_only = GraphqlSignals {
+            live_data_leak: true,
+            ..Default::default()
+        };
+        assert_eq!(finalize_category_scores(&leak_only).business_flows, 70.0);
+        let both = GraphqlSignals {
+            live_data_leak: true,
+            auth_differential: true,
+            ..Default::default()
+        };
+        assert_eq!(finalize_category_scores(&both).business_flows, 100.0);
+    }
+
+    #[test]
+    fn emit_toxic_headline_inserts_when_combos() {
+        let sig = GraphqlSignals {
+            introspection_enabled: true,
+            sensitive_fields: true,
+            ..Default::default()
+        };
+        let mut findings: Vec<Value> = Vec::new();
+        emit_toxic_headline("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["category"], json!("toxic_combination"));
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("TOXIC COMBINATION"));
+    }
+
+    #[test]
+    fn emit_toxic_headline_noop_when_clean() {
+        let sig = GraphqlSignals::default();
+        let mut findings: Vec<Value> = Vec::new();
+        emit_toxic_headline("t", &sig, &mut findings);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn extend_attack_paths_exfil_chain() {
+        let sig = GraphqlSignals {
+            introspection_enabled: true,
+            sensitive_fields: true,
+            bola_surface: true,
+            ..Default::default()
+        };
+        let mut findings: Vec<Value> = Vec::new();
+        extend_attack_paths("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["category"], json!("attack_path"));
+    }
+
+    #[test]
+    fn remediation_roadmap_always_baseline() {
+        let sig = GraphqlSignals::default();
+        let mut findings: Vec<Value> = Vec::new();
+        emit_remediation_roadmap("t", &sig, &mut findings);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["category"], json!("remediation_roadmap"));
+    }
+
+    #[test]
+    fn agent_guidance_emits_four() {
+        let mut findings: Vec<Value> = Vec::new();
+        emit_agent_guidance("t", &mut findings);
+        assert_eq!(findings.len(), 4);
+        assert!(findings
+            .iter()
+            .all(|f| f["category"] == json!("agent_guidance")));
+    }
+
+    #[test]
+    fn security_graph_secure_status() {
+        let sig = GraphqlSignals {
+            endpoints_found: 1,
+            ..Default::default()
+        };
+        let (nodes, _edges) = build_security_graph("t", &sig, "host.example");
+        assert_eq!(nodes[0].id, "root");
+        assert_eq!(nodes[0].label, "host.example");
+        assert_eq!(nodes[0].status, "secure");
+        assert!(nodes
+            .iter()
+            .any(|n| n.id == "gql" && n.label == "1 GraphQL endpoint(s)"));
+    }
+
+    #[test]
+    fn security_graph_degraded_with_exfil_edge() {
+        let sig = GraphqlSignals {
+            endpoints_found: 2,
+            introspection_enabled: true,
+            bola_surface: true,
+            sensitive_fields: true,
+            ..Default::default()
+        };
+        let (nodes, edges) = build_security_graph("t", &sig, "");
+        assert_eq!(nodes[0].label, "t"); // empty host -> target
+        assert_eq!(nodes[0].status, "degraded"); // avg (60+55+100)/3 ~= 71.7
+        assert!(nodes.iter().any(|n| n.id == "intro"));
+        assert!(nodes.iter().any(|n| n.id == "bola"));
+        assert!(nodes.iter().any(|n| n.id == "pii"));
+        assert!(edges.iter().any(|e| e.id == "ap_exfil"
+            && e.from_id == "intro"
+            && e.to_id == "pii"
+            && e.edge_type == "MASS_EXFIL"));
+    }
+}
