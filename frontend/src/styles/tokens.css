@@ -101,7 +101,7 @@
      styles on <html>). Defaults reproduce the original cyan→violet palette
      byte-for-byte (color-mix of a solid hue with `transparent` at N% equals the
      legacy rgba(...,N/100) value). Do not hardcode these hues downstream —
-     reference the --accent-*/--brand-* tokens instead. */
+     reference the --accent- and --brand- tokens instead. */
   --brand-primary: #22d3ee;        /* cyan */
   --brand-primary-soft: #67e8f9;
   --brand-secondary: #8b5cf6;      /* violet */
