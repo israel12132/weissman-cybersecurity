@@ -24,6 +24,7 @@ describe('DesignSystemGallery', () => {
     expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Visualizations' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'WarRoom & SOAR' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Enterprise & Marketplace' })).toBeInTheDocument()
   })
 
   it('opens the ⌘K command bar from its trigger', () => {

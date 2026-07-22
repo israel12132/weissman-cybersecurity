@@ -46,6 +46,9 @@ import Timeline from '../components/ui/Timeline'
 import KillChainPath from '../components/ui/KillChainPath'
 import EvidenceGallery from '../components/ui/EvidenceGallery'
 import Stepper from '../components/ui/Stepper'
+import WhiteLabelStudio from '../components/ui/WhiteLabelStudio'
+import ComplianceMatrix from '../components/ui/ComplianceMatrix'
+import MarketplaceCard from '../components/ui/MarketplaceCard'
 
 /**
  * Design System Gallery — a living catalogue of every design-system primitive,
@@ -146,6 +149,7 @@ function ThemeControls() {
 }
 
 export default function DesignSystemGallery() {
+  const { brand, setBrand, clearBrand } = useTheme()
   const [modalOpen, setModalOpen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerSide, setDrawerSide] = useState('end')
@@ -529,6 +533,66 @@ export default function DesignSystemGallery() {
               />
             </div>
           </Field>
+        </Section>
+
+        {/* ── Enterprise & Marketplace ────────────────────────────────── */}
+        <Section
+          id="enterprise"
+          title="Enterprise & Marketplace"
+          description="Live white-label studio (drives the brand engine), compliance coverage matrix, and marketplace cards."
+        >
+          <div className="w-full">
+            <WhiteLabelStudio brand={brand} onChange={setBrand} onReset={clearBrand} />
+          </div>
+          <div className="w-full">
+            <ComplianceMatrix
+              frameworks={[
+                { id: 'iso', label: 'ISO 27001' },
+                { id: 'soc2', label: 'SOC 2' },
+                { id: 'nist', label: 'NIST CSF' },
+                { id: 'cis', label: 'CIS v8' },
+              ]}
+              controls={[
+                { id: 'ac', label: 'Access control', status: { iso: 'covered', soc2: 'covered', nist: 'partial', cis: 'covered' } },
+                { id: 'enc', label: 'Encryption at rest', status: { iso: 'covered', soc2: 'partial', nist: 'covered', cis: 'gap' } },
+                { id: 'log', label: 'Audit logging', status: { iso: 'partial', soc2: 'covered', nist: 'covered', cis: 'covered' } },
+                { id: 'ir', label: 'Incident response', status: { iso: 'gap', soc2: 'partial', nist: 'covered', cis: 'na' } },
+              ]}
+            />
+          </div>
+          <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <MarketplaceCard
+              name="Dark Web Monitor"
+              description="Continuous infostealer + credential-leak surveillance across markets."
+              category="Threat Intel"
+              version="2.4.0"
+              rating={5}
+              installs={12800}
+              price="$49/mo"
+              icon={<Search />}
+            />
+            <MarketplaceCard
+              name="OT/ICS Sentinel"
+              description="Passive OT protocol analysis and anomaly detection for plant networks."
+              category="OT Security"
+              version="1.1.2"
+              rating={4}
+              installs={3400}
+              price="$129/mo"
+              icon={<ShieldCheck />}
+            />
+            <MarketplaceCard
+              name="Cloud Posture"
+              description="CSPM across AWS/Azure/GCP with drift and blast-radius scoring."
+              category="Cloud"
+              version="3.0.1"
+              rating={4}
+              installs={22100}
+              price="Free"
+              installed
+              icon={<Rocket />}
+            />
+          </div>
         </Section>
       </div>
 

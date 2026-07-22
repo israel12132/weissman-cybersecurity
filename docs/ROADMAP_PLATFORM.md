@@ -49,7 +49,7 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| F1 | Compliance report builder UI (ISO/SOC2/NIST/CIS mapping view) | 🟡 FE-surface | ⬜ |
+| F1 | Compliance report builder UI (ISO/SOC2/NIST/CIS mapping view) | 🟡 FE-surface | 🚧 `ComplianceMatrix` shipped |
 | F2 | Evidence Vault browser + tamper-proof badge UI | 🟡 FE-surface | ⬜ |
 | F3 | Audit-trail export UI | 🟢 FE | ⬜ |
 | F4 | RBAC/ABAC policy editor UI | 🟡 FE-surface | ⬜ |
@@ -59,10 +59,10 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| G1 | White-label admin panel (drives the `setBrand` engine from A) | 🟢 FE | ⬜ |
+| G1 | White-label admin panel (drives the `setBrand` engine from A) | 🟢 FE | ✅ `WhiteLabelStudio` |
 | G2 | Billing / usage dashboard UI | 🟡 FE-surface | ⬜ |
 | G3 | Partner Portal (MSSP) shell | 🟡 FE-surface | ⬜ |
-| G4 | Engine Marketplace browse/install UI | 🟡 FE-surface | ⬜ |
+| G4 | Engine Marketplace browse/install UI | 🟡 FE-surface | 🚧 `MarketplaceCard` shipped |
 | G5 | Usage-based + seat billing backend | 🔴 BE | ⬜ |
 
 ---
