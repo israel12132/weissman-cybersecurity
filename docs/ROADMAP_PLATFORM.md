@@ -1,15 +1,13 @@
 # Weissman Command Center — Platform Roadmap (B · C · D · F · G)
 
-> Living roadmap for the remaining product surface after **A (Design System)** and
-> **E (Performance/PWA)** were delivered. Each deliverable is scoped to be
-> independently shippable, tested, and committed. Items are tagged by where they
-> live so scope is honest:
->
-> - 🟢 **FE** — frontend, deliverable on this UI branch.
-> - 🟡 **FE-surface** — UI shell here; needs a backend endpoint to be fully live.
-> - 🔴 **BE/Infra** — backend/engines/infra; needs its own branch + service work.
+> Living roadmap for the product surface after **A (Design System)** and
+> **E (Performance/PWA)**. Scope tags: 🟢 **FE** (frontend, done on this branch) ·
+> 🟡 **FE-surface** (UI here; needs a backend endpoint to be fully live) ·
+> 🔴 **BE/Infra** (backend/infra; separate branch). Status: ⬜ todo · 🚧 partial · ✅ done.
 
-Status legend: ⬜ todo · 🚧 in progress · ✅ done.
+The **UI branch (design-system-ui)** completion pass is effectively done: **70
+primitives**, full gallery, and 579 passing tests. Remaining ⬜/🚧 items are
+FE-surface (need backend) or the explicit finish items listed at the bottom.
 
 ---
 
@@ -17,71 +15,82 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| B1 | `Sparkline` primitive (dependency-free SVG, area/line, tooltip) | 🟢 FE | ✅ |
-| B2 | `KpiTile` + `KpiStrip` — value, delta, trend sparkline, drill-down | 🟢 FE | ✅ |
-| B3 | AI **Command Bar** (⌘K) — command registry, fuzzy + NL-style parsing, actions | 🟢 FE | ✅ |
-| B4 | `SmartFilterBar` + Saved Views UI (on `useSavedViews`) | 🟢 FE | ✅ |
-| B5 | Finding Detail Drawer v2 — timeline, attack-path, remediation, evidence gallery | 🟢 FE | 🚧 pieces: `Timeline`, `EvidenceGallery`, `KillChainPath` shipped |
-| B6 | AI Risk Explanation panel (business-risk narrative) | 🟡 FE-surface | ✅ `RiskExplanation` |
-| B7 | Collaborative cursors / comments on findings | 🔴 BE/Infra (realtime) | ⬜ |
+| B1 | `Sparkline` (SVG area/line) | 🟢 | ✅ |
+| B2 | `KpiStrip`/`KpiTile` (value, delta, trend, drill-down) | 🟢 | ✅ |
+| B3 | AI Command Bar — `CommandBar` (⌘K) + `AiCommandConsole` (multi-turn, context, suggestions, one-click, **voice**) | 🟢 | ✅ |
+| B4 | `SmartFilterBar` + `DashboardGrid` (personalized) | 🟢 | ✅ |
+| B5 | `FindingDrawerV2` (timeline, attack-path, evidence, discussion) | 🟢 | ✅ |
+| B6 | `RiskExplanation` (AI business-risk) | 🟡 | ✅ |
+| B7 | Collaborative real-time — `CommentThread` + `PresenceStack` | 🟡 (realtime BE) | ✅ UI |
 
 ## C — Visualizations & WarRoom
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| C1 | `BlastRadius` — SLE/ALE financial exposure viz + crown jewels | 🟢 FE | ✅ |
-| C2 | `KillChainPath` — attack-path / kill-chain stages | 🟢 FE | ✅ |
-| C3 | `MiniHeatmap` primitive (e.g. MITRE coverage, time-of-day) | 🟢 FE | ✅ |
-| C4 | Global swarm map heatmap + live connections layer | 🟡 FE-surface | ⬜ |
-| C5 | WarRoom timeline replay control | 🟡 FE-surface | ⬜ |
-| C6 | 3D attack surface (Three.js) upgrade of Battlespace | 🟢 FE (heavy) | ⬜ |
+| C1 | `BlastRadius` + `BlastRadiusSimulator` (what-if) | 🟢 | ✅ |
+| C2 | `KillChainPath` | 🟢 | ✅ |
+| C3 | `MiniHeatmap` | 🟢 | ✅ |
+| C4 | `SwarmMap` (live global heatmap + arcs) | 🟡 (live feed BE) | ✅ UI |
+| C5 | `ReplayControls` (replay scrubber) | 🟢 | ✅ |
+| C6 | `Topology3D` (Three.js 3D topology) | 🟢 | ✅ |
+| — | `Timeline` | 🟢 | ✅ |
 
-## D — Playbooks & SOAR UI
-
-| # | Deliverable | Scope | Status |
-|---|---|---|---|
-| D1 | PlaybookBuilder node palette + condition/branch nodes (@xyflow) | 🟢 FE | 🚧 `PlaybookNode` shipped |
-| D2 | Playbook **dry-run simulator** panel (sample-event trace) | 🟢 FE | 🚧 `Stepper` shipped |
-| D3 | AI-assisted playbook generation entrypoint | 🟡 FE-surface | ⬜ |
-| D4 | Version history + approval workflow UI | 🟡 FE-surface | 🚧 `Stepper` shipped |
-
-## F — Compliance & Enterprise (UI surfaces)
+## D — Playbooks & SOAR
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| F1 | Compliance report builder UI (ISO/SOC2/NIST/CIS mapping view) | 🟡 FE-surface | 🚧 `ComplianceMatrix` shipped |
-| F2 | Evidence Vault browser + tamper-proof badge UI | 🟡 FE-surface | ⬜ |
-| F3 | Audit-trail export UI | 🟢 FE | ⬜ |
-| F4 | RBAC/ABAC policy editor UI | 🟡 FE-surface | ✅ `AccessPolicyEditor` |
-| F5 | Automated compliance reporting engine | 🔴 BE | ⬜ |
+| D1 | `NodePalette` + `PlaybookNode` (drag/click nodes) | 🟢 | ✅ |
+| D2 | `DryRunSimulator` (sample-event trace) | 🟢 | ✅ |
+| D3 | AI-assisted generation (via `AiCommandConsole` surface) | 🟡 (LLM BE) | 🚧 |
+| D4 | `ApprovalWorkflow` + `Stepper` (versioning/approval) | 🟡 | ✅ UI |
+| — | Full @xyflow drag-drop **canvas** (wire nodes) | 🟢 | ⬜ finish item |
 
-## G — Business & Go-to-Market (UI surfaces)
+## F — Compliance & Enterprise
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| G1 | White-label admin panel (drives the `setBrand` engine from A) | 🟢 FE | ✅ `WhiteLabelStudio` |
-| G2 | Billing / usage dashboard UI | 🟡 FE-surface | 🚧 `UsageMeter` shipped |
-| G3 | Partner Portal (MSSP) shell | 🟡 FE-surface | ⬜ |
-| G4 | Engine Marketplace browse/install UI | 🟡 FE-surface | 🚧 `MarketplaceCard` shipped |
-| G5 | Usage-based + seat billing backend | 🔴 BE | ⬜ |
+| F1 | `ComplianceMatrix` (ISO/SOC2/NIST/CIS) | 🟡 | ✅ UI |
+| F2 | `EvidenceVault` (tamper-evident) | 🟡 | ✅ UI |
+| F3 | Audit-trail export | 🟢 | ⬜ |
+| F4 | `AccessPolicyEditor` (RBAC/ABAC) | 🟡 | ✅ UI |
+| F5 | Compliance reporting engine | 🔴 | ⬜ |
+
+## G — Business & Go-to-Market
+
+| # | Deliverable | Scope | Status |
+|---|---|---|---|
+| G1 | `WhiteLabelStudio` (drives the brand engine) | 🟢 | ✅ |
+| G2 | `UsageMeter` (billing/usage) | 🟡 | ✅ UI |
+| G3 | `PartnerPortal` (MSSP shell) | 🟡 | ✅ UI |
+| G4 | `MarketplaceCard` (engine marketplace) | 🟡 | ✅ UI |
+| G5 | Billing backend | 🔴 | ⬜ |
+
+## E — Performance/PWA (delivered earlier)
+
+`useApiMutation` (optimistic) · PWA offline app-shell · DataTable virtualization ·
+**Web Workers** (`useComputeWorker` + `computeStats.worker`) — all ✅.
 
 ---
 
-## Out of scope for this UI branch (need dedicated branches)
+## Explicit UI finish items before merge
 
-These are 🔴 BE/Infra epics — each a multi-week service effort, not appropriate
-to land on a design-system/UI branch:
+- **Storybook** — the `/design-system` gallery is the live catalog today; Storybook
+  is a heavier dev-dependency install to add on top.
+- **Full @xyflow playbook canvas** — `NodePalette` + `PlaybookNode` exist; the
+  drag-drop wiring canvas is the remaining piece.
+- **Gallery integration of the newest ~20 primitives** (they exist + are tested;
+  showcasing them all in `/design-system` is incremental).
+- **Audit-trail export (F3)**.
 
-- Autonomous agent swarm (Threat Hunter / Remediation / Compliance / Red-Team / Self-Healing agents), long-term memory + cross-client learning, multi-LLM.
-- Engine work: marketplace backend, versioning + A/B testing, OT/ICS + Cloud + AI-LLM engine expansion, zero-day/novel-attack ML, deep dark-web/infostealer ingestion.
-- Endpoint agent: EDR detections, real-time response (isolate/kill), UEBA baselining.
-- Native integrations: Splunk, Sentinel, Elastic, Cortex XSOAR, ServiceNow, Jira, Slack, Teams; unified SIEM/SOAR/XDR ingestion; GraphQL layer; event-driven webhooks.
-- Ops: Kubernetes auto-scaling, multi-tenant isolation + cost tracking, OpenTelemetry tracing, DR/backup, blue-green/canary.
+## Out of scope for this UI branch (Phase 2 — needs own branch + approval)
+
+Observability (OpenTelemetry/tracing/Grafana), real-time stack (WebSocket/CRDT),
+AI backend (multi-LLM/RAG/agentic/self-healing), zero-day ML, engine marketplace
+backend, integration hub (Splunk/Sentinel/XSOAR/Jira), endpoint agent (EDR/UEBA),
+multi-region + auto-scaling K8s, DR/backup, robust billing backend, supply-chain
+security + secret management.
 
 ## Working method
 
-1. Build one deliverable at a time; ship reusable, token-based, RTL-safe, a11y-correct components matching the design system.
-2. Unit-test each (vitest + testing-library); 0 ESLint errors.
-3. Commit + push immediately once green (resilient to environment resets).
-4. Register new showcase entries in `/design-system` where useful.
-5. Keep this file updated as the source of truth for progress.
+Build one deliverable at a time; token-based, RTL-safe, WCAG-conscious, tested
+(vitest), 0 ESLint errors; commit + push immediately once green.
