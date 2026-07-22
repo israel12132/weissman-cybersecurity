@@ -86,17 +86,22 @@ mod extract_host_tests {
     }
 }
 
-pub async fn http_client() -> Client {
+// A `reqwest::Client` owns a connection pool and is cheap to `clone` (it is `Arc`-backed), so it is
+// meant to be built ONCE and reused — reuse is what gives HTTP keep-alive across probes. Building a
+// fresh client per call (this module is called from ~240 sites) defeated pooling: every probe paid a
+// full TCP+TLS handshake and opened a new socket, so a network-heavy engine's fan-out churned
+// hundreds of connections, lengthening the scan and the window in which one scan's post-persist work
+// overlaps the next. Cache one client per variant; config (TLS policy, UA, timeout) is process-wide.
+static HTTP_CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
     Client::builder()
         .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
         .user_agent("Weissman-Probe/1.0")
         .build()
         .unwrap_or_else(|_| Client::new())
-}
+});
 
-/// HTTP/1.1-only client — used to compare against HTTP/2 ALPN on the same URL.
-pub async fn http1_client() -> Client {
+static HTTP1_CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
     Client::builder()
         .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
@@ -104,10 +109,9 @@ pub async fn http1_client() -> Client {
         .http1_only()
         .build()
         .unwrap_or_else(|_| Client::new())
-}
+});
 
-/// HTTP/2-capable client (ALPN negotiates h2 on TLS). Pair with [`http1_client`].
-pub async fn http2_client() -> Client {
+static HTTP2_CLIENT: std::sync::LazyLock<Client> = std::sync::LazyLock::new(|| {
     Client::builder()
         .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
@@ -115,6 +119,20 @@ pub async fn http2_client() -> Client {
         .http2_adaptive_window(true)
         .build()
         .unwrap_or_else(|_| Client::new())
+});
+
+pub async fn http_client() -> Client {
+    HTTP_CLIENT.clone()
+}
+
+/// HTTP/1.1-only client — used to compare against HTTP/2 ALPN on the same URL.
+pub async fn http1_client() -> Client {
+    HTTP1_CLIENT.clone()
+}
+
+/// HTTP/2-capable client (ALPN negotiates h2 on TLS). Pair with [`http1_client`].
+pub async fn http2_client() -> Client {
+    HTTP2_CLIENT.clone()
 }
 
 /// Attempt a TCP connect+banner read. Returns banner string if the port is open.
