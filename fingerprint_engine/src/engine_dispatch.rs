@@ -114,6 +114,11 @@ pub use engine_dispatch_agent::{
 };
 
 pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -> EngineResult {
+    // Diagnostic breadcrumb: emitted at INFO (captured in the worker log dump) immediately before
+    // an engine runs. If an engine aborts the process (e.g. a stack overflow), the LAST such line
+    // in the worker log names the culprit engine — the only reliable pinpoint for a fatal abort,
+    // which no panic hook can catch.
+    tracing::info!(target: "engine_exec", engine = %engine_id, "run_engine begin");
     let _oast_guard = {
         let listener = ctx.oast_listener_url.as_deref().unwrap_or("").trim();
         let domain = ctx.oast_domain.as_deref().unwrap_or("").trim();

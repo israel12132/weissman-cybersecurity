@@ -325,8 +325,30 @@ async fn process_one(
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    // Scanning engines recurse over untrusted, arbitrarily-nested network data — HTML trees,
+    // JSON / SBOM dependency graphs, redirect chains, protocol frames. Tokio's default 2 MiB
+    // worker-thread stack can overflow on legitimately-deep (but finite) input and, because a
+    // stack overflow ABORTS the whole process, that kills the entire worker and every in-flight
+    // job (observed in the engine-wiring audit: one scan aborted the worker, all later scans
+    // then failed unclaimed). Give the runtime threads a generous, env-tunable stack so
+    // deep-but-finite recursion completes. A genuinely UNBOUNDED recursion would still overflow
+    // here — the `run_engine` begin-log (see engine_dispatch) then names the last engine before
+    // the abort in the worker log, so the specific engine can be given a depth guard.
+    let stack_mb = std::env::var("WEISSMAN_WORKER_THREAD_STACK_MB")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|&n| n >= 2)
+        .unwrap_or(64);
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(stack_mb * 1024 * 1024)
+        .build()
+        .expect("build weissman-worker tokio runtime")
+        .block_on(async_main());
+}
+
+async fn async_main() {
     weissman_db::env_bootstrap::load_process_environment();
     fingerprint_engine::observability::init_tracing_from_env();
     fingerprint_engine::observability::init_prometheus_recorder();
