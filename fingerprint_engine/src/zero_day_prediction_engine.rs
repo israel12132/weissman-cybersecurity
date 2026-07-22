@@ -356,8 +356,12 @@ mod tests {
 
     #[test]
     fn high_risk_components_data_integrity() {
-        assert!(!HIGH_RISK_COMPONENTS.is_empty());
+        // Count during iteration so the "table is populated" assertion is a
+        // runtime check on a local — `!CONST.is_empty()` is denied by clippy's
+        // const_is_empty lint (the emptiness is known at compile time).
+        let mut seen = 0usize;
         for (name, cve_count, risk, pattern) in HIGH_RISK_COMPONENTS {
+            seen += 1;
             assert!(!name.is_empty());
             assert!(*cve_count > 0);
             assert!(!pattern.is_empty());
@@ -367,5 +371,6 @@ mod tests {
                 risk
             );
         }
+        assert!(seen > 0, "HIGH_RISK_COMPONENTS must be populated");
     }
 }
