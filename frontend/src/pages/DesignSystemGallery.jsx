@@ -42,6 +42,10 @@ import CommandBar from '../components/ui/CommandBar'
 import SmartFilterBar from '../components/ui/SmartFilterBar'
 import BlastRadius from '../components/ui/BlastRadius'
 import MiniHeatmap from '../components/ui/MiniHeatmap'
+import Timeline from '../components/ui/Timeline'
+import KillChainPath from '../components/ui/KillChainPath'
+import EvidenceGallery from '../components/ui/EvidenceGallery'
+import Stepper from '../components/ui/Stepper'
 
 /**
  * Design System Gallery — a living catalogue of every design-system primitive,
@@ -473,6 +477,57 @@ export default function DesignSystemGallery() {
                 [8, 2, 5, 9, 3, 6],
               ]}
             />
+          </Field>
+        </Section>
+
+        {/* ── WarRoom & SOAR ──────────────────────────────────────────── */}
+        <Section
+          id="warroom"
+          title="WarRoom & SOAR"
+          description="Attack-path kill chain, incident timeline, evidence lightbox, and a playbook stepper."
+        >
+          <div className="w-full">
+            <KillChainPath
+              title="Kill chain"
+              stages={[
+                { id: 'recon', label: 'Recon', status: 'done' },
+                { id: 'access', label: 'Initial access', status: 'done' },
+                { id: 'exec', label: 'Execution', status: 'active' },
+                { id: 'exfil', label: 'Exfiltration', status: 'blocked', detail: 'DLP blocked' },
+                { id: 'impact', label: 'Impact', status: 'pending' },
+              ]}
+            />
+          </div>
+          <div className="w-full max-w-md">
+            <Timeline
+              items={[
+                { id: 1, title: 'Finding detected', description: 'KEV service on prod-web-01', timestamp: '09:12', variant: 'danger' },
+                { id: 2, title: 'Auto-triaged', description: 'Correlated to CVE-2024-3400', timestamp: '09:13', variant: 'warning' },
+                { id: 3, title: 'Playbook launched', description: 'Ransomware containment', timestamp: '09:15', variant: 'info' },
+                { id: 4, title: 'Host isolated', timestamp: '09:16', variant: 'success' },
+              ]}
+            />
+          </div>
+          <div className="w-full max-w-md">
+            <Stepper
+              steps={[
+                { id: 't', label: 'Trigger', status: 'complete' },
+                { id: 'e', label: 'Enrich', status: 'complete' },
+                { id: 'c', label: 'Contain', status: 'current' },
+                { id: 'n', label: 'Notify', status: 'upcoming' },
+              ]}
+            />
+          </div>
+          <Field label="Evidence gallery">
+            <div className="w-72">
+              <EvidenceGallery
+                items={[
+                  { id: 'a', kind: 'log', caption: 'Access log', content: 'GET /admin 200\nPOST /login 401 x12' },
+                  { id: 'b', kind: 'file', caption: 'memory-dump.raw' },
+                  { id: 'c', kind: 'log', caption: 'EDR alert', content: 'proc: powershell -enc …' },
+                ]}
+              />
+            </div>
           </Field>
         </Section>
       </div>

@@ -23,6 +23,7 @@ describe('DesignSystemGallery', () => {
     // New command-center + visualization sections exercise the 6 new primitives.
     expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Visualizations' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'WarRoom & SOAR' })).toBeInTheDocument()
   })
 
   it('opens the ⌘K command bar from its trigger', () => {
