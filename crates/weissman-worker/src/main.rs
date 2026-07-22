@@ -526,11 +526,27 @@ async fn async_main() {
                 interval.tick().await;
                 let app_size = m_app.size();
                 let app_idle = m_app.num_idle();
+                // Active health-probe: time a trivial acquire+query on app_pool. When a scan's
+                // begin_tenant_tx fails with "pool timed out" even though occupancy is ~0, the cause
+                // is inability to acquire/OPEN a connection (runtime starvation or slow establishment),
+                // not connections held. This probe records how long an acquire+SELECT 1 actually takes
+                // and whether it fails within 8s, so the stall window is captured and correlated with
+                // the running engine. It also keeps one connection hot, reducing cold-start churn.
+                let probe_start = std::time::Instant::now();
+                let probe = tokio::time::timeout(
+                    Duration::from_secs(8),
+                    sqlx::query("SELECT 1").execute(m_app.as_ref()),
+                )
+                .await;
+                let probe_ms = probe_start.elapsed().as_millis() as u64;
+                let probe_ok = matches!(probe, Ok(Ok(_)));
                 info!(
                     target: "pool_metrics",
                     app_size,
                     app_idle,
                     app_in_use = app_size.saturating_sub(app_idle as u32),
+                    probe_ms,
+                    probe_ok,
                     ctrl_size = m_ctrl.size(),
                     ctrl_idle = m_ctrl.num_idle(),
                     intel_size = m_intel.size(),

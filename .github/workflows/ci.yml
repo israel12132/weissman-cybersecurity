@@ -495,6 +495,17 @@ jobs:
           WEISSMAN_APP_POOL_MAX: "30"
           WEISSMAN_AUTH_POOL_MAX: "4"
           WEISSMAN_INTEL_POOL_MAX: "4"
+          # Keep the app pool WARM. Telemetry from a prior run showed worker app-pool occupancy is
+          # ~0 the whole audit (in-use never above 1 of 30 — so this is NOT connection exhaustion),
+          # yet a scan's persist begin_tenant_tx intermittently fails with "pool timed out" while the
+          # pool size had decayed toward 0. That is a cold-start/establishment stall, not saturation:
+          # opening a fresh connection when the next scan arrives is what times out. Holding 8
+          # connections warm means a scan acquires a ready connection instead of opening one on the
+          # hot path. This is warming, not a capacity change — max stays 30 (8 + server 24+6+4 << 100).
+          WEISSMAN_APP_POOL_MIN: "8"
+          # Fine-grained pool telemetry + active SELECT-1 health-probe (main.rs) to capture the exact
+          # stall window and correlate it with the running engine; also keeps a connection hot.
+          WEISSMAN_WORKER_POOL_METRICS_SECS: "2"
           # Tighten the per-finding background-DB fan-out cap (default 6) further for CI's single
           # small Postgres: findings_persist fires best-effort side-effect tasks (pentest-memory +
           # SOAR dispatch) per finding, and a high-finding scan's fan-out otherwise pressures the
