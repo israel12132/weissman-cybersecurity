@@ -4,6 +4,8 @@
     "toggle_theme": "החלף ערכת נושא בהירה/כהה",
     "theme_light": "בהיר",
     "theme_dark": "כהה",
+    "theme_high_contrast": "ניגודיות גבוהה",
+    "cycle_theme": "החלף ערכת נושא (כהה, בהיר, ניגודיות גבוהה)",
     "switch": "החלף",
     "loading": "טוען…",
     "save": "שמור",

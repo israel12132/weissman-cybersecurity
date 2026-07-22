@@ -1,12 +1,20 @@
 {
   "name": "Weissman Cybersecurity Command Center",
   "short_name": "Weissman",
+  "description": "Autonomous cybersecurity command center — live findings, engines, and war-room operations for SOC teams.",
+  "id": "/command-center/",
+  "lang": "en",
+  "dir": "auto",
   "start_url": "/command-center/",
   "scope": "/command-center/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "categories": ["security", "business", "productivity"],
   "theme_color": "#0f172a",
   "background_color": "#020617",
   "icons": [
-    { "src": "/command-center/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/command-center/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/command-center/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }
