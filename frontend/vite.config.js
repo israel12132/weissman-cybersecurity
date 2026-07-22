@@ -33,51 +33,16 @@ function serveDeployPublicHtml() {
   }
 }
 
-const VENDOR_REACT = ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler']
-const VENDOR_I18N = ['i18next', 'react-i18next', 'i18next-browser-languagedetector']
-
-function matchVendor(id, needles) {
-  return needles.some((n) => id.includes(`/node_modules/${n}`))
-}
-
-function manualChunkForId(id) {
-  if (!id.includes('node_modules')) {
-    // Single shared chunk for React contexts — prevents duplicate createContext instances
-    // when cockpit-shell and lazy route chunks both import the same provider module.
-    if (id.includes('/src/context/') || id.includes('/src/providers/')) {
-      return 'app-context'
-    }
-    if (id.includes('/engineC2/EngineManifestContext') || id.includes('/engineC2/EngineC2Boundary')) {
-      return 'app-context'
-    }
-    if (id.includes('enginesRegistry.js')) return 'data-engines-registry'
-    if (id.includes('engineParamDefs.generated')) return 'data-engine-params'
-    if (id.includes('engineUiManifests.seed')) return 'data-ui-manifests'
-    if (id.includes('/locales/en.json')) return 'locale-en'
-    if (id.includes('/locales/he.json')) return 'locale-he'
-    if (id.includes('AstTreeViewer')) return 'widget-ast-tree'
-    if (id.includes('battlespace/')) return 'widget-battlespace'
-    if (id.includes('/Cockpit.jsx')) return 'cockpit-shell'
-    if (id.includes('/TacticalApp.jsx')) return 'tactical-app'
-    if (id.includes('/routing/routeChunks') || id.includes('/routing/routePrefetchMap')) {
-      return 'route-registry'
-    }
-    return undefined
-  }
-
-  if (matchVendor(id, VENDOR_REACT)) return 'vendor-react'
-  if (matchVendor(id, VENDOR_I18N)) return 'vendor-i18n'
-  if (id.includes('three')) return 'vendor-three'
-  if (id.includes('recharts')) return 'vendor-recharts'
-  if (id.includes('@xyflow')) return 'vendor-xyflow'
-  if (id.includes('framer-motion')) return 'vendor-motion'
-  if (id.includes('lucide-react')) return 'vendor-lucide'
-  if (id.includes('@tanstack/react-table')) return 'vendor-table'
-  if (id.includes('react-window')) return 'vendor-window'
-  if (id.includes('react-simple-maps')) return 'vendor-maps'
-
-  return undefined
-}
+// NOTE ON CHUNKING (do not reintroduce a hand-rolled `manualChunks` without live-browser
+// verification): a previous manual vendor/widget split forced React-consuming modules into their own
+// chunks (vendor-lucide, widget-ast-tree, …). Those chunks execute their MODULE-TOP-LEVEL
+// `React.forwardRef(...)` calls before the separate `vendor-react` chunk has initialised React's
+// namespace, so the browser throws "Cannot read properties of undefined (reading 'forwardRef')" and
+// the whole SPA fails to mount — a blank page where the login #email never renders. The Vite dev
+// server does not chunk, so mock UI tests never saw it; it only surfaced in the built bundle under
+// the live E2E. Rollup's default chunking evaluates modules in dependency order (React first) and
+// still emits a separate chunk per dynamic import() — the i18n locale micro-chunks and every lazy
+// route stay split, and shared modules are still deduplicated — so we simply let it decide.
 
 export default defineConfig({
   base: '/command-center/',
@@ -91,9 +56,6 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          return manualChunkForId(id)
-        },
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
