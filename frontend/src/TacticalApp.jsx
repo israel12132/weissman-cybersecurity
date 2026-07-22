@@ -23,6 +23,7 @@ import {
   Login,
   App,
   SystemCore,
+  DesignSystemGallery,
   ReportView,
   AttackSurfaceGraph,
   SemanticLogicEngine,
@@ -195,6 +196,7 @@ export default function TacticalApp() {
           <Route index element={<CeoProtectedRoute><Cockpit ceoIntegrated /></CeoProtectedRoute>} />
           <Route path="operations" element={<Cockpit />} />
           <Route path="system-core" element={<SystemCore />} />
+          <Route path="design-system" element={<DesignSystemGallery />} />
           <Route path="report/:clientId" element={<ReportView />} />
           <Route path="attack-surface-graph/:clientId" element={<AttackSurfaceGraph />} />
           <Route path="semantic-logic/:clientId" element={<SemanticLogicEngine />} />
