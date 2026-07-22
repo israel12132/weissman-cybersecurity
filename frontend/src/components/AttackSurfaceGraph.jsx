@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 
 const CENTER_X = 500
@@ -125,7 +125,6 @@ export default function AttackSurfaceGraph() {
     if (!clientId) return
     setLoading(true)
     apiFetch(`/api/clients/${clientId}/attack-surface-graph`)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(t(`${NS}.load_failed`)))))
       .then(data => {
         setGraph(data)
         const { nodes: layoutN, edges: layoutE } = layoutNodes(data.nodes || [], data.edges || [])

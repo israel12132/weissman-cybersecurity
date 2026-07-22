@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { ENGINES_BY_ID, ENGINE_GROUPS } from '../lib/enginesRegistry'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import { downloadBytes } from '../lib/pdfExport'
 import { exportStandardFindingsCsv } from '../lib/exportFindingsCsv'
@@ -143,6 +143,7 @@ function Terminal({ lines }) {
   }, [lines])
 
   const copyAll = useCallback(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     navigator.clipboard?.writeText(lines.join('\n')).catch(() => {})
   }, [lines])
 
@@ -263,9 +264,8 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
     async function load() {
       setLoading(true)
       try {
-        const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
-        const data = await r.json().catch(() => null)
-        if (!cancelled && r.ok && Array.isArray(data?.jobs) && data.jobs.length > 0) {
+        const data = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
+        if (!cancelled && Array.isArray(data?.jobs) && data.jobs.length > 0) {
           setHistory(data.jobs.map(mapServerHistoryJob))
           setFromServer(true)
           setLoading(false)
@@ -318,10 +318,9 @@ function EngineContractPanel({ engineId }) {
     let cancelled = false
     setState('loading')
     apiFetch(`/api/engines/${encodeURIComponent(engineId)}/contract`)
-      .then(async (r) => {
-        const d = await r.json().catch(() => ({}))
+      .then((d) => {
         if (cancelled) return
-        if (r.ok && !d.error) {
+        if (!d.error) {
           setContract(d)
           setState('ok')
         } else {
@@ -429,8 +428,8 @@ export default function EngineDetail() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -438,9 +437,8 @@ export default function EngineDetail() {
     if (!engineId) return
     setHistoryLoading(true)
     try {
-      const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
-      const data = await r.json().catch(() => null)
-      if (r.ok && Array.isArray(data?.jobs) && data.jobs.length > 0) {
+      const data = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=20`)
+      if (Array.isArray(data?.jobs) && data.jobs.length > 0) {
         setRunHistory(data.jobs.map(mapServerHistoryJob))
         return
       }
@@ -463,7 +461,6 @@ export default function EngineDetail() {
     }
     let cancelled = false
     apiFetch(`/api/clients/${selectedClientId}/integrations`)
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled && d) setClientIntegrations(normalizeIntegrations(d)) })
       .catch(() => { if (!cancelled) setClientIntegrations(null) })
     return () => { cancelled = true }
@@ -541,7 +538,7 @@ export default function EngineDetail() {
               es.close()
               setLines((prev) => [...prev, `> [${status.toUpperCase()}] Job ${jid} finished.`])
             }
-          } catch {}
+          } catch { /* best-effort; non-fatal */ }
         }
         es.onerror = () => { setRunning(false); es.close(); setLastRunStatus('error') }
       } else {
@@ -553,6 +550,7 @@ export default function EngineDetail() {
       showToast('error', e?.message ?? 'Network error')
       setRunning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, clientIntegrations, showToast, resetFindings, addFinding, isProduction, t])
 
   const handleStop = useCallback(() => {
@@ -820,8 +818,9 @@ export default function EngineDetail() {
 
           {/* Client */}
           <div>
-            <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
+            <label htmlFor="engine-client" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
             <select
+              id="engine-client"
               value={selectedClientId ?? ''}
               onChange={(e) => setSelectedClientId(e.target.value || null)}
               disabled={running}

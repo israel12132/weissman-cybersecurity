@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from 'react-simple-maps'
 import { Radio, RefreshCw } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 // Vendored locally (see world-atlas dependency) so the map needs no external
 // CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
@@ -33,14 +33,22 @@ export default function GlobalEdgeSwarmMap() {
     setLoading(true)
     setError(null)
     try {
-      const [nr, mr] = await Promise.all([
-        apiFetch('/api/edge-swarm/nodes'),
-        apiFetch('/api/edge-fuzz/manifest'),
+      // Each endpoint is independently tolerant so one failing with an HTTP
+      // error still lets the other populate (preserves the original per-response
+      // `.ok` checks). A tolerated HTTP failure resolves to null; network
+      // failures (no `.status`) are re-thrown so they still surface the error
+      // banner via the outer catch, exactly as before.
+      const tolerateHttpError = (e) => {
+        if (e?.status != null) return null
+        throw e
+      }
+      const [nodesData, manifestData] = await Promise.all([
+        apiFetch('/api/edge-swarm/nodes').catch(tolerateHttpError),
+        apiFetch('/api/edge-fuzz/manifest').catch(tolerateHttpError),
       ])
-      const nd = nr.ok ? await nr.json() : { nodes: [] }
+      const nd = nodesData != null ? nodesData : { nodes: [] }
       setNodes(Array.isArray(nd.nodes) ? nd.nodes : [])
-      if (mr.ok) setManifest(await mr.json())
-      else setManifest(null)
+      setManifest(manifestData != null ? manifestData : null)
     } catch (e) {
       setError(t(`${NS}.loadFailed`))
       setNodes([])

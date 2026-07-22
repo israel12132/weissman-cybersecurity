@@ -16,7 +16,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 const NS = 'pages.threatHuntingWorkbench'
@@ -349,15 +349,7 @@ export default function ThreatHuntingWorkbench() {
 
   const loadHuntData = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/soc/hunts')
-      if (!r.ok) {
-        setCampaigns([])
-        setIocs([])
-        setQueries([])
-        setCampaignsError(t(`${NS}.load_error`, { status: r.status }))
-        return
-      }
-      const data = await r.json().catch(() => ({}))
+      const data = await apiFetch('/api/soc/hunts')
       const list = (Array.isArray(data.campaigns) ? data.campaigns : []).map((raw) => normalizeCampaign(raw, t))
       const iocList = (Array.isArray(data.iocs) ? data.iocs : []).map(normalizeIoc)
       const queryList = (Array.isArray(data.queries) ? data.queries : []).map((raw, i) => normalizeQuery(raw, i, t))
@@ -373,7 +365,7 @@ export default function ThreatHuntingWorkbench() {
       setCampaigns([])
       setIocs([])
       setQueries([])
-      setCampaignsError(e.message || String(e))
+      setCampaignsError(e?.status ? t(`${NS}.load_error`, { status: e.status }) : (e.message || String(e)))
     } finally {
       setCampaignsLoading(false)
     }

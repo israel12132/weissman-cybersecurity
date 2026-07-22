@@ -9,7 +9,7 @@ vi.mock('react-i18next', () => {
 })
 
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-vi.mock('../../lib/apiBase', () => ({ apiFetch }))
+vi.mock('../../utils/apiFetch', () => ({ apiFetch }))
 
 import AuditTrailTab from './AuditTrailTab'
 
@@ -25,7 +25,7 @@ afterEach(() => cleanup())
 
 describe('AuditTrailTab → DataTable', () => {
   it('loads audit rows and renders them through the DataTable primitive', async () => {
-    apiFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(SAMPLE) })
+    apiFetch.mockResolvedValue(SAMPLE)
     render(<AuditTrailTab />)
 
     // Data plumbed into the DataTable → the first row's distinctive cell appears...
@@ -37,7 +37,7 @@ describe('AuditTrailTab → DataTable', () => {
   })
 
   it('shows the empty state when there are no entries', async () => {
-    apiFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    apiFetch.mockResolvedValue([])
     render(<AuditTrailTab />)
     await waitFor(() =>
       expect(screen.getByText('components.cockpitTabs.auditTrail.noEntries')).toBeInTheDocument(),

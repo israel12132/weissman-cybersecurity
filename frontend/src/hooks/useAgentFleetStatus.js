@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 let cachedPayload = null
 let fetchPromise = null
@@ -8,7 +8,6 @@ async function fetchAgentStatus(force = false) {
   if (!force && cachedPayload) return cachedPayload
   if (!fetchPromise || force) {
     fetchPromise = apiFetch('/api/agents/status')
-      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         cachedPayload = data || { agents: [], online_count: 0 }
         return cachedPayload

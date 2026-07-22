@@ -8,7 +8,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { SkeletonBar } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 export default function CeoCommandCenter() {
   const { t } = useTranslation()
@@ -21,10 +21,10 @@ export default function CeoCommandCenter() {
     setExporting(true)
     try {
       const [telemetry, snapshot, buffer, vault] = await Promise.all([
-        apiFetch('/api/ceo/telemetry').then((r) => (r.ok ? r.json() : null)),
-        apiFetch('/api/ceo/god-mode/snapshot').then((r) => (r.ok ? r.json() : null)),
-        apiFetch('/api/ceo/sovereign/buffer?limit=200').then((r) => (r.ok ? r.json() : null)),
-        apiFetch('/api/ceo/vault?limit=100&offset=0').then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/api/ceo/telemetry').catch(() => null),
+        apiFetch('/api/ceo/god-mode/snapshot').catch(() => null),
+        apiFetch('/api/ceo/sovereign/buffer?limit=200').catch(() => null),
+        apiFetch('/api/ceo/vault?limit=100&offset=0').catch(() => null),
       ])
       const bundle = {
         exported_at: new Date().toISOString(),

@@ -13,7 +13,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonTable } from '../components/ui/Skeleton';
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
@@ -128,6 +128,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
       setStatus('error');
       showToast('error', e?.message ?? t('pages.otIcsSecurity.scan_failed'));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, clients, engine, showToast, t]);
 
   return (
@@ -235,13 +236,10 @@ export default function OtIcsSecurity() {
 
   const fetchOtDevices = useCallback(async () => {
     try {
-      const response = await apiFetch('/api/ot-ics/devices');
-      if (response.ok) {
-        const data = await response.json();
-        setDevices(data.devices || []);
-        setProtocols(data.protocols || []);
-        setFindings(data.findings || []);
-      }
+      const data = await apiFetch('/api/ot-ics/devices');
+      setDevices(data.devices || []);
+      setProtocols(data.protocols || []);
+      setFindings(data.findings || []);
     } catch (error) {
       console.error('Failed to fetch OT devices:', error);
     } finally {
@@ -259,8 +257,7 @@ export default function OtIcsSecurity() {
     }
     setFpLoading(true);
     try {
-      const r = await apiFetch(`/api/clients/${encodeURIComponent(cid)}/ot-ics/fingerprints`);
-      const d = await r.json().catch(() => ({}));
+      const d = await apiFetch(`/api/clients/${encodeURIComponent(cid)}/ot-ics/fingerprints`);
       setFingerprints(Array.isArray(d.fingerprints) ? d.fingerprints : []);
     } catch {
       setFingerprints([]);
@@ -314,9 +311,8 @@ export default function OtIcsSecurity() {
   const handleRefresh = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const r = await apiFetch('/api/engines/history/scada_ics?limit=1');
-      if (r.ok) {
-        const d = await r.json();
+      try {
+        const d = await apiFetch('/api/engines/history/scada_ics?limit=1');
         const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : [];
         const last = runs[0];
         if (last) {
@@ -325,7 +321,7 @@ export default function OtIcsSecurity() {
           setLastUpdated(last.completed_at || last.updated_at || last.created_at || null);
           setLastJobId(last.job_id ?? last.id ?? null);
         }
-      }
+      } catch { /* history unavailable — still refresh the device inventory below */ }
       await fetchOtDevices();
     } finally {
       setHistoryLoading(false);
@@ -335,7 +331,6 @@ export default function OtIcsSecurity() {
   useEffect(() => {
     handleRefresh();
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         if (!Array.isArray(d)) return;
         setClients(d);

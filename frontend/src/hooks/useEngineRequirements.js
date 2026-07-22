@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 const DEFAULT_MODULES = ['baseline_asm']
 
@@ -31,14 +31,12 @@ export function useEngineRequirements() {
     setLoading(true)
     setError('')
     try {
-      const [reqR, tenR] = await Promise.all([
+      const [catalogData, tenantData] = await Promise.all([
         apiFetch('/api/engines/requirements'),
         apiFetch('/api/onboarding/tenant-status'),
       ])
-      if (!reqR.ok) throw new Error(`requirements HTTP ${reqR.status}`)
-      if (!tenR.ok) throw new Error(`tenant-status HTTP ${tenR.status}`)
-      setCatalog(await reqR.json())
-      setTenantStatus(await tenR.json())
+      setCatalog(catalogData)
+      setTenantStatus(tenantData)
     } catch (e) {
       setError(e.message || 'Failed to load requirements')
     } finally {

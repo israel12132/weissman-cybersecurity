@@ -9,7 +9,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { isHttpUrl } from '../utils/safeUrl'
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
@@ -1727,7 +1727,8 @@ export default function IacSecurityCenter() {
   }, [previewBody])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -1751,6 +1752,7 @@ export default function IacSecurityCenter() {
     if (params.scan_modes.includes('repo') && !params.repo_url.trim()) return params.scan_modes.length > 1
     if (params.scan_modes.includes('exposure') && !target.trim()) return params.scan_modes.length > 1
     return true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, params.scan_modes, params.iac_content, params.repo_url, target])
 
   const handleRun = useCallback(async () => {
@@ -1775,7 +1777,7 @@ export default function IacSecurityCenter() {
           if (p.message) appendLine(p.message)
           if (p.status === 'completed' || p.status === 'failed') {
             es.close()
-            apiFetch(`/api/jobs/${jobId}`).then((jr) => (jr.ok ? jr.json() : null)).then((job) => {
+            apiFetch(`/api/jobs/${jobId}`).then((job) => {
               const res = job?.result_json || job?.result
               const all = res?.findings || []
               const sum = all.find((x) => x.category === 'iac_summary')
@@ -1791,6 +1793,7 @@ export default function IacSecurityCenter() {
       }
       es.onerror = () => { es.close(); setRunning(false) }
     } catch (e) { appendLine(`[ERROR] ${e.message}`); setRunning(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRun, params, selectedClientId, effectiveTarget, paramCount, appendLine])
 
   const remediationQueue = useMemo(() => summary?.remediation_queue || [], [summary])
@@ -1877,9 +1880,7 @@ export default function IacSecurityCenter() {
 
   const loadLastScan = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/engines/history/iac_misconfig?limit=1')
-      if (!r.ok) return
-      const d = await r.json()
+      const d = await apiFetch('/api/engines/history/iac_misconfig?limit=1')
       const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
       const last = runs[0]
       if (!last) return

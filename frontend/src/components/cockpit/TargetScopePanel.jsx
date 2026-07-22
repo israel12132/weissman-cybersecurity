@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.targetScopePanel'
@@ -59,7 +59,6 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
     }
     setLoading(true)
     apiFetch(`/api/clients/${selectedClientId}/findings`)
-      .then((r) => r.ok ? r.json() : { findings: [] })
       .then((d) => {
         const list = Array.isArray(d.findings) ? d.findings : []
         setZeroDayFindings(list.filter((f) => (f.source || '').toLowerCase().includes('zero_day') || (f.source || '').toLowerCase().includes('zero-day')))

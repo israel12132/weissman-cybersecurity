@@ -8,7 +8,8 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import DataTable from '../components/ui/DataTable'
 import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -67,25 +68,31 @@ export default function ClientEvidenceVault() {
     setLoading(true)
     setError('')
     try {
-      const [clientRes, evidenceRes] = await Promise.all([
-        apiFetch(`/api/clients/${clientId}`),
-        apiFetch(`/api/clients/${clientId}/evidence`),
+      const settle = (p) => p.then((data) => ({ data }), (error) => ({ error }))
+      const [clientR, evidenceR] = await Promise.all([
+        settle(apiFetch(`/api/clients/${clientId}`)),
+        settle(apiFetch(`/api/clients/${clientId}/evidence`)),
       ])
 
-      if (!clientRes.ok) {
-        setError(t('pages.clientEvidenceVault.load_client_failed', { status: clientRes.status }))
-        setLoading(false)
-        return
-      }
-      setClient(await clientRes.json().catch(() => null))
+      // A genuine network failure (no HTTP status) surfaces as the generic
+      // network_error via the outer catch, exactly like the old Promise.all reject.
+      const netErr = [clientR, evidenceR].find((r) => r.error && !r.error.status)?.error
+      if (netErr) throw netErr
 
-      if (!evidenceRes.ok) {
-        const detail = await evidenceRes.text().catch(() => '')
-        setError(t('pages.clientEvidenceVault.load_failed', { status: evidenceRes.status, detail }))
+      if (clientR.error) {
+        setError(t('pages.clientEvidenceVault.load_client_failed', { status: clientR.error.status }))
         setLoading(false)
         return
       }
-      const data = await evidenceRes.json().catch(() => ({}))
+      setClient(clientR.data)
+
+      if (evidenceR.error) {
+        const detail = evidenceR.error.response ? await evidenceR.error.response.text().catch(() => '') : ''
+        setError(t('pages.clientEvidenceVault.load_failed', { status: evidenceR.error.status, detail }))
+        setLoading(false)
+        return
+      }
+      const data = evidenceR.data
       setEvidence(Array.isArray(data.evidence) ? data.evidence : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEvidenceVault.network_error'))
@@ -116,16 +123,10 @@ export default function ClientEvidenceVault() {
         engagement_id: engagementId.trim() ? Number(engagementId.trim()) : undefined,
         vulnerability_id: vulnerabilityId.trim() ? Number(vulnerabilityId.trim()) : undefined,
       }
-      const res = await apiFetch(`/api/clients/${clientId}/evidence`, {
+      await apiFetch(`/api/clients/${clientId}/evidence`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
       })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setError(body?.detail || body?.error || `Upload failed (HTTP ${res.status})`)
-        return
-      }
       setLabel('')
       setNotes('')
       setEngagementId('')
@@ -133,7 +134,12 @@ export default function ClientEvidenceVault() {
       setFile(null)
       await loadAll()
     } catch (e) {
-      setError(e?.message || t('pages.clientEvidenceVault.upload_failed'))
+      if (e?.response) {
+        const body = await e.response.json().catch(() => ({}))
+        setError(body?.detail || body?.error || `Upload failed (HTTP ${e.status})`)
+      } else {
+        setError(e?.message || t('pages.clientEvidenceVault.upload_failed'))
+      }
     } finally {
       setUploading(false)
     }
@@ -149,16 +155,16 @@ export default function ClientEvidenceVault() {
     })
     if (!ok) return
     try {
-      const res = await apiFetch(`/api/evidence/${item.id}`, { method: 'DELETE' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast.error(data?.detail || data?.error || `Delete failed (HTTP ${res.status})`)
-        return
-      }
+      await apiFetch(`/api/evidence/${item.id}`, { method: 'DELETE' })
       await loadAll()
       toast.success(t('pages.clientEvidenceVault.delete_success'))
     } catch (e) {
-      toast.error(e?.message || t('pages.clientEvidenceVault.delete_failed'))
+      if (e?.response) {
+        const data = await e.response.json().catch(() => ({}))
+        toast.error(data?.detail || data?.error || `Delete failed (HTTP ${e.status})`)
+      } else {
+        toast.error(e?.message || t('pages.clientEvidenceVault.delete_failed'))
+      }
     }
   }
 

@@ -84,5 +84,6 @@ export function useResolvedEngineManifest({ pathname, engineId }) {
     if (engineId) return resolveByEngineId(engineId)
     if (pathname) return resolveByRoute(pathname)
     return null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineId, pathname, resolveByRoute, resolveByEngineId, ready])
 }

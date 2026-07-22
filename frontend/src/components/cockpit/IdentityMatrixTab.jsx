@@ -5,7 +5,7 @@ import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { motion } from 'framer-motion'
 import { ShieldAlert, UserPlus, Trash2, ArrowRight, Zap, Sparkles } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 import DataTable from '../ui/DataTable'
 
@@ -27,23 +27,17 @@ export default function IdentityMatrixTab() {
   const fetchContexts = useCallback(async () => {
     if (!selectedClientId) return
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
-      if (r.ok) {
-        const d = await r.json()
-        setContexts(d.contexts || [])
-      }
-    } catch (_) {}
+      const d = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`)
+      setContexts(d.contexts || [])
+    } catch (_) { /* best-effort; non-fatal */ }
   }, [selectedClientId])
 
   const fetchEvents = useCallback(async () => {
     if (!selectedClientId) return
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
-      if (r.ok) {
-        const d = await r.json()
-        setEvents(d.events || [])
-      }
-    } catch (_) {}
+      const d = await apiFetch(`/api/clients/${selectedClientId}/privilege-escalation`)
+      setEvents(d.events || [])
+    } catch (_) { /* best-effort; non-fatal */ }
   }, [selectedClientId])
 
   useEffect(() => {
@@ -85,21 +79,18 @@ export default function IdentityMatrixTab() {
     if (!selectedClientId || !form.role_name.trim()) return
     setSubmitting(true)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`, {
+      await apiFetch(`/api/clients/${selectedClientId}/identity-contexts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           role_name: form.role_name.trim(),
           privilege_order: Number(form.privilege_order) || 0,
           token_type: form.token_type,
           token_value: form.token_value,
-        }),
+        },
       })
-      if (r.ok) {
-        setForm({ role_name: '', privilege_order: 0, token_type: 'bearer', token_value: '' })
-        await fetchContexts()
-      }
-    } catch (_) {}
+      setForm({ role_name: '', privilege_order: 0, token_type: 'bearer', token_value: '' })
+      await fetchContexts()
+    } catch (_) { /* best-effort; non-fatal */ }
     setSubmitting(false)
   }
 
@@ -107,11 +98,11 @@ export default function IdentityMatrixTab() {
     async (ctxId) => {
       if (!selectedClientId) return
       try {
-        const r = await apiFetch(`/api/clients/${selectedClientId}/identity-contexts/${ctxId}`, {
+        await apiFetch(`/api/clients/${selectedClientId}/identity-contexts/${ctxId}`, {
           method: 'DELETE',
         })
-        if (r.ok) await fetchContexts()
-      } catch (_) {}
+        await fetchContexts()
+      } catch (_) { /* best-effort; non-fatal */ }
     },
     [selectedClientId, fetchContexts],
   )

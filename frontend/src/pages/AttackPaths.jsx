@@ -17,7 +17,7 @@ import DataTable from '../components/ui/DataTable'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
@@ -111,9 +111,8 @@ export default function AttackPaths() {
       setError('')
       try {
         const qs = recompute ? '?recompute=1&top_k=15' : ''
-        const r = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}${qs}`)
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok || data.ok === false) throw new Error(data.detail || `HTTP ${r.status}`)
+        const data = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}${qs}`)
+        if (data?.ok === false) throw new Error(data.detail || 'load failed')
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))

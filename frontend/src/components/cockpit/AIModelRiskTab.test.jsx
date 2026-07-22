@@ -10,7 +10,7 @@ vi.mock('../../context/ClientContext', () => ({
   useClient: () => ({ selectedClientId: 'c1', selectedClient: { id: 'c1', name: 'Acme' } }),
 }))
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-vi.mock('../../lib/apiBase', () => ({ apiFetch }))
+vi.mock('../../utils/apiFetch', () => ({ apiFetch }))
 
 import AIModelRiskTab from './AIModelRiskTab'
 
@@ -23,9 +23,9 @@ beforeEach(() => {
   apiFetch.mockReset()
   apiFetch.mockImplementation((url) => {
     const u = String(url)
-    if (u.includes('/events')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: EVENTS }) })
-    if (u.includes('/summary')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ vectors: [] }) })
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    if (u.includes('/events')) return Promise.resolve({ events: EVENTS })
+    if (u.includes('/summary')) return Promise.resolve({ vectors: [] })
+    return Promise.resolve({})
   })
 })
 afterEach(() => cleanup())

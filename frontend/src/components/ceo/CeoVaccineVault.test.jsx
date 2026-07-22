@@ -6,7 +6,8 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t }) }
 })
 const { apiFetch, apiUrl } = vi.hoisted(() => ({ apiFetch: vi.fn(), apiUrl: (p) => p }))
-vi.mock('../../lib/apiBase', () => ({ apiFetch, apiUrl }))
+vi.mock('../../utils/apiFetch', () => ({ apiFetch }))
+vi.mock('../../lib/apiBase', () => ({ apiUrl }))
 
 import CeoVaccineVault from './CeoVaccineVault'
 
@@ -20,7 +21,7 @@ afterEach(() => cleanup())
 
 describe('CeoVaccineVault → DataTable', () => {
   it('renders vault rows and selecting a row via onRowClick loads its chain view', async () => {
-    apiFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(VAULT) })
+    apiFetch.mockResolvedValue(VAULT)
     render(<CeoVaccineVault />)
 
     await waitFor(() => expect(screen.getByText('nginx')).toBeInTheDocument())

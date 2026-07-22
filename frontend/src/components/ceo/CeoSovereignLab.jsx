@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 import DataTable from '../ui/DataTable'
 
@@ -20,9 +20,7 @@ export default function CeoSovereignLab() {
     setLoading(true)
     setErr('')
     try {
-      const r = await apiFetch('/api/ceo/sovereign/buffer?limit=200')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch('/api/ceo/sovereign/buffer?limit=200')
       setRows(Array.isArray(d) ? d : [])
     } catch (e) {
       setErr(e.message || t('components.ceo.sovereignLab.loadFailed'))
@@ -41,16 +39,13 @@ export default function CeoSovereignLab() {
       setBusyId(bufferId)
       setToast('')
       try {
-        const r = await apiFetch('/api/ceo/sovereign/trigger', {
+        const d = await apiFetch('/api/ceo/sovereign/trigger', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             buffer_id: bufferId,
             trace: 'ceo-sovereign-shadow-preflight',
-          }),
+          },
         })
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(d.detail || r.statusText)
         setToast(t(`${NS}.enqueuedJob`, { jobId: d.job_id || '' }))
         await load()
       } catch (e) {

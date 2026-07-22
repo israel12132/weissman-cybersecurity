@@ -211,6 +211,7 @@ export function useWeissmanSocket() {
       );
       scheduleReconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleMessage]);
 
   function scheduleReconnect() {

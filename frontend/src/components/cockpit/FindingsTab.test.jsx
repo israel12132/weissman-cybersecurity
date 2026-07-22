@@ -19,7 +19,7 @@ vi.mock('../findings/FindingLiveVerify', () => ({
   LiveVerdictBadge: () => <span data-testid="verdict" />,
 }))
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-vi.mock('../../lib/apiBase', () => ({ apiFetch }))
+vi.mock('../../utils/apiFetch', () => ({ apiFetch }))
 
 import FindingsTab from './FindingsTab'
 
@@ -31,7 +31,7 @@ const FINDINGS = [
 beforeEach(() => {
   apiFetch.mockReset()
   apiFetch.mockImplementation((url) =>
-    Promise.resolve({ ok: true, json: () => Promise.resolve(String(url).includes('/findings') ? { findings: FINDINGS } : {}) }),
+    Promise.resolve(String(url).includes('/findings') ? { findings: FINDINGS } : {}),
   )
 })
 afterEach(() => cleanup())

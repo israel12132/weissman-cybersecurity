@@ -11,7 +11,7 @@ import {
   Shield,
   Sparkles,
 } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import { formatApiErrorFromBody } from '../../lib/apiError'
 import Button from '../ui/Button'
 
@@ -70,21 +70,24 @@ export default function OnboardingWizard({ open, onComplete }) {
         contact_email: '',
         auto_detect_tech_stack: true,
       }
-      const r = await apiFetch('/api/clients', {
+      const d = await apiFetch('/api/clients', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.id == null) {
-        setError(formatApiErrorFromBody(d, r.status))
+      if (d.id == null) {
+        setError(formatApiErrorFromBody(d, 200))
         setSubmitting(false)
         return
       }
       setClientId(String(d.id))
       setStep(2)
     } catch (err) {
-      setError(err?.message || t('components.onboarding.network_error'))
+      if (err?.response) {
+        const b = await err.response.json().catch(() => ({}))
+        setError(formatApiErrorFromBody(b, err.status))
+      } else {
+        setError(err?.message || t('components.onboarding.network_error'))
+      }
     }
     setSubmitting(false)
   }
@@ -94,13 +97,7 @@ export default function OnboardingWizard({ open, onComplete }) {
     setError('')
     setSubmitting(true)
     try {
-      const r = await apiFetch(`/api/clients/${clientId}/scan/run-all`, { method: 'POST' })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setError(d.detail || d.message || t('components.onboarding.scan_failed', { status: r.status }))
-        setSubmitting(false)
-        return
-      }
+      const d = await apiFetch(`/api/clients/${clientId}/scan/run-all`, { method: 'POST' })
       setScanResult({
         message: d.message || t('components.onboarding.scan_queued_default'),
         jobs_queued: d.jobs_queued ?? 0,
@@ -109,7 +106,12 @@ export default function OnboardingWizard({ open, onComplete }) {
         onComplete?.({ clientId, scan: d })
       }, 1800)
     } catch (err) {
-      setError(err?.message || t('components.onboarding.scan_network_error'))
+      if (err?.response) {
+        const b = await err.response.json().catch(() => ({}))
+        setError(b.detail || b.message || t('components.onboarding.scan_failed', { status: err.status }))
+      } else {
+        setError(err?.message || t('components.onboarding.scan_network_error'))
+      }
       setSubmitting(false)
     }
   }
@@ -215,6 +217,7 @@ export default function OnboardingWizard({ open, onComplete }) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={t('components.onboarding.client_placeholder')}
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional focus on first field of onboarding wizard
                     autoFocus
                     className="w-full px-4 py-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border-default)] text-white placeholder-white/25 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 transition-all"
                   />

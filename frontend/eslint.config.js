@@ -8,7 +8,15 @@ import jsxA11y from 'eslint-plugin-jsx-a11y'
 // errors — stays green while we burn down the a11y backlog across the ~77 pages that
 // currently lack aria/role coverage. New code is nudged toward accessible markup.
 const jsxA11yWarnings = Object.fromEntries(
-  Object.keys(jsxA11y.flatConfigs.recommended.rules).map((rule) => [rule, 'warn']),
+  Object.entries(jsxA11y.flatConfigs.recommended.rules)
+    // Honor the plugin's own recommended baseline: skip rules it ships as "off"
+    // (notably the DEPRECATED `label-has-for`, superseded by
+    // `label-has-associated-control`, which the old `Object.keys(...)` mapping
+    // was force-enabling), and PRESERVE each rule's option object (e.g.
+    // `control-has-associated-label`'s ignore-list for bare inputs/textareas)
+    // rather than dropping it. Real a11y rules still surface as warnings.
+    .filter(([, cfg]) => (Array.isArray(cfg) ? cfg[0] : cfg) !== 'off')
+    .map(([rule, cfg]) => [rule, Array.isArray(cfg) ? ['warn', ...cfg.slice(1)] : 'warn']),
 )
 
 // Flat config (ESLint 9). Scoped to application source (src/**). The Playwright

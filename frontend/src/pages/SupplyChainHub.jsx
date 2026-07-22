@@ -10,7 +10,7 @@ import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -104,6 +104,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
       showToast('error', e?.message ?? t('common.error'))
       setRunning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, engineId, label, showToast, t])
 
   return (
@@ -177,8 +178,8 @@ export default function SupplyChainHub() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -217,9 +218,7 @@ export default function SupplyChainHub() {
   const handleRefresh = useCallback(async () => {
     setRefreshLoading(true)
     try {
-      const r = await apiFetch('/api/engines/history/supply_chain?limit=1')
-      if (!r.ok) return
-      const d = await r.json()
+      const d = await apiFetch('/api/engines/history/supply_chain?limit=1')
       const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
       const last = runs[0]
       const findings = Array.isArray(last?.findings) ? last.findings : []

@@ -8,7 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EmptyState from '../components/ui/EmptyState'
 import Button from '../components/ui/Button'
 import { SkeletonTable } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import RemediationDetail from '../components/remediation/RemediationDetail'
 import BatchHealPanel from '../components/remediation/BatchHealPanel'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
@@ -129,9 +129,7 @@ export default function RemediationHub() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/findings?limit=2000')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch('/api/findings?limit=2000')
       const arr = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
       setFindings(arr)
     } catch (e) {
@@ -149,7 +147,7 @@ export default function RemediationHub() {
     if (!ids.length) { setHealStats(null); return undefined }
     let cancelled = false
     Promise.all(
-      ids.map((id) => apiFetch(`/api/clients/${id}/heal-stats`).then((r) => (r.ok ? r.json() : null)).catch(() => null)),
+      ids.map((id) => apiFetch(`/api/clients/${id}/heal-stats`).catch(() => null)),
     ).then((list) => {
       if (cancelled) return
       const channelMap = {}

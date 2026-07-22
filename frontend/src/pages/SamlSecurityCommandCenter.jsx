@@ -11,7 +11,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -164,7 +164,8 @@ export default function SamlSecurityCommandCenter() {
   const set = (k, v) => setParams((p) => ({ ...p, [k]: v }))
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -214,7 +215,7 @@ export default function SamlSecurityCommandCenter() {
     setStatus('running')
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToastMsg('error', d.detail || L.scanFailed); return }
       const jobId = d.job_id ?? ''
       showToastMsg('info', `${L.queued} · ${jobId}`)
@@ -224,6 +225,7 @@ export default function SamlSecurityCommandCenter() {
       setStatus('error')
       showToastMsg('error', e?.message ?? L.scanFailed)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
   const { posture, paths, regular, toxic, roadmap, agentGaps, categoryScores } = useMemo(() => {

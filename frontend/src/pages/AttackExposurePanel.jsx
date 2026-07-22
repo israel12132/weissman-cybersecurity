@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Crosshair, AlertTriangle, FileText, Search } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
@@ -72,9 +72,7 @@ export default function AttackExposurePanel({ clientId }) {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/attack-exposure/${encodeURIComponent(id)}?limit=2000`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/attack-exposure/${encodeURIComponent(id)}?limit=2000`)
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')

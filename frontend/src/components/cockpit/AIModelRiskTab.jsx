@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useClient } from '../../context/ClientContext'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 import DataTable from '../ui/DataTable'
 
@@ -62,9 +62,13 @@ export default function AIModelRiskTab() {
 
   const loadEndpoints = useCallback(async () => {
     if (!selectedClientId) return
-    const r = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
-    if (!r.ok) return
-    const d = await r.json()
+    let d
+    try {
+      d = await apiFetch(`/api/clients/${selectedClientId}/integrations`)
+    } catch (e) {
+      if (e?.status) return
+      throw e
+    }
     const eps = Array.isArray(d.llm_secops_endpoints) && d.llm_secops_endpoints.length
       ? d.llm_secops_endpoints.map((e) => ({
           url: e.url || '',
@@ -82,18 +86,16 @@ export default function AIModelRiskTab() {
     try {
       await loadEndpoints()
       const [sRes, eRes] = await Promise.all([
-        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`),
-        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`),
+        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/summary`).catch(() => null),
+        apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/events`).catch(() => null),
       ])
-      if (sRes.ok) {
-        const d = await sRes.json()
-        setSummary({ vectors: d.vectors ?? [] })
+      if (sRes) {
+        setSummary({ vectors: sRes.vectors ?? [] })
       } else {
         setSummary({ vectors: [] })
       }
-      if (eRes.ok) {
-        const d = await eRes.json()
-        setEvents(d.events ?? [])
+      if (eRes) {
+        setEvents(eRes.events ?? [])
       } else {
         setEvents([])
       }
@@ -121,15 +123,10 @@ export default function AIModelRiskTab() {
           model: e.model.trim() || undefined,
           authorization: e.authorization.trim() || undefined,
         }))
-      const r = await apiFetch(`/api/clients/${selectedClientId}/integrations`, {
+      await apiFetch(`/api/clients/${selectedClientId}/integrations`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ llm_secops_endpoints }),
+        body: { llm_secops_endpoints },
       })
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}))
-        throw new Error(d.detail || `HTTP ${r.status}`)
-      }
       setMsg({ type: 'ok', text: t(`${NS}.endpointsSaved`) })
       await loadEndpoints()
     } catch (e) {
@@ -144,18 +141,18 @@ export default function AIModelRiskTab() {
     setRunning(true)
     setMsg(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/run`, {
+      const d = await apiFetch(`/api/clients/${selectedClientId}/llm-fuzz/run`, {
         method: 'POST',
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok) {
-        setMsg({ type: 'ok', text: t(`${NS}.probesCompleted`, { count: d.summary?.probes?.length ?? 0 }) })
-        await load()
-      } else {
-        setMsg({ type: 'err', text: d.detail || d.error || t(`${NS}.runFailed`) })
-      }
+      setMsg({ type: 'ok', text: t(`${NS}.probesCompleted`, { count: d.summary?.probes?.length ?? 0 }) })
+      await load()
     } catch (e) {
-      setMsg({ type: 'err', text: String(e.message || e) })
+      if (e?.status) {
+        const d = e.response ? await e.response.json().catch(() => ({})) : {}
+        setMsg({ type: 'err', text: d.detail || d.error || t(`${NS}.runFailed`) })
+      } else {
+        setMsg({ type: 'err', text: String(e.message || e) })
+      }
     } finally {
       setRunning(false)
     }

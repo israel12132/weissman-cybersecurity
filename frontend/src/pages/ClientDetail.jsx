@@ -7,7 +7,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import PremiumPageHeader from '../components/ui/PremiumPageHeader'
 import Button from '../components/ui/Button'
 import { SkeletonCard } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 
@@ -24,28 +24,25 @@ export default function ClientDetail() {
 
   useEffect(() => {
     loadClient()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   async function loadClient() {
     setLoading(true)
     setError('')
     try {
-      const response = await apiFetch(`/api/clients/${id}`)
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError(t('client_detail.not_found'))
-        } else {
-          const text = await response.text().catch(() => 'Failed to load client')
-          setError(`${t('common.error')}: ${text}`)
-        }
-        setLoading(false)
-        return
-      }
-      const data = await response.json()
+      const data = await apiFetch(`/api/clients/${id}`)
       setClient(data)
       setLastUpdated(new Date())
     } catch (err) {
-      setError(`${t('common.error')}: ${err.message}`)
+      if (err?.status === 404) {
+        setError(t('client_detail.not_found'))
+      } else if (err?.response) {
+        const text = await err.response.text().catch(() => 'Failed to load client')
+        setError(`${t('common.error')}: ${text}`)
+      } else {
+        setError(`${t('common.error')}: ${err.message}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -65,19 +62,10 @@ export default function ClientDetail() {
     setScanResult(null)
 
     try {
-      const response = await apiFetch(`/api/clients/${client.id}/scan/run-all`, {
+      const data = await apiFetch(`/api/clients/${client.id}/scan/run-all`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       })
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null)
-        const text = data?.detail || data?.code || (await response.text().catch(() => null)) || `HTTP ${response.status}`
-        setScanResult({ success: false, message: `${t('clients_page.scan_error')}: ${text}` })
-        return
-      }
-
-      const data = await response.json()
       setScanResult({
         success: true,
         message: data.message || t('clients_page.scan_queued', { count: data.jobs_queued ?? 0 }),
@@ -86,7 +74,14 @@ export default function ClientDetail() {
         jobs: data.jobs || [],
       })
     } catch (err) {
-      setScanResult({ success: false, message: `${t('clients_page.scan_error')}: ${err.message}` })
+      let text
+      if (err?.response) {
+        const data = await err.response.json().catch(() => null)
+        text = data?.detail || data?.code || (await err.response.text().catch(() => null)) || `HTTP ${err.status}`
+      } else {
+        text = err.message
+      }
+      setScanResult({ success: false, message: `${t('clients_page.scan_error')}: ${text}` })
     } finally {
       setLaunchingScan(false)
     }

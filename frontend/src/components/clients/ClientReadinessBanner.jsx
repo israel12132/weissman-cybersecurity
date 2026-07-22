@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 export default function ClientReadinessBanner({ clientId }) {
   const { t } = useTranslation()
@@ -15,8 +15,8 @@ export default function ClientReadinessBanner({ clientId }) {
     ;(async () => {
       setLoading(true)
       try {
-        const r = await apiFetch(`/api/clients/${clientId}/readiness`)
-        if (r.ok && !cancelled) setData(await r.json())
+        const d = await apiFetch(`/api/clients/${clientId}/readiness`)
+        if (!cancelled) setData(d)
       } catch { /* ignore */ }
       if (!cancelled) setLoading(false)
     })()

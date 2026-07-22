@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -354,8 +354,8 @@ export default function PqcRadar() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -378,7 +378,7 @@ export default function PqcRadar() {
     setScanning(true)
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildScanBody(params, selectedClientId, target))
+      const { ok, data: d } = await postScan(buildScanBody(params, selectedClientId, target))
       if (!ok) { setScanning(false); showToast('error', d.detail || tt('scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', tt('scan_queued', 'PQC scan queued: job {{jobId}}').replace('{{jobId}}', jobId))
@@ -388,6 +388,7 @@ export default function PqcRadar() {
       setScanning(false)
       showToast('error', e?.message ?? tt('scan_failed', 'Scan failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params, showToast, tt])
 
   const score = summary ? Number(summary.readiness_score ?? 0) : null

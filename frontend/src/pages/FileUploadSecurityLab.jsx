@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -507,7 +507,8 @@ export default function FileUploadSecurityLab() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   const selectedClient = useMemo(() => clients.find((c) => String(c.id) === String(clientId)), [clients, clientId])
@@ -568,7 +569,7 @@ export default function FileUploadSecurityLab() {
     if (!target.trim()) { showToast('error', t('pages.fileUploadLab.target_required', 'A target URL is required')); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.fileUploadLab.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.fileUploadLab.queued', 'Upload scan queued ({{jobId}})', { jobId }))
@@ -576,6 +577,7 @@ export default function FileUploadSecurityLab() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? t('pages.fileUploadLab.scan_failed', 'Scan failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToast, t])
 
   const summary = useMemo(() => findings.find(isSummary), [findings])
@@ -656,6 +658,7 @@ export default function FileUploadSecurityLab() {
                 <div className="space-y-2">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.fileUploadLab.bypass_matrix', 'Bypass matrix')}</p>
                   {TOGGLES.map((tg) => (
+                    // eslint-disable-next-line jsx-a11y/label-has-associated-control -- label nests its checkbox control; text comes from dynamic {tg.label} which the rule cannot statically verify
                     <label key={tg.key} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-[var(--row-hover-bg)] border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--row-hover-bg)]">
                       <span className="min-w-0">
                         <span className="block text-[11px] font-mono text-[var(--text-secondary)]">{tg.label}</span>

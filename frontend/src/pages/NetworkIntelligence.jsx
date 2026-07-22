@@ -9,7 +9,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -433,7 +433,7 @@ function BgpDnsFlagship({ clientId, target, showToast, t, tt, onShellReady, isFo
     setScanning(true)
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBgpBody(params, clientId, target))
+      const { ok, data: d } = await postScan(buildBgpBody(params, clientId, target))
       if (!ok) { setScanning(false); showToast('error', d.detail || t('pages.networkIntelligence.scan_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.networkIntelligence.queued', { label: 'BGP/DNS', jobId }))
@@ -702,8 +702,8 @@ export default function NetworkIntelligence() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

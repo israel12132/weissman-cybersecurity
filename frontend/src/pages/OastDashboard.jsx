@@ -1,14 +1,14 @@
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useClientTargetPrefill } from '../hooks/useHubLocalScanParams'
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 const PROBE_IDS = ['log4shell', 'blind_ssrf', 'blind_xss', 'xxe_oob', 'cmd_dns', 'host_ssrf']
@@ -77,8 +77,8 @@ export default function OastDashboard() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -87,15 +87,12 @@ export default function OastDashboard() {
   const reloadCallbacks = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setRefreshLoading(true)
     try {
-      const r = await apiFetch('/api/oast/callbacks')
-      if (r.ok) {
-        const d = await r.json()
-        const list = Array.isArray(d?.callbacks)
-          ? d.callbacks
-          : (Array.isArray(d) ? d : [])
-        setCallbacks(list.slice(0, 50))
-      }
-    } catch {}
+      const d = await apiFetch('/api/oast/callbacks')
+      const list = Array.isArray(d?.callbacks)
+        ? d.callbacks
+        : (Array.isArray(d) ? d : [])
+      setCallbacks(list.slice(0, 50))
+    } catch { /* best-effort; non-fatal */ }
     finally {
       if (!silent) setRefreshLoading(false)
       setCallbacksInitialLoading(false)
@@ -163,24 +160,22 @@ export default function OastDashboard() {
         setActiveProbes((prev) => { const s = new Set(prev); s.delete(probeId); return s })
       }, 10000)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, showToast, t])
 
   const handleMintToken = useCallback(async () => {
     if (!mintTarget) return
     setMintLoading(true)
     try {
-      const r = await apiFetch('/api/oast/probe', {
+      const data = await apiFetch('/api/oast/probe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           target_url: mintTarget,
           probe_type: mintProbeType,
           label: mintLabel || undefined,
           client_id: selectedClientId ? Number(selectedClientId) : undefined,
-        }),
+        },
       })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data?.error || data?.detail || t('pages.oastDashboard.probe_failed'))
       setMintedTokens((prev) => [data, ...prev])
       setMintTarget('')
       setMintLabel('')
@@ -194,9 +189,7 @@ export default function OastDashboard() {
 
   const handlePollToken = useCallback(async (token) => {
     try {
-      const r = await apiFetch(`/api/oast/verify/${token}`)
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data?.error || data?.detail || t('pages.oastDashboard.probe_failed'))
+      const data = await apiFetch(`/api/oast/verify/${token}`)
       setMintedTokens((prev) => prev.map((tok) => (tok.token === token ? { ...tok, ...data } : tok)))
     } catch (e) {
       showToast('error', t('pages.oastDashboard.poll_failed', { message: e.message }))

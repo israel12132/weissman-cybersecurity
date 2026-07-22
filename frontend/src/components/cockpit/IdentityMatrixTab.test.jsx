@@ -13,7 +13,7 @@ vi.mock('../../context/WarRoomContext', () => ({
   useWarRoom: () => ({ lastHarvestedToken: null, setLastHarvestedToken: vi.fn() }),
 }))
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-vi.mock('../../lib/apiBase', () => ({ apiFetch }))
+vi.mock('../../utils/apiFetch', () => ({ apiFetch }))
 
 import IdentityMatrixTab from './IdentityMatrixTab'
 
@@ -26,9 +26,9 @@ beforeEach(() => {
   apiFetch.mockReset()
   apiFetch.mockImplementation((url, opts) => {
     const u = String(url)
-    if (opts?.method === 'DELETE') return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-    if (u.includes('/identity-contexts')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ contexts: CONTEXTS }) })
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    if (opts?.method === 'DELETE') return Promise.resolve({})
+    if (u.includes('/identity-contexts')) return Promise.resolve({ contexts: CONTEXTS })
+    return Promise.resolve({})
   })
 })
 afterEach(() => cleanup())

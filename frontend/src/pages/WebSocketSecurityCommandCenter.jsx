@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -365,7 +365,8 @@ export default function WebSocketSecurityCommandCenter() {
   const [statefulFuzzRounds, setStatefulFuzzRounds] = useState(4)
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   const selectedClient = useMemo(() => clients.find((c) => String(c.id) === String(clientId)), [clients, clientId])
@@ -463,7 +464,7 @@ export default function WebSocketSecurityCommandCenter() {
     if (!target.trim()) { showToast('error', t('pages.websocketSecurity.target_required', 'Target URL required')); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.websocketSecurity.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.websocketSecurity.queued', 'WebSocket scan queued ({{jobId}})', { jobId }))
@@ -471,6 +472,7 @@ export default function WebSocketSecurityCommandCenter() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? t('pages.websocketSecurity.scan_failed', 'Scan failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToast, t])
 
   const summary = useMemo(() => extractSummary(findings), [findings])
@@ -615,8 +617,8 @@ export default function WebSocketSecurityCommandCenter() {
                   <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-400/50 mb-3">{t('pages.websocketSecurity.advanced', 'Weissman Standard (advanced)')}</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <label className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">stateful_fuzz_rounds</label>
-                      <input type="number" min={1} max={6} value={statefulFuzzRounds} onChange={(e) => setStatefulFuzzRounds(e.target.value)}
+                      <label htmlFor="wssc-stateful-fuzz-rounds" className="text-[10px] font-mono uppercase text-[var(--text-muted)] block mb-1">stateful_fuzz_rounds</label>
+                      <input id="wssc-stateful-fuzz-rounds" type="number" min={1} max={6} value={statefulFuzzRounds} onChange={(e) => setStatefulFuzzRounds(e.target.value)}
                         className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-secondary)]" />
                     </div>
                     <div>

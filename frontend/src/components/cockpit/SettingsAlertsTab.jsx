@@ -1,7 +1,7 @@
 import { useEffect, useState, Component } from 'react'
 import { useTranslation } from 'react-i18next'
 import { loadDestructiveConfirmToken, saveDestructiveConfirmToken } from '../../utils/destructiveConfirm'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.settingsAlerts'
@@ -64,7 +64,6 @@ function SettingsAlertsTabInner() {
   const load = () => {
     setLoading(true)
     apiFetch('/api/enterprise/settings')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Load failed'))))
       .then((d) => {
         if (d == null || typeof d !== 'object') return
         setWebhookUrl(typeof d.alert_webhook_url === 'string' ? d.alert_webhook_url : '')
@@ -81,38 +80,37 @@ function SettingsAlertsTabInner() {
     } catch {
       setDestructiveToken('')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t])
 
   const save = async () => {
     setMsg(null)
     try {
-      const r = await apiFetch('/api/enterprise/settings', {
+      await apiFetch('/api/enterprise/settings', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           global_safe_mode: safeMode,
           alert_webhook_url: webhookUrl,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok) setMsg({ type: 'ok', text: t(`${NS}.saved`) })
-      else setMsg({ type: 'err', text: (d && d.detail) || t(`${NS}.saveFailed`) })
-    } catch {
-      setMsg({ type: 'err', text: t(`${NS}.networkError`) })
+      setMsg({ type: 'ok', text: t(`${NS}.saved`) })
+    } catch (e) {
+      if (e?.status) setMsg({ type: 'err', text: e.message || t(`${NS}.saveFailed`) })
+      else setMsg({ type: 'err', text: t(`${NS}.networkError`) })
     }
   }
 
   const runBackup = async () => {
     setBackupMsg(null)
     try {
-      const r = await apiFetch('/api/system/backup', {
+      const d = await apiFetch('/api/system/backup', {
         method: 'POST',
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok && d?.path) setBackupMsg({ type: 'ok', text: t(`${NS}.backupPath`, { path: d.path }) })
+      if (d?.path) setBackupMsg({ type: 'ok', text: t(`${NS}.backupPath`, { path: d.path }) })
       else setBackupMsg({ type: 'err', text: (d && d.detail) || t(`${NS}.backupFailed`) })
-    } catch {
-      setBackupMsg({ type: 'err', text: t(`${NS}.networkError`) })
+    } catch (e) {
+      if (e?.status) setBackupMsg({ type: 'err', text: e.message || t(`${NS}.backupFailed`) })
+      else setBackupMsg({ type: 'err', text: t(`${NS}.networkError`) })
     }
   }
 

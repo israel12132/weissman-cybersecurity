@@ -14,7 +14,7 @@ import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 
@@ -67,9 +67,7 @@ export default function DarkWebMonitor() {
   const load = useCallback(async () => {
     setError(null)
     try {
-      const r = await apiFetch('/api/findings?limit=2000')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch('/api/findings?limit=2000')
       setFindings(parseFindings(d))
       setLastRefresh(new Date())
     } catch (e) {

@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search } from 'lucide-react';
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -205,9 +205,8 @@ function buildCorrelations(patterns) {
 }
 
 async function loadIntelPatterns() {
-  const socRes = await apiFetch('/api/soc/ai-patterns')
-  if (socRes.ok) {
-    const socData = await socRes.json()
+  const socData = await apiFetch('/api/soc/ai-patterns').catch(() => null)
+  if (socData) {
     const socPatterns = Array.isArray(socData?.patterns) ? socData.patterns : []
     if (socPatterns.length > 0) {
       return { patterns: socPatterns.map(socPatternToPattern), source: 'soc', total: socPatterns.length }
@@ -217,10 +216,9 @@ async function loadIntelPatterns() {
   let findings = []
   let findingsTotal = 0
   let findingsOk = false
-  const findingsRes = await apiFetch('/api/findings?limit=2000')
-  if (findingsRes.ok) {
+  const fd = await apiFetch('/api/findings?limit=2000').catch(() => null)
+  if (fd) {
     findingsOk = true
-    const fd = await findingsRes.json()
     findings = Array.isArray(fd) ? fd : Array.isArray(fd?.findings) ? fd.findings : []
     findingsTotal = fd?.total ?? findings.length
     for (const f of findings) {
@@ -230,9 +228,9 @@ async function loadIntelPatterns() {
       membersByCluster.set(f.cluster_id, list)
     }
   }
-  const clustersRes = await apiFetch('/api/findings/clusters?limit=500')
-  if (clustersRes.ok) {
-    const cd = await clustersRes.json()
+  let clustersErr = null
+  const cd = await apiFetch('/api/findings/clusters?limit=500').catch((e) => { clustersErr = e; return null })
+  if (cd) {
     const clusters = Array.isArray(cd?.clusters) ? cd.clusters : []
     if (clusters.length > 0) {
       return {
@@ -245,7 +243,8 @@ async function loadIntelPatterns() {
   if (findingsOk) {
     return { patterns: findings.map(findingToPattern), source: 'findings', total: findingsTotal }
   }
-  throw new Error(`HTTP ${clustersRes.status}`)
+  if (clustersErr?.status) throw new Error(`HTTP ${clustersErr.status}`)
+  throw new Error(clustersErr?.message || 'HTTP error')
 }
 
 function exportPatternsCsv(patterns) {

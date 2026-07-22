@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
 
@@ -32,7 +32,6 @@ export default function CICDThreatMatrix() {
     if (!clientId) return
     setLoading(true)
     apiFetch(`/api/clients/${clientId}/cicd-findings`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setFindings(data?.findings ?? []))
       .catch(() => setFindings([]))
       .finally(() => setLoading(false))
@@ -45,7 +44,6 @@ export default function CICDThreatMatrix() {
   useEffect(() => {
     if (!clientId) return
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((list) => {
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
@@ -63,11 +61,10 @@ export default function CICDThreatMatrix() {
     setRunning(true)
     apiFetch('/api/pipeline-scan/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, repo_url: runRepoUrl.trim() }),
+      body: { client_id: clientId, repo_url: runRepoUrl.trim() },
     })
-      .then((r) => r.json())
       .then(() => fetchFindings())
+      .catch(() => fetchFindings())
       .finally(() => setRunning(false))
   }
 
@@ -129,10 +126,12 @@ export default function CICDThreatMatrix() {
         )}
 
         {modalFinding && (
+          // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- modal backdrop click-to-dismiss; contains interactive children
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
             onClick={() => setModalFinding(null)}
           >
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- stopPropagation guard on modal content; contains interactive children */}
             <div
               className="rounded-xl bg-[var(--bg-1)] border-2 border-[var(--border-strong)] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TrendingUp } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 /**
  * HealTrendSparkline — daily auto-heal volume + success-rate trend, merged across the given clients
@@ -19,7 +19,6 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
     Promise.all(
       clientIds.map((id) =>
         apiFetch(`/api/clients/${id}/heal-trends?days=${days}`)
-          .then((r) => (r.ok ? r.json() : null))
           .catch(() => null)),
     ).then((list) => {
       if (cancelled) return
@@ -51,6 +50,7 @@ export default function HealTrendSparkline({ clientIds = [], days = 30 }) {
       })
     })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, days])
 
   if (!data || data.total === 0) return null

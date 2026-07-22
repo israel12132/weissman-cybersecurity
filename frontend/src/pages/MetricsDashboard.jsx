@@ -8,7 +8,7 @@ import ShellScanActions from '../components/engine/ShellScanActions';
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EmptyState from '../components/ui/EmptyState';
 import { SkeletonBar, SkeletonWidgetGrid } from '../components/ui/Skeleton';
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 const SEVERITY_COLORS = {
@@ -39,14 +39,11 @@ export default function MetricsDashboard() {
   const fetchMetrics = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const [metricsRes, kpisRes] = await Promise.all([
+      const [data, kpis] = await Promise.all([
         apiFetch('/api/metrics/dashboard'),
-        apiFetch('/api/dashboard/exec-kpis'),
+        apiFetch('/api/dashboard/exec-kpis').catch(() => null),
       ]);
 
-      if (!metricsRes.ok) throw new Error(`HTTP ${metricsRes.status}`);
-
-      const data = await metricsRes.json();
       setMetrics({
         postgres_ok: Boolean(data.postgres_ok),
         active_scans: data.active_scans ?? 0,
@@ -63,8 +60,7 @@ export default function MetricsDashboard() {
         },
       });
 
-      if (kpisRes.ok) {
-        const kpis = await kpisRes.json();
+      if (kpis) {
         setExecKpis(kpis);
       }
 
@@ -106,6 +102,7 @@ export default function MetricsDashboard() {
     title: severityLabel(severity),
     type: 'finding_count',
     description: String(count),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   })), [metrics.findings_by_severity, i18n.language])
 
   const { exportCsv, filteredFindings } = useFindingsWorkbench(listFindings, {

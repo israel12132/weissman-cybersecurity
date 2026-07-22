@@ -5,7 +5,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { promptDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -26,17 +26,15 @@ export default function RoeApprovals() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/roe/override-requests?status=pending')
-      if (!r.ok) {
-        const detail = await r.text().catch(() => '')
-        setError(t('pages.roeApprovals.load_failed', { status: r.status, detail }))
-        setRequests([])
-        return
-      }
-      const data = await r.json().catch(() => ({}))
+      const data = await apiFetch('/api/roe/override-requests?status=pending')
       setRequests(Array.isArray(data.requests) ? data.requests : [])
     } catch (e) {
-      setError(e?.message || t('pages.roeApprovals.network_error'))
+      if (e?.status) {
+        const detail = e.response ? await e.response.text().catch(() => '') : ''
+        setError(t('pages.roeApprovals.load_failed', { status: e.status, detail }))
+      } else {
+        setError(e?.message || t('pages.roeApprovals.network_error'))
+      }
       setRequests([])
     } finally {
       setLoading(false)
@@ -73,14 +71,12 @@ export default function RoeApprovals() {
   async function approve(req) {
     setActionId(req.id)
     try {
-      const r = await apiFetch(`/api/roe/override-requests/${req.id}/approve`, { method: 'POST' })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        toast.error(data?.detail || t('pages.roeApprovals.approve_failed', { status: r.status }))
-        return
-      }
+      await apiFetch(`/api/roe/override-requests/${req.id}/approve`, { method: 'POST' })
       await load()
       toast.success(t('pages.roeApprovals.approve_success'))
+    } catch (e) {
+      const b = e?.response ? await e.response.json().catch(() => ({})) : {}
+      toast.error(b?.detail || t('pages.roeApprovals.approve_failed', { status: e?.status }))
     } finally {
       setActionId(null)
     }
@@ -99,18 +95,15 @@ export default function RoeApprovals() {
     if (reason === null) return
     setActionId(req.id)
     try {
-      const r = await apiFetch(`/api/roe/override-requests/${req.id}/reject`, {
+      await apiFetch(`/api/roe/override-requests/${req.id}/reject`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
+        body: { reason },
       })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        toast.error(data?.detail || t('pages.roeApprovals.reject_failed', { status: r.status }))
-        return
-      }
       await load()
       toast.success(t('pages.roeApprovals.reject_success'))
+    } catch (e) {
+      const b = e?.response ? await e.response.json().catch(() => ({})) : {}
+      toast.error(b?.detail || t('pages.roeApprovals.reject_failed', { status: e?.status }))
     } finally {
       setActionId(null)
     }

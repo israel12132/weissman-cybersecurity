@@ -577,7 +577,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
     if (!clientId) { showToast?.('error', L.selectClient); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast?.('error', d.detail || L.scanFailed); return }
       const jobId = d.job_id ?? ''
       showToast?.('info', `${L.queued} · ${jobId}`)
@@ -585,6 +585,7 @@ export default function KubernetesSecurityPanel({ clientId, target: defaultTarge
     } catch (e) {
       setStatus('error'); showToast?.('error', e?.message ?? L.scanFailed)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, buildBody, showToast, L])
 
   const { posture, cis, paths, regular } = useMemo(() => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Boxes, Search, Play, Loader2, CheckCircle2, XCircle, Rocket, FileText } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import Button from '../components/ui/Button'
@@ -107,9 +107,7 @@ export default function ArsenalInventory({ clientId }) {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/arsenal/catalog')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch('/api/arsenal/catalog')
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')
@@ -122,9 +120,7 @@ export default function ArsenalInventory({ clientId }) {
   const resolveTarget = useCallback(async (id) => {
     if (id == null) { setTarget(''); return }
     try {
-      const r = await apiFetch('/api/clients')
-      if (!r.ok) return
-      const d = await r.json().catch(() => [])
+      const d = await apiFetch('/api/clients')
       const list = Array.isArray(d) ? d : d?.clients || []
       const c = list.find((x) => String(x.id) === String(id))
       setTarget(parseFirstDomain(c?.domains))
@@ -152,13 +148,11 @@ export default function ArsenalInventory({ clientId }) {
     setDeploying(true)
     setBatch(null)
     try {
-      const r = await apiFetch('/api/arsenal/deploy', {
+      const d = await apiFetch('/api/arsenal/deploy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, target, engines: batchIds }),
+        body: { client_id: clientId, target, engines: batchIds },
       })
-      const d = await r.json().catch(() => ({}))
-      setBatch(r.ok ? { ok: true, ...d } : { ok: false, detail: d?.detail || `HTTP ${r.status}` })
+      setBatch({ ok: true, ...d })
     } catch (e) {
       setBatch({ ok: false, detail: e?.message || 'deploy failed' })
     } finally {

@@ -1,10 +1,10 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import {
   apiUrl,
-  apiFetch,
   setStoredAccessToken,
   clearStoredAccessToken,
 } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { effectiveRole, sessionRoleRank, sessionHasRole } from '../lib/roles'
 
 const AuthContext = createContext(null)
@@ -20,14 +20,16 @@ export function AuthProvider({ children }) {
 
   const refreshSession = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/auth/me', { method: 'GET' })
-      if (!r.ok) {
-        setSession(null)
-        setIsAuthenticated(false)
-        return null
-      }
-      const data = await r.json().catch(() => ({}))
-      if (data.ok !== true) {
+      // utils/apiFetch returns the parsed JSON on success and throws on any
+      // non-2xx (→ the catch below de-authenticates). lib/apiBase's 401
+      // interceptor still runs underneath — it attempts a single token refresh
+      // and retries once before a 401 surfaces here — so an expired token
+      // self-heals while a genuinely unauthenticated response terminates in the
+      // catch. No retry loop. The `instanceof Response` guard covers the
+      // (contract-impossible) non-JSON 200, so a Response is never mistaken for
+      // a session payload.
+      const data = await apiFetch('/api/auth/me', { method: 'GET' })
+      if (!data || data instanceof Response || data.ok !== true) {
         setSession(null)
         setIsAuthenticated(false)
         return null

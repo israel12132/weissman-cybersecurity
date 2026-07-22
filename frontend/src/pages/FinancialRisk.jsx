@@ -18,7 +18,7 @@ import DataTable from '../components/ui/DataTable'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd } from '../lib/riskFormat'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -77,11 +77,8 @@ export default function FinancialRisk() {
       setError('')
       try {
         const qs = recompute ? '?recompute=1' : ''
-        const r = await apiFetch(`/api/financial-risk/${encodeURIComponent(selectedClientId)}${qs}`)
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok || data.ok === false) {
-          throw new Error(data.detail || `HTTP ${r.status}`)
-        }
+        const data = await apiFetch(`/api/financial-risk/${encodeURIComponent(selectedClientId)}${qs}`)
+        if (data?.ok === false) throw new Error(data.detail || 'load failed')
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))

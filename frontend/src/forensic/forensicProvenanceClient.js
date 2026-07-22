@@ -55,10 +55,8 @@ export function forensicWorkerRequest(type, payload) {
  */
 export async function fetchProvenanceVerifyKey() {
   try {
-    const { apiFetch } = await import('../lib/apiBase.js')
-    const res = await apiFetch('/api/forensic/provenance-key')
-    if (!res.ok) return null
-    const data = await res.json()
+    const { apiFetch } = await import('../utils/apiFetch.js')
+    const data = await apiFetch('/api/forensic/provenance-key')
     return data?.verify_key?.trim() || null
   } catch {
     return null

@@ -9,7 +9,7 @@ import '@xyflow/react/dist/style.css'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { Layers, Pause, Play, Radio, GitBranch } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.livePipelineMonitor'
@@ -98,16 +98,13 @@ export default function LivePipelineMonitor() {
       const url = selectedClientId
         ? `/api/pipeline/state?client_id=${encodeURIComponent(selectedClientId)}`
         : '/api/pipeline/state'
-      const r = await apiFetch(url)
-      if (r.ok) {
-        const d = await r.json()
-        setRunId(d.run_id ?? null)
-        setStates(d.states ?? [])
-        if (Array.isArray(d.stage_labels) && d.stage_labels.length) {
-          setApiStageLabels(d.stage_labels.map((s) => s.label || s))
-        } else {
-          setApiStageLabels(null)
-        }
+      const d = await apiFetch(url)
+      setRunId(d.run_id ?? null)
+      setStates(d.states ?? [])
+      if (Array.isArray(d.stage_labels) && d.stage_labels.length) {
+        setApiStageLabels(d.stage_labels.map((s) => s.label || s))
+      } else {
+        setApiStageLabels(null)
       }
     } catch (_) {
       setStates([])
@@ -119,8 +116,8 @@ export default function LivePipelineMonitor() {
 
   const fetchDag = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/dag')
-      if (r.ok) setDag(await r.json())
+      const d = await apiFetch('/api/dag')
+      setDag(d)
     } catch (_) {
       setDag(null)
     }
@@ -146,15 +143,19 @@ export default function LivePipelineMonitor() {
     try {
       await apiFetch('/api/pipeline/state', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           run_id: runId,
           client_id: payload.client_id || selectedClientId,
           ...payload,
-        }),
+        },
       })
       await fetchState()
-    } catch (_) {}
+    } catch (e) {
+      // A non-2xx response (carries e.status) still means the server saw the
+      // PATCH — refresh, matching the pre-migration always-refresh behaviour.
+      // A network failure (no status) leaves state untouched, as before.
+      if (e?.status) await fetchState()
+    }
     setPatching(false)
   }
 

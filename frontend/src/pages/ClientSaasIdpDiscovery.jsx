@@ -6,7 +6,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { alertDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -46,16 +46,16 @@ export default function ClientSaasIdpDiscovery() {
     setRunning(true)
     setError('')
     try {
-      const res = await apiFetch(`/api/clients/${clientId}/discovery/saas-idp`)
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setError(data?.detail || data?.error || t('pages.clientSaasIdpDiscovery.discovery_failed', { status: res.status }))
-        return
-      }
+      const data = await apiFetch(`/api/clients/${clientId}/discovery/saas-idp`)
       setClientName(data?.client_name || '')
       setReport(data?.report || null)
     } catch (e) {
-      setError(e?.message || t('pages.clientSaasIdpDiscovery.network_error'))
+      if (e?.status) {
+        const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        setError(b?.detail || b?.error || t('pages.clientSaasIdpDiscovery.discovery_failed', { status: e.status }))
+      } else {
+        setError(e?.message || t('pages.clientSaasIdpDiscovery.network_error'))
+      }
     } finally {
       setLoading(false)
       setRunning(false)
@@ -78,7 +78,9 @@ export default function ClientSaasIdpDiscovery() {
   }
 
   const domains = Array.isArray(report?.domains_considered) ? report.domains_considered : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const idps = Array.isArray(report?.idp_candidates) ? report.idp_candidates : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const saas = Array.isArray(report?.saas_signals) ? report.saas_signals : []
 
   const listFindings = useMemo(() => [
@@ -96,6 +98,7 @@ export default function ClientSaasIdpDiscovery() {
       type: 'saas_signal',
       description: (Array.isArray(row.evidence) ? row.evidence[0] : row.signal) || row.domain || '',
     })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [idps, saas, t])
 
   const {

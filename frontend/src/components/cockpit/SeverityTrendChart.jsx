@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 const NS = 'components.cockpitWidgets.severityTrendChart'
 
@@ -37,9 +37,9 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
     let cancelled = false
     const load = async () => {
       try {
-        const r = await apiFetch('/api/dashboard/exec-kpis')
-        if (r.ok && !cancelled) setData(await r.json())
-      } catch (_) {}
+        const d = await apiFetch('/api/dashboard/exec-kpis')
+        if (!cancelled) setData(d)
+      } catch (_) { /* best-effort; non-fatal */ }
       finally { if (!cancelled) setLoading(false) }
     }
     load()
@@ -52,7 +52,9 @@ export default function SeverityTrendChart({ className = '', height = 180 }) {
   const padding = 16
   const trend = data?.trend || {}
   const labels = trend.labels || []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const discovered = trend.discovered || []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const resolved = trend.resolved || []
 
   const dArea = useMemo(() => buildArea(discovered, w, h, padding), [discovered, h])

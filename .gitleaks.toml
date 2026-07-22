@@ -55,4 +55,7 @@ regexes = [
     '''enable_rfc3161_signing''',
     # Literal CI test env secret in the nightly-e2e workflow (not a real secret).
     '''nightly-e2e-secret-min-32-chars''',
+    # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in the nightly-e2e workflow —
+    # scoped to the ephemeral runner DB only, never a real vault key.
+    '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
 ]

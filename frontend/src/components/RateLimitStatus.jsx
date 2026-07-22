@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 
 const NS = 'components.intelWidgets.rateLimitStatus';
 
@@ -30,16 +30,13 @@ export default function RateLimitStatus({ compact = false }) {
 
   const fetchLimits = useCallback(async () => {
     try {
-      const response = await apiFetch('/api/rate-limits/status');
-      if (response.ok) {
-        const data = await response.json();
-        const next = data.limits || {};
-        setLimits((prev) => ({
-          scans: next.scans || prev.scans,
-          logins: next.logins || prev.logins,
-          api: next.api || prev.api,
-        }));
-      }
+      const data = await apiFetch('/api/rate-limits/status');
+      const next = data.limits || {};
+      setLimits((prev) => ({
+        scans: next.scans || prev.scans,
+        logins: next.logins || prev.logins,
+        api: next.api || prev.api,
+      }));
     } catch (error) {
       console.warn('Failed to fetch rate limits:', error);
     } finally {

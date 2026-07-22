@@ -461,6 +461,7 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal backdrop; Escape-key handler only, dialog semantics live on inner element
     <div
       className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
@@ -482,10 +483,11 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            <label htmlFor="integration-type-input" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Integration Type
             </label>
             <input
+              id="integration-type-input"
               type="text"
               value={formData.type}
               disabled
@@ -494,10 +496,11 @@ function AddIntegrationModal({ integration, existing = null, onClose, onSave }) 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            <label htmlFor="integration-name-input" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Name
             </label>
             <input
+              id="integration-name-input"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}

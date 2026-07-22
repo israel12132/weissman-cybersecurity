@@ -7,7 +7,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -522,7 +522,8 @@ export default function CloudPostureCommandCenter() {
   }, [refreshFromHistory, setLastUpdated, setLastJobId])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -589,7 +590,7 @@ export default function CloudPostureCommandCenter() {
     if (!roleArn.trim()) { showToast('error', t('pages.cloudPostureCommandCenter.toast_role_required')); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d, status: _status } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.cloudPostureCommandCenter.toast_scan_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.cloudPostureCommandCenter.toast_scan_queued', { jobId }))
@@ -597,6 +598,7 @@ export default function CloudPostureCommandCenter() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? t('pages.cloudPostureCommandCenter.toast_scan_failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, roleArn, buildBody, showToast, t])
 
   const summary = useMemo(() => findings.find(isSummary), [findings])

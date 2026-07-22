@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle, Gem, FileText, Search } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -154,9 +154,7 @@ export default function FixFirstProgram() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/remediation/priority/${encodeURIComponent(id)}?limit=200`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/remediation/priority/${encodeURIComponent(id)}?limit=200`)
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')

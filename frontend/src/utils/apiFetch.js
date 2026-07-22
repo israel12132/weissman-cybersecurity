@@ -4,7 +4,7 @@
  * via lib/apiBase so both API clients show the same global rate-limit toast.
  */
 
-import { apiFetch as baseApiFetch, setRateLimitToastCallback, getRateLimitToastCallback } from '../lib/apiBase'
+import { apiFetch as baseApiFetch, setRateLimitToastCallback } from '../lib/apiBase.js'
 
 export { setRateLimitToastCallback }
 
@@ -41,6 +41,11 @@ export async function apiFetch(url, options = {}) {
     body,
     headers = {},
     credentials = 'include',
+    // Explicit binary/raw bypass: when true, a 2xx response is returned unparsed
+    // (the caller reads .blob()/.text()/.headers itself) instead of relying on the
+    // content-type sniff below. Used by PDF/CSV downloads and by tolerant-parse
+    // callers (e.g. useApiQuery) that must not throw on an empty/malformed body.
+    raw = false,
     retries = 0,
     retryDelay = 1000,
     ...restOptions
@@ -67,15 +72,17 @@ export async function apiFetch(url, options = {}) {
     const response = await baseApiFetch(url, init)
 
     if (response.status === 429) {
+      // The underlying lib/apiBase.apiFetch already fired the shared rate-limit
+      // toast for this 429 (apiBase.js ~line 226). Do NOT fire it again here, or
+      // every rate-limited request double-toasts. Attach the Response so catch-side
+      // formatters (formatApiErrorResponse/formatHttpApiError/formatApiErrorFromBody)
+      // can read the body, exactly like any other non-ok error below.
       const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
       const errorMessage = await readErrorMessage(response)
-      const toastFn = getRateLimitToastCallback()
-      if (toastFn) {
-        toastFn({ retryAfter, message: errorMessage })
-      }
       const error = new Error(errorMessage)
       error.status = 429
       error.retryAfter = retryAfter
+      error.response = response
       throw error
     }
 
@@ -86,6 +93,8 @@ export async function apiFetch(url, options = {}) {
       error.response = response
       throw error
     }
+
+    if (raw) return response
 
     const contentType = response.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {

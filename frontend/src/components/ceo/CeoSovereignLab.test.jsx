@@ -6,7 +6,7 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t }) }
 })
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-vi.mock('../../lib/apiBase', () => ({ apiFetch }))
+vi.mock('../../utils/apiFetch', () => ({ apiFetch }))
 
 import CeoSovereignLab from './CeoSovereignLab'
 
@@ -21,8 +21,8 @@ afterEach(() => cleanup())
 describe('CeoSovereignLab → DataTable', () => {
   it('renders buffer rows and fires the preflight trigger POST from the action cell', async () => {
     apiFetch.mockImplementation((url) => {
-      if (String(url).includes('/trigger')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ job_id: 'job-42' }) })
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(BUFFER) })
+      if (String(url).includes('/trigger')) return Promise.resolve({ job_id: 'job-42' })
+      return Promise.resolve(BUFFER)
     })
     render(<CeoSovereignLab />)
 

@@ -8,7 +8,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import Button from '../components/ui/Button'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 import RemediationAnalyticsPanel from '../components/remediation/RemediationAnalyticsPanel'
 import HealReadinessPanel from '../components/remediation/HealReadinessPanel'
@@ -61,9 +61,7 @@ export default function RemediationAnalytics() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const r = await apiFetch('/api/findings?limit=2000')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch('/api/findings?limit=2000')
       setFindings(Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : [])
     } catch (e) {
       setError(e.message || 'Failed to load findings')
@@ -93,8 +91,7 @@ export default function RemediationAnalytics() {
     // allSettled (not all): a failed client query must surface as a partial-data warning rather than
     // silently reading as low activity / "no runs yet".
     Promise.allSettled(
-      clientIds.map((id) =>
-        apiFetch(`/api/clients/${id}/heal-stats`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))),
+      clientIds.map((id) => apiFetch(`/api/clients/${id}/heal-stats`)),
     ).then((results) => {
       if (cancelled) return
       setPartial(results.some((x) => x.status === 'rejected'))
@@ -131,7 +128,7 @@ export default function RemediationAnalytics() {
     Promise.all(
       clientIds.map((id) =>
         apiFetch(`/api/clients/${id}/heal-requests`)
-          .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+          .catch(() => null)
           .then((d) => {
             const list = Array.isArray(d) ? d : Array.isArray(d?.requests) ? d.requests : []
             return list.map((x) => ({ ...x, client_id: id }))

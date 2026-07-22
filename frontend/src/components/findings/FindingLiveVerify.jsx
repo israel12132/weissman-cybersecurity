@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, ShieldX } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const VERDICT_META = {
@@ -120,13 +120,11 @@ export default function FindingVerifyButton({
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch(`/api/findings/${encodeURIComponent(rawId)}/verify`, {
+      const d = await apiFetch(`/api/findings/${encodeURIComponent(rawId)}/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deep }),
+        body: { deep },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || !d.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
+      if (!d?.ok) throw new Error(d?.detail || d?.error || 'verify failed')
       const verification = {
         verdict: d.verdict,
         confidence: d.confidence,
@@ -187,12 +185,10 @@ export default function FindingVerifyButton({
               setError('')
               apiFetch(`/api/findings/${encodeURIComponent(rawId)}/verify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deep: true }),
+                body: { deep: true },
               })
-                .then(async (r) => {
-                  const d = await r.json().catch(() => ({}))
-                  if (!r.ok || !d.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+                .then((d) => {
+                  if (!d?.ok) throw new Error(d?.detail || 'verify failed')
                   const verification = {
                     verdict: d.verdict,
                     confidence: d.confidence,

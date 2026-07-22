@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Swords, Rocket, ShieldAlert, CheckCircle2, XCircle, Loader2, FileText, Search } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -84,9 +84,7 @@ export default function ArsenalConsole({ clientId }) {
     setError(null)
     setLaunchStatus({})
     try {
-      const r = await apiFetch(`/api/arsenal/recommendation/${encodeURIComponent(id)}`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/arsenal/recommendation/${encodeURIComponent(id)}`)
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')
@@ -100,9 +98,7 @@ export default function ArsenalConsole({ clientId }) {
   const resolveTarget = useCallback(async (id) => {
     if (id == null) { setTarget(''); return }
     try {
-      const r = await apiFetch('/api/clients')
-      if (!r.ok) return
-      const d = await r.json().catch(() => [])
+      const d = await apiFetch('/api/clients')
       const list = Array.isArray(d) ? d : d?.clients || []
       const c = list.find((x) => String(x.id) === String(id))
       setTarget(parseFirstDomain(c?.domains))
@@ -143,14 +139,11 @@ export default function ArsenalConsole({ clientId }) {
     setDeploying(true)
     setLaunchStatus({})
     try {
-      const r = await apiFetch('/api/arsenal/deploy', {
+      await apiFetch('/api/arsenal/deploy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, target, engines: plan }),
+        body: { client_id: clientId, target, engines: plan },
       })
-      await r.json().catch(() => ({}))
-      const state = r.ok ? 'queued' : 'failed'
-      setLaunchStatus(Object.fromEntries(plan.map((id) => [id, state])))
+      setLaunchStatus(Object.fromEntries(plan.map((id) => [id, 'queued'])))
     } catch {
       setLaunchStatus(Object.fromEntries(plan.map((id) => [id, 'failed'])))
     } finally {

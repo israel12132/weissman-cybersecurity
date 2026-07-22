@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Download } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
@@ -382,9 +382,7 @@ export default function IncidentResponseCenter() {
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/soc/incidents')
-      if (!r.ok) throw new Error(`Failed to load incidents (${r.status})`)
-      const data = await r.json()
+      const data = await apiFetch('/api/soc/incidents')
       const list = (data?.incidents ?? []).map((raw) => normalizeIncident(raw, t))
       setIncidents(list)
       setSelectedId((prev) => prev ?? list[0]?.id ?? null)
@@ -427,13 +425,10 @@ export default function IncidentResponseCenter() {
 
     setStepSaving(true)
     try {
-      const r = await apiFetch(`/api/soc/incidents/${encodeURIComponent(incidentId)}/playbook-steps`, {
+      const data = await apiFetch(`/api/soc/incidents/${encodeURIComponent(incidentId)}/playbook-steps`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step_id: stepId, done: nextDone }),
+        body: { step_id: stepId, done: nextDone },
       })
-      if (!r.ok) throw new Error(`Failed to save step (${r.status})`)
-      const data = await r.json()
       const doneIds = Array.isArray(data?.playbookStepsDone) ? data.playbookStepsDone : null
       if (doneIds) {
         setIncidents((prev) => prev.map((inc) => (

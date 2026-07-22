@@ -8,7 +8,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonBar } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
 import { useClient } from '../context/ClientContext'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
@@ -64,8 +64,8 @@ function TemplateEngineWorkbenchBody() {
 
   useEffect(() => {
     apiFetch('/api/template-engine/templates')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setTemplates(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 
@@ -78,9 +78,7 @@ function TemplateEngineWorkbenchBody() {
     setLoadingYaml(true)
     setError('')
     apiFetch(`/api/template-engine/templates/${encodeURIComponent(selectedId)}`)
-      .then(async (r) => {
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(d?.error || t(`${NS}.load_failed`))
+      .then((d) => {
         setYaml(String(d?.yaml || ''))
       })
       .catch((e) => setError(e?.message || t(`${NS}.load_failed`)))
@@ -93,18 +91,15 @@ function TemplateEngineWorkbenchBody() {
     setError('')
     setRunResult(null)
     try {
-      const r = await apiFetch('/api/template-engine/run', {
+      const d = await apiFetch('/api/template-engine/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           target_url: targetUrl.trim(),
           template_yaml: yaml,
           max_body_bytes: 200000,
-        }),
+        },
         signal,
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d?.error || d?.detail || t(`${NS}.run_failed`))
       setRunResult(d)
     } catch (e) {
       setError(e?.message || t(`${NS}.run_failed`))
@@ -115,8 +110,8 @@ function TemplateEngineWorkbenchBody() {
 
   const loadTemplates = useCallback(() => {
     apiFetch('/api/template-engine/templates')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setTemplates(d) })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [])
 

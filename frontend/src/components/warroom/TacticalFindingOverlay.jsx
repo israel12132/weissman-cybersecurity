@@ -40,7 +40,7 @@ export default function TacticalFindingOverlay() {
     const desc = lastFinding.description || ''
     const match = desc.match(/CVE-\d{4}-\d+/i)
     if (match) cve = match[0]
-  } catch (_) {}
+  } catch (_) { /* best-effort CVE parse; non-fatal */ }
 
   return (
     <AnimatePresence>
