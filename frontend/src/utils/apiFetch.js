@@ -1,12 +1,35 @@
 /**
- * JSON-oriented API client built on lib/apiBase (apiUrl, auth, token refresh).
- * 429 toast handling shares the same callback registered by RateLimitProvider
- * via lib/apiBase so both API clients show the same global rate-limit toast.
+ * Unified JSON API client built on lib/apiBase (apiUrl, auth, token refresh),
+ * hardened with the resilience primitives in lib/resilience:
+ *
+ *  - Per-origin circuit breaker: under sustained backend failure the client
+ *    short-circuits instead of piling on load (no self-inflicted DDoS), then
+ *    probes for recovery with a single half-open trial.
+ *  - Full-jitter exponential backoff for opt-in retries (idempotent calls).
+ *  - Runtime boundary validation: pass `options.validate` (a resilience `v.*`
+ *    schema) and a tampered/malformed payload is rejected before it reaches the
+ *    React render cycle. This is the JS analog of typed boundaries.
+ *  - Attestation hook: pass `options.attestVerify` (async) to verify a payload's
+ *    cryptographic provenance (see forensic/forensicProvenanceClient) so the UI
+ *    never renders unverified findings.
+ *
+ * All new behavior is opt-in; existing callers keep their exact semantics.
+ * 429 toast handling shares the callback registered by RateLimitProvider via
+ * lib/apiBase so both clients show the same global rate-limit toast.
  */
 
 import { apiFetch as baseApiFetch, setRateLimitToastCallback } from '../lib/apiBase.js'
+import {
+  isRetryableStatus,
+  computeBackoffDelay,
+  getCircuitBreaker,
+  originKeyOf,
+  validateAtBoundary,
+  CircuitOpenError,
+} from '../lib/resilience'
 
 export { setRateLimitToastCallback }
+export { CircuitOpenError, BoundaryValidationError, v } from '../lib/resilience'
 
 function parseRetryAfter(retryAfterHeader) {
   if (!retryAfterHeader) return 60
@@ -32,8 +55,19 @@ async function readErrorMessage(response) {
   return errorMessage
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 /**
  * Fetch JSON from API paths (relative or absolute). Throws on non-OK responses.
+ *
+ * @param {string} url
+ * @param {object} [options] fetch init plus:
+ *   retries        {number}   opt-in retry budget for retryable statuses (default 0)
+ *   retryBaseMs    {number}   backoff base ms (default 300)
+ *   retryMaxMs     {number}   backoff cap ms (default 15000)
+ *   validate       {Function} resilience validator run on the decoded JSON
+ *   attestVerify   {Function} async (data) => data | throws — provenance check
+ *   breaker        {boolean}  set false to bypass the circuit breaker (default true)
  */
 export async function apiFetch(url, options = {}) {
   const {
@@ -47,7 +81,13 @@ export async function apiFetch(url, options = {}) {
     // callers (e.g. useApiQuery) that must not throw on an empty/malformed body.
     raw = false,
     retries = 0,
-    retryDelay = 1000,
+    retryDelay, // legacy: fixed base delay (still honored if provided)
+    retryBaseMs = 300,
+    retryMaxMs = 15000,
+    validate,
+    attestVerify,
+    breaker = true,
+    _attempt = 0,
     ...restOptions
   } = options
 
@@ -68,51 +108,79 @@ export async function apiFetch(url, options = {}) {
     init.body = body
   }
 
-  try {
-    const response = await baseApiFetch(url, init)
+  // Circuit breaker: short-circuit a backend that is failing hard.
+  const cb = breaker ? getCircuitBreaker(originKeyOf(url)) : null
+  if (cb && !cb.canRequest()) {
+    throw new CircuitOpenError()
+  }
+  if (cb) cb.onTrialStart()
 
-    if (response.status === 429) {
-      // The underlying lib/apiBase.apiFetch already fired the shared rate-limit
-      // toast for this 429 (apiBase.js ~line 226). Do NOT fire it again here, or
-      // every rate-limited request double-toasts. Attach the Response so catch-side
-      // formatters (formatApiErrorResponse/formatHttpApiError/formatApiErrorFromBody)
-      // can read the body, exactly like any other non-ok error below.
-      const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
-      const errorMessage = await readErrorMessage(response)
-      const error = new Error(errorMessage)
-      error.status = 429
-      error.retryAfter = retryAfter
-      error.response = response
-      throw error
-    }
-
-    if (!response.ok) {
-      const errorMessage = await readErrorMessage(response)
-      const error = new Error(errorMessage)
-      error.status = response.status
-      error.response = response
-      throw error
-    }
-
-    if (raw) return response
-
-    const contentType = response.headers.get('content-type') || ''
-    if (contentType.includes('application/json')) {
-      return await response.json()
-    }
-
-    return response
-  } catch (error) {
-    if (error.status !== 429 && retries > 0) {
-      await new Promise((resolve) => setTimeout(resolve, retryDelay))
-      return apiFetch(url, {
-        ...options,
-        retries: retries - 1,
-        retryDelay: retryDelay * 2,
-      })
+  const retryOrThrow = async (error) => {
+    if (cb) cb.onFailure()
+    const status = error?.status
+    const retryable = status === undefined || isRetryableStatus(status)
+    // 429 is surfaced immediately (apiBase fired the shared toast + Retry-After
+    // drives the wait), never auto-retried.
+    if (status !== 429 && retryable && _attempt < retries) {
+      const base = typeof retryDelay === 'number' ? retryDelay : retryBaseMs
+      const delay = computeBackoffDelay(_attempt, { baseMs: base, maxMs: retryMaxMs })
+      await sleep(delay)
+      return apiFetch(url, { ...options, _attempt: _attempt + 1 })
     }
     throw error
   }
+
+  let response
+  try {
+    response = await baseApiFetch(url, init)
+  } catch (networkError) {
+    // Transport-level failure (offline, DNS, TLS): retryable + counts against breaker.
+    return retryOrThrow(networkError)
+  }
+
+  if (response.status === 429) {
+    // apiBase.apiFetch already fired the shared rate-limit toast for this 429
+    // (apiBase.js line ~226); do NOT re-fire it here or every rate-limited
+    // request double-toasts. Attach the Response so catch-side formatters can
+    // read the body, and count the 429 against the breaker.
+    const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
+    const errorMessage = await readErrorMessage(response)
+    if (cb) cb.onFailure()
+    const error = new Error(errorMessage)
+    error.status = 429
+    error.retryAfter = retryAfter
+    error.response = response
+    throw error
+  }
+
+  if (!response.ok) {
+    const errorMessage = await readErrorMessage(response)
+    const error = new Error(errorMessage)
+    error.status = response.status
+    error.response = response
+    return retryOrThrow(error)
+  }
+
+  // Success path: the backend answered cleanly → close the breaker.
+  if (cb) cb.onSuccess()
+
+  // Explicit raw bypass: return the unparsed 2xx Response (PDF/CSV downloads,
+  // tolerant-parse callers) before the JSON sniff/validation below.
+  if (raw) return response
+
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    let data = await response.json()
+    // Strict boundary: drop malformed/tampered shapes before they reach React.
+    data = validateAtBoundary(data, validate)
+    // Cryptographic integrity: verify provenance/attestation when required.
+    if (typeof attestVerify === 'function') {
+      data = await attestVerify(data)
+    }
+    return data
+  }
+
+  return response
 }
 
 export const api = {

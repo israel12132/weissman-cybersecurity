@@ -9,7 +9,6 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 import { SkeletonBar } from '../components/ui/Skeleton';
 import { api } from '../utils/apiFetch';
-import { apiFetch } from '../lib/apiBase';
 import Button from '../components/ui/Button'
 
 const NS = 'pages.systemConfiguration';
@@ -332,23 +331,22 @@ function GeneralSettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.general.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.general.org_name`)}
-          </label>
+        <label htmlFor="cfg-general-org_name" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.general.org_name`)}</span>
           <input
+            id="cfg-general-org_name"
+            aria-label={t(`${NS}.fields.general.org_name`)}
             type="text"
             value={config.org_name || ''}
             onChange={(e) => onChange('org_name', e.target.value)}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.general.timezone`)}
-          </label>
+        <label htmlFor="cfg-general-timezone" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.general.timezone`)}</span>
           <select
+            id="cfg-general-timezone"
             value={config.timezone || 'UTC'}
             onChange={(e) => onChange('timezone', e.target.value)}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -359,13 +357,12 @@ function GeneralSettings({ config, onChange }) {
               </option>
             ))}
           </select>
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.general.language`)}
-          </label>
+        <label htmlFor="cfg-general-language" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.general.language`)}</span>
           <select
+            id="cfg-general-language"
             value={config.language || 'en'}
             onChange={(e) => onChange('language', e.target.value)}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -376,13 +373,12 @@ function GeneralSettings({ config, onChange }) {
               </option>
             ))}
           </select>
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.general.date_format`)}
-          </label>
+        <label htmlFor="cfg-general-date_format" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.general.date_format`)}</span>
           <select
+            id="cfg-general-date_format"
             value={config.date_format || 'YYYY-MM-DD'}
             onChange={(e) => onChange('date_format', e.target.value)}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -393,7 +389,7 @@ function GeneralSettings({ config, onChange }) {
               </option>
             ))}
           </select>
-        </div>
+        </label>
       </div>
     </div>
   );
@@ -410,28 +406,34 @@ function SecuritySettings({ config, onChange }) {
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.password_policy`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.password_min_length`)}</label>
+            <label htmlFor="cfg-security-password_min_length" className="block text-sm text-[var(--text-tertiary)]">
+              <span className="block mb-2">{t(`${NS}.fields.security.password_min_length`)}</span>
               <input
+                id="cfg-security-password_min_length"
+                aria-label={t(`${NS}.fields.security.password_min_length`)}
                 type="number"
                 value={config.password_min_length || 12}
                 onChange={(e) => onChange('password_min_length', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
-            </div>
-            <div>
-              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.password_max_age`)}</label>
+            </label>
+            <label htmlFor="cfg-security-password_max_age" className="block text-sm text-[var(--text-tertiary)]">
+              <span className="block mb-2">{t(`${NS}.fields.security.password_max_age`)}</span>
               <input
+                id="cfg-security-password_max_age"
+                aria-label={t(`${NS}.fields.security.password_max_age`)}
                 type="number"
                 value={config.password_max_age || 90}
                 onChange={(e) => onChange('password_max_age', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
-            </div>
+            </label>
           </div>
           <div className="mt-4 space-y-2">
-            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <label htmlFor="cfg-security-password_require_uppercase" className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
+                id="cfg-security-password_require_uppercase"
+                aria-label={t(`${NS}.fields.security.password_require_uppercase`)}
                 type="checkbox"
                 checked={config.password_require_uppercase || false}
                 onChange={(e) => onChange('password_require_uppercase', e.target.checked)}
@@ -439,8 +441,10 @@ function SecuritySettings({ config, onChange }) {
               />
               {t(`${NS}.fields.security.password_require_uppercase`)}
             </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <label htmlFor="cfg-security-password_require_numbers" className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
+                id="cfg-security-password_require_numbers"
+                aria-label={t(`${NS}.fields.security.password_require_numbers`)}
                 type="checkbox"
                 checked={config.password_require_numbers || false}
                 onChange={(e) => onChange('password_require_numbers', e.target.checked)}
@@ -448,8 +452,10 @@ function SecuritySettings({ config, onChange }) {
               />
               {t(`${NS}.fields.security.password_require_numbers`)}
             </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <label htmlFor="cfg-security-password_require_special" className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
               <input
+                id="cfg-security-password_require_special"
+                aria-label={t(`${NS}.fields.security.password_require_special`)}
                 type="checkbox"
                 checked={config.password_require_special || false}
                 onChange={(e) => onChange('password_require_special', e.target.checked)}
@@ -463,31 +469,37 @@ function SecuritySettings({ config, onChange }) {
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.session_management`)}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.session_timeout`)}</label>
+            <label htmlFor="cfg-security-session_timeout" className="block text-sm text-[var(--text-tertiary)]">
+              <span className="block mb-2">{t(`${NS}.fields.security.session_timeout`)}</span>
               <input
+                id="cfg-security-session_timeout"
+                aria-label={t(`${NS}.fields.security.session_timeout`)}
                 type="number"
                 value={config.session_timeout || 60}
                 onChange={(e) => onChange('session_timeout', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
-            </div>
-            <div>
-              <label className="block text-sm text-[var(--text-tertiary)] mb-2">{t(`${NS}.fields.security.max_concurrent_sessions`)}</label>
+            </label>
+            <label htmlFor="cfg-security-max_concurrent_sessions" className="block text-sm text-[var(--text-tertiary)]">
+              <span className="block mb-2">{t(`${NS}.fields.security.max_concurrent_sessions`)}</span>
               <input
+                id="cfg-security-max_concurrent_sessions"
+                aria-label={t(`${NS}.fields.security.max_concurrent_sessions`)}
                 type="number"
                 value={config.max_concurrent_sessions || 3}
                 onChange={(e) => onChange('max_concurrent_sessions', parseInt(e.target.value, 10))}
                 className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
-            </div>
+            </label>
           </div>
         </div>
 
         <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.security.mfa`)}</h4>
-          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3">
+          <label htmlFor="cfg-security-mfa_required" className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3">
             <input
+              id="cfg-security-mfa_required"
+              aria-label={t(`${NS}.fields.security.mfa_required`)}
               type="checkbox"
               checked={config.mfa_required || false}
               onChange={(e) => onChange('mfa_required', e.target.checked)}
@@ -512,8 +524,7 @@ function MfaSelfServicePanel() {
 
   const refresh = React.useCallback(async () => {
     try {
-      const r = await apiFetch('/api/auth/mfa/status');
-      const d = await r.json().catch(() => ({}));
+      const d = await api.get('/api/auth/mfa/status');
       setStatus(d);
     } catch (e) {
       setErr(e?.message || t(`${NS}.mfa.errors.status_fetch_failed`));
@@ -528,9 +539,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await apiFetch('/api/auth/mfa/setup', { method: 'POST' });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.setup_failed`));
+      const d = await api.post('/api/auth/mfa/setup');
       setSetup(d);
     } catch (e) {
       setErr(e?.message || t(`${NS}.mfa.errors.setup_failed`));
@@ -543,13 +552,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await apiFetch('/api/auth/mfa/enable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.enable_failed`));
+      await api.post('/api/auth/mfa/enable', { code: code.trim() });
       setSetup(null);
       setCode('');
       await refresh();
@@ -564,13 +567,7 @@ function MfaSelfServicePanel() {
     setBusy(true);
     setErr('');
     try {
-      const r = await apiFetch('/api/auth/mfa/disable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim() }),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || t(`${NS}.mfa.errors.disable_failed`));
+      await api.post('/api/auth/mfa/disable', { code: code.trim() });
       setCode('');
       await refresh();
     } catch (e) {
@@ -617,6 +614,7 @@ function MfaSelfServicePanel() {
           <div className="flex items-center gap-2">
             <input
               type="text"
+              aria-label={t(`${NS}.mfa.code_placeholder`)}
               inputMode="numeric"
               maxLength={6}
               value={code}
@@ -639,6 +637,7 @@ function MfaSelfServicePanel() {
         <div className="flex items-center gap-2 mt-2">
           <input
             type="text"
+            aria-label={t(`${NS}.mfa.code_placeholder`)}
             inputMode="numeric"
             maxLength={6}
             value={code}
@@ -668,35 +667,34 @@ function ScanningSettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.scanning.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.scanning.default_timeout`)}
-          </label>
+        <label htmlFor="cfg-scanning-default_timeout" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.scanning.default_timeout`)}</span>
           <input
+            id="cfg-scanning-default_timeout"
+            aria-label={t(`${NS}.fields.scanning.default_timeout`)}
             type="number"
             value={config.default_timeout || 300}
             onChange={(e) => onChange('default_timeout', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.scanning.max_concurrency`)}
-          </label>
+        <label htmlFor="cfg-scanning-max_concurrency" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.scanning.max_concurrency`)}</span>
           <input
+            id="cfg-scanning-max_concurrency"
+            aria-label={t(`${NS}.fields.scanning.max_concurrency`)}
             type="number"
             value={config.max_concurrency || 10}
             onChange={(e) => onChange('max_concurrency', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.scanning.auto_retry`)}
-          </label>
+        <label htmlFor="cfg-scanning-auto_retry" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.scanning.auto_retry`)}</span>
           <select
+            id="cfg-scanning-auto_retry"
             value={String(config.auto_retry ?? false)}
             onChange={(e) => onChange('auto_retry', e.target.value === 'true')}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -704,19 +702,19 @@ function ScanningSettings({ config, onChange }) {
             <option value="true">{t(`${NS}.common.enabled`)}</option>
             <option value="false">{t(`${NS}.common.disabled`)}</option>
           </select>
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.scanning.max_retries`)}
-          </label>
+        <label htmlFor="cfg-scanning-max_retries" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.scanning.max_retries`)}</span>
           <input
+            id="cfg-scanning-max_retries"
+            aria-label={t(`${NS}.fields.scanning.max_retries`)}
             type="number"
             value={config.max_retries || 3}
             onChange={(e) => onChange('max_retries', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
       </div>
     </div>
   );
@@ -734,6 +732,7 @@ function IntegrationsSettings({ config, onChange }) {
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
           <input
             type="text"
+            aria-label={t(`${NS}.sections.integrations.webhook`)}
             value={config.webhook_url || ''}
             onChange={(e) => onChange('webhook_url', e.target.value)}
             placeholder={t(`${NS}.placeholders.webhook_url`)}
@@ -745,6 +744,7 @@ function IntegrationsSettings({ config, onChange }) {
           <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
           <div className="space-y-3">
             <select
+              aria-label={t(`${NS}.sections.integrations.siem`)}
               value={config.siem_type || 'none'}
               onChange={(e) => onChange('siem_type', e.target.value)}
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -758,6 +758,7 @@ function IntegrationsSettings({ config, onChange }) {
             {config.siem_type && config.siem_type !== 'none' && (
               <input
                 type="text"
+                aria-label={t(`${NS}.placeholders.siem_endpoint`)}
                 value={config.siem_endpoint || ''}
                 onChange={(e) => onChange('siem_endpoint', e.target.value)}
                 placeholder={t(`${NS}.placeholders.siem_endpoint`)}
@@ -772,6 +773,7 @@ function IntegrationsSettings({ config, onChange }) {
           <div className="space-y-3">
             <input
               type="text"
+              aria-label={t(`${NS}.placeholders.smtp_server`)}
               value={config.smtp_server || ''}
               onChange={(e) => onChange('smtp_server', e.target.value)}
               placeholder={t(`${NS}.placeholders.smtp_server`)}
@@ -779,6 +781,7 @@ function IntegrationsSettings({ config, onChange }) {
             />
             <input
               type="number"
+              aria-label={t(`${NS}.placeholders.smtp_port`)}
               value={config.smtp_port || 587}
               onChange={(e) => onChange('smtp_port', parseInt(e.target.value, 10))}
               placeholder={t(`${NS}.placeholders.smtp_port`)}
@@ -799,53 +802,53 @@ function RetentionSettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.retention.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.retention.scan_results`)}
-          </label>
+        <label htmlFor="cfg-retention-scan_results" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.retention.scan_results`)}</span>
           <input
+            id="cfg-retention-scan_results"
+            aria-label={t(`${NS}.fields.retention.scan_results`)}
             type="number"
             value={config.scan_results_retention || 90}
             onChange={(e) => onChange('scan_results_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.retention.audit_logs`)}
-          </label>
+        <label htmlFor="cfg-retention-audit_logs" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.retention.audit_logs`)}</span>
           <input
+            id="cfg-retention-audit_logs"
+            aria-label={t(`${NS}.fields.retention.audit_logs`)}
             type="number"
             value={config.audit_logs_retention || 365}
             onChange={(e) => onChange('audit_logs_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.retention.findings`)}
-          </label>
+        <label htmlFor="cfg-retention-findings" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.retention.findings`)}</span>
           <input
+            id="cfg-retention-findings"
+            aria-label={t(`${NS}.fields.retention.findings`)}
             type="number"
             value={config.findings_retention || 180}
             onChange={(e) => onChange('findings_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.retention.metrics`)}
-          </label>
+        <label htmlFor="cfg-retention-metrics" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.retention.metrics`)}</span>
           <input
+            id="cfg-retention-metrics"
+            aria-label={t(`${NS}.fields.retention.metrics`)}
             type="number"
             value={config.metrics_retention || 30}
             onChange={(e) => onChange('metrics_retention', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
       </div>
     </div>
   );
@@ -859,53 +862,53 @@ function PerformanceSettings({ config, onChange }) {
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.performance.title`)}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.performance.worker_threads`)}
-          </label>
+        <label htmlFor="cfg-performance-worker_threads" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.performance.worker_threads`)}</span>
           <input
+            id="cfg-performance-worker_threads"
+            aria-label={t(`${NS}.fields.performance.worker_threads`)}
             type="number"
             value={config.worker_threads || 4}
             onChange={(e) => onChange('worker_threads', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.performance.cache_ttl`)}
-          </label>
+        <label htmlFor="cfg-performance-cache_ttl" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.performance.cache_ttl`)}</span>
           <input
+            id="cfg-performance-cache_ttl"
+            aria-label={t(`${NS}.fields.performance.cache_ttl`)}
             type="number"
             value={config.cache_ttl || 300}
             onChange={(e) => onChange('cache_ttl', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.performance.max_memory`)}
-          </label>
+        <label htmlFor="cfg-performance-max_memory" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.performance.max_memory`)}</span>
           <input
+            id="cfg-performance-max_memory"
+            aria-label={t(`${NS}.fields.performance.max_memory`)}
             type="number"
             value={config.max_memory || 2048}
             onChange={(e) => onChange('max_memory', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            {t(`${NS}.fields.performance.db_pool_size`)}
-          </label>
+        <label htmlFor="cfg-performance-db_pool_size" className="block text-sm font-medium text-[var(--text-secondary)]">
+          <span className="block mb-2">{t(`${NS}.fields.performance.db_pool_size`)}</span>
           <input
+            id="cfg-performance-db_pool_size"
+            aria-label={t(`${NS}.fields.performance.db_pool_size`)}
             type="number"
             value={config.db_pool_size || 20}
             onChange={(e) => onChange('db_pool_size', parseInt(e.target.value, 10))}
             className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
           />
-        </div>
+        </label>
       </div>
     </div>
   );
@@ -922,9 +925,12 @@ function ComplianceSettings({ config, onChange }) {
         {COMPLIANCE_FRAMEWORKS.map((framework) => (
           <label
             key={framework.configKey}
+            htmlFor={`cfg-compliance-${framework.configKey}`}
             className="flex items-center gap-3 p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors"
           >
             <input
+              id={`cfg-compliance-${framework.configKey}`}
+              aria-label={t(`${NS}.${framework.labelKey}`)}
               type="checkbox"
               checked={config[framework.configKey] || false}
               onChange={(e) => onChange(framework.configKey, e.target.checked)}
