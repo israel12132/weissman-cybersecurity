@@ -79,15 +79,30 @@ jobs:
 
       - name: Free runner disk (workspace links several large debug binaries)
         # `cargo build --workspace` links weissman-server, weissman-worker AND the
-        # fingerprint_engine binary as full debug executables. On the stock runner the
-        # linker exhausts the disk mid-link and `ld` dies with SIGBUS (signal 7, "Bus
-        # error", core dumped) — NOT a code error: the same workspace compiles in the
-        # rust-coverage job, which already frees disk first. Reclaim the unused language
-        # toolchains up front so ld has headroom through clippy + build. Mirrors the
-        # rust-coverage job's identical step.
+        # fingerprint_engine binary as full debug executables, and `cargo test
+        # --all-targets` then links the fingerprint_engine LIB-TEST binary — the largest
+        # link of the job (test harness + every dep). rust-lld memory-maps the output and
+        # writes its sections in parallel; when the runner disk is exhausted at that moment
+        # the mmap'd page can't be committed and the linker faults with SIGBUS (signal 7,
+        # "Bus error", core dumped) inside `llvm::parallelFor` — NOT a code error (the same
+        # crate links fine in the engine-wiring job, which frees disk first, and cargo check
+        # passes). A prior, lighter free-list still let target/ growth cross the ceiling at
+        # the test-link step, so reclaim aggressively and cache-preservingly up front (this
+        # only removes unused language runtimes / prebuilt toolchains / docker images — never
+        # ~/.cargo or target/, so the build cache is untouched) to keep headroom through the
+        # test link. `df -h /` records the reclaimed headroom for diagnosis.
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /usr/local/share/powershell \
+            /usr/local/lib/node_modules \
+            /opt/microsoft || true
+          sudo docker image prune -af || true
           df -h /
 
       - name: Install cargo-audit
