@@ -122,12 +122,33 @@ pub fn init_tracing_from_env() {
     let _ = tracing_subscriber::registry().with(layers).try_init();
 }
 
+/// Caps concurrent LLM-usage metering inserts so this best-effort accounting can never pin the
+/// engine-execution `app_pool` out from under live scans. Metering fires once per successful LLM
+/// completion; a burst of concurrent completions (e.g. an angle-fan-out council run) would otherwise
+/// `tokio::spawn` an unbounded set of `begin_tenant_tx` inserts that each hold an app_pool
+/// connection for ~4 round-trips, starving the pool a serialized scan needs. Tasks past the cap wait
+/// on this semaphore holding NO connection, so no usage records are dropped — only the DB fan-out is
+/// bounded. Tunable via `WEISSMAN_LLM_METER_DB_CONCURRENCY` (default 2).
+static LLM_METER_DB_SEM: std::sync::LazyLock<tokio::sync::Semaphore> =
+    std::sync::LazyLock::new(|| {
+        let n = std::env::var("WEISSMAN_LLM_METER_DB_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(2);
+        tokio::sync::Semaphore::new(n)
+    });
+
 /// Spawns background inserts into `tenant_llm_usage` for each LLM completion (see `weissman_engines::openai_chat`).
 pub fn register_llm_tenant_metering(app_pool: Arc<sqlx::PgPool>) {
     weissman_engines::openai_chat::set_llm_usage_reporter(Arc::new(
         move |tenant_id, prompt_tokens, completion_tokens, model, operation| {
             let pool = app_pool.clone();
             tokio::spawn(async move {
+                // Bound concurrent metering inserts (best-effort) so they can never hold every
+                // app_pool slot a live scan needs. `acquire` queues rather than drops, so usage is
+                // still recorded; the permit is held only for the insert, then released.
+                let _permit = LLM_METER_DB_SEM.acquire().await;
                 if let Err(e) = weissman_db::llm_usage::log_tenant_llm_usage(
                     pool.as_ref(),
                     tenant_id,
