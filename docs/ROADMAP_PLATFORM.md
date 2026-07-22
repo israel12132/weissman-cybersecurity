@@ -52,7 +52,7 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 | F1 | Compliance report builder UI (ISO/SOC2/NIST/CIS mapping view) | 🟡 FE-surface | 🚧 `ComplianceMatrix` shipped |
 | F2 | Evidence Vault browser + tamper-proof badge UI | 🟡 FE-surface | ⬜ |
 | F3 | Audit-trail export UI | 🟢 FE | ⬜ |
-| F4 | RBAC/ABAC policy editor UI | 🟡 FE-surface | ⬜ |
+| F4 | RBAC/ABAC policy editor UI | 🟡 FE-surface | ✅ `AccessPolicyEditor` |
 | F5 | Automated compliance reporting engine | 🔴 BE | ⬜ |
 
 ## G — Business & Go-to-Market (UI surfaces)
