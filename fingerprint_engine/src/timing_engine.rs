@@ -420,11 +420,6 @@ mod tests {
             TIMING_PAYLOADS.len()
         );
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn mean_of_empty_is_zero_and_average_otherwise() {
