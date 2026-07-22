@@ -17,10 +17,10 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| B1 | `Sparkline` primitive (dependency-free SVG, area/line, tooltip) | 🟢 FE | ⬜ |
-| B2 | `KpiTile` + `KpiStrip` — value, delta, trend sparkline, drill-down | 🟢 FE | ⬜ |
-| B3 | AI **Command Bar** (⌘K) — command registry, fuzzy + NL-style parsing, actions | 🟢 FE | ⬜ |
-| B4 | `SmartFilterBar` + Saved Views UI (on `useSavedViews`) | 🟢 FE | ⬜ |
+| B1 | `Sparkline` primitive (dependency-free SVG, area/line, tooltip) | 🟢 FE | ✅ |
+| B2 | `KpiTile` + `KpiStrip` — value, delta, trend sparkline, drill-down | 🟢 FE | ✅ |
+| B3 | AI **Command Bar** (⌘K) — command registry, fuzzy + NL-style parsing, actions | 🟢 FE | ✅ |
+| B4 | `SmartFilterBar` + Saved Views UI (on `useSavedViews`) | 🟢 FE | 🚧 |
 | B5 | Finding Detail Drawer v2 — timeline, attack-path, remediation, evidence gallery | 🟢 FE | ⬜ |
 | B6 | AI Risk Explanation panel (business-risk narrative) | 🟡 FE-surface | ⬜ |
 | B7 | Collaborative cursors / comments on findings | 🔴 BE/Infra (realtime) | ⬜ |
@@ -29,9 +29,9 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| C1 | `BlastRadius` — SLE/ALE financial exposure viz + crown jewels | 🟢 FE | ⬜ |
+| C1 | `BlastRadius` — SLE/ALE financial exposure viz + crown jewels | 🟢 FE | 🚧 |
 | C2 | `AttackPath` — interactive path finder / kill-chain (SVG/@xyflow) | 🟢 FE | ⬜ |
-| C3 | `MiniHeatmap` primitive (e.g. MITRE coverage, time-of-day) | 🟢 FE | ⬜ |
+| C3 | `MiniHeatmap` primitive (e.g. MITRE coverage, time-of-day) | 🟢 FE | 🚧 |
 | C4 | Global swarm map heatmap + live connections layer | 🟡 FE-surface | ⬜ |
 | C5 | WarRoom timeline replay control | 🟡 FE-surface | ⬜ |
 | C6 | 3D attack surface (Three.js) upgrade of Battlespace | 🟢 FE (heavy) | ⬜ |
