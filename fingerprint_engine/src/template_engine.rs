@@ -516,7 +516,10 @@ mod tests {
     #[test]
     fn join_url_absolute_passthrough() {
         assert_eq!(join_url("https://x.com", "http://evil/a"), "http://evil/a");
-        assert_eq!(join_url("https://x.com", "  https://y.com/z  "), "https://y.com/z");
+        assert_eq!(
+            join_url("https://x.com", "  https://y.com/z  "),
+            "https://y.com/z"
+        );
     }
 
     #[test]
@@ -546,7 +549,10 @@ mod tests {
     fn render_string_no_placeholders_unchanged() {
         let vars = BTreeMap::new();
         let state = BTreeMap::new();
-        assert_eq!(render_string("plain text", "https://h", &vars, &state), "plain text");
+        assert_eq!(
+            render_string("plain text", "https://h", &vars, &state),
+            "plain text"
+        );
     }
 
     #[test]
@@ -564,7 +570,9 @@ mod tests {
 
     #[test]
     fn eval_matcher_status() {
-        let m = TemplateMatcher::Status { statuses: vec![200, 301] };
+        let m = TemplateMatcher::Status {
+            statuses: vec![200, 301],
+        };
         let h = BTreeMap::new();
         let (ok, _) = eval_matcher(&m, 200, &h, "", 0, "", "");
         assert!(ok);
@@ -575,7 +583,9 @@ mod tests {
     #[test]
     fn eval_matcher_body_and_duration() {
         let h = BTreeMap::new();
-        let body_m = TemplateMatcher::BodyContains { contains: "unused".to_string() };
+        let body_m = TemplateMatcher::BodyContains {
+            contains: "unused".to_string(),
+        };
         let (ok, _) = eval_matcher(&body_m, 200, &h, "hello world", 0, "world", "");
         assert!(ok);
         let (ok, _) = eval_matcher(&body_m, 200, &h, "hello", 0, "world", "");
@@ -601,7 +611,9 @@ mod tests {
         let (ok, _) = eval_matcher(&hm, 200, &h, "", 0, "apache", "");
         assert!(!ok);
 
-        let rm = TemplateMatcher::Regex { regex: "unused".to_string() };
+        let rm = TemplateMatcher::Regex {
+            regex: "unused".to_string(),
+        };
         let (ok, _) = eval_matcher(&rm, 200, &h, "abc123", 0, "", "[0-9]+");
         assert!(ok);
         // invalid regex -> never_matches

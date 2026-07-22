@@ -1060,8 +1060,7 @@ mod tests {
     use super::*;
 
     // sha256("abc") — standard NIST test vector.
-    const SHA256_ABC: &str =
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    const SHA256_ABC: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
     #[test]
     fn hash_token_matches_known_vector_and_trims() {
@@ -1078,10 +1077,9 @@ mod tests {
 
     #[test]
     fn generate_enrollment_token_length_and_alphabet() {
-        let alphabet: Vec<char> =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-                .chars()
-                .collect();
+        let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+            .chars()
+            .collect();
         for _ in 0..50 {
             let t = generate_enrollment_token();
             assert_eq!(t.len(), 32);

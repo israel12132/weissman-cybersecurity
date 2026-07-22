@@ -443,7 +443,8 @@ mod tests {
 
     #[test]
     fn scan_file_sorts_findings_by_line() {
-        let content = "clean\n-----BEGIN RSA PRIVATE KEY-----\nmore\nlet k=\"AKIAIOSFODNN7EXAMPLE\";";
+        let content =
+            "clean\n-----BEGIN RSA PRIVATE KEY-----\nmore\nlet k=\"AKIAIOSFODNN7EXAMPLE\";";
         let f = scan_file("multi.txt", content);
         assert_eq!(f.len(), 2);
         assert!(f[0].line <= f[1].line);
@@ -454,9 +455,15 @@ mod tests {
     #[test]
     fn scan_many_files_aggregates() {
         let files = vec![
-            ("a.txt".to_string(), "-----BEGIN RSA PRIVATE KEY-----".to_string()),
+            (
+                "a.txt".to_string(),
+                "-----BEGIN RSA PRIVATE KEY-----".to_string(),
+            ),
             ("b.txt".to_string(), "nothing here".to_string()),
-            ("c.txt".to_string(), "xoxb-1234567890-abcdefghij".to_string()),
+            (
+                "c.txt".to_string(),
+                "xoxb-1234567890-abcdefghij".to_string(),
+            ),
         ];
         let f = scan_many_files(&files);
         assert_eq!(f.len(), 2);

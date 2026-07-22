@@ -385,7 +385,10 @@ mod tests {
 
     #[test]
     fn toxic_checks_detects_curl_bash() {
-        let hits = toxic_checks("run: curl https://get.example.com/install.sh | bash", "ci.yml");
+        let hits = toxic_checks(
+            "run: curl https://get.example.com/install.sh | bash",
+            "ci.yml",
+        );
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].0, "Unpinned curl | bash (supply chain)");
     }

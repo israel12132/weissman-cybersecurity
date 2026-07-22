@@ -289,7 +289,11 @@ mod tests {
     fn cve_matches_searches_title_and_description() {
         let cond = json!({ "cve_pattern": "CVE-2021-44228" });
         assert!(cve_matches(&cond, "Log4Shell cve-2021-44228", "unrelated"));
-        assert!(cve_matches(&cond, "unrelated", "affected by CVE-2021-44228 here"));
+        assert!(cve_matches(
+            &cond,
+            "unrelated",
+            "affected by CVE-2021-44228 here"
+        ));
         assert!(!cve_matches(&cond, "nothing", "here"));
     }
 

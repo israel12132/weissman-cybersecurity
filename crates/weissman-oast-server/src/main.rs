@@ -680,7 +680,10 @@ mod tests {
             None
         );
         // Host equal to suffix (no label) rejected.
-        assert_eq!(token_from_host("weissmancyber.com", "weissmancyber.com"), None);
+        assert_eq!(
+            token_from_host("weissmancyber.com", "weissmancyber.com"),
+            None
+        );
         // Empty suffix rejected.
         assert_eq!(token_from_host(&format!("{UUID}.x.com"), ""), None);
     }

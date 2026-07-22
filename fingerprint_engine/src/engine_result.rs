@@ -150,7 +150,8 @@ mod tests {
     #[test]
     fn serialization_skips_helper_and_none_graph_fields() {
         let r = EngineResult::ok(vec![], "m");
-        let v: serde_json::Value = serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
         let obj = v.as_object().unwrap();
         assert!(obj.contains_key("status"));
         assert!(obj.contains_key("findings"));

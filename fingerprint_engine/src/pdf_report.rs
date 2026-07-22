@@ -1533,10 +1533,7 @@ mod tests {
             remediation_from_desc(r#"{"remediation_snippet":"patch now"}"#),
             "patch now"
         );
-        assert_eq!(
-            remediation_from_desc(r#"{"remediation":"do X"}"#),
-            "do X"
-        );
+        assert_eq!(remediation_from_desc(r#"{"remediation":"do X"}"#), "do X");
         // Empty snippet falls through to remediation.
         assert_eq!(
             remediation_from_desc(r#"{"remediation_snippet":"","remediation":"fallback"}"#),
@@ -1630,7 +1627,12 @@ mod tests {
     fn should_include_in_detailed_findings_filter() {
         // high + poc, no remediation -> included
         assert!(should_include_in_detailed_findings(&row(
-            1, "t", "high", "src", "", "curl http://x"
+            1,
+            "t",
+            "high",
+            "src",
+            "",
+            "curl http://x"
         )));
         // low, no poc, no remediation -> excluded
         assert!(!should_include_in_detailed_findings(&row(

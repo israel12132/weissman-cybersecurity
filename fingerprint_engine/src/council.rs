@@ -1860,10 +1860,7 @@ mod tests {
 
     #[test]
     fn env_f64_returns_default_when_key_absent() {
-        assert_eq!(
-            env_f64("WEISSMAN_COUNCIL_TEST_ABSENT_F64_q9z7", 1.25),
-            1.25
-        );
+        assert_eq!(env_f64("WEISSMAN_COUNCIL_TEST_ABSENT_F64_q9z7", 1.25), 1.25);
     }
 
     #[test]
@@ -2028,8 +2025,11 @@ mod tests {
 
     #[test]
     fn into_council_debate_result_maps_all_fields() {
-        let out = mk_supreme_result(json!({"content_type": "application/json"}), Some("pf".into()))
-            .into_council_debate_result();
+        let out = mk_supreme_result(
+            json!({"content_type": "application/json"}),
+            Some("pf".into()),
+        )
+        .into_council_debate_result();
         assert_eq!(out.council_round, 7);
         assert_eq!(out.alpha.strategies.len(), 1);
         assert_eq!(out.alpha.strategies[0].id, "s2");

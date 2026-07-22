@@ -503,7 +503,9 @@ mod tests {
         // Guard against accidental edits to the documented port maps.
         assert!(DEFAULT_SAP_PORTS.contains(&3299));
         assert!(DEFAULT_SAP_PORTS.contains(&3300));
-        assert!(SAP_ICM_HTTP_PORTS.iter().all(|p| DEFAULT_SAP_PORTS.contains(p)));
+        assert!(SAP_ICM_HTTP_PORTS
+            .iter()
+            .all(|p| DEFAULT_SAP_PORTS.contains(p)));
         assert!(DEFAULT_MAINFRAME_PORTS.contains(&21));
         assert!(DEFAULT_MAINFRAME_PORTS.contains(&23));
     }

@@ -265,17 +265,20 @@ mod tests {
 
     #[test]
     fn extract_email_none_when_absent() {
-        assert_eq!(extract_email_from_saml_xml("<Response>no email</Response>"), None);
+        assert_eq!(
+            extract_email_from_saml_xml("<Response>no email</Response>"),
+            None
+        );
         // NameID without an '@' is not an email.
-        assert_eq!(extract_email_from_saml_xml("<NameID>notanemail</NameID>"), None);
+        assert_eq!(
+            extract_email_from_saml_xml("<NameID>notanemail</NameID>"),
+            None
+        );
     }
 
     #[test]
     fn html_escape_attr_escapes_all_specials() {
-        assert_eq!(
-            html_escape_attr(r#"a&b"c<d>e"#),
-            "a&amp;b&quot;c&lt;d&gt;e"
-        );
+        assert_eq!(html_escape_attr(r#"a&b"c<d>e"#), "a&amp;b&quot;c&lt;d&gt;e");
         // Ampersand is escaped first so no double-encoding occurs.
         assert_eq!(html_escape_attr("&lt;"), "&amp;lt;");
         assert_eq!(html_escape_attr("plain"), "plain");

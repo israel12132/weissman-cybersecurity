@@ -418,7 +418,10 @@ mod tests {
             api_key_preview: "k".into(),
             ed25519_public_openssh: "ssh".into(),
         };
-        assert_eq!(serde_json::to_value(&rot).unwrap()["kind"], "honeytoken_rotation");
+        assert_eq!(
+            serde_json::to_value(&rot).unwrap()["kind"],
+            "honeytoken_rotation"
+        );
     }
 
     #[test]
@@ -431,7 +434,11 @@ mod tests {
         let s = serde_json::to_string(&cmd).unwrap();
         let back: SovereignSwarmCmd = serde_json::from_str(&s).unwrap();
         match back {
-            SovereignSwarmCmd::CommandApiPortHint { port, issued_unix, hmac_hex } => {
+            SovereignSwarmCmd::CommandApiPortHint {
+                port,
+                issued_unix,
+                hmac_hex,
+            } => {
                 assert_eq!(port, 50000);
                 assert_eq!(issued_unix, 999);
                 assert_eq!(hmac_hex, "abc123");

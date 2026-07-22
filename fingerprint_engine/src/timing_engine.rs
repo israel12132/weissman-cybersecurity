@@ -467,7 +467,10 @@ mod tests {
     #[test]
     fn timing_full_url_appends_encoded_payload() {
         assert_eq!(timing_full_url("http://x/", None), "http://x/");
-        assert_eq!(timing_full_url("http://x/", Some("a b")), "http://x/?q=a%20b");
+        assert_eq!(
+            timing_full_url("http://x/", Some("a b")),
+            "http://x/?q=a%20b"
+        );
         assert_eq!(
             timing_full_url("http://x/?a=1", Some("v")),
             "http://x/?a=1&q=v"
@@ -479,7 +482,10 @@ mod tests {
         assert_eq!(normalize_timing_url(""), "");
         assert_eq!(normalize_timing_url("   "), "");
         assert_eq!(normalize_timing_url("example.com"), "https://example.com");
-        assert_eq!(normalize_timing_url("  example.com "), "https://example.com");
+        assert_eq!(
+            normalize_timing_url("  example.com "),
+            "https://example.com"
+        );
         assert_eq!(normalize_timing_url("http://x/"), "http://x/");
         assert_eq!(normalize_timing_url("https://x/"), "https://x/");
     }

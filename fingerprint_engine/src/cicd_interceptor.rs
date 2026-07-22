@@ -592,7 +592,11 @@ mod tests {
         });
         assert!(verify_github_signature(secret, Some(&raw_hex), body));
         // tampered body must fail
-        assert!(!verify_github_signature(secret, Some(&header), b"other body"));
+        assert!(!verify_github_signature(
+            secret,
+            Some(&header),
+            b"other body"
+        ));
     }
 
     #[test]

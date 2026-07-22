@@ -187,7 +187,9 @@ fn parse_state_machine_builds_nodes_and_edges() {
     let (nodes, edges) = weissman_engines::fuzzer::parse_state_machine(&spec);
     assert_eq!(nodes.len(), 2);
     // Node id encodes METHOD + underscored path.
-    assert!(nodes.iter().any(|n| n.id == "POST_login" && n.method == "POST"));
+    assert!(nodes
+        .iter()
+        .any(|n| n.id == "POST_login" && n.method == "POST"));
     assert!(nodes.iter().any(|n| n.id == "GET_users"));
     // Two ordered endpoints -> exactly one sequence edge.
     assert_eq!(edges.len(), 1);

@@ -677,8 +677,10 @@ mod tests {
 
     #[test]
     fn parse_triage_json_valid_and_invalid() {
-        let ok = parse_triage_json(r#"{"severity":"High","dynamic_impact":"impact","remediation":"fix"}"#)
-            .expect("valid triage");
+        let ok = parse_triage_json(
+            r#"{"severity":"High","dynamic_impact":"impact","remediation":"fix"}"#,
+        )
+        .expect("valid triage");
         assert_eq!(ok.severity, "High");
         assert_eq!(ok.dynamic_impact, "impact");
         assert_eq!(ok.remediation, "fix");
@@ -691,10 +693,10 @@ mod tests {
         assert_eq!(fenced.severity, "Low");
 
         // An empty required field -> None.
-        assert!(parse_triage_json(
-            r#"{"severity":"","dynamic_impact":"i","remediation":"r"}"#
-        )
-        .is_none());
+        assert!(
+            parse_triage_json(r#"{"severity":"","dynamic_impact":"i","remediation":"r"}"#)
+                .is_none()
+        );
         // Missing field -> None.
         assert!(parse_triage_json(r#"{"severity":"High"}"#).is_none());
         // Not JSON -> None.
@@ -729,10 +731,7 @@ mod tests {
     fn truncate_for_llm_boundaries() {
         assert_eq!(truncate_for_llm("hello", 10), "hello");
         assert_eq!(truncate_for_llm("abc", 3), "abc");
-        assert_eq!(
-            truncate_for_llm("hello", 2),
-            "he… [truncated 3 chars]"
-        );
+        assert_eq!(truncate_for_llm("hello", 2), "he… [truncated 3 chars]");
     }
 
     #[test]
@@ -776,7 +775,8 @@ mod tests {
 
     #[test]
     fn build_report_markdown_static_fallback() {
-        let md = build_report_markdown("http://t.example", "payload\"x", "SQLi", "base-delta", None);
+        let md =
+            build_report_markdown("http://t.example", "payload\"x", "SQLi", "base-delta", None);
         assert!(md.contains("# Security Vulnerability Report"));
         assert!(md.contains("Anomaly Detected During Fuzzing: SQLi"));
         assert!(md.contains("http://t.example"));

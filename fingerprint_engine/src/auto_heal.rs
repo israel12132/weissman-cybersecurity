@@ -711,7 +711,10 @@ mod tests {
     fn backoff_saturates_at_max() {
         // Large attempt saturates ms at MAX_BACKOFF_MS (60_000); jitter_cap=500 => [60000, 60500)
         let ms = backoff_with_jitter(20).as_millis();
-        assert!((60_000..60_500).contains(&ms), "saturated out of range: {ms}");
+        assert!(
+            (60_000..60_500).contains(&ms),
+            "saturated out of range: {ms}"
+        );
     }
 
     #[test]
@@ -732,7 +735,10 @@ mod tests {
     fn retry_after_clamps_high_to_3600() {
         let mut h = HeaderMap::new();
         h.insert(RETRY_AFTER, HeaderValue::from_static("999999"));
-        assert_eq!(retry_after_from_headers(&h), Some(Duration::from_secs(3600)));
+        assert_eq!(
+            retry_after_from_headers(&h),
+            Some(Duration::from_secs(3600))
+        );
     }
 
     #[test]
@@ -746,7 +752,10 @@ mod tests {
         let h = HeaderMap::new();
         for code in [408u16, 429, 500, 502, 503, 504] {
             let s = StatusCode::from_u16(code).unwrap();
-            assert!(github_transient_status(s, "", &h), "code {code} should be transient");
+            assert!(
+                github_transient_status(s, "", &h),
+                "code {code} should be transient"
+            );
         }
     }
 
@@ -766,7 +775,11 @@ mod tests {
             &h
         ));
         // Plain forbidden with no rate-limit signal is terminal.
-        assert!(!github_transient_status(StatusCode::FORBIDDEN, "forbidden", &h));
+        assert!(!github_transient_status(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            &h
+        ));
     }
 
     #[test]
@@ -808,13 +821,17 @@ mod tests {
     #[test]
     fn validate_rejects_dotdot_path() {
         let files = vec![("../etc/passwd".to_string(), "x".to_string())];
-        assert!(validate_heal_files(&files).unwrap_err().contains("invalid heal file path"));
+        assert!(validate_heal_files(&files)
+            .unwrap_err()
+            .contains("invalid heal file path"));
     }
 
     #[test]
     fn validate_rejects_empty_path() {
         let files = vec![("   ".to_string(), "x".to_string())];
-        assert!(validate_heal_files(&files).unwrap_err().contains("invalid heal file path"));
+        assert!(validate_heal_files(&files)
+            .unwrap_err()
+            .contains("invalid heal file path"));
     }
 
     #[test]
@@ -823,7 +840,9 @@ mod tests {
             ("a.txt".to_string(), "1".to_string()),
             ("a.txt".to_string(), "2".to_string()),
         ];
-        assert!(validate_heal_files(&files).unwrap_err().contains("duplicate"));
+        assert!(validate_heal_files(&files)
+            .unwrap_err()
+            .contains("duplicate"));
     }
 
     #[test]

@@ -666,8 +666,7 @@ mod tests {
         assert!(empty.role.is_none());
         assert!(empty.is_superadmin.is_none());
 
-        let some: UpdateUserBody =
-            serde_json::from_value(json!({"role": "ceo"})).unwrap();
+        let some: UpdateUserBody = serde_json::from_value(json!({"role": "ceo"})).unwrap();
         assert_eq!(some.role.as_deref(), Some("ceo"));
         assert!(some.is_superadmin.is_none());
     }

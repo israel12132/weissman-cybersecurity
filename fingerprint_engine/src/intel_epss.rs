@@ -363,9 +363,18 @@ mod tests {
 
     #[test]
     fn normalize_cve_uppercases_and_trims() {
-        assert_eq!(normalize_cve("cve-2021-1234").as_deref(), Some("CVE-2021-1234"));
-        assert_eq!(normalize_cve("  CVE-2021-1  ").as_deref(), Some("CVE-2021-1"));
-        assert_eq!(normalize_cve("CVE-2021-44228").as_deref(), Some("CVE-2021-44228"));
+        assert_eq!(
+            normalize_cve("cve-2021-1234").as_deref(),
+            Some("CVE-2021-1234")
+        );
+        assert_eq!(
+            normalize_cve("  CVE-2021-1  ").as_deref(),
+            Some("CVE-2021-1")
+        );
+        assert_eq!(
+            normalize_cve("CVE-2021-44228").as_deref(),
+            Some("CVE-2021-44228")
+        );
     }
 
     #[test]

@@ -192,10 +192,7 @@ mod tests {
     #[test]
     fn merge_flags_agent_guidance_in_message() {
         let remote = EngineResult::ok(vec![], "r");
-        let agent = EngineResult::ok(
-            vec![json!({"title": "X", "agent_required": true})],
-            "a",
-        );
+        let agent = EngineResult::ok(vec![json!({"title": "X", "agent_required": true})], "a");
         let merged = merge_agent_hybrid(remote, agent, "ENG");
         assert_eq!(merged.findings.len(), 1);
         assert!(merged

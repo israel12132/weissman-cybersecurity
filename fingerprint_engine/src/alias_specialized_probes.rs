@@ -1686,8 +1686,12 @@ mod tests {
             .unwrap();
         let ctx = EngineRunContext::default();
         // Unknown id falls through to the `_ => empty_ok(..)` arm (no network).
-        let r =
-            rt.block_on(run_specialized_probe("no_such_engine_zzz", "canon", "example.com", &ctx));
+        let r = rt.block_on(run_specialized_probe(
+            "no_such_engine_zzz",
+            "canon",
+            "example.com",
+            &ctx,
+        ));
         assert_eq!(r.status, "ok");
         assert!(r.findings.is_empty());
         assert_eq!(

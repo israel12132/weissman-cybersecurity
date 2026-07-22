@@ -844,7 +844,10 @@ mod tests {
         // 64 hex chars, deterministic.
         let fp = tech_fingerprint_for_chain(&["x".to_string(), "y".to_string()]);
         assert_eq!(fp.len(), 64);
-        assert_eq!(fp, tech_fingerprint_for_chain(&["x".to_string(), "y".to_string()]));
+        assert_eq!(
+            fp,
+            tech_fingerprint_for_chain(&["x".to_string(), "y".to_string()])
+        );
     }
 
     #[test]
@@ -860,7 +863,12 @@ mod tests {
         let outcomes: Vec<&str> = fb.iter().map(|s| s.outcome.as_str()).collect();
         assert_eq!(
             outcomes,
-            vec!["path_success", "path_failure", "path_failure", "path_success"]
+            vec![
+                "path_success",
+                "path_failure",
+                "path_failure",
+                "path_success"
+            ]
         );
         assert_eq!(fb[0].pivot, "chain_advances");
         assert_eq!(fb[1].pivot, "internal_path_retry_encoding");

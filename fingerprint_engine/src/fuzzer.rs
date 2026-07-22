@@ -1300,10 +1300,19 @@ mod tests {
 
     #[test]
     fn target_host_strips_scheme_path_and_port_and_lowercases() {
-        assert_eq!(target_host_for_memory("https://Example.com/path"), "example.com");
+        assert_eq!(
+            target_host_for_memory("https://Example.com/path"),
+            "example.com"
+        );
         assert_eq!(target_host_for_memory("http://host:8080/x?y=1"), "host");
-        assert_eq!(target_host_for_memory("HTTP-less.example.org"), "http-less.example.org");
-        assert_eq!(target_host_for_memory("https://API.Corp.NET:443"), "api.corp.net");
+        assert_eq!(
+            target_host_for_memory("HTTP-less.example.org"),
+            "http-less.example.org"
+        );
+        assert_eq!(
+            target_host_for_memory("https://API.Corp.NET:443"),
+            "api.corp.net"
+        );
     }
 
     #[test]

@@ -545,12 +545,18 @@ mod tests {
 
     #[test]
     fn extract_tag_basic_cdata_and_missing() {
-        assert_eq!(extract_tag("<title>Hello</title>", "title"), Some("Hello".to_string()));
+        assert_eq!(
+            extract_tag("<title>Hello</title>", "title"),
+            Some("Hello".to_string())
+        );
         assert_eq!(
             extract_tag("<title><![CDATA[Hi there]]></title>", "title"),
             Some("Hi there".to_string())
         );
-        assert_eq!(extract_tag("<title>  spaced  </title>", "title"), Some("spaced".to_string()));
+        assert_eq!(
+            extract_tag("<title>  spaced  </title>", "title"),
+            Some("spaced".to_string())
+        );
         assert_eq!(extract_tag("<a>x</a>", "b"), None);
     }
 
@@ -589,7 +595,8 @@ mod tests {
 
     #[test]
     fn parse_rss_body_id_falls_back_to_title() {
-        let xml = "<rss><item><title>NoLinkItem</title><description>plain</description></item></rss>";
+        let xml =
+            "<rss><item><title>NoLinkItem</title><description>plain</description></item></rss>";
         let items = parse_rss_body(xml, "s");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].external_id, "NoLinkItem");
@@ -647,8 +654,14 @@ mod tests {
         let p = parse_probe_json(text).unwrap();
         assert_eq!(p.path, "/api");
         assert_eq!(p.method, "POST");
-        assert_eq!(p.headers.as_ref().unwrap().get("User-Agent"), Some(&"Scanner".to_string()));
-        assert_eq!(p.query_params.as_ref().unwrap().get("q"), Some(&"1".to_string()));
+        assert_eq!(
+            p.headers.as_ref().unwrap().get("User-Agent"),
+            Some(&"Scanner".to_string())
+        );
+        assert_eq!(
+            p.query_params.as_ref().unwrap().get("q"),
+            Some(&"1".to_string())
+        );
         assert_eq!(p.expected_regex.as_deref(), Some("vuln"));
     }
 

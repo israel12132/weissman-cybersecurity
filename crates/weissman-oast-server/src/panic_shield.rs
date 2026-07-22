@@ -177,7 +177,10 @@ mod tests {
 
     #[test]
     fn ipv4_slash24_zeroes_last_octet() {
-        assert_eq!(ipv4_slash24(Ipv4Addr::new(192, 168, 1, 55)), "192.168.1.0/24");
+        assert_eq!(
+            ipv4_slash24(Ipv4Addr::new(192, 168, 1, 55)),
+            "192.168.1.0/24"
+        );
         assert_eq!(ipv4_slash24(Ipv4Addr::new(10, 0, 0, 0)), "10.0.0.0/24");
         assert_eq!(
             ipv4_slash24(Ipv4Addr::new(203, 0, 113, 254)),

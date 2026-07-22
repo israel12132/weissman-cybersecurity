@@ -413,7 +413,11 @@ mod tests {
 
     #[test]
     fn git_config_signatures_detected() {
-        assert!(looks_like_leak(".git/config", 200, "[core]\nrepositoryformatversion = 0"));
+        assert!(looks_like_leak(
+            ".git/config",
+            200,
+            "[core]\nrepositoryformatversion = 0"
+        ));
         assert!(looks_like_leak(".git/HEAD", 200, "ref: refs/heads/main"));
         // Short body under a .git path is treated as a leak.
         assert!(looks_like_leak(".git/HEAD", 206, "tiny"));
@@ -426,7 +430,11 @@ mod tests {
             200,
             "-----BEGIN OPENSSH PRIVATE KEY-----"
         ));
-        assert!(!looks_like_leak("home/id_rsa", 200, "just a public key ssh-rsa AAAA"));
+        assert!(!looks_like_leak(
+            "home/id_rsa",
+            200,
+            "just a public key ssh-rsa AAAA"
+        ));
     }
 
     #[test]

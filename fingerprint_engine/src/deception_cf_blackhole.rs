@@ -266,7 +266,10 @@ mod tests {
 
     #[test]
     fn slash24_zeros_last_octet() {
-        assert_eq!(ipv4_slash24(Ipv4Addr::new(203, 0, 113, 47)), "203.0.113.0/24");
+        assert_eq!(
+            ipv4_slash24(Ipv4Addr::new(203, 0, 113, 47)),
+            "203.0.113.0/24"
+        );
         assert_eq!(ipv4_slash24(Ipv4Addr::new(8, 8, 8, 8)), "8.8.8.0/24");
         assert_eq!(ipv4_slash24(Ipv4Addr::new(1, 2, 3, 0)), "1.2.3.0/24");
     }
@@ -298,7 +301,10 @@ mod tests {
     #[test]
     fn sniff_ipv4_from_nested_array() {
         let v = json!({ "records": [ { "x": 1 }, { "clientIp": "192.0.2.44" } ] });
-        assert_eq!(sniff_ipv4_from_json(&v, 0), Some(Ipv4Addr::new(192, 0, 2, 44)));
+        assert_eq!(
+            sniff_ipv4_from_json(&v, 0),
+            Some(Ipv4Addr::new(192, 0, 2, 44))
+        );
     }
 
     #[test]
@@ -334,7 +340,10 @@ mod tests {
 
     #[test]
     fn sniff_asn_from_array_and_none_cases() {
-        assert_eq!(sniff_asn_from_json(&json!([{ "source_asn": 3356 }]), 0), Some(3356));
+        assert_eq!(
+            sniff_asn_from_json(&json!([{ "source_asn": 3356 }]), 0),
+            Some(3356)
+        );
         assert_eq!(sniff_asn_from_json(&json!("not-a-number"), 0), None);
         assert_eq!(sniff_asn_from_json(&json!({ "x": "abc" }), 0), None);
         assert_eq!(sniff_asn_from_json(&json!(true), 0), None);

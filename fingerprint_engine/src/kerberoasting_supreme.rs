@@ -1297,7 +1297,10 @@ mod tests {
     #[test]
     fn nbss_wrap_encodes_length_big_endian() {
         // Small payload: header carries the 3-byte length.
-        assert_eq!(nbss_wrap(&[0xAA, 0xBB]), vec![0x00, 0x00, 0x00, 0x02, 0xAA, 0xBB]);
+        assert_eq!(
+            nbss_wrap(&[0xAA, 0xBB]),
+            vec![0x00, 0x00, 0x00, 0x02, 0xAA, 0xBB]
+        );
         assert_eq!(nbss_wrap(&[]), vec![0x00, 0x00, 0x00, 0x00]);
         // 300 bytes = 0x00012C -> out[1]=0, out[2]=1, out[3]=0x2C.
         let payload = vec![0u8; 300];
@@ -1371,7 +1374,10 @@ mod tests {
     #[test]
     fn krb_error_code_extracts_and_defaults() {
         // 0x7e KRB-ERROR marker, INTEGER (0x02 len 1) -> value 25 (PREAUTH_REQUIRED).
-        assert_eq!(krb_error_code(&[0x7e, 0x00, 0x02, 0x01, 25, 0, 0, 0]), Some(25));
+        assert_eq!(
+            krb_error_code(&[0x7e, 0x00, 0x02, 0x01, 25, 0, 0, 0]),
+            Some(25)
+        );
         // Marker not at index 0.
         assert_eq!(
             krb_error_code(&[0x00, 0x7e, 0x00, 0x02, 0x01, 6, 0, 0, 0]),
@@ -1410,7 +1416,10 @@ mod tests {
         let mut findings: Vec<Value> = Vec::new();
         emit_toxic_headline("t", &s, &mut findings);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].get("severity").and_then(Value::as_str), Some("critical"));
+        assert_eq!(
+            findings[0].get("severity").and_then(Value::as_str),
+            Some("critical")
+        );
         assert!(findings[0]
             .get("title")
             .and_then(Value::as_str)
@@ -1429,7 +1438,10 @@ mod tests {
         let mut findings: Vec<Value> = Vec::new();
         emit_remediation_roadmap("t", &s, &mut findings);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].get("severity").and_then(Value::as_str), Some("info"));
+        assert_eq!(
+            findings[0].get("severity").and_then(Value::as_str),
+            Some("info")
+        );
         assert_eq!(
             findings[0].get("category").and_then(Value::as_str),
             Some("remediation_roadmap")
@@ -1506,7 +1518,10 @@ mod tests {
         s.ldap_reachable = true;
         extend_attack_paths("t", &s, &mut findings);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].get("severity").and_then(Value::as_str), Some("critical"));
+        assert_eq!(
+            findings[0].get("severity").and_then(Value::as_str),
+            Some("critical")
+        );
         assert!(findings[0].get("attack_path").is_some());
     }
 

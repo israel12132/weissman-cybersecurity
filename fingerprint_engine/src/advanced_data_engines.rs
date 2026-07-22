@@ -381,12 +381,18 @@ mod tests {
             ("acoustic_exfil", run_acoustic_exfil_result("host").await),
             ("em_exfil_engine", run_em_exfil_engine_result("host").await),
             ("optical_exfil", run_optical_exfil_result("host").await),
-            ("keyboard_acoustic", run_keyboard_acoustic_result("host").await),
+            (
+                "keyboard_acoustic",
+                run_keyboard_acoustic_result("host").await,
+            ),
             (
                 "screen_capture_exfil",
                 run_screen_capture_exfil_result("host").await,
             ),
-            ("clipboard_hijack", run_clipboard_hijack_result("host").await),
+            (
+                "clipboard_hijack",
+                run_clipboard_hijack_result("host").await,
+            ),
             ("insider_exfil", run_insider_exfil_result("host").await),
             (
                 "storage_covert_channel",

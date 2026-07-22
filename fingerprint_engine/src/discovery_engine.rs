@@ -631,7 +631,8 @@ mod tests {
 
     #[test]
     fn extract_html_links_skips_anchor_and_js_schemes() {
-        let html = r##"<a href="/ok">1</a><a href="#frag">2</a><a href="javascript:void(0)">3</a>"##;
+        let html =
+            r##"<a href="/ok">1</a><a href="#frag">2</a><a href="javascript:void(0)">3</a>"##;
         let links = extract_html_links(html, "");
         assert!(links.contains(&"/ok".to_string()));
         assert!(!links.iter().any(|l| l.starts_with('#')));

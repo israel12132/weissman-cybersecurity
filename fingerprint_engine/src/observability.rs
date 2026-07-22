@@ -563,10 +563,7 @@ mod tests {
     #[test]
     fn compact_metrics_path_collapses_client_ids() {
         assert_eq!(compact_metrics_path("/api/clients/12345"), "/api/clients/*");
-        assert_eq!(
-            compact_metrics_path("/api/clients/"),
-            "/api/clients/*"
-        );
+        assert_eq!(compact_metrics_path("/api/clients/"), "/api/clients/*");
     }
 
     #[test]
@@ -615,10 +612,7 @@ mod tests {
     #[test]
     fn haversine_identical_points_is_zero() {
         assert_eq!(haversine_km((0.0, 0.0), (0.0, 0.0)), 0.0);
-        assert_eq!(
-            haversine_km((51.5, -0.12), (51.5, -0.12)),
-            0.0
-        );
+        assert_eq!(haversine_km((51.5, -0.12), (51.5, -0.12)), 0.0);
     }
 
     #[test]

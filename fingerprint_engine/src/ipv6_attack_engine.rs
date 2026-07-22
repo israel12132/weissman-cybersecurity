@@ -196,6 +196,9 @@ mod tests {
     #[test]
     fn extract_domain_preserves_port() {
         // extract_domain only splits on '/', so a port stays attached.
-        assert_eq!(extract_domain("https://example.com:8443/x"), "example.com:8443");
+        assert_eq!(
+            extract_domain("https://example.com:8443/x"),
+            "example.com:8443"
+        );
     }
 }

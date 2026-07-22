@@ -863,14 +863,21 @@ mod tests {
     #[test]
     fn mapping_matches_vulnerability_source_filter() {
         let m = row("SOC2", "CC1", "t", None, Some("nuclei"), None, None);
-        assert!(mapping_matches_vulnerability(&m, "nuclei-scan", "anything", "low"));
+        assert!(mapping_matches_vulnerability(
+            &m,
+            "nuclei-scan",
+            "anything",
+            "low"
+        ));
         assert!(!mapping_matches_vulnerability(&m, "zap", "anything", "low"));
     }
 
     #[test]
     fn mapping_matches_vulnerability_min_severity_filter() {
         let m = row("SOC2", "CC1", "t", None, None, None, Some("high"));
-        assert!(mapping_matches_vulnerability(&m, "src", "title", "critical"));
+        assert!(mapping_matches_vulnerability(
+            &m, "src", "title", "critical"
+        ));
         assert!(mapping_matches_vulnerability(&m, "src", "title", "high"));
         assert!(!mapping_matches_vulnerability(&m, "src", "title", "low"));
     }
@@ -878,20 +885,34 @@ mod tests {
     #[test]
     fn mapping_matches_vulnerability_cloud_only_row_is_excluded() {
         let m = row("SOC2", "CC1", "t", Some("s3_public"), None, None, None);
-        assert!(!mapping_matches_vulnerability(&m, "src", "title", "critical"));
+        assert!(!mapping_matches_vulnerability(
+            &m, "src", "title", "critical"
+        ));
     }
 
     #[test]
     fn mapping_matches_vulnerability_no_signal_is_false() {
         let m = row("SOC2", "CC1", "t", None, None, None, None);
-        assert!(!mapping_matches_vulnerability(&m, "src", "title", "critical"));
+        assert!(!mapping_matches_vulnerability(
+            &m, "src", "title", "critical"
+        ));
     }
 
     #[test]
     fn mapping_matches_vulnerability_title_filter_case_insensitive() {
         let m = row("SOC2", "CC1", "t", None, None, Some("SQL"), None);
-        assert!(mapping_matches_vulnerability(&m, "src", "Blind sql injection", "low"));
-        assert!(!mapping_matches_vulnerability(&m, "src", "xss reflected", "low"));
+        assert!(mapping_matches_vulnerability(
+            &m,
+            "src",
+            "Blind sql injection",
+            "low"
+        ));
+        assert!(!mapping_matches_vulnerability(
+            &m,
+            "src",
+            "xss reflected",
+            "low"
+        ));
     }
 
     #[test]
@@ -914,7 +935,15 @@ mod tests {
 
     #[test]
     fn compute_posture_no_violations_is_full_compliance() {
-        let mappings = vec![row("ISO27001", "A.5", "Policy", None, None, Some("sql"), None)];
+        let mappings = vec![row(
+            "ISO27001",
+            "A.5",
+            "Policy",
+            None,
+            None,
+            Some("sql"),
+            None,
+        )];
         let out = compute_posture(&mappings, &[], &[]);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].compliance_percent, 100);
@@ -931,7 +960,15 @@ mod tests {
         let mappings = vec![
             row("SOC2", "CC2", "Logging", None, None, Some("sql"), None),
             row("SOC2", "CC1", "Access", Some("s3_public"), None, None, None),
-            row("ISO27001", "A.5", "Other", Some("s3_public"), None, None, None),
+            row(
+                "ISO27001",
+                "A.5",
+                "Other",
+                Some("s3_public"),
+                None,
+                None,
+                None,
+            ),
         ];
         let cloud_rule_ids = vec!["s3_public".to_string()];
         let vulns: Vec<(String, String, String)> = vec![];
@@ -950,8 +987,14 @@ mod tests {
         assert_eq!(normalize_framework_slug("soc2").as_deref(), Some("SOC2"));
         assert_eq!(normalize_framework_slug("SOC_2").as_deref(), Some("SOC2"));
         assert_eq!(normalize_framework_slug("pci-dss").as_deref(), Some("PCI"));
-        assert_eq!(normalize_framework_slug("nist-csf").as_deref(), Some("NIST"));
-        assert_eq!(normalize_framework_slug("  iso27001 ").as_deref(), Some("ISO27001"));
+        assert_eq!(
+            normalize_framework_slug("nist-csf").as_deref(),
+            Some("NIST")
+        );
+        assert_eq!(
+            normalize_framework_slug("  iso27001 ").as_deref(),
+            Some("ISO27001")
+        );
         assert_eq!(normalize_framework_slug("unknown"), None);
     }
 

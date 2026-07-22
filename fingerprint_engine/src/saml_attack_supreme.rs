@@ -733,7 +733,15 @@ mod tests {
         let mut facts = MetadataFacts::default();
         facts.valid_until = Some("2000-01-01T00:00:00Z".to_string());
         emit_metadata_depth_findings(
-            "t", "https://idp/meta", &facts, &mut sig, &mut findings, true, true, true, true,
+            "t",
+            "https://idp/meta",
+            &facts,
+            &mut sig,
+            &mut findings,
+            true,
+            true,
+            true,
+            true,
         );
         assert!(sig.metadata_expired);
         assert_eq!(findings.len(), 1);
@@ -751,7 +759,15 @@ mod tests {
         let mut facts = MetadataFacts::default();
         facts.valid_until = Some("2999-01-01T00:00:00Z".to_string());
         emit_metadata_depth_findings(
-            "t", "https://idp/meta", &facts, &mut sig, &mut findings, true, true, true, true,
+            "t",
+            "https://idp/meta",
+            &facts,
+            &mut sig,
+            &mut findings,
+            true,
+            true,
+            true,
+            true,
         );
         assert!(!sig.metadata_expired);
         assert!(findings.is_empty());
@@ -764,7 +780,15 @@ mod tests {
         let mut facts = MetadataFacts::default();
         facts.authn_requests_signed = Some(false);
         emit_metadata_depth_findings(
-            "t", "https://idp/meta", &facts, &mut sig, &mut findings, false, false, false, false,
+            "t",
+            "https://idp/meta",
+            &facts,
+            &mut sig,
+            &mut findings,
+            false,
+            false,
+            false,
+            false,
         );
         assert!(sig.authn_requests_unsigned);
         assert_eq!(findings.len(), 1);
@@ -781,7 +805,15 @@ mod tests {
         let mut sig = Signals::default();
         let mut findings = Vec::new();
         emit_metadata_depth_findings(
-            "t", "u", &facts, &mut sig, &mut findings, false, false, false, false,
+            "t",
+            "u",
+            &facts,
+            &mut sig,
+            &mut findings,
+            false,
+            false,
+            false,
+            false,
         );
         assert!(!sig.slo_exposed);
         assert!(!sig.http_redirect_binding);
@@ -791,7 +823,15 @@ mod tests {
         let mut sig2 = Signals::default();
         let mut findings2 = Vec::new();
         emit_metadata_depth_findings(
-            "t", "u", &facts, &mut sig2, &mut findings2, false, true, true, false,
+            "t",
+            "u",
+            &facts,
+            &mut sig2,
+            &mut findings2,
+            false,
+            true,
+            true,
+            false,
         );
         assert!(sig2.slo_exposed);
         assert!(sig2.http_redirect_binding);
@@ -805,7 +845,15 @@ mod tests {
         let mut facts = MetadataFacts::default();
         facts.http_acs_urls = vec!["http://sp/acs".into()];
         emit_metadata_depth_findings(
-            "t", "u", &facts, &mut sig, &mut findings, false, false, false, false,
+            "t",
+            "u",
+            &facts,
+            &mut sig,
+            &mut findings,
+            false,
+            false,
+            false,
+            false,
         );
         assert_eq!(sig.http_acs_urls.len(), 1);
         assert_eq!(findings.len(), 1);
@@ -820,7 +868,15 @@ mod tests {
         facts.acs_urls = vec!["https://a".into(), "https://b".into()];
         facts.certs = vec![cert(), cert()];
         emit_metadata_depth_findings(
-            "t", "u", &facts, &mut sig, &mut findings, true, false, false, false,
+            "t",
+            "u",
+            &facts,
+            &mut sig,
+            &mut findings,
+            true,
+            false,
+            false,
+            false,
         );
         // 2 ACS + 2 certs = 4
         assert_eq!(sig.xsw_preconditions, 4);
@@ -857,7 +913,10 @@ mod tests {
         let mut findings = Vec::new();
         extend_attack_paths("t", &sig, &mut findings);
         assert_eq!(findings.len(), 1);
-        assert!(findings[0]["title"].as_str().unwrap().contains("Golden SAML"));
+        assert!(findings[0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("Golden SAML"));
     }
 
     #[test]

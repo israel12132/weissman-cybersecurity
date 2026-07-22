@@ -250,10 +250,13 @@ mod tests {
     #[test]
     fn normalize_cve_requires_more_than_eight_chars() {
         // len > 8 required after uppercasing.
-        assert_eq!(normalize_cve("CVE-2021-1234").as_deref(), Some("CVE-2021-1234"));
+        assert_eq!(
+            normalize_cve("CVE-2021-1234").as_deref(),
+            Some("CVE-2021-1234")
+        );
         assert_eq!(normalize_cve("cve-2021-1").as_deref(), Some("CVE-2021-1")); // len 10
         assert_eq!(normalize_cve("  cve-20211  ").as_deref(), Some("CVE-20211")); // len 9
-        // Exactly 8 chars ("CVE-2021") is NOT > 8 => rejected.
+                                                                                  // Exactly 8 chars ("CVE-2021") is NOT > 8 => rejected.
         assert_eq!(normalize_cve("CVE-2021"), None);
         assert_eq!(normalize_cve("GHSA-xxxx"), None);
         assert_eq!(normalize_cve(""), None);

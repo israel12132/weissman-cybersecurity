@@ -365,10 +365,22 @@ mod tests {
 
     #[test]
     fn normalize_domain_lowercases_and_strips() {
-        assert_eq!(normalize_domain("Example.COM"), Some("example.com".to_string()));
-        assert_eq!(normalize_domain("https://foo.com/path"), Some("foo.com".to_string()));
-        assert_eq!(normalize_domain("http://bar.com:8080/x"), Some("bar.com".to_string()));
-        assert_eq!(normalize_domain("  spaced.com  "), Some("spaced.com".to_string()));
+        assert_eq!(
+            normalize_domain("Example.COM"),
+            Some("example.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain("https://foo.com/path"),
+            Some("foo.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain("http://bar.com:8080/x"),
+            Some("bar.com".to_string())
+        );
+        assert_eq!(
+            normalize_domain("  spaced.com  "),
+            Some("spaced.com".to_string())
+        );
     }
 
     #[test]
@@ -393,24 +405,45 @@ mod tests {
 
     #[test]
     fn classify_idp_from_host() {
-        assert_eq!(classify_idp_from_issuer_or_host("acme.okta.com"), Some("okta"));
+        assert_eq!(
+            classify_idp_from_issuer_or_host("acme.okta.com"),
+            Some("okta")
+        );
         assert_eq!(classify_idp_from_issuer_or_host("OKTA.COM"), Some("okta"));
         assert_eq!(
             classify_idp_from_issuer_or_host("login.microsoftonline.com"),
             Some("azure_ad")
         );
-        assert_eq!(classify_idp_from_issuer_or_host("sts.windows.net"), Some("azure_ad"));
-        assert_eq!(classify_idp_from_issuer_or_host("accounts.google.com"), Some("google"));
-        assert_eq!(classify_idp_from_issuer_or_host("auth.pingone.com"), Some("ping"));
-        assert_eq!(classify_idp_from_issuer_or_host("x.onelogin.com"), Some("onelogin"));
-        assert_eq!(classify_idp_from_issuer_or_host("x.jumpcloud.com"), Some("jumpcloud"));
+        assert_eq!(
+            classify_idp_from_issuer_or_host("sts.windows.net"),
+            Some("azure_ad")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("accounts.google.com"),
+            Some("google")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("auth.pingone.com"),
+            Some("ping")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("x.onelogin.com"),
+            Some("onelogin")
+        );
+        assert_eq!(
+            classify_idp_from_issuer_or_host("x.jumpcloud.com"),
+            Some("jumpcloud")
+        );
         assert_eq!(classify_idp_from_issuer_or_host("api.duo.com"), Some("duo"));
         assert_eq!(classify_idp_from_issuer_or_host("random.example.net"), None);
     }
 
     #[test]
     fn classify_saas_from_spf() {
-        assert_eq!(classify_saas_from_spf_include("_spf.google.com"), Some("google_workspace"));
+        assert_eq!(
+            classify_saas_from_spf_include("_spf.google.com"),
+            Some("google_workspace")
+        );
         assert_eq!(
             classify_saas_from_spf_include("spf.protection.outlook.com"),
             Some("microsoft_365")
@@ -420,9 +453,18 @@ mod tests {
             classify_saas_from_spf_include("SPF.PROTECTION.OUTLOOK.COM"),
             Some("microsoft_365")
         );
-        assert_eq!(classify_saas_from_spf_include("u123.wl.sendgrid.net"), Some("sendgrid"));
-        assert_eq!(classify_saas_from_spf_include("mg.mailgun.org"), Some("mailgun"));
-        assert_eq!(classify_saas_from_spf_include("spf.mandrillapp.com"), Some("mandrill"));
+        assert_eq!(
+            classify_saas_from_spf_include("u123.wl.sendgrid.net"),
+            Some("sendgrid")
+        );
+        assert_eq!(
+            classify_saas_from_spf_include("mg.mailgun.org"),
+            Some("mailgun")
+        );
+        assert_eq!(
+            classify_saas_from_spf_include("spf.mandrillapp.com"),
+            Some("mandrill")
+        );
         assert_eq!(classify_saas_from_spf_include("unknown.example.com"), None);
     }
 
@@ -449,13 +491,19 @@ mod tests {
 
         let mut h2 = HashMap::new();
         h2.insert("x-azure-ref".to_string(), "ref".to_string());
-        assert_eq!(detect_vendor_from_landing("", &h2, "host"), Some("azure_ad"));
+        assert_eq!(
+            detect_vendor_from_landing("", &h2, "host"),
+            Some("azure_ad")
+        );
     }
 
     #[test]
     fn detect_vendor_from_body_keywords() {
         let empty = HashMap::new();
-        assert_eq!(detect_vendor_from_landing("Welcome to Okta", &empty, "h"), Some("okta"));
+        assert_eq!(
+            detect_vendor_from_landing("Welcome to Okta", &empty, "h"),
+            Some("okta")
+        );
         assert_eq!(
             detect_vendor_from_landing("Powered by Microsoft Entra", &empty, "h"),
             Some("azure_ad")
@@ -464,16 +512,28 @@ mod tests {
             detect_vendor_from_landing("Sign in with Google", &empty, "h"),
             Some("google")
         );
-        assert_eq!(detect_vendor_from_landing("PingOne login", &empty, "h"), Some("ping"));
-        assert_eq!(detect_vendor_from_landing("ADFS sign on", &empty, "h"), Some("adfs"));
+        assert_eq!(
+            detect_vendor_from_landing("PingOne login", &empty, "h"),
+            Some("ping")
+        );
+        assert_eq!(
+            detect_vendor_from_landing("ADFS sign on", &empty, "h"),
+            Some("adfs")
+        );
     }
 
     #[test]
     fn detect_vendor_falls_back_to_host_then_none() {
         let empty = HashMap::new();
         // No header/body signal -> classify by final host.
-        assert_eq!(detect_vendor_from_landing("nothing", &empty, "x.okta.com"), Some("okta"));
+        assert_eq!(
+            detect_vendor_from_landing("nothing", &empty, "x.okta.com"),
+            Some("okta")
+        );
         // No signal anywhere.
-        assert_eq!(detect_vendor_from_landing("nothing", &empty, "plain.example.net"), None);
+        assert_eq!(
+            detect_vendor_from_landing("nothing", &empty, "plain.example.net"),
+            None
+        );
     }
 }

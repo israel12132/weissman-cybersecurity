@@ -463,7 +463,10 @@ mod tests {
     #[test]
     fn provider_error_page_requires_error_status_and_phrase() {
         assert!(is_provider_error_page("...NoSuchBucket...", 404));
-        assert!(is_provider_error_page("There isn't a GitHub Pages site here", 404));
+        assert!(is_provider_error_page(
+            "There isn't a GitHub Pages site here",
+            404
+        ));
         // Right phrase but 200 status -> not an error page.
         assert!(!is_provider_error_page("no such bucket", 200));
         // Error status but no known phrase.
@@ -473,7 +476,10 @@ mod tests {
     #[test]
     fn list_bucket_response_only_on_200_with_marker() {
         assert!(is_list_bucket_response("<ListBucketResult><Contents>", 200));
-        assert!(is_list_bucket_response("{\"kind\": \"storage#objects\"}", 200));
+        assert!(is_list_bucket_response(
+            "{\"kind\": \"storage#objects\"}",
+            200
+        ));
         assert!(!is_list_bucket_response("<ListBucketResult>", 403));
         assert!(!is_list_bucket_response("plain page", 200));
     }
@@ -494,7 +500,14 @@ mod tests {
         assert_eq!(f["probe_depth"], CLOUD_HUNTER_PROBE_DEPTH);
         assert_eq!(f["cname_target"], "x.herokuapp.com");
         // Without a cname target the key is absent.
-        let f2 = cloud_hunter_finding("public_cloud_exposure", "storage", "y", "critical", "T", None);
+        let f2 = cloud_hunter_finding(
+            "public_cloud_exposure",
+            "storage",
+            "y",
+            "critical",
+            "T",
+            None,
+        );
         assert!(f2.get("cname_target").is_none());
     }
 

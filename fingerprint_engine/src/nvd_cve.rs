@@ -370,8 +370,14 @@ mod tests {
             NvdFetchError::ApiKeyMissing.to_string(),
             "NVD_API_KEY not configured"
         );
-        assert_eq!(NvdFetchError::KeywordTooShort.to_string(), "keyword too short");
-        assert_eq!(NvdFetchError::HttpStatus(500).to_string(), "HTTP status 500");
+        assert_eq!(
+            NvdFetchError::KeywordTooShort.to_string(),
+            "keyword too short"
+        );
+        assert_eq!(
+            NvdFetchError::HttpStatus(500).to_string(),
+            "HTTP status 500"
+        );
         assert_eq!(NvdFetchError::Json("x".into()).to_string(), "JSON: x");
         assert_eq!(NvdFetchError::Body("b".into()).to_string(), "read body: b");
         assert_eq!(

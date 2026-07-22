@@ -392,13 +392,19 @@ mod tests {
             ai_redteam_endpoint: "  https://api.x/chat  ".to_string(),
             ..Default::default()
         };
-        assert_eq!(resolve_ai_endpoint(&config, "ignored.com"), "https://api.x/chat");
+        assert_eq!(
+            resolve_ai_endpoint(&config, "ignored.com"),
+            "https://api.x/chat"
+        );
     }
 
     #[test]
     fn resolve_ai_endpoint_derives_from_target() {
         let config = AiRedteamConfig::default();
-        assert_eq!(resolve_ai_endpoint(&config, "example.com"), "https://example.com/chat");
+        assert_eq!(
+            resolve_ai_endpoint(&config, "example.com"),
+            "https://example.com/chat"
+        );
     }
 
     #[test]

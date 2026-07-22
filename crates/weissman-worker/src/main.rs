@@ -595,10 +595,19 @@ mod tests {
 
     #[test]
     fn heavy_jobs_get_long_timeouts() {
-        assert_eq!(job_kind_timeout("tenant_full_scan"), Duration::from_secs(3600));
-        assert_eq!(job_kind_timeout("onboarding_tenant_scan"), Duration::from_secs(3600));
+        assert_eq!(
+            job_kind_timeout("tenant_full_scan"),
+            Duration::from_secs(3600)
+        );
+        assert_eq!(
+            job_kind_timeout("onboarding_tenant_scan"),
+            Duration::from_secs(3600)
+        );
         assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
-        assert_eq!(job_kind_timeout("scan_all_engines"), Duration::from_secs(2700));
+        assert_eq!(
+            job_kind_timeout("scan_all_engines"),
+            Duration::from_secs(2700)
+        );
         assert_eq!(job_kind_timeout("pipeline_scan"), Duration::from_secs(1200));
     }
 

@@ -277,7 +277,10 @@ mod tests {
 
     #[test]
     fn apply_placeholders_leaves_unrelated_text_intact() {
-        assert_eq!(apply_placeholders("no tokens here", "a", "b", "c"), "no tokens here");
+        assert_eq!(
+            apply_placeholders("no tokens here", "a", "b", "c"),
+            "no tokens here"
+        );
     }
 
     #[test]

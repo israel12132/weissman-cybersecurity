@@ -170,7 +170,7 @@ mod tests {
     fn content_length_discrepancy_high_ratio() {
         assert!(content_length_discrepancy(100, 200)); // ratio 2.0 == threshold
         assert!(content_length_discrepancy(50, 400)); // ratio 8.0
-        // ratio 1.99 and baseline not > 100 -> not flagged
+                                                      // ratio 1.99 and baseline not > 100 -> not flagged
         assert!(!content_length_discrepancy(100, 199));
         assert!(!content_length_discrepancy(1000, 1000)); // ratio 1.0
     }
@@ -179,7 +179,7 @@ mod tests {
     fn content_length_discrepancy_low_ratio() {
         assert!(content_length_discrepancy(200, 50)); // ratio 0.25, baseline > 100
         assert!(content_length_discrepancy(1000, 100)); // ratio 0.1
-        // ratio 0.25 but baseline not strictly > 100 -> not flagged
+                                                        // ratio 0.25 but baseline not strictly > 100 -> not flagged
         assert!(!content_length_discrepancy(100, 25));
     }
 

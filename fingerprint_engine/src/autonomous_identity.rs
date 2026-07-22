@@ -691,10 +691,16 @@ mod tests {
             SET_COOKIE,
             HeaderValue::from_static("session=abcdef; Path=/; HttpOnly"),
         );
-        h.append(SET_COOKIE, HeaderValue::from_static("token=xyz12345; Secure"));
+        h.append(
+            SET_COOKIE,
+            HeaderValue::from_static("token=xyz12345; Secure"),
+        );
         assert_eq!(
             cookie_header_from_set_cookie(&h),
-            Some(("cookie".to_string(), "session=abcdef; token=xyz12345".to_string()))
+            Some((
+                "cookie".to_string(),
+                "session=abcdef; token=xyz12345".to_string()
+            ))
         );
     }
 
@@ -726,6 +732,9 @@ mod tests {
         const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrst23456789!@#$%";
         let p = synthetic_password();
         assert_eq!(p.chars().count(), 22);
-        assert!(p.bytes().all(|b| CHARSET.contains(&b)), "unexpected char in {p}");
+        assert!(
+            p.bytes().all(|b| CHARSET.contains(&b)),
+            "unexpected char in {p}"
+        );
     }
 }

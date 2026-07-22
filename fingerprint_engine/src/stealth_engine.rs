@@ -63,6 +63,9 @@ mod tests {
     #[test]
     fn proxy_swarm_parse_reexport_wired() {
         let p = StealthConfig::parse_proxy_swarm("http://a:8080,https://b:3128\nftp://skip");
-        assert_eq!(p, vec!["http://a:8080".to_string(), "https://b:3128".to_string()]);
+        assert_eq!(
+            p,
+            vec!["http://a:8080".to_string(), "https://b:3128".to_string()]
+        );
     }
 }

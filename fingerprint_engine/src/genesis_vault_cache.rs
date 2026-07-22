@@ -64,10 +64,7 @@ mod tests {
         let tid = 990_002;
         vault_cache_put(tid, "app", json!({ "x": 1 }));
         vault_cache_replace(tid, "app", vec![json!({ "y": 9 })]);
-        assert_eq!(
-            vault_cache_get(tid, "app"),
-            Some(vec![json!({ "y": 9 })])
-        );
+        assert_eq!(vault_cache_get(tid, "app"), Some(vec![json!({ "y": 9 })]));
     }
 
     #[test]

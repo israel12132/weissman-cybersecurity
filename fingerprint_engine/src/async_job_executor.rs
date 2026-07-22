@@ -2301,9 +2301,7 @@ mod tests {
     fn tenant_consistency_ignores_unparseable_tenant_id() {
         // A non-numeric string cannot be parsed to i64, so it is treated as absent
         // and no cross-tenant check fires.
-        assert!(
-            enforce_job_tenant_consistency(7, &json!({ "tenant_id": "not-a-number" })).is_ok()
-        );
+        assert!(enforce_job_tenant_consistency(7, &json!({ "tenant_id": "not-a-number" })).is_ok());
     }
 
     #[test]
@@ -2343,7 +2341,10 @@ mod tests {
         assert_eq!(f["type"], "feedback_fuzz");
         assert_eq!(f["anomaly_type"], "sqli");
         assert_eq!(f["poc"], "PAYLOAD");
-        assert_eq!(f["description"], "base vs anom\n\nPayload excerpt:\nPAYLOAD");
+        assert_eq!(
+            f["description"],
+            "base vs anom\n\nPayload excerpt:\nPAYLOAD"
+        );
     }
 
     #[test]

@@ -1734,8 +1734,8 @@ mod tests {
     #[test]
     fn domain_score_only_counts_matching_domain() {
         let findings = vec![
-            json!({ "domain": "identity", "severity": "low" }),   // 1.5
-            json!({ "domain": "data", "severity": "critical" }),  // not identity
+            json!({ "domain": "identity", "severity": "low" }), // 1.5
+            json!({ "domain": "data", "severity": "critical" }), // not identity
         ];
         assert_eq!(domain_score(&findings, Domain::Identity), 100.0 - 1.5);
         assert_eq!(domain_score(&findings, Domain::Data), 100.0 - 20.0);
@@ -1835,7 +1835,10 @@ mod tests {
         let cfg = base_cfg(); // permutations off
         let out = bucket_candidates("https://acme.example.com/path", &cfg);
         // First label + dot-collapsed host, sorted & deduped.
-        assert_eq!(out, vec!["acme".to_string(), "acme-example-com".to_string()]);
+        assert_eq!(
+            out,
+            vec!["acme".to_string(), "acme-example-com".to_string()]
+        );
     }
 
     #[test]
@@ -1883,8 +1886,8 @@ mod tests {
     #[test]
     fn count_domain_sev_filters_by_domain_and_min_rank() {
         let findings = vec![
-            json!({ "domain": "identity", "severity": "high" }),   // rank 3
-            json!({ "domain": "identity", "severity": "low" }),    // rank 1
+            json!({ "domain": "identity", "severity": "high" }), // rank 3
+            json!({ "domain": "identity", "severity": "low" }),  // rank 1
             json!({ "domain": "network", "severity": "critical" }),
         ];
         // identity findings with rank >= 2: only the "high" one.
@@ -1950,7 +1953,10 @@ mod tests {
         );
         assert_eq!(f.get("severity").and_then(Value::as_str), Some("critical"));
         // attack_path re-tags category and always lives in the posture domain.
-        assert_eq!(f.get("category").and_then(Value::as_str), Some("attack_path"));
+        assert_eq!(
+            f.get("category").and_then(Value::as_str),
+            Some("attack_path")
+        );
         assert_eq!(f.get("domain").and_then(Value::as_str), Some("posture"));
         assert_eq!(f.get("attack_path").and_then(Value::as_bool), Some(true));
         assert_eq!(f.get("steps"), Some(&json!(["step one", "step two"])));
@@ -2027,7 +2033,10 @@ mod tests {
             Some(100)
         );
         // Clean, high score with no criticals => informational summary severity.
-        assert_eq!(summary.get("severity").and_then(Value::as_str), Some("info"));
+        assert_eq!(
+            summary.get("severity").and_then(Value::as_str),
+            Some("info")
+        );
         let counts = summary.get("severity_counts").unwrap();
         assert_eq!(counts.get("critical").and_then(Value::as_i64), Some(0));
     }
@@ -2042,10 +2051,16 @@ mod tests {
         })];
         let summary = build_posture_summary(&findings, &[], "example.com", None, None, &cfg);
         // One critical => 100 - 20 = 80 => grade B.
-        assert_eq!(summary.get("posture_score").and_then(Value::as_i64), Some(80));
+        assert_eq!(
+            summary.get("posture_score").and_then(Value::as_i64),
+            Some(80)
+        );
         assert_eq!(summary.get("grade").and_then(Value::as_str), Some("B"));
         // A critical present forces a "high" summary severity.
-        assert_eq!(summary.get("severity").and_then(Value::as_str), Some("high"));
+        assert_eq!(
+            summary.get("severity").and_then(Value::as_str),
+            Some("high")
+        );
         let counts = summary.get("severity_counts").unwrap();
         assert_eq!(counts.get("critical").and_then(Value::as_i64), Some(1));
         let subscores = summary.get("subscores").unwrap();

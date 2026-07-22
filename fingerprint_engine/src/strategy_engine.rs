@@ -614,7 +614,10 @@ mod tests {
     #[test]
     fn normalize_target_preserves_scheme() {
         assert_eq!(normalize_target("http://example.com"), "http://example.com");
-        assert_eq!(normalize_target("https://example.com"), "https://example.com");
+        assert_eq!(
+            normalize_target("https://example.com"),
+            "https://example.com"
+        );
     }
 
     #[test]
@@ -635,8 +638,14 @@ mod tests {
 
     #[test]
     fn extract_json_object_finds_outer_braces() {
-        assert_eq!(extract_json_object("prefix {\"a\":1} suffix"), Some("{\"a\":1}"));
-        assert_eq!(extract_json_object("  {\"x\":true}  "), Some("{\"x\":true}"));
+        assert_eq!(
+            extract_json_object("prefix {\"a\":1} suffix"),
+            Some("{\"a\":1}")
+        );
+        assert_eq!(
+            extract_json_object("  {\"x\":true}  "),
+            Some("{\"x\":true}")
+        );
         assert_eq!(extract_json_object("{}"), Some("{}"));
     }
 
@@ -650,7 +659,10 @@ mod tests {
     #[test]
     fn default_mission_plan_shape() {
         let p = default_mission_plan("https://t.example");
-        assert_eq!(p.phases, vec!["asm".to_string(), "semantic_fuzz".to_string()]);
+        assert_eq!(
+            p.phases,
+            vec!["asm".to_string(), "semantic_fuzz".to_string()]
+        );
         assert_eq!(p.primary_target, "https://t.example");
         assert!(!p.run_osint);
     }
@@ -669,7 +681,10 @@ mod tests {
             r#"{"phases":["asm","semantic_fuzz"],"primary_target":"https://x","run_osint":true}"#,
         )
         .unwrap();
-        assert_eq!(p.phases, vec!["asm".to_string(), "semantic_fuzz".to_string()]);
+        assert_eq!(
+            p.phases,
+            vec!["asm".to_string(), "semantic_fuzz".to_string()]
+        );
         assert_eq!(p.primary_target, "https://x");
         assert!(p.run_osint);
     }

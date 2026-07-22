@@ -76,12 +76,18 @@ mod tests {
 
     #[test]
     fn engines_for_global_intel_stage() {
-        assert_eq!(engines_for_stage(STAGE_GLOBAL_INTEL), &["zero_day_radar"][..]);
+        assert_eq!(
+            engines_for_stage(STAGE_GLOBAL_INTEL),
+            &["zero_day_radar"][..]
+        );
     }
 
     #[test]
     fn engines_for_deep_discovery_stage() {
-        assert_eq!(engines_for_stage(STAGE_DEEP_DISCOVERY), &["osint", "asm"][..]);
+        assert_eq!(
+            engines_for_stage(STAGE_DEEP_DISCOVERY),
+            &["osint", "asm"][..]
+        );
     }
 
     #[test]

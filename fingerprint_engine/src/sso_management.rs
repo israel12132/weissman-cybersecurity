@@ -816,7 +816,14 @@ mod tests {
 
     #[test]
     fn norm_vendor_hint_passes_known_and_falls_back() {
-        for h in ["okta", "azure_ad", "google", "ping", "saml_custom", "oidc_custom"] {
+        for h in [
+            "okta",
+            "azure_ad",
+            "google",
+            "ping",
+            "saml_custom",
+            "oidc_custom",
+        ] {
             assert_eq!(norm_vendor_hint(h), h);
         }
         assert_eq!(norm_vendor_hint("unknown"), "oidc_custom");
@@ -827,7 +834,9 @@ mod tests {
 
     #[test]
     fn validate_outbound_url_accepts_public_https() {
-        assert!(validate_outbound_url("https://example.com/.well-known/openid-configuration").is_ok());
+        assert!(
+            validate_outbound_url("https://example.com/.well-known/openid-configuration").is_ok()
+        );
         assert!(validate_outbound_url("https://8.8.8.8/x").is_ok());
         // 100.63.0.0 is below the 100.64.0.0/10 CGNAT floor and public.
         assert!(validate_outbound_url("https://100.63.0.1/").is_ok());

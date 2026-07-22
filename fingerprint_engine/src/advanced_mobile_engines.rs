@@ -579,8 +579,9 @@ mod tests {
     fn deep_link_wildcard_paths_flagged() {
         for pat in ["*", "/*", "/"] {
             let body = json!({"applinks": {"details": [{"paths": [pat]}]}}).to_string();
-            let f = deep_link_overbroad_finding("mob_engine", &body, "https://x.test/aasa", "x.test")
-                .unwrap_or_else(|| panic!("expected overbroad finding for path {pat:?}"));
+            let f =
+                deep_link_overbroad_finding("mob_engine", &body, "https://x.test/aasa", "x.test")
+                    .unwrap_or_else(|| panic!("expected overbroad finding for path {pat:?}"));
             assert_eq!(f.get("type").and_then(Value::as_str), Some("mob_engine"));
             assert_eq!(f.get("severity").and_then(Value::as_str), Some("medium"));
             assert_eq!(f.get("mitre_attack").and_then(Value::as_str), Some("T1416"));
@@ -609,7 +610,8 @@ mod tests {
 
     #[test]
     fn deep_link_scoped_component_is_none() {
-        let body = json!({"applinks": {"details": [{"components": [{"/": "/login"}]}]}}).to_string();
+        let body =
+            json!({"applinks": {"details": [{"components": [{"/": "/login"}]}]}}).to_string();
         assert!(deep_link_overbroad_finding("e", &body, "u", "t").is_none());
     }
 
@@ -636,7 +638,10 @@ mod tests {
         assert!(r.success);
         assert_eq!(r.findings.len(), 1);
         let f = &r.findings[0];
-        assert_eq!(f.get("type").and_then(Value::as_str), Some("sim_swap_engine"));
+        assert_eq!(
+            f.get("type").and_then(Value::as_str),
+            Some("sim_swap_engine")
+        );
         assert_eq!(f.get("agent_required").and_then(Value::as_bool), Some(true));
     }
 }

@@ -743,7 +743,9 @@ mod tests {
         assert!(looks_like_sqli_response(
             "You have an error in your SQL syntax near ..."
         ));
-        assert!(looks_like_sqli_response("Warning: mysqli error in your sql"));
+        assert!(looks_like_sqli_response(
+            "Warning: mysqli error in your sql"
+        ));
         assert!(looks_like_sqli_response("ORA-01756: quoted string"));
         assert!(!looks_like_sqli_response("perfectly normal html page"));
     }

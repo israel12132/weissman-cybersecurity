@@ -589,7 +589,10 @@ mod tests {
         assert_eq!(f.len(), 2);
         assert_eq!(f[0]["severity"], "critical");
         assert_eq!(f[0]["category"], "toxic_combination");
-        assert!(f[0]["title"].as_str().unwrap().starts_with("TOXIC COMBINATION:"));
+        assert!(f[0]["title"]
+            .as_str()
+            .unwrap()
+            .starts_with("TOXIC COMBINATION:"));
     }
 
     #[test]

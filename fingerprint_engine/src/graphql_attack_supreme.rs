@@ -503,10 +503,7 @@ mod tests {
             live_data_leak: true,
             ..Default::default()
         };
-        assert_eq!(
-            finalize_category_scores(&leak_only).business_flows,
-            70.0
-        );
+        assert_eq!(finalize_category_scores(&leak_only).business_flows, 70.0);
         let both = GraphqlSignals {
             live_data_leak: true,
             auth_differential: true,
