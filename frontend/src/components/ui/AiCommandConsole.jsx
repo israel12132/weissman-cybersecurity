@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { CornerDownLeft, Play, Sparkles } from 'lucide-react'
+import { CornerDownLeft, Mic, Play, Sparkles } from 'lucide-react'
 import { cn } from '../../lib/cn'
+
+/** Resolve the browser SpeechRecognition constructor, if available. */
+function getSpeechRecognition() {
+  if (typeof window === 'undefined') return null
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null
+}
 
 /**
  * AiCommandConsole — a conversational, context-aware command surface ("Ask
@@ -16,6 +22,7 @@ import { cn } from '../../lib/cn'
  * @param {Array<{id?:string,label:string,prompt?:string}>} [suggestions]
  * @param {Array<{id?:string,label:React.ReactNode}>} [context] — grounding chips
  * @param {boolean} [busy=false] — assistant is thinking
+ * @param {boolean} [voice=true] — show a mic button when the browser supports speech input
  * @param {string} [placeholder]
  */
 export default function AiCommandConsole({
@@ -25,12 +32,16 @@ export default function AiCommandConsole({
   suggestions = [],
   context = [],
   busy = false,
+  voice = true,
   placeholder = 'Ask or command — e.g. “run ransomware playbook on Acme prod”',
   className,
   ...props
 }) {
   const [value, setValue] = useState('')
+  const [listening, setListening] = useState(false)
   const threadRef = useRef(null)
+  const recognitionRef = useRef(null)
+  const voiceSupported = voice && Boolean(getSpeechRecognition())
 
   // Keep the newest turn in view.
   useEffect(() => {
@@ -43,6 +54,44 @@ export default function AiCommandConsole({
     if (!t || busy) return
     onSubmit?.(t)
     setValue('')
+  }
+
+  // Stop recognition on unmount.
+  useEffect(() => () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const toggleVoice = () => {
+    const Ctor = getSpeechRecognition()
+    if (!Ctor) return
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const rec = new Ctor()
+    rec.lang = document?.documentElement?.lang || 'en-US'
+    rec.interimResults = true
+    rec.continuous = false
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map((r) => r[0]?.transcript || '')
+        .join('')
+      setValue(transcript)
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    recognitionRef.current = rec
+    setListening(true)
+    try {
+      rec.start()
+    } catch {
+      setListening(false)
+    }
   }
 
   return (
@@ -168,6 +217,22 @@ export default function AiCommandConsole({
           aria-label="Ask Weissman"
           className="flex-1 rounded-lg border border-border-default bg-bg-1 px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus-visible:border-accent-cyan/50 focus-visible:shadow-[var(--focus-ring)]"
         />
+        {voiceSupported && (
+          <button
+            type="button"
+            onClick={toggleVoice}
+            aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+            aria-pressed={listening}
+            className={cn(
+              'inline-flex size-9 items-center justify-center rounded-lg border focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]',
+              listening
+                ? 'border-severity-critical-border bg-severity-critical-bg text-severity-critical animate-pulse-subtle'
+                : 'border-border-default bg-bg-1 text-text-muted hover:text-text-secondary',
+            )}
+          >
+            <Mic className="size-4" aria-hidden="true" />
+          </button>
+        )}
         <button
           type="submit"
           disabled={busy || !value.trim()}

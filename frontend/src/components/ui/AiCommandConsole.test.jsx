@@ -64,4 +64,27 @@ describe('AiCommandConsole', () => {
     fireEvent.submit(input.closest('form'))
     expect(onSubmit).not.toHaveBeenCalled()
   })
+
+  it('hides the mic when speech recognition is unavailable', () => {
+    render(<AiCommandConsole messages={[]} onSubmit={() => {}} />)
+    expect(screen.queryByRole('button', { name: /voice input/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a mic and starts recognition when the browser supports it', () => {
+    const start = vi.fn()
+    class MockRecognition {
+      start = start
+      stop = vi.fn()
+    }
+    window.SpeechRecognition = MockRecognition
+    try {
+      render(<AiCommandConsole messages={[]} onSubmit={() => {}} />)
+      const mic = screen.getByRole('button', { name: /Start voice input/i })
+      fireEvent.click(mic)
+      expect(start).toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: /Stop voice input/i })).toBeInTheDocument()
+    } finally {
+      delete window.SpeechRecognition
+    }
+  })
 })
