@@ -49,6 +49,9 @@ import Stepper from '../components/ui/Stepper'
 import WhiteLabelStudio from '../components/ui/WhiteLabelStudio'
 import ComplianceMatrix from '../components/ui/ComplianceMatrix'
 import MarketplaceCard from '../components/ui/MarketplaceCard'
+import UsageMeter from '../components/ui/UsageMeter'
+import RiskExplanation from '../components/ui/RiskExplanation'
+import PlaybookNode from '../components/ui/PlaybookNode'
 
 /**
  * Design System Gallery — a living catalogue of every design-system primitive,
@@ -533,6 +536,12 @@ export default function DesignSystemGallery() {
               />
             </div>
           </Field>
+          <Field label="Playbook nodes">
+            <PlaybookNode type="trigger" title="On critical finding" summary="severity = critical" />
+            <PlaybookNode type="condition" title="Is KEV-listed?" status="success" />
+            <PlaybookNode type="action" title="Isolate host" summary="EDR · prod-web-01" selected />
+            <PlaybookNode type="notify" title="Page on-call" summary="Slack + PagerDuty" />
+          </Field>
         </Section>
 
         {/* ── Enterprise & Marketplace ────────────────────────────────── */}
@@ -543,6 +552,24 @@ export default function DesignSystemGallery() {
         >
           <div className="w-full">
             <WhiteLabelStudio brand={brand} onChange={setBrand} onReset={clearBrand} />
+          </div>
+          <div className="grid w-full gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <UsageMeter label="Engine scans" used={820} limit={1000} unit="scans" />
+              <UsageMeter label="Seats" used={48} limit={50} unit="seats" />
+              <UsageMeter label="API calls" used={112000} limit={100000} unit="calls" />
+            </div>
+            <RiskExplanation
+              narrative="This host exposes a KEV-listed RCE directly to the internet; exploitation would give an attacker a foothold adjacent to the payments database."
+              likelihood="high"
+              impact="high"
+              factors={[
+                { label: 'Internet-facing asset', level: 'high' },
+                { label: 'KEV-listed (actively exploited)', level: 'high' },
+                { label: 'Adjacent to crown-jewel data', level: 'medium' },
+              ]}
+              recommendation="Apply the vendor hotfix within 24h and rotate gateway credentials."
+            />
           </div>
           <div className="w-full">
             <ComplianceMatrix

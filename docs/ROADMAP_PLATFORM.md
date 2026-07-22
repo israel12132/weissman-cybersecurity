@@ -22,7 +22,7 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 | B3 | AI **Command Bar** (⌘K) — command registry, fuzzy + NL-style parsing, actions | 🟢 FE | ✅ |
 | B4 | `SmartFilterBar` + Saved Views UI (on `useSavedViews`) | 🟢 FE | ✅ |
 | B5 | Finding Detail Drawer v2 — timeline, attack-path, remediation, evidence gallery | 🟢 FE | 🚧 pieces: `Timeline`, `EvidenceGallery`, `KillChainPath` shipped |
-| B6 | AI Risk Explanation panel (business-risk narrative) | 🟡 FE-surface | ⬜ |
+| B6 | AI Risk Explanation panel (business-risk narrative) | 🟡 FE-surface | ✅ `RiskExplanation` |
 | B7 | Collaborative cursors / comments on findings | 🔴 BE/Infra (realtime) | ⬜ |
 
 ## C — Visualizations & WarRoom
@@ -40,7 +40,7 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
-| D1 | PlaybookBuilder node palette + condition/branch nodes (@xyflow) | 🟢 FE | ⬜ |
+| D1 | PlaybookBuilder node palette + condition/branch nodes (@xyflow) | 🟢 FE | 🚧 `PlaybookNode` shipped |
 | D2 | Playbook **dry-run simulator** panel (sample-event trace) | 🟢 FE | 🚧 `Stepper` shipped |
 | D3 | AI-assisted playbook generation entrypoint | 🟡 FE-surface | ⬜ |
 | D4 | Version history + approval workflow UI | 🟡 FE-surface | 🚧 `Stepper` shipped |
@@ -60,7 +60,7 @@ Status legend: ⬜ todo · 🚧 in progress · ✅ done.
 | # | Deliverable | Scope | Status |
 |---|---|---|---|
 | G1 | White-label admin panel (drives the `setBrand` engine from A) | 🟢 FE | ✅ `WhiteLabelStudio` |
-| G2 | Billing / usage dashboard UI | 🟡 FE-surface | ⬜ |
+| G2 | Billing / usage dashboard UI | 🟡 FE-surface | 🚧 `UsageMeter` shipped |
 | G3 | Partner Portal (MSSP) shell | 🟡 FE-surface | ⬜ |
 | G4 | Engine Marketplace browse/install UI | 🟡 FE-surface | 🚧 `MarketplaceCard` shipped |
 | G5 | Usage-based + seat billing backend | 🔴 BE | ⬜ |
