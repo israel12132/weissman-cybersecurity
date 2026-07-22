@@ -91,6 +91,11 @@ function SortIndicator({ sorted }) {
  *      chevron toggles a full-width detail row. Opt-in: omit → unchanged behavior.
  *  - getRowCanExpand — (row) => boolean; gate which rows show an expander
  *  - expandLabel / collapseLabel — a11y labels for the expander button
+ *  - virtualized — opt-in row windowing for very large flat datasets (default
+ *      off; auto-disabled with renderSubRow). Pair with hidePagination + a large
+ *      page to render one long virtualized list.
+ *  - rowHeight — estimated row height in px for windowing (default 44)
+ *  - overscan — extra rows rendered above/below the viewport (default 10)
  */
 export default function DataTable({
   columns,
@@ -120,6 +125,14 @@ export default function DataTable({
   getRowCanExpand,
   expandLabel = 'Expand row',
   collapseLabel = 'Collapse row',
+  // ── Opt-in row virtualization (windowing) for very large flat datasets ──
+  // Renders only the visible rows plus top/bottom spacer rows, keeping the
+  // semantic <table>, sticky header, selection and sort intact. Default off so
+  // every existing usage is byte-identical; auto-disabled when sub-rows are
+  // enabled. Assumes ~uniform row height (rowHeight, in px).
+  virtualized = false,
+  rowHeight = 44,
+  overscan = 10,
   // ── Opt-in toolbar (all default off → existing usages unchanged) ──
   searchable = false,
   searchPlaceholder = 'Search…',
@@ -335,6 +348,46 @@ export default function DataTable({
 
   const { rows } = table.getRowModel()
   const colCount = table.getVisibleLeafColumns().length
+
+  // ── Row virtualization (opt-in) ──────────────────────────────────────────
+  // Window the visible rows against the scroll container; render spacer rows
+  // above/below to preserve scrollbar geometry. Disabled when sub-rows are on
+  // (their variable height would break fixed-height windowing).
+  const scrollRef = React.useRef(null)
+  const [viewport, setViewport] = React.useState({ scrollTop: 0, height: 0 })
+  const vActive = virtualized && !expandable && rows.length > 0
+  React.useEffect(() => {
+    if (!vActive) return undefined
+    const el = scrollRef.current
+    if (!el) return undefined
+    const measure = () => setViewport({ scrollTop: el.scrollTop, height: el.clientHeight })
+    measure()
+    el.addEventListener('scroll', measure, { passive: true })
+    let ro
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure)
+      ro.observe(el)
+    }
+    return () => {
+      el.removeEventListener('scroll', measure)
+      if (ro) ro.disconnect()
+    }
+  }, [vActive, rows.length])
+
+  const rowH = Math.max(1, rowHeight)
+  const rowTotal = rows.length
+  const startIndex = vActive
+    ? Math.max(0, Math.floor(viewport.scrollTop / rowH) - overscan)
+    : 0
+  const windowCount = vActive
+    ? Math.ceil((viewport.height || 600) / rowH) + overscan * 2
+    : rowTotal
+  const endIndex = vActive ? Math.min(rowTotal, startIndex + windowCount) : rowTotal
+  const visibleRows = vActive ? rows.slice(startIndex, endIndex) : rows
+  const topPad = vActive ? startIndex * rowH : 0
+  const bottomPad = vActive ? Math.max(0, (rowTotal - endIndex) * rowH) : 0
+  const rowMotion = animateRows && !vActive
+
   const totalFiltered = table.getFilteredRowModel().rows.length
   const pageCount = table.getPageCount()
   const pageIndex = effectivePagination.pageIndex ?? 0
@@ -451,7 +504,7 @@ export default function DataTable({
         id={id}
         className={`rounded-2xl border border-[var(--border-default)] bg-[var(--table-surface)] backdrop-blur-md overflow-hidden ${className}`}
       >
-      <div className="overflow-x-auto custom-scroll max-h-[70vh]">
+      <div ref={scrollRef} className="overflow-x-auto custom-scroll max-h-[70vh]">
         <table
           className={`weissman-data-table w-full text-left border-collapse ${tableClassName}`}
         >
@@ -515,7 +568,13 @@ export default function DataTable({
               </tr>
             )}
 
-            {rows.map((row, i) => {
+            {topPad > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={colCount} style={{ height: topPad, padding: 0, border: 0 }} />
+              </tr>
+            )}
+
+            {visibleRows.map((row, i) => {
               const accent = getRowAccentColor?.(row.original)
               const rowId = getRowId(row.original)
               const isSelected =
@@ -571,7 +630,7 @@ export default function DataTable({
               // deep-links can target a specific record regardless of the
               // current client-side sort/filter order.
               const rowIdAttr = rowId != null ? String(rowId) : undefined
-              const mainRow = animateRows ? (
+              const mainRow = rowMotion ? (
                 <motion.tr
                   key={row.id}
                   data-row-id={rowIdAttr}
@@ -598,6 +657,12 @@ export default function DataTable({
                 </React.Fragment>
               )
             })}
+
+            {bottomPad > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={colCount} style={{ height: bottomPad, padding: 0, border: 0 }} />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
