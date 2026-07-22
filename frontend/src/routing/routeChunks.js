@@ -15,6 +15,7 @@ export const Login = React.lazy(() => import(/* webpackChunkName: "page-login" *
 export const App = React.lazy(() => import(/* webpackChunkName: "page-intel-map" */ '../App'))
 export const SystemCore = React.lazy(() => import('../components/SystemCore'))
 export const DesignSystemGallery = React.lazy(() => import('../pages/DesignSystemGallery'))
+export const AdvancedShowcase = React.lazy(() => import('../pages/AdvancedShowcase'))
 export const ReportView = React.lazy(() => import('../components/ReportView'))
 export const AttackSurfaceGraph = React.lazy(() => import('../components/AttackSurfaceGraph'))
 export const SemanticLogicEngine = React.lazy(() => import('../components/SemanticLogicEngine'))

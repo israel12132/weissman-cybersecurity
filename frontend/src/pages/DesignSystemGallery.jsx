@@ -105,6 +105,9 @@ function ThemeControls() {
             <p className="text-xs text-text-muted">
               Primitives · tokens · theming · white-label
             </p>
+            <a href="/command-center/design-system/advanced" className="text-xs text-accent-cyan hover:underline">
+              Advanced components (AI · WarRoom · SOAR · Enterprise) →
+            </a>
           </div>
         </div>
 
