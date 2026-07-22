@@ -20,6 +20,19 @@ describe('DesignSystemGallery', () => {
     expect(screen.getByText('Weissman Design System')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Button' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Overlays' })).toBeInTheDocument()
+    // New command-center + visualization sections exercise the 6 new primitives.
+    expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Visualizations' })).toBeInTheDocument()
+  })
+
+  it('opens the ⌘K command bar from its trigger', () => {
+    render(
+      <ThemeProvider>
+        <DesignSystemGallery />
+      </ThemeProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Open command bar/i }))
+    expect(screen.getByPlaceholderText(/Type a command/i)).toBeInTheDocument()
   })
 
   it('opens the Modal overlay from its trigger', () => {

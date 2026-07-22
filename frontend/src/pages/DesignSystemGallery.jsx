@@ -36,6 +36,12 @@ import Alert from '../components/ui/Alert'
 import Avatar, { AvatarGroup } from '../components/ui/Avatar'
 import Progress from '../components/ui/Progress'
 import Spinner from '../components/ui/Spinner'
+import Sparkline from '../components/ui/Sparkline'
+import KpiStrip from '../components/ui/KpiStrip'
+import CommandBar from '../components/ui/CommandBar'
+import SmartFilterBar from '../components/ui/SmartFilterBar'
+import BlastRadius from '../components/ui/BlastRadius'
+import MiniHeatmap from '../components/ui/MiniHeatmap'
 
 /**
  * Design System Gallery — a living catalogue of every design-system primitive,
@@ -144,6 +150,19 @@ export default function DesignSystemGallery() {
   const [switched, setSwitched] = useState(true)
   const [alertOpen, setAlertOpen] = useState(true)
   const [progress, setProgress] = useState(64)
+  const [commandOpen, setCommandOpen] = useState(false)
+  const [filters, setFilters] = useState([
+    { id: 'sev', label: 'Severity', value: 'critical' },
+    { id: 'env', label: 'Env', value: 'production' },
+  ])
+  const [activeView, setActiveView] = useState('v1')
+
+  const commands = [
+    { id: 'scan', title: 'Run full engine scan', subtitle: 'All engines', group: 'Actions', icon: <Rocket />, run: () => {} },
+    { id: 'isolate', title: 'Isolate host prod-web-01', group: 'Actions', icon: <ShieldCheck />, run: () => {} },
+    { id: 'crit', title: 'Show critical findings (24h)', group: 'Navigate', icon: <Search />, run: () => {} },
+    { id: 'notif', title: 'Open notifications', group: 'Navigate', icon: <Bell />, run: () => {} },
+  ]
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
@@ -382,6 +401,80 @@ export default function DesignSystemGallery() {
             </AvatarGroup>
           </Field>
         </Section>
+
+        {/* ── Command Center ──────────────────────────────────────────── */}
+        <Section
+          id="command-center"
+          title="Command Center"
+          description="KPI strip with drill-down, sparklines, the ⌘K command bar, and smart filters."
+        >
+          <div className="w-full">
+            <KpiStrip
+              items={[
+                { label: 'Open findings', value: 142, delta: 8, deltaLabel: 'vs 24h', invertDelta: true, trend: [120, 128, 124, 135, 138, 142] },
+                { label: 'Critical', value: 7, delta: -2, deltaLabel: 'vs 24h', invertDelta: true, trend: [11, 10, 9, 9, 8, 7], icon: <ShieldCheck /> },
+                { label: 'Resolved (7d)', value: 318, delta: 24, trend: [40, 55, 48, 62, 58, 71] },
+                { label: 'Mean time to remediate', value: '4.2', unit: 'h', delta: -0.6, invertDelta: true, trend: [6, 5.5, 5.1, 4.8, 4.4, 4.2] },
+              ]}
+            />
+          </div>
+          <Field label="Sparklines">
+            <Sparkline data={[3, 7, 4, 9, 6, 11, 8]} label="up trend" />
+            <Sparkline data={[11, 8, 9, 5, 6, 3, 2]} variant="danger" label="down trend" />
+            <Sparkline data={[5, 5, 6, 5, 6, 5, 5]} variant="success" type="line" showDot label="flat" />
+          </Field>
+          <Field label="Command Bar (⌘K)">
+            <Button leftIcon={<Command />} onClick={() => setCommandOpen(true)}>
+              Open command bar
+            </Button>
+          </Field>
+          <div className="w-full">
+            <SmartFilterBar
+              filters={filters}
+              onRemove={(id) => setFilters((f) => f.filter((x) => x.id !== id))}
+              onClear={() => setFilters([])}
+              savedViews={[
+                { id: 'v1', name: 'Critical · Prod' },
+                { id: 'v2', name: 'KEV only' },
+              ]}
+              activeViewId={activeView}
+              onApplyView={setActiveView}
+              onSaveView={() => {}}
+            />
+          </div>
+        </Section>
+
+        {/* ── Visualizations ──────────────────────────────────────────── */}
+        <Section
+          id="visualizations"
+          title="Visualizations"
+          description="Financial blast radius (SLE/ALE) and a compact grid heatmap."
+        >
+          <div className="w-full max-w-md">
+            <BlastRadius
+              sle={125000}
+              ale={480000}
+              crownJewels={[
+                { name: 'Customer PII store', value: 210000 },
+                { name: 'Payments gateway', value: 160000 },
+                { name: 'Source control', value: 90000 },
+              ]}
+            />
+          </div>
+          <Field label="MITRE coverage heatmap">
+            <MiniHeatmap
+              title="Technique coverage"
+              variant="danger"
+              cellSize={18}
+              data={[
+                [2, 5, 8, 3, 6, 1],
+                [7, 4, 9, 2, 5, 8],
+                [1, 6, 3, 7, 4, 2],
+                [8, 2, 5, 9, 3, 6],
+              ]}
+            />
+          </Field>
+        </Section>
       </div>
 
       <Modal
@@ -417,6 +510,8 @@ export default function DesignSystemGallery() {
           <p>Recommended: apply the vendor hotfix and rotate credentials.</p>
         </div>
       </Drawer>
+
+      <CommandBar open={commandOpen} onOpenChange={setCommandOpen} commands={commands} hotkey={false} />
     </div>
   )
 }
