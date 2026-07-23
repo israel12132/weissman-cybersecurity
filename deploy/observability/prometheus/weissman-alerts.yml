@@ -1,0 +1,103 @@
+# Weissman Command Center — Prometheus alerting rules.
+#
+# Consumes the metrics emitted by fingerprint_engine::observability (exposed at
+# GET /api/metrics on weissman-server). Load via prometheus.yml:
+#   rule_files:
+#     - /etc/prometheus/rules/weissman-alerts.yml
+#
+# Thresholds are conservative starting points — tune per environment SLOs.
+groups:
+  - name: weissman-http
+    rules:
+      - alert: WeissmanHigh5xxRatio
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: { severity: critical, service: weissman-server }
+        annotations:
+          summary: "High 5xx ratio (>5%) on the API"
+          description: "5xx responses exceed 5% of traffic over the last 5m."
+
+      - alert: WeissmanHighRequestLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 1
+        for: 10m
+        labels: { severity: warning, service: weissman-server }
+        annotations:
+          summary: "API p95 latency above 1s"
+          description: "The 95th-percentile request duration has exceeded 1s for 10m."
+
+      - alert: WeissmanErrorsSpiking
+        expr: sum(rate(weissman_errors_total[5m])) > 1
+        for: 5m
+        labels: { severity: warning, service: weissman-server }
+        annotations:
+          summary: "Server 5xx errors are spiking"
+          description: "weissman_errors_total is increasing at >1/s over 5m."
+
+      - alert: WeissmanRateLimitPressure
+        expr: sum(rate(weissman_rate_limit_violations_total[5m])) > 5
+        for: 10m
+        labels: { severity: warning, service: weissman-server }
+        annotations:
+          summary: "Sustained rate-limit (429) pressure"
+          description: "429 responses exceed 5/s for 10m — possible abuse or an undersized limit."
+
+  - name: weissman-infra
+    rules:
+      - alert: WeissmanDbPoolExhausted
+        expr: min by (pool) (weissman_db_pool_idle) == 0
+        for: 5m
+        labels: { severity: critical, service: weissman-db }
+        annotations:
+          summary: "DB pool {{ $labels.pool }} has no idle connections"
+          description: "weissman_db_pool_idle for pool {{ $labels.pool }} has been 0 for 5m — requests may be queuing."
+
+      - alert: WeissmanJobBacklog
+        expr: weissman_async_jobs_pending > 100
+        for: 10m
+        labels: { severity: warning, service: weissman-worker }
+        annotations:
+          summary: "Async job backlog is growing"
+          description: "weissman_async_jobs_pending > 100 for 10m — workers may be under-provisioned or stuck."
+
+      - alert: WeissmanDependencyDown
+        expr: weissman_dependency_up == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "A tracked dependency is down"
+          description: "weissman_dependency_up == 0 for 3m (see the 'dependency' label)."
+
+  - name: weissman-fleet
+    rules:
+      - alert: WeissmanAllAgentsOffline
+        expr: weissman_agents_registered > 0 and weissman_agents_online == 0
+        for: 5m
+        labels: { severity: critical, service: weissman-agent }
+        annotations:
+          summary: "No endpoint agents are online"
+          description: "Agents are registered but none are reporting online for 5m."
+
+      - alert: WeissmanAgentsStaleHigh
+        expr: |
+          weissman_agents_registered > 0
+          and (weissman_agents_stale / clamp_min(weissman_agents_registered, 1)) > 0.5
+        for: 15m
+        labels: { severity: warning, service: weissman-agent }
+        annotations:
+          summary: "Over half of agents are stale"
+          description: "More than 50% of registered agents are stale for 15m."
+
+      - alert: WeissmanSelfHealingDegraded
+        expr: weissman_heal_total_requests > 0 and weissman_heal_success_rate < 0.8
+        for: 15m
+        labels: { severity: warning, service: weissman-agent }
+        annotations:
+          summary: "Self-healing success rate below 80%"
+          description: "weissman_heal_success_rate < 0.8 while healing is active."
