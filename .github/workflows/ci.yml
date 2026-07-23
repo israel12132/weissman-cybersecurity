@@ -155,11 +155,13 @@ jobs:
         run: cargo build --workspace
 
       - name: Run Rust tests (blocking gate)
-        # Fail-fast: this `cargo test --workspace --all-targets` normally runs ~5-7 min.
-        # A hung test (parallel-test deadlock / connection-pool leak) must not ride GitHub's 360-min
-        # default timeout and silently burn a runner — 15 min is >2x the legitimate upper bound yet
-        # kills a hang decisively. See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 15
+        # Fail-fast: `cargo test --workspace --all-targets` runs in ~6 min on a WARM cache, but a
+        # cold runner recompiles + links every test target (rust-lld, ~2300 workspace tests after the
+        # main merge) and was observed still linking past 15 min — an under-sized budget, not a hung
+        # test. 30 min absorbs the cold-cache compile yet still kills a genuine multi-hour hang
+        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default.
+        # See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 30
         # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
         # test step also struck this one (observed live). Bounding test concurrency keeps parallel
         # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
@@ -399,11 +401,13 @@ jobs:
         run: cargo run -q -p weissman-db --example run_migrate
 
       - name: Run Rust workspace tests (blocking gate)
-        # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Normal runtime
-        # is ~5-7 min (same DB-backed `cargo test --workspace --all-targets`); 15 min is >2x margin
-        # yet kills a deadlock/pool-leak hang fast instead of riding GitHub's 360-min default.
+        # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
+        # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
+        # recompiles + links every test target (rust-lld, ~2300 tests after the main merge) which can
+        # exceed 15 min mid-link — under-sized budget, not a hang. 30 min absorbs the cold compile yet
+        # still kills a deadlock/pool-leak hang far below GitHub's 360-min default.
         # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 15
+        timeout-minutes: 30
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
