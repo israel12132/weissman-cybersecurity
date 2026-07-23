@@ -18,7 +18,9 @@ function collectApprovedDomainsFromPlan(plan) {
 }
 
 function terminalStatus(status) {
-  return ['completed', 'failed', 'error', 'cancelled'].includes(String(status || '').toLowerCase())
+  // `dead` = dead-letter queue (permanent failure); treat it as terminal so a dead-lettered job
+  // surfaces its real error immediately instead of being polled until the client timeout.
+  return ['completed', 'failed', 'error', 'cancelled', 'dead'].includes(String(status || '').toLowerCase())
 }
 
 function terminalErrorText(payload) {

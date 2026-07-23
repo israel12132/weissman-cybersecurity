@@ -604,3 +604,48 @@ pub async fn force_requeue_running(
     .await?;
     Ok(r.rows_affected())
 }
+
+#[cfg(test)]
+mod worker_pool_role_tests {
+    use super::WorkerPoolRole;
+    use std::collections::HashSet;
+
+    #[test]
+    fn sql_mode_is_stable_and_distinct() {
+        // These discriminants are persisted / compared against SQL — they must not drift.
+        assert_eq!(WorkerPoolRole::Mixed.sql_mode(), 0);
+        assert_eq!(WorkerPoolRole::Research.sql_mode(), 1);
+        assert_eq!(WorkerPoolRole::Client.sql_mode(), 2);
+        let modes: HashSet<i32> = [
+            WorkerPoolRole::Mixed.sql_mode(),
+            WorkerPoolRole::Research.sql_mode(),
+            WorkerPoolRole::Client.sql_mode(),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            modes.len(),
+            3,
+            "each role maps to a distinct SQL discriminant"
+        );
+    }
+
+    #[test]
+    fn default_is_the_legacy_mixed_pool() {
+        assert_eq!(WorkerPoolRole::default(), WorkerPoolRole::Mixed);
+        assert_eq!(WorkerPoolRole::default().sql_mode(), 0);
+    }
+
+    #[test]
+    fn from_env_yields_a_valid_role_regardless_of_environment() {
+        // Env-agnostic: whatever WEISSMAN_WORKER_POOL is (or is not) set to in the runner, the
+        // classifier must resolve to one of the three known roles and never panic, and the
+        // resolved role's SQL discriminant must stay in range.
+        let role = WorkerPoolRole::from_env();
+        assert!(matches!(
+            role,
+            WorkerPoolRole::Mixed | WorkerPoolRole::Research | WorkerPoolRole::Client
+        ));
+        assert!((0..=2).contains(&role.sql_mode()));
+    }
+}

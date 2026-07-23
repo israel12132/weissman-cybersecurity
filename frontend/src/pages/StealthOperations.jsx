@@ -201,11 +201,11 @@ export default function StealthOperations() {
             type="button"
             onClick={exportPdf}
             disabled={!filteredHosts.length}
-            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-white/15 text-text-secondary hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
-            {t('common.export_pdf', { defaultValue: 'PDF' })}
+            {t('common.export_pdf')}
           </Button>
         </div>
       </header>
@@ -371,8 +371,8 @@ export default function StealthOperations() {
                     type="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t('common.search', { defaultValue: 'Search host' })}
-                    aria-label={t('common.search', { defaultValue: 'Search host' })}
+                    placeholder={t('common.search')}
+                    aria-label={t('common.search')}
                     className="w-40 pl-6 pr-2 py-1 rounded-md text-[11px] bg-bg-1 border border-white/10 text-text-secondary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                   />
                 </div>
@@ -387,7 +387,7 @@ export default function StealthOperations() {
               </div>
             ) : filteredHosts.length === 0 ? (
               <div className="text-sm text-text-muted py-6 text-center">
-                {t('stealthOps.noMatch', { defaultValue: 'No active hosts match your search.' })}
+                {t('stealthOps.noMatch')}
               </div>
             ) : (
               <ul className="space-y-2">

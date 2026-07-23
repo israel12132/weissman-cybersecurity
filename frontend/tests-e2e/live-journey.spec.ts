@@ -5,6 +5,7 @@
 import { test, expect } from '@playwright/test'
 import {
   apiLogin,
+  apiRequestWithRetry,
   authHeaders,
   ensureE2eClient,
   ensureUiSession,
@@ -60,15 +61,17 @@ test('journey — client, scan, findings evidence, PDF export', async ({ page, r
   await expect(page.locator('#cockpit-engage-scan-btn')).toBeVisible({ timeout: 20_000 })
 
   // Enqueue osint scan via API (deterministic) then verify UI findings tab
-  const scan = await request.post('/api/command-center/scan', {
-    headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
-    data: {
-      engine: 'osint',
-      client_id: clientId,
-      target: 'https://example.com',
-      depth: '1',
-    },
-  })
+  const scan = await apiRequestWithRetry(() =>
+    request.post('/api/command-center/scan', {
+      headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
+      data: {
+        engine: 'osint',
+        client_id: clientId,
+        target: 'https://example.com',
+        depth: '1',
+      },
+    }),
+  )
   expect(scan.status()).toBe(202)
   const scanBody = await scan.json()
   const jobId = String(scanBody.job_id || '')
@@ -81,16 +84,18 @@ test('journey — client, scan, findings evidence, PDF export', async ({ page, r
   })
 
   // Findings API — prefer this client; fall back to tenant rollups when worker queue is slow
-  let findingsRes = await request.get(`/api/findings?client_id=${clientId}&limit=20`, {
-    headers: authHeaders(auth),
-  })
+  let findingsRes = await apiRequestWithRetry(() =>
+    request.get(`/api/findings?client_id=${clientId}&limit=20`, { headers: authHeaders(auth) }),
+  )
   expect(findingsRes.ok()).toBeTruthy()
   let findingsPayload = await findingsRes.json()
   expect(findingsPayload.ok).toBe(true)
   let rows = Array.isArray(findingsPayload.findings) ? findingsPayload.findings : []
 
   if (rows.length === 0) {
-    const tenantRes = await request.get('/api/findings?limit=20', { headers: authHeaders(auth) })
+    const tenantRes = await apiRequestWithRetry(() =>
+      request.get('/api/findings?limit=20', { headers: authHeaders(auth) }),
+    )
     expect(tenantRes.ok()).toBeTruthy()
     const tenantPayload = await tenantRes.json()
     rows = Array.isArray(tenantPayload.findings) ? tenantPayload.findings : []
@@ -119,9 +124,9 @@ test('journey — client, scan, findings evidence, PDF export', async ({ page, r
   }
 
   // PDF export — cryptographic report contract
-  const pdfRes = await request.get(`/api/clients/${clientId}/report/pdf`, {
-    headers: authHeaders(auth),
-  })
+  const pdfRes = await apiRequestWithRetry(() =>
+    request.get(`/api/clients/${clientId}/report/pdf`, { headers: authHeaders(auth) }),
+  )
   expect(pdfRes.ok()).toBeTruthy()
   const ct = pdfRes.headers()['content-type'] || ''
   expect(ct).toMatch(/html|pdf|octet-stream/i)
@@ -130,9 +135,9 @@ test('journey — client, scan, findings evidence, PDF export', async ({ page, r
   expect(pdfBody.toLowerCase()).toMatch(/report|weissman|finding|executive/i)
 
   // Compliance evidence pack API
-  const packRes = await request.get(`/api/compliance/evidence-pack/${clientId}`, {
-    headers: authHeaders(auth),
-  })
+  const packRes = await apiRequestWithRetry(() =>
+    request.get(`/api/compliance/evidence-pack/${clientId}`, { headers: authHeaders(auth) }),
+  )
   expect(packRes.ok()).toBeTruthy()
   const pack = await packRes.json()
   expect(pack.packet_type).toBe('weissman-compliance-evidence-pack-v2')

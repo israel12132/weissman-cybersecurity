@@ -62,6 +62,7 @@
     "count": "ספירה",
     "clear_filters": "נקה מסננים",
     "export_csv": "ייצוא CSV",
+    "live_source": "מקור נתונים חי",
     "show_filters": "מסננים",
     "hide_filters": "הסתר מסננים"
   },
@@ -1887,7 +1888,7 @@
       "detail_title": "תדריך תיקון",
       "generate_brief": "הפק תדריך",
       "brief_loading": "מפיק תדריך דו-לשוני…",
-      "brief_error": "לא ניתן להפיק את התדריך",
+      "brief_error": "לא ניתן להפיק את התדריך: {{error}}",
       "brief_problem": "הבעיה",
       "brief_root_cause": "שורש הבעיה",
       "brief_impact": "השפעה",

@@ -19,16 +19,38 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
 
   const refreshSession = useCallback(async () => {
-    try {
-      // utils/apiFetch returns the parsed JSON on success and throws on any
-      // non-2xx (→ the catch below de-authenticates). lib/apiBase's 401
-      // interceptor still runs underneath — it attempts a single token refresh
-      // and retries once before a 401 surfaces here — so an expired token
-      // self-heals while a genuinely unauthenticated response terminates in the
-      // catch. No retry loop. The `instanceof Response` guard covers the
-      // (contract-impossible) non-JSON 200, so a Response is never mistaken for
+    // A throttled (429) or hiccuping (5xx / network) session probe says NOTHING about
+    // whether the user is actually logged out — only a definitive 401/403 does.
+    // utils/apiFetch throws on any non-2xx (429 surfaced immediately with err.status /
+    // err.retryAfter; a 401 only after lib/apiBase's single token-refresh retry has already
+    // failed underneath). So retry transient failures here, honor Retry-After, and clear the
+    // session ONLY on a real 401/403. Dropping a live session on a transient 429 bounces the
+    // user to /login, whose own boot requests then re-burst the API — a self-amplifying
+    // throttle storm. Never log a valid user out on a throttle.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      let data
+      try {
+        data = await apiFetch('/api/auth/me', { method: 'GET' })
+      } catch (err) {
+        const status = err?.status
+        if (status === 401 || status === 403) {
+          setSession(null)
+          setIsAuthenticated(false)
+          return null
+        }
+        if (status === 429 || status === undefined || status >= 500) {
+          // Throttled / server hiccup / network blip — transient. Honor Retry-After, else back off.
+          const ra = Number(err?.retryAfter)
+          const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 3000) : 300 * (attempt + 1)
+          await new Promise((res) => setTimeout(res, waitMs))
+          continue
+        }
+        // Any other 4xx is not an auth signal we understand — don't nuke a live session.
+        return null
+      }
+      // On success utils/apiFetch returns the parsed JSON. The instanceof Response guard
+      // covers the (contract-impossible) non-JSON 200 so a Response is never mistaken for
       // a session payload.
-      const data = await apiFetch('/api/auth/me', { method: 'GET' })
       if (!data || data instanceof Response || data.ok !== true) {
         setSession(null)
         setIsAuthenticated(false)
@@ -37,11 +59,10 @@ export function AuthProvider({ children }) {
       setSession(data)
       setIsAuthenticated(true)
       return data
-    } catch (_) {
-      setSession(null)
-      setIsAuthenticated(false)
-      return null
     }
+    // Exhausted transient retries: do NOT forcibly clear an existing session — leave auth
+    // state untouched so a throttled probe never logs a valid user out.
+    return null
   }, [])
 
   const checkAuth = useCallback(async () => {

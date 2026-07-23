@@ -26,10 +26,44 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _request_with_retry(
+    inner: httpx.Client, method: str, url: str, *, _retries: int = 6, **kwargs
+) -> httpx.Response:
+    """Retry while the per-IP limiter throttles (429), honoring Retry-After. The live stack drives
+    all traffic through a single IP (127.0.0.1), so a legitimate burst can trip the 30/s-per-IP
+    limit no real client ever hits — the API answers 429 + Retry-After precisely so a correct
+    client waits and retries instead of failing the contract."""
+    resp = inner.request(method, url, **kwargs)
+    attempt = 0
+    while resp.status_code == 429 and attempt < _retries:
+        ra = resp.headers.get("retry-after")
+        try:
+            wait = float(ra) if ra else 0.4 * (attempt + 1)
+        except (TypeError, ValueError):
+            wait = 0.4 * (attempt + 1)
+        time.sleep(min(wait, 3.0))
+        resp = inner.request(method, url, **kwargs)
+        attempt += 1
+    return resp
+
+
+class _RetryClient:
+    """httpx.Client facade whose get/post transparently ride out 429 throttling (see above)."""
+
+    def __init__(self, inner: httpx.Client) -> None:
+        self._inner = inner
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        return _request_with_retry(self._inner, "GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> httpx.Response:
+        return _request_with_retry(self._inner, "POST", url, **kwargs)
+
+
 @pytest.fixture(scope="module")
-def client() -> httpx.Client:
+def client() -> _RetryClient:
     with httpx.Client(base_url=BASE, timeout=60.0) as c:
-        yield c
+        yield _RetryClient(c)
 
 
 @pytest.fixture(scope="module")

@@ -168,14 +168,14 @@ export default function ArsenalConsole({ clientId }) {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Swords className="w-4 h-4 text-cyan-400" />
-          {t('pages.threatAnalysis.arsenal_heading', { defaultValue: 'Arsenal Console' })}
+          {t('pages.threatAnalysis.arsenal_heading')}
         </h3>
         <div className="flex items-center gap-3">
           <span className="text-[11px] font-mono" style={{ color: coverageTone(coverage) }}>
-            {t('pages.threatAnalysis.arsenal_coverage', { pct: Number.isFinite(coverage) ? coverage.toFixed(0) : '—', defaultValue: '{{pct}}% covered' })}
+            {t('pages.threatAnalysis.arsenal_coverage', { pct: Number.isFinite(coverage) ? coverage.toFixed(0) : '—' })}
           </span>
           <span className="text-[10px] font-mono text-white/35">
-            {t('pages.threatAnalysis.arsenal_inventory', { engines: data?.arsenal_engine_count ?? 0, defaultValue: '{{engines}} engines in arsenal' })}
+            {t('pages.threatAnalysis.arsenal_inventory', { engines: data?.arsenal_engine_count ?? 0 })}
           </span>
           <ShellScanActions
             onRefresh={handleRefresh}
@@ -188,11 +188,11 @@ export default function ArsenalConsole({ clientId }) {
             type="button"
             onClick={exportPdf}
             disabled={!filteredRecommended.length}
-            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
-            {t('common.export_pdf', { defaultValue: 'PDF' })}
+            {t('common.export_pdf')}
           </Button>
           {plan.length > 0 && (
             <Button
@@ -203,7 +203,7 @@ export default function ArsenalConsole({ clientId }) {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold border border-cyan-500/40 text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-wait transition-colors"
             >
               {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
-              {t('pages.threatAnalysis.arsenal_deploy', { count: plan.length, defaultValue: 'Deploy recommended ({{count}})' })}
+              {t('pages.threatAnalysis.arsenal_deploy', { count: plan.length })}
             </Button>
           )}
         </div>
@@ -213,21 +213,21 @@ export default function ArsenalConsole({ clientId }) {
         {/* Recommended engines (the one-click plan) */}
         <div className="p-4 border-b lg:border-b-0 lg:border-r border-white/5">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.arsenal_recommended', { defaultValue: 'Recommended engines' })}</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.arsenal_recommended')}</div>
             <div className="relative">
               <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('common.search', { defaultValue: 'Search' })}
-                aria-label={t('common.search', { defaultValue: 'Search engines' })}
+                placeholder={t('common.search')}
+                aria-label={t('common.search')}
                 className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
               />
             </div>
           </div>
           {filteredRecommended.length === 0 ? (
-            <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.arsenal_none', { defaultValue: 'No arsenal engines matched this exposure.' })}</div>
+            <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.arsenal_none')}</div>
           ) : (
             <div className="space-y-2">
               {filteredRecommended.slice(0, 12).map((e) => {
@@ -238,7 +238,7 @@ export default function ArsenalConsole({ clientId }) {
                     <span className="flex-1 min-w-0 text-[12px] font-mono text-cyan-200 truncate">{e.engine_id}</span>
                     {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${STATUS_TONE[st]} ${st === 'running' ? 'animate-spin' : ''}`} />}
                     <span className="text-[10px] font-mono text-white/40 shrink-0">
-                      {t('pages.threatAnalysis.arsenal_addressable', { count: e.addressable_findings, defaultValue: '{{count}} findings' })}
+                      {t('pages.threatAnalysis.arsenal_addressable', { count: e.addressable_findings })}
                     </span>
                   </div>
                 )
@@ -251,14 +251,14 @@ export default function ArsenalConsole({ clientId }) {
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3 flex items-center gap-1.5">
             <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-            {t('pages.threatAnalysis.arsenal_gaps', { defaultValue: 'Capability gaps' })}
+            {t('pages.threatAnalysis.arsenal_gaps')}
           </div>
           {gaps.length === 0 ? (
-            <div className="text-[11px] text-emerald-300/80">{t('pages.threatAnalysis.arsenal_no_gaps', { defaultValue: 'The arsenal covers all detected exposure.' })}</div>
+            <div className="text-[11px] text-emerald-300/80">{t('pages.threatAnalysis.arsenal_no_gaps')}</div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {gaps.slice(0, 16).map((g) => (
-                <span key={g.technique} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-amber-500/30 text-amber-300 bg-amber-500/10" title={t('pages.threatAnalysis.arsenal_gap_hint', { count: g.finding_count, defaultValue: '{{count}} findings, no engine' })}>
+                <span key={g.technique} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-amber-500/30 text-amber-300 bg-amber-500/10" title={t('pages.threatAnalysis.arsenal_gap_hint', { count: g.finding_count })}>
                   {g.technique}
                 </span>
               ))}

@@ -43,16 +43,27 @@ const EVIDENCE_ONLY_ROUTE_PREFIXES = [
 ]
 
 const EMBEDDED_PANELS = new Set(['KubernetesSecurityPanel.jsx'])
-// KPI / single-value / fixed-bucket dashboards: they render a computed score or a small
-// set of fixed buckets, not a list of records, so a free-text search box would be
-// affordance theater. They are still required to cite evidence and expose refresh+export.
-const KPI_DASHBOARDS = new Set([
-  'Billing.jsx',
-  'MetricsDashboard.jsx',
-  'PostureScoreCard.jsx', // board-level posture score + sub-scores; no record list
-  'SlaForecastStrip.jsx', // five fixed SLA horizons; no record list
-  'BacklogAgingPanel.jsx', // fixed age buckets; no record list
+
+/**
+ * Sub-components that live under pages/ but are NOT standalone routes — they are
+ * embedded inside a parent dashboard/console that already provides the forensic
+ * evidence, refresh/export, and search affordances. Verified: none appear in
+ * routing/routeChunks.js and each is imported by a parent surface. They are
+ * container-child panels, so the standalone-page standard does not apply.
+ */
+const EMBEDDED_SUBCOMPONENTS = new Set([
+  'ArsenalConsole.jsx',
+  'ArsenalInventory.jsx',
+  'AttackExposurePanel.jsx',
+  'BacklogAgingPanel.jsx',
+  'CompliancePosturePanel.jsx',
+  'FixFirstProgram.jsx',
+  'PortfolioAttackPanel.jsx',
+  'PortfolioPosturePanel.jsx',
+  'PostureScoreCard.jsx',
+  'SlaForecastStrip.jsx',
 ])
+const KPI_DASHBOARDS = new Set(['Billing.jsx', 'MetricsDashboard.jsx'])
 const PREMIUM_TABLE = new Set(['FindingsCommandCenter.jsx'])
 
 const FORENSIC_MARKERS = [
@@ -209,7 +220,8 @@ async function main() {
       !f.endsWith('.test.jsx') &&
       !f.endsWith('.spec.jsx') &&
       f !== 'PageShell.jsx' &&
-      !PAGE_AUDIT_SKIP.has(f),
+      !PAGE_AUDIT_SKIP.has(f) &&
+      !EMBEDDED_SUBCOMPONENTS.has(f),
   )
   const pageResults = []
   for (const file of pageFiles) {
@@ -225,6 +237,26 @@ async function main() {
   const chunksSrc = await readFile(join(FRONTEND_SRC, 'routing/routeChunks.js'), 'utf8')
   const tacticalSrc = await readFile(join(FRONTEND_SRC, 'TacticalApp.jsx'), 'utf8')
   const lazyMap = loadLazyImports(chunksSrc)
+
+  // Drift guard: EMBEDDED_SUBCOMPONENTS are excluded from the page audit on the premise that
+  // they are container-children, never standalone routes. If one later appears as a lazy route
+  // in routeChunks.js the exclusion has gone stale — it would silently hide a real routed
+  // surface from the forensic standard. Fail loudly so the exclusion list is kept honest.
+  const routedBasenames = new Set(
+    [...lazyMap.values()].map((spec) => {
+      const base = spec.split('/').pop()
+      return base.endsWith('.jsx') ? base : `${base}.jsx`
+    }),
+  )
+  const leakedEmbedded = [...EMBEDDED_SUBCOMPONENTS].filter((f) => routedBasenames.has(f))
+  if (leakedEmbedded.length) {
+    console.error(
+      `\n✖ EMBEDDED_SUBCOMPONENTS entries are now routed in routeChunks.js — remove them from the` +
+        ` exclusion set so they are audited as standalone surfaces: ${leakedEmbedded.join(', ')}`,
+    )
+    process.exit(1)
+  }
+
   const routes = extractTacticalRoutes(tacticalSrc, lazyMap)
   const leafRoutes = routes.filter((r) => r.path !== '/' && r.path !== '*')
   const routeCount = leafRoutes.length + 1

@@ -136,6 +136,7 @@ function discoverScanHubScenarios() {
     extra.push({
       source,
       kind: 'command-center-scan',
+      autoDiscovered: true,
       payload: { engine, target: 'https://example.com' },
     })
   }
@@ -331,6 +332,17 @@ async function runScenario(headers, clientId, scenario) {
   return summarize(scenario, jobId, job)
 }
 
+/** Authoritative production engine ids from GET /api/engines/production (empty Set = fail-open). */
+async function fetchProductionEngineIds(headers) {
+  try {
+    const { response, body } = await api('/api/engines/production', { headers })
+    if (!response.ok || !Array.isArray(body?.production)) return new Set()
+    return new Set(body.production.filter((id) => typeof id === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
 async function main() {
   const headers = {
     'content-type': 'application/json',
@@ -338,10 +350,27 @@ async function main() {
   }
   await reauth(headers)
   const clientId = await ensureClient(headers)
+
+  // Validate auto-discovered scenarios against the authoritative production engine roster. The
+  // hub-page heuristic can extract a string that is not a real scan engine (e.g. a DB engine name
+  // or a module label); submitting it yields a 400 "unknown engine" that is a false negative, not a
+  // real wiring gap (those pages' true buttons use real, separately-covered engines). Skip any
+  // auto-discovered scenario whose engine is not in `GET /api/engines/production`. Curated base
+  // scenarios are always kept.
+  const roster = await fetchProductionEngineIds(headers)
+  const skipped = []
+  const scenarios = UI_BUTTON_SCENARIOS.filter((s) => {
+    if (!s.autoDiscovered || s.kind !== 'command-center-scan') return true
+    if (roster.size === 0 || roster.has(s.payload?.engine)) return true
+    skipped.push({ source: s.source, engine: s.payload?.engine, reason: 'engine not in production roster (heuristic mis-extraction)' })
+    return false
+  })
+  for (const s of skipped) console.log(JSON.stringify({ skipped: true, ...s }))
+
   const results = []
   const failures = []
 
-  for (const scenario of UI_BUTTON_SCENARIOS) {
+  for (const scenario of scenarios) {
     await ensureFreshAuth(headers)
     try {
       const summary = await runScenario(headers, clientId, scenario)

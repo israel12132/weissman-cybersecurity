@@ -10,7 +10,16 @@
 //!
 //! The URL should be a **superuser** (or any role granted `weissman_app`) so the test can
 //! `SET ROLE weissman_app` and exercise real RLS (superuser bypass is dropped after `SET ROLE`).
-//! The database must already have Weissman migrations applied.
+//! The database must already have Weissman migrations applied (the `run_migrate` example
+//! creates the `weissman_app` role NOSUPERUSER/NOBYPASSRLS, enables + FORCEs RLS on
+//! `clients`, and grants CRUD — no running server is required).
+//!
+//! IMPORTANT: RLS is enforced per Postgres *session*, and both `SET ROLE` and a
+//! transaction-local GUC are session/transaction-scoped. The whole role-scoped probe must
+//! therefore run on ONE pinned connection inside ONE explicit transaction — otherwise a
+//! pooled connection can serve the probe SELECT as the still-superuser role (which bypasses
+//! RLS) and the test falsely "passes the leak". That is exactly the bug an earlier version
+//! of this test had.
 
 use sqlx::postgres::PgPoolOptions;
 
@@ -86,37 +95,38 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         .await
         .expect("resolve t2 id");
 
-    sqlx::query("SET ROLE weissman_app")
-        .execute(&mut *conn)
-        .await
-        .expect("SET ROLE weissman_app (GRANT weissman_app TO your test role if this fails)");
-
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
-        .bind(t2.to_string())
-        .execute(&mut *conn)
-        .await
-        .expect("set GUC t2");
-
+    // Seed tenant B's probe row as the connecting (superuser) role, which bypasses RLS, so
+    // the row definitely exists regardless of any GUC. The cross-tenant check then proves
+    // that weissman_app scoped to tenant A cannot see it.
     sqlx::query("DELETE FROM clients WHERE tenant_id = $1 AND name = $2")
         .bind(t2)
         .bind(PROBE_NAME)
         .execute(&mut *conn)
         .await
         .ok();
-
-    sqlx::query(r#"INSERT INTO clients (tenant_id, name) VALUES ($1, $2)"#)
+    sqlx::query("INSERT INTO clients (tenant_id, name) VALUES ($1, $2)")
         .bind(t2)
         .bind(PROBE_NAME)
         .execute(&mut *conn)
         .await
         .expect("insert probe client under tenant B");
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
+    // Cross-tenant: as weissman_app scoped to tenant A, tenant B's row must be INVISIBLE.
+    // BEGIN + SET LOCAL ROLE + transaction-local set_config keep role, scope and query on the
+    // same session; ROLLBACK afterwards restores the superuser role and clears the GUC.
+    sqlx::query("BEGIN")
+        .execute(&mut *conn)
+        .await
+        .expect("begin cross-tenant tx");
+    sqlx::query("SET LOCAL ROLE weissman_app")
+        .execute(&mut *conn)
+        .await
+        .expect("SET LOCAL ROLE weissman_app (GRANT weissman_app TO the test role if this fails)");
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
         .bind(t1.to_string())
         .execute(&mut *conn)
         .await
-        .expect("set GUC t1");
-
+        .expect("scope GUC to tenant A");
     let cross: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1 AND name = $2",
     )
@@ -125,18 +135,26 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     .fetch_one(&mut *conn)
     .await
     .expect("count cross-tenant");
-
+    sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
     assert_eq!(
         cross, 0,
         "weissman_app with app.current_tenant_id=A must not see tenant B rows"
     );
 
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, false)")
+    // Same-tenant sanity: weissman_app scoped to tenant B still sees its own row.
+    sqlx::query("BEGIN")
+        .execute(&mut *conn)
+        .await
+        .expect("begin same-tenant tx");
+    sqlx::query("SET LOCAL ROLE weissman_app")
+        .execute(&mut *conn)
+        .await
+        .expect("SET LOCAL ROLE weissman_app");
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
         .bind(t2.to_string())
         .execute(&mut *conn)
         .await
-        .expect("set GUC t2 again");
-
+        .expect("scope GUC to tenant B");
     let same: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM clients WHERE tenant_id = $1 AND name = $2",
     )
@@ -145,10 +163,10 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     .fetch_one(&mut *conn)
     .await
     .expect("count same-tenant");
-
+    sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
     assert_eq!(same, 1, "sanity: same tenant must still see its own row");
 
-    let _ = sqlx::query("RESET ROLE").execute(&mut *conn).await;
+    // Cleanup as the (superuser) connecting role — RLS bypassed, so the probe row is removed.
     let _ = sqlx::query("DELETE FROM clients WHERE name = $1")
         .bind(PROBE_NAME)
         .execute(&mut *conn)

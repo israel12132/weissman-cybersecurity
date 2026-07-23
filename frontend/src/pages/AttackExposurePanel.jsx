@@ -120,7 +120,7 @@ export default function AttackExposurePanel({ clientId }) {
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-rose-400" />
-          {t('pages.threatAnalysis.exposure_heading', { defaultValue: 'ATT&CK Exposure' })}
+          {t('pages.threatAnalysis.exposure_heading')}
         </h3>
         <div className="flex items-center gap-3">
           <ShellScanActions
@@ -134,28 +134,28 @@ export default function AttackExposurePanel({ clientId }) {
             type="button"
             onClick={exportPdf}
             disabled={!filteredTechniques.length}
-            title={t('common.export_pdf', { defaultValue: 'Export PDF' })}
+            title={t('common.export_pdf')}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
             <FileText className="w-3.5 h-3.5" />
-            {t('common.export_pdf', { defaultValue: 'PDF' })}
+            {t('common.export_pdf')}
           </Button>
         </div>
       </div>
 
       {clientId == null ? (
-        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_no_client', { defaultValue: 'Select a client to load ATT&CK exposure.' })} /></div>
+        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_no_client')} /></div>
       ) : error ? (
-        <div className="p-4 text-sm text-rose-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{t('pages.threatAnalysis.exposure_error', { error, defaultValue: "Couldn't load ATT&CK exposure: {{error}}." })}</div>
+        <div className="p-4 text-sm text-rose-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{t('pages.threatAnalysis.exposure_error', { error })}</div>
       ) : loading ? (
         <div className="p-4"><SkeletonTable rows={5} cols={3} /></div>
       ) : techniques.length === 0 ? (
-        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_empty', { defaultValue: 'No ATT&CK-tagged findings for this client yet.' })} /></div>
+        <div className="p-4"><EmptyState compact icon="shield" title={t('pages.threatAnalysis.exposure_empty')} /></div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
           {/* Tactic rollup */}
           <div className="p-4 border-b lg:border-b-0 lg:border-r border-white/5">
-            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_tactics', { defaultValue: 'Tactics' })}</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.exposure_tactics')}</div>
             <div className="space-y-2">
               {tactics.map((ta) => (
                 <div key={ta.tactic} className="flex items-center gap-2">
@@ -174,21 +174,21 @@ export default function AttackExposurePanel({ clientId }) {
           {/* Top techniques */}
           <div className="p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.exposure_top', { defaultValue: 'Top techniques' })}</div>
+              <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.exposure_top')}</div>
               <div className="relative">
                 <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('common.search', { defaultValue: 'Search' })}
-                  aria-label={t('common.search', { defaultValue: 'Search techniques' })}
+                  placeholder={t('common.search')}
+                  aria-label={t('common.search')}
                   className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-rose-500/40"
                 />
               </div>
             </div>
             {topTechniques.length === 0 ? (
-              <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.exposure_no_match', { defaultValue: 'No techniques matched this search.' })}</div>
+              <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.exposure_no_match')}</div>
             ) : (
             <div className="space-y-2.5">
               {topTechniques.map((tech) => (

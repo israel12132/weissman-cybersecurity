@@ -71,7 +71,7 @@ export default function BatchHealPanel({ findings, onClose }) {
           <Wrench className="w-3.5 h-3.5" />
           {t('pages.remediationHub.batch_heal_title', { n: healable.length })}
         </span>
-        <Button variant="unstyled" type="button" onClick={onClose} aria-label={t('common.close', { defaultValue: 'Close' })} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></Button>
+        <Button variant="unstyled" type="button" onClick={onClose} aria-label={t('common.close')} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></Button>
       </div>
 
       {result ? (

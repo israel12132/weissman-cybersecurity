@@ -61,7 +61,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.91.1
         with:
-          components: clippy
+          # rustfmt must be pinned to the toolchain (1.91.1) so `cargo fmt --check`
+          # below is deterministic. Without it, cargo falls back to the runner's
+          # preinstalled rustfmt, whose formatting drifts from the pinned compiler and
+          # fails on code that is correctly formatted for 1.91.1 (e.g. pdf_report.rs).
+          components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
         uses: actions/cache@v4
@@ -72,6 +76,34 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Free runner disk (workspace links several large debug binaries)
+        # `cargo build --workspace` links weissman-server, weissman-worker AND the
+        # fingerprint_engine binary as full debug executables, and `cargo test
+        # --all-targets` then links the fingerprint_engine LIB-TEST binary — the largest
+        # link of the job (test harness + every dep). rust-lld memory-maps the output and
+        # writes its sections in parallel; when the runner disk is exhausted at that moment
+        # the mmap'd page can't be committed and the linker faults with SIGBUS (signal 7,
+        # "Bus error", core dumped) inside `llvm::parallelFor` — NOT a code error (the same
+        # crate links fine in the engine-wiring job, which frees disk first, and cargo check
+        # passes). A prior, lighter free-list still let target/ growth cross the ceiling at
+        # the test-link step, so reclaim aggressively and cache-preservingly up front (this
+        # only removes unused language runtimes / prebuilt toolchains / docker images — never
+        # ~/.cargo or target/, so the build cache is untouched) to keep headroom through the
+        # test link. `df -h /` records the reclaimed headroom for diagnosis.
+        run: |
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /usr/local/share/powershell \
+            /usr/local/lib/node_modules \
+            /opt/microsoft || true
+          sudo docker image prune -af || true
+          df -h /
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -123,7 +155,18 @@ jobs:
         run: cargo build --workspace
 
       - name: Run Rust tests (blocking gate)
-        run: cargo test --workspace --all-targets
+        # Fail-fast: `cargo test --workspace --all-targets` runs in ~6 min on a WARM cache, but a
+        # cold runner recompiles + links every test target (rust-lld, ~2300 workspace tests after the
+        # main merge) and was observed still linking past 15 min — an under-sized budget, not a hung
+        # test. 30 min absorbs the cold-cache compile yet still kills a genuine multi-hour hang
+        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default.
+        # See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 30
+        # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
+        # test step also struck this one (observed live). Bounding test concurrency keeps parallel
+        # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
+        # not a mask (every test still runs and still blocks). Runs well under the 15-min guard.
+        run: cargo test --workspace --all-targets -- --test-threads=2
 
   security-scan:
     name: Security — secrets & dependency scan
@@ -252,6 +295,494 @@ jobs:
         run: npx playwright install chromium && npm run test:e2e
         working-directory: frontend
 
+  engine-wiring-and-smoke:
+    name: Engine wiring audit & API smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weissman
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d weissman"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@1.91.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install frontend dependencies
+        # Must precede the Weissman UI compliance audit below: that script parses the
+        # route tree with @babel/parser + @babel/traverse, which are frontend devDeps.
+        run: npm ci
+        working-directory: frontend
+
+      - name: Verify engine wiring coverage
+        run: node scripts/verify_engine_wiring.mjs
+
+      - name: Generate engine catalog snapshot
+        run: node scripts/generate_engine_catalog_snapshot.mjs
+
+      - name: Verify engine scan wiring
+        run: node scripts/verify_engine_scan_wiring.mjs
+
+      - name: Verify hub local params wiring
+        run: node scripts/verify_hub_local_params.mjs
+
+      - name: Verify command center supreme coverage
+        run: node scripts/verify_command_center_coverage.mjs
+
+      - name: Engine reality audit
+        run: node scripts/engine_reality_audit.mjs
+
+      - name: Doc metrics sync (fail on drift)
+        run: node scripts/sync_doc_metrics.mjs --check
+
+      - name: Frontend↔backend route contract
+        run: node scripts/verify_frontend_route_contract.mjs
+
+      - name: Cloud posture catalog parity
+        run: node scripts/verify_cloud_posture_catalog.mjs
+
+      - name: Weissman UI compliance audit
+        run: node scripts/weissman-ui-audit.mjs
+
+      - name: i18n defaultValue gate
+        run: node scripts/verify_i18n_no_default_values.mjs
+
+      - name: i18n templated-key resolution gate
+        run: node scripts/verify_i18n_template_keys.mjs
+
+      - name: Build frontend production bundle
+        run: npm run build
+        working-directory: frontend
+
+      - name: Build weissman-server + worker (warm compile for health check)
+        run: cargo build -p weissman-server -p weissman-worker
+
+      - name: Apply database migrations
+        env:
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+        run: cargo run -q -p weissman-db --example run_migrate
+
+      - name: Run Rust workspace tests (blocking gate)
+        # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
+        # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
+        # recompiles + links every test target (rust-lld, ~2300 tests after the main merge) which can
+        # exceed 15 min mid-link — under-sized budget, not a hang. 30 min absorbs the cold compile yet
+        # still kills a deadlock/pool-leak hang far below GitHub's 360-min default.
+        # See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 30
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          # Fail (don't skip) the DB-backed integration tests here, so a dropped
+          # TEST_DATABASE_URL can never masquerade as a green run.
+          WEISSMAN_REQUIRE_DB_TESTS: "1"
+        # Two contracts require the *running server*, not just a migrated DB, so they are
+        # enforced AFTER the server boots — not in this pre-boot gate where they can only
+        # false-fail:
+        #   - soar_playbook_e2e::isolate_dry_run_verify_and_revert_chain — dispatches an
+        #     armored SOAR action, which needs a live integration registered against the
+        #     running server; enforced end-to-end by the "SOAR playbook E2E contract" step
+        #     (scripts/verify_soar_playbook_e2e.mjs) below.
+        #   - rls_cross_tenant::weissman_app_cannot_read_other_tenant_clients — needs the
+        #     weissman_app role + forced-RLS the server boot provisions; re-run by the
+        #     "Live RLS cross-tenant isolation contract" step below.
+        # Everything else stays a hard blocking gate. Skip is by exact fn name (substring),
+        # so the server-free sibling test eight_soar_adapters_registered still runs here.
+        #
+        # `--test-threads=2`: this is the ONLY test run that exercises the DB-backed integration
+        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1). At full per-core parallelism those
+        # tests occasionally exhaust the shared connection pool and one acquire blocks forever —
+        # the intermittent multi-hour hang tracked in docs/TECH_DEBT_flaky_db_test_hang.md. Bounding
+        # concurrency keeps concurrent DB work under the pool ceiling so acquires never deadlock.
+        # It is the documented remediation, not a mask: every test still runs and still blocks.
+        run: |
+          cargo test --workspace --all-targets -- \
+            --test-threads=2 \
+            --skip isolate_dry_run_verify_and_revert_chain \
+            --skip weissman_app_cannot_read_other_tenant_clients
+
+      - name: Free runner disk before Docker image build
+        # By this point the job has a full debug target/, node_modules, and a built
+        # frontend on the stock runner; building three production Docker images on top
+        # risks exhausting the root filesystem. Reclaim the unused language toolchains
+        # first (same remedy the rust-audit + rust-coverage jobs use).
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
+      - name: Build Docker production images
+        # `docker compose build` interpolates the ENTIRE compose file at load time, so the
+        # two runtime-only required secrets — ${WEISSMAN_JWT_SECRET:?} and
+        # ${WEISSMAN_ADMIN_PASSWORD:?} in docker-compose.yml — must be present even though a
+        # build never consumes them. Supply CI-throwaway values purely to satisfy parse-time
+        # interpolation; the :? runtime hardening in the compose file is left intact.
+        env:
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
+          WEISSMAN_ADMIN_PASSWORD: changeme
+        # Override the release profile for THIS CI validation build only: the committed
+        # profile.release (lto=fat, codegen-units=1) makes the in-Docker release build of three
+        # binaries over the 350k-LOC workspace OOM-kill the runner (exit 143 mid-link). Disable
+        # LTO + parallelize codegen so it fits in the runner's memory; the published image (via
+        # the publish job, which passes no build-args) keeps the full fat-LTO profile. The image
+        # here only needs to build + be Trivy-scanned; it never runs the live stack.
+        run: |
+          docker compose build \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=false \
+            --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+            backend worker gateway
+
+      - name: Scan built backend image (Trivy, CRITICAL+HIGH)
+        # The fs scan in the security-scan job covers source/deps; this scans the
+        # actual runtime image (base OS packages baked into weissman-backend:stable).
+        # ignore-unfixed keeps it actionable — only CRITICAL/HIGH with an available fix
+        # fail the build (then bump the base image; Dependabot 'docker' helps here).
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: weissman-backend:stable
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore
+
+      - name: Validate docker-compose.test.yml
+        run: docker compose -f docker-compose.test.yml config > /dev/null
+
+      - name: Start weissman-server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
+          WEISSMAN_METRICS_TOKEN: ci-metrics-token-32-bytes-minimum
+          WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
+          WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
+          WEISSMAN_ENV: production
+          WEISSMAN_COOKIE_SECURE: "1"
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: changeme
+          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
+          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
+          # each polled up to 180s). The default access-token TTL is 15 min, so the token
+          # expires mid-run and later scan submits/polls 401. Give the CI token room to
+          # outlive the whole smoke sweep.
+          WEISSMAN_ACCESS_TOKEN_MINUTES: "120"
+          # Disable the periodic bulk-scan orchestrator for CI. It dispatches a HEAVY
+          # `tenant_full_scan` per active tenant every 60s (60-min job timeout). Those jobs
+          # share the worker's 2-slot heavy semaphore with the smoke's on-demand
+          # `command_center_engine` scans, and the worker's claim loop reserves a job and then
+          # BLOCKS acquiring its heavy permit before it can claim the next. So once two
+          # long-running tenant scans hold both heavy permits, the claim loop freezes on the
+          # permit and the smoke's on-demand scans are never claimed (attempt_count stays 0 →
+          # each group 180s-poll-times-out). Every live-scan E2E step below triggers its OWN
+          # on-demand scan (POST /api/command-center/scan), so none of them need the periodic
+          # dispatcher — turning it off keeps the heavy lane free for the scans we verify.
+          # (The bulk-vs-interactive head-of-line starvation is a real product concern tracked
+          # separately from this CI-scoping change.)
+          WEISSMAN_SCANNING_ENABLED: "0"
+          # Server + worker share ONE Postgres (max_connections=100). Each process opens THREE
+          # pools (app + auth + intel), so capping only the app pool leaves auth(12)+intel(12)
+          # each uncounted. Cap all three to the sizes the repo's own E2E harness uses
+          # (scripts/run_e2e_stack.sh) so the combined footprint stays far under the ceiling
+          # (server 24+6+4 + worker 16+4+4 = 58 << 100) with no acquire-timeout pressure.
+          WEISSMAN_APP_POOL_MAX: "24"
+          WEISSMAN_AUTH_POOL_MAX: "6"
+          WEISSMAN_INTEL_POOL_MAX: "4"
+          PORT: "18000"
+        run: ./target/debug/weissman-server > /tmp/weissman-server.log 2>&1 &
+
+      - name: Start weissman-worker
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          REDIS_URL: redis://127.0.0.1:6379/0
+          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
+          WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
+          WEISSMAN_ENV: production
+          # Cap the worker's auth+intel pools, but give the APP pool real headroom: each
+          # in-flight scan AND its completion write both need a connection. A prior iteration
+          # shrank this to 16 while raising heavy concurrency to 4 — with the connection-hungry
+          # superposition-collapse follow-up that every smoke scan spawns, 4 concurrent heavy
+          # jobs drained the 16-connection pool and the FINISHED jobs' completion DB-writes
+          # failed with "database: pool timed out", so they never reached 'completed' and the
+          # smoke polled them to the 180s timeout. app=30 + server(24+6+4) = 72 << max_conn=100.
+          WEISSMAN_APP_POOL_MAX: "30"
+          WEISSMAN_AUTH_POOL_MAX: "4"
+          WEISSMAN_INTEL_POOL_MAX: "4"
+          # Keep the app pool WARM. Telemetry from a prior run showed worker app-pool occupancy is
+          # ~0 the whole audit (in-use never above 1 of 30 — so this is NOT connection exhaustion),
+          # yet a scan's persist begin_tenant_tx intermittently fails with "pool timed out" while the
+          # pool size had decayed toward 0. That is a cold-start/establishment stall, not saturation:
+          # opening a fresh connection when the next scan arrives is what times out. Holding 8
+          # connections warm means a scan acquires a ready connection instead of opening one on the
+          # hot path. This is warming, not a capacity change — max stays 30 (8 + server 24+6+4 << 100).
+          WEISSMAN_APP_POOL_MIN: "8"
+          # Fine-grained pool telemetry + active SELECT-1 health-probe (main.rs) to capture the exact
+          # stall window and correlate it with the running engine; also keeps a connection hot.
+          WEISSMAN_WORKER_POOL_METRICS_SECS: "2"
+          # Tighten the per-finding background-DB fan-out cap (default 6) further for CI's single
+          # small Postgres: findings_persist fires best-effort side-effect tasks (pentest-memory +
+          # SOAR dispatch) per finding, and a high-finding scan's fan-out otherwise pressures the
+          # app pool enough that a couple of engines' scans transiently fail to acquire a connection
+          # and retry past the poll window. 3 keeps that background work bounded well clear of the
+          # pool used by live scan execution.
+          WEISSMAN_POST_PERSIST_DB_CONCURRENCY: "3"
+          # Serialize heavy scan execution (heavy=1). The smoke submits one command_center scan
+          # per group and waits for it, so at heavy=2 the only reason two scans overlap is timing
+          # jitter between a finishing scan and the next submit — and that overlap is exactly what
+          # exhausts CI's single small Postgres pool and made one high-DB engine
+          # (bgp_dns_hijacking) retry past the poll window while the other 13 passed. With heavy=1
+          # each scan runs alone against the full app pool, so there is no cross-scan contention.
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
+          # With heavy=1, a background auto-superposition-collapse follow-up (also a heavy job)
+          # could hold the single permit and head-of-line-block the next smoke scan. It is a
+          # best-effort cross-finding fusion that NONE of the live-scan contracts assert on
+          # (step 41 checks per-finding risk fields written during findings_persist, not the
+          # collapse output), so disable it for CI to keep the single heavy lane free for the
+          # scans under test.
+          #
+          # CI-ONLY — DO NOT REPLICATE TO PRODUCTION. This =0 is a CI-scoped opt-OUT. Superposition
+          # collapse is the client-facing dedup/intelligence engine; auto_superposition_enabled()
+          # (fingerprint_engine/src/superposition_followup.rs) DEFAULTS TO ENABLED when the var is
+          # unset, so production must leave it unset. Setting it to 0/false/no in any production
+          # config (docker-compose*.yml, PRODUCTION.env.template, deploy/k8s, deploy/systemd,
+          # *.Dockerfile, start_*.sh) would silently disable dedup and cause client alert fatigue.
+          WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "0"
+        run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
+
+      - name: Wait for API health
+        env:
+          PORT: "18000"
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf "http://127.0.0.1:${PORT}/api/health" > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "weissman-server did not become healthy"
+          cat /tmp/weissman-server.log || true
+          exit 1
+
+      - name: DAST — OWASP ZAP baseline against the live stack (informational)
+        # We sell DAST, so we run it against our own live stack every CI build. Non-blocking
+        # for now (-I + fail_action:false); promote to blocking with a tuned .zap/rules.tsv
+        # once the baseline is clean. ZAP runs inside a container, so 127.0.0.1 would be the
+        # container itself — target the runner's docker-bridge gateway to reach the host.
+        #
+        # continue-on-error: the scan itself is already non-blocking (fail_action:false), but
+        # action-baseline@v0.12.0 bundles the deprecated v1 artifact uploader, which the
+        # current GitHub artifact backend rejects with HTTP 400 ("artifact name ... is not
+        # valid") AFTER a clean scan (FAIL-NEW: 0). That action-internal upload error is not a
+        # security finding and must not gate the PR (nor skip the live E2E contracts below);
+        # this keeps the informational DAST truly non-blocking. TODO: bump action-baseline to a
+        # release using upload-artifact@v4 to make the step green rather than tolerated-red.
+        continue-on-error: true
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: http://172.17.0.1:18000/api/health
+          cmd_options: '-I -a'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-baseline-report
+
+      - name: Live RLS cross-tenant isolation contract
+        env:
+          # Superuser connection; the test does SET ROLE weissman_app to exercise
+          # real row-level security (the role + migrations were created by the
+          # weissman-server boot above).
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+        run: cargo test -p weissman-db --test rls_cross_tenant -- --nocapture
+
+      - name: Smoke one engine per group
+        env:
+          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
+          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_TENANT_SLUG: default
+          # Real multi-engine scans against the CI single-Postgres stack can need a couple of retry
+          # attempts under transient connection pressure; give the poller headroom beyond one 180s
+          # attempt so a scan that succeeds on retry still reports before the client gives up.
+          WEISSMAN_SMOKE_POLL_TIMEOUT_MS: "240000"
+        run: node scripts/smoke_engine_groups.mjs
+
+      - name: Audit UI scan button paths
+        env:
+          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
+          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_TENANT_SLUG: default
+          WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS: "180000"
+        run: node scripts/audit_ui_button_scan_paths.mjs
+
+      - name: Live scan pipeline E2E contract
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_E2E_POLL_MS: "2000"
+          WEISSMAN_E2E_POLL_MAX: "90"
+        run: node scripts/verify_scan_pipeline_e2e.mjs
+
+      - name: Playwright live journey (login → scan → findings → PDF)
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+        run: |
+          cd frontend
+          npx playwright install chromium
+          npm run test:e2e:live -- live-journey live-ui-crawl
+
+      - name: Dump Playwright live error-context on failure
+        if: failure()
+        # Surfaces the page's accessibility snapshot (what actually rendered at the failing
+        # assertion) into the CI log so a live-journey failure is diagnosable without downloading
+        # artifacts. Also tails any live-server log for correlation. Best-effort; never fails the job.
+        run: |
+          echo "=== Playwright live error-context snapshots ==="
+          find frontend/test-results -name 'error-context.md' 2>/dev/null | while read -r f; do
+            echo "----- $f -----"; sed -n '1,120p' "$f" 2>/dev/null || true; echo
+          done
+          echo "=== Playwright result dirs ==="
+          find frontend/test-results -maxdepth 2 -type d 2>/dev/null | head -40 || true
+
+      # True-Live counterpart of the mock feature-verify.spec.ts: drives the
+      # Findings-console features added this cycle (multi-select bulk status,
+      # saved views, URL-shareable severity filter, row density) and the ⌘K
+      # command palette against the REAL backend built above (WEISSMAN_ENV=
+      # production), and verifies the bulk-status PATCH actually persisted in
+      # Postgres via an API round-trip. Reuses the already-running server + the
+      # findings the scan steps above wrote to the live DB.
+      - name: Playwright True-Live feature specs (bulk · views · URL filter · density)
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+        run: |
+          cd frontend
+          npm run test:e2e:live -- live-feature
+
+      - name: Generate audit evidence pack
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_EVIDENCE_OUT: ${{ github.workspace }}/evidence-pack/ci
+        run: |
+          chmod +x scripts/generate_audit_evidence_pack.sh
+          ./scripts/generate_audit_evidence_pack.sh
+
+      - name: Upload audit evidence pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-evidence-pack
+          path: evidence-pack/ci/
+          if-no-files-found: error
+
+      # This job is Rust+Node; it never set up Python, so the pytest contract below
+      # (python -m pytest, importing httpx) failed to even start once the earlier live
+      # steps finally went green and it ran for the first time. Provide the same clean,
+      # pip-installable interpreter the Python job uses, then its two imports.
+      - name: Set up Python for the live pytest contract
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install live pytest contract deps (pytest + httpx)
+        run: python -m pip install --quiet --disable-pip-version-check pytest httpx
+
+      - name: Live scan pipeline pytest contract
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_E2E_POLL_MS: "2000"
+          WEISSMAN_E2E_POLL_MAX: "90"
+        run: python -m pytest tests/e2e/test_scan_pipeline_live.py -v --tb=short
+
+      - name: Engine groups findings + risk E2E
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
+          WEISSMAN_FINDINGS_E2E_POLL_MAX: "72"
+        run: node scripts/verify_engine_groups_findings_e2e.mjs
+
+      - name: SOAR playbook E2E contract
+        env:
+          WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
+          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
+          WEISSMAN_DUAL_APPROVAL_SECRET: ci-dual-approval-secret-32-bytes-minimum-v1
+        run: node scripts/verify_soar_playbook_e2e.mjs
+
+      - name: FP/TP confidence feedback E2E
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+        run: node scripts/verify_fp_tp_confidence_e2e.mjs
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: |
+          echo '--- weissman-server.log ---'
+          cat /tmp/weissman-server.log || true
+          echo '--- weissman-worker.log ---'
+          cat /tmp/weissman-worker.log || true
+
   semgrep:
     name: Semgrep SAST (critical blocking)
     runs-on: ubuntu-latest
@@ -328,7 +859,7 @@ jobs:
     name: Publish signed image (tags only)
     runs-on: ubuntu-latest
     # Only build+publish after the quality gates pass, and only for release tags.
-    needs: [rust-audit, security-scan, frontend-build, semgrep]
+    needs: [rust-audit, security-scan, frontend-build, engine-wiring-and-smoke, semgrep]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read

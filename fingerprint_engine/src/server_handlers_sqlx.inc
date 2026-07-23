@@ -922,13 +922,22 @@ async fn api_findings(
         if kev_ransom {
             risk *= 1.15;
         }
-        // confidence multiplier (FP/TP) — prefer persisted column, else batch map.
+        // Confidence multiplier (FP/TP): the batch map is recomputed live from the CURRENT
+        // (engine, signature) FP/TP counts, so it reflects analyst feedback the instant it lands —
+        // marking a finding FALSE_POSITIVE must lower its confidence on the very next read, which
+        // is the entire point of the feedback loop. Prefer the batch value; the persisted column
+        // is only a scan-time snapshot that goes stale the moment feedback is recorded, so it
+        // serves purely as the fallback for rows the batch has no adjustment entry for.
         let stored_conf = r.try_get::<Option<f64>, _>("confidence_multiplier").ok().flatten();
         let conf_mult = match signature_hash.as_deref() {
-            Some(sig) if !sig.is_empty() => stored_conf.unwrap_or_else(|| {
+            Some(sig) if !sig.is_empty() => {
                 let eng = r.try_get::<String, _>("source").unwrap_or_default();
-                *conf_map.get(&(eng, sig.to_string())).unwrap_or(&1.0)
-            }),
+                conf_map
+                    .get(&(eng, sig.to_string()))
+                    .copied()
+                    .or(stored_conf)
+                    .unwrap_or(1.0)
+            }
             _ => stored_conf.unwrap_or(1.0),
         };
         let stored_effective = r.try_get::<Option<f64>, _>("effective_risk").ok().flatten();

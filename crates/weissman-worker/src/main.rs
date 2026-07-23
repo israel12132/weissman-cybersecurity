@@ -81,8 +81,12 @@ fn worker_concurrency_cap(key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
+// Distinct pools/handles the executor legitimately needs; splitting into a struct would only
+// shuffle the same fields. app_pool = engine execution, ctrl_pool = job-state control plane.
+#[allow(clippy::too_many_arguments)]
 async fn process_one(
     app_pool: Arc<PgPool>,
+    ctrl_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
     channels: AsyncJobChannels,
@@ -91,7 +95,10 @@ async fn process_one(
     wid: String,
     job: AsyncJob,
 ) {
-    let pool = app_pool.as_ref();
+    // Job-state writes (fail/complete/dead-letter/forensic) go through the control-plane pool so a
+    // running scan holding every `app_pool` slot can never starve them. Engine execution below
+    // still uses `app_pool`.
+    let pool = ctrl_pool.as_ref();
     let bus_on = bus.is_enabled();
     info!(
         target: "weissman_worker",
@@ -174,7 +181,7 @@ async fn process_one(
     let lease_job_id = job.id;
     let lease_tid = job.tenant_id;
     let lease_arc = lease.clone();
-    let hb_pool = app_pool.clone();
+    let hb_pool = ctrl_pool.clone();
     let lease_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
         while !lease_stop_bg.load(Ordering::SeqCst) {
@@ -337,8 +344,30 @@ async fn process_one(
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    // Scanning engines recurse over untrusted, arbitrarily-nested network data — HTML trees,
+    // JSON / SBOM dependency graphs, redirect chains, protocol frames. Tokio's default 2 MiB
+    // worker-thread stack can overflow on legitimately-deep (but finite) input and, because a
+    // stack overflow ABORTS the whole process, that kills the entire worker and every in-flight
+    // job (observed in the engine-wiring audit: one scan aborted the worker, all later scans
+    // then failed unclaimed). Give the runtime threads a generous, env-tunable stack so
+    // deep-but-finite recursion completes. A genuinely UNBOUNDED recursion would still overflow
+    // here — the `run_engine` begin-log (see engine_dispatch) then names the last engine before
+    // the abort in the worker log, so the specific engine can be given a depth guard.
+    let stack_mb = std::env::var("WEISSMAN_WORKER_THREAD_STACK_MB")
+        .ok()
+        .and_then(|s| s.trim().parse::<usize>().ok())
+        .filter(|&n| n >= 2)
+        .unwrap_or(64);
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(stack_mb * 1024 * 1024)
+        .build()
+        .expect("build weissman-worker tokio runtime")
+        .block_on(async_main());
+}
+
+async fn async_main() {
     weissman_db::env_bootstrap::load_process_environment();
     fingerprint_engine::observability::init_tracing_from_env();
     fingerprint_engine::observability::init_prometheus_recorder();
@@ -405,6 +434,22 @@ async fn main() {
         }
     };
 
+    // Dedicated control-plane pool: claim/reserve, heartbeat and job-state completion writes go
+    // here, isolated from the `app_pool` that a running engine scan can hold in full. Without this,
+    // a connection-hungry scan checks out every app slot and the worker's own "mark this job
+    // completed" write times out ("database: pool timed out"), so finished jobs never reach a
+    // terminal state and pollers see them hang. A tiny separate pool keeps the control plane alive.
+    let ctrl_pool = match weissman_db::connect_control(database_url.trim()).await {
+        Ok(p) => Arc::new(p),
+        Err(e) => {
+            eprintln!(
+                "weissman-worker: control-plane database connect failed: {}",
+                e
+            );
+            std::process::exit(1);
+        }
+    };
+
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);
     let light_sem = Arc::new(tokio::sync::Semaphore::new(light_n));
@@ -412,7 +457,7 @@ async fn main() {
 
     let channels = AsyncJobChannels::from_env();
     let wid = worker_id();
-    let bus = Arc::new(JobBus::from_env((*app_pool).clone()).await);
+    let bus = Arc::new(JobBus::from_env((*ctrl_pool).clone()).await);
 
     let swarm: Option<Arc<WorkerSwarm>> = if bus.is_enabled() {
         let redis = bus.redis().cloned().expect("bus enabled implies redis");
@@ -458,7 +503,7 @@ async fn main() {
     });
 
     // Reclaim jobs left `running` after worker crash / network partition (self-healing queue).
-    let reclaim_pool = app_pool.clone();
+    let reclaim_pool = ctrl_pool.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(120));
         loop {
@@ -479,11 +524,63 @@ async fn main() {
         }
     });
 
+    // App-pool saturation telemetry. Engine scans acquire `app_pool` connections for the duration of
+    // a run; if an engine holds them across long network I/O or leaks them, later scans time out
+    // acquiring one ("pool timed out while waiting for an open connection"). Log pool occupancy every
+    // few seconds so a saturating engine is pinpointed by correlating occupancy with the adjacent
+    // `engine_exec` "run_engine begin engine=" breadcrumb. Tunable via
+    // `WEISSMAN_WORKER_POOL_METRICS_SECS` (default 5; 0 disables).
+    let pool_metrics_secs = std::env::var("WEISSMAN_WORKER_POOL_METRICS_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(5);
+    if pool_metrics_secs > 0 {
+        let m_app = app_pool.clone();
+        let m_ctrl = ctrl_pool.clone();
+        let m_intel = intel_pool.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(pool_metrics_secs));
+            interval.tick().await; // consume the immediate first tick
+            loop {
+                interval.tick().await;
+                let app_size = m_app.size();
+                let app_idle = m_app.num_idle();
+                // Active health-probe: time a trivial acquire+query on app_pool. When a scan's
+                // begin_tenant_tx fails with "pool timed out" even though occupancy is ~0, the cause
+                // is inability to acquire/OPEN a connection (runtime starvation or slow establishment),
+                // not connections held. This probe records how long an acquire+SELECT 1 actually takes
+                // and whether it fails within 8s, so the stall window is captured and correlated with
+                // the running engine. It also keeps one connection hot, reducing cold-start churn.
+                let probe_start = std::time::Instant::now();
+                let probe = tokio::time::timeout(
+                    Duration::from_secs(8),
+                    sqlx::query("SELECT 1").execute(m_app.as_ref()),
+                )
+                .await;
+                let probe_ms = probe_start.elapsed().as_millis() as u64;
+                let probe_ok = matches!(probe, Ok(Ok(_)));
+                info!(
+                    target: "pool_metrics",
+                    app_size,
+                    app_idle,
+                    app_in_use = app_size.saturating_sub(app_idle as u32),
+                    probe_ms,
+                    probe_ok,
+                    ctrl_size = m_ctrl.size(),
+                    ctrl_idle = m_ctrl.num_idle(),
+                    intel_size = m_intel.size(),
+                    intel_idle = m_intel.num_idle(),
+                    "worker pool occupancy"
+                );
+            }
+        });
+    }
+
     while !stop.load(Ordering::SeqCst) {
         let claim_result = if bus.is_enabled() {
-            job_queue::reserve_next(app_pool.as_ref(), &wid, LOCK_SECS).await
+            job_queue::reserve_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
         } else {
-            job_queue::claim_next(app_pool.as_ref(), &wid, LOCK_SECS).await
+            job_queue::claim_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
         };
 
         match claim_result {
@@ -513,7 +610,7 @@ async fn main() {
                             _ = hb.tick() => {
                                 if !bus.is_enabled() {
                                     if let Err(e) = job_queue::heartbeat(
-                                        app_pool.as_ref(), job.id, LOCK_SECS,
+                                        ctrl_pool.as_ref(), job.id, LOCK_SECS,
                                     ).await {
                                         warn!(
                                             target: "weissman_worker",
@@ -531,6 +628,7 @@ async fn main() {
                     Err(_) => continue,
                 };
                 let app_pool = app_pool.clone();
+                let ctrl_pool = ctrl_pool.clone();
                 let intel_pool = intel_pool.clone();
                 let auth_pool = auth_pool.clone();
                 let channels = channels.clone();
@@ -540,7 +638,7 @@ async fn main() {
                 tokio::spawn(async move {
                     let _permit = permit;
                     process_one(
-                        app_pool, intel_pool, auth_pool, channels, bus, swarm, wid, job,
+                        app_pool, ctrl_pool, intel_pool, auth_pool, channels, bus, swarm, wid, job,
                     )
                     .await;
                 });

@@ -16,6 +16,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import {
   apiLogin,
+  apiRequestWithRetry,
   authHeaders,
   ensureE2eClient,
   ensureUiSession,
@@ -43,8 +44,10 @@ type LiveFinding = { id: number; status: string; severity: string; title: string
 let cachedAuth: LiveAuth | null = null
 let cachedFindings: LiveFinding[] | null = null
 
-async function fetchFindings(request: APIRequestContext, auth: LiveAuth): Promise<LiveFinding[]> {
-  const r = await request.get(`${LIVE_BASE}/api/findings?limit=50`, { headers: authHeaders(auth) })
+async function fetchFindings(request: APIRequestContext, auth: LiveAuth, limit = 50): Promise<LiveFinding[]> {
+  const r = await apiRequestWithRetry(() =>
+    request.get(`${LIVE_BASE}/api/findings?limit=${limit}`, { headers: authHeaders(auth) }),
+  )
   if (!r.ok()) return []
   const payload = await r.json()
   const list = Array.isArray(payload) ? payload : Array.isArray(payload?.findings) ? payload.findings : []
@@ -74,10 +77,12 @@ async function ensureLiveFindings(request: APIRequestContext): Promise<{ auth: L
   let findings = await fetchFindings(request, auth)
   if (findings.length === 0) {
     const clientId = await ensureE2eClient(request, auth)
-    const scan = await request.post(`${LIVE_BASE}/api/command-center/scan`, {
-      headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
-      data: { engine: 'osint', client_id: clientId, target: 'https://example.com', depth: '1' },
-    })
+    const scan = await apiRequestWithRetry(() =>
+      request.post(`${LIVE_BASE}/api/command-center/scan`, {
+        headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
+        data: { engine: 'osint', client_id: clientId, target: 'https://example.com', depth: '1' },
+      }),
+    )
     if (scan.status() === 202) {
       const jobId = String((await scan.json()).job_id || '')
       if (jobId) {
@@ -157,18 +162,23 @@ test('bulk status update persists to Postgres (real DB round-trip)', async ({ pa
   const table = page.locator('#findings-command-table')
   await expect(table).toBeVisible({ timeout: 30_000 })
 
-  // The table applies its own client-side sort (default: severity), which is NOT
-  // the findings API order (kev, epss, discovered_at) — so the first table row is
-  // NOT necessarily findings[0]. Read the finding id the first row actually
-  // represents (each row carries data-row-id = the raw finding id) so the record
-  // we assert on is exactly the one the bulk action targets, regardless of order.
+  // The table sorts CLIENT-SIDE (default: by severity), so the first visible row is
+  // NOT necessarily the first API row. Read the domain id straight off the row we are
+  // about to mutate (`data-row-id` = raw_id) and verify THAT finding — never an
+  // assumed-parallel API ordering.
   const firstRow = table.locator('tbody tr[data-row-id]').first()
-  const firstRowId = await firstRow.getAttribute('data-row-id')
-  const target = findings.find((f) => String(f.id) === firstRowId) ?? findings[0]
-  const newStatus = target.status === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
+  await expect(firstRow).toBeVisible({ timeout: 30_000 })
+  const targetId = Number(await firstRow.getAttribute('data-row-id'))
+  expect(Number.isFinite(targetId), 'first row must expose a numeric data-row-id').toBe(true)
+
+  // Current status of THAT finding (wide fetch so a high-severity row sorted to the
+  // top is still covered regardless of its position in API order).
+  const before = await fetchFindings(request, auth, 2000)
+  const current = (before.find((f) => f.id === targetId)?.status || 'OPEN').toUpperCase()
+  const newStatus = current === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
   expect(VALID_STATUSES).toContain(newStatus)
 
-  // Select that same first row and drive the bulk-status bar.
+  // Select that exact row and drive the bulk-status bar.
   await firstRow.locator('input[type="checkbox"]').first().check()
   await expect(page.getByText(/1 selected/i)).toBeVisible()
 
@@ -185,20 +195,20 @@ test('bulk status update persists to Postgres (real DB round-trip)', async ({ pa
   // THE PROOF: re-read the finding straight from the backend and confirm the
   // new status was written to Postgres (not just reflected in local UI state).
   let persisted = ''
-  for (let i = 0; i < 8; i += 1) {
-    const fresh = await fetchFindings(request, auth)
-    const row = fresh.find((f) => f.id === target.id)
+  for (let i = 0; i < 10; i += 1) {
+    const fresh = await fetchFindings(request, auth, 2000)
+    const row = fresh.find((f) => f.id === targetId)
     if (row) persisted = row.status
     if (persisted === newStatus) break
     await new Promise((res) => setTimeout(res, 1000))
   }
-  expect(persisted, `finding ${target.id} status must be ${newStatus} in the live DB`).toBe(newStatus)
+  expect(persisted, `finding ${targetId} status must be ${newStatus} in the live DB`).toBe(newStatus)
 
   // Restore the original status so reruns stay deterministic.
   await request
-    .patch(`${LIVE_BASE}/api/findings/${target.id}/status`, {
+    .patch(`${LIVE_BASE}/api/findings/${targetId}/status`, {
       headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
-      data: { status: target.status },
+      data: { status: current },
     })
     .catch(() => {})
 })
@@ -237,6 +247,10 @@ test('severity filter round-trips through the URL against live data', async ({ p
   } else {
     await expect(table).toBeVisible({ timeout: 30_000 })
     const severityCells = table.locator('tbody tr td:nth-child(2)')
+    // The findings fetch (limit=2000) resolves AFTER the table shell mounts, and `.count()`
+    // does not auto-wait — so wait for the first filtered row to actually render before
+    // asserting, or a fast runner reads 0 rows against a still-loading table.
+    await expect(severityCells.first()).toBeVisible({ timeout: 30_000 })
     const n = await severityCells.count()
     expect(n).toBeGreaterThan(0)
     // Every rendered row must be critical — the URL param really drove the filter.

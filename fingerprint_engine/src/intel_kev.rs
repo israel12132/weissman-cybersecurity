@@ -202,6 +202,62 @@ pub async fn is_kev_listed(pool: &PgPool, cve: &str) -> Option<KevEntry> {
     })
 }
 
+/// Batch variant of [`is_kev_listed`]: resolve many CVEs against the local mirror in a **single**
+/// `WHERE cve = ANY($1)` query, keyed by normalized CVE. Callers on the hot persist path use this
+/// once per scan instead of one round-trip per finding, so a high-finding engine no longer fans out
+/// N separate connection checkouts into the pool. CVEs absent from the mirror are simply absent from
+/// the returned map.
+pub async fn kev_listed_for_cves(
+    pool: &PgPool,
+    cves: &[String],
+) -> std::collections::HashMap<String, KevEntry> {
+    use sqlx::Row;
+    let mut normalized: Vec<String> = cves
+        .iter()
+        .map(|c| normalize_cve(c))
+        .filter(|c| c.starts_with("CVE-"))
+        .collect();
+    normalized.sort();
+    normalized.dedup();
+    let mut out: std::collections::HashMap<String, KevEntry> = std::collections::HashMap::new();
+    if normalized.is_empty() {
+        return out;
+    }
+    let rows = sqlx::query(
+        r#"SELECT cve, vendor_project, product, vulnerability_name, date_added,
+                  short_description, required_action, due_date,
+                  known_ransomware_use, notes
+             FROM kev_intel
+            WHERE cve = ANY($1)"#,
+    )
+    .bind(&normalized)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    for row in rows {
+        let cve: String = row.try_get("cve").unwrap_or_default();
+        if cve.is_empty() {
+            continue;
+        }
+        out.insert(
+            cve.clone(),
+            KevEntry {
+                cve,
+                vendor_project: row.try_get("vendor_project").unwrap_or_default(),
+                product: row.try_get("product").unwrap_or_default(),
+                vulnerability_name: row.try_get("vulnerability_name").unwrap_or_default(),
+                date_added: row.try_get("date_added").ok(),
+                short_description: row.try_get("short_description").unwrap_or_default(),
+                required_action: row.try_get("required_action").unwrap_or_default(),
+                due_date: row.try_get("due_date").ok(),
+                known_ransomware_use: row.try_get("known_ransomware_use").unwrap_or(false),
+                notes: row.try_get("notes").unwrap_or_default(),
+            },
+        );
+    }
+    out
+}
+
 /// One immediate KEV catalog refresh at boot (before the periodic loop).
 /// Ensures `kev_listed` is populated on first login without waiting 6h.
 pub fn bootstrap_kev_catalog(pool: Arc<PgPool>) {

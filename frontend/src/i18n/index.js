@@ -36,6 +36,12 @@ i18n
       lookupLocalStorage: 'weissman_lang',
     },
     returnNull: false,
+    // Do NOT suspend rendering while a translation namespace loads. Locales are loaded as
+    // micro-chunks (localeLoader.js) and normally hydrated before mount, but if that chunk is
+    // slow or fails (e.g. a live host that mis-serves the asset), Suspense would strand every
+    // `t()` consumer — including the login form — on the fallback forever. With suspense off a
+    // missing key renders as its fallback/key and is replaced in place once the bundle arrives.
+    react: { useSuspense: false },
   })
 
 i18n.on('languageChanged', (lng) => {

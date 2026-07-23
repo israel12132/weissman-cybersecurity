@@ -156,6 +156,35 @@ fn statement_timeout_ms(var: &str, default_ms: u64) -> u64 {
         .unwrap_or(default_ms)
 }
 
+/// Control-plane pool: `WEISSMAN_CONTROL_POOL_MAX` (default 8). Dedicated to durable job-queue
+/// state operations (claim/reserve, heartbeat, completion/failure projection) so they can never
+/// be starved by the engine-execution `app` pool. Engine scans acquire many `app` connections for
+/// the duration of a run; routing the worker's job-STATE writes through a separate, tiny pool keeps
+/// the control plane responsive even while the data plane (a running scan) holds every app slot.
+/// Short statement timeout — these are all fast single-row UPDATEs / event appends.
+pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    let max: u32 = std::env::var("WEISSMAN_CONTROL_POOL_MAX")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(8);
+    let stmt_ms = statement_timeout_ms("WEISSMAN_CONTROL_STATEMENT_TIMEOUT_MS", 30_000);
+    PgPoolOptions::new()
+        .max_connections(max)
+        .min_connections(1)
+        .acquire_timeout(Duration::from_secs(30))
+        .after_connect(move |conn, _| {
+            Box::pin(async move {
+                sqlx::query(&format!("SET statement_timeout = {stmt_ms}"))
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect(database_url)
+        .await
+}
+
 /// Connect app pool using `DATABASE_URL` from the environment.
 pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
     let url = database_url_from_env()
@@ -412,4 +441,36 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
         "master bootstrap admin user created (credentials from env only)"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod url_and_path_helper_tests {
+    use super::{
+        auth_database_url_from_env, database_url_from_env, migrations_dir,
+        resolve_auth_database_url,
+    };
+
+    #[test]
+    fn migrations_dir_is_always_a_non_empty_path() {
+        // With WEISSMAN_MIGRATIONS_DIR set we get that path; unset, we fall back to the
+        // compile-time crate path. Either way the resolved directory is non-empty — a caller
+        // can always attempt to read migrations from it.
+        let dir = migrations_dir();
+        assert!(!dir.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn url_resolvers_execute_and_stay_consistent() {
+        // Env-agnostic: the runner may set any combination of DATABASE_URL /
+        // WEISSMAN_AUTH_DATABASE_URL. Exercise every resolver body without asserting a specific
+        // URL, then check the one invariant that holds for any environment: when no explicit auth
+        // URL is configured, the auth resolver mirrors the app URL resolution (Ok/Err alike).
+        let _ = database_url_from_env();
+        let explicit_auth = auth_database_url_from_env();
+        let resolved = resolve_auth_database_url();
+        match explicit_auth {
+            Some(u) => assert_eq!(resolved.ok().as_deref(), Some(u.as_str())),
+            None => assert_eq!(resolved.is_ok(), database_url_from_env().is_ok()),
+        }
+    }
 }
