@@ -53,22 +53,22 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
+        uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -221,7 +221,7 @@ jobs:
         # baseline or a container/report hiccup, which would otherwise skip every live
         # contract below it (exactly what happened before this guard).
         continue-on-error: true
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: http://172.17.0.1:18000/api/health
           cmd_options: '-I -a'
@@ -271,7 +271,7 @@ jobs:
       # time-boxed install step below bounds the cold path so a network stall fails fast
       # (in minutes) instead of hanging the job.
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/package-lock.json') }}
@@ -327,7 +327,7 @@ jobs:
           ./scripts/generate_audit_evidence_pack.sh
 
       - name: Upload audit evidence pack
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: audit-evidence-pack
           path: evidence-pack/ci/
@@ -338,7 +338,7 @@ jobs:
       # ModuleNotFoundError when this suite was split out of ci.yml. Mirror ci.yml's
       # engine-wiring setup (Set up Python + install pytest/httpx) so the step imports.
       - name: Set up Python for the live pytest contract
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6.3.0
         with:
           python-version: "3.12"
       - name: Install live pytest contract deps (pytest + httpx)
