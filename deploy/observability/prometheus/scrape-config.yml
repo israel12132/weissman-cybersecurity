@@ -1,0 +1,33 @@
+# Weissman Command Center — Prometheus scrape config snippet.
+#
+# Merge into your prometheus.yml. The /api/metrics endpoint is token-guarded
+# (see fingerprint_engine::observability::metrics_auth_ok); supply the token via
+# a bearer credential file so it never lands in the config.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/weissman-alerts.yml
+
+scrape_configs:
+  - job_name: weissman-server
+    metrics_path: /api/metrics
+    scheme: https
+    # The metrics endpoint requires an auth token. Point this at a file holding
+    # the value of WEISSMAN_METRICS_TOKEN (mounted as a secret, not committed).
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/weissman-metrics-token
+    static_configs:
+      - targets:
+          - weissman-server:8080
+        labels:
+          service: weissman-server
+    # In Kubernetes, prefer service discovery instead of static_configs, e.g.:
+    # kubernetes_sd_configs:
+    #   - role: pod
+    # relabel_configs:
+    #   - source_labels: [__meta_kubernetes_pod_label_app]
+    #     regex: weissman-server
+    #     action: keep
