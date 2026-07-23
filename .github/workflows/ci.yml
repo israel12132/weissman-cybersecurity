@@ -672,6 +672,17 @@ jobs:
           path: evidence-pack/ci/
           if-no-files-found: error
 
+      # This job is Rust+Node; it never set up Python, so the pytest contract below
+      # (python -m pytest, importing httpx) failed to even start once the earlier live
+      # steps finally went green and it ran for the first time. Provide the same clean,
+      # pip-installable interpreter the Python job uses, then its two imports.
+      - name: Set up Python for the live pytest contract
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install live pytest contract deps (pytest + httpx)
+        run: python -m pip install --quiet --disable-pip-version-check pytest httpx
+
       - name: Live scan pipeline pytest contract
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
