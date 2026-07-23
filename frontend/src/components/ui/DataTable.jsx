@@ -567,6 +567,11 @@ export default function DataTable({
                   </tr>
                 ) : null
 
+              // Stable domain id on every data row (defaults to raw_id ?? id). Lets
+              // live E2E identify exactly which record a row represents without
+              // depending on render order — the table sorts client-side (e.g. by
+              // severity), so "first row" is NOT "first API row".
+              const rowIdAttr = rowId != null ? { 'data-row-id': String(rowId) } : {}
               const mainRow = animateRows ? (
                 <motion.tr
                   key={row.id}
@@ -575,12 +580,13 @@ export default function DataTable({
                   transition={{ duration: 0.12, delay: Math.min(i * 0.012, 0.25) }}
                   className={rowClasses}
                   style={style}
+                  {...rowIdAttr}
                   {...interactiveProps}
                 >
                   {cells}
                 </motion.tr>
               ) : (
-                <tr key={row.id} className={rowClasses} style={style} {...interactiveProps}>
+                <tr key={row.id} className={rowClasses} style={style} {...rowIdAttr} {...interactiveProps}>
                   {cells}
                 </tr>
               )

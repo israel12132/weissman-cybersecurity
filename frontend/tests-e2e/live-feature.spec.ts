@@ -43,8 +43,8 @@ type LiveFinding = { id: number; status: string; severity: string; title: string
 let cachedAuth: LiveAuth | null = null
 let cachedFindings: LiveFinding[] | null = null
 
-async function fetchFindings(request: APIRequestContext, auth: LiveAuth): Promise<LiveFinding[]> {
-  const r = await request.get(`${LIVE_BASE}/api/findings?limit=50`, { headers: authHeaders(auth) })
+async function fetchFindings(request: APIRequestContext, auth: LiveAuth, limit = 50): Promise<LiveFinding[]> {
+  const r = await request.get(`${LIVE_BASE}/api/findings?limit=${limit}`, { headers: authHeaders(auth) })
   if (!r.ok()) return []
   const payload = await r.json()
   const list = Array.isArray(payload) ? payload : Array.isArray(payload?.findings) ? payload.findings : []
@@ -153,19 +153,28 @@ test('bulk status update persists to Postgres (real DB round-trip)', async ({ pa
   const { auth, findings } = await ensureLiveFindings(request)
   expect(findings.length).toBeGreaterThan(0)
 
-  // The findings API and the table share ORDER BY (kev, epss, discovered_at) and
-  // status does not participate in it — so the first table row is the first API
-  // row deterministically. Pick a NEW status distinct from its current one.
-  const target = findings[0]
-  const newStatus = target.status === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
-  expect(VALID_STATUSES).toContain(newStatus)
-
   await gotoFindings(page)
   const table = page.locator('#findings-command-table')
   await expect(table).toBeVisible({ timeout: 30_000 })
 
-  // Select the first row and drive the bulk-status bar.
-  await table.locator('tbody input[type="checkbox"]').first().check()
+  // The table sorts CLIENT-SIDE (default: by severity), so the first visible row is
+  // NOT necessarily the first API row. Read the domain id straight off the row we are
+  // about to mutate (`data-row-id` = raw_id) and verify THAT finding — never an
+  // assumed-parallel API ordering.
+  const firstRow = table.locator('tbody tr[data-row-id]').first()
+  await expect(firstRow).toBeVisible({ timeout: 30_000 })
+  const targetId = Number(await firstRow.getAttribute('data-row-id'))
+  expect(Number.isFinite(targetId), 'first row must expose a numeric data-row-id').toBe(true)
+
+  // Current status of THAT finding (wide fetch so a high-severity row sorted to the
+  // top is still covered regardless of its position in API order).
+  const before = await fetchFindings(request, auth, 2000)
+  const current = (before.find((f) => f.id === targetId)?.status || 'OPEN').toUpperCase()
+  const newStatus = current === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
+  expect(VALID_STATUSES).toContain(newStatus)
+
+  // Select that exact row and drive the bulk-status bar.
+  await firstRow.locator('input[type="checkbox"]').first().check()
   await expect(page.getByText(/1 selected/i)).toBeVisible()
 
   // The <select> options carry raw status values — language-independent.
@@ -181,20 +190,20 @@ test('bulk status update persists to Postgres (real DB round-trip)', async ({ pa
   // THE PROOF: re-read the finding straight from the backend and confirm the
   // new status was written to Postgres (not just reflected in local UI state).
   let persisted = ''
-  for (let i = 0; i < 8; i += 1) {
-    const fresh = await fetchFindings(request, auth)
-    const row = fresh.find((f) => f.id === target.id)
+  for (let i = 0; i < 10; i += 1) {
+    const fresh = await fetchFindings(request, auth, 2000)
+    const row = fresh.find((f) => f.id === targetId)
     if (row) persisted = row.status
     if (persisted === newStatus) break
     await new Promise((res) => setTimeout(res, 1000))
   }
-  expect(persisted, `finding ${target.id} status must be ${newStatus} in the live DB`).toBe(newStatus)
+  expect(persisted, `finding ${targetId} status must be ${newStatus} in the live DB`).toBe(newStatus)
 
   // Restore the original status so reruns stay deterministic.
   await request
-    .patch(`${LIVE_BASE}/api/findings/${target.id}/status`, {
+    .patch(`${LIVE_BASE}/api/findings/${targetId}/status`, {
       headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
-      data: { status: target.status },
+      data: { status: current },
     })
     .catch(() => {})
 })
