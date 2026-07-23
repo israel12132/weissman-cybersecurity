@@ -74,12 +74,6 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     // explicitly and run every statement on it.
     let mut conn = pool.acquire().await.expect("acquire dedicated connection");
 
-    // Pin ONE connection for the entire contract. Every role/GUC/probe statement below runs
-    // on `conn`, so `SET LOCAL ROLE` + the transaction-local GUC and the COUNT they gate all
-    // share the same session — a pooled connection could otherwise serve the SELECT as the
-    // superuser role and bypass RLS.
-    let mut conn = pool.acquire().await.expect("acquire dedicated connection");
-
     sqlx::query(
         r#"INSERT INTO tenants (slug, name) VALUES ($1, 'rls_contract_a'), ($2, 'rls_contract_b')
            ON CONFLICT (slug) DO NOTHING"#,
