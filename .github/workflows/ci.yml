@@ -155,12 +155,16 @@ jobs:
         run: cargo build --workspace
 
       - name: Run Rust tests (blocking gate)
-        # Fail-fast: this DB-backed `cargo test --workspace --all-targets` normally runs ~5-7 min.
+        # Fail-fast: this `cargo test --workspace --all-targets` normally runs ~5-7 min.
         # A hung test (parallel-test deadlock / connection-pool leak) must not ride GitHub's 360-min
         # default timeout and silently burn a runner — 15 min is >2x the legitimate upper bound yet
         # kills a hang decisively. See docs/TECH_DEBT_flaky_db_test_hang.md.
         timeout-minutes: 15
-        run: cargo test --workspace --all-targets
+        # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
+        # test step also struck this one (observed live). Bounding test concurrency keeps parallel
+        # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
+        # not a mask (every test still runs and still blocks). Runs well under the 15-min guard.
+        run: cargo test --workspace --all-targets -- --test-threads=2
 
   security-scan:
     name: Security — secrets & dependency scan
