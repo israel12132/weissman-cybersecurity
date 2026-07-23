@@ -26,10 +26,10 @@ import {
   originKeyOf,
   validateAtBoundary,
   CircuitOpenError,
-} from '../lib/resilience'
+} from '../lib/resilience.js'
 
 export { setRateLimitToastCallback }
-export { CircuitOpenError, BoundaryValidationError, v } from '../lib/resilience'
+export { CircuitOpenError, BoundaryValidationError, v } from '../lib/resilience.js'
 
 function parseRetryAfter(retryAfterHeader) {
   if (!retryAfterHeader) return 60
