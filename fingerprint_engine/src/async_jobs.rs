@@ -19,15 +19,18 @@ pub async fn enqueue(
     trace_id: Option<String>,
 ) -> Result<Uuid, sqlx::Error> {
     let bus = JobBus::from_env(pool.clone()).await;
-    let bus_on = bus.is_enabled();
+    let bus_enabled = bus.is_enabled();
 
-    // When the zero-trust bus is enabled, the row must NOT be claimable until its signed envelope
-    // has been attached below. If it were inserted as an immediately-runnable `pending` row, a
-    // worker polling in the window before the envelope UPDATE lands would claim a still-unsigned
-    // job, `on_worker_claimed` would reject it as "missing signed envelope", and it would be
-    // permanently dead-lettered. Insert it with a short claim-hold; the envelope UPDATE releases it.
-    let id = if bus_on {
-        weissman_db::job_queue::enqueue_hold(
+    // Zero-trust path: the worker rejects (permanently dead-letters) any job it
+    // claims without a valid signed envelope. The envelope can only be attached
+    // AFTER the row exists (on_job_dispatched appends an event keyed by job_id),
+    // so insert the job HELD (future run_after -> not claimable) and only make
+    // it claimable once the envelope is attached — otherwise a fast worker can
+    // claim the still-envelopeless `pending` row in the insert->UPDATE window
+    // and kill it ("missing signed envelope"). Non-bus path keeps the plain
+    // immediately-`pending` insert.
+    let id = if bus_enabled {
+        weissman_db::job_queue::enqueue_held(
             pool,
             tenant_id,
             kind,
@@ -41,7 +44,7 @@ pub async fn enqueue(
             .await?
     };
 
-    if bus_on {
+    if bus_enabled {
         match bus
             .on_job_dispatched(id, tenant_id, kind, &payload, trace_id.as_deref())
             .await
@@ -49,15 +52,10 @@ pub async fn enqueue(
             Ok(Some(envelope)) => {
                 let mut enriched = payload;
                 attach_signed_envelope(&mut enriched, envelope);
-                // Attach the envelope AND release the claim-hold (run_after = now()) atomically so
-                // the job only becomes claimable once it carries a valid signed envelope.
-                let _ = sqlx::query(
-                    "UPDATE weissman_async_jobs SET payload = $2, run_after = now() WHERE id = $1",
-                )
-                .bind(id)
-                .bind(sqlx::types::Json(enriched))
-                .execute(pool)
-                .await;
+                // Atomic: attach envelope AND release the hold (run_after=NULL)
+                // so the worker only ever sees this job claimable WITH its
+                // envelope present.
+                let _ = weissman_db::job_queue::release_hold(pool, id, enriched).await;
             }
             Ok(None) => {
                 if weissman_core::tls_policy::is_production_environment() {

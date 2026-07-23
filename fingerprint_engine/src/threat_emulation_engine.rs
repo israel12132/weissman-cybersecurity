@@ -197,3 +197,40 @@ pub async fn run_threat_emulation_result(target: &str) -> EngineResult {
 pub async fn run_threat_emulation(target: &str) {
     print_result(run_threat_emulation_result(target).await);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_target_preserves_scheme() {
+        assert_eq!(normalize_target("http://x"), "http://x");
+        assert_eq!(normalize_target("https://x"), "https://x");
+    }
+
+    #[test]
+    fn normalize_target_adds_https() {
+        assert_eq!(normalize_target("example.com"), "https://example.com");
+        assert_eq!(normalize_target("  example.com  "), "https://example.com");
+    }
+
+    #[test]
+    fn normalize_target_empty_yields_bare_scheme() {
+        // no empty-guard here: trimmed empty input still gets the scheme prefix
+        assert_eq!(normalize_target(""), "https://");
+        assert_eq!(normalize_target("   "), "https://");
+    }
+
+    #[test]
+    fn apt_scenarios_are_well_formed() {
+        assert_eq!(APT_SCENARIOS.len(), 7);
+        for s in APT_SCENARIOS {
+            assert!(!s.group.is_empty());
+            assert!(!s.technique.is_empty());
+            assert!(!s.mitre.is_empty());
+            assert!(!s.user_agent.is_empty());
+            assert!(!s.description.is_empty());
+            assert!(s.path.starts_with('/'), "path must be relative: {}", s.path);
+        }
+    }
+}

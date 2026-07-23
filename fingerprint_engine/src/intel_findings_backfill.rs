@@ -241,3 +241,84 @@ pub fn bootstrap_findings_intel_backfill(pool: Arc<PgPool>) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn normalize_cve_requires_more_than_eight_chars() {
+        // len > 8 required after uppercasing.
+        assert_eq!(
+            normalize_cve("CVE-2021-1234").as_deref(),
+            Some("CVE-2021-1234")
+        );
+        assert_eq!(normalize_cve("cve-2021-1").as_deref(), Some("CVE-2021-1")); // len 10
+        assert_eq!(normalize_cve("  cve-20211  ").as_deref(), Some("CVE-20211")); // len 9
+                                                                                  // Exactly 8 chars ("CVE-2021") is NOT > 8 => rejected.
+        assert_eq!(normalize_cve("CVE-2021"), None);
+        assert_eq!(normalize_cve("GHSA-xxxx"), None);
+        assert_eq!(normalize_cve(""), None);
+    }
+
+    #[test]
+    fn extract_cve_from_direct_keys() {
+        assert_eq!(
+            extract_cve_from_value(&json!({"cve": "CVE-2021-44228"})).as_deref(),
+            Some("CVE-2021-44228")
+        );
+        // cve_id is normalized (uppercased).
+        assert_eq!(
+            extract_cve_from_value(&json!({"cve_id": "cve-2021-44228"})).as_deref(),
+            Some("CVE-2021-44228")
+        );
+        assert_eq!(
+            extract_cve_from_value(&json!({"cveId": "CVE-2020-0001"})).as_deref(),
+            Some("CVE-2020-0001")
+        );
+    }
+
+    #[test]
+    fn extract_cve_from_arrays() {
+        // First array element that normalizes wins; "not-a-cve" is skipped.
+        assert_eq!(
+            extract_cve_from_value(&json!({"cves": ["not-a-cve", "CVE-2022-9999"]})).as_deref(),
+            Some("CVE-2022-9999")
+        );
+        assert_eq!(
+            extract_cve_from_value(&json!({"osv_ids": ["GHSA-aaa", "CVE-2020-1234"]})).as_deref(),
+            Some("CVE-2020-1234")
+        );
+    }
+
+    #[test]
+    fn extract_cve_from_nested_raw() {
+        assert_eq!(
+            extract_cve_from_value(&json!({"raw": {"cve": "CVE-2019-5678"}})).as_deref(),
+            Some("CVE-2019-5678")
+        );
+    }
+
+    #[test]
+    fn extract_cve_key_priority_and_length_filter() {
+        // `cve` is checked first.
+        assert_eq!(
+            extract_cve_from_value(&json!({"cve": "CVE-2021-0001", "cves": ["CVE-2022-2222"]}))
+                .as_deref(),
+            Some("CVE-2021-0001")
+        );
+        // A too-short `cve` fails normalization and falls through to `cve_id`.
+        assert_eq!(
+            extract_cve_from_value(&json!({"cve": "CVE-1", "cve_id": "CVE-2021-1234"})).as_deref(),
+            Some("CVE-2021-1234")
+        );
+    }
+
+    #[test]
+    fn extract_cve_none_when_absent() {
+        assert_eq!(extract_cve_from_value(&json!({})), None);
+        assert_eq!(extract_cve_from_value(&json!({"unrelated": "x"})), None);
+        assert_eq!(extract_cve_from_value(&Value::Null), None);
+    }
+}

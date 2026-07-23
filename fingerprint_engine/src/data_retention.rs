@@ -109,3 +109,31 @@ pub fn spawn_data_retention_loop(app_pool: Arc<PgPool>, intel_pool: Arc<PgPool>)
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_u64_uses_default_when_unset() {
+        let key = "WEISSMAN_TEST_DR_ENV_U64_UNSET_UNIQUE_A1";
+        std::env::remove_var(key);
+        assert_eq!(env_u64(key, 42), 42);
+        // default is also clamped to a minimum of 1
+        assert_eq!(env_u64(key, 0), 1);
+    }
+
+    #[test]
+    fn env_u64_parses_and_clamps() {
+        let key = "WEISSMAN_TEST_DR_ENV_U64_SET_UNIQUE_B2";
+        std::env::set_var(key, "100");
+        assert_eq!(env_u64(key, 42), 100);
+        // zero is clamped up to the minimum of 1
+        std::env::set_var(key, "0");
+        assert_eq!(env_u64(key, 42), 1);
+        // unparseable value falls back to default
+        std::env::set_var(key, "not-a-number");
+        assert_eq!(env_u64(key, 42), 42);
+        std::env::remove_var(key);
+    }
+}

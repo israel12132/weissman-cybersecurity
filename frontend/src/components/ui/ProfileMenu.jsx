@@ -14,6 +14,7 @@ import {
   CreditCard,
   Sun,
   Moon,
+  Contrast,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
@@ -38,7 +39,7 @@ const QUICK_LINKS = [
 export default function ProfileMenu({ variant = 'header' }) {
   const { t, i18n } = useTranslation()
   const { session, logout } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { theme, cycleTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const menuRef = useRef(null)
@@ -147,13 +148,23 @@ export default function ProfileMenu({ variant = 'header' }) {
             </div>
             <Button variant="unstyled"
               type="button"
-              onClick={toggleTheme}
+              onClick={cycleTheme}
               className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[12px] font-mono text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors"
-              aria-label={t('common.toggle_theme')}
+              aria-label={t('common.cycle_theme')}
             >
               <span className="flex items-center gap-2">
-                {theme === 'light' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-                {theme === 'light' ? t('common.theme_light') : t('common.theme_dark')}
+                {theme === 'light' ? (
+                  <Sun className="w-3.5 h-3.5" />
+                ) : theme === 'high-contrast' ? (
+                  <Contrast className="w-3.5 h-3.5" />
+                ) : (
+                  <Moon className="w-3.5 h-3.5" />
+                )}
+                {theme === 'light'
+                  ? t('common.theme_light')
+                  : theme === 'high-contrast'
+                    ? t('common.theme_high_contrast')
+                    : t('common.theme_dark')}
               </span>
               <span className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
                 {t('common.switch')}

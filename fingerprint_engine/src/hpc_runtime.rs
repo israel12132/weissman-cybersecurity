@@ -216,3 +216,49 @@ pub fn bind_current_thread_genesis_research() {
         let _ = bind_current_thread_to_cpu(c);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_mixed_singletons_and_ranges() {
+        assert_eq!(
+            parse_cpu_affinity_list("0,1,8-11"),
+            vec![0, 1, 8, 9, 10, 11]
+        );
+    }
+
+    #[test]
+    fn parse_sorts_and_dedups() {
+        assert_eq!(parse_cpu_affinity_list("3,1,2,2,1"), vec![1, 2, 3]);
+        // overlapping range + singleton
+        assert_eq!(parse_cpu_affinity_list("2-4,3,5"), vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn parse_ignores_empty_and_invalid_parts() {
+        assert_eq!(parse_cpu_affinity_list(""), Vec::<usize>::new());
+        assert_eq!(parse_cpu_affinity_list("   "), Vec::<usize>::new());
+        assert_eq!(parse_cpu_affinity_list("x,5,y"), vec![5]);
+        assert_eq!(parse_cpu_affinity_list(",,7,,"), vec![7]);
+    }
+
+    #[test]
+    fn parse_reversed_range_is_skipped() {
+        // start > end contributes nothing
+        assert_eq!(parse_cpu_affinity_list("5-3"), Vec::<usize>::new());
+        assert_eq!(parse_cpu_affinity_list("10-8,1"), vec![1]);
+    }
+
+    #[test]
+    fn parse_single_element_range() {
+        assert_eq!(parse_cpu_affinity_list("4-4"), vec![4]);
+    }
+
+    #[test]
+    fn parse_tolerates_internal_whitespace() {
+        assert_eq!(parse_cpu_affinity_list(" 0 - 2 "), vec![0, 1, 2]);
+        assert_eq!(parse_cpu_affinity_list(" 1 , 3 "), vec![1, 3]);
+    }
+}

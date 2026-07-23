@@ -43,3 +43,41 @@ pub async fn acquire_full_scan_permit() -> Result<OwnedSemaphorePermit, ()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_concurrent_clamps_to_at_least_one() {
+        let k = "WEISSMAN_MAX_CONCURRENT_FULL_SCANS";
+        std::env::remove_var(k);
+        assert_eq!(max_concurrent_full_scans(), 2); // default
+        std::env::set_var(k, "0");
+        assert_eq!(max_concurrent_full_scans(), 1); // clamped up to 1
+        std::env::set_var(k, "8");
+        assert_eq!(max_concurrent_full_scans(), 8);
+        std::env::set_var(k, "junk");
+        assert_eq!(max_concurrent_full_scans(), 2); // parse failure -> default
+        std::env::remove_var(k);
+    }
+
+    #[test]
+    fn queue_wait_clamps_to_floor() {
+        let k = "WEISSMAN_SCAN_QUEUE_WAIT_SECS";
+        std::env::remove_var(k);
+        assert_eq!(queue_wait_secs(), 120); // default
+        std::env::set_var(k, "1");
+        assert_eq!(queue_wait_secs(), 5); // floor of 5
+        std::env::set_var(k, "300");
+        assert_eq!(queue_wait_secs(), 300);
+        std::env::remove_var(k);
+    }
+
+    #[test]
+    fn try_acquire_returns_permit_when_slot_free() {
+        // Default provides >= 1 slot, so a first non-blocking acquire succeeds.
+        let permit = try_acquire_full_scan_permit();
+        assert!(permit.is_some());
+    }
+}

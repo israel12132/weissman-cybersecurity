@@ -4,6 +4,8 @@
     "toggle_theme": "החלף ערכת נושא בהירה/כהה",
     "theme_light": "בהיר",
     "theme_dark": "כהה",
+    "theme_high_contrast": "ניגודיות גבוהה",
+    "cycle_theme": "החלף ערכת נושא (כהה, בהיר, ניגודיות גבוהה)",
     "switch": "החלף",
     "loading": "טוען…",
     "save": "שמור",
@@ -143,9 +145,8 @@
     "billing": "חיוב ושימוש",
     "system_config": "הגדרות מערכת",
     "status": "סטטוס",
-    "reports": "דוחות",
-    "audit_log": "יומן ביקורת",
     "reports": "היסטוריית דוחות",
+    "audit_log": "יומן ביקורת",
     "ask_weissman": "שאל את Weissman",
     "playbooks": "מדריכי SOAR",
     "threat_intel": "מודיעין איומים",
@@ -190,7 +191,6 @@
     "incident_response": "תגובה לאירועים",
     "threat_emulation": "APT Emulation",
     "kill_chain": "שרשרת הריג",
-    "attack_paths": "נתיבי תקיפה",
     "ai_analysis": "ניתוח AI",
     "exploit_lab": "מעבדת exploit",
     "council_queue": "Council Queue",
@@ -1125,7 +1125,8 @@
     "ready_body": "הגדר יעד ופרמטרים, ואז הפעל את ההערכה.",
     "filtered_title": "אין התאמות",
     "filtered_body": "אין ממצאים התואמים לחיפוש או לסינון החומרה הנוכחיים.",
-    "confidence": "ביטחון סיכון ×{{value}}"
+    "confidence": "ביטחון סיכון ×{{value}}",
+    "export_json": "ייצוא JSON"
   },
   "nexusSwarm": {
     "save_preset_title": "שמירת קונפיגורציה",
@@ -1846,7 +1847,9 @@
       "empty_title": "עדיין אין ריצות ריפוי אוטומטי.",
       "empty_hint": "הפעל ריפוי ממרכז התיקון כדי לאכלס את האנליטיקה.",
       "partial": "חלק מטלמטריית הלקוחות לא נטענה — הסכומים למטה חלקיים.",
-      "bounded": "מדגם מוגבל: מצטבר על 25 הלקוחות הראשונים שנראו בממצאים האחרונים, לא כל הלקוחות."
+      "bounded": "מדגם מוגבל: מצטבר על 25 הלקוחות הראשונים שנראו בממצאים האחרונים, לא כל הלקוחות.",
+      "search_placeholder": "חיפוש ריפויים…",
+      "no_match": "אין ריפויים התואמים לחיפוש."
     },
     "remediationHub": {
       "title": "מרכז תיקון",
@@ -3973,7 +3976,7 @@
       "preview": "תצוגה מקדימה",
       "preview_empty": "צור מוטציות לתצוגה מקדימה של וריאנטים.",
       "search_mutations": "סינון מוטציות…",
-      "no_match": "אין מוטציות שתואמות לסינון.",
+      "no_match": "אין מוטציות התואמות לסינון.",
       "mutations": "מוטציות",
       "count": "כמות:",
       "preview_failed": "התצוגה המקדימה נכשלה",
@@ -3988,7 +3991,6 @@
       "copy_all": "העתק הכול",
       "download": "הורד",
       "search_placeholder": "סנן מוטציות…",
-      "no_match": "אין מוטציות התואמות לסינון.",
       "showing_count": "{{shown}} מתוך {{total}}",
       "evidence_notice": "קמפיינים fuzz מונחי-AST נשלחים לתור ב-POST /api/command-center/scan עם payloads מודעים ל-grammar. crashes ו-anomalies נשמרים כממצאי tenant רגילים."
     },
@@ -4639,12 +4641,30 @@
       "attack_reference": "ייחוס התקפות",
       "remediation": "תיקון",
       "attack_ref": {
-        "alg_none": { "id": "alg:none", "desc": "קבלת token לא חתום" },
-        "alg_confusion": { "id": "RS256→HS256", "desc": "בלבול אלגוריתם (מפתח ציבורי כסוד HMAC)" },
-        "weak_hmac": { "id": "Weak HMAC", "desc": "פיצוח סוד משותף → זיוף" },
-        "kid_injection": { "id": "kid injection", "desc": "Path traversal / SQLi / החלפת מפתח" },
-        "jku_ssrf": { "id": "jku / x5u SSRF", "desc": "ערכת מפתחות ממארח תוקף" },
-        "jwks_hygiene": { "id": "JWKS hygiene", "desc": "RSA חלש / פרמטרים פרטיים דולפים" }
+        "alg_none": {
+          "id": "alg:none",
+          "desc": "קבלת token לא חתום"
+        },
+        "alg_confusion": {
+          "id": "RS256→HS256",
+          "desc": "בלבול אלגוריתם (מפתח ציבורי כסוד HMAC)"
+        },
+        "weak_hmac": {
+          "id": "Weak HMAC",
+          "desc": "פיצוח סוד משותף → זיוף"
+        },
+        "kid_injection": {
+          "id": "kid injection",
+          "desc": "Path traversal / SQLi / החלפת מפתח"
+        },
+        "jku_ssrf": {
+          "id": "jku / x5u SSRF",
+          "desc": "ערכת מפתחות ממארח תוקף"
+        },
+        "jwks_hygiene": {
+          "id": "JWKS hygiene",
+          "desc": "RSA חלש / פרמטרים פרטיים דולפים"
+        }
       }
     },
     "iacSecurityCenter": {
@@ -5898,7 +5918,6 @@
         "noAssets": "אין נכסי הטעיה. צור אסימונים, ואז פרוס ל-AWS למעלה.",
         "canaryAkia": "canary AKIA: {{id}}",
         "liveOastBadge": "OAST חי",
-        "liveAwsBadge": "AWS חי",
         "refresh": "רענן"
       },
       "containmentRules": {
@@ -6883,7 +6902,9 @@
       "idn": "IDN",
       "homographRisk": "סיכון הומוגרף",
       "resolvedIps": "כתובות IP שנפתרו"
-    }
+    },
+    "evidence_notice": "פרופיל יעד חי מ-GET /api/intel/target-profile — מקור, טביעת אצבע של שירות, ובחירת מנועים.",
+    "search_placeholder": "סינון מנועים…"
   },
   "stealthOps": {
     "title": "תפעול חמקני",
@@ -6923,7 +6944,10 @@
     "identitiesDispensed": "זהויות שחולקו",
     "activeTargets": "מטרות פעילות · עומס חי",
     "showing": "מציג {{n}}",
-    "noRequests": "אין בקשות בטיסה. הפעל סריקה כדי לראות את התור מעצב תעבורה לכל מטרה."
+    "noRequests": "אין בקשות בטיסה. הפעל סריקה כדי לראות את התור מעצב תעבורה לכל מטרה.",
+    "evidence_notice": "נתוני קצב חיים מ-GET /api/stealth/status — תקרות מקביליות, רוויה, וקבלת מארחים.",
+    "search_placeholder": "סינון מארחים…",
+    "no_match": "לא נמצאו מארחים תואמים"
   },
   "engineAccounting": {
     "title": "חשבונאות יכולות · ספירה ישרה",

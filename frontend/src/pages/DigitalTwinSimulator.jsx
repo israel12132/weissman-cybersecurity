@@ -11,7 +11,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -348,7 +348,6 @@ export default function DigitalTwinSimulator() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch(() => setClients([]))
   }, [])
@@ -433,7 +432,7 @@ export default function DigitalTwinSimulator() {
     if (!body.target) { showToast('error', t('pages.digitalTwinSimulator.no_domain')); return }
     setRunningId(scenarioId)
     try {
-      const { ok, data: d, status } = await postScan(body)
+      const { ok, data: d } = await postScan(body)
       if (!ok) { showToast('error', d.detail || t('pages.digitalTwinSimulator.simulation_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.digitalTwinSimulator.simulation_queued', { jobId }))
@@ -444,6 +443,7 @@ export default function DigitalTwinSimulator() {
     } finally {
       setRunningId(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, buildScanBody, showToast, t])
 
   const handleBuildTwin = useCallback(async () => {
@@ -452,7 +452,7 @@ export default function DigitalTwinSimulator() {
     if (!body.target) { showToast('error', t('pages.digitalTwinSimulator.no_domain')); return }
     setRunningId('all')
     try {
-      const { ok, data: d, status } = await postScan(body)
+      const { ok, data: d } = await postScan(body)
       if (!ok) { showToast('error', d.detail || t('pages.digitalTwinSimulator.simulation_failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.digitalTwinSimulator.full_twin_queued', { jobId }))
@@ -462,6 +462,7 @@ export default function DigitalTwinSimulator() {
     } finally {
       setRunningId(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, buildScanBody, showToast, t])
 
   const activePoll = Object.entries(pendingJobs).find(([, jobId]) => jobId)?.[0] ?? null

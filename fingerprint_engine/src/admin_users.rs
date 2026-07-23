@@ -97,6 +97,41 @@ async fn require_admin_access(pool: &PgPool, auth: &AuthContext) -> Result<AuthC
     }
 }
 
+/// Effective privilege rank: a superadmin outranks every named role.
+fn effective_rank(role: &str, is_superadmin: bool) -> u8 {
+    if is_superadmin {
+        u8::MAX
+    } else {
+        crate::rbac::role_rank(&role.to_lowercase())
+    }
+}
+
+/// Guard: a non-superadmin actor may only modify a target of strictly LOWER
+/// effective rank. This stops a lower-privileged admin from demoting, role-swapping,
+/// or deactivating a CEO or a peer admin. Superadmins bypass.
+fn ensure_can_manage_target(
+    actor: &AuthContext,
+    target_role: &str,
+    target_is_superadmin: bool,
+) -> Result<(), Response> {
+    if actor.is_superadmin {
+        return Ok(());
+    }
+    let actor_rank = effective_rank(&actor.role, actor.is_superadmin);
+    let target_rank = effective_rank(target_role, target_is_superadmin);
+    if target_rank >= actor_rank {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "ok": false,
+                "detail": "Cannot modify a user of equal or higher privilege"
+            })),
+        )
+            .into_response());
+    }
+    Ok(())
+}
+
 /// GET /api/admin/users — List all users in the tenant
 pub async fn api_admin_users_list(
     State(state): State<Arc<AppState>>,
@@ -334,22 +369,33 @@ pub async fn api_admin_users_update(
         }
     };
 
-    let exists: Option<i64> =
-        sqlx::query_scalar("SELECT id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1")
-            .bind(user_id)
-            .bind(auth.tenant_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten();
+    let target: Option<(String, bool)> = sqlx::query_as(
+        "SELECT role, is_superadmin FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
 
-    if exists.is_none() {
+    let (target_role, target_is_superadmin) = match target {
+        Some(t) => t,
+        None => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok": false, "detail": "User not found"})),
+            )
+                .into_response();
+        }
+    };
+
+    // A lower-privileged admin must not be able to modify a peer or a higher-ranked
+    // account (e.g. an admin demoting the tenant CEO or another admin).
+    if let Err(r) = ensure_can_manage_target(&auth, &target_role, target_is_superadmin) {
         let _ = tx.rollback().await;
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "detail": "User not found"})),
-        )
-            .into_response();
+        return r;
     }
 
     // Validate role if provided
@@ -372,6 +418,21 @@ pub async fn api_admin_users_update(
             if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
                 return r;
             }
+        }
+        // Prevent privilege escalation: a non-superadmin cannot grant a role above
+        // their own privilege level.
+        if !auth.is_superadmin
+            && crate::rbac::role_rank(role) > effective_rank(&auth.role, auth.is_superadmin)
+        {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Cannot assign a role above your own privilege level"
+                })),
+            )
+                .into_response();
         }
     }
 
@@ -505,6 +566,34 @@ pub async fn api_admin_users_deactivate(
         }
     };
 
+    let target: Option<(String, bool)> = sqlx::query_as(
+        "SELECT role, is_superadmin FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(auth.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    let (target_role, target_is_superadmin) = match target {
+        Some(t) => t,
+        None => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok": false, "detail": "User not found"})),
+            )
+                .into_response();
+        }
+    };
+
+    // A lower-privileged admin must not be able to deactivate a peer or higher account.
+    if let Err(r) = ensure_can_manage_target(&auth, &target_role, target_is_superadmin) {
+        let _ = tx.rollback().await;
+        return r;
+    }
+
     let result = sqlx::query("UPDATE users SET is_active = false WHERE id = $1 AND tenant_id = $2")
         .bind(user_id)
         .bind(auth.tenant_id)
@@ -534,5 +623,70 @@ pub async fn api_admin_users_deactivate(
             )
                 .into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_role_is_viewer() {
+        assert_eq!(default_role(), "viewer");
+    }
+
+    #[test]
+    fn create_user_body_applies_defaults() {
+        let b: CreateUserBody = serde_json::from_value(json!({
+            "email": "x@y.com",
+            "password": "password123"
+        }))
+        .unwrap();
+        assert_eq!(b.email, "x@y.com");
+        assert_eq!(b.role, "viewer"); // default_role
+        assert!(!b.is_superadmin); // default false
+    }
+
+    #[test]
+    fn create_user_body_explicit_fields() {
+        let b: CreateUserBody = serde_json::from_value(json!({
+            "email": "a@b.com",
+            "password": "pw",
+            "role": "admin",
+            "is_superadmin": true
+        }))
+        .unwrap();
+        assert_eq!(b.role, "admin");
+        assert!(b.is_superadmin);
+    }
+
+    #[test]
+    fn update_user_body_all_optional() {
+        let empty: UpdateUserBody = serde_json::from_value(json!({})).unwrap();
+        assert!(empty.role.is_none());
+        assert!(empty.is_superadmin.is_none());
+
+        let some: UpdateUserBody = serde_json::from_value(json!({"role": "ceo"})).unwrap();
+        assert_eq!(some.role.as_deref(), Some("ceo"));
+        assert!(some.is_superadmin.is_none());
+    }
+
+    #[test]
+    fn user_info_serializes_expected_fields() {
+        let u = UserInfo {
+            id: 7,
+            email: "u@e.com".to_string(),
+            role: "analyst".to_string(),
+            is_superadmin: false,
+            is_active: true,
+            created_at: None,
+        };
+        let v = serde_json::to_value(&u).unwrap();
+        assert_eq!(v["id"], json!(7));
+        assert_eq!(v["email"], json!("u@e.com"));
+        assert_eq!(v["role"], json!("analyst"));
+        assert_eq!(v["is_superadmin"], json!(false));
+        assert_eq!(v["is_active"], json!(true));
+        assert_eq!(v["created_at"], serde_json::Value::Null);
     }
 }

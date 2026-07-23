@@ -75,3 +75,32 @@ fn md5_hash(b: &[u8]) -> u128 {
     b.hash(&mut h);
     h.finish().into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn md5_hash_is_deterministic() {
+        assert_eq!(md5_hash(b"abc"), md5_hash(b"abc"));
+        assert_eq!(md5_hash(b""), md5_hash(b""));
+        assert_eq!(md5_hash(b"kernel-line"), md5_hash(b"kernel-line"));
+    }
+
+    #[test]
+    fn md5_hash_varies_with_input() {
+        assert_ne!(md5_hash(b"abc"), md5_hash(b"xyz"));
+        assert_ne!(md5_hash(b"line-1"), md5_hash(b"line-2"));
+        assert_ne!(md5_hash(b""), md5_hash(b"x"));
+    }
+
+    // Password auth returns early with an error before any process spawn / network IO.
+    #[tokio::test]
+    async fn password_auth_is_rejected_without_io() {
+        let auth = SshAuth::Password("secret".to_string());
+        let err = deploy_and_stream_ebpf("host", 22, "user", &auth, "cid", "http://ingest")
+            .await
+            .unwrap_err();
+        assert_eq!(err, "Password auth for eBPF deploy not supported (use key)");
+    }
+}

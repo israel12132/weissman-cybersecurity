@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle, Gem, Download } from 'lucide-react'
+import { Target, Flame, GitBranch, ShieldAlert, Clock, CheckCircle2, AlertTriangle, Gem, FileText, Search } from 'lucide-react'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
-import { downloadCsv } from '../lib/exportFindingsCsv'
+import { apiFetch } from '../utils/apiFetch'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import Button from '../components/ui/Button'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
 /**
  * FixFirstProgram — the authoritative, backend-computed remediation program.
@@ -144,15 +147,14 @@ export default function FixFirstProgram() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async (id) => {
     if (id == null) { setData(null); return }
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch(`/api/remediation/priority/${encodeURIComponent(id)}?limit=200`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/remediation/priority/${encodeURIComponent(id)}?limit=200`)
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')
@@ -164,11 +166,35 @@ export default function FixFirstProgram() {
 
   useEffect(() => { load(clientId) }, [clientId, load])
 
-  const program = Array.isArray(data?.program) ? data.program : []
+  const program = useMemo(() => (Array.isArray(data?.program) ? data.program : []), [data])
   const frameworks = Array.isArray(data?.compliance_frameworks) ? data.compliance_frameworks : []
+
+  // Client-side filter over the already-loaded, tenant-scoped program (match on the human-
+  // readable title and the affected asset). Export follows whatever the search narrows to.
+  const filteredProgram = useMemo(
+    () => program.filter((it) => rowMatchesQuery(searchQuery, [it?.title, it?.asset])),
+    [program, searchQuery],
+  )
+
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(PROGRAM_CSV_HEADER, programToCsvRows(filteredProgram), 'weissman-fix-first'),
+    [filteredProgram],
+  )
+  const exportPdf = useCallback(
+    () => exportRowsPdf('Weissman Fix-First Program', PROGRAM_CSV_HEADER, programToCsvRows(filteredProgram), 'weissman-fix-first'),
+    [filteredProgram],
+  )
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live remediation program from GET /api/remediation/priority/:clientId — backend-ranked,
+          root-cause deduplicated, with EPSS/KEV effective risk, attack-graph choke points and SLA
+          clocks. Nothing is recomputed in the browser; no fabricated remediation telemetry.
+        </EvidenceNotice>
+      </div>
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Target className="w-4 h-4 text-cyan-400" />
@@ -178,15 +204,23 @@ export default function FixFirstProgram() {
           <span className="text-[10px] text-white/35 font-mono hidden sm:inline">
             {t('pages.remediationHub.program_caption')}
           </span>
-          <button
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredProgram.length}
+          />
+          <Button
+            variant="unstyled"
             type="button"
-            disabled={program.length === 0}
-            onClick={() => downloadCsv(programToCsvRows(program), PROGRAM_CSV_HEADER, 'weissman-fix-first')}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            onClick={exportPdf}
+            disabled={!filteredProgram.length}
+            title={t('common.export_pdf')}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
           >
-            <Download className="w-3.5 h-3.5" />
-            {t('pages.remediationHub.program_export')}
-          </button>
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf')}
+          </Button>
         </div>
       </div>
 
@@ -223,8 +257,27 @@ export default function FixFirstProgram() {
             </div>
           )}
 
+          <div className="px-4 py-2 border-b border-white/5 flex items-center gap-2">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('pages.remediationHub.program_search')}
+                aria-label={t('pages.remediationHub.program_search')}
+                className="w-full pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
+          </div>
+
+          {filteredProgram.length === 0 ? (
+            <div className="p-4 text-[11px] text-white/35">
+              {t('pages.remediationHub.program_no_match')}
+            </div>
+          ) : (
           <div className="divide-y divide-white/5">
-            {program.map((item) => {
+            {filteredProgram.map((item) => {
               const risk = Number(item.max_effective_risk)
               return (
                 <div key={`${item.rank}-${item.title}-${item.asset}`} className="p-4 hover:bg-white/5 transition-colors">
@@ -278,6 +331,7 @@ export default function FixFirstProgram() {
               )
             })}
           </div>
+          )}
         </>
       )}
     </div>

@@ -42,6 +42,12 @@ paths = [
     # Playwright saved login state — JWTs signed with the CI-only test secret,
     # scoped to a test tenant; worthless outside CI.
     '''frontend/tests-e2e/\.auth/''',
+    # Nightly-e2e workflow boots an ephemeral throwaway stack; every hardcoded
+    # value here is a CI-only fixture (JWT/orchestrator/metrics/vault placeholders
+    # like the repeating-hex WEISSMAN_VAULT_KEY). Real secrets in workflows come
+    # from `${{ secrets.* }}`, never inline. gitleaks stays active on every other
+    # workflow and on deploy/, backend/, crates/, scripts/, .env*, etc.
+    '''\.github/workflows/nightly-e2e\.yml$''',
 ]
 regexes = [
     # `key = 'enable_rfc3161_signing'` is a config FLAG NAME, not a credential —
@@ -49,4 +55,7 @@ regexes = [
     '''enable_rfc3161_signing''',
     # Literal CI test env secret in the nightly-e2e workflow (not a real secret).
     '''nightly-e2e-secret-min-32-chars''',
+    # Throwaway 64-hex WEISSMAN_VAULT_KEY fixture in the nightly-e2e workflow —
+    # scoped to the ephemeral runner DB only, never a real vault key.
+    '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
 ]

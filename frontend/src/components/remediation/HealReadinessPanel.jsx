@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, XCircle, ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
+import Button from '../ui/Button'
 
 /**
  * HealReadinessPanel — bilingual auto-heal readiness self-diagnostics from GET /api/heal-readiness.
@@ -19,9 +20,7 @@ export default function HealReadinessPanel() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const r = await apiFetch('/api/heal-readiness')
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      setReport(await r.json())
+      setReport(await apiFetch('/api/heal-readiness'))
     } catch (e) {
       setError(e.message || 'failed')
     } finally {
@@ -42,7 +41,8 @@ export default function HealReadinessPanel() {
           <ShieldCheck className="w-4 h-4 text-cyan-400" />
           {t('pages.healReadiness.title')}
         </h3>
-        <button
+        <Button
+          variant="unstyled"
           type="button"
           onClick={load}
           disabled={loading}
@@ -50,7 +50,7 @@ export default function HealReadinessPanel() {
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           {t('pages.healReadiness.refresh')}
-        </button>
+        </Button>
       </div>
 
       {error && (

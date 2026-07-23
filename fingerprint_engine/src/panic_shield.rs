@@ -182,3 +182,53 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_payload_from_owned_string() {
+        let p: Box<dyn std::any::Any + Send> = Box::new("owned message".to_string());
+        assert_eq!(format_panic_payload(p), "owned message");
+    }
+
+    #[test]
+    fn format_payload_from_static_str() {
+        let p: Box<dyn std::any::Any + Send> = Box::new("static message");
+        assert_eq!(format_panic_payload(p), "static message");
+    }
+
+    #[test]
+    fn format_payload_opaque_type() {
+        let p: Box<dyn std::any::Any + Send> = Box::new(42u32);
+        assert_eq!(
+            format_panic_payload(p),
+            "panic payload is not &str or String (opaque type)"
+        );
+    }
+
+    #[test]
+    fn circuit_is_closed_for_unseen_label() {
+        assert!(!circuit_is_open("panic_shield_ut_never_seen_label"));
+    }
+
+    #[tokio::test]
+    async fn catch_unwind_returns_completed_value() {
+        match catch_unwind_future("panic_shield_ut_ok", async { 7u8 }).await {
+            CatchOutcome::Completed(v) => assert_eq!(v, 7),
+            _ => panic!("expected Completed outcome"),
+        }
+    }
+
+    #[tokio::test]
+    async fn catch_unwind_captures_panic_message() {
+        let outcome =
+            catch_unwind_future::<_, ()>("panic_shield_ut_panic", async { panic!("boom-xyz") })
+                .await;
+        match outcome {
+            CatchOutcome::Panicked { message, .. } => assert!(message.contains("boom-xyz")),
+            _ => panic!("expected Panicked outcome"),
+        }
+    }
+}

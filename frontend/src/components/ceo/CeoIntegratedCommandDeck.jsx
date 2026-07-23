@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
-import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
+import { formatHttpApiError } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import { useToast } from '../ui/Toaster'
 import CeoGenesisPanel from './CeoGenesisPanel'
 import CeoWarRoomDock from './CeoWarRoomDock'
@@ -54,14 +55,25 @@ export default function CeoIntegratedCommandDeck() {
 
   const fetchCeoGet = useCallback(
     async (path) => {
-      let r = await apiFetch(path)
-      if (r.status === 401) {
-        await refreshSession()
-        r = await apiFetch(path)
+      const attempt = () => apiFetch(path)
+      try {
+        // utils/apiFetch returns parsed JSON on success and throws on non-2xx.
+        return await attempt()
+      } catch (e) {
+        // lib/apiBase already tried one token refresh + retry before this 401
+        // surfaced. Re-sync the session (drives the logged-out UI), then retry
+        // the path exactly once — bounded: ≤2 path calls + 1 /api/auth/me, so an
+        // unauthenticated state resolves to a thrown error, never a loop.
+        if (e?.status === 401) {
+          await refreshSession()
+          try {
+            return await attempt()
+          } catch (e2) {
+            throw new Error(e2?.response ? formatHttpApiError(e2.response, e2.message) : (e2?.message ?? String(e2)))
+          }
+        }
+        throw new Error(e?.response ? formatHttpApiError(e.response, e.message) : (e?.message ?? String(e)))
       }
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
-      return d
     },
     [refreshSession],
   )
@@ -109,17 +121,14 @@ export default function CeoIntegratedCommandDeck() {
     setSafeSaving(true)
     const next = !globalSafe
     try {
-      const r = await apiFetch('/api/ceo/global-safe-mode', {
+      await apiFetch('/api/ceo/global-safe-mode', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ global_safe_mode: next }),
+        body: { global_safe_mode: next },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadTelemetry()
       await loadGodSnapshot()
     } catch (e) {
-      toast.error(e.message || t('components.ceo.integratedCommandDeck.globalSafeModeFailed'))
+      toast.error(e?.response ? formatHttpApiError(e.response, e.message) : (e?.message || t('components.ceo.integratedCommandDeck.globalSafeModeFailed')))
     }
     setSafeSaving(false)
   }
@@ -127,16 +136,13 @@ export default function CeoIntegratedCommandDeck() {
   const toggleTenantEngine = async (engineId, enabled) => {
     setEngineToggleBusy(engineId)
     try {
-      const r = await apiFetch('/api/ceo/tenant/engines', {
+      await apiFetch('/api/ceo/tenant/engines', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine_id: engineId, enabled }),
+        body: { engine_id: engineId, enabled },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadGodSnapshot()
     } catch (e) {
-      toast.error(e.message || t('components.ceo.integratedCommandDeck.tenantEngineToggleFailed'))
+      toast.error(e?.response ? formatHttpApiError(e.response, e.message) : (e?.message || t('components.ceo.integratedCommandDeck.tenantEngineToggleFailed')))
     }
     setEngineToggleBusy(null)
   }
@@ -145,18 +151,15 @@ export default function CeoIntegratedCommandDeck() {
     setKillSaving(true)
     const next = !genesisKill
     try {
-      const r = await apiFetch('/api/ceo/strategy', {
+      await apiFetch('/api/ceo/strategy', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           configs: { genesis_kill_switch: next ? 'true' : 'false' },
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       await loadTelemetry()
     } catch (e) {
-      toast.error(e.message || t('components.ceo.integratedCommandDeck.genesisKillSwitchFailed'))
+      toast.error(e?.response ? formatHttpApiError(e.response, e.message) : (e?.message || t('components.ceo.integratedCommandDeck.genesisKillSwitchFailed')))
     }
     setKillSaving(false)
   }
@@ -169,17 +172,14 @@ export default function CeoIntegratedCommandDeck() {
     }
     setIntervalSaving(true)
     try {
-      const r = await apiFetch('/api/ceo/god-mode/scan-interval', {
+      const d = await apiFetch('/api/ceo/god-mode/scan-interval', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scan_interval_secs: n }),
+        body: { scan_interval_secs: n },
       })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
       if (d.scan_interval_secs != null) setIntervalInput(String(d.scan_interval_secs))
       await loadGodSnapshot()
     } catch (e) {
-      toast.error(e.message || t('components.ceo.integratedCommandDeck.scanIntervalUpdateFailed'))
+      toast.error(e?.response ? formatHttpApiError(e.response, e.message) : (e?.message || t('components.ceo.integratedCommandDeck.scanIntervalUpdateFailed')))
     }
     setIntervalSaving(false)
   }

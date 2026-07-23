@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { Shield, GitPullRequest, CheckCircle, Clock, ExternalLink, Loader2, Container } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.autoHeal'
@@ -44,14 +44,15 @@ export default function AutoHealTab() {
     }
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/heal-requests`)
-      if (r.ok) {
-        const d = await r.json()
-        const list = Array.isArray(d) ? d : (d.requests ?? [])
-        setRequests(list)
-      }
-    } catch (_) {
-      setRequests([])
+      const d = await apiFetch(`/api/clients/${selectedClientId}/heal-requests`)
+      const list = Array.isArray(d) ? d : (d.requests ?? [])
+      setRequests(list)
+    } catch (e) {
+      // Before migration a non-OK HTTP response left the list unchanged (the
+      // `if (r.ok)` guard simply skipped setRequests); only a network/parse
+      // failure hit the catch and cleared it. utils/apiFetch throws on non-OK,
+      // so restrict clearing to network errors (no e.status) to preserve that.
+      if (e?.status == null) setRequests([])
     } finally {
       setLoading(false)
     }
@@ -80,14 +81,7 @@ export default function AutoHealTab() {
     setVerifySteps([])
     const tick = async () => {
       try {
-        const r = await apiFetch(`/api/heal-verify/${encodeURIComponent(jobId)}/steps`)
-        if (!r.ok) {
-          stopPoll()
-          setVerifyJobId(null)
-          await fetchRequests()
-          return
-        }
-        const d = await r.json()
+        const d = await apiFetch(`/api/heal-verify/${encodeURIComponent(jobId)}/steps`)
         const steps = d.steps || []
         setVerifySteps(steps)
         const last = steps[steps.length - 1]
@@ -123,18 +117,27 @@ export default function AutoHealTab() {
         image: healForm.image || undefined,
         container_port: Number.isFinite(port) ? port : undefined,
       }
-      const res = await apiFetch(`/api/clients/${selectedClientId}/auto-heal`, {
+      const data = await apiFetch(`/api/clients/${selectedClientId}/auto-heal`, {
         method: 'POST',
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(body),
+        body,
       })
-      const data = await res.json().catch(() => ({}))
-      if (res.status === 202 && data.job_id) {
+      // 202-accepted was keyed on status===202 && data.job_id; on a 2xx
+      // utils/apiFetch resolves to the parsed body, so key on data.job_id alone
+      // (equivalent for the accepted case). A null JSON body still throws on
+      // .job_id exactly as before and lands in the catch below.
+      if (data.job_id) {
         startVerifyPoll(data.job_id)
       } else {
         await fetchRequests()
       }
-    } catch (_) {}
+    } catch (e) {
+      // Before migration a non-OK HTTP response never threw: it fell through the
+      // else branch to fetchRequests(). Only a real exception (network error) hit
+      // the empty catch and did nothing. Reproduce both: refresh on HTTP errors
+      // (e.status set), do nothing on network errors (no e.status).
+      if (e?.status != null) await fetchRequests()
+    }
     setHealing(null)
   }
 

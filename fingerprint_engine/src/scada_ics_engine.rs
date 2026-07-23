@@ -46,3 +46,33 @@ pub async fn run_scada_ics_result(target: &str) -> EngineResult {
 pub async fn run_scada_ics(target: &str) {
     print_result(run_scada_ics_result(target).await);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_host_strips_scheme_path_and_port() {
+        assert_eq!(extract_host("https://example.com:8080/path"), "example.com");
+    }
+
+    #[test]
+    fn extract_host_strips_http_scheme() {
+        assert_eq!(extract_host("http://example.com/x"), "example.com");
+    }
+
+    #[test]
+    fn extract_host_bare_host() {
+        assert_eq!(extract_host("example.com"), "example.com");
+    }
+
+    #[test]
+    fn extract_host_trims_whitespace() {
+        assert_eq!(extract_host("  example.com  "), "example.com");
+    }
+
+    #[test]
+    fn extract_host_drops_port_only() {
+        assert_eq!(extract_host("10.0.0.1:502"), "10.0.0.1");
+    }
+}

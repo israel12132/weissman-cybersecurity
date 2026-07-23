@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Wrench, Loader2, X, CheckCircle, AlertTriangle } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
+import Button from '../ui/Button'
 
 const CHANNELS = ['github_pr', 'github_direct_commit', 'gitlab_mr', 'bitbucket_pr', 'azure_repos_pr', 'diff_download', 'virtual_patch']
 
@@ -47,13 +48,11 @@ export default function BatchHealPanel({ findings, onClose }) {
       let enqueued = 0
       let skipped = 0
       for (const [clientId, findingIds] of byClient.entries()) {
-        const r = await apiFetch(`/api/clients/${clientId}/heal-batch`, {
+        const d = await apiFetch(`/api/clients/${clientId}/heal-batch`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ finding_ids: findingIds, repo_slug: repoSlug.trim(), git_token: gitToken.trim(), channel }),
+          body: { finding_ids: findingIds, repo_slug: repoSlug.trim(), git_token: gitToken.trim(), channel },
         })
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`)
         enqueued += d.enqueued || 0
         skipped += d.skipped || 0
       }
@@ -72,7 +71,7 @@ export default function BatchHealPanel({ findings, onClose }) {
           <Wrench className="w-3.5 h-3.5" />
           {t('pages.remediationHub.batch_heal_title', { n: healable.length })}
         </span>
-        <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></button>
+        <Button variant="unstyled" type="button" onClick={onClose} aria-label={t('common.close')} className="text-white/40 hover:text-white/70"><X className="w-3.5 h-3.5" /></Button>
       </div>
 
       {result ? (
@@ -89,7 +88,7 @@ export default function BatchHealPanel({ findings, onClose }) {
               className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 placeholder-white/25 font-mono focus:outline-none focus:border-cyan-500/40" />
             <select value={channel} onChange={(e) => setChannel(e.target.value)}
               className="bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/85 font-mono focus:outline-none focus:border-cyan-500/40">
-              {CHANNELS.map((c) => <option key={c} value={c}>{t(`pages.remediationHub.channel_${c === 'github_direct_commit' ? 'github_commit' : c}`, { defaultValue: c })}</option>)}
+              {CHANNELS.map((c) => <option key={c} value={c}>{t(`pages.remediationHub.channel_${c === 'github_direct_commit' ? 'github_commit' : c}`)}</option>)}
             </select>
           </div>
           <details className="text-[11px] text-white/45">
@@ -104,11 +103,11 @@ export default function BatchHealPanel({ findings, onClose }) {
           {error && (
             <div className="text-xs text-rose-300 flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5" /> {error}</div>
           )}
-          <button type="button" onClick={submit} disabled={submitting || healable.length === 0}
+          <Button variant="unstyled" type="button" onClick={submit} disabled={submitting || healable.length === 0}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-xs font-medium hover:bg-cyan-500/30 disabled:opacity-50">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
             {t('pages.remediationHub.batch_heal_go', { n: healable.length })}
-          </button>
+          </Button>
         </>
       )}
     </div>

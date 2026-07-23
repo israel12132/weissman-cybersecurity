@@ -400,3 +400,96 @@ pub async fn run_ascension_wave(
         "message": "ascension wave queued; poll /api/jobs/:id",
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn risk_heuristic_baseline() {
+        let (score, reasons) = risk_heuristic("web", "", "", None);
+        assert_eq!(score, 10.0);
+        assert!(reasons.is_empty());
+    }
+
+    #[test]
+    fn risk_heuristic_cloud_surface() {
+        let (score, reasons) = risk_heuristic("s3", "", "", None);
+        assert_eq!(score, 45.0);
+        assert_eq!(reasons, vec!["cloud_exposure_surface".to_string()]);
+    }
+
+    #[test]
+    fn risk_heuristic_cname_present() {
+        let (score, reasons) = risk_heuristic("web", "", "", Some("target.example.com"));
+        assert_eq!(score, 35.0);
+        assert_eq!(reasons, vec!["dns_takeover_or_cname".to_string()]);
+    }
+
+    #[test]
+    fn risk_heuristic_status_exposure() {
+        let (score, reasons) = risk_heuristic("web", "open", "", None);
+        assert_eq!(score, 28.0);
+        assert_eq!(reasons, vec!["status_indicates_exposure".to_string()]);
+    }
+
+    #[test]
+    fn risk_heuristic_high_value_label() {
+        let (score, reasons) = risk_heuristic("web", "", "admin", None);
+        assert_eq!(score, 22.0);
+        assert_eq!(reasons, vec!["high_value_label".to_string()]);
+    }
+
+    #[test]
+    fn risk_heuristic_caps_at_100() {
+        // 10 + 35 (s3) + 25 (takeover) + 18 (open) + 12 (admin) = 100
+        let (score, reasons) =
+            risk_heuristic("s3-takeover", "open", "admin-api", Some("c.example.com"));
+        assert_eq!(score, 100.0);
+        assert_eq!(
+            reasons,
+            vec![
+                "cloud_exposure_surface".to_string(),
+                "dns_takeover_or_cname".to_string(),
+                "status_indicates_exposure".to_string(),
+                "high_value_label".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn mission_node_serializes() {
+        let n = MissionNode {
+            client_id: 1,
+            client_name: "c".into(),
+            target_hint: "h".into(),
+            risk_score: 12.5,
+            reasons: vec!["r".into()],
+            asm_node_types: vec!["t".into()],
+        };
+        let v = serde_json::to_value(&n).unwrap();
+        assert_eq!(
+            v,
+            json!({
+                "client_id": 1,
+                "client_name": "c",
+                "target_hint": "h",
+                "risk_score": 12.5,
+                "reasons": ["r"],
+                "asm_node_types": ["t"],
+            })
+        );
+    }
+
+    #[test]
+    fn llm_rank_out_deserializes() {
+        let a: LlmRankOut = serde_json::from_str(r#"{"client_ids":[1,2,3]}"#).unwrap();
+        assert_eq!(a.client_ids, vec![1i64, 2, 3]);
+    }
+
+    #[test]
+    fn llm_rank_out_defaults_empty() {
+        let b: LlmRankOut = serde_json::from_str("{}").unwrap();
+        assert!(b.client_ids.is_empty());
+    }
+}

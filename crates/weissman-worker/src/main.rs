@@ -30,6 +30,9 @@ fn job_kind_timeout(kind: &str) -> Duration {
         "tenant_full_scan" | "onboarding_tenant_scan" => Duration::from_secs(60 * 60),
         "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => Duration::from_secs(30 * 60),
         "command_center_engine" => Duration::from_secs(15 * 60),
+        // Fans out to every top-tier engine sequentially (each with its own 180s ceiling),
+        // so the whole probe needs a budget on the order of the summed per-engine timeouts.
+        "top_tier_health_probe" => Duration::from_secs(60 * 60),
         "scan_all_engines" | "scan_discovered_domains" => Duration::from_secs(45 * 60),
         "pipeline_scan" | "threat_intel_run" | "council_debate" => Duration::from_secs(20 * 60),
         "noop" | "ping" => Duration::from_secs(30),
@@ -59,6 +62,12 @@ fn job_is_heavy(kind: &str) -> bool {
             | "genesis_eternal_fuzz"
             | "genesis_knowledge_match"
             | "command_center_engine"
+            // Fans out to every top-tier engine via `engine_dispatch::run_engine` (the deep
+            // monolithic engine future). Like `command_center_engine`/`scan_all_engines`, it
+            // MUST run on the 32 MiB large stack — dispatching it inline on the ~2 MiB Tokio
+            // worker stack overflows and aborts the whole worker process (fatal runtime error:
+            // stack overflow), which then makes the swarm coordinator orphan its in-flight jobs.
+            | "top_tier_health_probe"
             | "scan_all_engines"
             | "scan_discovered_domains"
     )
@@ -146,6 +155,7 @@ async fn process_one(
                     let _ = job_queue::release_reserved_job(
                         pool,
                         job.id,
+                        &wid,
                         &format!("claim rejected: {e}"),
                         backoff,
                     )
@@ -319,7 +329,16 @@ async fn process_one(
             } else if let Err(e) = job_queue::fail_job(pool, &job, &msg, BASE_BACKOFF_SECS).await {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
                 let _ =
-                    job_queue::force_requeue_running(pool, job.id, &format!("fail_job: {e}")).await;
+                    job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
+                        .await;
+            }
+            // Overlay the raw error onto the dead row AFTER the event-sourced DLQ
+            // projection (which stores only the failure class). Runs last so the
+            // human-readable cause survives on `GET /api/jobs/:id` for triage.
+            if exhausted {
+                if let Err(e) = job_queue::annotate_last_error(pool, job.id, &msg).await {
+                    error!(target: "weissman_worker", job_id = %job.id, error = %e, "annotate_last_error failed");
+                }
             }
         }
     }
@@ -632,4 +651,115 @@ async fn async_main() {
         }
     }
     info!(target: "weissman_worker", "shutdown");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Every job kind whose executor arm dispatches the deep monolithic engine future
+    // (`engine_dispatch::run_engine` / `dispatch_engine_match`) MUST be classified heavy so
+    // `process_one` drives it on the 32 MiB large stack. Running such a future inline on the
+    // ~2 MiB Tokio worker stack overflows and aborts the whole worker process — a `fatal
+    // runtime error: stack overflow` that then makes the swarm coordinator orphan every
+    // in-flight job on that worker. `top_tier_health_probe` regressed exactly this way.
+    #[test]
+    fn deep_engine_dispatch_kinds_run_on_large_stack() {
+        for kind in [
+            "command_center_engine",
+            "top_tier_health_probe",
+            "scan_all_engines",
+            "scan_discovered_domains",
+        ] {
+            assert!(
+                job_is_heavy(kind),
+                "{kind} dispatches deep engine futures and must be heavy (32 MiB large stack), \
+                 else the worker stack-overflows and aborts"
+            );
+        }
+    }
+
+    // A 20-engine sequential fan-out must not be capped at the 5-minute default, which would
+    // spuriously time out a legitimately long probe.
+    #[test]
+    fn top_tier_health_probe_has_generous_timeout() {
+        let default_budget = job_kind_timeout("some_unknown_kind");
+        assert!(
+            job_kind_timeout("top_tier_health_probe") > default_budget,
+            "top_tier_health_probe fans out to every top-tier engine and needs more than the \
+             default per-job budget"
+        );
+    }
+
+    #[test]
+    fn heavy_jobs_get_long_timeouts() {
+        assert_eq!(
+            job_kind_timeout("tenant_full_scan"),
+            Duration::from_secs(3600)
+        );
+        assert_eq!(
+            job_kind_timeout("onboarding_tenant_scan"),
+            Duration::from_secs(3600)
+        );
+        assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
+        assert_eq!(
+            job_kind_timeout("scan_all_engines"),
+            Duration::from_secs(2700)
+        );
+        assert_eq!(job_kind_timeout("pipeline_scan"), Duration::from_secs(1200));
+    }
+
+    #[test]
+    fn cheap_and_unknown_jobs_get_short_timeouts() {
+        assert_eq!(job_kind_timeout("noop"), Duration::from_secs(30));
+        assert_eq!(job_kind_timeout("ping"), Duration::from_secs(30));
+        // Unknown kinds fall back to the 5-minute default.
+        assert_eq!(job_kind_timeout("something_new"), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn job_is_heavy_classifies_known_kinds() {
+        assert!(job_is_heavy("tenant_full_scan"));
+        assert!(job_is_heavy("ai_redteam"));
+        assert!(job_is_heavy("scan_discovered_domains"));
+        assert!(job_is_heavy("genesis_eternal_fuzz"));
+    }
+
+    #[test]
+    fn job_is_heavy_rejects_light_and_unknown_kinds() {
+        assert!(!job_is_heavy("noop"));
+        assert!(!job_is_heavy("ping"));
+        assert!(!job_is_heavy("unknown_kind"));
+        assert!(!job_is_heavy(""));
+    }
+
+    #[test]
+    fn concurrency_cap_parses_positive_env_value() {
+        let key = "WEISSMAN_TEST_WORKER_CAP_POSITIVE";
+        std::env::set_var(key, "12");
+        assert_eq!(worker_concurrency_cap(key, 4), 12);
+        std::env::remove_var(key);
+    }
+
+    #[test]
+    fn concurrency_cap_falls_back_on_invalid_or_zero() {
+        let key = "WEISSMAN_TEST_WORKER_CAP_INVALID";
+        std::env::remove_var(key);
+        // Unset -> default.
+        assert_eq!(worker_concurrency_cap(key, 7), 7);
+        // Zero rejected -> default.
+        std::env::set_var(key, "0");
+        assert_eq!(worker_concurrency_cap(key, 7), 7);
+        // Non-numeric rejected -> default.
+        std::env::set_var(key, "abc");
+        assert_eq!(worker_concurrency_cap(key, 7), 7);
+        std::env::remove_var(key);
+    }
+
+    #[test]
+    fn worker_id_has_host_and_pid() {
+        let id = worker_id();
+        let (_host, pid) = id.rsplit_once(':').expect("worker id contains a colon");
+        assert_eq!(pid.parse::<u32>().unwrap(), std::process::id());
+    }
 }

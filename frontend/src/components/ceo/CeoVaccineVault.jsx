@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiUrl, apiFetch } from '../../lib/apiBase'
+import { createColumnHelper } from '@tanstack/react-table'
+import { apiUrl } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
+import DataTable from '../ui/DataTable'
+
+const columnHelper = createColumnHelper()
+const VV = 'components.ceo.vaccineVault'
 
 export default function CeoVaccineVault() {
   const { t } = useTranslation()
@@ -24,9 +30,7 @@ export default function CeoVaccineVault() {
     setLoading(true)
     setErr('')
     try {
-      const r = await apiFetch('/api/ceo/vault?limit=100&offset=0')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch('/api/ceo/vault?limit=100&offset=0')
       setRows(Array.isArray(d) ? d : [])
     } catch (e) {
       setErr(e.message || t('components.ceo.vaccineVault.loadFailed'))
@@ -40,15 +44,44 @@ export default function CeoVaccineVault() {
     load()
   }, [load])
 
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('id', {
+        header: t(`${VV}.colId`),
+        cell: (info) => <span className="text-cyan-300/90">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor('tech_fingerprint', {
+        header: t(`${VV}.colFingerprint`),
+        cell: (info) => (
+          <span className="max-w-[180px] truncate block" title={info.getValue()}>
+            {info.getValue()}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('severity', { header: t(`${VV}.colSeverity`) }),
+      columnHelper.accessor((r) => (r.preemptive_validated ? t(`${VV}.yes`) : t(`${VV}.no`)), {
+        id: 'validated',
+        header: t(`${VV}.colValidated`),
+      }),
+      columnHelper.accessor('component_ref', {
+        header: t(`${VV}.colComponent`),
+        cell: (info) => (
+          <span className="max-w-[200px] truncate block" title={info.getValue()}>
+            {info.getValue()}
+          </span>
+        ),
+      }),
+    ],
+    [t],
+  )
+
   const runMatch = async () => {
     if (!selected) return
     setMatchBusy(true)
     setMatchMsg('')
     try {
       const path = '/api/ceo/genesis/vault/' + encodeURIComponent(selected.id) + '/match'
-      const r = await apiFetch(path, { method: 'POST' })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || r.statusText)
+      const d = await apiFetch(path, { method: 'POST' })
       setMatchMsg(JSON.stringify(d, null, 2))
     } catch (e) {
       setMatchMsg(e.message || t('components.ceo.vaccineVault.matchFailed'))
@@ -82,49 +115,21 @@ export default function CeoVaccineVault() {
       </div>
       {loading && <p className="p-4 text-xs text-[var(--text-muted)] font-mono">{t('components.ceo.vaccineVault.loading')}</p>}
       {err && <p className="p-4 text-xs text-red-400 font-mono">{err}</p>}
-      <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
-        <table className="w-full text-left text-xs font-mono text-[var(--text-secondary)]">
-          <thead className="sticky top-0 bg-[var(--bg-0)]/95 border-b border-white/10 text-[10px] uppercase text-[var(--text-muted)]">
-            <tr>
-              <th className="p-2 pl-4">{t('components.ceo.vaccineVault.colId')}</th>
-              <th className="p-2">{t('components.ceo.vaccineVault.colFingerprint')}</th>
-              <th className="p-2">{t('components.ceo.vaccineVault.colSeverity')}</th>
-              <th className="p-2">{t('components.ceo.vaccineVault.colValidated')}</th>
-              <th className="p-2 pr-4">{t('components.ceo.vaccineVault.colComponent')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.id}
-                onClick={() => {
-                  setSelected(row)
-                  setTab('chain')
-                  setMatchMsg('')
-                }}
-                className={
-                  'border-b border-white/5 cursor-pointer hover:bg-white/5 ' +
-                  (selected && selected.id === row.id ? 'bg-cyan-950/30' : '')
-                }
-              >
-                <td className="p-2 pl-4 text-cyan-300/90">{row.id}</td>
-                <td className="p-2 max-w-[180px] truncate" title={row.tech_fingerprint}>
-                  {row.tech_fingerprint}
-                </td>
-                <td className="p-2">{row.severity}</td>
-                <td className="p-2">
-                  {row.preemptive_validated
-                    ? t('components.ceo.vaccineVault.yes')
-                    : t('components.ceo.vaccineVault.no')}
-                </td>
-                <td className="p-2 pr-4 max-w-[200px] truncate" title={row.component_ref}>
-                  {row.component_ref}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {!loading && !err && (
+        <DataTable
+          id="ceo-vaccine-vault-table"
+          columns={columns}
+          data={rows}
+          getRowId={(r) => r.id}
+          selectedRowId={selected?.id}
+          onRowClick={(row) => {
+            setSelected(row.original)
+            setTab('chain')
+            setMatchMsg('')
+          }}
+          animateRows={false}
+        />
+      )}
 
       {selected && (
         <div className="border-t border-white/10 bg-[var(--bg-0)]/80 p-4 space-y-3">

@@ -178,8 +178,7 @@ test('bulk status update persists to Postgres (real DB round-trip)', async ({ pa
   const newStatus = current === 'ACKNOWLEDGED' ? 'IN_PROGRESS' : 'ACKNOWLEDGED'
   expect(VALID_STATUSES).toContain(newStatus)
 
-  // Select that exact row and drive the bulk-status bar.
-  await firstRow.locator('input[type="checkbox"]').first().check()
+  // Select that exact row and drive the bulk-status bar.  await firstRow.locator('input[type="checkbox"]').first().check()
   await expect(page.getByText(/1 selected/i)).toBeVisible()
 
   // The <select> options carry raw status values — language-independent.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 const NS = 'components.cockpitWidgets.topMoversPanel'
 
@@ -71,8 +71,8 @@ export default function TopMoversPanel({ className = '' }) {
     let cancelled = false
     const load = async () => {
       try {
-        const r = await apiFetch('/api/dashboard/exec-kpis')
-        if (r.ok && !cancelled) setData(await r.json())
+        const d = await apiFetch('/api/dashboard/exec-kpis')
+        if (!cancelled) setData(d)
       } catch (_) {
         // dashboard tile soft-fails — keep last good payload
       } finally {

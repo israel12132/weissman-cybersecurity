@@ -43,13 +43,22 @@ vi.mock('../hooks/useFindingsWorkbench', () => ({
 
 import AgentManagement from './AgentManagement.jsx'
 
-const resp = (over = {}) => ({
-  ok: true,
-  status: 200,
-  text: async () => '{}',
-  json: async () => ({}),
-  ...over,
-})
+// Faithful Response-like mock: json() reflects the SAME body as text(), headers.get
+// answers content-type, and clone() returns a re-readable copy — matching how the
+// unified utils/apiFetch reads success bodies (json()) and error bodies
+// (response.clone().json()). The previous mock hardcoded json()->{} with no clone(),
+// which only worked with the old r.text()-based reads.
+const resp = (over = {}) => {
+  const base = { ok: true, status: 200, statusText: '', text: async () => '{}', ...over }
+  const build = () => ({
+    ...base,
+    json: over.json || (async () => JSON.parse((await base.text()) || '{}')),
+    headers:
+      over.headers || { get: (k) => (String(k).toLowerCase() === 'content-type' ? 'application/json' : null) },
+    clone: () => build(),
+  })
+  return build()
+}
 
 const renderPage = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

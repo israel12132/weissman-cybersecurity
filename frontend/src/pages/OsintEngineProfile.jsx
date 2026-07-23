@@ -7,7 +7,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream, SSE_CLOSED } from '../lib/sseStream'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useRegisterHubClient } from '../context/EngineHubContext'
@@ -111,13 +111,6 @@ export default function OsintEngineProfile() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then(async (r) => {
-        if (!r.ok) {
-          if (import.meta.env.DEV) console.warn(`[OsintEngineProfile] clients load failed: HTTP ${r.status}`)
-          return []
-        }
-        return r.json()
-      })
       .then((d) => { if (Array.isArray(d)) setClients(d) })
       .catch((err) => { if (import.meta.env.DEV) console.warn('[OsintEngineProfile] clients load failed:', err) })
   }, [])
@@ -125,10 +118,9 @@ export default function OsintEngineProfile() {
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true)
     try {
-      const r = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=100`)
-      const d = await r.json().catch(() => null)
-      if (r.ok) setHistory(d)
-    } finally {
+      const d = await apiFetch(`/api/engines/history/${ENGINE_ID}?limit=100`)
+      setHistory(d)
+    } catch { /* keep prior history on transient failure */ } finally {
       setHistoryLoading(false)
     }
   }, [])
@@ -156,7 +148,6 @@ export default function OsintEngineProfile() {
     }
     let cancelled = false
     apiFetch(`/api/clients/${selectedClientId}/integrations`)
-      .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setClientIntegrations(normalizeIntegrations(d)) })
       .catch(() => { if (!cancelled) setClientIntegrations(null) })
     return () => { cancelled = true }
@@ -175,7 +166,9 @@ export default function OsintEngineProfile() {
     [clients, selectedClientId, t],
   )
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const findings = Array.isArray(history?.findings) ? history.findings : []
 
   const kpi = useMemo(() => {

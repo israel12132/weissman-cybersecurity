@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Trash2 } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
@@ -104,7 +104,7 @@ export default function AskWeissman() {
   const visibleHistory = useMemo(() => {
     if (!searchQuery.trim()) return history
     const ids = new Set(filteredFindings.map((f) => f.id))
-    return history.filter((turn, i) => {
+    return history.filter((turn, _i) => {
       if (turn.pending) return true
       const idx = completedTurns.indexOf(turn)
       return idx >= 0 && ids.has(idx)
@@ -119,12 +119,10 @@ export default function AskWeissman() {
     const placeholder = { q: text, pending: true, t: Date.now() }
     setHistory((h) => [...h, placeholder])
     try {
-      const r = await apiFetch('/api/ask', {
+      const d = await apiFetch('/api/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text }),
+        body: { question: text },
       })
-      const d = await r.json().catch(() => ({}))
       const result = d?.result || {}
       setHistory((h) => {
         const next = [...h]
@@ -132,7 +130,7 @@ export default function AskWeissman() {
         const turn = {
           q: text,
           ok: !result.error,
-          error: result.error || (r.ok ? null : formatApiErrorFromBody(d, r.status)),
+          error: result.error || null,
           plan: result.plan,
           sql: result.sql,
           rows: result.rows || [],
@@ -145,8 +143,15 @@ export default function AskWeissman() {
         return next
       })
     } catch (e) {
+      let msg
+      if (e?.status) {
+        const b = e.response ? await e.response.json().catch(() => ({})) : {}
+        msg = formatApiErrorFromBody(b, e.status)
+      } else {
+        msg = e?.message || t('ask_weissman.network_error')
+      }
       setHistory((h) => h.map((x) => x === placeholder ? {
-        q: text, ok: false, error: e?.message || t('ask_weissman.network_error'), t: Date.now(),
+        q: text, ok: false, error: msg, t: Date.now(),
       } : x))
     } finally {
       setLoading(false)
@@ -305,7 +310,7 @@ export default function AskWeissman() {
                           <thead>
                             <tr className="text-[var(--text-tertiary)]">
                               {Object.keys(turn.rows[0]).map((k) => (
-                                <th key={k} className="px-2 py-1.5 font-normal border-b border-[var(--border-default)]">
+                                <th key={k} scope="col" className="px-2 py-1.5 font-normal border-b border-[var(--border-default)]">
                                   {k}
                                 </th>
                               ))}
@@ -353,6 +358,7 @@ export default function AskWeissman() {
           placeholder={t('ask_weissman.placeholder')}
           aria-label={t('ask_weissman.placeholder')}
           className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focus the primary question input on this dedicated Q&A page
           autoFocus
         />
         <Button variant="unstyled"

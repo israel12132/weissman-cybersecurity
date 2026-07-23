@@ -17,8 +17,14 @@ const FRONTEND_SRC = join(ROOT, 'frontend/src')
 const PAGES_DIR = join(FRONTEND_SRC, 'pages')
 const TARGET_ROUTES = 112
 
-/** Auth / catch-all — excluded from routed component audit */
-const ROUTE_AUDIT_SKIP = new Set(['login', '*'])
+/** Auth / catch-all / dev component catalogs — excluded from routed component audit.
+ *  The design-system gallery and advanced showcase are developer-facing component
+ *  catalogs, not operational SOC surfaces — they cite no findings and hold no data
+ *  records, so evidence/refresh_export/search would be affordance theater. */
+const ROUTE_AUDIT_SKIP = new Set(['login', '*', 'design-system', 'design-system/advanced'])
+
+/** Page files excluded from the page-level audit (dev component catalogs). */
+const PAGE_AUDIT_SKIP = new Set(['DesignSystemGallery.jsx', 'AdvancedShowcase.jsx'])
 
 /** Embedded labs & cockpit — evidence required; search/refresh not enforced */
 const EVIDENCE_ONLY_ROUTE_PREFIXES = [
@@ -211,8 +217,10 @@ async function main() {
   const pageFiles = (await readdir(PAGES_DIR)).filter(
     (f) =>
       f.endsWith('.jsx') &&
+      !f.endsWith('.test.jsx') &&
+      !f.endsWith('.spec.jsx') &&
       f !== 'PageShell.jsx' &&
-      !f.includes('.test.') &&
+      !PAGE_AUDIT_SKIP.has(f) &&
       !EMBEDDED_SUBCOMPONENTS.has(f),
   )
   const pageResults = []

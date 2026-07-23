@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.complianceDashboard'
@@ -41,7 +41,6 @@ export default function ComplianceDashboardTab() {
     setPostureLoading(true)
     const q = `?client_id=${encodeURIComponent(selectedClientId)}`
     apiFetch(`/api/compliance/posture${q}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setPosture(d))
       .catch(() => setPosture(null))
       .finally(() => setPostureLoading(false))
@@ -56,24 +55,19 @@ export default function ComplianceDashboardTab() {
     setSaving(true)
     setMsg(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/cloud-integration`, {
+      await apiFetch(`/api/clients/${selectedClientId}/cloud-integration`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           aws_cross_account_role_arn: arn.trim(),
           aws_external_id: externalId.trim(),
           gcp_project_id: gcpProject.trim(),
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok) {
-        setMsg({ type: 'ok', text: t(`${NS}.cloudSaved`) })
-        refreshClients()
-      } else {
-        setMsg({ type: 'err', text: d.detail || t(`${NS}.saveFailed`) })
-      }
-    } catch {
-      setMsg({ type: 'err', text: t(`${NS}.networkError`) })
+      setMsg({ type: 'ok', text: t(`${NS}.cloudSaved`) })
+      refreshClients()
+    } catch (e) {
+      if (e?.status) setMsg({ type: 'err', text: e.message || t(`${NS}.saveFailed`) })
+      else setMsg({ type: 'err', text: t(`${NS}.networkError`) })
     }
     setSaving(false)
   }
@@ -83,18 +77,14 @@ export default function ComplianceDashboardTab() {
     setScanning(true)
     setMsg(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/cloud-scan/run`, {
+      const d = await apiFetch(`/api/clients/${selectedClientId}/cloud-scan/run`, {
         method: 'POST',
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok) {
-        setMsg({ type: 'ok', text: t(`${NS}.scanComplete`, { count: d.findings_count ?? 0 }) })
-        loadPosture()
-      } else {
-        setMsg({ type: 'err', text: d.detail || t(`${NS}.scanFailed`) })
-      }
-    } catch {
-      setMsg({ type: 'err', text: t(`${NS}.networkError`) })
+      setMsg({ type: 'ok', text: t(`${NS}.scanComplete`, { count: d.findings_count ?? 0 }) })
+      loadPosture()
+    } catch (e) {
+      if (e?.status) setMsg({ type: 'err', text: e.message || t(`${NS}.scanFailed`) })
+      else setMsg({ type: 'err', text: t(`${NS}.networkError`) })
     }
     setScanning(false)
   }

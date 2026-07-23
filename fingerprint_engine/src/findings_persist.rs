@@ -51,6 +51,41 @@ async fn post_persist_db_permit() -> Option<SemaphorePermit<'static>> {
     POST_PERSIST_DB_SEM.acquire().await.ok()
 }
 
+/// Global concurrency cap for detached background DB tasks spawned by callers *outside* this
+/// module's per-finding loop (LLM-usage metering in `observability`, and the pool-starvation
+/// contract tests). Same rationale as [`POST_PERSIST_DB_SEM`]: without a bound, a burst of
+/// detached `tokio::spawn`s each acquire a pooled connection and, being detached, keep the pool
+/// saturated for the full `acquire_timeout` window after the job returns. Bounding makes peak
+/// background connection demand `O(permits)`. Override with `WEISSMAN_BG_DB_CONCURRENCY` (default 8).
+fn background_db_semaphore() -> &'static tokio::sync::Semaphore {
+    static SEM: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    SEM.get_or_init(|| {
+        let permits = std::env::var("WEISSMAN_BG_DB_CONCURRENCY")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|&n| n > 0)
+            .unwrap_or(8);
+        tokio::sync::Semaphore::new(permits)
+    })
+}
+
+/// Spawn a detached background task that touches the DB, gated by the global
+/// [`background_db_semaphore`]. The permit is held for the whole task lifetime, so excess tasks
+/// queue on the semaphore instead of storming `pool.acquire()`. This preserves fire-and-forget
+/// semantics while hard-capping concurrent pooled-connection demand regardless of call volume.
+pub fn spawn_bounded_db_task<Fut>(task: Fut)
+where
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
+    tokio::spawn(async move {
+        // If the semaphore is ever closed (never in practice) just drop the task.
+        let Ok(_permit) = background_db_semaphore().acquire().await else {
+            return;
+        };
+        task.await;
+    });
+}
+
 /// Lower-case severity from an arbitrary value, defaulting to `info`.
 fn normalize_severity(raw: Option<&str>) -> String {
     let s = raw.unwrap_or("info").trim().to_ascii_lowercase();
@@ -317,7 +352,7 @@ pub async fn persist_engine_findings(
     let mut suppression_hits: Vec<String> = Vec::new();
 
     let mut inserted: u64 = 0;
-    for raw in findings.iter().cloned() {
+    for (finding_index, raw) in findings.iter().cloned().enumerate() {
         let Some(gated) = gate_finding(engine, target, raw) else {
             tracing::warn!(
                 target: "findings_persist",

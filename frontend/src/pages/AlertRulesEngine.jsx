@@ -8,6 +8,7 @@ import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { api } from '../utils/apiFetch';
 import { confirmDialog } from '../utils/confirmDialog'
+import EmptyState from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
@@ -34,6 +35,7 @@ export default function AlertRulesEngine() {
 
   useEffect(() => {
     fetchRules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchRules = async () => {
@@ -236,11 +238,17 @@ export default function AlertRulesEngine() {
               Loading rules...
             </div>
           ) : filteredRules.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">
-              No alert rules found. Click &quot;Create Rule&quot; to get started.
+            <div className="p-6">
+              <EmptyState
+                icon="alert"
+                title={t('pages.alertRulesEngine.empty_title')}
+                body={t('pages.alertRulesEngine.empty_body')}
+              />
             </div>
           ) : visibleRules.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
+            <div className="p-6">
+              <EmptyState icon="search-x" title={t('weissmanFindings.filtered_title')} compact />
+            </div>
           ) : (
             <div className="divide-y divide-[var(--border-subtle)]">
               {visibleRules.map((rule) => (
@@ -461,6 +469,7 @@ function RuleModal({ rule, template, onClose, onSave }) {
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- full-screen modal overlay; only handles Escape keydown, dialog semantics live on the inner element
     <div
       className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
@@ -481,8 +490,9 @@ function RuleModal({ rule, template, onClose, onSave }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Rule Name</label>
+            <label htmlFor="alert-rule-name" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Rule Name</label>
             <input
+              id="alert-rule-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -492,8 +502,9 @@ function RuleModal({ rule, template, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
+            <label htmlFor="alert-rule-description" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
             <textarea
+              id="alert-rule-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
@@ -504,8 +515,9 @@ function RuleModal({ rule, template, onClose, onSave }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Priority</label>
+              <label htmlFor="alert-rule-priority" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Priority</label>
               <input
+                id="alert-rule-priority"
                 type="number"
                 min="1"
                 max="10"
@@ -518,8 +530,9 @@ function RuleModal({ rule, template, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Status</label>
+              <label htmlFor="alert-rule-status" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Status</label>
               <select
+                id="alert-rule-status"
                 value={formData.enabled ? 'enabled' : 'disabled'}
                 onChange={(e) =>
                   setFormData({ ...formData, enabled: e.target.value === 'enabled' })
@@ -533,9 +546,9 @@ function RuleModal({ rule, template, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            <span className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Notification Channels
-            </label>
+            </span>
             <div className="space-y-2">
               {['email', 'slack', 'teams', 'pagerduty', 'webhook'].map((channel) => (
                 <label key={channel} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">

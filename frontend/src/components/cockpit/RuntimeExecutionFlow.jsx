@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Cpu, FileCode, MapPin } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 const NS = 'components.cockpitWidgets.runtimeExecutionFlow'
 
@@ -20,7 +20,6 @@ export default function RuntimeExecutionFlow({ clientId, findingId }) {
       ? `/api/clients/${clientId}/runtime-traces?finding_id=${encodeURIComponent(findingId)}`
       : `/api/clients/${clientId}/runtime-traces`
     apiFetch(url)
-      .then(r => (r.ok ? r.json() : { traces: [] }))
       .then(d => {
         setTraces(d.traces || [])
       })

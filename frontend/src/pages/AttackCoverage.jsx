@@ -15,7 +15,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 const NS = 'pages.attackCoverage'
 
@@ -58,9 +58,7 @@ export default function AttackCoverage() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/attack-coverage')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/attack-coverage')
       setData(d)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
@@ -151,7 +149,7 @@ export default function AttackCoverage() {
             {loading ? (
               <SkeletonCard lines={8} />
             ) : filteredTactics.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredTactics.map((tac, i) => {

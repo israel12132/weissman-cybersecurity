@@ -20,6 +20,9 @@ permissions:
 
 env:
   IMAGE: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend
+  # Bind the workflow input to an env var so it is never interpolated as ${{ }} inside a
+  # run: shell (which Semgrep flags as a code-injection sink). Shells read it as "$IMAGE_DIGEST".
+  IMAGE_DIGEST: ${{ inputs.image_digest }}
 
 jobs:
   deploy:
@@ -27,15 +30,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Read-only checkout: this job never pushes back, so don't leave the
+          # GitHub token in .git/config for later steps (least privilege).
+          persist-credentials: false
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
       - name: Verify image signature (fail closed)
-        # Pass ${{ inputs.image_digest }} through an intermediate env var rather than
-        # interpolating it straight into the shell — GitHub context data is untrusted
-        # and direct `${{ }}` in a run: step is a shell-injection vector. Mirrors the
-        # KUBECONFIG_DATA pattern in the Apply step below.
+        # `inputs.image_digest` is passed via env (never interpolated into the
+        # script text) so untrusted workflow input can't inject shell — see
+        # Semgrep run-shell-injection (sg.run/pkzk).
         env:
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
@@ -52,21 +58,24 @@ jobs:
           set -euo pipefail
           DIGEST_REF="${IMAGE}@${IMAGE_DIGEST}"
           # Replace any `image: <IMAGE>:tag` or existing digest with the verified digest.
-          for f in $(grep -rl "${IMAGE}" deploy/k8s || true); do
-            sed -i -E "s,image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+),image: ${DIGEST_REF},g" "$f"
+          # NUL-delimited so filenames with spaces/newlines are handled safely.
+          while IFS= read -r -d '' f; do
+            sed -i -E "s|image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+)|image: ${DIGEST_REF}|g" "$f"
             echo "pinned $f -> ${DIGEST_REF}"
-          done
+          done < <(grep -rlZ "${IMAGE}" deploy/k8s || true)
 
       - name: Render pinned manifests (artifact for review / GitOps)
         env:
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
+          set -euo pipefail
           mkdir -p _render && cp deploy/k8s/*.yaml _render/
-          # Artifact names cannot contain ':'; sanitize the sha256:... digest to sha256-...
-          echo "SAFE_DIGEST=${IMAGE_DIGEST//:/-}" >> "$GITHUB_ENV"
+          # GitHub artifact names forbid ':', so map `sha256:<hex>` -> `sha256-<hex>`.
+          # Value comes via the environment (IMAGE_DIGEST) to keep shell-injection safe.
+          echo "ARTIFACT_NAME=rendered-k8s-${IMAGE_DIGEST//:/-}" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: rendered-k8s-${{ env.SAFE_DIGEST }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: _render/
 
       - name: Apply to cluster (only when a KUBECONFIG secret is configured)

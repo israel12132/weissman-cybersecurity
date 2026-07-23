@@ -18,7 +18,7 @@ import DataTable from '../components/ui/DataTable'
 import CopyButton from '../components/ui/CopyButton'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 const NS = 'pages.reportHistory'
 const columnHelper = createColumnHelper()
@@ -34,9 +34,7 @@ export default function ReportHistory() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/reports')
-      const d = await r.json().catch(() => [])
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await apiFetch('/api/reports')
       setRows(Array.isArray(d) ? d : Array.isArray(d?.reports) ? d.reports : [])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
@@ -140,9 +138,9 @@ export default function ReportHistory() {
             </div>
 
             {rows.length === 0 ? (
-              <EmptyState icon="🧾" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+              <EmptyState icon="file" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
             ) : filtered.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <DataTable id="report-history-table" columns={columns} data={filtered} animateRows={false} getRowId={(r) => r.id} />
             )}

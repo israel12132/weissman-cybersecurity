@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Swords, Rocket, ShieldAlert, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { Swords, Rocket, ShieldAlert, CheckCircle2, XCircle, Loader2, FileText, Search } from 'lucide-react'
+import { apiFetch } from '../utils/apiFetch'
+import Button from '../components/ui/Button'
+import EvidenceNotice from '../components/ui/EvidenceNotice'
+import ShellScanActions from '../components/engine/ShellScanActions'
+import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
+
+/** CSV/PDF columns for the recommended-engine plan. Exported for tests. */
+export const ARSENAL_CSV_HEADER = ['engine_id', 'addressable_findings']
+
+/** Pure: recommended engines → export rows. Exported for tests. */
+export function arsenalRows(recommended) {
+  return (Array.isArray(recommended) ? recommended : []).map((e) => [
+    e?.engine_id ?? '',
+    e?.addressable_findings ?? 0,
+  ])
+}
 
 /**
  * ArsenalConsole — the system's self-aware, one-click response to a client's threat exposure.
@@ -61,6 +76,7 @@ export default function ArsenalConsole({ clientId }) {
   const [target, setTarget] = useState('')
   const [deploying, setDeploying] = useState(false)
   const [launchStatus, setLaunchStatus] = useState({})
+  const [searchQuery, setSearchQuery] = useState('')
 
   const load = useCallback(async (id) => {
     if (id == null) { setData(null); return }
@@ -68,9 +84,7 @@ export default function ArsenalConsole({ clientId }) {
     setError(null)
     setLaunchStatus({})
     try {
-      const r = await apiFetch(`/api/arsenal/recommendation/${encodeURIComponent(id)}`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/arsenal/recommendation/${encodeURIComponent(id)}`)
       setData(d && typeof d === 'object' ? d : null)
     } catch (e) {
       setError(e?.message || 'load failed')
@@ -84,9 +98,7 @@ export default function ArsenalConsole({ clientId }) {
   const resolveTarget = useCallback(async (id) => {
     if (id == null) { setTarget(''); return }
     try {
-      const r = await apiFetch('/api/clients')
-      if (!r.ok) return
-      const d = await r.json().catch(() => [])
+      const d = await apiFetch('/api/clients')
       const list = Array.isArray(d) ? d : d?.clients || []
       const c = list.find((x) => String(x.id) === String(id))
       setTarget(parseFirstDomain(c?.domains))
@@ -102,6 +114,24 @@ export default function ArsenalConsole({ clientId }) {
   const gaps = Array.isArray(data?.gaps) ? data.gaps : []
   const plan = useMemo(() => deployList(recommended), [recommended])
 
+  // Client-side filter over the already-loaded recommendation set (a bounded, tenant-
+  // scoped rollup — no server round-trip needed to search it).
+  const filteredRecommended = useMemo(
+    () => recommended.filter((e) => rowMatchesQuery(searchQuery, [e?.engine_id, e?.addressable_findings])),
+    [recommended, searchQuery],
+  )
+
+  const handleRefresh = useCallback(() => load(clientId), [load, clientId])
+  const exportCsv = useCallback(
+    () => exportRowsCsv(ARSENAL_CSV_HEADER, arsenalRows(filteredRecommended), 'weissman-arsenal-console'),
+    [filteredRecommended],
+  )
+  const exportPdf = useCallback(
+    () =>
+      exportRowsPdf('Weissman Arsenal Console', ARSENAL_CSV_HEADER, arsenalRows(filteredRecommended), 'weissman-arsenal-console'),
+    [filteredRecommended],
+  )
+
   // Deploy the recommended plan through the stealth batch endpoint (rate-limited, jittered, rotated
   // identity) instead of a burst — so the recommended one-click is as WAF-safe as "Run all".
   const deploy = useCallback(async () => {
@@ -109,14 +139,11 @@ export default function ArsenalConsole({ clientId }) {
     setDeploying(true)
     setLaunchStatus({})
     try {
-      const r = await apiFetch('/api/arsenal/deploy', {
+      await apiFetch('/api/arsenal/deploy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, target, engines: plan }),
+        body: { client_id: clientId, target, engines: plan },
       })
-      const d = await r.json().catch(() => ({}))
-      const state = r.ok ? 'queued' : 'failed'
-      setLaunchStatus(Object.fromEntries(plan.map((id) => [id, state])))
+      setLaunchStatus(Object.fromEntries(plan.map((id) => [id, 'queued'])))
     } catch {
       setLaunchStatus(Object.fromEntries(plan.map((id) => [id, 'failed'])))
     } finally {
@@ -132,6 +159,12 @@ export default function ArsenalConsole({ clientId }) {
 
   return (
     <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+      <div className="px-4 pt-4">
+        <EvidenceNotice>
+          Live recommendation from GET /api/arsenal/recommendation/:client_id — ATT&amp;CK exposure
+          crossed against the tenant-scoped engine arsenal. No fabricated engine telemetry.
+        </EvidenceNotice>
+      </div>
       <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
           <Swords className="w-4 h-4 text-cyan-400" />
@@ -144,8 +177,26 @@ export default function ArsenalConsole({ clientId }) {
           <span className="text-[10px] font-mono text-white/35">
             {t('pages.threatAnalysis.arsenal_inventory', { engines: data?.arsenal_engine_count ?? 0 })}
           </span>
+          <ShellScanActions
+            onRefresh={handleRefresh}
+            onExport={exportCsv}
+            refreshLoading={loading}
+            exportDisabled={!filteredRecommended.length}
+          />
+          <Button
+            variant="unstyled"
+            type="button"
+            onClick={exportPdf}
+            disabled={!filteredRecommended.length}
+            title={t('common.export_pdf')}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('common.export_pdf')}
+          </Button>
           {plan.length > 0 && (
-            <button
+            <Button
+              variant="unstyled"
               type="button"
               onClick={deploy}
               disabled={deploying}
@@ -153,7 +204,7 @@ export default function ArsenalConsole({ clientId }) {
             >
               {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
               {t('pages.threatAnalysis.arsenal_deploy', { count: plan.length })}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -161,12 +212,25 @@ export default function ArsenalConsole({ clientId }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
         {/* Recommended engines (the one-click plan) */}
         <div className="p-4 border-b lg:border-b-0 lg:border-r border-white/5">
-          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-3">{t('pages.threatAnalysis.arsenal_recommended')}</div>
-          {recommended.length === 0 ? (
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="text-[10px] uppercase tracking-wider text-white/40">{t('pages.threatAnalysis.arsenal_recommended')}</div>
+            <div className="relative">
+              <Search className="w-3 h-3 text-white/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('common.search')}
+                aria-label={t('common.search')}
+                className="w-32 pl-6 pr-2 py-1 rounded-md text-[11px] bg-black/40 border border-white/10 text-white/80 placeholder-white/30 focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
+          </div>
+          {filteredRecommended.length === 0 ? (
             <div className="text-[11px] text-white/35">{t('pages.threatAnalysis.arsenal_none')}</div>
           ) : (
             <div className="space-y-2">
-              {recommended.slice(0, 12).map((e) => {
+              {filteredRecommended.slice(0, 12).map((e) => {
                 const st = launchStatus[e.engine_id]
                 const Icon = st ? STATUS_ICON[st] : null
                 return (

@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { createColumnHelper } from '@tanstack/react-table'
 import { useClient } from '../../context/ClientContext'
 import DigitalEvidenceHUD from '../warroom/DigitalEvidenceHUD'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
 import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import SeverityBadge from '../ui/SeverityBadge'
-import { SkeletonTable } from '../ui/Skeleton'
-import EmptyState from '../ui/EmptyState'
+import DataTable from '../ui/DataTable'
 import Button from '../ui/Button'
+
+const columnHelper = createColumnHelper()
+const FT = 'components.cockpitTabs.findings'
 
 function severityToCvss(severity) {
   if (!severity) return '—'
@@ -22,162 +25,12 @@ function severityToCvss(severity) {
   return '—'
 }
 
-function parseDescription(description) {
-  if (!description || typeof description !== 'string') return {}
-  try {
-    const d = JSON.parse(description)
-    return {
-      footprint: d.footprint ?? '',
-      trigger_reason: d.trigger_reason ?? '',
-      entropy_map: d.entropy_map ?? [],
-      entropy_score: d.entropy_score,
-      response_bleed_preview: d.response_bleed_preview ?? '',
-      bleed_start_offset: d.bleed_start_offset,
-      expected_verification: d.expected_verification ?? '',
-      remediation_snippet: d.remediation_snippet ?? d.remediation ?? '',
-      generated_patch: d.generated_patch ?? '',
-    }
-  } catch (_) {
-    return { footprint: description }
-  }
-}
-
-function CopyableBlock({ label, value }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  const raw = value || '—'
-  const text = raw === '—' ? '—' : sanitizeFindingPlainText(raw)
-  const copy = () => {
-    if (!text || text === '—') return
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/60 overflow-hidden">
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/10 bg-black/40">
-        <span className="text-[10px] uppercase tracking-wider text-[#6b7280] font-mono">{label}</span>
-        <Button variant="unstyled"
-          type="button"
-          onClick={copy}
-          className="text-xs font-medium text-[#22d3ee] hover:text-[#67e8f9] transition-colors"
-        >
-          {copied ? t('components.cockpitTabs.findings.copy.copied') : t('components.cockpitTabs.findings.copy.copy')}
-        </Button>
-      </div>
-      <pre className="p-3 font-mono text-[11px] text-[#4ade80] whitespace-pre-wrap break-all overflow-x-auto m-0 max-h-48 overflow-y-auto">
-        {text}
-      </pre>
-    </div>
-  )
-}
-
-/** Forensic / PoE text is rendered as plain React children (escaped) — never HTML. */
-function ExpandedRow({ finding, onClose, onVerified }) {
-  const { t } = useTranslation()
-  const desc = parseDescription(finding.description)
-  const proofText = finding.poc_exploit?.trim()
-    ? finding.poc_exploit.trim()
-    : t('components.cockpitTabs.findings.awaiting_poe')
-  const forensicContent = desc.response_bleed_preview
-    ? t('components.cockpitTabs.findings.expanded.bleed_preview', { preview: desc.response_bleed_preview })
-    : Array.isArray(desc.entropy_map) && desc.entropy_map.length > 0
-      ? t('components.cockpitTabs.findings.expanded.entropy_map', {
-          map: JSON.stringify(desc.entropy_map, null, 2),
-        })
-      : finding.description && String(finding.description).trim().startsWith('{')
-        ? (() => {
-            try {
-              return JSON.stringify(JSON.parse(finding.description), null, 2)
-            } catch (_) {
-              return finding.description
-            }
-          })()
-        : t('components.cockpitTabs.findings.expanded.no_forensic_envelope')
-  const crimeScene = desc.footprint || finding.description || t('components.cockpitTabs.findings.expanded.no_crime_scene')
-  const remediation = desc.remediation_snippet?.trim() || '—'
-  const generatedPatch = desc.generated_patch?.trim() || ''
-  const pocCommit = finding.poc_commitment_sha256?.trim() || ''
-  const findingId = finding.finding_id?.trim() || ''
-
-  return (
-    <tr className="bg-[#0a0a0a]">
-      <td colSpan={5} className="p-0 border-b border-[#1a1a1a] align-top">
-        <div className="relative p-4">
-          <Button variant="unstyled"
-            type="button"
-            onClick={onClose}
-            className="absolute top-2 right-2 text-[#6b7280] hover:text-[var(--text-primary)] text-sm"
-            aria-label={t('components.cockpitTabs.findings.expanded.close')}
-          >
-            {t('components.cockpitTabs.findings.expanded.close_button')}
-          </Button>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 pr-20">
-            <div>
-              <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">
-                {t('components.cockpitTabs.findings.expanded.forensic_evidence')}
-              </h4>
-              <div className="rounded-xl border border-white/10 bg-black/80 shadow-inner p-3 font-mono text-[11px] text-white/80 whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
-                {forensicContent}
-              </div>
-            </div>
-            <div>
-              <h4 className="text-xs font-semibold text-[#22d3ee] mb-2 uppercase tracking-wider">
-                {t('components.cockpitTabs.findings.expanded.crime_scene_report')}
-              </h4>
-              <div className="rounded-xl border border-white/10 bg-black/80 shadow-inner p-3 font-mono text-[11px] text-white/80 whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
-                {crimeScene}
-              </div>
-            </div>
-          </div>
-          <div className="px-4 pt-4 space-y-3">
-            <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#10b981' }}>
-              {t('components.cockpitTabs.findings.expanded.recommended_remediation')}
-            </h4>
-            <CopyableBlock
-              label={t('components.cockpitTabs.findings.expanded.remediation_patch')}
-              value={remediation}
-            />
-            {findingId ? <CopyableBlock label="finding_id" value={findingId} /> : null}
-            {pocCommit ? <CopyableBlock label="poc_commitment_sha256" value={pocCommit} /> : null}
-            {generatedPatch ? (
-              <>
-                <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#34d399' }}>
-                  {t('components.cockpitTabs.findings.expanded.generated_patch_title')}
-                </h4>
-                <CopyableBlock label="generated_patch" value={generatedPatch} />
-              </>
-            ) : null}
-          </div>
-        </div>
-        <div className="px-4 pb-4">
-          <h4 className="text-xs font-semibold text-[#f87171] mb-2 uppercase tracking-wider">
-            {t('components.cockpitTabs.findings.expanded.zero_fp_proof')}
-          </h4>
-          <CopyableBlock
-            label={t('components.cockpitTabs.findings.expanded.reproduction_payload')}
-            value={proofText}
-          />
-        </div>
-        <div className="px-4 pb-4 border-t border-white/10 pt-4">
-          <h4 className="text-xs font-semibold text-violet-300 mb-3 uppercase tracking-wider">
-            {t('findings.col_live_verify')}
-          </h4>
-          <FindingVerifyButton finding={finding} onVerified={onVerified} />
-        </div>
-      </td>
-    </tr>
-  )
-}
-
 export default function FindingsTab() {
   const { t } = useTranslation()
   const { selectedClientId, selectedClient } = useClient()
   const [findings, setFindings] = useState([])
   const [loading, setLoading] = useState(false)
   const [findingsError, setFindingsError] = useState(null)
-  const [expandedId, setExpandedId] = useState(null)
   const [evidenceFinding, setEvidenceFinding] = useState(null)
 
   const handleVerifyComplete = useCallback((rawId, verification) => {
@@ -194,6 +47,56 @@ export default function FindingsTab() {
     })
   }, [])
 
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('severity', {
+        header: t(`${FT}.table.severity`),
+        cell: (info) => <SeverityBadge severity={info.getValue()} size="sm" />,
+      }),
+      columnHelper.accessor((f) => severityToCvss(f.severity), {
+        id: 'cvss',
+        header: t(`${FT}.table.cvss`),
+        cell: (info) => <span className="text-[#9ca3af] font-mono text-xs">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor((f) => sanitizeFindingPlainText(f.title, 2000), {
+        id: 'title',
+        header: t(`${FT}.table.title`),
+        cell: (info) => (
+          <span className="text-white max-w-md truncate block" title={info.getValue()}>
+            {info.getValue() || '—'}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('source', {
+        header: t(`${FT}.table.engine_source`),
+        cell: (info) => (
+          <span className="text-[#22d3ee] font-mono text-xs">{info.getValue() || '—'}</span>
+        ),
+      }),
+      columnHelper.display({
+        id: 'live_verify',
+        header: t('findings.col_live_verify'),
+        // Interactive controls: stop row-click (which opens the evidence drawer) from firing.
+        cell: ({ row }) => (
+          <div
+            className="flex items-center gap-1.5"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <LiveVerdictBadge
+              verification={row.original.live_verification}
+              verdict={row.original.live_verdict}
+              compact
+            />
+            <FindingVerifyButton compact finding={row.original} onVerified={handleVerifyComplete} />
+          </div>
+        ),
+      }),
+    ],
+    [t, handleVerifyComplete],
+  )
+
   const fetchFindings = useCallback(async () => {
     if (!selectedClientId) {
       setFindings([])
@@ -203,20 +106,18 @@ export default function FindingsTab() {
     setLoading(true)
     setFindingsError(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/findings`)
-      if (r.ok) {
-        const d = await r.json()
-        setFindings(Array.isArray(d.findings) ? d.findings : [])
-        if (!Array.isArray(d.findings)) {
-          setFindingsError(t('components.cockpitTabs.findings.unexpected_response'))
-        }
-      } else {
-        setFindings([])
-        setFindingsError(await formatApiErrorResponse(r))
+      const d = await apiFetch(`/api/clients/${selectedClientId}/findings`)
+      setFindings(Array.isArray(d.findings) ? d.findings : [])
+      if (!Array.isArray(d.findings)) {
+        setFindingsError(t('components.cockpitTabs.findings.unexpected_response'))
       }
     } catch (e) {
       setFindings([])
-      setFindingsError(e?.message || t('components.cockpitTabs.findings.network_error'))
+      setFindingsError(
+        e?.response
+          ? await formatApiErrorResponse(e.response)
+          : e?.message || t('components.cockpitTabs.findings.network_error'),
+      )
     } finally {
       setLoading(false)
     }
@@ -230,20 +131,19 @@ export default function FindingsTab() {
     if (!selectedClientId) return
     const url = `/api/clients/${selectedClientId}/report/pdf`
     try {
-      const r = await apiFetch(url)
-      const contentType = r.headers.get('Content-Type') || ''
-      if (!r.ok) {
-        setFindingsError(await formatApiErrorResponse(r))
-        return
-      }
+      // raw:true so utils returns the unparsed Response even for a JSON body,
+      // so a non-PDF response reports its ACTUAL Content-Type (matching the old
+      // r.headers.get('Content-Type')) rather than a hardcoded 'application/json'.
+      const res = await apiFetch(url, { raw: true })
+      const contentType = res.headers.get('Content-Type') || ''
       if (!contentType.includes('application/pdf')) {
         setFindingsError(
           t('components.cockpitTabs.findings.report_unexpected_type', { type: contentType || 'unknown' }),
         )
         return
       }
-      const blob = await r.blob()
-      const disposition = r.headers.get('Content-Disposition') || ''
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') || ''
       const match = disposition.match(/filename="?([^";\n]+)"?/)
       let filename = match ? match[1].trim() : 'Weissman_Report.pdf'
       if (!filename.toLowerCase().endsWith('.pdf')) filename = `${filename.replace(/\.[^.]+$/, '')}.pdf`
@@ -256,7 +156,11 @@ export default function FindingsTab() {
       document.body.removeChild(a)
       URL.revokeObjectURL(objectUrl)
     } catch (e) {
-      setFindingsError(e?.message || t('components.cockpitTabs.findings.pdf_download_failed'))
+      setFindingsError(
+        e?.response
+          ? await formatApiErrorResponse(e.response)
+          : e?.message || t('components.cockpitTabs.findings.pdf_download_failed'),
+      )
     }
   }
 
@@ -300,88 +204,23 @@ export default function FindingsTab() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-white/10 bg-white/5">
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-24">
-                  {t('components.cockpitTabs.findings.table.severity')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-28">
-                  {t('components.cockpitTabs.findings.table.cvss')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono">
-                  {t('components.cockpitTabs.findings.table.title')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-40">
-                  {t('components.cockpitTabs.findings.table.engine_source')}
-                </th>
-                <th className="text-left py-3 px-4 text-[10px] uppercase tracking-wider text-[#6b7280] font-mono w-32">
-                  {t('findings.col_live_verify')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={5} className="py-4 px-4">
-                    <SkeletonTable rows={6} cols={5} />
-                  </td>
-                </tr>
-              )}
-              {!loading && !findingsError && findings.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-0 border-0">
-                    <EmptyState
-                      icon="search-x"
-                      title={t('components.cockpitTabs.findings.empty.title')}
-                      body={t('components.cockpitTabs.findings.empty.body')}
-                      compact
-                      className="border-0 bg-transparent rounded-none"
-                    />
-                  </td>
-                </tr>
-              )}
-              {!loading && findings.map((f) => (
-                <React.Fragment key={f.id}>
-                  <tr
-                    onClick={() => setEvidenceFinding(f)}
-                    className="border-b border-white/10 cursor-pointer transition-colors duration-200 hover:bg-white/5"
-                  >
-                    <td className="py-2.5 px-4">
-                      <SeverityBadge severity={f.severity} size="sm" />
-                    </td>
-                    <td className="py-2.5 px-4 text-[#9ca3af] font-mono text-xs">
-                      {severityToCvss(f.severity)}
-                    </td>
-                    <td className="py-2.5 px-4 text-white max-w-md truncate" title={sanitizeFindingPlainText(f.title, 500)}>
-                      {sanitizeFindingPlainText(f.title, 2000) || '—'}
-                    </td>
-                    <td className="py-2.5 px-4 text-[#22d3ee] font-mono text-xs">
-                      {f.source || '—'}
-                    </td>
-                    <td
-                      className="py-2.5 px-4"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      role="presentation"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <LiveVerdictBadge verification={f.live_verification} verdict={f.live_verdict} compact />
-                        <FindingVerifyButton compact finding={f} onVerified={handleVerifyComplete} />
-                      </div>
-                    </td>
-                  </tr>
-                  {expandedId === f.id && (
-                    <ExpandedRow finding={f} onClose={() => setExpandedId(null)} onVerified={handleVerifyComplete} />
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        id="cockpit-findings-table"
+        columns={columns}
+        data={findings}
+        loading={loading}
+        getRowId={(f) => f.id}
+        onRowClick={(row) => setEvidenceFinding(row.original)}
+        animateRows={false}
+        emptyState={
+          findingsError ? undefined : {
+            icon: 'search-x',
+            title: t(`${FT}.empty.title`),
+            body: t(`${FT}.empty.body`),
+            compact: true,
+          }
+        }
+      />
 
       <DigitalEvidenceHUD
         clientId={selectedClientId}

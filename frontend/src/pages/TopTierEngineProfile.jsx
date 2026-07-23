@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { buildSimpleTextPdf, downloadBytes } from '../lib/pdfExport'
 import { normalizeIntegrations, TOP_TIER_PARAM_ROUTES } from '../lib/engineClientPrefill'
 import { getTopTierProfile, isTopTierEngine } from '../lib/topTierEngineProfiles'
@@ -63,17 +63,21 @@ export default function TopTierEngineProfile() {
   const reloadAll = useCallback(async () => {
     setHistoryLoading(true)
     try {
-      const [auditR, historyR] = await Promise.all([
+      // allSettled so history is set whenever its call SUCCEEDS (matching the old
+      // `if (historyR.ok)`), independent of body truthiness, and one call failing
+      // never rejects the other. A non-JSON 2xx (raw Response) maps to null, as the
+      // old `await r.json().catch(() => null)` did.
+      const [auditRes, historyRes] = await Promise.allSettled([
         apiFetch('/api/engines/top-tier/audit'),
         apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/history?limit=80`),
       ])
-      const auditD = await auditR.json().catch(() => null)
-      const historyD = await historyR.json().catch(() => null)
-      if (auditR.ok && Array.isArray(auditD?.engines)) {
-        const row = auditD.engines.find((x) => x.engine_id === engineId) || null
+      if (auditRes.status === 'fulfilled' && Array.isArray(auditRes.value?.engines)) {
+        const row = auditRes.value.engines.find((x) => x.engine_id === engineId) || null
         setAudit(row)
       }
-      if (historyR.ok) setHistory(historyD)
+      if (historyRes.status === 'fulfilled') {
+        setHistory(historyRes.value instanceof Response ? null : historyRes.value)
+      }
     } finally {
       setHistoryLoading(false)
     }
@@ -86,9 +90,8 @@ export default function TopTierEngineProfile() {
   useEffect(() => {
     let cancelled = false
     async function loadClients() {
-      const r = await apiFetch('/api/clients')
-      const d = await r.json().catch(() => [])
-      if (!cancelled && r.ok && Array.isArray(d)) setClients(d)
+      const d = await apiFetch('/api/clients').catch(() => null)
+      if (!cancelled && Array.isArray(d)) setClients(d)
     }
     loadClients()
     return () => {
@@ -103,8 +106,7 @@ export default function TopTierEngineProfile() {
     }
     let cancelled = false
     ;(async () => {
-      const r = await apiFetch(`/api/clients/${clientId}/integrations`)
-      const d = r.ok ? await r.json() : null
+      const d = await apiFetch(`/api/clients/${clientId}/integrations`).catch(() => null)
       if (cancelled) return
       setClientIntegrations(normalizeIntegrations(d))
     })()
@@ -121,6 +123,7 @@ export default function TopTierEngineProfile() {
     return p
   }, [profile, clientId, target, engineId, extraParams])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const jobs = Array.isArray(history?.jobs) ? history.jobs : []
   const findings = Array.isArray(history?.findings) ? history.findings : []
 
@@ -194,9 +197,8 @@ export default function TopTierEngineProfile() {
     if (!activeJobId) return undefined
     let cancelled = false
     const iv = setInterval(async () => {
-      const r = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`)
-      const d = await r.json().catch(() => null)
-      if (cancelled || !r.ok || !d) return
+      const d = await apiFetch(`/api/jobs/${encodeURIComponent(activeJobId)}`).catch(() => null)
+      if (cancelled || !d) return
       setLiveJob(d)
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
@@ -224,10 +226,17 @@ export default function TopTierEngineProfile() {
   }
 
   async function exportJson() {
-    const r = await apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/export?limit=120${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
-    const d = await r.json().catch(() => null)
-    if (!r.ok || !d) {
-      setRunState((prev) => ({ ...prev, msg: t('pages.topTierEngineProfile.export_json_failed', { status: r.status }) }))
+    let d
+    try {
+      d = await apiFetch(`/api/engines/top-tier/${encodeURIComponent(engineId)}/export?limit=120${activeJobId ? `&job_id=${encodeURIComponent(activeJobId)}` : ''}`)
+    } catch (e) {
+      setRunState((prev) => ({ ...prev, msg: t('pages.topTierEngineProfile.export_json_failed', { status: e?.status }) }))
+      return
+    }
+    if (!d || d instanceof Response) {
+      // non-JSON/empty 2xx (utils returns the raw Response) is a failure here,
+      // not a serializable export — don't stringify a Response into a garbage file.
+      setRunState((prev) => ({ ...prev, msg: t('pages.topTierEngineProfile.export_json_failed', { status: 200 }) }))
       return
     }
     const bytes = new TextEncoder().encode(JSON.stringify(d, null, 2))

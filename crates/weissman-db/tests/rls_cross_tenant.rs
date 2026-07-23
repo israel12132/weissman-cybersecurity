@@ -62,10 +62,17 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
         return;
     }
     let pool = PgPoolOptions::new()
-        .max_connections(2)
+        .max_connections(1)
         .connect(url.trim())
         .await
         .expect("connect TEST_DATABASE_URL");
+    // Pin the whole contract to ONE connection. `SET ROLE weissman_app` and the
+    // `app.current_tenant_id` GUC are per-connection session state; running the
+    // seed / role / GUC / SELECT statements over a multi-connection pool let the
+    // SELECT land on a still-superuser connection and bypass RLS (flaky under the
+    // full `cargo test --workspace` connection contention). Hold one connection
+    // explicitly and run every statement on it.
+    let mut conn = pool.acquire().await.expect("acquire dedicated connection");
 
     // Pin ONE connection for the entire contract. Every role/GUC/probe statement below runs
     // on `conn`, so `SET LOCAL ROLE` + the transaction-local GUC and the COUNT they gate all

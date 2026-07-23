@@ -17,7 +17,7 @@ import DataTable from '../components/ui/DataTable'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
 
@@ -111,9 +111,8 @@ export default function AttackPaths() {
       setError('')
       try {
         const qs = recompute ? '?recompute=1&top_k=15' : ''
-        const r = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}${qs}`)
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok || data.ok === false) throw new Error(data.detail || `HTTP ${r.status}`)
+        const data = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}${qs}`)
+        if (data?.ok === false) throw new Error(data.detail || 'load failed')
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
@@ -245,7 +244,7 @@ export default function AttackPaths() {
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
         {selectedClientId == null && (
-          <EmptyState icon="🏢" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
+          <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
         )}
 
         {selectedClientId != null && loading && <SkeletonWidgetGrid count={4} />}
@@ -258,7 +257,7 @@ export default function AttackPaths() {
 
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
-            icon="🕸"
+            icon="network"
             title={t(`${NS}.no_snapshot_title`)}
             body={t(`${NS}.no_snapshot_body`)}
             action={
@@ -294,7 +293,7 @@ export default function AttackPaths() {
               </h2>
               <p className="text-[11px] text-[var(--text-muted)] mb-3">{t(`${NS}.choke_points_hint`)}</p>
               {chokePoints.length === 0 ? (
-                <EmptyState icon="📊" title={t(`${NS}.no_choke_title`)} body={t(`${NS}.no_choke_body`)} />
+                <EmptyState icon="chart" title={t(`${NS}.no_choke_title`)} body={t(`${NS}.no_choke_body`)} />
               ) : (
                 <DataTable
                   id="attack-choke-points"
@@ -313,7 +312,7 @@ export default function AttackPaths() {
                 {t(`${NS}.top_paths`)}
               </h2>
               {paths.length === 0 ? (
-                <EmptyState icon="🛡" title={t(`${NS}.no_paths_title`)} body={t(`${NS}.no_paths_body`)} />
+                <EmptyState icon="shield" title={t(`${NS}.no_paths_title`)} body={t(`${NS}.no_paths_body`)} />
               ) : (
                 <div className="space-y-3">
                   {paths.slice(0, 15).map((p, i) => (

@@ -402,6 +402,70 @@ pub async fn validate_scan_target_in_scope(
     })
 }
 
+/// Validate a tenant-configured OUTBOUND URL (webhook / Slack / integration target)
+/// against SSRF. Unlike scan targets these legitimately point at arbitrary third-party
+/// domains, so there is no tenant-scope allow-list — but the destination must be a
+/// public http(s) endpoint: cloud-metadata/internal hosts are blocked, and every
+/// resolved address is rejected if it is private/reserved (unless the operator sets
+/// `WEISSMAN_ALLOW_PRIVATE_WEBHOOKS=1` for on-prem integrations).
+pub async fn validate_outbound_url(raw: &str) -> Result<(), String> {
+    let u = raw.trim();
+    if u.is_empty() || u.len() > MAX_URL_BYTES {
+        return Err("invalid webhook url length".to_string());
+    }
+    let parsed = Url::parse(u).map_err(|_| "invalid webhook URL".to_string())?;
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err("only http and https webhook URLs are allowed".to_string());
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "missing webhook host".to_string())?
+        .to_ascii_lowercase();
+    let host_trimmed_dot = host.trim_end_matches('.');
+    if SCAN_SCOPE_BLOCKLIST.iter().any(|h| *h == host_trimmed_dot)
+        || host_trimmed_dot == "metadata"
+        || host_trimmed_dot == "metadata.google.internal"
+        || host_trimmed_dot.ends_with(".internal")
+    {
+        return Err(format!("webhook host '{host_trimmed_dot}' is blocked"));
+    }
+    let allow_private = std::env::var("WEISSMAN_ALLOW_PRIVATE_WEBHOOKS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if allow_private {
+        return Ok(());
+    }
+    let port = parsed.port_or_known_default().unwrap_or(443);
+    if let Ok(ip) = host_trimmed_dot.parse::<IpAddr>() {
+        if is_private_or_reserved_ip(&ip) {
+            return Err(format!(
+                "webhook host '{host_trimmed_dot}' is a private/reserved address"
+            ));
+        }
+    } else {
+        let resolved = lookup_host((host_trimmed_dot, port))
+            .await
+            .map_err(|_| format!("failed to resolve webhook host '{host_trimmed_dot}'"))?;
+        let mut saw = false;
+        for addr in resolved {
+            saw = true;
+            if is_private_or_reserved_ip(&addr.ip()) {
+                return Err(format!(
+                    "webhook host '{host_trimmed_dot}' resolved to blocked address {}",
+                    addr.ip()
+                ));
+            }
+        }
+        if !saw {
+            return Err(format!(
+                "failed to resolve webhook host '{host_trimmed_dot}'"
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub async fn enforce_execution_scope_pin(
     target: &str,
     validated_scope: &Value,
@@ -622,14 +686,38 @@ mod tests {
         assert!(err.is_err());
     }
 
+    // Round-robin tolerance: a target that still resolves to a PUBLIC address is accepted even
+    // when that address is not in the submission-time pin set. Rotating/anycast/CDN hosts
+    // (github.com, Cloudflare-fronted sites) hand out different public A-records per lookup, so
+    // requiring an exact pin match would permanently break legitimate public scans. The pin's
+    // job is anti-rebinding into internal space — enforced by the test below — not freezing a
+    // single public IP.
     #[tokio::test]
-    async fn execution_scope_pin_rejects_unpinned_ip() {
+    async fn execution_scope_pin_allows_unpinned_public_ip() {
         let scope = serde_json::json!({
             "host": "1.1.1.1",
             "resolved_ips": ["8.8.8.8"]
         });
-        let err = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
-        assert!(err.is_err());
+        let ok = enforce_execution_scope_pin("https://1.1.1.1", &scope).await;
+        assert!(
+            ok.is_ok(),
+            "a public address outside the pin set must be tolerated (round-robin), got {ok:?}"
+        );
+    }
+
+    // Retained SSRF property: if the (name-matched) host resolves to a private/reserved address
+    // at execution while the pin was public, reject it as a possible DNS rebind.
+    #[tokio::test]
+    async fn execution_scope_pin_rejects_rebind_to_private_ip() {
+        let scope = serde_json::json!({
+            "host": "10.0.0.1",
+            "resolved_ips": ["8.8.8.8"]
+        });
+        let err = enforce_execution_scope_pin("https://10.0.0.1", &scope).await;
+        assert!(
+            err.is_err(),
+            "a host resolving into private/reserved space must be rejected (rebind), got {err:?}"
+        );
     }
 
     #[test]

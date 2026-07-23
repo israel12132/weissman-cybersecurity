@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
@@ -289,7 +289,8 @@ export default function ServerlessSecurityCommandCenter() {
   const appendLine = useCallback((msg) => setLines((prev) => [...prev.slice(-400), msg]), [])
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -329,7 +330,7 @@ export default function ServerlessSecurityCommandCenter() {
           if (p.status === 'completed' || p.status === 'failed') {
             es.close()
             setRunning(false)
-            apiFetch(`/api/jobs/${jobId}`).then((jr) => (jr.ok ? jr.json() : null)).then((job) => {
+            apiFetch(`/api/jobs/${jobId}`).then((job) => {
               const res = job?.result_json || job?.result
               const f = res?.findings || []
               setFindings(f)
@@ -338,6 +339,7 @@ export default function ServerlessSecurityCommandCenter() {
               const meta = f.find((x) => x.serverless_metrics)?.serverless_metrics
               if (meta) setMetrics(meta)
               appendLine(`[λ] ${dryRun ? 'Dry-run complete' : 'Assessment complete'} — ${f.length} findings`)
+              // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
             }).catch(() => {})
           }
         } catch { /* ignore */ }
@@ -347,6 +349,7 @@ export default function ServerlessSecurityCommandCenter() {
       appendLine(`[ERROR] ${e.message}`)
       setRunning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params, paramCount, appendLine, setLastUpdated, setLastJobId])
 
   return (

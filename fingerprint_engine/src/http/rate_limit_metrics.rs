@@ -144,7 +144,7 @@ fn push_window(
     let now = Instant::now();
     let cutoff = now.checked_sub(window).unwrap_or(now);
     let cell = map.entry(key.to_string()).or_default();
-    let mut q = cell.lock().expect("rate_limit window lock");
+    let mut q = cell.lock().unwrap_or_else(|poison| poison.into_inner());
     q.retain(|t| *t > cutoff);
     q.push_back(now);
     let count = q.len();
@@ -169,7 +169,7 @@ fn push_window_i64(
     let now = Instant::now();
     let cutoff = now.checked_sub(window).unwrap_or(now);
     let cell = map.entry(key).or_default();
-    let mut q = cell.lock().expect("rate_limit window lock");
+    let mut q = cell.lock().unwrap_or_else(|poison| poison.into_inner());
     q.retain(|t| *t > cutoff);
     q.push_back(now);
     let count = q.len();
@@ -196,7 +196,7 @@ fn window_count_i64(
     let Some(cell) = map.get(&key) else {
         return (0, 0);
     };
-    let mut q = cell.lock().expect("rate_limit window lock");
+    let mut q = cell.lock().unwrap_or_else(|poison| poison.into_inner());
     q.retain(|t| *t > cutoff);
     let count = q.len();
     let reset_in = q
@@ -222,7 +222,7 @@ fn window_count(
     let Some(cell) = map.get(key) else {
         return (0, 0);
     };
-    let mut q = cell.lock().expect("rate_limit window lock");
+    let mut q = cell.lock().unwrap_or_else(|poison| poison.into_inner());
     q.retain(|t| *t > cutoff);
     let count = q.len();
     let reset_in = q
@@ -239,7 +239,10 @@ fn window_count(
 }
 
 fn record_violation(tenant_id: Option<i64>, kind: &'static str, endpoint: &str) {
-    let mut v = store().violations.lock().expect("violations lock");
+    let mut v = store()
+        .violations
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     v.push_back(ViolationRow {
         at: Utc::now(),
         tenant_id,

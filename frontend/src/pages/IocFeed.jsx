@@ -18,7 +18,7 @@ import CopyButton from '../components/ui/CopyButton'
 import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 
@@ -43,9 +43,8 @@ export default function IocFeed() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/soc/iocs')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/soc/iocs')
+      if (d?.ok === false) throw new Error(d.detail || 'load failed')
       setIocs(Array.isArray(d.iocs) ? d.iocs : [])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
@@ -220,9 +219,9 @@ export default function IocFeed() {
             </div>
 
             {iocs.length === 0 ? (
-              <EmptyState icon="🎯" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+              <EmptyState icon="target" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
             ) : filtered.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <DataTable
                 id="ioc-feed-table"

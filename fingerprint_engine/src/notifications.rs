@@ -219,3 +219,22 @@ pub fn spawn_genesis_telegram_alert(text: &str) {
             .await;
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn poc_has_curl_matches_case_insensitively() {
+        assert!(poc_has_curl("curl -X POST https://x"));
+        assert!(poc_has_curl("CURL https://x"));
+        assert!(poc_has_curl("run cURl -v then check"));
+    }
+
+    #[test]
+    fn poc_has_curl_rejects_non_curl() {
+        assert!(!poc_has_curl(""));
+        assert!(!poc_has_curl("wget https://x"));
+        assert!(!poc_has_curl("no exploit tooling mentioned here"));
+    }
+}

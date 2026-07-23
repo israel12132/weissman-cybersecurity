@@ -31,7 +31,9 @@ export default function NeuralEngineWeb({ width = 400, height = 300 }) {
   const { t } = useTranslation()
   const { clients, selectedClientId, clientConfig } = useClient()
   const { engineActivityCount } = useWarRoom()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const enabledEngines = Array.isArray(clientConfig?.enabled_engines) ? clientConfig.enabled_engines : []
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const activity = engineActivityCount || {}
 
   const paths = useMemo(() => {

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 /**
  * Load the most recent engine run from GET /api/engines/history/:engineId.
@@ -14,9 +14,7 @@ export function useEngineHistory(engineId) {
     if (!engineId) return null
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=1`)
-      if (!r.ok) return null
-      const d = await r.json()
+      const d = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=1`)
       const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
       const last = runs[0]
       if (!last) return null

@@ -73,8 +73,8 @@
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-default: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
-  --border-accent: rgba(34, 211, 238, 0.22);
-  --border-accent-violet: rgba(139, 92, 246, 0.28);
+  --border-accent: color-mix(in srgb, var(--brand-primary) 22%, transparent);
+  --border-accent-violet: color-mix(in srgb, var(--brand-secondary) 28%, transparent);
   --border-danger: rgba(248, 113, 113, 0.35);
   --border: var(--border-default);
 
@@ -85,7 +85,7 @@
   --text-muted: #85858f; /* WCAG 1.4.3: ≥4.5:1 on dark surfaces (was #636372 ≈ 3:1) */
   --text-disabled: #45454f;
   --text-inverse: #06060a;
-  --text-accent: #67e8f9;
+  --text-accent: var(--brand-primary-soft);
   --text-accent-violet: #c4b5fd;
 
   /* Legacy aliases */
@@ -93,16 +93,31 @@
   --accent: var(--text-tertiary);
   --accent-strong: var(--text-primary);
 
-  /* ── Brand accent (cyan → violet) ───────────────────────────────────────── */
-  --accent-cyan: #22d3ee;
-  --accent-cyan-soft: #67e8f9;
-  --accent-cyan-muted: rgba(34, 211, 238, 0.15);
-  --accent-violet: #8b5cf6;
-  --accent-violet-soft: #a78bfa;
-  --accent-violet-muted: rgba(139, 92, 246, 0.18);
-  --accent-gradient: linear-gradient(135deg, #22d3ee 0%, #6366f1 48%, #8b5cf6 100%);
-  --accent-gradient-subtle: linear-gradient(135deg, rgba(34, 211, 238, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
-  --accent-gradient-border: linear-gradient(135deg, rgba(34, 211, 238, 0.45) 0%, rgba(139, 92, 246, 0.35) 50%, rgba(34, 211, 238, 0.2) 100%);
+  /* ── White-label brand seeds ────────────────────────────────────────────────
+     Every brand-tinted token below is DERIVED from these five seeds via
+     color-mix, so a tenant can rebrand the entire accent system — fills,
+     gradients, glows, borders, focus rings, selection — by overriding just
+     these variables at runtime (ThemeContext.setBrand stamps them as inline
+     styles on <html>). Defaults reproduce the original cyan→violet palette
+     byte-for-byte (color-mix of a solid hue with `transparent` at N% equals the
+     legacy rgba(...,N/100) value). Do not hardcode these hues downstream —
+     reference the --accent- and --brand- tokens instead. */
+  --brand-primary: #22d3ee;        /* cyan */
+  --brand-primary-soft: #67e8f9;
+  --brand-secondary: #8b5cf6;      /* violet */
+  --brand-secondary-soft: #a78bfa;
+  --brand-gradient-mid: #6366f1;   /* indigo waypoint of the accent gradient */
+
+  /* ── Brand accent (derived from the seeds above) ────────────────────────── */
+  --accent-cyan: var(--brand-primary);
+  --accent-cyan-soft: var(--brand-primary-soft);
+  --accent-cyan-muted: color-mix(in srgb, var(--brand-primary) 15%, transparent);
+  --accent-violet: var(--brand-secondary);
+  --accent-violet-soft: var(--brand-secondary-soft);
+  --accent-violet-muted: color-mix(in srgb, var(--brand-secondary) 18%, transparent);
+  --accent-gradient: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-gradient-mid) 48%, var(--brand-secondary) 100%);
+  --accent-gradient-subtle: linear-gradient(135deg, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, color-mix(in srgb, var(--brand-secondary) 12%, transparent) 100%);
+  --accent-gradient-border: linear-gradient(135deg, color-mix(in srgb, var(--brand-primary) 45%, transparent) 0%, color-mix(in srgb, var(--brand-secondary) 35%, transparent) 50%, color-mix(in srgb, var(--brand-primary) 20%, transparent) 100%);
 
   /* ── Severity palette ───────────────────────────────────────────────────── */
   --severity-critical: #f87171;
@@ -170,9 +185,9 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 8px rgba(0, 0, 0, 0.25);
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.3);
   --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-  --shadow-glow-cyan: 0 0 20px rgba(34, 211, 238, 0.15), 0 0 40px rgba(34, 211, 238, 0.06);
-  --shadow-glow-violet: 0 0 20px rgba(139, 92, 246, 0.18), 0 0 40px rgba(139, 92, 246, 0.08);
-  --shadow-glow-premium: 0 0 24px rgba(34, 211, 238, 0.2), 0 4px 16px rgba(139, 92, 246, 0.15);
+  --shadow-glow-cyan: 0 0 20px color-mix(in srgb, var(--brand-primary) 15%, transparent), 0 0 40px color-mix(in srgb, var(--brand-primary) 6%, transparent);
+  --shadow-glow-violet: 0 0 20px color-mix(in srgb, var(--brand-secondary) 18%, transparent), 0 0 40px color-mix(in srgb, var(--brand-secondary) 8%, transparent);
+  --shadow-glow-premium: 0 0 24px color-mix(in srgb, var(--brand-primary) 20%, transparent), 0 4px 16px color-mix(in srgb, var(--brand-secondary) 15%, transparent);
 
   /* ── Radius scale ───────────────────────────────────────────────────────── */
   --radius-xs: 0.25rem;   /* 4px */
@@ -212,10 +227,10 @@
   --duration-dramatic: 500ms;
 
   /* ── Focus & selection ────────────────────────────────────────────────────── */
-  --focus-ring: 0 0 0 2px var(--bg-0), 0 0 0 4px rgba(34, 211, 238, 0.55);
+  --focus-ring: 0 0 0 2px var(--bg-0), 0 0 0 4px color-mix(in srgb, var(--brand-primary) 55%, transparent);
   --focus-ring-danger: 0 0 0 2px var(--bg-0), 0 0 0 4px rgba(248, 113, 113, 0.55);
-  --focus-ring-violet: 0 0 0 2px var(--bg-0), 0 0 0 4px rgba(139, 92, 246, 0.55);
-  --selection-bg: rgba(34, 211, 238, 0.25);
+  --focus-ring-violet: 0 0 0 2px var(--bg-0), 0 0 0 4px color-mix(in srgb, var(--brand-secondary) 55%, transparent);
+  --selection-bg: color-mix(in srgb, var(--brand-primary) 25%, transparent);
   --selection-text: var(--text-primary);
 
   /* ── Z-index scale ────────────────────────────────────────────────────────── */
@@ -306,5 +321,100 @@
    hardcoded body utility class), so no dark flashes behind the app shell. */
 :root[data-theme='light'] body {
   background-color: var(--bg-0);
+  color: var(--text-secondary);
+}
+
+/**
+ * ── High-Contrast theme ──────────────────────────────────────────────────────
+ * Opt-in via <html data-theme="high-contrast">. A dark-based, maximum-contrast
+ * mode targeting WCAG 2.2 AAA (1.4.6): pure-black surfaces, near-white text,
+ * high-alpha borders, and brightened semantic hues that all clear ≥7:1 on black.
+ * Translucent/blur surfaces are flattened to solid and focus rings gain a solid
+ * outline via the companion rules in index.css. Brand seeds stay overridable so
+ * white-label rebrands still work in this mode.
+ */
+:root[data-theme='high-contrast'] {
+  /* Surfaces — pure black base, subtle stepped elevation */
+  --bg-0: #000000;
+  --bg-1: #000000;
+  --bg-2: #0b0b0b;
+  --bg-3: #161616;
+  --bg-4: #232323;
+  --bg-elevated: #0b0b0b;
+  --bg-overlay: rgba(0, 0, 0, 0.94);
+  --bg-glass: #0b0b0b;
+  --bg-glass-elevated: #161616;
+  --shell-bg: #000000;
+
+  /* Borders — always visible (1.4.11 non-text contrast) */
+  --border-subtle: rgba(255, 255, 255, 0.32);
+  --border-default: rgba(255, 255, 255, 0.55);
+  --border-strong: rgba(255, 255, 255, 0.85);
+  --border-danger: #ff8a8a;
+
+  /* Text — near-white ramp, all ≥7:1 on #000 */
+  --text-primary: #ffffff;
+  --text-secondary: #f2f2f2;
+  --text-tertiary: #e2e2e2;
+  --text-muted: #cfcfcf;
+  --text-disabled: #8f8f8f;
+  --text-inverse: #000000;
+
+  /* Brand seeds — brightened for AAA on black (still white-label overridable) */
+  --brand-primary: #33e6ff;
+  --brand-primary-soft: #7ff0ff;
+  --brand-secondary: #b79bff;
+  --brand-secondary-soft: #cdb9ff;
+  --brand-gradient-mid: #8f9bff;
+  --text-accent: #7ff0ff;
+  --text-accent-violet: #d6c7ff;
+
+  /* Severity — brightened to clear ≥7:1 on black */
+  --severity-critical: #ff7a7a;
+  --severity-critical-bg: rgba(255, 122, 122, 0.16);
+  --severity-critical-border: rgba(255, 122, 122, 0.55);
+  --severity-high: #ffb15e;
+  --severity-high-bg: rgba(255, 177, 94, 0.16);
+  --severity-high-border: rgba(255, 177, 94, 0.55);
+  --severity-medium: #ffe066;
+  --severity-medium-bg: rgba(255, 224, 102, 0.16);
+  --severity-medium-border: rgba(255, 224, 102, 0.55);
+  --severity-low: #6ef29a;
+  --severity-low-bg: rgba(110, 242, 154, 0.16);
+  --severity-low-border: rgba(110, 242, 154, 0.5);
+  --severity-info: #6fd2ff;
+  --severity-info-bg: rgba(111, 210, 255, 0.16);
+  --severity-info-border: rgba(111, 210, 255, 0.5);
+
+  /* Status */
+  --status-active: #5ef0a8;
+  --status-active-bg: rgba(94, 240, 168, 0.16);
+  --status-pending: #ffe066;
+  --status-pending-bg: rgba(255, 224, 102, 0.14);
+  --status-resolved: #cbd5e1;
+  --status-resolved-bg: rgba(203, 213, 225, 0.14);
+  --status-offline: #a0aec0;
+  --status-offline-bg: rgba(160, 174, 192, 0.14);
+  --status-error: #ff7a7a;
+  --status-error-bg: rgba(255, 122, 122, 0.16);
+
+  /* Interaction overlays / chrome — stronger so zebra & hover read on black */
+  --row-hover-bg: rgba(255, 255, 255, 0.16);
+  --row-zebra-bg: rgba(255, 255, 255, 0.07);
+  --table-surface: #0b0b0b;
+  --sidebar-surface: #000000;
+  --header-surface: #000000;
+  --scrim: rgba(0, 0, 0, 0.82);
+  --skeleton-bg: rgba(255, 255, 255, 0.16);
+
+  /* Shadows carry no contrast in HC — a solid ring is added in index.css */
+  --focus-ring: 0 0 0 2px #000000, 0 0 0 4px var(--brand-primary);
+  --focus-ring-danger: 0 0 0 2px #000000, 0 0 0 4px var(--severity-critical);
+  --focus-ring-violet: 0 0 0 2px #000000, 0 0 0 4px var(--brand-secondary);
+  --selection-bg: color-mix(in srgb, var(--brand-primary) 45%, transparent);
+}
+
+:root[data-theme='high-contrast'] body {
+  background-color: #000000;
   color: var(--text-secondary);
 }

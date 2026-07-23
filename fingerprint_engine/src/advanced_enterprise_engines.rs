@@ -435,3 +435,95 @@ pub async fn run_mainframe_zos_attack_result(target: &str, ctx: &EngineRunContex
     let n = findings.len();
     EngineResult::ok(findings, format!("mainframe_zos_attack: {n} mainframe exposure finding(s) on {host}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── scheme_for ────────────────────────────────────────────────────────────
+    #[test]
+    fn scheme_for_tls_ports() {
+        for p in [443u16, 44300, 44301, 50001, 8443] {
+            assert_eq!(scheme_for(p), "https", "port {p} should be https");
+        }
+    }
+
+    #[test]
+    fn scheme_for_plain_ports() {
+        for p in [80u16, 8000, 8001, 8100, 3200, 3300, 50000, 50013] {
+            assert_eq!(scheme_for(p), "http", "port {p} should be http");
+        }
+    }
+
+    // ── sap_url ───────────────────────────────────────────────────────────────
+    #[test]
+    fn sap_url_omits_default_http_port() {
+        assert_eq!(
+            sap_url("http", "sap.example.com", 80, "/sap/public/info"),
+            "http://sap.example.com/sap/public/info"
+        );
+    }
+
+    #[test]
+    fn sap_url_omits_default_https_port() {
+        assert_eq!(
+            sap_url("https", "sap.example.com", 443, "/sap/bc/ping"),
+            "https://sap.example.com/sap/bc/ping"
+        );
+    }
+
+    #[test]
+    fn sap_url_includes_non_default_http_port() {
+        assert_eq!(
+            sap_url("http", "sap.example.com", 8000, "/sap/bc/ping"),
+            "http://sap.example.com:8000/sap/bc/ping"
+        );
+    }
+
+    #[test]
+    fn sap_url_includes_non_default_https_port() {
+        assert_eq!(
+            sap_url("https", "sap.example.com", 44300, "/CTCWebService"),
+            "https://sap.example.com:44300/CTCWebService"
+        );
+    }
+
+    #[test]
+    fn sap_url_scheme_port_mismatch_keeps_port() {
+        // http on 443 is not the default pairing, so the port is retained.
+        assert_eq!(
+            sap_url("http", "h", 443, "/x"),
+            "http://h:443/x"
+        );
+        // https on 80 likewise retains the port.
+        assert_eq!(
+            sap_url("https", "h", 80, "/x"),
+            "https://h:80/x"
+        );
+    }
+
+    // ── port constants ────────────────────────────────────────────────────────
+    #[test]
+    fn sap_default_ports_cover_key_services() {
+        // SAProuter, dispatcher, gateway, message server, ICM/https.
+        for p in [3299u16, 3200, 3300, 3600, 443, 44300, 50000] {
+            assert!(SAP_DEFAULT_PORTS.contains(&p), "missing SAP port {p}");
+        }
+    }
+
+    #[test]
+    fn zos_default_ports_cover_key_services() {
+        // FTP, telnet/TN3270, NJE, TN3270-over-TLS.
+        for p in [21u16, 23, 175, 992] {
+            assert!(ZOS_DEFAULT_PORTS.contains(&p), "missing z/OS port {p}");
+        }
+    }
+
+    #[test]
+    fn recon_path_present_in_sap_http_paths() {
+        // The CVE-2020-6287 (RECON) surface must be probed.
+        assert!(SAP_HTTP_PATHS
+            .iter()
+            .any(|(path, _, _)| path.contains("CTCWebService")));
+    }
+}

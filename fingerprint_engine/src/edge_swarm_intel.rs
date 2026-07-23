@@ -255,3 +255,118 @@ pub async fn enrich_scan_payload_with_edge_node(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(id: i64, region: &str, jobs: i32) -> EdgeNodeRow {
+        EdgeNodeRow {
+            id,
+            region_code: region.to_string(),
+            pop_label: "pop".to_string(),
+            active_jobs: jobs,
+            latitude: None,
+            longitude: None,
+        }
+    }
+
+    #[test]
+    fn region_guess_eu() {
+        assert_eq!(target_region_guess("eu-west-1.example.com"), Some("eu"));
+        assert_eq!(target_region_guess("app.frankfurt.internal"), Some("eu"));
+        assert_eq!(target_region_guess("https://shop.de/cart"), Some("eu"));
+        assert_eq!(target_region_guess("host.ireland.corp"), Some("eu"));
+    }
+
+    #[test]
+    fn region_guess_ap() {
+        assert_eq!(target_region_guess("ap-southeast-2.aws"), Some("ap"));
+        assert_eq!(target_region_guess("edge.tokyo.node"), Some("ap"));
+        assert_eq!(target_region_guess("https://site.jp/index"), Some("ap"));
+    }
+
+    #[test]
+    fn region_guess_us() {
+        assert_eq!(target_region_guess("us-east-1.example.com"), Some("us"));
+        assert_eq!(target_region_guess("db.virginia.local"), Some("us"));
+        assert_eq!(target_region_guess("https://gov.us/portal"), Some("us"));
+    }
+
+    #[test]
+    fn region_guess_is_case_insensitive() {
+        assert_eq!(target_region_guess("EU-WEST-1.EXAMPLE.COM"), Some("eu"));
+    }
+
+    #[test]
+    fn region_guess_none_for_unknown() {
+        assert_eq!(target_region_guess("plain.example.org"), None);
+        assert_eq!(target_region_guess("192.0.2.1"), None);
+    }
+
+    #[test]
+    fn deterministic_pick_empty_is_none() {
+        let nodes: Vec<EdgeNodeRow> = vec![];
+        assert!(deterministic_pick(&nodes, "anything").is_none());
+    }
+
+    #[test]
+    fn deterministic_pick_prefers_lowest_active_jobs() {
+        let nodes = vec![node(1, "xx", 5), node(2, "yy", 2)];
+        let picked = deterministic_pick(&nodes, "example.com").unwrap();
+        assert_eq!(picked.id, 2);
+    }
+
+    #[test]
+    fn deterministic_pick_region_hint_lowers_score() {
+        // Same active_jobs; region match on the eu node subtracts 50 -> wins.
+        let nodes = vec![node(1, "us-east", 3), node(2, "eu-central", 3)];
+        let picked = deterministic_pick(&nodes, "eu-west-1.example.com").unwrap();
+        assert_eq!(picked.id, 2);
+    }
+
+    #[test]
+    fn deterministic_pick_ties_break_by_id() {
+        let nodes = vec![node(5, "us", 0), node(3, "us", 0)];
+        let picked = deterministic_pick(&nodes, "example.com").unwrap();
+        assert_eq!(picked.id, 3);
+    }
+
+    #[test]
+    fn parse_node_id_plain_object() {
+        assert_eq!(parse_llm_node_id("{\"node_id\": 5}"), Some(5));
+    }
+
+    #[test]
+    fn parse_node_id_with_surrounding_text() {
+        assert_eq!(
+            parse_llm_node_id("Here is my answer: {\"node_id\": 7} thanks"),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn parse_node_id_chosen_node_id_alias() {
+        assert_eq!(parse_llm_node_id("{\"chosen_node_id\": 9}"), Some(9));
+    }
+
+    #[test]
+    fn parse_node_id_string_value_parsed() {
+        assert_eq!(parse_llm_node_id("{\"node_id\": \"11\"}"), Some(11));
+    }
+
+    #[test]
+    fn parse_node_id_no_braces_is_none() {
+        assert_eq!(parse_llm_node_id("no json here"), None);
+    }
+
+    #[test]
+    fn parse_node_id_invalid_json_is_none() {
+        assert_eq!(parse_llm_node_id("{ not valid json }"), None);
+    }
+
+    #[test]
+    fn parse_node_id_missing_key_is_none() {
+        assert_eq!(parse_llm_node_id("{\"other\": 1}"), None);
+    }
+}

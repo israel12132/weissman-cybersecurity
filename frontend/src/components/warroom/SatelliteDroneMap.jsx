@@ -6,7 +6,7 @@ import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { useWarRoomSound } from '../../hooks/useWarRoomSound'
 import { stableGeoFromLabel } from '../../lib/stableGeoFromLabel'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 // Vendored locally (see world-atlas dependency) so the map needs no external
 // CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
 import worldGeography from 'world-atlas/countries-110m.json'
@@ -109,7 +109,6 @@ export default function SatelliteDroneMap() {
   useEffect(() => {
     if (zoomPhase !== 'done' || !selectedClientId || !targetCoord) return
     apiFetch(`/api/clients/${selectedClientId}/findings`)
-      .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         const list = data?.findings ?? (Array.isArray(data) ? data : [])
         const arr = Array.isArray(list) ? list : []
@@ -118,6 +117,7 @@ export default function SatelliteDroneMap() {
           coord: [targetCoord[0] + (i - count / 2) * 0.08, targetCoord[1]], // [lng, lat]
         })))
       })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {})
   }, [zoomPhase, selectedClientId, targetCoord, setVulnMarkers])
 

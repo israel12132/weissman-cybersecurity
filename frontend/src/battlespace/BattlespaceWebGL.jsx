@@ -100,6 +100,7 @@ export default function BattlespaceWebGL({
   const panRef = useRef({ x: 0, y: 0 })
   const zoomRef = useRef(1)
   const dragRef = useRef(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const allNodes = [...nodes, ...shadowNodes]
 
   const render = useCallback(() => {

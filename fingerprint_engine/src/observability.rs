@@ -122,33 +122,24 @@ pub fn init_tracing_from_env() {
     let _ = tracing_subscriber::registry().with(layers).try_init();
 }
 
-/// Caps concurrent LLM-usage metering inserts so this best-effort accounting can never pin the
-/// engine-execution `app_pool` out from under live scans. Metering fires once per successful LLM
-/// completion; a burst of concurrent completions (e.g. an angle-fan-out council run) would otherwise
-/// `tokio::spawn` an unbounded set of `begin_tenant_tx` inserts that each hold an app_pool
-/// connection for ~4 round-trips, starving the pool a serialized scan needs. Tasks past the cap wait
-/// on this semaphore holding NO connection, so no usage records are dropped — only the DB fan-out is
-/// bounded. Tunable via `WEISSMAN_LLM_METER_DB_CONCURRENCY` (default 2).
-static LLM_METER_DB_SEM: std::sync::LazyLock<tokio::sync::Semaphore> =
-    std::sync::LazyLock::new(|| {
-        let n = std::env::var("WEISSMAN_LLM_METER_DB_CONCURRENCY")
-            .ok()
-            .and_then(|s| s.trim().parse::<usize>().ok())
-            .filter(|&n| n > 0)
-            .unwrap_or(2);
-        tokio::sync::Semaphore::new(n)
-    });
-
 /// Spawns background inserts into `tenant_llm_usage` for each LLM completion (see `weissman_engines::openai_chat`).
+///
+/// Architectural law (same as `findings_persist`): fire-and-forget DB tasks must not
+/// storm `pool.acquire()`. This reporter fires once per LLM/embedding completion, and
+/// LLM-heavy engines (council debate, generative fuzz, red-team) emit many completions
+/// concurrently — a raw `tokio::spawn` per call would spawn a burst of detached tasks
+/// that each open a tenant tx (`log_tenant_llm_usage` → `begin_tenant_tx`) and
+/// collectively drain the shared app pool, starving the worker's claim/reserve loop
+/// ("pool timed out while waiting for an open connection"). Routing every metering
+/// insert through the SAME global `spawn_bounded_db_task` semaphore as the persistence
+/// background tasks makes total background pooled-connection demand `O(permits)`
+/// (`WEISSMAN_BG_DB_CONCURRENCY`, default 8) regardless of LLM call volume — the storm
+/// is queued on the semaphore instead of on the connection pool.
 pub fn register_llm_tenant_metering(app_pool: Arc<sqlx::PgPool>) {
     weissman_engines::openai_chat::set_llm_usage_reporter(Arc::new(
         move |tenant_id, prompt_tokens, completion_tokens, model, operation| {
             let pool = app_pool.clone();
-            tokio::spawn(async move {
-                // Bound concurrent metering inserts (best-effort) so they can never hold every
-                // app_pool slot a live scan needs. `acquire` queues rather than drops, so usage is
-                // still recorded; the permit is held only for the insert, then released.
-                let _permit = LLM_METER_DB_SEM.acquire().await;
+            crate::findings_persist::spawn_bounded_db_task(async move {
                 if let Err(e) = weissman_db::llm_usage::log_tenant_llm_usage(
                     pool.as_ref(),
                     tenant_id,
@@ -563,4 +554,87 @@ pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compact_metrics_path_collapses_client_ids() {
+        assert_eq!(compact_metrics_path("/api/clients/12345"), "/api/clients/*");
+        assert_eq!(compact_metrics_path("/api/clients/"), "/api/clients/*");
+    }
+
+    #[test]
+    fn compact_metrics_path_collapses_known_prefixes() {
+        assert_eq!(
+            compact_metrics_path("/api/verify-audit/abc"),
+            "/api/verify-audit/*"
+        );
+        assert_eq!(
+            compact_metrics_path("/api/poe-scan/status/9"),
+            "/api/poe-scan/*"
+        );
+        assert_eq!(
+            compact_metrics_path("/api/poe-scan/stream/9"),
+            "/api/poe-scan/*"
+        );
+        assert_eq!(
+            compact_metrics_path("/api/heal-verify/x"),
+            "/api/heal-verify/*"
+        );
+        assert_eq!(compact_metrics_path("/ws/tenant/1"), "/ws/*");
+        assert_eq!(
+            compact_metrics_path("/command-center/dash"),
+            "/command-center/*"
+        );
+    }
+
+    #[test]
+    fn compact_metrics_path_passes_through_other_api_paths_verbatim() {
+        // starts with /api/ but matches no specific bucket -> returned unchanged
+        assert_eq!(compact_metrics_path("/api/health"), "/api/health");
+        // /api/poe-scan without status|stream falls through to the generic /api/ branch
+        assert_eq!(
+            compact_metrics_path("/api/poe-scan/other"),
+            "/api/poe-scan/other"
+        );
+    }
+
+    #[test]
+    fn compact_metrics_path_non_api_maps_to_other() {
+        assert_eq!(compact_metrics_path("/health"), "/other");
+        assert_eq!(compact_metrics_path("/"), "/other");
+        assert_eq!(compact_metrics_path("/metrics"), "/other");
+    }
+
+    #[test]
+    fn haversine_identical_points_is_zero() {
+        assert_eq!(haversine_km((0.0, 0.0), (0.0, 0.0)), 0.0);
+        assert_eq!(haversine_km((51.5, -0.12), (51.5, -0.12)), 0.0);
+    }
+
+    #[test]
+    fn haversine_is_symmetric() {
+        let a = (40.0, -74.0);
+        let b = (34.0, -118.0);
+        let d1 = haversine_km(a, b);
+        let d2 = haversine_km(b, a);
+        assert!((d1 - d2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn haversine_one_degree_at_equator_is_about_111km() {
+        // one degree of longitude at the equator is ~111.19 km
+        let d = haversine_km((0.0, 0.0), (0.0, 1.0));
+        assert!((d - 111.19).abs() < 0.5, "got {d}");
+    }
+
+    #[test]
+    fn haversine_quarter_circumference() {
+        // equator to the pole-meridian 90 deg apart is a quarter of Earth's circumference
+        let d = haversine_km((0.0, 0.0), (0.0, 90.0));
+        assert!((d - 10007.5).abs() < 5.0, "got {d}");
+    }
 }

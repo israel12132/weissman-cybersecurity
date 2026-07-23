@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
+import DataTable from '../ui/DataTable'
 
 const NS = 'components.cockpitTabs.auditTrail'
+const columnHelper = createColumnHelper()
 
 export default function AuditTrailTab() {
   const { t } = useTranslation()
@@ -12,20 +15,61 @@ export default function AuditTrailTab() {
   const [err, setErr] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('timestamp', {
+        header: t(`${NS}.colTime`),
+        cell: (info) => (
+          <span className="text-white/70 whitespace-nowrap">{info.getValue() || '—'}</span>
+        ),
+      }),
+      columnHelper.accessor((r) => sanitizeFindingPlainText(r.user, 500), {
+        id: 'user',
+        header: t(`${NS}.colUser`),
+        cell: (info) => (
+          <span className="text-[#22d3ee]/90 max-w-[140px] truncate block" title={info.getValue()}>
+            {info.getValue() || '—'}
+          </span>
+        ),
+      }),
+      columnHelper.accessor((r) => (r.user_id != null ? String(r.user_id) : '—'), {
+        id: 'user_id',
+        header: t(`${NS}.colUserId`),
+        cell: (info) => (
+          <span className="text-white/50 whitespace-nowrap tabular-nums">{info.getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor((r) => sanitizeFindingPlainText(r.action_type, 200), {
+        id: 'action_type',
+        header: t(`${NS}.colAction`),
+        cell: (info) => (
+          <span className="text-amber-200/90 whitespace-nowrap">{info.getValue() || '—'}</span>
+        ),
+      }),
+      columnHelper.accessor((r) => sanitizeFindingPlainText(r.ip_address, 80), {
+        id: 'ip_address',
+        header: t(`${NS}.colIp`),
+        cell: (info) => <span className="text-white/50">{info.getValue() || '—'}</span>,
+      }),
+      columnHelper.accessor((r) => sanitizeFindingPlainText(r.details, 8000), {
+        id: 'details',
+        header: t(`${NS}.colDetails`),
+        cell: (info) => (
+          <span className="text-white/60 max-w-md break-words block">{info.getValue() || '—'}</span>
+        ),
+      }),
+    ],
+    [t],
+  )
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       setLoading(true)
       setErr(null)
       try {
-        const r = await apiFetch('/api/audit-logs')
+        const data = await apiFetch('/api/audit-logs')
         if (cancelled) return
-        if (!r.ok) {
-          setRows([])
-          setErr(await formatApiErrorResponse(r))
-          return
-        }
-        const data = await r.json()
         if (!Array.isArray(data)) {
           setRows([])
           setErr(t(`${NS}.unexpectedResponse`))
@@ -35,7 +79,7 @@ export default function AuditTrailTab() {
       } catch (e) {
         if (!cancelled) {
           setRows([])
-          setErr(e?.message || t(`${NS}.loadFailed`))
+          setErr(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || t(`${NS}.loadFailed`)))
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -59,43 +103,14 @@ export default function AuditTrailTab() {
         </div>
       )}
       {!loading && !err && (
-        <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
-                <th className="p-3 font-medium">{t(`${NS}.colTime`)}</th>
-                <th className="p-3 font-medium">{t(`${NS}.colUser`)}</th>
-                <th className="p-3 font-medium">{t(`${NS}.colUserId`)}</th>
-                <th className="p-3 font-medium">{t(`${NS}.colAction`)}</th>
-                <th className="p-3 font-medium">{t(`${NS}.colIp`)}</th>
-                <th className="p-3 font-medium">{t(`${NS}.colDetails`)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-white/40">
-                    {t(`${NS}.noEntries`)}
-                  </td>
-                </tr>
-              )}
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b border-white/5 hover:bg-white/[0.03] font-mono">
-                  <td className="p-3 text-white/70 whitespace-nowrap">{r.timestamp || '—'}</td>
-                  <td className="p-3 text-[#22d3ee]/90 max-w-[140px] truncate" title={sanitizeFindingPlainText(r.user, 500)}>
-                    {sanitizeFindingPlainText(r.user, 500) || '—'}
-                  </td>
-                  <td className="p-3 text-white/50 whitespace-nowrap tabular-nums">
-                    {r.user_id != null ? String(r.user_id) : '—'}
-                  </td>
-                  <td className="p-3 text-amber-200/90 whitespace-nowrap">{sanitizeFindingPlainText(r.action_type, 200) || '—'}</td>
-                  <td className="p-3 text-white/50">{sanitizeFindingPlainText(r.ip_address, 80) || '—'}</td>
-                  <td className="p-3 text-white/60 max-w-md break-words">{sanitizeFindingPlainText(r.details, 8000) || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          id="audit-trail-table"
+          columns={columns}
+          data={rows}
+          getRowId={(r) => r.id}
+          animateRows={false}
+          emptyState={<span className="text-white/40">{t(`${NS}.noEntries`)}</span>}
+        />
       )}
     </div>
   )

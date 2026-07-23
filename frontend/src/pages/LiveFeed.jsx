@@ -17,7 +17,7 @@ import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
 import Button from '../components/ui/Button'
 
@@ -40,9 +40,7 @@ export default function LiveFeed() {
     // Manual refresh shows the spinner; the 15s poll refreshes silently.
     if (!opts.silent) setLoading(true)
     try {
-      const r = await apiFetch('/api/command-center/ticker')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/command-center/ticker')
       setEvents(Array.isArray(d.events) ? d.events : [])
       setLastUpdated(new Date())
     } catch (e) {
@@ -161,9 +159,9 @@ export default function LiveFeed() {
             </div>
 
             {events.length === 0 ? (
-              <EmptyState icon="📡" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+              <EmptyState icon="radar" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
             ) : filtered.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <ul className="space-y-1.5">
                 {filtered.map((e) => {

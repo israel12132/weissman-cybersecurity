@@ -1824,3 +1824,284 @@ pub async fn process_mission(
         shared_state: shared,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn mk_critic_audit(score: u32) -> CriticAudit {
+        CriticAudit {
+            stealth_score: score,
+            detected_waf_signatures: vec![],
+            risk_assessment: String::new(),
+            alternative_encoding: String::new(),
+        }
+    }
+
+    #[test]
+    fn stealth_clamped_below_at_above() {
+        assert_eq!(mk_critic_audit(0).stealth_clamped(), 0);
+        assert_eq!(mk_critic_audit(90).stealth_clamped(), 90);
+        assert_eq!(mk_critic_audit(100).stealth_clamped(), 100);
+        assert_eq!(mk_critic_audit(101).stealth_clamped(), 100);
+        assert_eq!(mk_critic_audit(u32::MAX).stealth_clamped(), 100);
+    }
+
+    #[test]
+    fn passes_stealth_bar_is_strictly_greater_than_90() {
+        assert!(!mk_critic_audit(0).passes_stealth_bar());
+        assert!(!mk_critic_audit(90).passes_stealth_bar());
+        assert!(mk_critic_audit(91).passes_stealth_bar());
+        assert!(mk_critic_audit(100).passes_stealth_bar());
+        // Values above 100 clamp to 100, which is still > 90.
+        assert!(mk_critic_audit(255).passes_stealth_bar());
+    }
+
+    #[test]
+    fn env_f64_returns_default_when_key_absent() {
+        assert_eq!(env_f64("WEISSMAN_COUNCIL_TEST_ABSENT_F64_q9z7", 1.25), 1.25);
+    }
+
+    #[test]
+    fn env_u32_returns_default_when_key_absent() {
+        assert_eq!(env_u32("WEISSMAN_COUNCIL_TEST_ABSENT_U32_q9z7", 42), 42);
+    }
+
+    #[test]
+    fn target_fingerprint_normalizes_case_and_whitespace() {
+        let a = target_fingerprint("  Hello World  ");
+        let b = target_fingerprint("hello world");
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        // Blank input trims to the empty string -> SHA-256 of "".
+        assert_eq!(
+            target_fingerprint("    "),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn json_vec_to_f32_extracts_numbers_only() {
+        assert_eq!(
+            json_vec_to_f32(&json!([1.0, 2.0, 3.5])),
+            vec![1.0f32, 2.0, 3.5]
+        );
+        // Integer JSON numbers coerce via as_f64.
+        assert_eq!(json_vec_to_f32(&json!([1, 2])), vec![1.0f32, 2.0]);
+        // Non-numeric entries are filtered out.
+        assert_eq!(json_vec_to_f32(&json!([1.0, "x", 2.0])), vec![1.0f32, 2.0]);
+        // Non-array values yield an empty vec.
+        assert!(json_vec_to_f32(&json!("nope")).is_empty());
+        assert!(json_vec_to_f32(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn cosine_similarity_edge_cases() {
+        let approx = |x: f32, y: f32| (x - y).abs() < 1e-6;
+        assert!(approx(cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]), 1.0));
+        assert!(approx(cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]), 0.0));
+        // Parallel vectors -> similarity 1.0.
+        assert!(approx(
+            cosine_similarity(&[1.0, 2.0, 3.0], &[2.0, 4.0, 6.0]),
+            1.0
+        ));
+        // Length mismatch and empty inputs both short-circuit to 0.0.
+        assert_eq!(cosine_similarity(&[1.0, 2.0], &[1.0]), 0.0);
+        assert_eq!(cosine_similarity(&[], &[]), 0.0);
+    }
+
+    #[test]
+    fn sign_council_audit_is_deterministic_hex_and_input_sensitive() {
+        let s1 = sign_council_audit("m1", "PHASE_A", "{\"k\":1}");
+        let s2 = sign_council_audit("m1", "PHASE_A", "{\"k\":1}");
+        assert_eq!(s1, s2);
+        assert_eq!(s1.len(), 64);
+        assert!(s1.chars().all(|c| c.is_ascii_hexdigit()));
+        // Changing any component changes the signature.
+        assert_ne!(s1, sign_council_audit("m1", "PHASE_B", "{\"k\":1}"));
+        assert_ne!(s1, sign_council_audit("m2", "PHASE_A", "{\"k\":1}"));
+        assert_ne!(s1, sign_council_audit("m1", "PHASE_A", "{\"k\":2}"));
+    }
+
+    #[test]
+    fn parse_alpha_ok_fenced_and_err() {
+        let ok = parse_alpha(
+            r#"{"strategies":[{"id":"s1","name":"n","description":"d","payload_sketch":"p"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(ok.strategies.len(), 1);
+        assert_eq!(ok.strategies[0].id, "s1");
+        assert_eq!(ok.strategies[0].payload_sketch, "p");
+        // Markdown-fenced JSON is stripped before parsing.
+        let fenced = parse_alpha("```json\n{\"strategies\":[]}\n```").unwrap();
+        assert!(fenced.strategies.is_empty());
+        // Trailing comma is repaired by the JSON-repair path.
+        let relaxed = parse_alpha(r#"{"strategies":[],}"#).unwrap();
+        assert!(relaxed.strategies.is_empty());
+        assert!(parse_alpha("totally not json").is_err());
+    }
+
+    #[test]
+    fn parse_beta_and_gamma_ok() {
+        let beta = parse_beta(
+            r#"{"critique":"c","ranked_by_stealth":["s1","s2"],"detection_risks":["r"],"recommended_strategy_id":"s1"}"#,
+        )
+        .unwrap();
+        assert_eq!(beta.recommended_strategy_id, "s1");
+        assert_eq!(beta.ranked_by_stealth, vec!["s1", "s2"]);
+
+        // Missing fields fall back to serde defaults.
+        let gamma = parse_gamma(r#"{"final_payload":"fp"}"#).unwrap();
+        assert_eq!(gamma.final_payload, "fp");
+        assert_eq!(gamma.rationale, "");
+        assert_eq!(gamma.oast_token, "");
+    }
+
+    #[test]
+    fn parse_supreme_command_structs() {
+        let brief = parse_mission_brief_json(
+            r#"{"mission_id":"m","objective":"o","target_context":"t","constraints":"c","rules_of_engagement":"r"}"#,
+        )
+        .unwrap();
+        assert_eq!(brief.mission_id, "m");
+        // deny_unknown_fields: an extra key must fail.
+        assert!(parse_mission_brief_json(
+            r#"{"mission_id":"m","objective":"o","target_context":"t","constraints":"c","rules_of_engagement":"r","extra":"x"}"#
+        )
+        .is_err());
+        // Missing required key must also fail.
+        assert!(parse_mission_brief_json(r#"{"mission_id":"m"}"#).is_err());
+
+        let hacker = parse_hacker_proposal_json(
+            r#"{"vector_type":"v","payload_hex":"","target_entry_point":"e","bypass_logic":"b"}"#,
+        )
+        .unwrap();
+        assert_eq!(hacker.vector_type, "v");
+
+        let audit = parse_critic_audit_json(
+            r#"{"stealth_score":95,"detected_waf_signatures":["waf"],"risk_assessment":"r","alternative_encoding":"a"}"#,
+        )
+        .unwrap();
+        assert_eq!(audit.stealth_score, 95);
+        assert!(audit.passes_stealth_bar());
+
+        let exec = parse_executive_order_json(
+            r#"{"final_payload":"p","execution_delay_ms":100,"success_criteria":"s","emergency_abort_condition":"e"}"#,
+        )
+        .unwrap();
+        assert_eq!(exec.execution_delay_ms, 100);
+    }
+
+    fn mk_supreme_result(orch: Value, prior: Option<String>) -> SupremeCouncilDebateResult {
+        SupremeCouncilDebateResult {
+            council_round: 7,
+            proposer: ProposerStrategyOut {
+                strategy: StrategySketch {
+                    id: "s2".into(),
+                    name: "n".into(),
+                    description: "d".into(),
+                    payload_sketch: "p".into(),
+                },
+            },
+            critic: CriticTargetAssessment {
+                flaw_vectors: vec!["waf".into(), "siem".into()],
+                critique: "crit".into(),
+                false_positive_risk: "low".into(),
+                hardening_notes: "hn".into(),
+            },
+            sovereign: SovereignDirective {
+                orchestrator: orch,
+                final_payload: "fp".into(),
+                rationale: "rat".into(),
+                oast_token: "tok".into(),
+                sovereign_override: "ovr".into(),
+            },
+            transcript_excerpt: "t".into(),
+            prior_failure_log: prior,
+        }
+    }
+
+    #[test]
+    fn into_council_debate_result_maps_all_fields() {
+        let out = mk_supreme_result(
+            json!({"content_type": "application/json"}),
+            Some("pf".into()),
+        )
+        .into_council_debate_result();
+        assert_eq!(out.council_round, 7);
+        assert_eq!(out.alpha.strategies.len(), 1);
+        assert_eq!(out.alpha.strategies[0].id, "s2");
+        assert_eq!(out.beta.critique, "crit");
+        assert_eq!(out.beta.ranked_by_stealth, vec!["s2".to_string()]);
+        assert_eq!(
+            out.beta.detection_risks,
+            vec!["waf".to_string(), "siem".to_string()]
+        );
+        assert_eq!(out.beta.recommended_strategy_id, "s2");
+        assert_eq!(out.gamma.final_payload, "fp");
+        assert_eq!(out.gamma.rationale, "rat");
+        assert_eq!(out.gamma.oast_token, "tok");
+        assert_eq!(out.gamma.content_type_hint, "application/json");
+        assert_eq!(out.prior_failure_log.as_deref(), Some("pf"));
+        assert_eq!(out.sovereign_override.as_deref(), Some("ovr"));
+        assert_eq!(out.supreme_council, Some(true));
+        assert!(out.orchestrator_instruction.is_some());
+    }
+
+    #[test]
+    fn into_council_debate_result_content_type_hint_resolution() {
+        // `content_type` wins over `content_type_hint`.
+        assert_eq!(
+            mk_supreme_result(json!({"content_type": "a", "content_type_hint": "b"}), None)
+                .into_council_debate_result()
+                .gamma
+                .content_type_hint,
+            "a"
+        );
+        // Falls back to `content_type_hint`.
+        assert_eq!(
+            mk_supreme_result(json!({"content_type_hint": "text/xml"}), None)
+                .into_council_debate_result()
+                .gamma
+                .content_type_hint,
+            "text/xml"
+        );
+        // Neither present -> empty string, and None prior log stays None.
+        let out = mk_supreme_result(json!({}), None).into_council_debate_result();
+        assert_eq!(out.gamma.content_type_hint, "");
+        assert!(out.prior_failure_log.is_none());
+    }
+
+    #[test]
+    fn council_debate_result_skips_none_optionals_on_serialize() {
+        let r = CouncilDebateResult {
+            council_round: 1,
+            alpha: AlphaStrategies { strategies: vec![] },
+            beta: BetaCritique {
+                critique: String::new(),
+                ranked_by_stealth: vec![],
+                detection_risks: vec![],
+                recommended_strategy_id: String::new(),
+            },
+            gamma: GammaOutput {
+                final_payload: String::new(),
+                rationale: String::new(),
+                content_type_hint: String::new(),
+                oast_token: String::new(),
+            },
+            prior_failure_log: None,
+            orchestrator_instruction: None,
+            sovereign_override: None,
+            supreme_council: None,
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        let obj = v.as_object().unwrap();
+        assert!(obj.contains_key("council_round"));
+        assert!(!obj.contains_key("prior_failure_log"));
+        assert!(!obj.contains_key("orchestrator_instruction"));
+        assert!(!obj.contains_key("sovereign_override"));
+        assert!(!obj.contains_key("supreme_council"));
+    }
+}

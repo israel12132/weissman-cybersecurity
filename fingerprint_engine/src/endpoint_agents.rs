@@ -1054,3 +1054,184 @@ pub async fn mark_task_status(
     .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // sha256("abc") — standard NIST test vector.
+    const SHA256_ABC: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    #[test]
+    fn hash_token_matches_known_vector_and_trims() {
+        assert_eq!(hash_token("abc"), SHA256_ABC);
+        // Leading/trailing whitespace is trimmed before hashing.
+        assert_eq!(hash_token("  abc\n"), SHA256_ABC);
+        assert_eq!(hash_token("abc").len(), 64);
+    }
+
+    #[test]
+    fn hash_token_differs_for_different_input() {
+        assert_ne!(hash_token("abc"), hash_token("abd"));
+    }
+
+    #[test]
+    fn generate_enrollment_token_length_and_alphabet() {
+        let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+            .chars()
+            .collect();
+        for _ in 0..50 {
+            let t = generate_enrollment_token();
+            assert_eq!(t.len(), 32);
+            assert!(t.chars().all(|c| alphabet.contains(&c)));
+        }
+    }
+
+    #[test]
+    fn constants_have_expected_values() {
+        assert_eq!(FLEET_MAX_AGENTS, 100);
+        assert_eq!(PENDING_TASK_REPLAY_LIMIT, 500);
+        assert_eq!(AGENT_STATUS_LIMIT, 10_000);
+        assert_eq!(NSSI_BRIDGE_ENGINES.len(), 10);
+        assert!(NSSI_BRIDGE_ENGINES.contains(&"process_inventory"));
+        assert!(NSSI_BRIDGE_ENGINES.contains(&"ueba_baseline"));
+    }
+
+    #[test]
+    fn parse_ueba_ingest_minimal_valid() {
+        let finding = json!({"agent_id": "agent-1", "metrics": {"cpu": 1}});
+        let p = parse_ueba_ingest(&finding, 7).unwrap();
+        assert_eq!(p.agent_id, "agent-1");
+        assert_eq!(p.client_id, 7); // no client_id in finding -> falls back to arg
+        assert_eq!(p.hour_of_week, 0); // absent -> 0
+        assert_eq!(p.metrics, json!({"cpu": 1}));
+    }
+
+    #[test]
+    fn parse_ueba_ingest_overrides_client_id_and_clamps_hour() {
+        let finding = json!({
+            "agent_id": "  agent-2  ",
+            "client_id": 99,
+            "hour_of_week": 200,
+            "metrics": {"x": 1}
+        });
+        let p = parse_ueba_ingest(&finding, 7).unwrap();
+        assert_eq!(p.agent_id, "agent-2"); // trimmed
+        assert_eq!(p.client_id, 99); // from finding
+        assert_eq!(p.hour_of_week, 167); // clamp(0,167)
+    }
+
+    #[test]
+    fn parse_ueba_ingest_clamps_negative_hour_to_zero() {
+        let finding = json!({"agent_id": "a", "hour_of_week": -5, "metrics": {"x": 1}});
+        let p = parse_ueba_ingest(&finding, 1).unwrap();
+        assert_eq!(p.hour_of_week, 0);
+    }
+
+    #[test]
+    fn parse_ueba_ingest_raw_metrics_fallback() {
+        let finding = json!({"agent_id": "a", "raw_metrics": {"y": 2}});
+        let p = parse_ueba_ingest(&finding, 1).unwrap();
+        assert_eq!(p.metrics, json!({"y": 2}));
+    }
+
+    #[test]
+    fn parse_ueba_ingest_rejects_missing_agent_id() {
+        let finding = json!({"metrics": {"x": 1}});
+        assert!(parse_ueba_ingest(&finding, 1).is_none());
+    }
+
+    #[test]
+    fn parse_ueba_ingest_rejects_empty_agent_id() {
+        let finding = json!({"agent_id": "   ", "metrics": {"x": 1}});
+        assert!(parse_ueba_ingest(&finding, 1).is_none());
+    }
+
+    #[test]
+    fn parse_ueba_ingest_rejects_missing_metrics() {
+        let finding = json!({"agent_id": "a"});
+        assert!(parse_ueba_ingest(&finding, 1).is_none());
+    }
+
+    #[test]
+    fn parse_ueba_ingest_rejects_null_metrics() {
+        let finding = json!({"agent_id": "a", "metrics": null});
+        assert!(parse_ueba_ingest(&finding, 1).is_none());
+    }
+
+    #[test]
+    fn server_to_agent_ack_serializes() {
+        let v = serde_json::to_value(ServerToAgent::Ack {
+            task_id: "t-1".to_string(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "ack");
+        assert_eq!(v["task_id"], "t-1");
+    }
+
+    #[test]
+    fn server_to_agent_welcome_serializes_nulls() {
+        let v = serde_json::to_value(ServerToAgent::Welcome {
+            scan_concurrency: Some(4),
+            heartbeat_secs: None,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "welcome");
+        assert_eq!(v["scan_concurrency"], 4);
+        assert!(v["heartbeat_secs"].is_null());
+    }
+
+    #[test]
+    fn server_to_agent_task_round_trips() {
+        let msg = ServerToAgent::Task {
+            task_id: "abc".to_string(),
+            engine: "process_inventory".to_string(),
+            target: Some("host.local".to_string()),
+            params: json!({"k": 1}),
+        };
+        let v = serde_json::to_value(&msg).unwrap();
+        assert_eq!(v["type"], "task");
+        assert_eq!(v["engine"], "process_inventory");
+        assert_eq!(v["target"], "host.local");
+        assert_eq!(v["params"]["k"], 1);
+        let back: ServerToAgent = serde_json::from_value(v).unwrap();
+        match back {
+            ServerToAgent::Task { engine, target, .. } => {
+                assert_eq!(engine, "process_inventory");
+                assert_eq!(target.as_deref(), Some("host.local"));
+            }
+            _ => panic!("expected Task variant"),
+        }
+    }
+
+    #[test]
+    fn server_to_agent_shutdown_serializes() {
+        let v = serde_json::to_value(ServerToAgent::Shutdown {
+            reason: "bye".to_string(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "shutdown");
+        assert_eq!(v["reason"], "bye");
+    }
+
+    #[test]
+    fn enroll_response_round_trips() {
+        let e = EnrollResponse {
+            agent_id: "a".to_string(),
+            tenant_id: 1,
+            client_id: 2,
+            session_jwt: "jwt".to_string(),
+            ws_path: "/ws/agent".to_string(),
+            server_message: None,
+        };
+        let v = serde_json::to_value(&e).unwrap();
+        assert_eq!(v["agent_id"], "a");
+        assert_eq!(v["tenant_id"], 1);
+        assert_eq!(v["client_id"], 2);
+        assert_eq!(v["ws_path"], "/ws/agent");
+        let back: EnrollResponse = serde_json::from_value(v).unwrap();
+        assert_eq!(back.client_id, 2);
+        assert_eq!(back.session_jwt, "jwt");
+        assert!(back.server_message.is_none());
+    }
+}

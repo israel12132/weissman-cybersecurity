@@ -180,3 +180,134 @@ pub fn spawn_agent_registry_redis_sync(registry: Arc<crate::endpoint_agents::Age
         "agent registry redis sync enabled"
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_constant() {
+        assert_eq!(CHANNEL, "weissman:agent_registry:sync");
+        assert_eq!(EVENT_VERSION, 1);
+    }
+
+    #[test]
+    fn attach_constructor_stamps_version() {
+        let e = AgentSyncEvent::attach("replica-a", "uuid-1", 42);
+        match e {
+            AgentSyncEvent::Attach {
+                v,
+                replica_id,
+                agent_uuid,
+                tenant_id,
+            } => {
+                assert_eq!(v, EVENT_VERSION);
+                assert_eq!(replica_id, "replica-a");
+                assert_eq!(agent_uuid, "uuid-1");
+                assert_eq!(tenant_id, 42);
+            }
+            _ => panic!("expected Attach variant"),
+        }
+    }
+
+    #[test]
+    fn detach_constructor_has_no_tenant() {
+        let e = AgentSyncEvent::detach("replica-b", "uuid-2");
+        match e {
+            AgentSyncEvent::Detach {
+                v,
+                replica_id,
+                agent_uuid,
+            } => {
+                assert_eq!(v, 1);
+                assert_eq!(replica_id, "replica-b");
+                assert_eq!(agent_uuid, "uuid-2");
+            }
+            _ => panic!("expected Detach variant"),
+        }
+    }
+
+    #[test]
+    fn status_constructor_carries_status() {
+        let e = AgentSyncEvent::status("replica-c", "uuid-3", 7, "online");
+        match e {
+            AgentSyncEvent::Status {
+                v,
+                replica_id,
+                agent_uuid,
+                tenant_id,
+                status,
+            } => {
+                assert_eq!(v, 1);
+                assert_eq!(replica_id, "replica-c");
+                assert_eq!(agent_uuid, "uuid-3");
+                assert_eq!(tenant_id, 7);
+                assert_eq!(status, "online");
+            }
+            _ => panic!("expected Status variant"),
+        }
+    }
+
+    #[test]
+    fn attach_serializes_with_snake_case_tag() {
+        let e = AgentSyncEvent::attach("r1", "u1", 99);
+        let v = serde_json::to_value(&e).unwrap();
+        assert_eq!(v["type"], "attach");
+        assert_eq!(v["v"], 1);
+        assert_eq!(v["replica_id"], "r1");
+        assert_eq!(v["agent_uuid"], "u1");
+        assert_eq!(v["tenant_id"], 99);
+    }
+
+    #[test]
+    fn detach_serialization_omits_tenant_field() {
+        let e = AgentSyncEvent::detach("r1", "u1");
+        let v = serde_json::to_value(&e).unwrap();
+        assert_eq!(v["type"], "detach");
+        assert!(v.get("tenant_id").is_none());
+        assert!(v.get("status").is_none());
+    }
+
+    #[test]
+    fn status_serialization_includes_status_and_tenant() {
+        let e = AgentSyncEvent::status("r1", "u1", 3, "degraded");
+        let v = serde_json::to_value(&e).unwrap();
+        assert_eq!(v["type"], "status");
+        assert_eq!(v["status"], "degraded");
+        assert_eq!(v["tenant_id"], 3);
+    }
+
+    #[test]
+    fn status_round_trips_through_json() {
+        let e = AgentSyncEvent::status("rep", "agent", 11, "offline");
+        let json = serde_json::to_string(&e).unwrap();
+        let back: AgentSyncEvent = serde_json::from_str(&json).unwrap();
+        match back {
+            AgentSyncEvent::Status {
+                replica_id,
+                agent_uuid,
+                tenant_id,
+                status,
+                v,
+            } => {
+                assert_eq!(v, 1);
+                assert_eq!(replica_id, "rep");
+                assert_eq!(agent_uuid, "agent");
+                assert_eq!(tenant_id, 11);
+                assert_eq!(status, "offline");
+            }
+            _ => panic!("expected Status variant after round trip"),
+        }
+    }
+
+    #[test]
+    fn attach_round_trips_through_json() {
+        let e = AgentSyncEvent::attach("rep", "agent", 500);
+        let back: AgentSyncEvent =
+            serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        match back {
+            AgentSyncEvent::Attach { tenant_id, .. } => assert_eq!(tenant_id, 500),
+            _ => panic!("expected Attach after round trip"),
+        }
+    }
+}

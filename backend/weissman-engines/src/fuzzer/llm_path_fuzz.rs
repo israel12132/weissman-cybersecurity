@@ -25,6 +25,8 @@ async fn client_insecure_default() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(TARGET_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+        // Do not follow redirects — an unvalidated redirect Location is an SSRF pivot.
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap_or_else(|_| reqwest::Client::new())
 }
@@ -138,14 +140,38 @@ pub async fn run_llm_path_fuzz_result_multi(
     let model = resolve_llm_model(llm_model_config.as_str());
 
     let first_url = urls.first().cloned().unwrap_or_default();
-    let req = apply_stealth_headers(c_in.get(&first_url), st_ref);
-    let (baseline_status, baseline_len) = match req.send().await {
-        Ok(r) => (
-            r.status().as_u16(),
-            r.bytes().await.map(|b| b.len()).unwrap_or(0),
-        ),
-        Err(_) => (0, 0),
-    };
+    // Establish a baseline with a few retries. A single flaky baseline request must
+    // not poison the whole run: without a valid baseline (`bs == 0`) every probe that
+    // gets any response would previously be reported as an anomaly. If we still cannot
+    // baseline the target after retries, abort the run rather than emit false findings.
+    let mut baseline_status = 0u16;
+    let mut baseline_len = 0usize;
+    for attempt in 0..3 {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        match apply_stealth_headers(c_in.get(&first_url), st_ref)
+            .send()
+            .await
+        {
+            Ok(r) => {
+                let s = r.status().as_u16();
+                let l = r.bytes().await.map(|b| b.len()).unwrap_or(0);
+                if s > 0 {
+                    baseline_status = s;
+                    baseline_len = l;
+                    break;
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    if baseline_status == 0 {
+        return EngineResult::ok(
+            vec![],
+            "Baseline request to target failed after retries; skipping fuzz run to avoid false anomalies",
+        );
+    }
 
     let context = match apply_stealth_headers(c_in.get(&first_url), st_ref)
         .send()
@@ -261,7 +287,10 @@ pub async fn run_llm_path_fuzz_result_multi(
                             }
                         }
 
-                        if !reasons.is_empty() || status >= 500 || (bs == 0 && status > 0) {
+                        // `bs` is a valid baseline here (the run aborts earlier if the
+                        // target could not be baselined), so a probe is only a finding
+                        // when it deviates from that baseline or 5xx-errors.
+                        if !reasons.is_empty() || status >= 500 {
                             let severity =
                                 if status >= 500 || reasons.contains(&"reflected_payload") {
                                     "high"
@@ -289,14 +318,10 @@ pub async fn run_llm_path_fuzz_result_multi(
                             None
                         }
                     }
-                    Err(_) => Some(json!({
-                        "type": "llm_path_fuzz",
-                        "url": url,
-                        "payload": payload.chars().take(100).collect::<String>(),
-                        "error": "request_failed",
-                        "severity": "medium",
-                        "title": "Fuzz request failed (timeout or connection error)"
-                    })),
+                    // A probe transport failure (timeout / connection error) is a
+                    // scanner-side condition, not a vulnerability — do not emit it as a
+                    // finding (it inflated counts with our own timeouts).
+                    Err(_) => None,
                 }
             });
         }

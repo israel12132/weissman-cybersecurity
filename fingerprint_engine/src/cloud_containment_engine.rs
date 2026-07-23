@@ -272,3 +272,36 @@ pub async fn execute_aws_containment(
     )
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_ports_csv_basic_comma_separated() {
+        assert_eq!(parse_ports_csv("22,443"), vec![22, 443]);
+    }
+
+    #[test]
+    fn parse_ports_csv_mixed_comma_and_whitespace_delimiters() {
+        assert_eq!(parse_ports_csv("22, 443 8080"), vec![22, 443, 8080]);
+    }
+
+    #[test]
+    fn parse_ports_csv_filters_out_of_range_and_nonnumeric() {
+        // 0 (not > 0), 70000 (> 65535), -5 (not > 0), abc (parse fail) dropped; 80 kept.
+        assert_eq!(parse_ports_csv("0,70000,-5,abc,80"), vec![80]);
+    }
+
+    #[test]
+    fn parse_ports_csv_boundaries() {
+        assert_eq!(parse_ports_csv("1,65535"), vec![1, 65535]);
+        assert!(parse_ports_csv("65536").is_empty());
+    }
+
+    #[test]
+    fn parse_ports_csv_empty_input() {
+        assert!(parse_ports_csv("").is_empty());
+        assert!(parse_ports_csv("   ").is_empty());
+    }
+}

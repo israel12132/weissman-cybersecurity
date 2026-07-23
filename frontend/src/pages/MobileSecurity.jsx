@@ -9,7 +9,7 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { clientPrimaryTargetUrl } from '../lib/clientTarget'
 import { useJobPoll, resolveJobFindings } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
@@ -61,12 +61,9 @@ export default function MobileSecurity() {
   const fetchMobileApps = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await apiFetch('/api/mobile-security/apps');
-      if (response.ok) {
-        const data = await response.json();
-        setApps(Array.isArray(data.apps) ? data.apps : []);
-        setFindings(Array.isArray(data.findings) ? data.findings : []);
-      }
+      const data = await apiFetch('/api/mobile-security/apps');
+      setApps(Array.isArray(data.apps) ? data.apps : []);
+      setFindings(Array.isArray(data.findings) ? data.findings : []);
     } catch {
       // non-critical: list stays empty and the empty-state explains next steps
     } finally {
@@ -77,7 +74,6 @@ export default function MobileSecurity() {
   useEffect(() => {
     fetchMobileApps();
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => {
         if (!Array.isArray(d)) return
         setClients(d)
@@ -175,6 +171,7 @@ export default function MobileSecurity() {
       setScanError(e?.message ?? t('pages.mobileSecurity.network_error'))
       setScanningAppId(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, clients, t])
 
   const filteredApps = useMemo(

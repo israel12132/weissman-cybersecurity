@@ -12,7 +12,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import { downloadBytes } from '../lib/pdfExport'
 import Button from '../components/ui/Button'
@@ -646,7 +646,8 @@ export default function SmbNetbiosCommandCenter() {
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   const selectedClient = useMemo(() => clients.find((c) => String(c.id) === String(clientId)), [clients, clientId])
@@ -711,7 +712,7 @@ export default function SmbNetbiosCommandCenter() {
     setStatus('running')
     setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d, status: _status } = await postScan(buildBody())
       if (!ok) {
         setStatus('error')
         showToastMsg('error', d.detail || L.scanFailed)
@@ -724,6 +725,7 @@ export default function SmbNetbiosCommandCenter() {
       setStatus('error')
       showToastMsg('error', e?.message ?? L.scanFailed)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToastMsg, L])
 
   const handleExport = useCallback(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 
 const NS = 'components.intelWidgets.assetHexGrid'
 
@@ -31,7 +31,6 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
     }
     let cancelled = false
     apiFetch('/api/clients')
-      .then(async (r) => (r.ok ? r.json() : { clients: [] }))
       .then((data) => {
         if (cancelled) return
         const first = (data?.clients ?? [])[0]
@@ -52,10 +51,6 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
     setLoading(true)
     setError(null)
     apiFetch(`/api/clients/${clientId}/attack-surface-graph`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
       .then((data) => {
         if (cancelled) return
         setNodes(Array.isArray(data?.nodes) ? data.nodes : [])

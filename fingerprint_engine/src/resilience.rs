@@ -138,3 +138,86 @@ impl Default for ResilienceRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backoff_zero_base_or_cap_is_zero() {
+        // exp = 0 -> jitter window is empty -> always zero
+        assert_eq!(jittered_backoff_duration(0, 5, 1000), Duration::ZERO);
+        assert_eq!(jittered_backoff_duration(500, 3, 0), Duration::ZERO);
+    }
+
+    #[test]
+    fn backoff_stays_within_exponential_window() {
+        // exp = 500 * 2^0 = 500, so full-jitter result is strictly < 500 ms
+        for _ in 0..64 {
+            let d = jittered_backoff_duration(500, 0, 30_000);
+            assert!(d.as_millis() < 500, "got {:?}", d);
+        }
+        // exp = 500 * 2^3 = 4000
+        for _ in 0..64 {
+            let d = jittered_backoff_duration(500, 3, 30_000);
+            assert!(d.as_millis() < 4000, "got {:?}", d);
+        }
+    }
+
+    #[test]
+    fn backoff_respects_cap() {
+        // 1000 * 2^10 = 1_024_000 but capped to 2000 -> result < 2000 ms
+        for _ in 0..64 {
+            let d = jittered_backoff_duration(1000, 10, 2000);
+            assert!(d.as_millis() < 2000, "got {:?}", d);
+        }
+    }
+
+    #[test]
+    fn circuit_starts_closed_and_allows() {
+        let cb = CircuitBreaker::new(3, 3600);
+        assert!(cb.state() == CircuitState::Closed);
+        assert!(cb.allow_request());
+    }
+
+    #[test]
+    fn circuit_opens_after_threshold_failures() {
+        let cb = CircuitBreaker::new(3, 3600);
+        cb.record_failure();
+        assert!(cb.state() == CircuitState::Closed); // still below threshold
+        cb.record_failure();
+        cb.record_failure();
+        // failures >= threshold and cooldown not elapsed -> Open
+        assert!(cb.state() == CircuitState::Open);
+        assert!(!cb.allow_request());
+    }
+
+    #[test]
+    fn circuit_success_resets_to_closed() {
+        let cb = CircuitBreaker::new(1, 3600);
+        cb.record_failure();
+        assert!(cb.state() == CircuitState::Open);
+        cb.record_success();
+        assert!(cb.state() == CircuitState::Closed);
+        assert!(cb.allow_request());
+    }
+
+    #[test]
+    fn circuit_half_open_when_cooldown_elapsed() {
+        // cooldown 0 -> now - last >= 0 is always true, so an over-threshold breaker
+        // is immediately HalfOpen (probe allowed).
+        let cb = CircuitBreaker::new(1, 0);
+        cb.record_failure();
+        assert!(cb.state() == CircuitState::HalfOpen);
+        assert!(cb.allow_request());
+    }
+
+    #[test]
+    fn resilience_registry_defaults_are_closed() {
+        let reg = ResilienceRegistry::default();
+        assert!(reg.llm.state() == CircuitState::Closed);
+        assert!(reg.crt_sh.state() == CircuitState::Closed);
+        assert!(reg.webhook.state() == CircuitState::Closed);
+        assert!(reg.llm.allow_request());
+    }
+}

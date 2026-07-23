@@ -6,7 +6,8 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import EmptyState from '../components/ui/EmptyState'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
-import { apiFetch, apiUrl } from '../lib/apiBase'
+import { apiUrl } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -45,26 +46,31 @@ export default function ClientEngagements() {
     setLoading(true)
     setError('')
     try {
-      const [clientRes, listRes] = await Promise.all([
-        apiFetch(`/api/clients/${clientId}`),
-        apiFetch(`/api/clients/${clientId}/engagements`),
+      const settle = (p) => p.then((data) => ({ data }), (error) => ({ error }))
+      const [clientR, listR] = await Promise.all([
+        settle(apiFetch(`/api/clients/${clientId}`)),
+        settle(apiFetch(`/api/clients/${clientId}/engagements`)),
       ])
 
-      if (!clientRes.ok) {
-        setError(t('pages.clientEngagements.load_client_failed', { status: clientRes.status }))
-        setLoading(false)
-        return
-      }
-      const clientData = await clientRes.json().catch(() => null)
-      setClient(clientData)
+      // A genuine network failure (no HTTP status) surfaces as the generic
+      // network_error via the outer catch, exactly like the old Promise.all reject.
+      const netErr = [clientR, listR].find((r) => r.error && !r.error.status)?.error
+      if (netErr) throw netErr
 
-      if (!listRes.ok) {
-        const detail = await listRes.text().catch(() => '')
-        setError(t('pages.clientEngagements.load_failed', { status: listRes.status, detail }))
+      if (clientR.error) {
+        setError(t('pages.clientEngagements.load_client_failed', { status: clientR.error.status }))
         setLoading(false)
         return
       }
-      const listData = await listRes.json().catch(() => ({}))
+      setClient(clientR.data)
+
+      if (listR.error) {
+        const detail = listR.error.response ? await listR.error.response.text().catch(() => '') : ''
+        setError(t('pages.clientEngagements.load_failed', { status: listR.error.status, detail }))
+        setLoading(false)
+        return
+      }
+      const listData = listR.data
       setEngagements(Array.isArray(listData.engagements) ? listData.engagements : [])
     } catch (e) {
       setError(e?.message || t('pages.clientEngagements.network_error'))
@@ -89,23 +95,22 @@ export default function ClientEngagements() {
         end_at: endAt ? new Date(endAt).toISOString() : undefined,
         notes: notes.trim() || undefined,
       }
-      const res = await apiFetch(`/api/clients/${clientId}/engagements`, {
+      await apiFetch(`/api/clients/${clientId}/engagements`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setError(data?.detail || `Create failed (HTTP ${res.status})`)
-        return
-      }
       setName('')
       setNotes('')
       setEndAt('')
       await loadAll()
       toast.success(t('pages.clientEngagements.create_success'))
     } catch (e) {
-      setError(e?.message || t('pages.clientEngagements.create_failed'))
+      if (e?.response) {
+        const data = await e.response.json().catch(() => ({}))
+        setError(data?.detail || `Create failed (HTTP ${e.status})`)
+      } else {
+        setError(e?.message || t('pages.clientEngagements.create_failed'))
+      }
     } finally {
       setCreating(false)
     }
@@ -121,20 +126,19 @@ export default function ClientEngagements() {
     })
     if (!ok) return
     try {
-      const res = await apiFetch(`/api/engagements/${engagement.id}`, {
+      await apiFetch(`/api/engagements/${engagement.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'closed', end_at: new Date().toISOString() }),
+        body: { status: 'closed', end_at: new Date().toISOString() },
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast.error(data?.detail || `Close failed (HTTP ${res.status})`)
-        return
-      }
       await loadAll()
       toast.success(t('pages.clientEngagements.close_success'))
     } catch (e) {
-      toast.error(e?.message || t('pages.clientEngagements.close_failed'))
+      if (e?.response) {
+        const data = await e.response.json().catch(() => ({}))
+        toast.error(data?.detail || `Close failed (HTTP ${e.status})`)
+      } else {
+        toast.error(e?.message || t('pages.clientEngagements.close_failed'))
+      }
     }
   }
 

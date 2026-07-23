@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { TOP_TIER_ENGINE_IDS } from '../lib/topTierEngineProfiles'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
@@ -33,9 +33,10 @@ export default function TopTierEngineHub() {
   const reloadAudit = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apiFetch('/api/engines/top-tier/audit')
-      const d = await r.json().catch(() => null)
-      if (r.ok) setAudit(d)
+      const d = await apiFetch('/api/engines/top-tier/audit')
+      setAudit(d)
+    } catch {
+      // audit load failed — keep prior state
     } finally {
       setLoading(false)
     }
@@ -48,9 +49,12 @@ export default function TopTierEngineHub() {
   useEffect(() => {
     let cancelled = false
     async function loadClients() {
-      const r = await apiFetch('/api/clients')
-      const d = await r.json().catch(() => [])
-      if (!cancelled && r.ok && Array.isArray(d)) setClients(d)
+      try {
+        const d = await apiFetch('/api/clients')
+        if (!cancelled && Array.isArray(d)) setClients(d)
+      } catch {
+        // clients load failed — leave list unchanged
+      }
     }
     loadClients()
     return () => {
@@ -102,9 +106,8 @@ export default function TopTierEngineHub() {
     if (!probeRunning || !probeJobId) return undefined
     let cancelled = false
     const iv = setInterval(async () => {
-      const r = await apiFetch(`/api/jobs/${encodeURIComponent(probeJobId)}`)
-      const d = await r.json().catch(() => null)
-      if (cancelled || !r.ok || !d) return
+      const d = await apiFetch(`/api/jobs/${encodeURIComponent(probeJobId)}`).catch(() => null)
+      if (cancelled || !d) return
       if (d.status === 'completed' || d.status === 'failed' || d.status === 'dead') {
         setProbeRunning(false)
       }
@@ -135,20 +138,19 @@ export default function TopTierEngineHub() {
     const payload = {}
     if (clientId) payload.client_id = Number(clientId)
     if (target.trim()) payload.target = target.trim()
-    const r = await apiFetch('/api/engines/top-tier/health-probe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const d = await r.json().catch(() => ({}))
-    if (!r.ok) {
-      setProbeSummary(d.detail || t('pages.topTierEngineHub.probe_failed', { status: r.status }))
+    try {
+      const d = await apiFetch('/api/engines/top-tier/health-probe', {
+        method: 'POST',
+        body: payload,
+      })
+      setProbeJobId(d.job_id || '')
+      setProbeRunning(true)
+      setProbeSummary(t('pages.topTierEngineHub.probe_queued', { jobId: d.job_id || 'unknown' }))
+    } catch (e) {
+      const body = e?.response ? await e.response.json().catch(() => ({})) : {}
+      setProbeSummary(body.detail || t('pages.topTierEngineHub.probe_failed', { status: e?.status ?? '' }))
       setProbeRunning(false)
-      return
     }
-    setProbeJobId(d.job_id || '')
-    setProbeRunning(true)
-    setProbeSummary(t('pages.topTierEngineHub.probe_queued', { jobId: d.job_id || 'unknown' }))
   }
 
   const filteredEngineIds = useMemo(() => {

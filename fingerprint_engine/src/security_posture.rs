@@ -193,3 +193,56 @@ pub async fn compute_platform_posture(pool: &PgPool) -> SecurityPostureScore {
 pub fn posture_to_json(p: &SecurityPostureScore) -> Value {
     serde_json::to_value(p).unwrap_or_else(|_| json!({ "error": "posture serialize failed" }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> SecurityPostureScore {
+        SecurityPostureScore {
+            score: 85,
+            grade: 'B',
+            checks: vec![
+                PostureCheck {
+                    id: "jwt_secret_strength",
+                    passed: true,
+                    weight: 15,
+                    detail: "ok".into(),
+                },
+                PostureCheck {
+                    id: "metrics_token",
+                    passed: false,
+                    weight: 10,
+                    detail: "missing".into(),
+                },
+            ],
+            generated_at: "2026-01-01T00:00:00+00:00".into(),
+        }
+    }
+
+    #[test]
+    fn posture_to_json_preserves_fields() {
+        let v = posture_to_json(&sample());
+        assert_eq!(v["score"], 85);
+        assert_eq!(v["grade"], "B");
+        assert_eq!(v["checks"].as_array().unwrap().len(), 2);
+        assert_eq!(v["checks"][0]["id"], "jwt_secret_strength");
+        assert_eq!(v["checks"][0]["passed"], true);
+        assert_eq!(v["checks"][1]["weight"], 10);
+    }
+
+    #[test]
+    fn posture_check_serializes_all_fields() {
+        let c = PostureCheck {
+            id: "redis_distributed",
+            passed: true,
+            weight: 12,
+            detail: "Redis configured".into(),
+        };
+        let v = serde_json::to_value(&c).unwrap();
+        assert_eq!(v["id"], "redis_distributed");
+        assert_eq!(v["passed"], true);
+        assert_eq!(v["weight"], 12);
+        assert_eq!(v["detail"], "Redis configured");
+    }
+}

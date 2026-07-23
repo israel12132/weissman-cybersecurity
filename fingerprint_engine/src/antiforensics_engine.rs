@@ -76,3 +76,24 @@ pub async fn run_antiforensics_result(target: &str) -> EngineResult {
 pub async fn run_antiforensics(target: &str) {
     print_result(run_antiforensics_result(target).await);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_target_adds_https_when_missing() {
+        assert_eq!(normalize_target("example.com"), "https://example.com");
+    }
+
+    #[test]
+    fn normalize_target_preserves_http_and_https() {
+        assert_eq!(normalize_target("http://x.internal"), "http://x.internal");
+        assert_eq!(normalize_target("https://x.internal"), "https://x.internal");
+    }
+
+    #[test]
+    fn normalize_target_trims_whitespace_before_prefixing() {
+        assert_eq!(normalize_target("  example.com "), "https://example.com");
+    }
+}

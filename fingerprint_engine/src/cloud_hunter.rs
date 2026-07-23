@@ -439,3 +439,107 @@ pub async fn run_cloud_hunter(
 fn sanitize_id(s: &str) -> String {
     s.replace('.', "_").replace(['/', ':', '?', '#'], "_")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_id_replaces_separators() {
+        assert_eq!(sanitize_id("a.b.com"), "a_b_com");
+        assert_eq!(sanitize_id("host:80/path?x#y"), "host_80_path_x_y");
+    }
+
+    #[test]
+    fn takeover_suffix_matches_known_providers() {
+        assert!(is_known_takeover_suffix("myapp.herokuapp.com"));
+        assert!(is_known_takeover_suffix("bucket.s3.amazonaws.com"));
+        assert!(is_known_takeover_suffix("SITE.NETLIFY.APP")); // case-insensitive
+        assert!(is_known_takeover_suffix("  x.vercel.app  ")); // trimmed
+        assert!(!is_known_takeover_suffix("example.com"));
+        assert!(!is_known_takeover_suffix(""));
+    }
+
+    #[test]
+    fn provider_error_page_requires_error_status_and_phrase() {
+        assert!(is_provider_error_page("...NoSuchBucket...", 404));
+        assert!(is_provider_error_page(
+            "There isn't a GitHub Pages site here",
+            404
+        ));
+        // Right phrase but 200 status -> not an error page.
+        assert!(!is_provider_error_page("no such bucket", 200));
+        // Error status but no known phrase.
+        assert!(!is_provider_error_page("generic not found", 404));
+    }
+
+    #[test]
+    fn list_bucket_response_only_on_200_with_marker() {
+        assert!(is_list_bucket_response("<ListBucketResult><Contents>", 200));
+        assert!(is_list_bucket_response(
+            "{\"kind\": \"storage#objects\"}",
+            200
+        ));
+        assert!(!is_list_bucket_response("<ListBucketResult>", 403));
+        assert!(!is_list_bucket_response("plain page", 200));
+    }
+
+    #[test]
+    fn cloud_hunter_finding_shape_and_optional_cname() {
+        let f = cloud_hunter_finding(
+            "subdomain_takeover",
+            "subdomain",
+            "x.example.com",
+            "critical",
+            "Dangling DNS",
+            Some("x.herokuapp.com"),
+        );
+        assert_eq!(f["type"], "cloud_hunter");
+        assert_eq!(f["subtype"], "subdomain_takeover");
+        assert_eq!(f["severity"], "critical");
+        assert_eq!(f["probe_depth"], CLOUD_HUNTER_PROBE_DEPTH);
+        assert_eq!(f["cname_target"], "x.herokuapp.com");
+        // Without a cname target the key is absent.
+        let f2 = cloud_hunter_finding(
+            "public_cloud_exposure",
+            "storage",
+            "y",
+            "critical",
+            "T",
+            None,
+        );
+        assert!(f2.get("cname_target").is_none());
+    }
+
+    #[test]
+    fn graph_node_skips_none_optionals_in_json() {
+        let n = GraphNode {
+            id: "n1".into(),
+            label: "example.com".into(),
+            node_type: "root".into(),
+            status: "secure".into(),
+            cname_target: None,
+            raw_finding: None,
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&n).unwrap()).unwrap();
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj["node_type"], "root");
+        assert!(!obj.contains_key("cname_target"));
+        assert!(!obj.contains_key("raw_finding"));
+    }
+
+    #[test]
+    fn graph_edge_roundtrips() {
+        let e = GraphEdge {
+            id: "e-a-b".into(),
+            from_id: "a".into(),
+            to_id: "b".into(),
+            edge_type: "CNAME".into(),
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        assert_eq!(v["edge_type"], "CNAME");
+        assert_eq!(v["from_id"], "a");
+    }
+}

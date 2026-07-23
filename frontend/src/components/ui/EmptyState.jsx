@@ -1,12 +1,21 @@
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
+  BarChart3,
+  Bot,
+  Building2,
+  DollarSign,
   FileSearch,
+  FileText,
   Inbox,
+  Link2,
+  List,
+  Network,
   Radar,
   SearchX,
   Shield,
   ShieldOff,
+  Target,
 } from 'lucide-react'
 import Button from './Button'
 
@@ -18,17 +27,31 @@ const ICON_MAP = {
   'search-x': SearchX,
   radar: Radar,
   alert: AlertTriangle,
+  building: Building2,
+  chart: BarChart3,
+  file: FileText,
+  target: Target,
+  bot: Bot,
+  link: Link2,
+  dollar: DollarSign,
+  network: Network,
+  list: List,
 }
 
 /**
  * Premium empty state — icon + title + description + optional CTA.
- * No illustrations; lucide icons only.
+ * Prefer a lucide key from ICON_MAP (inbox, shield, search, chart, …).
  *
  * Props:
- *  - icon: lucide key (inbox, shield, search, …) or custom React node
+ *  - icon: lucide key (inbox, shield, search, …), a custom React node, or an
+ *    emoji/text glyph string. Unknown strings render verbatim in the badge
+ *    rather than silently falling back to the inbox icon.
  *  - title, body (alias: description)
  *  - cta: { label, onClick }
  *  - secondary: { label, href | onClick }
+ *  - action: a raw React node rendered in the actions row (use when you need a
+ *    custom control — e.g. a button with its own spinner/disabled state — that
+ *    the cta/secondary shorthands can't express)
  *  - compact: smaller padding
  *  - className
  */
@@ -39,11 +62,17 @@ export default function EmptyState({
   description,
   cta,
   secondary,
+  action,
   compact = false,
   className = '',
 }) {
   const copy = body ?? description
-  const IconComponent = typeof icon === 'string' ? ICON_MAP[icon] ?? Inbox : null
+  // Known lucide key → rendered as an icon component. A string that is not a
+  // known key (e.g. an emoji) is rendered verbatim; a React node is rendered
+  // as-is. An undefined OR null icon defaults to the inbox glyph.
+  const resolvedIcon = icon ?? 'inbox'
+  const IconComponent = typeof resolvedIcon === 'string' ? ICON_MAP[resolvedIcon] : null
+  const glyphText = typeof resolvedIcon === 'string' && !IconComponent ? resolvedIcon : null
 
   return (
     <div
@@ -63,8 +92,10 @@ export default function EmptyState({
             className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} text-[var(--accent)]`}
             strokeWidth={1.75}
           />
+        ) : glyphText ? (
+          <span className={`${compact ? 'text-lg' : 'text-xl'} leading-none`}>{glyphText}</span>
         ) : (
-          icon
+          resolvedIcon
         )}
       </div>
 
@@ -83,8 +114,9 @@ export default function EmptyState({
         </p>
       )}
 
-      {(cta || secondary) && (
+      {(cta || secondary || action) && (
         <div className="flex gap-3 mt-6 flex-wrap justify-center">
+          {action}
           {cta &&
             (cta.to ? (
               <Link

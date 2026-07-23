@@ -23,7 +23,7 @@ import FilterPills from '../components/ui/FilterPills'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { SEV_ORDER, SEV_COLOR } from '../lib/severity'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 
@@ -66,9 +66,8 @@ export default function UebaAnomalies() {
     setLoading(true)
     setError('')
     try {
-      const r = await apiFetch('/api/ueba/anomalies?limit=500')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/ueba/anomalies?limit=500')
+      if (d?.ok === false) throw new Error(d.detail || 'load failed')
       setAnomalies(Array.isArray(d.anomalies) ? d.anomalies : [])
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
@@ -287,9 +286,9 @@ export default function UebaAnomalies() {
             </div>
 
             {anomalies.length === 0 ? (
-              <EmptyState icon="📈" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+              <EmptyState icon="chart" title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
             ) : filtered.length === 0 ? (
-              <EmptyState icon="🔍" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
+              <EmptyState icon="search-x" title={t(`${NS}.no_match_title`)} body={t(`${NS}.no_match_body`)} />
             ) : (
               <DataTable
                 id="ueba-anomalies-table"

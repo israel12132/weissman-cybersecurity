@@ -305,3 +305,81 @@ pub fn spawn_kev_refresh_worker(pool: Arc<PgPool>) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_date_valid() {
+        assert_eq!(
+            parse_date("2024-06-01"),
+            chrono::NaiveDate::from_ymd_opt(2024, 6, 1)
+        );
+        // Surrounding whitespace is trimmed.
+        assert_eq!(
+            parse_date("  2024-02-29  "),
+            chrono::NaiveDate::from_ymd_opt(2024, 2, 29)
+        );
+    }
+
+    #[test]
+    fn parse_date_invalid_and_empty() {
+        assert_eq!(parse_date(""), None);
+        assert_eq!(parse_date("   "), None);
+        assert_eq!(parse_date("not-a-date"), None);
+        assert_eq!(parse_date("2024/06/01"), None); // wrong separator
+    }
+
+    #[test]
+    fn normalize_cve_trims_and_uppercases() {
+        assert_eq!(normalize_cve("  cve-2021-1  "), "CVE-2021-1");
+        assert_eq!(normalize_cve("cve-2021"), "CVE-2021");
+        assert_eq!(normalize_cve(""), "");
+    }
+
+    #[test]
+    fn kev_feed_deserializes_renamed_fields() {
+        let feed: KevFeed = serde_json::from_value(serde_json::json!({
+            "vulnerabilities": [{
+                "cveID": "CVE-2024-1",
+                "vendorProject": "ACME",
+                "product": "Widget",
+                "vulnerabilityName": "RCE",
+                "dateAdded": "2024-01-01",
+                "shortDescription": "desc",
+                "requiredAction": "patch now",
+                "dueDate": "2024-02-01",
+                "knownRansomwareCampaignUse": "Known",
+                "notes": "n"
+            }]
+        }))
+        .unwrap();
+        assert_eq!(feed.vulnerabilities.len(), 1);
+        let r = &feed.vulnerabilities[0];
+        assert_eq!(r.cve_id, "CVE-2024-1");
+        assert_eq!(r.vendor_project, "ACME");
+        assert_eq!(r.product, "Widget");
+        assert_eq!(r.vulnerability_name, "RCE");
+        assert_eq!(r.date_added, "2024-01-01");
+        assert_eq!(r.short_description, "desc");
+        assert_eq!(r.required_action, "patch now");
+        assert_eq!(r.due_date, "2024-02-01");
+        assert_eq!(r.known_ransomware_use, "Known");
+        assert_eq!(r.notes, "n");
+    }
+
+    #[test]
+    fn kev_feed_defaults_missing() {
+        // Missing `vulnerabilities` => empty vec via serde default.
+        let feed: KevFeed = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(feed.vulnerabilities.is_empty());
+
+        // Fully empty row => every field defaults to "".
+        let row: KevApiRow = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(row.cve_id, "");
+        assert_eq!(row.vendor_project, "");
+        assert_eq!(row.known_ransomware_use, "");
+        assert_eq!(row.notes, "");
+    }
+}

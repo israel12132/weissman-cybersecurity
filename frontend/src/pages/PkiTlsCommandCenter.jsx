@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -340,7 +340,8 @@ export default function PkiTlsCommandCenter() {
   const [cipherLimit, setCipherLimit] = useState(80)
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   const selectedClient = useMemo(() => clients.find((c) => String(c.id) === String(clientId)), [clients, clientId])
@@ -424,7 +425,7 @@ export default function PkiTlsCommandCenter() {
     if (!target.trim()) { showToast('error', t('pages.pkiTlsPosture.target_required', 'A target host/URL is required')); return }
     setStatus('running'); setFindings([])
     try {
-      const { ok, data: d, status } = await postScan(buildBody())
+      const { ok, data: d } = await postScan(buildBody())
       if (!ok) { setStatus('error'); showToast('error', d.detail || t('pages.pkiTlsPosture.scan_failed', 'Scan failed')); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.pkiTlsPosture.queued', 'TLS scan queued ({{jobId}})', { jobId }))
@@ -432,6 +433,7 @@ export default function PkiTlsCommandCenter() {
     } catch (e) {
       setStatus('error'); showToast('error', e?.message ?? t('pages.pkiTlsPosture.scan_failed', 'Scan failed'))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, target, buildBody, showToast, t])
 
   const summary = useMemo(() => findings.find(isSummary), [findings])

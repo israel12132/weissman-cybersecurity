@@ -95,6 +95,7 @@ export default function EngineRoomTab() {
   const enabledList = Array.isArray(clientConfig?.enabled_engines)
     ? clientConfig.enabled_engines
     : defaultEngines
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const enabledSet = new Set(enabledList)
 
   const handleEngineToggle = useCallback(

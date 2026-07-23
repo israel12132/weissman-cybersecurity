@@ -18,7 +18,7 @@ import DataTable from '../components/ui/DataTable'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd } from '../lib/riskFormat'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -77,11 +77,8 @@ export default function FinancialRisk() {
       setError('')
       try {
         const qs = recompute ? '?recompute=1' : ''
-        const r = await apiFetch(`/api/financial-risk/${encodeURIComponent(selectedClientId)}${qs}`)
-        const data = await r.json().catch(() => ({}))
-        if (!r.ok || data.ok === false) {
-          throw new Error(data.detail || `HTTP ${r.status}`)
-        }
+        const data = await apiFetch(`/api/financial-risk/${encodeURIComponent(selectedClientId)}${qs}`)
+        if (data?.ok === false) throw new Error(data.detail || 'load failed')
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
         if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
@@ -207,7 +204,7 @@ export default function FinancialRisk() {
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
         {selectedClientId == null && (
-          <EmptyState icon="🏢" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
+          <EmptyState icon="building" title={t(`${NS}.pick_client_title`)} body={t(`${NS}.pick_client_body`)} />
         )}
 
         {selectedClientId != null && loading && <SkeletonWidgetGrid count={4} />}
@@ -220,7 +217,7 @@ export default function FinancialRisk() {
 
         {selectedClientId != null && !loading && !error && !hasSnapshot && (
           <EmptyState
-            icon="💵"
+            icon="dollar"
             title={t(`${NS}.no_snapshot_title`)}
             body={t(`${NS}.no_snapshot_body`)}
             action={
@@ -279,7 +276,7 @@ export default function FinancialRisk() {
                 {t(`${NS}.top_contributors`)}
               </h2>
               {contributors.length === 0 ? (
-                <EmptyState icon="📊" title={t(`${NS}.no_contributors_title`)} body={t(`${NS}.no_contributors_body`)} />
+                <EmptyState icon="chart" title={t(`${NS}.no_contributors_title`)} body={t(`${NS}.no_contributors_body`)} />
               ) : (
                 <DataTable
                   id="financial-risk-contributors"

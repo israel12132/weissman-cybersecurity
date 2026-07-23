@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Network, Globe, Shield, Activity, AlertTriangle, Search, Download } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { apiFetch } from '../lib/apiBase';
+import { apiFetch } from '../utils/apiFetch';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 import Button from '../components/ui/Button'
 
@@ -34,8 +34,8 @@ export default function NetworkProtocols() {
 
   useEffect(() => {
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (Array.isArray(d)) setClients(d); })
+      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
       .catch(() => {});
   }, []);
 
@@ -43,9 +43,7 @@ export default function NetworkProtocols() {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch('/api/soc/network-protocols');
-      if (!response.ok) throw new Error(`SOC HTTP ${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch('/api/soc/network-protocols');
       const list = Array.isArray(data?.protocols) ? data.protocols : [];
       setProtocols(list);
       setDataSource('soc');
@@ -58,6 +56,7 @@ export default function NetworkProtocols() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
     loadProtocols().catch(() => {});
   }, [loadProtocols]);
 

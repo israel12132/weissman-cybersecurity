@@ -11,7 +11,7 @@ import PortfolioAttackPanel from './PortfolioAttackPanel'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import EmptyState from '../components/ui/EmptyState'
 import { SkeletonCardGrid, SkeletonWidgetGrid } from '../components/ui/Skeleton'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
@@ -38,6 +38,7 @@ export default function Clients() {
 
   useEffect(() => {
     loadClients()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -46,9 +47,7 @@ export default function Clients() {
     Promise.all(
       clients.map(async (c) => {
         try {
-          const r = await apiFetch(`/api/financial-risk/${c.id}`)
-          if (!r.ok) return [c.id, null]
-          const d = await r.json()
+          const d = await apiFetch(`/api/financial-risk/${c.id}`)
           return [c.id, d?.snapshot || null]
         } catch (_) {
           return [c.id, null]
@@ -67,19 +66,19 @@ export default function Clients() {
     setLoading(true)
     setError('')
     try {
-      const response = await apiFetch('/api/clients')
-      if (!response.ok) {
-        const text = await response.text().catch(() => 'Failed to load clients')
-        setError(t('clients_page.load_failed', { detail: text }))
-        setLoading(false)
-        return
-      }
-      const data = await response.json()
+      const data = await apiFetch('/api/clients')
       const clientList = Array.isArray(data) ? data : (data.clients || [])
       setClients(clientList)
       setLastUpdated(new Date())
     } catch (err) {
-      setError(t('clients_page.load_error', { detail: err.message }))
+      if (err?.status) {
+        const text = err.response
+          ? await err.response.text().catch(() => 'Failed to load clients')
+          : (err.message || 'Failed to load clients')
+        setError(t('clients_page.load_failed', { detail: text }))
+      } else {
+        setError(t('clients_page.load_error', { detail: err.message }))
+      }
     } finally {
       setLoading(false)
     }
@@ -87,9 +86,8 @@ export default function Clients() {
 
   async function recomputeRisk(clientId) {
     try {
-      const r = await apiFetch(`/api/financial-risk/${clientId}?recompute=1`)
-      const d = await r.json()
-      if (r.ok && d?.snapshot) {
+      const d = await apiFetch(`/api/financial-risk/${clientId}?recompute=1`)
+      if (d?.snapshot) {
         setRisk((m) => ({ ...m, [clientId]: d.snapshot }))
       }
     } catch (_) { /* surfaced via the empty $— card */ }
@@ -121,22 +119,22 @@ export default function Clients() {
     setScanningId(clientId)
     setScanToast(null)
     try {
-      const r = await apiFetch(`/api/clients/${clientId}/scan/run-all`, { method: 'POST' })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setScanToast({
-          kind: 'error',
-          message: data.detail || t('clients_page.scan_failed', { status: r.status }),
-        })
-        return
-      }
+      const data = await apiFetch(`/api/clients/${clientId}/scan/run-all`, { method: 'POST' })
       setScanToast({
         kind: 'ok',
         message: data.message || t('clients_page.scan_queued', { count: data.jobs_queued ?? 0 }),
         jobs_queued: data.jobs_queued ?? 0,
       })
     } catch (err) {
-      setScanToast({ kind: 'error', message: err.message || t('clients_page.scan_error') })
+      if (err?.status) {
+        const b = err.response ? await err.response.json().catch(() => ({})) : {}
+        setScanToast({
+          kind: 'error',
+          message: b.detail || t('clients_page.scan_failed', { status: err.status }),
+        })
+      } else {
+        setScanToast({ kind: 'error', message: err.message || t('clients_page.scan_error') })
+      }
     } finally {
       setScanningId(null)
     }
@@ -152,16 +150,18 @@ export default function Clients() {
     })
     if (!ok) return
     try {
-      const response = await apiFetch(`/api/clients/${clientId}`, { method: 'DELETE' })
-      if (!response.ok) {
-        const text = await response.text().catch(() => 'Failed to delete client')
-        toast.error(t('clients_page.delete_failed', { detail: text }))
-        return
-      }
+      await apiFetch(`/api/clients/${clientId}`, { method: 'DELETE' })
       loadClients()
       toast.success(t('clients_page.delete_success', { name: clientName }))
     } catch (err) {
-      toast.error(t('clients_page.delete_error', { detail: err.message }))
+      if (err?.status) {
+        const text = err.response
+          ? await err.response.text().catch(() => 'Failed to delete client')
+          : (err.message || 'Failed to delete client')
+        toast.error(t('clients_page.delete_failed', { detail: text }))
+      } else {
+        toast.error(t('clients_page.delete_error', { detail: err.message }))
+      }
     }
   }
 

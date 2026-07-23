@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 
 const NS = 'components.cockpitWidgets.systemPulseEkg'
 
@@ -48,12 +48,10 @@ export default function SystemPulseEKG() {
     setProbePending(true)
     const probe = async () => {
       try {
-        const r = await apiFetch('/api/latency-probe', {
+        const data = await apiFetch('/api/latency-probe', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: targetUrl }),
+          body: { url: targetUrl },
         })
-        const data = await r.json().catch(() => ({}))
         const ms = data.latency_ms
         const value = ms == null || data.error ? null : ms
         if (value != null && value > 0) hadSuccessRef.current = true

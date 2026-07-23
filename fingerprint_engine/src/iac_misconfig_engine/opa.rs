@@ -40,7 +40,7 @@ pub const GK_DISABLED: PolicyMeta = pol!(
     High,
     "enforcementAction: dryrun or disabled on security Constraint.",
     "Set enforcementAction: deny for production constraints.",
-    "T1562",
+    "T1685",
     "CWE-693",
     &["CIS-K8S-5.7.1"],
     &["NIST-CM-7", "SOC2-CC8.1"]

@@ -242,7 +242,13 @@ fn truncate_for_log(s: &str, max: usize) -> String {
     if s.len() <= max {
         s
     } else {
-        format!("{}...", &s[..max])
+        // Round down to a char boundary — slicing mid-codepoint panics, and payloads
+        // routinely contain multibyte/binary bytes on the confirmed-anomaly path.
+        let mut end = max;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}...", &s[..end])
     }
 }
 
@@ -259,16 +265,21 @@ async fn process_post_anomaly(
     oob_token: Option<String>,
     llm_user_prompt: Option<String>,
 ) -> Option<ValidatedAnomaly> {
-    if let Some(rule) = crate::signatures::find_matching_rule(payload, signature_rules) {
-        let (_, _, _, resp_body) =
-            match measure_request_with_body(pool, target_url, Some(payload)).await {
-                Ok(t) => t,
-                Err(_) => return None,
-            };
-        if !crate::signatures::response_matches_signature(&resp_body, &rule.expected_signature) {
-            return None;
-        }
-    }
+    // A matching payload signature in the response body (e.g. /etc/passwd contents
+    // echoed back) is strong positive evidence — but its ABSENCE is not disproof:
+    // blind and error-free injections confirm via status/timing, not body content.
+    // So treat a signature hit as a confidence booster, never as a hard gate that
+    // suppresses an otherwise-confirmed anomaly.
+    let signature_confirmed = match crate::signatures::find_matching_rule(payload, signature_rules)
+    {
+        Some(rule) => match measure_request_with_body(pool, target_url, Some(payload)).await {
+            Ok((_, _, _, resp_body)) => {
+                crate::signatures::response_matches_signature(&resp_body, &rule.expected_signature)
+            }
+            Err(_) => false,
+        },
+        None => false,
+    };
     let baseline_vs = format!(
         "Baseline: status={}, content_length={}, latency_ms≈{:.0} | Anomaly: status={}, content_length={}, latency_ms={:.0}",
         baseline.status, baseline.content_length, baseline.avg_latency_ms,
@@ -280,8 +291,9 @@ async fn process_post_anomaly(
         truncate_for_log(payload, 200),
         anomaly
     );
-    let high_confidence =
-        status == 500 || latency_ms >= baseline.avg_latency_ms * TIME_ANOMALY_MULTIPLIER;
+    let high_confidence = signature_confirmed
+        || status == 500
+        || latency_ms >= baseline.avg_latency_ms * TIME_ANOMALY_MULTIPLIER;
     if !high_confidence {
         return None;
     }
@@ -464,15 +476,18 @@ async fn process_get_anomaly(
     signature_rules: &[crate::signatures::PayloadSignatureRule],
     llm_user_prompt: Option<String>,
 ) -> Option<ValidatedAnomaly> {
-    if let Some(rule) = crate::signatures::find_matching_rule(payload_echo, signature_rules) {
-        let (_, _, _, resp_body) = match measure_request_get_with_body(pool, get_url).await {
-            Ok(t) => t,
-            Err(_) => return None,
+    // Signature match = confidence booster, not a hard gate (see process_post_anomaly).
+    let signature_confirmed =
+        match crate::signatures::find_matching_rule(payload_echo, signature_rules) {
+            Some(rule) => match measure_request_get_with_body(pool, get_url).await {
+                Ok((_, _, _, resp_body)) => crate::signatures::response_matches_signature(
+                    &resp_body,
+                    &rule.expected_signature,
+                ),
+                Err(_) => false,
+            },
+            None => false,
         };
-        if !crate::signatures::response_matches_signature(&resp_body, &rule.expected_signature) {
-            return None;
-        }
-    }
     let baseline_vs = format!(
         "GET Baseline: status={}, content_length={}, latency_ms≈{:.0} | Anomaly: status={}, content_length={}, latency_ms={:.0}",
         baseline.status, baseline.content_length, baseline.avg_latency_ms,
@@ -484,8 +499,9 @@ async fn process_get_anomaly(
         truncate_for_log(payload_echo, 200),
         anomaly
     );
-    let high_confidence =
-        status == 500 || latency_ms >= baseline.avg_latency_ms * TIME_ANOMALY_MULTIPLIER;
+    let high_confidence = signature_confirmed
+        || status == 500
+        || latency_ms >= baseline.avg_latency_ms * TIME_ANOMALY_MULTIPLIER;
     if !high_confidence {
         return None;
     }
@@ -1234,4 +1250,74 @@ async fn param_injection_pass_with_urls(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waf_block_detected_by_status_codes() {
+        for s in [401u16, 403, 405, 406, 429, 503] {
+            assert!(
+                probe_suggests_waf_block(s, "totally normal body"),
+                "status {s} should look like a WAF block"
+            );
+        }
+    }
+
+    #[test]
+    fn waf_block_not_detected_for_benign_500() {
+        // 500 is not in the block-status set and the body has no marker.
+        assert!(!probe_suggests_waf_block(500, "internal error occurred"));
+        assert!(!probe_suggests_waf_block(200, "welcome home"));
+    }
+
+    #[test]
+    fn waf_block_detected_by_body_markers_case_insensitive() {
+        assert!(probe_suggests_waf_block(200, "Request Rejected by WAF"));
+        assert!(probe_suggests_waf_block(200, "You are BLOCKED"));
+        assert!(probe_suggests_waf_block(200, "Access Denied"));
+        assert!(probe_suggests_waf_block(200, "Powered by CLOUDFLARE"));
+        assert!(probe_suggests_waf_block(200, "served by Akamai"));
+        assert!(probe_suggests_waf_block(200, "403 Forbidden page"));
+        assert!(probe_suggests_waf_block(200, "Not Acceptable"));
+    }
+
+    #[test]
+    fn truncate_for_log_short_string_unchanged_but_newlines_flattened() {
+        assert_eq!(truncate_for_log("ab\ncd", 10), "ab cd");
+        assert_eq!(truncate_for_log("abc", 3), "abc");
+        assert_eq!(truncate_for_log("", 5), "");
+    }
+
+    #[test]
+    fn truncate_for_log_long_string_is_cut_with_ellipsis() {
+        assert_eq!(truncate_for_log("abcdef", 3), "abc...");
+        // Newline replacement happens before length comparison.
+        assert_eq!(truncate_for_log("a\nbcdef", 3), "a b...");
+    }
+
+    #[test]
+    fn target_host_strips_scheme_path_and_port_and_lowercases() {
+        assert_eq!(
+            target_host_for_memory("https://Example.com/path"),
+            "example.com"
+        );
+        assert_eq!(target_host_for_memory("http://host:8080/x?y=1"), "host");
+        assert_eq!(
+            target_host_for_memory("HTTP-less.example.org"),
+            "http-less.example.org"
+        );
+        assert_eq!(
+            target_host_for_memory("https://API.Corp.NET:443"),
+            "api.corp.net"
+        );
+    }
+
+    #[test]
+    fn target_host_bare_host_no_scheme() {
+        assert_eq!(target_host_for_memory("example.org"), "example.org");
+        assert_eq!(target_host_for_memory("  spaced.io  "), "spaced.io");
+    }
 }

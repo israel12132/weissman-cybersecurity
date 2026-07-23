@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { destructiveHeaders } from '../../utils/destructiveConfirm'
 import { ShieldOff, Plus, AlertTriangle, Server, Container } from 'lucide-react'
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitTabs.containmentRules'
@@ -40,8 +40,7 @@ export default function ContainmentRulesTab() {
     }
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/containment-rules`)
-      const d = await r.json().catch(() => ({}))
+      const d = await apiFetch(`/api/clients/${selectedClientId}/containment-rules`)
       setRules(d.rules || [])
     } catch (_) {
       setRules([])
@@ -58,20 +57,14 @@ export default function ContainmentRulesTab() {
     if (!selectedClientId || !form.name.trim()) return
     setMsg(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/containment-rules`, {
+      await apiFetch(`/api/clients/${selectedClientId}/containment-rules`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: form,
       })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok) {
-        setMsg({ ok: true, text: t(`${NS}.ruleSaved`) })
-        await fetchRules()
-      } else {
-        setMsg({ ok: false, text: d.error || r.statusText })
-      }
+      setMsg({ ok: true, text: t(`${NS}.ruleSaved`) })
+      await fetchRules()
     } catch (e) {
-      setMsg({ ok: false, text: String(e) })
+      setMsg({ ok: false, text: e?.status ? e.message : String(e) })
     }
   }
 
@@ -84,20 +77,19 @@ export default function ContainmentRulesTab() {
     }
     setMsg(null)
     try {
-      const r = await apiFetch(`/api/clients/${selectedClientId}/containment/execute`, {
+      const d = await apiFetch(`/api/clients/${selectedClientId}/containment/execute`, {
         method: 'POST',
         headers: destructiveHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
+        body: {
           rule_id: rid,
           mode: exec.mode,
           aws_instance_id: exec.aws_instance_id || undefined,
           confirm: true,
-        }),
+        },
       })
-      const d = await r.json().catch(() => ({}))
-      setMsg({ ok: r.ok, text: d.detail || d.error || JSON.stringify(d) })
+      setMsg({ ok: true, text: d.detail || d.error || JSON.stringify(d) })
     } catch (e) {
-      setMsg({ ok: false, text: String(e) })
+      setMsg({ ok: false, text: e?.status ? e.message : String(e) })
     }
   }
 

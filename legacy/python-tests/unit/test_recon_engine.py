@@ -14,12 +14,10 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.recon_engine import (
     DiscoveredAsset,
     _normalize_asset_id,
-    _ct_url,
     group_assets_by_confidence_and_risk,
     enumerate_subdomains_ct,
     enumerate_subdomains_dns,

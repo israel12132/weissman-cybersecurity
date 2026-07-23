@@ -656,3 +656,117 @@ pub fn spawn_self_improve_loop(app_pool: Arc<PgPool>, telemetry: Arc<Sender<Stri
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn norm_category_passes_known_values() {
+        assert_eq!(norm_category("new_engine"), "new_engine");
+        assert_eq!(norm_category("cleanliness"), "cleanliness");
+    }
+
+    #[test]
+    fn norm_category_trims_and_lowercases() {
+        assert_eq!(norm_category("  New_Engine  "), "new_engine");
+        assert_eq!(norm_category("WIRING"), "wiring");
+    }
+
+    #[test]
+    fn norm_category_unknown_falls_back_to_gap() {
+        assert_eq!(norm_category("bogus"), "gap");
+        assert_eq!(norm_category(""), "gap");
+    }
+
+    #[test]
+    fn norm_level_maps_high_low_and_default() {
+        assert_eq!(norm_level("HIGH"), "high");
+        assert_eq!(norm_level(" Low "), "low");
+        assert_eq!(norm_level("medium"), "medium");
+        assert_eq!(norm_level("nonsense"), "medium");
+    }
+
+    #[test]
+    fn deterministic_proposals_empty_when_no_signals() {
+        assert!(deterministic_proposals(&[]).is_empty());
+        // Signals present but below thresholds produce nothing.
+        let sig = vec![
+            ("open_critical_high".to_string(), 5i64),
+            ("false_positives".to_string(), 9i64),
+        ];
+        assert!(deterministic_proposals(&sig).is_empty());
+    }
+
+    #[test]
+    fn deterministic_proposals_dead_jobs() {
+        let sig = vec![("dead_jobs".to_string(), 3i64)];
+        let out = deterministic_proposals(&sig);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].category, "gap");
+        assert_eq!(out[0].title, "Investigate 3 dead async jobs");
+        assert_eq!(out[0].source, "deterministic");
+    }
+
+    #[test]
+    fn deterministic_proposals_false_positives_threshold() {
+        let sig = vec![("false_positives".to_string(), 10i64)];
+        let out = deterministic_proposals(&sig);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].category, "improve_engine");
+        assert_eq!(out[0].impact, "high");
+    }
+
+    #[test]
+    fn deterministic_proposals_both_signals() {
+        let sig = vec![
+            ("dead_jobs".to_string(), 1i64),
+            ("false_positives".to_string(), 25i64),
+        ];
+        assert_eq!(deterministic_proposals(&sig).len(), 2);
+    }
+
+    #[test]
+    fn improvement_proposal_serde_defaults() {
+        let p: ImprovementProposal =
+            serde_json::from_value(json!({"category": "c", "title": "t"})).unwrap();
+        assert_eq!(p.category, "c");
+        assert_eq!(p.title, "t");
+        assert_eq!(p.rationale, "");
+        assert_eq!(p.risk, "low");
+        assert_eq!(p.impact, "medium");
+        assert_eq!(p.effort, "medium");
+        assert_eq!(p.proposed_diff_summary, "");
+        assert!(p.affected_files.is_empty());
+        assert_eq!(p.source, "analyzer");
+    }
+
+    #[test]
+    fn improvement_proposal_serde_roundtrip() {
+        let p = ImprovementProposal {
+            category: "wiring".into(),
+            title: "Wire it".into(),
+            rationale: "why".into(),
+            risk: "high".into(),
+            impact: "high".into(),
+            effort: "low".into(),
+            proposed_diff_summary: "diff".into(),
+            affected_files: vec!["a.rs".into()],
+            source: "llm".into(),
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        let back: ImprovementProposal = serde_json::from_value(v).unwrap();
+        assert_eq!(back.title, "Wire it");
+        assert_eq!(back.affected_files, vec!["a.rs".to_string()]);
+        assert_eq!(back.source, "llm");
+    }
+
+    #[test]
+    fn review_error_display() {
+        assert_eq!(ReviewError::NotFound.to_string(), "item not found");
+        assert_eq!(
+            ReviewError::WrongStatus("APPROVED".to_string()).to_string(),
+            "wrong status: APPROVED"
+        );
+    }
+}

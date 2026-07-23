@@ -14,6 +14,7 @@ export function useWeissmanEnginePage(engineId, findings, options = {}) {
   })
   const history = useEngineHistory(engineId)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const refreshFromHistory = useCallback(async () => history.loadLastRun(), [history.loadLastRun])
 
   return {

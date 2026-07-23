@@ -71,6 +71,10 @@ pub async fn get_state_machine(target: &str) -> Option<(Vec<StateNode>, Vec<Stat
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(TARGET_TIMEOUT_SECS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+        // Do not follow redirects: the initial target is scope-checked, but a
+        // redirect Location is not, so following one lets a target bounce the probe
+        // to an internal/metadata address (SSRF).
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .ok()?;
     let spec = fetch_openapi(&base, &client, None).await?;
@@ -849,6 +853,8 @@ pub async fn run_semantic_fuzz_result(
         None => reqwest::Client::builder()
             .timeout(Duration::from_secs(TARGET_TIMEOUT_SECS))
             .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
+            // Do not follow redirects — an unvalidated redirect Location is an SSRF pivot.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .unwrap_or_else(|_| reqwest::Client::new()),
     };
@@ -957,10 +963,15 @@ pub async fn run_semantic_fuzz_result(
                     "summary": node.summary,
                     "payload_preview": serde_json::to_string(payload).unwrap_or_default().chars().take(200).collect::<String>(),
                     "server_status": status,
-                    "severity": "critical",
-                    "title": "Business logic flaw: server accepted invalid payload",
+                    // A 2xx to an edge-case payload is a CANDIDATE, not a confirmed
+                    // flaw: without a state-change/rejection oracle we cannot prove the
+                    // server acted on the invalid input. Report at `medium` and flag for
+                    // verification rather than manufacturing a false critical.
+                    "severity": "medium",
+                    "title": "Endpoint accepted edge-case payload; verify business rules",
+                    "needs_verification": true,
                     "poc_exploit": poc,
-                    "remediation": "Validate business rules server-side: reject negative amounts, enforce state machine order, validate enums and ranges."
+                    "remediation": "Manually verify whether the invalid input was acted on. If so, validate business rules server-side: reject negative amounts, enforce state-machine order, validate enums and ranges."
                 }));
             }
         }

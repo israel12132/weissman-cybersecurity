@@ -195,6 +195,20 @@ jobs:
           format: table
           trivyignores: .trivyignore
 
+      - name: IaC misconfig scan (Trivy config, deploy manifests)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: deploy
+          # Blocking gate so k8s/network hardening (egress metadata block, network
+          # policies, secret handling, container hardening) cannot silently regress.
+          # Scoped to CRITICAL to avoid failing on the pre-existing securityContext
+          # backlog tracked separately; raise to HIGH as that backlog is burned down.
+          severity: CRITICAL
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore
+
       - name: Generate SBOM (CycloneDX via Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -250,6 +264,22 @@ jobs:
 
       - name: UI-primitive adoption ratchet (no new raw <table>/<button>)
         run: node scripts/report-ui-primitives.mjs --check
+
+      - name: Engine coverage & accuracy gate (breadth + FP mechanism, from source)
+        run: node scripts/engine_coverage_accuracy_report.mjs --check
+
+      - name: MITRE ATT&CK currency gate (no stale/revoked technique IDs)
+        run: node scripts/mitre_attack_coverage.mjs --check
+
+      - name: Engine coverage & ATT&CK docs are in sync with source
+        run: |
+          node scripts/engine_coverage_accuracy_report.mjs >/dev/null
+          node scripts/mitre_attack_coverage.mjs >/dev/null
+          git diff --exit-code \
+            docs/ENGINE_COVERAGE_AND_ACCURACY.md \
+            docs/MITRE_ATTACK_COVERAGE.md \
+            docs/attack-navigator/ \
+            || { echo "::error::A generated coverage artifact is stale — run: node scripts/engine_coverage_accuracy_report.mjs && node scripts/mitre_attack_coverage.mjs"; exit 1; }
 
       - name: Unit tests with coverage (Vitest ≥60% critical paths)
         run: npm run test:coverage
@@ -795,113 +825,24 @@ jobs:
   rust-coverage:
     name: Rust — coverage (llvm-cov)
     runs-on: ubuntu-latest
-    # True-coverage measurement (Path A, see docs/Coverage_Deficit_Analysis.md):
-    # a live Postgres + Redis let the DB-backed integration/contract tests run, so
-    # coverage reflects how the I/O-heavy engines are ACTUALLY tested (integration/
-    # E2E), not just --lib unit tests. The 40% floor value is intentionally kept but is
-    # INFORMATIONAL / non-blocking (policy decision, see docs/Coverage_Deficit_Analysis.md):
-    # the honest number (~19.7%) is reported and the gap stays visible, but a platform that
-    # is ~96% I/O-bound attack engines cannot reach 40% by unit/DB tests without gaming, so
-    # this must not gate the PR — same stance as the ZAP DAST baseline.
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: weissman
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d weissman"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.91.1
         with:
           components: llvm-tools-preview
-      - name: Cache Rust build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-cov-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-      - name: Free runner disk (instrumented all-targets build is large)
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
-          df -h /
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Apply database migrations
-        env:
-          WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-        run: cargo run -q -p weissman-db --example run_migrate
-      - name: Coverage (workspace incl. integration tests) with a floor
-        # `-- --test-threads=2` (on the instrumented run below): this is the third DB-backed
-        # test step, and it was the one left exposed to the intermittent connection-pool
-        # deadlock tracked in docs/TECH_DEBT_flaky_db_test_hang.md. `cargo llvm-cov --workspace`
-        # runs the same live-Postgres integration suite as engine-wiring/rust-audit; at full
-        # per-core parallelism their concurrent acquires can exceed the pool and one blocks
-        # forever. `--ignore-run-fail` tolerates a test *failure* but NOT a *hang*, so the guard
-        # below was the only thing stopping it — and it did stop it, at the 30-min mark (observed
-        # live: this step hung to the timeout on run 30002805179). Bounding to 2 threads keeps
-        # concurrent DB work under the pool ceiling so acquires never deadlock — the documented
-        # prevention, matching the other two DB-test jobs; every test still runs and still counts.
-        #
-        # Fail-fast guard: thread-bounding trades parallelism for safety and lengthens the
-        # instrumented run, so 45 min sizes the guard to the real bounded runtime (~20-30 min
-        # build+run at 2 threads) while still fast-failing a genuine hang. Not a capacity bump:
-        # the hang is *prevented* above; this just fits the guard to the honest 2-thread runtime.
-        timeout-minutes: 45
-        # --workspace (not --lib): includes integration tests. TEST_DATABASE_URL +
-        # WEISSMAN_REQUIRE_DB_TESTS make the DB-backed contract tests run (not skip)
-        # against the Postgres service, so their coverage counts. Floor kept at 40%.
-        #
-        # --ignore-run-fail: this is a coverage MEASUREMENT job, not a test gate (the
-        # rust-audit and engine-wiring jobs are the gates). A few contracts (e.g. the
-        # SOAR isolate E2E) require the full running server to register their live
-        # integration and legitimately can't pass in a DB-only context; ignoring their
-        # run failure lets coverage be measured from everything that ran and lets the
-        # job's verdict be the FLOOR check on the honest number, not a server-only test.
-        env:
-          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          WEISSMAN_AUTH_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
-          REDIS_URL: redis://127.0.0.1:6379/0
-          WEISSMAN_REQUIRE_DB_TESTS: "1"
+        run: cargo install cargo-llvm-cov --locked
+      - name: Coverage (workspace lib tests) — per-crate ratchet
+        # Security-critical code should carry measured coverage, not just green tests.
+        # Per-crate floors live in scripts/coverage-floors.json: a fixed 40% for the maintained
+        # crates (weissman-core, weissman-ui-provenance, weissman-ast-cap) and a current-coverage
+        # quarantine for the legacy crates. Coverage may only go up, never down. Collect once,
+        # then emit both lcov (artifact) and json (ratchet input) from the cached profdata.
         run: |
-          # Run the instrumented suite ONCE (tolerating the server-only contract
-          # failures via --ignore-run-fail), keep the raw profdata (--no-report), then
-          # emit two reports from that same data:
-          #   1. the lcov artifact (consumed by the upload step below), and
-          #   2. a human-readable summary printed to THIS log — so the true coverage %
-          #      is visible in CI, not buried inside lcov.info.
-          # The 40% floor is still EVALUATED and printed, but is INFORMATIONAL: it emits a
-          # GitHub warning annotation instead of failing the job (policy: the platform is
-          # ~96% I/O-bound attack engines whose real coverage lives in the live-stack E2E,
-          # so <40% here is expected and must not gate the PR). Floor value kept at 40 —
-          # not lowered, not padded — so the gap stays visible; promote back to blocking
-          # once a genuine unit-test campaign or live-stack-instrumented coverage earns it.
-          cargo llvm-cov --workspace --ignore-run-fail --no-report -- --test-threads=2
+          cargo llvm-cov --workspace --lib --no-report
           cargo llvm-cov report --lcov --output-path lcov.info
-          cargo llvm-cov report --fail-under-lines 40 \
-            || echo "::warning title=Rust coverage below informational 40% floor::measured line coverage is under the 40% floor — expected and non-blocking per docs/Coverage_Deficit_Analysis.md"
+          cargo llvm-cov report --json --output-path cov.json
+          node scripts/coverage_ratchet.mjs cov.json
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { FixedSizeList as List } from 'react-window'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
@@ -33,13 +33,13 @@ function EntropyGauge({ value, isLeak }) {
   const c = colors[zone]
   return (
     <div className="relative flex flex-col items-center">
-      <svg viewBox="0 0 120 80" className="w-full max-w-[200px] h-24 text-slate-700" aria-label={`Entropy ${v.toFixed(1)}`}>
+      <svg viewBox="0 0 120 80" className="w-full max-w-[200px] h-24 text-text-muted" aria-label={`Entropy ${v.toFixed(1)}`}>
         <defs>
           <linearGradient id="gaugeSafe" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#1e3a5f" /><stop offset="100%" stopColor="#3b82f6" /></linearGradient>
           <linearGradient id="gaugeWarn" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#713f12" /><stop offset="100%" stopColor="#eab308" /></linearGradient>
           <linearGradient id="gaugeCrit" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#7f1d1d" /><stop offset="100%" stopColor="#dc2626" /></linearGradient>
         </defs>
-        <path d="M 10 70 A 50 50 0 0 1 110 70" fill="none" stroke="currentColor" strokeWidth="12" className="text-slate-700" />
+        <path d="M 10 70 A 50 50 0 0 1 110 70" fill="none" stroke="currentColor" strokeWidth="12" className="text-text-muted" />
         <path d="M 10 70 A 50 50 0 0 1 60 22" fill="none" stroke="url(#gaugeSafe)" strokeWidth="12" strokeLinecap="round" />
         <path d="M 60 22 A 50 50 0 0 1 95 52" fill="none" stroke="url(#gaugeWarn)" strokeWidth="12" strokeLinecap="round" />
         <path d="M 95 52 A 50 50 0 0 1 110 70" fill="none" stroke="url(#gaugeCrit)" strokeWidth="12" strokeLinecap="round" />
@@ -113,7 +113,6 @@ export default function MemoryForensicsLab() {
     if (!clientId) return
     setLoading(true)
     apiFetch(`/api/clients/${clientId}/poe-findings`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setFindings(data?.findings ?? []))
       .catch(() => setFindings([]))
       .finally(() => setLoading(false))
@@ -126,7 +125,6 @@ export default function MemoryForensicsLab() {
   useEffect(() => {
     if (!clientId) return
     apiFetch('/api/clients')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((list) => {
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
@@ -135,10 +133,11 @@ export default function MemoryForensicsLab() {
             const doms = typeof c.domains === 'string' ? JSON.parse(c.domains) : c.domains
             const first = Array.isArray(doms) ? doms[0] : null
             if (first && !targetUrl) setTargetUrl(first.startsWith('http') ? first : `https://${first}`)
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
       })
       .catch(() => setClient(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
   const runScan = () => {
@@ -147,9 +146,9 @@ export default function MemoryForensicsLab() {
     setJobId(null)
     setJobStatus(null)
     apiFetch('/api/poe-scan/run', {
+      raw: true,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, target_url: targetUrl.trim() }),
+      body: { client_id: clientId, target_url: targetUrl.trim() },
     })
       .then((r) => {
         if (r.status !== 202) return r.json().then((d) => Promise.reject(new Error(d?.detail || 'Start failed')))
@@ -180,7 +179,7 @@ export default function MemoryForensicsLab() {
               setJobId(null)
               es.close()
             }
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
         es.onerror = () => {
           es.close()

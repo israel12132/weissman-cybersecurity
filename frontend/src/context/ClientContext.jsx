@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { formatApiErrorResponse } from '../lib/apiError.js'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 
 const defaultConfig = {
@@ -42,23 +42,17 @@ export function ClientProvider({ children }) {
 
   const refreshClients = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/clients')
-      if (r.ok) {
-        const data = await r.json()
-        if (Array.isArray(data)) {
-          setClients(data)
-          setClientsError(null)
-        } else {
-          setClients([])
-          setClientsError('Unexpected response from /api/clients (expected a list).')
-        }
+      const data = await apiFetch('/api/clients')
+      if (Array.isArray(data)) {
+        setClients(data)
+        setClientsError(null)
       } else {
         setClients([])
-        setClientsError(await formatApiErrorResponse(r))
+        setClientsError('Unexpected response from /api/clients (expected a list).')
       }
     } catch (e) {
       setClients([])
-      setClientsError(e?.message || 'Network error')
+      setClientsError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || 'Network error'))
     }
   }, [])
 
@@ -71,22 +65,14 @@ export function ClientProvider({ children }) {
     setConfigLoading(true)
     setConfigError(null)
     try {
-      const r = await apiFetch(`/api/clients/${clientId}/config`)
-      if (r.ok) {
-        const data = await r.json()
-        if (selectedClientIdRef.current === clientId) {
-          setClientConfigState(parseConfigFromResponse(data))
-        }
-      } else {
-        const msg = await formatApiErrorResponse(r)
-        if (selectedClientIdRef.current === clientId) {
-          setConfigError(msg)
-          setClientConfigState(defaultConfig)
-        }
+      const data = await apiFetch(`/api/clients/${clientId}/config`)
+      if (selectedClientIdRef.current === clientId) {
+        setClientConfigState(parseConfigFromResponse(data))
       }
     } catch (e) {
+      const msg = e?.response ? await formatApiErrorResponse(e.response) : (e?.message || 'Network error')
       if (selectedClientIdRef.current === clientId) {
-        setConfigError(e?.message || 'Network error')
+        setConfigError(msg)
         setClientConfigState(defaultConfig)
       }
     } finally {
@@ -101,18 +87,11 @@ export function ClientProvider({ children }) {
     }
     setIntegrationsLoading(true)
     try {
-      const r = await apiFetch(`/api/clients/${clientId}/integrations`)
-      if (r.ok) {
-        const data = normalizeIntegrations(await r.json())
-        if (selectedClientIdRef.current === clientId) {
-          setClientIntegrations(data)
-        }
-        return data
-      }
+      const data = normalizeIntegrations(await apiFetch(`/api/clients/${clientId}/integrations`))
       if (selectedClientIdRef.current === clientId) {
-        setClientIntegrations(null)
+        setClientIntegrations(data)
       }
-      return null
+      return data
     } catch {
       if (selectedClientIdRef.current === clientId) {
         setClientIntegrations(null)
@@ -137,29 +116,24 @@ export function ClientProvider({ children }) {
     if (clientId == null) return false
     setConfigError(null)
     try {
-      const r = await apiFetch(`/api/clients/${clientId}/config`, {
+      const data = await apiFetch(`/api/clients/${clientId}/config`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        body: patch,
       })
-      if (r.ok) {
-        const data = await r.json()
-        if (data.config && selectedClientIdRef.current === clientId) {
-          setClientConfigState(parseConfigFromResponse(data.config))
-        }
-        return true
+      if (data.config && selectedClientIdRef.current === clientId) {
+        setClientConfigState(parseConfigFromResponse(data.config))
       }
-      if (r.status === 409) {
-        const data = await r.json().catch(() => null)
+      return true
+    } catch (e) {
+      if (e?.status === 409) {
+        const data = e?.response ? await e.response.json().catch(() => null) : null
         if (data?.error_code === 'roe_approval_required') {
           const reqId = data.request_id ? `Request #${data.request_id}` : 'Request created'
           setConfigError(`Weaponized ROE requires 2 admin approvals. ${reqId}. Go to /roe-approvals to approve.`)
           return false
         }
       }
-      setConfigError(await formatApiErrorResponse(r))
-    } catch (e) {
-      setConfigError(e?.message || 'Network error')
+      setConfigError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || 'Network error'))
     }
     return false
   }, [])

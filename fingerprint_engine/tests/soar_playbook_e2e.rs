@@ -80,6 +80,34 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .await
         .expect("tenant row");
 
+    // Seed a real client so the FK on soar_action_executions.client_id is honestly
+    // satisfied. This test runs against a freshly-migrated (empty) DB in the
+    // engine-wiring job's pre-boot `cargo test --workspace` step, so no client
+    // exists yet; hard-coding client_id=1 previously violated
+    // soar_action_executions_client_id_fkey. We connect as the superuser test role,
+    // so this direct insert is RLS-exempt (same pattern as the tenant lookup above).
+    let client_id: i64 =
+        sqlx::query_scalar("INSERT INTO clients (tenant_id, name) VALUES ($1, $2) RETURNING id")
+            .bind(tenant_id)
+            .bind("soar-e2e-contract-client")
+            .fetch_one(&pool)
+            .await
+            .expect("seed soar e2e client");
+
+    // Register an aws_ec2 integration for the tenant so the isolate_host action can
+    // resolve a provider. Without it execute_armored_action returns "skipped" with
+    // "no integration registered". The dry-run adapter path needs no real creds.
+    sqlx::query(
+        "INSERT INTO system_configs (tenant_id, key, value) \
+         VALUES ($1, 'integrations_registry', $2) \
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
+    )
+    .bind(tenant_id)
+    .bind(r#"[{"id":"aws_ec2","type":"aws_ec2","config":{}}]"#)
+    .execute(&pool)
+    .await
+    .expect("seed integrations_registry");
+
     let evidence = ThreatEvidence {
         finding_id: Some(1),
         title: "SOAR E2E contract probe".into(),
@@ -98,10 +126,7 @@ async fn isolate_dry_run_verify_and_revert_chain() {
     let cmd = build_command(
         "isolate_host",
         tenant_id,
-        // client_id is NULL: CI seeds a default tenant but no `clients` row, and the
-        // column is a nullable FK (ON DELETE SET NULL). The isolate→verify→revert chain
-        // under test is client-agnostic, so a hardcoded client_id=1 only tripped the FK.
-        None,
+        Some(client_id),
         None,
         "i-test123456789".into(),
         json!({ "pre_approved": true, "blast_radius_override": true }),
@@ -175,6 +200,17 @@ async fn isolate_dry_run_verify_and_revert_chain() {
         .await;
     let _ = sqlx::query("DELETE FROM soar_action_executions WHERE id = $1")
         .bind(execution_id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query(
+        "DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
+    )
+    .bind(tenant_id)
+    .execute(&pool)
+    .await;
+    // Remove the seeded client last (its FK children above are already gone).
+    let _ = sqlx::query("DELETE FROM clients WHERE id = $1")
+        .bind(client_id)
         .execute(&pool)
         .await;
 }

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { ListOrdered } from 'lucide-react';
-import { apiFetch } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
 import StandaloneLabShell from '../ui/StandaloneLabShell'
 
 const NS = 'components.tools.attackChainView'
@@ -51,10 +51,6 @@ export default function AttackChainView() {
     setLoading(true)
     setError(null)
     apiFetch(`/api/clients/${clientId}/attack-chain`)
-      .then((r) => {
-        if (!r.ok) throw new Error(r.statusText || `HTTP ${r.status}`)
-        return r.json()
-      })
       .then((d) => {
         if (cancelled) return
         try {

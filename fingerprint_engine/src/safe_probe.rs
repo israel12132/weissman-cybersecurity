@@ -89,3 +89,42 @@ pub async fn safe_probe(url: &str, tech_hint: &str) -> Option<SafeProbeResult> {
         tech_hint: tech_hint.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn safe_probe_result_serializes_all_fields() {
+        let mut baseline = HashMap::new();
+        baseline.insert("server".to_string(), "nginx".to_string());
+        let r = SafeProbeResult {
+            header_changed: true,
+            timing_anomaly: false,
+            baseline_latency_ms: 10,
+            probe_latency_ms: 20,
+            baseline_headers: baseline,
+            probe_headers: HashMap::new(),
+            tech_hint: "php".to_string(),
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["header_changed"], json!(true));
+        assert_eq!(v["timing_anomaly"], json!(false));
+        assert_eq!(v["baseline_latency_ms"], json!(10));
+        assert_eq!(v["probe_latency_ms"], json!(20));
+        assert_eq!(v["tech_hint"], json!("php"));
+        assert_eq!(v["baseline_headers"]["server"], json!("nginx"));
+        assert!(v["probe_headers"].as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn safe_probe_empty_url_returns_none_without_io() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        // Empty / whitespace-only url short-circuits before any HTTP client work.
+        assert!(rt.block_on(safe_probe("", "x")).is_none());
+        assert!(rt.block_on(safe_probe("    ", "x")).is_none());
+    }
+}

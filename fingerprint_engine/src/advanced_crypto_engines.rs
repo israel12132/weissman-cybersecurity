@@ -315,3 +315,110 @@ cli_wrapper!(
     run_password_spray_advanced,
     run_password_spray_advanced_result
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── find_hex_mac_param ────────────────────────────────────────────────────
+    // MD5 (32), SHA-1 (40), SHA-256 (64) hex of the empty string.
+    const MD5_HEX: &str = "d41d8cd98f00b204e9800998ecf8427e";
+    const SHA1_HEX: &str = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+    const SHA256_HEX: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    #[test]
+    fn hex_lengths_are_as_expected() {
+        // Guard the fixtures so the classification tests stay meaningful.
+        assert_eq!(MD5_HEX.len(), 32);
+        assert_eq!(SHA1_HEX.len(), 40);
+        assert_eq!(SHA256_HEX.len(), 64);
+    }
+
+    #[test]
+    fn detects_md5_mac_via_hash_param() {
+        let text = format!("hash={}", MD5_HEX);
+        assert_eq!(find_hex_mac_param(&text), Some(("hash", "MD5")));
+    }
+
+    #[test]
+    fn detects_sha1_mac_via_sig_param() {
+        let text = format!("sig={}", SHA1_HEX);
+        assert_eq!(find_hex_mac_param(&text), Some(("sig", "SHA-1")));
+    }
+
+    #[test]
+    fn detects_sha256_mac_via_signature_param() {
+        let text = format!("signature={}", SHA256_HEX);
+        assert_eq!(find_hex_mac_param(&text), Some(("signature", "SHA-256")));
+    }
+
+    #[test]
+    fn no_mac_param_returns_none() {
+        assert_eq!(find_hex_mac_param("nothing to see here"), None);
+    }
+
+    #[test]
+    fn non_hex_length_returns_none() {
+        // "abc" is valid hex but only 3 chars — no algorithm matches.
+        assert_eq!(find_hex_mac_param("hash=abc"), None);
+    }
+
+    #[test]
+    fn odd_hex_length_returns_none() {
+        // 33 hex chars (MD5 + one more) matches no algorithm.
+        let text = format!("hash={}a", MD5_HEX);
+        assert_eq!(find_hex_mac_param(&text), None);
+    }
+
+    #[test]
+    fn hex_value_terminated_by_non_hex_is_measured_correctly() {
+        // 32 hex digits followed by a non-hex delimiter still classifies as MD5.
+        let text = format!("mac={}&other=1", MD5_HEX);
+        assert_eq!(find_hex_mac_param(&text), Some(("mac", "MD5")));
+    }
+
+    #[test]
+    fn name_precedence_signature_before_sig() {
+        // Both a signature= (SHA-256) and a sig= (MD5) are present; the loop
+        // checks "signature=" before "sig=", so SHA-256 wins.
+        let text = format!("sig={}&signature={}", MD5_HEX, SHA256_HEX);
+        assert_eq!(find_hex_mac_param(&text), Some(("signature", "SHA-256")));
+    }
+
+    #[test]
+    fn skips_non_matching_occurrence_then_finds_valid_param() {
+        // First sig= has a non-hex value (fails), then a valid hash= is found.
+        let text = format!("sig=notvalidhex hash={}", MD5_HEX);
+        assert_eq!(find_hex_mac_param(&text), Some(("hash", "MD5")));
+    }
+
+    #[test]
+    fn uppercase_hex_is_accepted() {
+        let text = format!("hmac={}", MD5_HEX.to_uppercase());
+        assert_eq!(find_hex_mac_param(&text), Some(("hmac", "MD5")));
+    }
+
+    // ── crypto_finding ────────────────────────────────────────────────────────
+    #[test]
+    fn crypto_finding_has_expected_shape() {
+        let f = crypto_finding(
+            "padding_oracle_attack",
+            "Oracle signal",
+            "medium",
+            "T1556",
+            "desc",
+            "example.com",
+        );
+        assert_eq!(f["type"], serde_json::json!("padding_oracle_attack"));
+        assert_eq!(f["title"], serde_json::json!("Oracle signal"));
+        assert_eq!(f["severity"], serde_json::json!("medium"));
+        assert_eq!(f["mitre_attack"], serde_json::json!("T1556"));
+        assert_eq!(f["description"], serde_json::json!("desc"));
+        assert_eq!(f["target"], serde_json::json!("example.com"));
+        assert_eq!(f["probe_depth"], serde_json::json!(CRYPTO_PROBE_DEPTH));
+        assert_eq!(f["probe_depth"], serde_json::json!("crypto_auth_surface"));
+        // finding() attaches remediation + compliance metadata.
+        assert!(f.get("remediation").is_some());
+        assert!(f.get("compliance").is_some());
+    }
+}

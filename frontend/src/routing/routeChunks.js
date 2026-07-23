@@ -10,13 +10,15 @@ import { lazyWithRetry as React$lazy } from './lazyWithRetry'
 export { normalizeRoutePath, matchRouteChunk } from './routePrefetchMap'
 
 // ── Lazy route components (used by TacticalApp) ─────────────────────────────
-// `React$lazy` is `lazyWithRetry` — a drop-in for `React.lazy` that retries a transient chunk-load
-// failure and reloads once onto a fresh bundle after a stale deploy, instead of hard-crashing the
-// route with "This view crashed". See ./lazyWithRetry.js.
+// `React$lazy` is `lazyWithRetry` — a drop-in for `React.lazy` that retries a transient
+// dynamic-import (chunk 404 after a redeploy) with backoff before surfacing the error
+// boundary, instead of hard-failing the route. See ./lazyWithRetry.js.
 export const Cockpit = React$lazy(() => import(/* webpackChunkName: "cockpit-shell" */ '../Cockpit'))
 export const Login = React$lazy(() => import(/* webpackChunkName: "page-login" */ '../components/cockpit/Login'))
 export const App = React$lazy(() => import(/* webpackChunkName: "page-intel-map" */ '../App'))
 export const SystemCore = React$lazy(() => import('../components/SystemCore'))
+export const DesignSystemGallery = React$lazy(() => import('../pages/DesignSystemGallery'))
+export const AdvancedShowcase = React$lazy(() => import('../pages/AdvancedShowcase'))
 export const ReportView = React$lazy(() => import('../components/ReportView'))
 export const AttackSurfaceGraph = React$lazy(() => import('../components/AttackSurfaceGraph'))
 export const SemanticLogicEngine = React$lazy(() => import('../components/SemanticLogicEngine'))

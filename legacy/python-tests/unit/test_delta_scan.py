@@ -11,9 +11,8 @@ Run with: pytest tests/unit/test_delta_scan.py -v
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.delta_scan import (
     _ports_key,
@@ -282,7 +281,7 @@ class TestSaveSnapshot:
         existing.headers_hash = ""
         existing.cve_ids_json = "[]"
         existing.assets_json = "[]"
-        db = self._setup_db_mock(mock_factory, existing_row=existing)
+        self._setup_db_mock(mock_factory, existing_row=existing)
 
         assets = ["subdomain:api.x.com", "s3_bucket:s3://bucket"]
         save_snapshot("target1", assets=assets)

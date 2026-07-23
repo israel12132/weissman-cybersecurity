@@ -1,6 +1,6 @@
 # Production API + async job worker binaries (workspace build).
 # `fingerprint_engine serve` was removed — use `weissman-server` (see fingerprint_engine/src/main.rs).
-# Build: docker compose build backend
+# Build: docker compose -f docker-compose.build.yml build backend
 #
 # OT/ICS critical-infra engines: enabled via `high_risk_engines` on the fingerprint_engine
 # dependency in weissman-server / weissman-worker Cargo.toml (transitive for this build).
@@ -32,16 +32,14 @@ COPY backend ./backend
 COPY crates ./crates
 COPY scripts ./scripts
 COPY shared ./shared
-# Release-profile knobs, overridable at build time. Defaults reproduce the committed
-# profile.release (lto=fat, codegen-units=1), so production/publish images are byte-for-byte
-# unchanged. CI overrides them (thin/no LTO + parallel codegen) because the fat-LTO link of
-# three release binaries over the ~350k-LOC workspace exhausts a hosted runner's memory and
-# gets SIGKILL/143'd — and the CI image only needs to build + be Trivy-scannable, never to
-# run (the live-stack boots the debug binary). Cargo env vars override the Cargo.toml profile.
-ARG CARGO_PROFILE_RELEASE_LTO=fat
-ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-ENV CARGO_PROFILE_RELEASE_LTO=${CARGO_PROFILE_RELEASE_LTO} \
-    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=${CARGO_PROFILE_RELEASE_CODEGEN_UNITS}
+# Fat LTO on the full ~250-crate workspace (Cargo.toml [profile.release]) OOM-kills
+# standard CI/build runners at link time. Scope the image build to thin LTO —
+# near-identical runtime performance, dramatically lower peak build memory — and
+# bound parallelism so the optimized (opt-level 3) compiles don't spike RAM. This
+# keeps the workspace release profile (fat) intact for anyone who builds with the
+# memory headroom; the shipped image just builds reliably here.
+ENV CARGO_PROFILE_RELEASE_LTO=thin \
+    CARGO_BUILD_JOBS=2
 RUN cargo build -p weissman-server -p weissman-worker -p weissman-agent \
     --release --locked
 

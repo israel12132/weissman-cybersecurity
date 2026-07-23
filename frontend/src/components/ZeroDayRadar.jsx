@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import EvidenceNotice from './ui/EvidenceNotice'
 import ForensicEngineRealityBadge from '../forensic/ForensicEngineRealityBadge'
 import Button from './ui/Button'
@@ -33,7 +33,6 @@ export default function ZeroDayRadar() {
   const loadFeed = useCallback(() => {
     setLoadingFeed(true)
     apiFetch('/api/threat-intel/feed')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
         setFeedItems(data?.items ?? [])
       })
@@ -62,10 +61,8 @@ export default function ZeroDayRadar() {
     setExposure(null)
     apiFetch('/api/threat-intel/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: {},
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Start failed'))))
       .then(() => {
         const wsUrl = `${WS_BASE()}/ws/threat-intel`
         const ws = new WebSocket(wsUrl)
@@ -89,7 +86,7 @@ export default function ZeroDayRadar() {
               setExposure(e.finding)
               setSynthesisLog((prev) => [...prev, `ZERO-DAY EXPOSURE: ${e.finding?.title ?? e.finding?.cve_id}`])
             }
-          } catch (_) {}
+          } catch (_) { /* best-effort; non-fatal */ }
         }
         ws.onclose = () => setRunning(false)
         ws.onerror = () => setRunning(false)

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
-import { apiFetch, formatHttpApiError } from '../../lib/apiBase'
+import { apiFetch } from '../../utils/apiFetch'
+import { formatHttpApiError } from '../../lib/apiBase'
 import { openSseStream } from '../../lib/sseStream'
 import Button from '../ui/Button'
 
@@ -86,13 +87,15 @@ export default function CeoWarRoomDock() {
       const cid = raw ? Number(raw) : NaN
       if (raw && Number.isFinite(cid))
         path = `/api/ceo/jobs/live?client_id=${encodeURIComponent(String(cid))}`
-      const r = await apiFetch(path)
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(formatHttpApiError(r, d.detail))
+      const d = await apiFetch(path)
       setJobs(Array.isArray(d.jobs) ? d.jobs : [])
     } catch (e) {
       setJobs([])
-      setJobsErr(e.message || t('components.ceo.warRoomDock.loadJobsFailed'))
+      setJobsErr(
+        e?.response
+          ? formatHttpApiError(e.response, e.message)
+          : e.message || t('components.ceo.warRoomDock.loadJobsFailed'),
+      )
     }
   }, [selectedClientId, t])
 

@@ -35,6 +35,7 @@ export default function CeoVault() {
 
   useEffect(() => {
     fetchSecrets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSecrets = async () => {
@@ -398,6 +399,7 @@ function SecretModal({ secret, onClose, onSave }) {
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal backdrop; onKeyDown only handles Escape, not a UI control
     <div
       className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}

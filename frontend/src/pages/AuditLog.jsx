@@ -14,7 +14,7 @@ import {
   ShieldAlert,
   User,
 } from 'lucide-react'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import DataTable from '../components/ui/DataTable'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -153,9 +153,7 @@ export default function AuditLog() {
     if (actionFilter) qs.set('action', actionFilter)
     if (actor.trim()) qs.set('actor', actor.trim())
     try {
-      const r = await apiFetch(`/api/audit-logs?${qs.toString()}`)
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const d = await r.json()
+      const d = await apiFetch(`/api/audit-logs?${qs.toString()}`)
       const list = Array.isArray(d) ? d : Array.isArray(d?.entries) ? d.entries : []
       setEntries(list)
       setTotal(Number(d?.total ?? list.length))
@@ -174,9 +172,8 @@ export default function AuditLog() {
   const exportFull = useCallback(async () => {
     setExportingFull(true)
     try {
-      const r = await apiFetch('/api/audit/export?format=json&limit=50000')
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.ok === false) throw new Error(d.detail || `HTTP ${r.status}`)
+      const d = await apiFetch('/api/audit/export?format=json&limit=50000')
+      if (d.ok === false) throw new Error(d.detail || t('audit.export_full_failed'))
       const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -205,12 +202,11 @@ export default function AuditLog() {
     setVerifying(true)
     setVerifyResult(null)
     try {
-      const r = await apiFetch(`/api/verify-audit/${encodeURIComponent(h)}`)
-      const d = await r.json().catch(() => ({}))
-      if (r.ok && d.verified) {
+      const d = await apiFetch(`/api/verify-audit/${encodeURIComponent(h)}`)
+      if (d.verified) {
         setVerifyResult({ verified: true, ...d })
       } else {
-        setVerifyResult({ verified: false, error: d.error || `HTTP ${r.status}` })
+        setVerifyResult({ verified: false, error: d.error || t('audit.verify_error') })
       }
     } catch (e) {
       setVerifyResult({ verified: false, error: e.message || t('audit.verify_error') })
@@ -561,7 +557,7 @@ export default function AuditLog() {
           getRowCanExpand={(row) => Boolean(row.original.details)}
           expandLabel={t('audit.expand_payload')}
           collapseLabel={t('audit.collapse_payload')}
-          emptyState={{ icon: '📋', title: t('audit.empty_title'), body: t('audit.empty_body') }}
+          emptyState={{ icon: 'list', title: t('audit.empty_title'), body: t('audit.empty_body') }}
         />
 
         {total > 0 && (

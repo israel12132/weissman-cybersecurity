@@ -5,7 +5,7 @@ import PageShell from './PageShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import ClientOnboardingWizard from '../components/clients/ClientOnboardingWizard'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 
 export default function ClientNew() {
@@ -19,39 +19,35 @@ export default function ClientNew() {
     setError('')
     setSubmitting(true)
     try {
-      const response = await apiFetch('/api/clients', {
+      const data = await apiFetch('/api/clients', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
       })
 
-      if (!response.ok) {
-        let detail = `HTTP ${response.status}`
+      const clientId = data.id || data.client_id
+      navigate(clientId ? `/clients/${clientId}` : '/clients')
+    } catch (err) {
+      if (err?.response) {
+        let detail = `HTTP ${err.status}`
         try {
-          const data = await response.clone().json()
+          const data = await err.response.clone().json()
           detail = data.detail || data.error || detail
         } catch {
           try {
-            const text = await response.text()
+            const text = await err.response.text()
             if (text) detail = text.slice(0, 500)
           } catch { /* ignore */ }
         }
-        if (response.status === 403) {
+        if (err.status === 403) {
           setError(t('pages.clientNew.error_forbidden', { detail }))
-        } else if (response.status === 402) {
+        } else if (err.status === 402) {
           setError(t('pages.clientNew.error_plan_limit', { detail }))
         } else {
           setError(t('pages.clientNew.create_failed', { detail }))
         }
-        setSubmitting(false)
-        return
+      } else {
+        setError(t('pages.clientNew.create_error', { detail: err.message }))
       }
-
-      const data = await response.json()
-      const clientId = data.id || data.client_id
-      navigate(clientId ? `/clients/${clientId}` : '/clients')
-    } catch (err) {
-      setError(t('pages.clientNew.create_error', { detail: err.message }))
       setSubmitting(false)
     }
   }

@@ -703,3 +703,192 @@ pub fn run_eternal_fuzz_cycle_json() -> Value {
 pub fn unique_seed_targets() -> HashSet<String> {
     load_seed_strings().into_iter().collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ceo::strategy::GenesisRuntimeParams;
+
+    fn empty_params() -> GenesisRuntimeParams {
+        GenesisRuntimeParams {
+            protocol_enabled: true,
+            kill_switch: false,
+            ram_budget_mb: 4096,
+            dfs_max_depth: 8,
+            dfs_max_steps: usize::MAX,
+            seed_repos: String::new(),
+            seed_npm: String::new(),
+            seed_crates: String::new(),
+            seed_pypi: String::new(),
+            seed_images: String::new(),
+        }
+    }
+
+    #[test]
+    fn seed_strings_split_prefix_sort_and_dedup() {
+        let mut p = empty_params();
+        // Split on both comma and newline; whitespace trimmed; blanks dropped; dupes removed.
+        p.seed_repos = "b, a\n a ,\n".to_string();
+        let out = load_seed_strings_from_params(&p);
+        assert_eq!(
+            out,
+            vec![
+                "WEISSMAN_GENESIS_SEED_REPOS:a".to_string(),
+                "WEISSMAN_GENESIS_SEED_REPOS:b".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn seed_strings_span_multiple_channels_with_key_prefixes() {
+        let mut p = empty_params();
+        p.seed_npm = "left-pad".to_string();
+        p.seed_crates = "serde".to_string();
+        let out = load_seed_strings_from_params(&p);
+        assert!(out.contains(&"WEISSMAN_GENESIS_SEED_NPM:left-pad".to_string()));
+        assert!(out.contains(&"WEISSMAN_GENESIS_SEED_CRATES:serde".to_string()));
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn seed_strings_empty_when_all_channels_blank() {
+        assert!(load_seed_strings_from_params(&empty_params()).is_empty());
+    }
+
+    #[test]
+    fn build_roots_only_creates_one_node_per_seed() {
+        let seeds = vec!["s1".to_string(), "s2".to_string()];
+        let (g, roots) = build_roots_only(&seeds);
+        assert_eq!(g.node_count(), 2);
+        assert_eq!(g.edge_count(), 0);
+        assert_eq!(roots.len(), 2);
+        assert_eq!(g[roots[0]], "s1");
+        assert_eq!(g[roots[1]], "s2");
+    }
+
+    #[test]
+    fn ensure_single_child_creates_labeled_child_then_reuses_it() {
+        let (mut g, roots) = build_roots_only(&["seed".to_string()]);
+        let parent = roots[0];
+        let child = ensure_single_child(&mut g, parent, 0, 8, "seed").unwrap();
+        // CHAIN_VECTORS[0 % 7] == "memory_pressure".
+        assert_eq!(g[child], "seed>>memory_pressure@d0");
+        let edge = g.find_edge(parent, child).unwrap();
+        assert_eq!(g[edge], "memory_pressure");
+        // Second call returns the existing child, no new node.
+        let before = g.node_count();
+        let again = ensure_single_child(&mut g, parent, 0, 8, "seed").unwrap();
+        assert_eq!(again, child);
+        assert_eq!(g.node_count(), before);
+    }
+
+    #[test]
+    fn ensure_single_child_respects_depth_cap() {
+        let (mut g, roots) = build_roots_only(&["seed".to_string()]);
+        assert!(ensure_single_child(&mut g, roots[0], 8, 8, "seed").is_none());
+        assert!(ensure_single_child(&mut g, roots[0], 9, 8, "seed").is_none());
+    }
+
+    #[test]
+    fn ensure_single_child_vector_rotates_with_depth() {
+        let (mut g, roots) = build_roots_only(&["k".to_string()]);
+        // depth 1 -> CHAIN_VECTORS[1] == "memory_leak".
+        let c = ensure_single_child(&mut g, roots[0], 1, 8, "k").unwrap();
+        assert_eq!(g[c], "k>>memory_leak@d1");
+    }
+
+    #[test]
+    fn snapshot_roundtrip_preserves_counts() {
+        let (mut g, roots) = build_roots_only(&["a".to_string(), "b".to_string()]);
+        let _ = ensure_single_child(&mut g, roots[0], 0, 4, "a");
+        let snap = snapshot_graph(&g);
+        let restored = graph_from_snapshot(&snap).unwrap();
+        assert_eq!(restored.node_count(), g.node_count());
+        assert_eq!(restored.edge_count(), g.edge_count());
+    }
+
+    #[test]
+    fn graph_from_snapshot_rebuilds_nodes_and_edges() {
+        let snap = GraphSnapshot {
+            nodes: vec!["a".to_string(), "b".to_string()],
+            edges: vec![(0, 1, "w".to_string())],
+        };
+        let g = graph_from_snapshot(&snap).unwrap();
+        assert_eq!(g.node_count(), 2);
+        assert_eq!(g.edge_count(), 1);
+        assert_eq!(g[NodeIndex::new(0)], "a");
+        assert_eq!(g[NodeIndex::new(1)], "b");
+    }
+
+    #[test]
+    fn graph_from_snapshot_rejects_out_of_range_edge() {
+        let snap = GraphSnapshot {
+            nodes: vec!["only".to_string()],
+            edges: vec![(0, 5, "w".to_string())],
+        };
+        let err = graph_from_snapshot(&snap).unwrap_err();
+        assert_eq!(err, "edge endpoint out of range");
+    }
+
+    #[test]
+    fn tech_fingerprint_matches_known_sha256_vectors() {
+        // SHA256("") and SHA256("a"), lowercase hex.
+        assert_eq!(
+            tech_fingerprint_for_chain(&[]),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            tech_fingerprint_for_chain(&["a".to_string()]),
+            "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+        );
+        // 64 hex chars, deterministic.
+        let fp = tech_fingerprint_for_chain(&["x".to_string(), "y".to_string()]);
+        assert_eq!(fp.len(), 64);
+        assert_eq!(
+            fp,
+            tech_fingerprint_for_chain(&["x".to_string(), "y".to_string()])
+        );
+    }
+
+    #[test]
+    fn synthesize_feedback_alternates_success_on_multiples_of_three() {
+        let path = vec![
+            "s0".to_string(),
+            "s1".to_string(),
+            "s2".to_string(),
+            "s3".to_string(),
+        ];
+        let fb = synthesize_feedback_from_path(&path);
+        assert_eq!(fb.len(), 4);
+        let outcomes: Vec<&str> = fb.iter().map(|s| s.outcome.as_str()).collect();
+        assert_eq!(
+            outcomes,
+            vec![
+                "path_success",
+                "path_failure",
+                "path_failure",
+                "path_success"
+            ]
+        );
+        assert_eq!(fb[0].pivot, "chain_advances");
+        assert_eq!(fb[1].pivot, "internal_path_retry_encoding");
+        assert_eq!(fb[0].stage, "s0");
+    }
+
+    #[test]
+    fn sim_feedback_step_serializes_expected_fields() {
+        let step = SimFeedbackStep {
+            stage: "reconnaissance".to_string(),
+            outcome: "path_success".to_string(),
+            pivot: "chain_advances".to_string(),
+        };
+        let v = serde_json::to_value(&step).unwrap();
+        assert_eq!(v["stage"], "reconnaissance");
+        assert_eq!(v["outcome"], "path_success");
+        assert_eq!(v["pivot"], "chain_advances");
+        // Roundtrip back into the struct.
+        let back: SimFeedbackStep = serde_json::from_value(v).unwrap();
+        assert_eq!(back.stage, "reconnaissance");
+        assert_eq!(back.pivot, "chain_advances");
+    }
+}

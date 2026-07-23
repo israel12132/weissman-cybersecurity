@@ -315,3 +315,127 @@ pub fn run_pipeline_analysis_sync(
     );
     EngineResult::ok(findings, msg)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stage_from_path_classifies() {
+        assert_eq!(stage_from_path("src/test_foo.yml"), "Test");
+        assert_eq!(stage_from_path("spec/thing.yaml"), "Test");
+        assert_eq!(stage_from_path(".github/workflows/ci.yml"), "Build");
+        assert_eq!(stage_from_path(".gitlab-ci.yml"), "Build");
+        assert_eq!(stage_from_path("scripts/build.sh"), "Build");
+        assert_eq!(stage_from_path("main.tf"), "Deploy");
+        assert_eq!(stage_from_path("infra/terraform/vars.yaml"), "Deploy");
+        assert_eq!(stage_from_path("deploy/app.yaml"), "Deploy");
+        assert_eq!(stage_from_path("README.md"), "Build");
+    }
+
+    #[test]
+    fn stage_from_path_test_takes_priority() {
+        // "test" is checked before "deploy"
+        assert_eq!(stage_from_path("deploy/test_it.tf"), "Test");
+    }
+
+    #[test]
+    fn parse_github_repo_valid() {
+        assert_eq!(
+            parse_github_repo("https://github.com/owner/repo"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_github_repo("https://github.com/owner/repo.git"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_github_repo("https://github.com/owner/repo/"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_github_repo_invalid() {
+        assert_eq!(parse_github_repo("https://gitlab.com/owner/repo"), None);
+        assert_eq!(parse_github_repo("https://github.com/onlyowner"), None);
+        assert_eq!(parse_github_repo("not a url"), None);
+    }
+
+    #[test]
+    fn toxic_regexes_match_expected() {
+        assert!(toxic_secret_re().is_match("password = \"hunter2\""));
+        assert!(toxic_secret_re().is_match("AKIAIOSFODNN7EXAMPLE"));
+        assert!(!toxic_secret_re().is_match("nothing sensitive here"));
+
+        assert!(toxic_curl_bash_re().is_match("curl https://get.example.com/i.sh | bash"));
+        assert!(!toxic_curl_bash_re().is_match("curl https://x/i.sh > file"));
+
+        assert!(toxic_iam_wildcard_re().is_match("actions = [\"*\"]"));
+        assert!(!toxic_iam_wildcard_re().is_match("actions = [\"s3:GetObject\"]"));
+    }
+
+    #[test]
+    fn toxic_checks_detects_secret() {
+        let hits = toxic_checks("env:\n  password = \"s3cr3t\"", "config.yml");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, "Hardcoded secret in IaC");
+        assert!(hits[0].1.contains("password"));
+    }
+
+    #[test]
+    fn toxic_checks_detects_curl_bash() {
+        let hits = toxic_checks(
+            "run: curl https://get.example.com/install.sh | bash",
+            "ci.yml",
+        );
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, "Unpinned curl | bash (supply chain)");
+    }
+
+    #[test]
+    fn toxic_checks_iam_wildcard_only_for_tf() {
+        let content = "resource {\n  actions = [\"*\"]\n}";
+        let tf_hits = toxic_checks(content, "iam.tf");
+        assert_eq!(tf_hits.len(), 1);
+        assert_eq!(tf_hits[0].0, "Overly permissive IAM (wildcard Action)");
+        // same content in a non-.tf file: IAM check is skipped
+        let yaml_hits = toxic_checks(content, "iam.yaml");
+        assert!(yaml_hits.is_empty());
+    }
+
+    #[test]
+    fn toxic_checks_clean_content() {
+        assert!(toxic_checks("steps:\n  - run: echo hi", "ci.yml").is_empty());
+    }
+
+    #[test]
+    fn pipeline_config_default_is_empty() {
+        let c = PipelineConfig::default();
+        assert!(c.llm_base_url.is_empty());
+        assert!(c.llm_model.is_empty());
+        assert!(c.github_token.is_empty());
+        assert!(c.gitlab_api_url.is_empty());
+        assert!(c.gitlab_token.is_empty());
+    }
+
+    #[test]
+    fn pipeline_finding_serde_roundtrip() {
+        let f = PipelineFinding {
+            stage: "Deploy".to_string(),
+            file_path: "main.tf".to_string(),
+            title: "t".to_string(),
+            severity: "critical".to_string(),
+            vulnerable_snippet: "snip".to_string(),
+            poc_exploit: "poc".to_string(),
+            blast_radius: "big".to_string(),
+            raw_finding: "raw".to_string(),
+        };
+        let s = serde_json::to_string(&f).unwrap();
+        let back: PipelineFinding = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.stage, "Deploy");
+        assert_eq!(back.file_path, "main.tf");
+        assert_eq!(back.severity, "critical");
+        assert_eq!(back.raw_finding, "raw");
+    }
+}

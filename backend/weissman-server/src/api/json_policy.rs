@@ -17,3 +17,35 @@ pub fn max_request_body_bytes() -> usize {
         .filter(|&n| (1024..=128 * 1024 * 1024).contains(&n))
         .unwrap_or(DEFAULT_MAX_BYTES)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Single test owns the shared env var so parallel tests never race on it.
+    #[test]
+    fn max_body_bytes_clamps_and_defaults() {
+        let key = "WEISSMAN_MAX_REQUEST_BODY_BYTES";
+
+        std::env::remove_var(key);
+        assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
+
+        // In-range override honored.
+        std::env::set_var(key, "2048");
+        assert_eq!(max_request_body_bytes(), 2048);
+
+        // Below floor (1 KiB) rejected -> default.
+        std::env::set_var(key, "512");
+        assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
+
+        // Above ceiling (128 MiB) rejected -> default.
+        std::env::set_var(key, &(129 * 1024 * 1024).to_string());
+        assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
+
+        // Non-numeric rejected -> default.
+        std::env::set_var(key, "lots");
+        assert_eq!(max_request_body_bytes(), DEFAULT_MAX_BYTES);
+
+        std::env::remove_var(key);
+    }
+}

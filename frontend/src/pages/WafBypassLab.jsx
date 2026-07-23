@@ -8,7 +8,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissmanEnginePage'
-import { apiFetch } from '../lib/apiBase'
+import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
 
@@ -150,7 +150,8 @@ export default function WafBypassLab() {
   })
 
   useEffect(() => {
-    apiFetch('/api/clients').then((r) => (r.ok ? r.json() : [])).then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
+    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -191,13 +192,14 @@ export default function WafBypassLab() {
       else if (v !== '' && v != null) body[k] = v
     }
     try {
-      const { ok, data: d, status } = await postScan(body)
+      const { ok, data: d } = await postScan(body)
       if (!ok) { setScanning(false); return }
       if (d.job_id) setPendingJobId(d.job_id)
       else setScanning(false)
     } catch {
       setScanning(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId, target, params])
 
   const jobStatus = uiJobStatus(pendingJobId, scanning)

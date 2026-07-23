@@ -362,6 +362,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- full-screen modal overlay; only handles Escape keydown, dialog semantics live on the inner element
     <div
       className="fixed inset-0 bg-[var(--bg-3)] backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
