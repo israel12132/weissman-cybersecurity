@@ -623,7 +623,11 @@ mod worker_pool_role_tests {
         ]
         .into_iter()
         .collect();
-        assert_eq!(modes.len(), 3, "each role maps to a distinct SQL discriminant");
+        assert_eq!(
+            modes.len(),
+            3,
+            "each role maps to a distinct SQL discriminant"
+        );
     }
 
     #[test]
