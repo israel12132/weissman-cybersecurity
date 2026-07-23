@@ -377,8 +377,16 @@ jobs:
         #     "Live RLS cross-tenant isolation contract" step below.
         # Everything else stays a hard blocking gate. Skip is by exact fn name (substring),
         # so the server-free sibling test eight_soar_adapters_registered still runs here.
+        #
+        # `--test-threads=2`: this is the ONLY test run that exercises the DB-backed integration
+        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1). At full per-core parallelism those
+        # tests occasionally exhaust the shared connection pool and one acquire blocks forever —
+        # the intermittent multi-hour hang tracked in docs/TECH_DEBT_flaky_db_test_hang.md. Bounding
+        # concurrency keeps concurrent DB work under the pool ceiling so acquires never deadlock.
+        # It is the documented remediation, not a mask: every test still runs and still blocks.
         run: |
           cargo test --workspace --all-targets -- \
+            --test-threads=2 \
             --skip isolate_dry_run_verify_and_revert_chain \
             --skip weissman_app_cannot_read_other_tenant_clients
 
