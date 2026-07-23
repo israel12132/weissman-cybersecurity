@@ -1,7 +1,8 @@
 /**
  * Helpers for live-stack Playwright E2E (real backend — no API mocks).
  */
-import type { APIRequestContext, Page } from '@playwright/test'
+import type { APIRequestContext, APIResponse } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 export const LIVE_BASE = (process.env.WEISSMAN_E2E_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '')
 export const ADMIN_EMAIL = process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost'
@@ -17,10 +18,33 @@ export function liveEnabled(): boolean {
   return process.env.PLAYWRIGHT_LIVE === '1' && !!ADMIN_PASSWORD
 }
 
+/**
+ * Retry a live-stack API call while the per-IP rate limiter throttles it (429). The live E2E
+ * drives ALL browser + harness traffic through one IP (127.0.0.1), so legitimate bursts can trip
+ * the 30/s-per-IP limit that no single real client ever would. The API answers 429 with an
+ * explicit `Retry-After` — a documented "retry in Ns" contract — so a correct client honors it
+ * instead of failing the run. Non-429 responses (incl. real errors) pass straight through.
+ */
+export async function apiRequestWithRetry(
+  fn: () => Promise<APIResponse>,
+  retries = 5,
+): Promise<APIResponse> {
+  let r = await fn()
+  for (let attempt = 0; attempt < retries && r.status() === 429; attempt += 1) {
+    const ra = Number(r.headers()['retry-after'])
+    const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 3000) : 400 * (attempt + 1)
+    await new Promise((res) => setTimeout(res, waitMs))
+    r = await fn()
+  }
+  return r
+}
+
 export async function apiLogin(request: APIRequestContext): Promise<LiveAuth> {
-  const r = await request.post(`${LIVE_BASE}/api/login`, {
-    data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, tenant_slug: TENANT },
-  })
+  const r = await apiRequestWithRetry(() =>
+    request.post(`${LIVE_BASE}/api/login`, {
+      data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, tenant_slug: TENANT },
+    }),
+  )
   if (!r.ok()) {
     throw new Error(`login failed HTTP ${r.status()}: ${await r.text()}`)
   }
@@ -45,7 +69,7 @@ export function authHeaders(auth: LiveAuth): Record<string, string> {
 
 export async function ensureE2eClient(request: APIRequestContext, auth: LiveAuth): Promise<number> {
   const headers = { ...authHeaders(auth), 'Content-Type': 'application/json' }
-  const list = await request.get(`${LIVE_BASE}/api/clients`, { headers })
+  const list = await apiRequestWithRetry(() => request.get(`${LIVE_BASE}/api/clients`, { headers }))
   if (list.ok()) {
     const clients = await list.json()
     const arr = Array.isArray(clients) ? clients : []
@@ -54,14 +78,16 @@ export async function ensureE2eClient(request: APIRequestContext, auth: LiveAuth
     )
     if (existing?.id) return Number(existing.id)
   }
-  const created = await request.post(`${LIVE_BASE}/api/clients`, {
-    headers,
-    data: {
-      name: `Playwright E2E ${Date.now()}`,
-      domains: JSON.stringify(['https://example.com']),
-      ip_ranges: JSON.stringify(['127.0.0.0/8']),
-    },
-  })
+  const created = await apiRequestWithRetry(() =>
+    request.post(`${LIVE_BASE}/api/clients`, {
+      headers,
+      data: {
+        name: `Playwright E2E ${Date.now()}`,
+        domains: JSON.stringify(['https://example.com']),
+        ip_ranges: JSON.stringify(['127.0.0.0/8']),
+      },
+    }),
+  )
   if (!created.ok()) {
     throw new Error(`client create failed HTTP ${created.status()}: ${await created.text()}`)
   }

@@ -16,6 +16,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import {
   apiLogin,
+  apiRequestWithRetry,
   authHeaders,
   ensureE2eClient,
   ensureUiSession,
@@ -44,7 +45,9 @@ let cachedAuth: LiveAuth | null = null
 let cachedFindings: LiveFinding[] | null = null
 
 async function fetchFindings(request: APIRequestContext, auth: LiveAuth, limit = 50): Promise<LiveFinding[]> {
-  const r = await request.get(`${LIVE_BASE}/api/findings?limit=${limit}`, { headers: authHeaders(auth) })
+  const r = await apiRequestWithRetry(() =>
+    request.get(`${LIVE_BASE}/api/findings?limit=${limit}`, { headers: authHeaders(auth) }),
+  )
   if (!r.ok()) return []
   const payload = await r.json()
   const list = Array.isArray(payload) ? payload : Array.isArray(payload?.findings) ? payload.findings : []
@@ -74,10 +77,12 @@ async function ensureLiveFindings(request: APIRequestContext): Promise<{ auth: L
   let findings = await fetchFindings(request, auth)
   if (findings.length === 0) {
     const clientId = await ensureE2eClient(request, auth)
-    const scan = await request.post(`${LIVE_BASE}/api/command-center/scan`, {
-      headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
-      data: { engine: 'osint', client_id: clientId, target: 'https://example.com', depth: '1' },
-    })
+    const scan = await apiRequestWithRetry(() =>
+      request.post(`${LIVE_BASE}/api/command-center/scan`, {
+        headers: { ...authHeaders(auth), 'Content-Type': 'application/json' },
+        data: { engine: 'osint', client_id: clientId, target: 'https://example.com', depth: '1' },
+      }),
+    )
     if (scan.status() === 202) {
       const jobId = String((await scan.json()).job_id || '')
       if (jobId) {

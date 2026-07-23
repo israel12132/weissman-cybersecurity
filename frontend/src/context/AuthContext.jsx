@@ -19,8 +19,33 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
 
   const refreshSession = useCallback(async () => {
-    try {
-      const r = await apiFetch('/api/auth/me', { method: 'GET' })
+    // The session probe can be transiently throttled (429 rate limit) or hit a backend hiccup
+    // (5xx / network blip) — none of which mean the user is logged out. Retry a few times,
+    // honoring Retry-After, and clear the session ONLY on a definitive 401/403 (or a valid
+    // ok:false body). Dropping a live session on a transient 429 bounces the user to /login,
+    // and the login screen's own boot requests then re-burst the API — a self-amplifying
+    // throttle storm. Never log a valid user out on a throttle.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      let r
+      try {
+        r = await apiFetch('/api/auth/me', { method: 'GET' })
+      } catch (_) {
+        // Network blip — transient. Back off, preserve current state, retry.
+        await new Promise((res) => setTimeout(res, 300 * (attempt + 1)))
+        continue
+      }
+      if (r.status === 401 || r.status === 403) {
+        setSession(null)
+        setIsAuthenticated(false)
+        return null
+      }
+      if (r.status === 429 || r.status >= 500) {
+        // Throttled or server hiccup — says nothing about auth. Honor Retry-After, else back off.
+        const ra = Number(r.headers.get('Retry-After'))
+        const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 3000) : 300 * (attempt + 1)
+        await new Promise((res) => setTimeout(res, waitMs))
+        continue
+      }
       if (!r.ok) {
         setSession(null)
         setIsAuthenticated(false)
@@ -35,11 +60,10 @@ export function AuthProvider({ children }) {
       setSession(data)
       setIsAuthenticated(true)
       return data
-    } catch (_) {
-      setSession(null)
-      setIsAuthenticated(false)
-      return null
     }
+    // Exhausted transient retries: do NOT forcibly clear an existing session — leave auth state
+    // untouched so a throttled probe never logs a valid user out.
+    return null
   }, [])
 
   const checkAuth = useCallback(async () => {
