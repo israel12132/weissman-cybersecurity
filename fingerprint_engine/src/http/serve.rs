@@ -817,6 +817,20 @@ fn normalize_cc_event(raw: &str) -> Option<String> {
     None
 }
 
+/// Resync notice sent to a Command Center socket after the broadcast ring dropped
+/// `dropped` telemetry events for this (slow) client. The client treats `type: "resync"`
+/// as a signal to refetch authoritative state rather than trust its now-gapped live feed —
+/// in a SOC a silently missing event can be the one critical alert that mattered.
+fn stream_lag_notice(dropped: u64) -> String {
+    json!({
+        "type": "resync",
+        "kind": "stream_lagged",
+        "dropped": dropped,
+        "ts": chrono::Utc::now().timestamp_millis(),
+    })
+    .to_string()
+}
+
 /// WebSocket: init handshake + live telemetry stream for Command Center.
 async fn ws_command_center(
     ws: WebSocketUpgrade,
@@ -906,15 +920,34 @@ async fn handle_ws_command_center(
                 }
             }
             telemetry_msg = rx.recv() => {
-                if let Ok(raw) = telemetry_msg {
-                    // Tenant isolation: only forward events stamped for this socket's tenant.
-                    if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
-                        if let Some(normalized) = normalize_cc_event(&scoped) {
-                            if socket.send(Message::Text(normalized)).await.is_err() {
-                                break;
+                match telemetry_msg {
+                    Ok(raw) => {
+                        // Tenant isolation: only forward events stamped for this socket's tenant.
+                        if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                            if let Some(normalized) = normalize_cc_event(&scoped) {
+                                if socket.send(Message::Text(normalized)).await.is_err() {
+                                    break;
+                                }
                             }
                         }
                     }
+                    // Slow-consumer backpressure: this receiver fell behind the broadcast
+                    // ring and `dropped` telemetry events were discarded before we could read
+                    // them. Never let that loss be silent — count it for observability and tell
+                    // the client to resync from source-of-truth instead of trusting a gapped feed.
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(dropped)) => {
+                        metrics::counter!("weissman_ws_command_center_lagged_events_total")
+                            .increment(dropped);
+                        if socket
+                            .send(Message::Text(stream_lag_notice(dropped)))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    // Sender dropped (server shutting down) — no further events will arrive.
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
             _ = ticker.tick() => {
@@ -1749,5 +1782,33 @@ mod public_route_guard_tests {
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
+    }
+}
+
+#[cfg(test)]
+mod cc_stream_tests {
+    use super::{normalize_cc_event, stream_lag_notice};
+    use serde_json::Value;
+
+    /// A lag notice must be a well-formed resync signal the client can act on:
+    /// stable `type`/`kind` discriminators plus the dropped count and a timestamp.
+    #[test]
+    fn lag_notice_is_a_well_formed_resync_signal() {
+        let v: Value = serde_json::from_str(&stream_lag_notice(7)).expect("valid JSON");
+        assert_eq!(v["type"], "resync");
+        assert_eq!(v["kind"], "stream_lagged");
+        assert_eq!(v["dropped"], 7);
+        assert!(v["ts"].as_i64().unwrap_or(0) > 0, "timestamp must be present");
+    }
+
+    /// The resync notice must NOT be mistaken for a normal telemetry event: it already
+    /// carries `kind`, so normalize passes it through untouched (no double-wrapping).
+    #[test]
+    fn lag_notice_passes_through_normalize_unchanged() {
+        let notice = stream_lag_notice(3);
+        let normalized = normalize_cc_event(&notice).expect("kinded event passes through");
+        let v: Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(v["kind"], "stream_lagged");
+        assert_eq!(v["dropped"], 3);
     }
 }
