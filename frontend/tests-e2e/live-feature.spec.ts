@@ -247,6 +247,10 @@ test('severity filter round-trips through the URL against live data', async ({ p
   } else {
     await expect(table).toBeVisible({ timeout: 30_000 })
     const severityCells = table.locator('tbody tr td:nth-child(2)')
+    // The findings fetch (limit=2000) resolves AFTER the table shell mounts, and `.count()`
+    // does not auto-wait — so wait for the first filtered row to actually render before
+    // asserting, or a fast runner reads 0 rows against a still-loading table.
+    await expect(severityCells.first()).toBeVisible({ timeout: 30_000 })
     const n = await severityCells.count()
     expect(n).toBeGreaterThan(0)
     // Every rendered row must be critical — the URL param really drove the filter.
