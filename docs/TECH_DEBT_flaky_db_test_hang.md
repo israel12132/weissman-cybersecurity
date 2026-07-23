@@ -17,21 +17,31 @@ the same commit — confirming the hang is **flaky / non-deterministic**, not a 
 Because there was no per-step timeout, the hung step was on track to ride GitHub Actions'
 **360-minute default job timeout**, burning a runner for hours and masking the underlying deadlock.
 
-## Interim mitigation (shipped)
+## Mitigation (shipped)
 
-Step-level `timeout-minutes` added to every DB-backed Rust-test step in `.github/workflows/ci.yml`
-so a hang **fails fast** (fail-fast enforcement) instead of consuming a runner for 6 hours:
+Two layers, applied to **every** DB-backed Rust-test step in `.github/workflows/ci.yml`:
 
-| Job | Step | Normal | `timeout-minutes` |
-|-----|------|--------|-------------------|
-| `rust-audit` | Run Rust tests (blocking gate) | ~5–7 min | **15** |
-| `engine-wiring-and-smoke` | Run Rust workspace tests (blocking gate) | ~5–7 min | **15** |
-| `rust-coverage` | Coverage (workspace incl. integration tests) with a floor | ~6–16 min | **30** |
+1. **Prevention — `-- --test-threads=2`.** Bounding the test harness to 2 threads keeps concurrent
+   DB acquires under the shared-pool ceiling, so the pool can never be exhausted and no acquire
+   deadlocks. Every test still runs and still blocks the gate; only the *degree of parallelism* is
+   capped. This is the mechanism-level fix for the observed hang, not a mask.
+2. **Backstop — step-level `timeout-minutes`.** Should any *new* hang surface despite the bound, the
+   guard converts a silent multi-hour stall into a fast, visible failure instead of riding GitHub
+   Actions' 360-minute default job timeout.
 
-Margins are >2× the legitimate upper bound (≈1.9× for the more variable instrumented coverage
-step) — generous enough to never false-kill a slow-but-legit run, tight enough to kill a hang
-decisively. This is a **guard, not a fix**: it converts a silent hang into a fast, visible failure
-that surfaces the flake for diagnosis.
+| Job | Step | Normal | `--test-threads` | `timeout-minutes` |
+|-----|------|--------|------------------|-------------------|
+| `rust-audit` | Run Rust tests (blocking gate) | ~4–7 min | **2** | **15** |
+| `engine-wiring-and-smoke` | Run Rust workspace tests (blocking gate) | ~6–7 min | **2** | **15** |
+| `rust-coverage` | Coverage (workspace incl. integration tests) with a floor | ~20–30 min | **2** | **45** |
+
+The `rust-coverage` step was the last to receive the thread bound: it was left on the timeout guard
+alone on the theory it "had not exhibited the hang" — falsified on run `30002805179`, where its
+instrumented `cargo llvm-cov --workspace` run deadlocked and hung to the 30-min guard. Its
+`timeout-minutes` was raised 30→45 at the same time because thread-bounding legitimately lengthens
+the instrumented run (parallelism traded for safety); the guard is sized to the honest 2-thread
+runtime, not to wait out a hang. Timeout margins stay well above the legitimate upper bound —
+generous enough to never false-kill a slow-but-legit run, tight enough to kill a genuine hang.
 
 ## Suspected root causes (to investigate)
 

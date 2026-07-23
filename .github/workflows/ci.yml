@@ -854,10 +854,22 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
       - name: Coverage (workspace incl. integration tests) with a floor
-        # Fail-fast: the instrumented llvm-cov workspace build+run is variable (~6-16 min), so 30 min
-        # (~1.9x the observed upper bound) avoids false-killing a slow-but-legit run while still
-        # bounding a hung DB-backed test. See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 30
+        # `-- --test-threads=2` (on the instrumented run below): this is the third DB-backed
+        # test step, and it was the one left exposed to the intermittent connection-pool
+        # deadlock tracked in docs/TECH_DEBT_flaky_db_test_hang.md. `cargo llvm-cov --workspace`
+        # runs the same live-Postgres integration suite as engine-wiring/rust-audit; at full
+        # per-core parallelism their concurrent acquires can exceed the pool and one blocks
+        # forever. `--ignore-run-fail` tolerates a test *failure* but NOT a *hang*, so the guard
+        # below was the only thing stopping it — and it did stop it, at the 30-min mark (observed
+        # live: this step hung to the timeout on run 30002805179). Bounding to 2 threads keeps
+        # concurrent DB work under the pool ceiling so acquires never deadlock — the documented
+        # prevention, matching the other two DB-test jobs; every test still runs and still counts.
+        #
+        # Fail-fast guard: thread-bounding trades parallelism for safety and lengthens the
+        # instrumented run, so 45 min sizes the guard to the real bounded runtime (~20-30 min
+        # build+run at 2 threads) while still fast-failing a genuine hang. Not a capacity bump:
+        # the hang is *prevented* above; this just fits the guard to the honest 2-thread runtime.
+        timeout-minutes: 45
         # --workspace (not --lib): includes integration tests. TEST_DATABASE_URL +
         # WEISSMAN_REQUIRE_DB_TESTS make the DB-backed contract tests run (not skip)
         # against the Postgres service, so their coverage counts. Floor kept at 40%.
@@ -886,7 +898,7 @@ jobs:
           # so <40% here is expected and must not gate the PR). Floor value kept at 40 —
           # not lowered, not padded — so the gap stays visible; promote back to blocking
           # once a genuine unit-test campaign or live-stack-instrumented coverage earns it.
-          cargo llvm-cov --workspace --ignore-run-fail --no-report
+          cargo llvm-cov --workspace --ignore-run-fail --no-report -- --test-threads=2
           cargo llvm-cov report --lcov --output-path lcov.info
           cargo llvm-cov report --fail-under-lines 40 \
             || echo "::warning title=Rust coverage below informational 40% floor::measured line coverage is under the 40% floor — expected and non-blocking per docs/Coverage_Deficit_Analysis.md"
