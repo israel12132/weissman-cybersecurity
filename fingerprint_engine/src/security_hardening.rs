@@ -521,13 +521,21 @@ pub async fn enforce_execution_scope_pin(
         return Ok(());
     }
 
-    // An IP-literal target has no DNS indirection and therefore cannot legitimately "rotate":
-    // the resolved address must be exactly one of the pinned anchors. Keep the pin strict.
+    // An IP-literal target has no DNS indirection: it connects to exactly that address, and the
+    // host-match check above already proved the literal equals the approved host. A pinned
+    // resolved_ips set that lists a *different* public address (e.g. a submission-time A-record
+    // that has since rotated, or a scope pinned by hostname anchors) must therefore not freeze
+    // out the approved literal. Accept iff the literal is publicly routable; a private/reserved
+    // literal is an SSRF/rebind attempt and still fails closed — matching the hostname path below.
     if target_is_ip_literal {
-        return Err(
-            "validated_scope pin mismatch: IP-literal target outside pinned address set"
-                .to_string(),
-        );
+        return if all_ips_public(current_ips.iter()) {
+            Ok(())
+        } else {
+            Err(
+                "validated_scope pin mismatch: IP-literal target resolves into private/reserved space"
+                    .to_string(),
+            )
+        };
     }
 
     // Hostname target whose execution-time resolution diverged from the pinned anchors. This is
