@@ -10,6 +10,17 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded in-progress runs. When a newer commit is pushed to the same
+# branch/PR, the older run for that ref is cancelled instead of running to completion.
+# This is what produced the stream of "Engine wiring" failures on already-superseded
+# SHAs (05a51d7 / 4b4196e / 6249d7b): each old commit's ~40-min live stack kept running
+# and failing at the doc-metrics gate long after a newer commit had fixed it. Grouped by
+# ref, so push-runs supersede push-runs and PR-runs supersede PR-runs. Tag runs
+# (refs/tags/v*) are NEVER cancelled, so a release build+publish always finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   migration-sync:
     name: Migration trees in sync
