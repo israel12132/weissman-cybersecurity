@@ -58,6 +58,16 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    ignore:
+      # dtolnay/rust-toolchain's ref is a RUST TOOLCHAIN version (e.g. @1.91.1
+      # installs Rust 1.91.1), not an action release version. Dependabot cannot
+      # tell the difference and "bumped" it to @1.100.0 — a Rust version that
+      # does not exist — so `Set up Rust toolchain` failed to resolve the ref and
+      # the whole github-actions group PR went red. The toolchain version must be
+      # chosen deliberately (in lockstep with the workspace's MSRV / clippy lints),
+      # so exclude it from auto-bumps entirely; nightly-e2e.yml SHA-pins the same
+      # action for supply-chain immutability.
+      - dependency-name: "dtolnay/rust-toolchain"
     groups:
       actions:
         patterns: ["*"]
