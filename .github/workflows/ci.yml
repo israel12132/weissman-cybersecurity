@@ -775,6 +775,23 @@ jobs:
           WEISSMAN_E2E_TENANT: default
         run: node scripts/verify_fp_tp_confidence_e2e.mjs
 
+      # Light SLO smoke against the already-booted live stack: reuses the running server
+      # + ci-smoke admin (proven by the E2E steps above), adds ~20s, and is NON-blocking
+      # on PRs (continue-on-error) until the latency/error budget is baselined on this
+      # runner class. The full soak (higher VUs / 1m, blocking) runs in nightly-e2e.yml.
+      - name: Set up k6 (PR SLO smoke)
+        uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1.2.1
+
+      - name: k6 SLO smoke (short, informational)
+        continue-on-error: true
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          K6_VUS: "5"
+          K6_DURATION: "20s"
+        run: k6 run scripts/load/k6_slo.js
+
       - name: Dump server logs on failure
         if: failure()
         run: |
@@ -825,6 +842,14 @@ jobs:
             --exclude-rule generic.nginx.security.request-host-used.request-host-used \
             --exclude-rule generic.nginx.security.header-redefinition.header-redefinition \
             --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
+
+      # Project-specific rules (.semgrep/weissman-rules.yml) run SEPARATELY and NON-blocking
+      # first, so we can judge signal-to-noise on the real tree before promoting any into the
+      # blocking scan above. Semgrep exits 0 without --error, so findings surface without
+      # failing the build; continue-on-error is a belt-and-suspenders guard.
+      - name: Weissman custom Semgrep rules (informational)
+        continue-on-error: true
+        run: semgrep scan --config .semgrep/ --metrics off
 
   rust-coverage:
     name: Rust — coverage (llvm-cov)

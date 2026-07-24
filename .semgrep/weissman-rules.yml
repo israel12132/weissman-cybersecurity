@@ -1,0 +1,46 @@
+# Weissman project-specific Semgrep rules — layered ON TOP of the registry packs
+# (p/security-audit, p/secrets, p/owasp-top-ten) that the blocking `semgrep` job runs.
+#
+# These are wired into ci.yml as a SEPARATE, non-blocking step first: they surface in
+# the job output without failing the build, so we can validate signal-to-noise against
+# the real tree before promoting any of them into the blocking scan (drop `|| true` +
+# add `--error`).
+rules:
+  - id: weissman-rust-env-set-var
+    languages: [rust]
+    severity: INFO
+    message: >
+      std::env::set_var mutates process-global state and is not thread-safe under the
+      parallel test runner (Rust 2024 makes it `unsafe`). Prefer passing configuration
+      explicitly; if unavoidable in a test, serialize access and restore the prior value.
+    patterns:
+      - pattern-either:
+          - pattern: std::env::set_var(...)
+          - pattern: env::set_var(...)
+
+  - id: weissman-jsx-dangerously-set-inner-html
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >
+      dangerouslySetInnerHTML is an XSS sink. Render text nodes where possible; if raw
+      HTML is required, ensure it is a constant or sanitized (e.g. DOMPurify) first.
+    pattern: dangerouslySetInnerHTML={...}
+
+  - id: weissman-js-dynamic-code-exec
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >
+      Dynamic code execution (eval / new Function) is an injection risk and defeats CSP.
+      Replace with an explicit parser or a lookup table.
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+
+  - id: weissman-rust-secret-in-log
+    languages: [rust]
+    severity: WARNING
+    message: >
+      Possible secret written to a log/format sink. Never log password / secret / token /
+      api_key values — redact them or log only a stable non-reversible identifier.
+    patterns:
+      - pattern-regex: (?i)(println!|eprintln!|tracing::(?:info|warn|error|debug|trace)!|log::(?:info|warn|error|debug|trace)!)\s*\([^)]*\b(password|secret|api[_-]?key|access[_-]?token|bearer)\b[^)]*\)
