@@ -12,12 +12,12 @@ pub use login_lockout::{
     record_failure, LockoutStatus, ACCOUNT_LOCKOUT_PATHS,
 };
 pub use login_rate_limit::{is_login_post, login_rate_limit_middleware};
+pub mod event_replay;
 pub mod rate_limit_metrics;
 pub mod rate_limit_redis;
 mod serve;
 pub mod sse_bridge;
 pub mod sse_context;
-pub mod event_replay;
 pub mod tenant_scan_limit;
 pub mod tenant_stream;
 
