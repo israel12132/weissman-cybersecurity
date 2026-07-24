@@ -173,10 +173,12 @@ jobs:
         # Fail-fast: `cargo test --workspace --all-targets` runs in ~6 min on a WARM cache, but a
         # cold runner recompiles + links every test target (rust-lld, ~2300 workspace tests after the
         # main merge) and was observed still linking past 15 min — an under-sized budget, not a hung
-        # test. 30 min absorbs the cold-cache compile yet still kills a genuine multi-hour hang
-        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default.
+        # test. 45 min absorbs the cold-cache compile+link yet still kills a genuine multi-hour hang
+        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default. 30 min
+        # was observed timing out MID-COMPILE on the post-main-merge cold cache (run 30075974657) —
+        # a budget miss, not a hang: the tests hadn't even started yet.
         # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 30
+        timeout-minutes: 45
         # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
         # test step also struck this one (observed live). Bounding test concurrency keeps parallel
         # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
@@ -421,10 +423,11 @@ jobs:
         # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
         # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
         # recompiles + links every test target (rust-lld, ~2300 tests after the main merge) which can
-        # exceed 15 min mid-link — under-sized budget, not a hang. 30 min absorbs the cold compile yet
-        # still kills a deadlock/pool-leak hang far below GitHub's 360-min default.
+        # exceed 15 min mid-link — under-sized budget, not a hang. 45 min absorbs the cold compile+link
+        # yet still kills a deadlock/pool-leak hang far below GitHub's 360-min default. (The sibling
+        # rust-audit job was seen timing out mid-compile at 30 min on the post-merge cold cache.)
         # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
