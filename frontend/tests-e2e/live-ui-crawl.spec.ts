@@ -68,24 +68,51 @@ test.afterEach(async ({ page }, testInfo) => {
 })
 
 async function visitRoute(page: import('@playwright/test').Page, route: string) {
-  await ensureUiSession(page)
+  // Response listener is registered BEFORE the first navigation so 5xx/429 during session
+  // bootstrap are visible too; previously it was attached after ensureUiSession, making errors
+  // on the most failure-prone navigation invisible.
   const apiErrors: string[] = []
   page.on('response', (r) => {
     const u = r.url()
-    if (u.includes('/api/') && r.status() >= 500) {
+    // 429 was previously missed (`>= 500` only), so per-IP rate limiting during a 100-route
+    // crawl surfaced as a mystery timeout rather than a named failure.
+    if (u.includes('/api/') && (r.status() === 429 || r.status() >= 500)) {
       apiErrors.push(`${r.status()} ${u}`)
     }
   })
+  // NOTE: no pre-emptive ensureUiSession() here. It unconditionally loaded the cockpit
+  // (live-helpers.ts: `page.goto('/command-center/operations')`) before EVERY route, so each
+  // route test paid TWO full cold-cache SPA boots instead of one — the dominant cost behind the
+  // 150-min step. storageState (playwright.config.ts) already supplies the session; the lazy
+  // recovery branch below handles the rare expired-state case.
   await page.goto(route, { waitUntil: 'domcontentloaded' })
   await page.locator('script[type="module"]').first().waitFor({ state: 'attached', timeout: 20_000 })
   await page.getByText('Verifying session').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {})
-  if (await page.locator('#email').isVisible({ timeout: 1_500 }).catch(() => false)) {
+  // isVisible() IGNORES its `timeout` option (deprecated no-op in playwright-core 1.59.1), so the
+  // old probe sampled the DOM one tick after domcontentloaded — before React mounts — and this
+  // recovery branch effectively never fired. waitFor() actually honours the budget.
+  const bounced =
+    /\/login/.test(page.url()) ||
+    (await page
+      .locator('#email')
+      .waitFor({ state: 'visible', timeout: 1_500 })
+      .then(() => true, () => false))
+  if (bounced) {
     await ensureUiSession(page)
     await page.goto(route, { waitUntil: 'domcontentloaded' })
     await page.getByText('Verifying session').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {})
   }
   await expect(page).not.toHaveURL(/\/login/)
-  await page.waitForTimeout(1200)
+  // Was `await page.waitForTimeout(1200)` — a blind 120s tax across 100 routes that asserted
+  // nothing, simultaneously too long for fast routes and too short for slow ones. This waits for
+  // the condition the sleep stood in for, returns in ~50ms on a healthy route, and names the
+  // route when content never arrives.
+  await expect
+    .poll(async () => (await page.locator('#root').innerText()).trim().length, {
+      timeout: 15_000,
+      message: `${route}: #root never rendered meaningful content`,
+    })
+    .toBeGreaterThan(40)
   const body = await page.locator('body').innerText()
   expect(body.trim().length, `${route} empty body`).toBeGreaterThan(20)
   for (const re of CRASH) {

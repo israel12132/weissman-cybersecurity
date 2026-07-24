@@ -315,6 +315,10 @@ jobs:
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
+    # Job-level backstop. Without it this job inherited GitHub's 360-min default, so a live suite
+    # with no internal bound could burn 4 h before anyone noticed (measured: 240 min). Every
+    # long-running step below now carries its own tighter budget; this is the last line of defence.
+    timeout-minutes: 180
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -687,20 +691,66 @@ jobs:
           WEISSMAN_E2E_POLL_MAX: "90"
         run: node scripts/verify_scan_pipeline_e2e.mjs
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('frontend/package-lock.json') }}
+
+      # Hoisted out of the test step: an unbounded ~170MB CDN download used to be billed to the
+      # step under investigation and, behind a reporter that prints nothing at test start, was
+      # indistinguishable from a wedged test run. Bounded and attributable on its own line now.
+      - name: Install Playwright Chromium
+        timeout-minutes: 5
+        run: cd frontend && npx playwright install chromium
+
+      # SPLIT from the crawl below. The old single step ran BOTH suites under a name mentioning
+      # only the journey, so a 150-min step read as though 3 journey tests had hung when in fact
+      # 107 crawl tests were grinding. Separate names + separate budgets make the cost visible.
       - name: Playwright live journey (login → scan → findings → PDF)
+        timeout-minutes: 15
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
           WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
-        run: |
-          cd frontend
-          npx playwright install chromium
-          npm run test:e2e:live -- live-journey live-ui-crawl
+          # Makes the `list` reporter print each test as it STARTS (it is silent on test-begin
+          # for non-TTY streams), so a killed run still shows the in-flight test.
+          PLAYWRIGHT_FORCE_TTY: "1"
+        run: cd frontend && npm run test:e2e:live -- live-journey
+
+      # 100 appNav routes + 6 named tests, run serially. Budgeted separately because this suite
+      # grows automatically with every new Command Center page (appNav is the single source), so
+      # its cost must be visible rather than hidden inside another step's number.
+      - name: Playwright live UI crawl (100 sidebar routes)
+        timeout-minutes: 35
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+          PLAYWRIGHT_FORCE_TTY: "1"
+        run: cd frontend && npm run test:e2e:live -- live-ui-crawl
+
+      - name: Upload Playwright report + traces
+        # `always()` (not failure()) so the HTML report and traces survive a cancelled run too —
+        # the previous cancellation left literally nothing to read.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-live-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Dump Playwright live error-context on failure
-        if: failure()
+        # `!success()` rather than `failure()`: `failure()` is FALSE when a job is cancelled, so
+        # the one situation where diagnostics matter most produced no output at all.
+        if: ${{ !success() }}
         # Surfaces the page's accessibility snapshot (what actually rendered at the failing
         # assertion) into the CI log so a live-journey failure is diagnosable without downloading
         # artifacts. Also tails any live-server log for correlation. Best-effort; never fails the job.
