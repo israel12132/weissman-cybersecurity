@@ -1,0 +1,56 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":rebaseStalePrs",
+    "group:monorepos",
+    "schedule:weekly"
+  ],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 8,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 5am on monday"] },
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "description": "Cargo (Rust workspace) — grouped, one PR per week.",
+      "matchManagers": ["cargo"],
+      "groupName": "rust crates"
+    },
+    {
+      "description": "Frontend npm — grouped.",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["frontend/**"],
+      "groupName": "frontend npm"
+    },
+    {
+      "description": "Python (pip / requirements / pyproject) — grouped.",
+      "matchManagers": ["pip_requirements", "pip-compile", "pep621", "poetry"],
+      "groupName": "python deps"
+    },
+    {
+      "description": "GitHub Actions — group and pin to commit SHAs (supply-chain hardening).",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "pinDigests": true
+    },
+    {
+      "description": "Dockerfiles (app + deploy) — grouped.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "docker base images"
+    },
+    {
+      "description": "Auto-merge only low-risk dev-dependency patch/minor bumps once CI is green.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    }
+  ]
+}
