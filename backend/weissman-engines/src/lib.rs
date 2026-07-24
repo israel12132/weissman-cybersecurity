@@ -26,6 +26,7 @@ pub mod factory;
 pub mod fuzzer;
 pub mod llm_handshake;
 pub mod llm_json_repair;
+pub mod llm_router;
 pub mod llm_sanitize;
 pub mod openai_chat;
 pub mod osint;
