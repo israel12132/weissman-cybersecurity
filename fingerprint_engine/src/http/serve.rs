@@ -95,6 +95,11 @@ pub struct AppState {
     poe_job_updates_tx: flume::Sender<(String, String)>,
     /// Global error telemetry: broadcast to all connected Cockpit clients for Toast. Payload: JSON { engine, message, severity }.
     telemetry_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    /// Sequenced Command Center telemetry: raw telemetry tagged with a monotonic `_seq` by the
+    /// replay recorder; consumed by `/ws/command-center` so a live client can track its position.
+    cc_sequenced_tx: Arc<tokio::sync::broadcast::Sender<String>>,
+    /// Bounded per-tenant telemetry history for reconnect replay (Last-Event-ID).
+    pub replay_buffer: Arc<crate::http::event_replay::EventReplayBuffer>,
     /// Phase 5: multi-agent swarm events for `/ws/swarm`.
     pub swarm_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// Batched edge swarm heartbeats (30s flush) to reduce Postgres churn.
@@ -831,17 +836,40 @@ fn stream_lag_notice(dropped: u64) -> String {
     .to_string()
 }
 
+/// Read the monotonic `_seq` the replay recorder stamped onto a sequenced telemetry event.
+fn cc_extract_seq(raw: &str) -> Option<u64> {
+    serde_json::from_str::<Value>(raw)
+        .ok()?
+        .get("_seq")
+        .and_then(Value::as_u64)
+}
+
+/// Attach `_seq` to a normalized Command Center frame so the client can record its position
+/// (the value it echoes back as `last_event_id` on reconnect). Non-object frames pass through.
+fn cc_with_seq(normalized: &str, seq: u64) -> String {
+    match serde_json::from_str::<Value>(normalized) {
+        Ok(Value::Object(mut m)) => {
+            m.insert("_seq".to_string(), Value::from(seq));
+            Value::Object(m).to_string()
+        }
+        _ => normalized.to_string(),
+    }
+}
+
 /// WebSocket: init handshake + live telemetry stream for Command Center.
 async fn ws_command_center(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
 ) -> Response {
     let pool = state.app_pool.clone();
-    let telemetry = state.telemetry_broadcast_tx.clone();
+    let sequenced = state.cc_sequenced_tx.clone();
+    let replay = state.replay_buffer.clone();
+    let last_event_id = crate::http::event_replay::parse_last_event_id(query.as_deref());
     let tenant_id = auth.tenant_id;
     ws.on_upgrade(move |socket| async move {
-        handle_ws_command_center(socket, pool, tenant_id, telemetry).await;
+        handle_ws_command_center(socket, pool, tenant_id, sequenced, replay, last_event_id).await;
     })
 }
 
@@ -849,8 +877,13 @@ async fn handle_ws_command_center(
     mut socket: WebSocket,
     pool: Arc<PgPool>,
     tenant_id: i64,
-    telemetry: Arc<tokio::sync::broadcast::Sender<String>>,
+    sequenced: Arc<tokio::sync::broadcast::Sender<String>>,
+    replay: Arc<crate::http::event_replay::EventReplayBuffer>,
+    last_event_id: Option<u64>,
 ) {
+    // Subscribe BEFORE the init snapshot + replay so no live event can slip through the gap
+    // between "replay up to seq N" and "start listening". Duplicates are removed by seq below.
+    let mut rx = sequenced.subscribe();
     let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else {
         return;
     };
@@ -898,7 +931,31 @@ async fn handle_ws_command_center(
         let _ = socket.send(Message::Text(s)).await;
     }
 
-    let mut rx = telemetry.subscribe();
+    // Reconnect replay: if the client sent last_event_id, resend everything it missed
+    // (tenant-scoped) before going live. `last_delivered` then dedups any of those events
+    // that are also still buffered in the live channel we subscribed to above.
+    let mut last_delivered = last_event_id.unwrap_or(0);
+    if let Some(last_id) = last_event_id {
+        let slice = replay.replay_since(tenant_id, last_id);
+        if slice.gap {
+            // Buffer no longer covers the client's position — have it refetch source-of-truth.
+            let dropped = slice.latest_seq.saturating_sub(last_id);
+            let _ = socket.send(Message::Text(stream_lag_notice(dropped))).await;
+        }
+        for (seq, payload) in slice.events {
+            if let Some(normalized) = normalize_cc_event(&payload) {
+                if socket
+                    .send(Message::Text(cc_with_seq(&normalized, seq)))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            last_delivered = last_delivered.max(seq);
+        }
+    }
+
     let mut ticker = tokio::time::interval(Duration::from_secs(15));
 
     loop {
@@ -922,12 +979,23 @@ async fn handle_ws_command_center(
             telemetry_msg = rx.recv() => {
                 match telemetry_msg {
                     Ok(raw) => {
-                        // Tenant isolation: only forward events stamped for this socket's tenant.
-                        if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
-                            if let Some(normalized) = normalize_cc_event(&scoped) {
-                                if socket.send(Message::Text(normalized)).await.is_err() {
-                                    break;
+                        let seq = cc_extract_seq(&raw);
+                        // Dedup: skip events already sent during reconnect replay above.
+                        if seq.is_none_or(|s| s > last_delivered) {
+                            // Tenant isolation: only forward events stamped for this socket's tenant.
+                            if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                                if let Some(normalized) = normalize_cc_event(&scoped) {
+                                    let frame = match seq {
+                                        Some(s) => cc_with_seq(&normalized, s),
+                                        None => normalized,
+                                    };
+                                    if socket.send(Message::Text(frame)).await.is_err() {
+                                        break;
+                                    }
                                 }
+                            }
+                            if let Some(s) = seq {
+                                last_delivered = last_delivered.max(s);
                             }
                         }
                     }
@@ -1324,6 +1392,19 @@ pub fn new_app_state(
     });
     let (telemetry_tx, _) = tokio::sync::broadcast::channel::<String>(TELEMETRY_BROADCAST_CAPACITY);
     let telemetry_broadcast_tx = Arc::new(telemetry_tx);
+    // Command Center replay: a single recorder assigns each telemetry event a monotonic
+    // sequence, stores it in a bounded per-tenant buffer, and re-emits it (with `_seq`) on
+    // cc_sequenced_tx for the /ws/command-center live feed. One sequencer => live and replay
+    // share the same seq space, so a reconnecting client resumes exactly where it left off.
+    let replay_buffer = crate::http::event_replay::EventReplayBuffer::shared_from_env();
+    let (cc_sequenced_tx, _) =
+        tokio::sync::broadcast::channel::<String>(TELEMETRY_BROADCAST_CAPACITY);
+    let cc_sequenced_tx = Arc::new(cc_sequenced_tx);
+    crate::http::event_replay::spawn_recorder(
+        telemetry_broadcast_tx.subscribe(),
+        cc_sequenced_tx.clone(),
+        replay_buffer.clone(),
+    );
     let edge_heartbeat_batcher =
         crate::edge_heartbeat_batch::spawn(app_pool.clone(), Some(telemetry_broadcast_tx.clone()));
     let (swarm_tx, _) = tokio::sync::broadcast::channel::<String>(512);
@@ -1350,6 +1431,8 @@ pub fn new_app_state(
         poe_job_registry,
         poe_job_updates_tx: poe_updates_tx,
         telemetry_broadcast_tx,
+        cc_sequenced_tx,
+        replay_buffer,
         swarm_broadcast_tx: Arc::new(swarm_tx),
         edge_heartbeat_batcher,
         sovereign_swarm_tx,
