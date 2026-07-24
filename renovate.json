@@ -11,9 +11,14 @@
   "labels": ["dependencies"],
   "prConcurrentLimit": 8,
   "rangeStrategy": "bump",
+  "configMigration": true,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "osvVulnerabilityAlerts": true,
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 5am on monday"] },
   "vulnerabilityAlerts": {
     "labels": ["security", "dependencies"],
+    "minimumReleaseAge": "0 days",
     "automerge": false
   },
   "packageRules": [
@@ -50,9 +55,10 @@
       "groupName": "docker base images"
     },
     {
-      "description": "Auto-merge only low-risk dev-dependency patch/minor bumps once CI is green.",
+      "description": "Auto-merge only low-risk dev-dependency patch/minor bumps once CI is green. Auto-merged updates get a longer 7-day soak than the global 3-day floor: no human reviews them, so a freshly-published malicious version must age out before it can land.",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"],
+      "minimumReleaseAge": "7 days",
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
