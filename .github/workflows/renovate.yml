@@ -1,0 +1,79 @@
+# Renovate — self-hosted via GitHub Actions (no Marketplace App required).
+#
+# This runs the real Renovate against THIS repo on a schedule, reading the
+# rules in ./renovate.json. It is the code-based alternative to the hosted
+# Renovate GitHub App: everything is wired here except one secret you must add.
+#
+# ── One-time setup ────────────────────────────────────────────────────────
+#   Add a repository secret named RENOVATE_TOKEN:
+#     • Classic PAT with scopes: repo + workflow
+#       (workflow is required because Renovate edits files under .github/workflows/)
+#     • or a fine-grained PAT with: Contents RW, Pull requests RW, Workflows RW
+#   Settings → Secrets and variables → Actions → New repository secret.
+#
+# Until that secret exists the scheduled run is a clean no-op (it does not fail),
+# so this workflow is safe to merge before the token is in place.
+#
+# Prefer zero maintenance instead? Install the hosted app once at
+# https://github.com/apps/renovate and delete this file — it reads the same
+# renovate.json. Do NOT run both at once (they would open duplicate PRs).
+
+name: Renovate
+
+on:
+  schedule:
+    # Weekly, INSIDE renovate.json's "schedule:weekly" window (early Monday, before
+    # 04:00 UTC). Fire at 02:00 so a queued runner still executes while Renovate's own
+    # schedule gate is open — at 04:00 the window is shut and Renovate would run but
+    # skip every update.
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: Renovate log level
+        required: false
+        default: info
+        type: choice
+        options: [debug, info, warn]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    name: Renovate dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight — require RENOVATE_TOKEN
+        id: preflight
+        env:
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+        run: |
+          if [ -z "${RENOVATE_TOKEN}" ]; then
+            echo "::notice title=Renovate skipped::RENOVATE_TOKEN secret is not set. Add a PAT (repo + workflow scopes) as RENOVATE_TOKEN to enable dependency updates."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Renovate
+        if: steps.preflight.outputs.enabled == 'true'
+        uses: renovatebot/github-action@3064367f740a1a91cca218698a63902689cce200 # v46.1.20
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+          # Pin the Renovate RUNTIME too. The action commit is pinned above, but the
+          # Renovate release it executes defaults to latest otherwise — pin it so a run
+          # is fully reproducible. Bump deliberately (Renovate won't self-bump a `with:`).
+          renovate-version: 43.279.1
+        env:
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          # Only this repo; onboarding off because renovate.json already exists.
+          RENOVATE_PLATFORM: github
+          RENOVATE_AUTODISCOVER: 'false'
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_REQUIRE_CONFIG: 'required'

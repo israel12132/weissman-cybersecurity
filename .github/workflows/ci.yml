@@ -10,6 +10,17 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded in-progress runs. When a newer commit is pushed to the same
+# branch/PR, the older run for that ref is cancelled instead of running to completion.
+# This is what produced the stream of "Engine wiring" failures on already-superseded
+# SHAs (05a51d7 / 4b4196e / 6249d7b): each old commit's ~40-min live stack kept running
+# and failing at the doc-metrics gate long after a newer commit had fixed it. Grouped by
+# ref, so push-runs supersede push-runs and PR-runs supersede PR-runs. Tag runs
+# (refs/tags/v*) are NEVER cancelled, so a release build+publish always finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   migration-sync:
     name: Migration trees in sync
@@ -162,10 +173,12 @@ jobs:
         # Fail-fast: `cargo test --workspace --all-targets` runs in ~6 min on a WARM cache, but a
         # cold runner recompiles + links every test target (rust-lld, ~2300 workspace tests after the
         # main merge) and was observed still linking past 15 min — an under-sized budget, not a hung
-        # test. 30 min absorbs the cold-cache compile yet still kills a genuine multi-hour hang
-        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default.
+        # test. 45 min absorbs the cold-cache compile+link yet still kills a genuine multi-hour hang
+        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default. 30 min
+        # was observed timing out MID-COMPILE on the post-main-merge cold cache (run 30075974657) —
+        # a budget miss, not a hang: the tests hadn't even started yet.
         # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 30
+        timeout-minutes: 45
         # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
         # test step also struck this one (observed live). Bounding test concurrency keeps parallel
         # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
@@ -410,10 +423,11 @@ jobs:
         # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
         # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
         # recompiles + links every test target (rust-lld, ~2300 tests after the main merge) which can
-        # exceed 15 min mid-link — under-sized budget, not a hang. 30 min absorbs the cold compile yet
-        # still kills a deadlock/pool-leak hang far below GitHub's 360-min default.
+        # exceed 15 min mid-link — under-sized budget, not a hang. 45 min absorbs the cold compile+link
+        # yet still kills a deadlock/pool-leak hang far below GitHub's 360-min default. (The sibling
+        # rust-audit job was seen timing out mid-compile at 30 min on the post-merge cold cache.)
         # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
@@ -781,6 +795,27 @@ jobs:
           WEISSMAN_E2E_TENANT: default
         run: node scripts/verify_fp_tp_confidence_e2e.mjs
 
+      # Light SLO smoke against the already-booted live stack: reuses the running server
+      # + ci-smoke admin (proven by the E2E steps above), adds ~20s, and is NON-blocking
+      # on PRs (continue-on-error) until the latency/error budget is baselined on this
+      # runner class. The full soak (higher VUs / 1m, blocking) runs in nightly-e2e.yml.
+      - name: Set up k6 (PR SLO smoke)
+        uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1.2.1
+        with:
+          # Pin the k6 binary too — the action installs latest k6 otherwise, so a runtime
+          # change could shift the SLO result independent of the vetted k6_slo.js script.
+          k6-version: v1.8.0
+
+      - name: k6 SLO smoke (short, informational)
+        continue-on-error: true
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          K6_VUS: "5"
+          K6_DURATION: "20s"
+        run: k6 run scripts/load/k6_slo.js
+
       - name: Dump server logs on failure
         if: failure()
         run: |
@@ -831,6 +866,16 @@ jobs:
             --exclude-rule generic.nginx.security.request-host-used.request-host-used \
             --exclude-rule generic.nginx.security.header-redefinition.header-redefinition \
             --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
+
+      # Project-specific rules (.semgrep/weissman-rules.yml) run SEPARATELY and NON-blocking
+      # first, so we can judge signal-to-noise on the real tree before promoting any into the
+      # blocking scan above. Omitting --error means FINDINGS never fail the step (semgrep exits
+      # 0). We intentionally do NOT set continue-on-error: a malformed rules file or a semgrep
+      # engine error (exit 2/4/5/7) SHOULD fail loudly instead of being silently swallowed —
+      # the config is local (.semgrep/, no registry/network), so the only failure modes are
+      # our own broken rules, which we want surfaced.
+      - name: Weissman custom Semgrep rules (informational)
+        run: semgrep scan --config .semgrep/ --metrics off
 
   rust-coverage:
     name: Rust — coverage (llvm-cov)

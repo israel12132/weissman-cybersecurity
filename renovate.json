@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":rebaseStalePrs",
+    "group:monorepos",
+    "schedule:weekly"
+  ],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 8,
+  "rangeStrategy": "bump",
+  "configMigration": true,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 5am on monday"] },
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "minimumReleaseAge": "0 days",
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "description": "dtolnay/rust-toolchain — its tag encodes the Rust version and the ref is SHA-pinned to a specific toolchain commit (with an explicit `toolchain:`); never auto-bump. Mirrors the Dependabot ignore added on main in #202.",
+      "matchDepNames": ["dtolnay/rust-toolchain"],
+      "enabled": false
+    },
+    {
+      "description": "Cargo (Rust workspace) — grouped, one PR per week.",
+      "matchManagers": ["cargo"],
+      "groupName": "rust crates"
+    },
+    {
+      "description": "Frontend npm — grouped.",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["frontend/**"],
+      "groupName": "frontend npm"
+    },
+    {
+      "description": "Python (pip / requirements / pyproject) — grouped.",
+      "matchManagers": ["pip_requirements", "pip-compile", "pep621", "poetry"],
+      "groupName": "python deps"
+    },
+    {
+      "description": "GitHub Actions — group and pin to commit SHAs (supply-chain hardening).",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "pinDigests": true
+    },
+    {
+      "description": "Dockerfiles (app + deploy) — grouped.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "docker base images"
+    },
+    {
+      "description": "Low-risk dev-dependency patch/minor bumps: grouped, with a longer 7-day soak than the global 3-day floor. Deliberately NOT auto-merged — every dependency PR flows through the SAME approval-gated Mergify queue as any other change (it is labelled `dependencies`), so nothing lands on main without a human approval plus the full CI gate. No native GitHub auto-merge bypass path.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "minimumReleaseAge": "7 days",
+      "groupName": "dev-dependencies (patch/minor)"
+    }
+  ]
+}
