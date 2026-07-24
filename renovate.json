@@ -18,6 +18,11 @@
   },
   "packageRules": [
     {
+      "description": "dtolnay/rust-toolchain — its tag encodes the Rust version and the ref is SHA-pinned to a specific toolchain commit (with an explicit `toolchain:`); never auto-bump. Mirrors the Dependabot ignore added on main in #202.",
+      "matchDepNames": ["dtolnay/rust-toolchain"],
+      "enabled": false
+    },
+    {
       "description": "Cargo (Rust workspace) — grouped, one PR per week.",
       "matchManagers": ["cargo"],
       "groupName": "rust crates"

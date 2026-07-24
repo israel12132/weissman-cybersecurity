@@ -59,8 +59,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
+        # SHA-pinned for supply-chain immutability (a tag can be moved upstream; a SHA
+        # cannot). The ref is a commit, not a version, so `toolchain:` must be set
+        # explicitly — dtolnay/rust-toolchain infers the version from the tag name only.
+        uses: dtolnay/rust-toolchain@ab40b01f54fe82bdf65693ea090a1e4942c136e7 # 1.91.1
         with:
+          toolchain: 1.91.1
           # rustfmt must be pinned to the toolchain (1.91.1) so `cargo fmt --check`
           # below is deterministic. Without it, cargo falls back to the runner's
           # preinstalled rustfmt, whose formatting drifts from the pinned compiler and
@@ -332,8 +336,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.91.1
+        # SHA-pinned (supply-chain immutability); explicit toolchain since the ref is a commit.
+        uses: dtolnay/rust-toolchain@ab40b01f54fe82bdf65693ea090a1e4942c136e7 # 1.91.1
         with:
+          toolchain: 1.91.1
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
@@ -856,8 +862,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.91.1
+      # SHA-pinned (supply-chain immutability); explicit toolchain since the ref is a commit.
+      - uses: dtolnay/rust-toolchain@ab40b01f54fe82bdf65693ea090a1e4942c136e7 # 1.91.1
         with:
+          toolchain: 1.91.1
           components: llvm-tools-preview
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
