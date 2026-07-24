@@ -245,6 +245,7 @@ pub mod heal_channels;
 pub mod heal_export;
 pub mod heal_policy;
 pub mod heal_priority;
+pub mod heal_rate_limit;
 pub mod heal_readiness;
 pub mod heal_trends;
 pub mod http_smuggling_engine;

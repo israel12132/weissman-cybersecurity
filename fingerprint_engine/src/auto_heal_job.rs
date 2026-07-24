@@ -436,6 +436,30 @@ pub async fn run_auto_heal_job(
     let jid_str = spec_id.to_string();
     let heal_started = std::time::Instant::now();
 
+    // Governance: cap autonomous heal starts per tenant so a runaway trigger cannot flood a
+    // repository with heal PRs or burn LLM budget. Over budget => defer this heal without any
+    // DB mutation or work (the finding stays un-healed and can be retried in a later window).
+    let rl = crate::heal_rate_limit::check_and_record(tenant_id);
+    if !rl.allowed {
+        metrics::counter!("weissman_heal_rate_limited_total").increment(1);
+        tracing::warn!(
+            target: "auto_heal",
+            tenant_id,
+            used = rl.used,
+            limit = rl.limit,
+            "auto-heal rate limit reached; deferring this heal"
+        );
+        return Ok(json!({
+            "ok": false,
+            "throttled": true,
+            "message": format!(
+                "auto-heal rate limit reached ({}/{} in window); deferred",
+                rl.used, rl.limit
+            ),
+            "spec_id": spec_id,
+        }));
+    }
+
     let mut tx = db::begin_tenant_tx(app_pool.as_ref(), tenant_id)
         .await
         .map_err(|e| e.to_string())?;
