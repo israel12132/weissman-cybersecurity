@@ -295,6 +295,7 @@ pub fn spawn_pool_metrics_loop(
     intel_pool: Arc<sqlx::PgPool>,
 ) {
     tokio::spawn(async move {
+        let self_heal_thresholds = crate::self_healing::Thresholds::from_env();
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
         tick.tick().await;
         // Cheap pool/dependency gauges run every 10s tick; the heavier heal_requests aggregation
@@ -393,14 +394,54 @@ pub fn spawn_pool_metrics_loop(
             } else {
                 0.0
             });
-            if crate::http::rate_limit_redis::distributed_state_required() {
-                let redis_up = crate::http::rate_limit_redis::ping_ok().await;
-                metrics::gauge!("weissman_dependency_up", "dep" => "redis").set(if redis_up {
+            let redis_required = crate::http::rate_limit_redis::distributed_state_required();
+            let redis_up = if redis_required {
+                let up = crate::http::rate_limit_redis::ping_ok().await;
+                metrics::gauge!("weissman_dependency_up", "dep" => "redis").set(if up {
                     1.0
                 } else {
                     0.0
                 });
-            }
+                up
+            } else {
+                true
+            };
+
+            // Self-healing: fold the health signals into a diagnosis + recommended recovery,
+            // recorded as `weissman_self_heal_diagnosis_total` for dashboards/alerts. Builds a
+            // coherent single snapshot from the in-memory pool stats + the two small agent/backlog
+            // COUNTs (indexed, cheap at the 10s cadence).
+            let sh_async = sqlx::query_scalar::<_, i64>(
+                "SELECT count(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
+            )
+            .fetch_one(app_pool.as_ref())
+            .await
+            .unwrap_or(0);
+            let sh_registered =
+                sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM endpoint_agents")
+                    .fetch_one(app_pool.as_ref())
+                    .await
+                    .unwrap_or(0);
+            let sh_online = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*)::bigint FROM endpoint_agents WHERE last_seen_at > now() - interval '90 seconds'",
+            )
+            .fetch_one(app_pool.as_ref())
+            .await
+            .unwrap_or(sh_registered);
+            let snapshot = crate::self_healing::HealthSnapshot {
+                postgres_up: pg_up,
+                redis_required,
+                redis_up,
+                db_pool_size: app_pool.size(),
+                db_pool_idle: u32::try_from(app_pool.num_idle()).unwrap_or(u32::MAX),
+                agents_registered: u32::try_from(sh_registered).unwrap_or(0),
+                agents_online: u32::try_from(sh_online).unwrap_or(0),
+                async_jobs_pending: u64::try_from(sh_async).unwrap_or(0),
+            };
+            crate::self_healing::record_diagnoses(&crate::self_healing::diagnose(
+                &snapshot,
+                &self_heal_thresholds,
+            ));
         }
     });
 }
