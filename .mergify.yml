@@ -1,0 +1,78 @@
+# Mergify — automated PR merge queue + label management.
+# https://docs.mergify.com/  ·  Requires the Mergify GitHub App installed on this repo.
+#
+# What this does:
+#   • Merge queue for `main`: a PR is queued only when every blocking CI check is
+#     green AND it has >=1 approval AND it is not draft / not labelled do-not-merge.
+#   • The queue re-runs CI on the up-to-date branch before merging, so main never
+#     lands a PR that was green only against a stale base.
+#   • Auto-labels PRs by touched path so review routing / changelog grouping is free.
+#   • Deletes the head branch after merge.
+#
+# The check-success names below must match the ci.yml job `name:` values exactly.
+
+queue_rules:
+  - name: default
+    merge_method: merge
+    queue_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+      - -draft
+      - label!=do-not-merge
+      - check-success=Migration trees in sync
+      - check-success=Python — pip-audit & lint
+      - check-success=Rust — audit, lint, test
+      - check-success=Rust — coverage (llvm-cov)
+      - check-success=Security — secrets & dependency scan
+      - check-success=Frontend — lint, test, build
+      - check-success=Semgrep SAST (critical blocking)
+      - check-success=Engine wiring audit & API smoke
+    merge_conditions:
+      - check-success=Migration trees in sync
+      - check-success=Rust — audit, lint, test
+      - check-success=Engine wiring audit & API smoke
+
+pull_request_rules:
+  - name: queue for automatic merge when green + approved
+    conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+      - -draft
+      - label!=do-not-merge
+    actions:
+      queue:
+        name: default
+
+  - name: label — CI / CD & workflows
+    conditions:
+      - files~=^\.github/
+    actions:
+      label:
+        add: ["ci/cd"]
+
+  - name: label — frontend
+    conditions:
+      - files~=^frontend/
+    actions:
+      label:
+        add: ["frontend"]
+
+  - name: label — rust / backend
+    conditions:
+      - files~=\.rs$
+    actions:
+      label:
+        add: ["rust"]
+
+  - name: label — dependencies
+    conditions:
+      - author=renovate[bot]
+    actions:
+      label:
+        add: ["dependencies"]
+
+  - name: delete head branch after merge
+    conditions:
+      - merged
+    actions:
+      delete_head_branch: {}
