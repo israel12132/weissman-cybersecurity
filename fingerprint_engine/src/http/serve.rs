@@ -1798,7 +1798,10 @@ mod cc_stream_tests {
         assert_eq!(v["type"], "resync");
         assert_eq!(v["kind"], "stream_lagged");
         assert_eq!(v["dropped"], 7);
-        assert!(v["ts"].as_i64().unwrap_or(0) > 0, "timestamp must be present");
+        assert!(
+            v["ts"].as_i64().unwrap_or(0) > 0,
+            "timestamp must be present"
+        );
     }
 
     /// The resync notice must NOT be mistaken for a normal telemetry event: it already
