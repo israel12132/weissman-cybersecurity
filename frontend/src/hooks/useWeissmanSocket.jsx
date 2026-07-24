@@ -67,6 +67,10 @@ export function useWeissmanSocket() {
   const [scoreData, setScoreData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('offline');
   const [emergencyMessage, setEmergencyMessage] = useState('');
+  // Bumped every time the server reports it dropped events for this (slow) client.
+  // Consumers watch this (e.g. useEffect([resyncSignal]) → refetch) to recover the
+  // events they missed instead of trusting a live feed that now has a gap in it.
+  const [resyncSignal, setResyncSignal] = useState(0);
 
   const wsRef = useRef(null);
   const reconnectDelay = useRef(RECONNECT_BASE_MS);
@@ -91,6 +95,14 @@ export function useWeissmanSocket() {
     if (data.type === 'init' || data.type === 'refresh') {
       if (data.score) setScoreData(data.score);
       setConnectionStatus('online');
+      return;
+    }
+
+    // --- Resync signal: the server dropped events for this slow client (broadcast
+    //     backpressure). The live feed now has a gap, so bump resyncSignal and let
+    //     consumers refetch authoritative state rather than silently miss events. ---
+    if (data.type === 'resync' || data.kind === 'stream_lagged') {
+      setResyncSignal((n) => n + 1);
       return;
     }
 
@@ -251,6 +263,7 @@ export function useWeissmanSocket() {
     connectionStatus,
     emergencyMessage,
     setEmergencyMessage,
+    resyncSignal, // bumps when the server dropped events; consumers refetch on change
     arcEventKinds: ARC_EVENT_KINDS, // Export for App.jsx to use
   };
 }
