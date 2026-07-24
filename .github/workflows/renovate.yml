@@ -22,8 +22,11 @@ name: Renovate
 
 on:
   schedule:
-    # Weekly, mirrors renovate.json's "schedule:weekly" — early Monday UTC.
-    - cron: '0 4 * * 1'
+    # Weekly, INSIDE renovate.json's "schedule:weekly" window (early Monday, before
+    # 04:00 UTC). Fire at 02:00 so a queued runner still executes while Renovate's own
+    # schedule gate is open — at 04:00 the window is shut and Renovate would run but
+    # skip every update.
+    - cron: '0 2 * * 1'
   workflow_dispatch:
     inputs:
       logLevel:
@@ -62,6 +65,10 @@ jobs:
         uses: renovatebot/github-action@3064367f740a1a91cca218698a63902689cce200 # v46.1.20
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
+          # Pin the Renovate RUNTIME too. The action commit is pinned above, but the
+          # Renovate release it executes defaults to latest otherwise — pin it so a run
+          # is fully reproducible. Bump deliberately (Renovate won't self-bump a `with:`).
+          renovate-version: 43.279.1
         env:
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
           # Only this repo; onboarding off because renovate.json already exists.

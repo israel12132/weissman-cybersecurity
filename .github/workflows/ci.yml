@@ -787,6 +787,10 @@ jobs:
       # runner class. The full soak (higher VUs / 1m, blocking) runs in nightly-e2e.yml.
       - name: Set up k6 (PR SLO smoke)
         uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1.2.1
+        with:
+          # Pin the k6 binary too — the action installs latest k6 otherwise, so a runtime
+          # change could shift the SLO result independent of the vetted k6_slo.js script.
+          k6-version: v1.8.0
 
       - name: k6 SLO smoke (short, informational)
         continue-on-error: true
@@ -851,10 +855,12 @@ jobs:
 
       # Project-specific rules (.semgrep/weissman-rules.yml) run SEPARATELY and NON-blocking
       # first, so we can judge signal-to-noise on the real tree before promoting any into the
-      # blocking scan above. Semgrep exits 0 without --error, so findings surface without
-      # failing the build; continue-on-error is a belt-and-suspenders guard.
+      # blocking scan above. Omitting --error means FINDINGS never fail the step (semgrep exits
+      # 0). We intentionally do NOT set continue-on-error: a malformed rules file or a semgrep
+      # engine error (exit 2/4/5/7) SHOULD fail loudly instead of being silently swallowed —
+      # the config is local (.semgrep/, no registry/network), so the only failure modes are
+      # our own broken rules, which we want surfaced.
       - name: Weissman custom Semgrep rules (informational)
-        continue-on-error: true
         run: semgrep scan --config .semgrep/ --metrics off
 
   rust-coverage:

@@ -27,9 +27,22 @@ queue_rules:
       - check-success=Frontend — lint, test, build
       - check-success=Semgrep SAST (critical blocking)
       - check-success=Engine wiring audit & API smoke
+    # Re-assert EVERY hard gate at the final merge step, not a subset. While a PR waits in
+    # the queue an approval can be dismissed or a required check can revert; merge_conditions
+    # is the last gate before it lands on main, so it must independently enforce the complete
+    # entry criteria. Kept identical to queue_conditions above.
     merge_conditions:
+      - base=main
+      - "#approved-reviews-by>=1"
+      - -draft
+      - label!=do-not-merge
       - check-success=Migration trees in sync
+      - check-success=Python — pip-audit & lint
       - check-success=Rust — audit, lint, test
+      - check-success=Rust — coverage (llvm-cov)
+      - check-success=Security — secrets & dependency scan
+      - check-success=Frontend — lint, test, build
+      - check-success=Semgrep SAST (critical blocking)
       - check-success=Engine wiring audit & API smoke
 
 pull_request_rules:
