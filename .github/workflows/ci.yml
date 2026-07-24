@@ -687,7 +687,18 @@ jobs:
           WEISSMAN_E2E_POLL_MAX: "90"
         run: node scripts/verify_scan_pipeline_e2e.mjs
 
+      - name: Install Playwright Chromium (live E2E)
+        timeout-minutes: 8
+        run: |
+          cd frontend
+          npx playwright install chromium
+
+      # Split from the broad route crawl below so the deterministic core contract is not
+      # starved or masked by a slow/flaky route sweep, and each is independently bounded.
+      # Playwright's globalTimeout (20 min, CI) self-terminates first; timeout-minutes is the
+      # backstop so a stall fails fast instead of hanging the job (previously ~98 min, no cap).
       - name: Playwright live journey (login → scan → findings → PDF)
+        timeout-minutes: 22
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
           WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
@@ -696,8 +707,19 @@ jobs:
           PLAYWRIGHT_LIVE: "1"
         run: |
           cd frontend
-          npx playwright install chromium
-          npm run test:e2e:live -- live-journey live-ui-crawl
+          npm run test:e2e:live -- live-journey
+
+      - name: Playwright live UI crawl (every sidebar route)
+        timeout-minutes: 22
+        env:
+          WEISSMAN_E2E_BASE: http://127.0.0.1:18000
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_E2E_TENANT: default
+          PLAYWRIGHT_LIVE: "1"
+        run: |
+          cd frontend
+          npm run test:e2e:live -- live-ui-crawl
 
       - name: Dump Playwright live error-context on failure
         if: failure()
