@@ -51,12 +51,14 @@ const ARC_EVENT_KINDS = new Set([
 ]);
 
 // Build the WebSocket URL from the current page origin so it works behind
-// Cloudflare Tunnel and local dev equally.
-function buildWsUrl() {
+// Cloudflare Tunnel and local dev equally. On reconnect we pass the last event
+// sequence we saw so the server can replay everything we missed while offline.
+function buildWsUrl(lastEventId) {
   if (typeof window === 'undefined') return '';
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
-  return `${proto}//${host}/ws/command-center`;
+  const base = `${proto}//${host}/ws/command-center`;
+  return lastEventId > 0 ? `${base}?last_event_id=${lastEventId}` : base;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +81,9 @@ export function useWeissmanSocket() {
   const unmounted = useRef(false);
   const lastTickerKeyRef = useRef({ key: '', t: 0 });
   const eventIdRef = useRef(0);
+  // Highest server sequence (`_seq`) we've received. Sent as last_event_id on reconnect
+  // so the server replays the events we missed while the socket was down.
+  const lastEventIdRef = useRef(0);
 
   // -------------------------------------------------------------------------
   // Message handler — maps backend event kinds to state updates
@@ -89,6 +94,11 @@ export function useWeissmanSocket() {
       data = JSON.parse(raw);
     } catch {
       return; // ignore malformed frames
+    }
+
+    // Track the server sequence so a reconnect can resume via last_event_id.
+    if (typeof data._seq === 'number' && data._seq > lastEventIdRef.current) {
+      lastEventIdRef.current = data._seq;
     }
 
     // --- Initial handshake (sent by server on connect) ---
@@ -171,7 +181,7 @@ export function useWeissmanSocket() {
   const connect = useCallback(() => {
     if (unmounted.current) return;
 
-    const url = buildWsUrl();
+    const url = buildWsUrl(lastEventIdRef.current);
     if (!url) return;
 
     setConnectionStatus('offline');
