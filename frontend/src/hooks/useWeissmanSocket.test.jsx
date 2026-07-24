@@ -72,4 +72,51 @@ describe('useWeissmanSocket', () => {
     expect(result.current.resyncSignal).toBe(0)
     expect(result.current.events.length).toBe(1)
   })
+
+  it('reconnects with last_event_id after receiving sequenced events', () => {
+    vi.useFakeTimers()
+    try {
+      renderHook(() => useWeissmanSocket())
+      const first = lastWs
+      expect(first.url).not.toContain('last_event_id') // fresh connect carries no cursor
+
+      // Receive two sequenced events; the hook should track the highest seq.
+      act(() => {
+        first.onmessage({ data: JSON.stringify({ kind: 'scan_pulse', payload: { message: 'a' }, _seq: 5 }) })
+        first.onmessage({ data: JSON.stringify({ kind: 'scan_pulse', payload: { message: 'b' }, _seq: 12 }) })
+      })
+
+      // Drop the socket → the hook schedules a reconnect.
+      act(() => {
+        first.onclose({ code: 1006 })
+      })
+      act(() => {
+        vi.advanceTimersByTime(5000) // past the reconnect backoff
+      })
+
+      expect(lastWs).not.toBe(first)
+      expect(lastWs.url).toContain('last_event_id=12')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not move the cursor backwards on an out-of-order seq', () => {
+    vi.useFakeTimers()
+    try {
+      renderHook(() => useWeissmanSocket())
+      const first = lastWs
+      act(() => {
+        first.onmessage({ data: JSON.stringify({ kind: 'scan_pulse', payload: { message: 'a' }, _seq: 20 }) })
+        first.onmessage({ data: JSON.stringify({ kind: 'scan_pulse', payload: { message: 'late' }, _seq: 7 }) })
+        first.onclose({ code: 1006 })
+      })
+      act(() => {
+        vi.advanceTimersByTime(5000)
+      })
+      expect(lastWs.url).toContain('last_event_id=20')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

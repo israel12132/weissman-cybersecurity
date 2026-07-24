@@ -17,6 +17,7 @@ pub mod rate_limit_redis;
 mod serve;
 pub mod sse_bridge;
 pub mod sse_context;
+pub mod event_replay;
 pub mod tenant_scan_limit;
 pub mod tenant_stream;
 
