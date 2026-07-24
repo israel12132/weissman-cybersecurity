@@ -1,13 +1,15 @@
 name: Live Integration (E2E + API smoke)
 
-# Heavy live-stack integration + end-to-end suite, split out of ci.yml so the fast
-# static / unit / build / ratchet gates in ci.yml stay green on every push. This suite
-# boots the full product stack (Postgres + Redis services, live server + worker, Docker
-# images) and runs DAST, Playwright live journeys, and the RLS/SOAR/FP-TP live contracts.
-# It runs on pull requests and on demand; it is intentionally NOT a per-push blocker.
+# Heavy live-stack integration + end-to-end suite: boots the full product stack
+# (Postgres + Redis services, live server + worker, Docker images) and runs DAST,
+# Playwright live journeys, and the RLS/SOAR/FP-TP live contracts.
+#
+# ON-DEMAND ONLY (workflow_dispatch). The identical live-stack suite already runs
+# automatically as the `engine-wiring-and-smoke` job in ci.yml (blocking, on every
+# push + PR), so also firing it here on `pull_request` ran the ~100-min suite TWICE
+# per PR. The pull_request trigger was removed to end that duplication; trigger this
+# manually from the Actions tab when an on-demand live check is wanted.
 on:
-  pull_request:
-    branches: ["**"]
   workflow_dispatch:
 
 permissions:
