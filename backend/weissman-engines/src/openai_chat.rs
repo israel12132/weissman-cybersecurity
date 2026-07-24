@@ -134,6 +134,13 @@ fn circuit_on_failure(base_url: &str) {
     }
 }
 
+/// True when the circuit breaker for `base_url` is currently open (cooling down after
+/// repeated failures). Used by the multi-provider router to skip a known-bad endpoint.
+#[must_use]
+pub fn endpoint_circuit_open(base_url: &str) -> bool {
+    matches!(circuit_check(base_url), Err(LlmError::CircuitOpen { .. }))
+}
+
 fn health_cache() -> &'static Mutex<HashMap<String, Instant>> {
     static H: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
     H.get_or_init(|| Mutex::new(HashMap::new()))
@@ -219,6 +226,14 @@ impl LlmError {
     #[must_use]
     pub fn to_client_value(&self) -> Value {
         serde_json::to_value(self.client_body()).unwrap_or(json!({"code": "llm_error"}))
+    }
+
+    /// Whether retrying — or failing over to another provider endpoint — may succeed.
+    /// Transport/5xx/429/timeout/circuit errors are retryable; client-side errors
+    /// (bad request decode, empty content) are not — failover would just repeat them.
+    #[must_use]
+    pub fn retryable(&self) -> bool {
+        self.client_body().retryable
     }
 
     fn client_body(&self) -> LlmClientErrorBody {
