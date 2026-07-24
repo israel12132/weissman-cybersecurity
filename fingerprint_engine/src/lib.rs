@@ -144,6 +144,7 @@ pub mod safe_probe;
 pub mod saml_auth;
 pub mod scan_concurrency;
 pub mod scan_http_client;
+pub mod self_healing;
 pub mod semantic_fuzzer;
 pub mod server_db;
 pub mod signatures;
