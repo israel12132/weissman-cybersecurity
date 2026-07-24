@@ -17,6 +17,12 @@ const AUTH_FILE = path.join(__dirname, 'tests-e2e', '.auth', 'admin.json')
 const PW_EXECUTABLE_PATH = process.env.PW_EXECUTABLE_PATH || undefined
 const launchOptions = PW_EXECUTABLE_PATH ? { executablePath: PW_EXECUTABLE_PATH } : undefined
 
+// Video recording spawns an ffmpeg child that can orphan when a test hangs, defeating the
+// GitHub step-timeout kill (the live-journey step previously ran ~98 min with orphaned
+// chrome/ffmpeg). Off in CI — trace (on-first-retry) + screenshot (on-failure) still make
+// failures diagnosable — and kept locally for debugging.
+const VIDEO_MODE = (process.env.CI ? 'off' : 'retain-on-failure') as const
+
 /**
  * Two projects:
  *  - chromium-mock: Vite dev server + API mocks (fast UI smoke)
@@ -25,6 +31,11 @@ const launchOptions = PW_EXECUTABLE_PATH ? { executablePath: PW_EXECUTABLE_PATH 
 export default defineConfig({
   testDir: './tests-e2e',
   timeout: 180_000,
+  // Hard ceiling on the ENTIRE run: a single stalled live spec can never hang the job for
+  // hours again (the live-journey CI step previously ran ~98 min with no cap). Kept below the
+  // step's timeout-minutes so Playwright self-terminates first and cleans up its own browser +
+  // ffmpeg children, instead of GitHub SIGKILLing and orphaning them.
+  globalTimeout: process.env.CI ? 20 * 60_000 : undefined,
   expect: { timeout: 30_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -51,7 +62,7 @@ export default defineConfig({
             storageState: AUTH_FILE,
             trace: 'on-first-retry',
             screenshot: 'only-on-failure',
-            video: 'retain-on-failure',
+            video: VIDEO_MODE,
             ...devices['Desktop Chrome'],
             launchOptions,
           },
@@ -65,7 +76,7 @@ export default defineConfig({
             baseURL: MOCK_BASE,
             trace: 'on-first-retry',
             screenshot: 'only-on-failure',
-            video: 'retain-on-failure',
+            video: VIDEO_MODE,
             ...devices['Desktop Chrome'],
             launchOptions,
           },
