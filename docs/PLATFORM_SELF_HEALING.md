@@ -1,6 +1,7 @@
 # Platform Self-Healing
 
-**Status:** shipped (basics — detect → diagnose → signal). **Module:** `fingerprint_engine::self_healing`.
+**Status:** shipped (detect → diagnose → **recover**). **Modules:** `fingerprint_engine::self_healing`
+(diagnose) + `fingerprint_engine::self_heal_recovery` (execute).
 
 ## Why
 
@@ -30,7 +31,13 @@ observability 10s loop (DETECT)
    record_diagnoses → weissman_self_heal_diagnosis_total{subsystem,severity,action}
                           │
                           ▼
-   RECOVER: resilience::CircuitBreaker + backoff, agent pruner  (primitives — wired next)
+   self_heal_recovery::run_recovery(HealthSnapshot, &[Diagnosis])  (RECOVER — bounded, tested)
+     • feed dependency circuits (pg/redis) so they open on outage, close on recovery
+     • plan_recovery (pure) → cooldown-gate each (subsystem, action)
+     • apply effect: engage shed / backoff gate · raise prune signal · fail-fast circuit
+                          │
+                          ▼
+   weissman_self_heal_recovery_total{subsystem,action,outcome=executed|cooldown}
 ```
 
 ### Diagnosis rules
@@ -49,6 +56,34 @@ every rule and boundary (including "empty pool is not saturation" and the warn�
 step). Per-tenant-safe (operates on process-wide platform signals, not tenant data). Fail-open:
 the diagnosis never blocks the health loop.
 
+### Recovery execution (`self_heal_recovery`)
+
+Each diagnosis names a [`RecoveryAction`]; `run_recovery` turns that recommendation into a
+**bounded, reversible effect** and exposes the resulting state for the rest of the platform to
+consult:
+
+| Action | Effect | How callers consume it |
+|---|---|---|
+| `shed_load` | engage a process-wide **load-shed gate** for `SHED_TTL_SECS` | `self_heal_recovery::load_shed_active()` → reject/queue heavy new work |
+| `backoff` | engage a softer **backoff gate** for `BACKOFF_TTL_SECS` | `self_heal_recovery::backoff_active()` → add delay before heavy work |
+| `reconnect_dependency` | drive that dependency's **circuit breaker** (fed from the snapshot every round) | `self_heal_recovery::dependency_available(dep)` → fail fast while open; auto-probes (half-open) after cooldown so the pool re-establishes without a herd |
+| `prune_stale_agents` | raise a **prune-request** signal | `self_heal_recovery::prune_requests()`; the presence pruner reaps on its own 30s cadence |
+
+Two guard rails keep execution safe:
+
+- **Cooldown gate** — each `(subsystem, action)` fires at most once per
+  `ACTION_COOLDOWN_SECS`, so a *sustained* fault engages recovery once per window rather than
+  re-firing every 10s round. Suppressed rounds are still counted (`outcome=cooldown`).
+- **Master switch** — `WEISSMAN_SELFHEAL_RECOVERY_ENABLED=0` disables all execution; the gates
+  then read "healthy" (`load_shed_active()`/`backoff_active()` → false, `dependency_available()`
+  → true) so consumers degrade to normal behavior.
+
+The decision core `plan_recovery` is **pure** (`diagnoses + last-fired ledger + clock ⇒ plan`) and
+the gates take an injected `now`, so the whole state machine — engage/expire, cooldown
+suppression, circuit trip/recover — is unit-tested without a live stack. The load-shed and
+backoff gates **auto-expire**: if the fault clears, no new engagement refreshes them and they
+lapse on their own. All state is process-wide and tenant-agnostic.
+
 ## Configuration
 
 | Env var | Default | Meaning |
@@ -56,15 +91,24 @@ the diagnosis never blocks the health loop.
 | `WEISSMAN_SELFHEAL_STALE_AGENT_RATIO` | `0.5` | Fraction of registered agents allowed stale before flagging. |
 | `WEISSMAN_SELFHEAL_ASYNC_WARN` | `500` | Async-job backlog that raises a warning. |
 | `WEISSMAN_SELFHEAL_ASYNC_CRITICAL` | `5000` | Async-job backlog that raises a critical. |
+| `WEISSMAN_SELFHEAL_RECOVERY_ENABLED` | `true` | Master switch for recovery **execution** (`0`/`false`/`no`/`off` disables all effects). |
+| `WEISSMAN_SELFHEAL_ACTION_COOLDOWN_SECS` | `60` | Min seconds between the same `(subsystem, action)` firing. |
+| `WEISSMAN_SELFHEAL_SHED_TTL_SECS` | `30` | How long a `shed_load` gate stays engaged before auto-clearing. |
+| `WEISSMAN_SELFHEAL_BACKOFF_TTL_SECS` | `20` | How long a `backoff` gate stays engaged before auto-clearing. |
+| `WEISSMAN_SELFHEAL_DEP_CIRCUIT_THRESHOLD` | `3` | Consecutive dependency failures before its circuit opens (fail-fast). |
+| `WEISSMAN_SELFHEAL_DEP_CIRCUIT_COOLDOWN_SECS` | `15` | Seconds an open dependency circuit waits before probing (half-open). |
 
 ## Observability
 
 | Metric | Labels | Meaning |
 |---|---|---|
 | `weissman_self_heal_diagnosis_total` | `subsystem`, `severity`, `action` | Incremented each 10s round a subsystem is diagnosed unhealthy, tagged with the recommended recovery. |
+| `weissman_self_heal_recovery_total` | `subsystem`, `action`, `outcome` | Incremented per round a recovery is considered: `outcome=executed` when the effect ran, `outcome=cooldown` when suppressed by the per-action window. |
 
-Add to the Grafana/Prometheus layer (`deploy/observability`). A sustained nonzero rate for a
-`{subsystem, action}` is the platform telling you what it would self-heal.
+Add to the Grafana/Prometheus layer (`deploy/observability`). A sustained nonzero
+`diagnosis`/`executed` rate for a `{subsystem, action}` is the platform actively self-healing; a
+high `cooldown` rate means the fault is *sustained* (recovery already engaged, waiting out the
+window) — escalate to the runbook below.
 
 ## Runbook — reading the platform's self-diagnosis
 
@@ -75,11 +119,15 @@ Add to the Grafana/Prometheus layer (`deploy/observability`). A sustained nonzer
 
 ## Scope & follow-ups
 
-- **This milestone = detect → diagnose → signal** (the brain + its metric), wired into the
-  existing 10s loop using the observability already present.
-- **Next**: *execute* the recommended actions automatically — drive `resilience` circuit
-  breakers on `reconnect_dependency`, call the agent pruner on `prune_stale_agents`, apply
-  intake backoff on `shed_load` — each behind a bounded, per-action safety guard, plus a
-  `weissman_self_heal_recovery_total` counter for actions actually taken.
-- Diagnosis is intentionally a **pure function** so the recovery-execution layer can be added
-  and tested independently of the sampling loop.
+- **Shipped = detect → diagnose → recover.** The diagnose brain (`self_healing`) and the
+  bounded recovery executor (`self_heal_recovery`) are both wired into the existing 10s loop,
+  each with its own metric, over the observability already present.
+- **Next — adoption at the intake edge.** The recovery *state* is live and consumable, but the
+  win is only realized when heavy paths honor it: have scan/async-job admission check
+  `load_shed_active()` (reject/queue) and `backoff_active()` (delay), and have DB/Redis call
+  sites consult `dependency_available(dep)` to fail fast during an outage. Each adoption is a
+  small, isolated change guarded by the master switch.
+- **Later** — durable cross-replica recovery state (today each replica self-heals from its own
+  in-memory gates), and auto-restart of stuck background workers.
+- Both `diagnose` and `plan_recovery` are intentionally **pure functions** so new rules and new
+  effects can be added and tested independently of the sampling loop.
