@@ -29,13 +29,15 @@ export default defineConfig({
 
   // Wall-clock ceiling for the ENTIRE run. `timeout` above bounds ONE test and can never bound
   // the suite: the live selection is 110 serial tests (100 appNav routes + 6 named + 3 journey),
-  // so the worst case was 110 x 90s x 2 retries = 5.5 h. CI step 36 was measured running
-  // 150 min before the job died with NO report, because nothing inside Playwright ever stopped
-  // it. globalTimeout makes Playwright self-terminate, flush both reporters and exit non-zero,
-  // naming the test that was in flight. Sized generously on purpose so the gate cannot go
-  // permanently red before the cost-model work (worker-scoped context) lands; tighten once the
-  // crawl reuses its browser context. See docs/TECH_DEBT_live_e2e_runtime.md.
-  globalTimeout: process.env.CI ? 50 * 60 * 1000 : 0,
+  // so the worst case was 110 x 90s x 2 retries = 5.5 h. The step was measured running 150 min
+  // before the job died with NO report, because nothing inside Playwright ever stopped it.
+  // globalTimeout makes Playwright self-terminate, flush both reporters and exit non-zero,
+  // naming the test that was in flight.
+  // MEASURED after removing the duplicate SPA boot + blind sleep: journey 12s, crawl 3m52s
+  // (run 30129211956). 20 min is ~5x headroom over the whole live selection — loose enough to
+  // absorb a slow runner, tight enough that a real regression is caught in minutes rather than
+  // hours. See docs/TECH_DEBT_live_e2e_runtime.md before changing.
+  globalTimeout: process.env.CI ? 20 * 60 * 1000 : 0,
 
   // A systemically broken live stack must abort in ~2 min, not grind 110 tests x 90s and then
   // retry every one of them. Local runs stay unbounded so a dev sees every failure at once.

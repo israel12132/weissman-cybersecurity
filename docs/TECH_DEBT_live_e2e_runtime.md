@@ -37,15 +37,33 @@ So every route test paid **two** cold SPA boots: ~200 boots to make 100 route as
 Because the suite is derived from `appNav`, **every new Command Center page silently adds a
 ~20 s serial test to a blocking gate**, forever.
 
+## Outcome (measured, run 30129211956)
+
+Removing the duplicate cockpit boot and the blind sleep was sufficient on its own:
+
+| Step | Before | After | |
+|---|---|---|---|
+| Playwright live journey | *(bundled in one 150.9 min step)* | **12 s** | ✅ pass |
+| Playwright live UI crawl (100 routes) | | **3 min 52 s** | ✅ pass |
+| **Combined** | **150.9 min** | **4 min 4 s** | **−97 %** |
+
+The worker-scoped-context refactor (below) is therefore **no longer urgent**: the measured cost
+per route is now ~2.3 s, and the suite fits comfortably inside its budget. It remains the right
+answer if per-route cost ever regresses or `appNav` roughly triples.
+
+Bounds were tightened from these measurements (Phase 3): `globalTimeout` 50 → 20 min,
+crawl step 35 → 15 min, journey step 15 → 8 min.
+
 ## The bounds now in place — do not remove without replacing
 
 | Guard | Location | Purpose |
 |---|---|---|
-| `globalTimeout: 50 min` (CI) | `frontend/playwright.config.ts` | Playwright self-terminates, **flushes reporters**, exits non-zero naming the in-flight test. `timeout` bounds ONE test and can never bound the suite. |
+| `globalTimeout: 20 min` (CI) | `frontend/playwright.config.ts` | Playwright self-terminates, **flushes reporters**, exits non-zero naming the in-flight test. `timeout` bounds ONE test and can never bound the suite. ~5× headroom over the measured 4 min. |
 | `maxFailures: 10` (CI) | `frontend/playwright.config.ts` | A systemically broken stack aborts in ~2 min instead of grinding 110 × 90 s × 2 retries. |
 | `actionTimeout: 15s` / `navigationTimeout: 30s` | `frontend/playwright.config.ts` (`chromium-live`) | Unset, these collapse to **0 = no limit**, so a stalled `goto` ate the whole test budget and reported a generic timeout instead of naming the route. |
 | `github` reporter + `PLAYWRIGHT_FORCE_TTY=1` | config + `ci.yml` | `list` prints nothing at test **start** on a non-TTY stream. Without this a killed run gives no clue which test was running. |
-| `timeout-minutes: 15` (journey) / `35` (crawl) | `.github/workflows/ci.yml` | Per-suite budgets. The suites are **split** so the crawl's cost is visible instead of hidden under the journey's name. |
+| `timeout-minutes: 8` (journey) / `15` (crawl) | `.github/workflows/ci.yml` | Per-suite budgets, sized from measurement. The suites are **split** so the crawl's cost is visible instead of hidden under the journey's name. |
+| `continue-on-error` on **both** k6 steps | `.github/workflows/ci.yml` | The k6 SLO smoke is informational, but its **setup** step was blocking: a bad `k6-version` (`v1.8.0` → the action prepends `v`, giving a 404 on `vv1.8.0`) failed the whole engine-wiring gate after every real contract had passed. An informational feature must never be able to fail a blocking gate. |
 | `timeout-minutes: 5` (browser install) | `.github/workflows/ci.yml` | An unbounded ~170 MB CDN download used to be billed to the test step. |
 | `timeout-minutes: 180` (job) | `.github/workflows/ci.yml` | Last-resort backstop; the job previously inherited GitHub's 360-min default. |
 | `if: always()` artifact upload | `.github/workflows/ci.yml` | Report/traces survive **cancellation**; `if: failure()` is FALSE when a job is cancelled — exactly when diagnostics matter most. |

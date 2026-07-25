@@ -708,7 +708,8 @@ jobs:
       # only the journey, so a 150-min step read as though 3 journey tests had hung when in fact
       # 107 crawl tests were grinding. Separate names + separate budgets make the cost visible.
       - name: Playwright live journey (login → scan → findings → PDF)
-        timeout-minutes: 15
+        # Measured 12s (run 30129211956); 8 min is ~40x headroom for a cold/contended runner.
+        timeout-minutes: 8
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
           WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
@@ -724,7 +725,10 @@ jobs:
       # grows automatically with every new Command Center page (appNav is the single source), so
       # its cost must be visible rather than hidden inside another step's number.
       - name: Playwright live UI crawl (100 sidebar routes)
-        timeout-minutes: 35
+        # Measured 3m52s (run 30129211956), down from ~150 min when this ran with a duplicate
+        # cockpit boot per route. 15 min is ~4x headroom; if this ever trips, the cause is a real
+        # regression in per-route cost, not runner noise — read the uploaded Playwright report.
+        timeout-minutes: 15
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
           WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
@@ -850,11 +854,19 @@ jobs:
       # on PRs (continue-on-error) until the latency/error budget is baselined on this
       # runner class. The full soak (higher VUs / 1m, blocking) runs in nightly-e2e.yml.
       - name: Set up k6 (PR SLO smoke)
+        # continue-on-error to match the smoke step below. The k6 SLO smoke is INFORMATIONAL, but
+        # this setup step was blocking: when it failed the whole engine-wiring gate went red even
+        # though every real contract had already passed. An informational feature must never be
+        # able to fail a blocking security gate — that is the defect, not just the bad version.
+        continue-on-error: true
         uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1.2.1
         with:
           # Pin the k6 binary too — the action installs latest k6 otherwise, so a runtime
           # change could shift the SLO result independent of the vetted k6_slo.js script.
-          k6-version: v1.8.0
+          # NO leading "v": the action prepends it itself. "v1.8.0" produced a doubled tag and
+          # 404'd on .../download/vv1.8.0/k6-vv1.8.0-linux-amd64.tar.gz. Verified: the
+          # un-prefixed form resolves to .../download/v1.8.0/k6-v1.8.0-linux-amd64.tar.gz (200).
+          k6-version: 1.8.0
 
       - name: k6 SLO smoke (short, informational)
         continue-on-error: true
