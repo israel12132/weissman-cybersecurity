@@ -11,7 +11,7 @@ of this document merged them into one. They need different fixes.
 
 | # | Failure mode | Evidence | Fix |
 |---|---|---|---|
-| **A** | The step's `timeout-minutes` is consumed by a **cold compile + link**, before any test runs | see below | Split compile from execution (PR #215) |
+| **A** | The step's `timeout-minutes` is consumed by a **cold compile + link**, before any test runs | see below | Split compile from execution (`--no-run` step before each gate) |
 | **B** | An **unbounded `pg_advisory_xact_lock()` wait** hangs a test that did start | reproduced on demand against live Postgres | `weissman_db::advisory_lock` (this document's §The fix) |
 
 ### Mode A is what the observed step-23 timeouts actually were

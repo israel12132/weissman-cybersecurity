@@ -38,6 +38,39 @@ async fn api_ready(State(state): State<Arc<AppState>>) -> Response {
         .into_response()
 }
 
+/// Per-tenant resource-quota usage for the caller's tenant (monthly scan budget). Reports
+/// used/limit/remaining and when the period resets. `limit: 0` = unlimited. Read side of the
+/// quota ledger (see `crate::tenant_quota`).
+async fn api_quota(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    use crate::tenant_quota::{report, QuotaWindow};
+    let default_limit = std::env::var("WEISSMAN_DEFAULT_MONTHLY_SCAN_QUOTA")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(0);
+    match report(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        "scans",
+        QuotaWindow::Monthly,
+        default_limit,
+    )
+    .await
+    {
+        Ok(d) => (StatusCode::OK, Json(json!({ "ok": true, "quotas": [d] }))).into_response(),
+        Err(e) => {
+            tracing::warn!(target: "quota", error = %e, "quota report failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "ok": false, "code": "quota_unavailable" })),
+            )
+                .into_response()
+        }
+    }
+}
+
 async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let uptime_secs = state.started_at.elapsed().as_secs();
     let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
