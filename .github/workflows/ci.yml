@@ -166,24 +166,20 @@ jobs:
       - name: Clippy (correctness + suspicious bug gate)
         run: cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious
 
-      - name: Build Rust workspace
-        run: cargo build --workspace
+      - name: Build Rust workspace + test binaries
+        # `--no-run` builds the test harnesses too, so the gate below only EXECUTES. Its timeout
+        # then measures test runtime rather than a cold compile+link — failure mode A in
+        # docs/TECH_DEBT_flaky_db_test_hang.md. Subsumes the old `cargo build --workspace`.
+        run: cargo test --workspace --all-targets --no-run
 
       - name: Run Rust tests (blocking gate)
-        # Fail-fast: `cargo test --workspace --all-targets` runs in ~6 min on a WARM cache, but a
-        # cold runner recompiles + links every test target (rust-lld, ~2300 workspace tests after the
-        # main merge) and was observed still linking past 15 min — an under-sized budget, not a hung
-        # test. 45 min absorbs the cold-cache compile+link yet still kills a genuine multi-hour hang
-        # (parallel-test deadlock / connection-pool leak) far below GitHub's 360-min default. 30 min
-        # was observed timing out MID-COMPILE on the post-main-merge cold cache (run 30075974657) —
-        # a budget miss, not a hang: the tests hadn't even started yet.
-        # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 45
-        # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
-        # test step also struck this one (observed live). Bounding test concurrency reduces the
-        # window in which two transactions contend, and keeps parallel DB/pool work under the
-        # ceiling. It is a pressure reducer, NOT the fix: the hang was an unbounded
-        # `pg_advisory_xact_lock` wait, now bounded in weissman_db::advisory_lock. Every test
+        # Execution only — the step above built the binaries, so this never recompiles. Warm
+        # execution is ~6 min; 25 min is generous headroom yet still kills a genuine multi-hour
+        # hang far below GitHub's 360-min default.
+        timeout-minutes: 25
+        # `--test-threads=2`: contention-pressure reducer. It narrows the window in which two
+        # transactions contend and keeps parallel DB/pool work under the pool ceiling. It is not
+        # what bounds a contended advisory lock — weissman_db::advisory_lock does that. Every test
         # still runs and still blocks. See docs/TECH_DEBT_flaky_db_test_hang.md.
         run: cargo test --workspace --all-targets -- --test-threads=2
 
@@ -451,15 +447,22 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 \
             -c "SHOW lock_timeout" -c "SHOW idle_in_transaction_session_timeout"
 
+      - name: Compile Rust test binaries (DB-backed gate)
+        # Failure mode A in docs/TECH_DEBT_flaky_db_test_hang.md: this job has no pre-build step
+        # for test targets, so the gate below used to compile+link ~2300 test targets INSIDE its
+        # own timeout. That is what the repeated ~46-minute step-23 overruns actually were — in
+        # run 30188334763 the orphan processes at kill time were rustc/cc/collect2/rust-lld with
+        # no test binary running, while the Postgres service crash-looped under I/O starvation.
+        # Compiling here gives the link its own budget and makes the gate's timeout mean
+        # "the tests hung", which is the only thing a test timeout should ever mean.
+        timeout-minutes: 40
+        run: cargo test --workspace --all-targets --no-run
+
       - name: Run Rust workspace tests (blocking gate)
-        # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
-        # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
-        # recompiles + links every test target (rust-lld, ~2300 tests after the main merge) which can
-        # exceed 15 min mid-link — under-sized budget, not a hang. 45 min absorbs the cold compile+link
-        # yet still kills a deadlock/pool-leak hang far below GitHub's 360-min default. (The sibling
-        # rust-audit job was seen timing out mid-compile at 30 min on the post-merge cold cache.)
-        # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 45
+        # Execution only — the step above already built the binaries, so this never recompiles.
+        # Warm execution is ~6-8 min; 25 min is generous headroom yet still kills a genuine hang
+        # far below GitHub's 360-min default. See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 25
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
@@ -480,12 +483,12 @@ jobs:
         #
         # `--test-threads=2`: this is the ONLY test run that exercises the DB-backed integration
         # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1) — the sibling rust-audit and
-        # rust-coverage jobs declare no `services`, so those tests skip there. That is why the
-        # intermittent multi-hour hang in docs/TECH_DEBT_flaky_db_test_hang.md was specific to this
-        # job. Root cause: an unbounded `pg_advisory_xact_lock` wait (a pool acquire cannot hang —
-        # sqlx defaults acquire_timeout to 30s); it is now bounded in weissman_db::advisory_lock
-        # and by the database-level backstop above. Thread-bounding stays as a contention-pressure
-        # reducer, not as the fix: every test still runs and still blocks.
+        # rust-coverage jobs declare no `services`, so those tests skip there. Thread-bounding is
+        # a contention-pressure reducer: it narrows the window in which two transactions contend
+        # on the same advisory key. It is NOT what bounds the wait — weissman_db::advisory_lock
+        # and the database-level backstop above do that (failure mode B in the tech-debt doc; a
+        # pool acquire cannot hang, sqlx defaults acquire_timeout to 30s). Every test still runs
+        # and still blocks.
         run: |
           cargo test --workspace --all-targets -- \
             --test-threads=2 \

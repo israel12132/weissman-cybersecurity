@@ -3,23 +3,38 @@
 **Status:** Root-caused and fixed · **Area:** CI / DB-backed integration tests ·
 **Filed:** 2026-07-18 · **Root-caused:** 2026-07-26
 
-## Symptom
+## Two distinct failure modes — do not conflate them
 
-The `cargo test --workspace --all-targets` step that runs against a live Postgres service
-intermittently **hangs indefinitely** instead of completing in its normal ~8–16 minutes.
+The `cargo test --workspace --all-targets` step that runs against a live Postgres service has
+overrun its budget repeatedly. Investigation found **two different causes**, and earlier revisions
+of this document merged them into one. They need different fixes.
 
-| Run | Job / step | Observed |
+| # | Failure mode | Evidence | Fix |
+|---|---|---|---|
+| **A** | The step's `timeout-minutes` is consumed by a **cold compile + link**, before any test runs | see below | Split compile from execution (PR #215) |
+| **B** | An **unbounded `pg_advisory_xact_lock()` wait** hangs a test that did start | reproduced on demand against live Postgres | `weissman_db::advisory_lock` (this document's §The fix) |
+
+### Mode A is what the observed step-23 timeouts actually were
+
+| Run | Observed | What the log shows |
 |---|---|---|
-| `29650387309` | engine-wiring · Run Rust workspace tests | in_progress ~**69 min**, no output progression, no per-step timeout |
-| `30002805179` | rust-coverage · instrumented workspace run | deadlocked, hung to the 30-min guard |
-| `30154927534` (attempt 4) | engine-wiring · step 23 | 14:15:02 → ~15:01:52 = **46 m 50 s** against `timeout-minutes: 45` |
+| `30154927534` (attempt 3) | step 23 `in_progress` 14:15:02 → cancelled 15:01:52 = **46 m 50 s** | In the *same run*, `rust-audit` ran `cargo build --workspace` (12 m 05 s) **and then** `cargo test --workspace --all-targets` in **6 m 01 s**. engine-wiring has no pre-build step, so step 23 compiles every test target *inside* the gate. |
+| `30188334763` | step 23 failed at **46 m 05 s** | At kill time the orphan processes were `cargo`, `rustc` ×4, `cc` ×3, `collect2` ×3 and **`rust-lld` ×3** — still linking, no test binary running. The Postgres service container was simultaneously crash-looping under I/O starvation (`database system was not properly shut down`, `issuing SIGKILL to recalcitrant children`, 180 s `fsync` stalls) while `rust-lld` linked multi-GB debug binaries. |
 
-Two properties made this hard to attribute: the *same* invocation succeeded in the sibling
-`rust-audit` job on the same commit, and the commit under test in the first instance only changed
-CI env vars read by a later step. It is genuinely non-deterministic, and it is not a code
-regression in the commit under test.
+That is a budget/measurement problem, not a hang: the timeout was guarding the wrong thing. The
+fix is to give compilation its own step and budget so the gate's timeout measures *execution*.
 
-## Root cause (verified)
+Run `29650387309` (69 min, "no output progression") predates this analysis and its logs have
+expired; it is **not** attributed to either mode here.
+
+### Mode B is real, reproducible, and independently worth fixing
+
+Mode B has not been caught red-handed in a specific CI run — but it is not speculative either. It
+reproduces on demand (see the table under *The fix*), and until it is bounded, **any** contention
+on these keys hangs the process forever rather than failing. The rest of this document is about
+mode B.
+
+## Mode B root cause (verified by reproduction)
 
 **`pg_advisory_xact_lock()` waits forever, and in test binaries nothing bounded that wait.**
 
@@ -52,9 +67,9 @@ Four properties compose into the hang:
 Earlier revisions of this document ranked **connection-pool exhaustion** as the most likely
 mechanism. That is falsified: sqlx's `PoolOptions` default `acquire_timeout` is **30 seconds**
 (`sqlx-core-0.8.6/src/pool/options.rs:160`), so a starved pool raises `PoolTimedOut` in 30 s. It
-cannot produce a 46-minute stall. Pool pressure was a *contributing* stressor — it widens the
-window in which one transaction sits on the advisory key — but it was never the thing that made
-the wait unbounded.
+cannot produce a 46-minute stall — and the 46-minute stalls turned out to be mode A anyway. Pool
+pressure remains a *contributing* stressor for mode B (it widens the window in which one
+transaction sits on the advisory key), but it was never what made the wait unbounded.
 
 ## The fix
 
@@ -135,7 +150,8 @@ helper and not from pool configuration a refactor could drop:
 | `no_raw_advisory_locks` | `crates/weissman-db/tests/` | Makes Rule 1 below self-enforcing: fails the existing blocking `cargo test` gate if any Rust source outside the helper takes a blocking advisory lock. Both tech-debt documents in this repo record guards that were added and later silently lost; a rule stated only in prose is one of those. |
 | `ALTER DATABASE … lock_timeout / idle_in_transaction_session_timeout` | `.github/workflows/ci.yml` | Backstop for blocking waits we do not own and for future call sites that bypass the helper. |
 | `--test-threads=2` | `.github/workflows/ci.yml` (both Rust test steps) | Contention *pressure* reducer. Not the fix — it narrows the window, it does not bound the wait. Keep it: it also keeps concurrent DB work under the pool ceiling. |
-| `timeout-minutes: 45` | `.github/workflows/ci.yml` (both Rust test steps) | Last-resort backstop, sized to the honest cold-compile runtime (~16 min warm), not to wait out a hang. |
+| `--no-run` compile step before each Rust gate | `.github/workflows/ci.yml` (both Rust jobs) | Fix for mode A. Keeps cold compile+link out of the gate's budget so a test-step timeout means "the tests hung" and nothing else. Deleting it silently re-arms the 46-minute overrun. |
+| `timeout-minutes: 25` on the gates, `40` on the compile step | `.github/workflows/ci.yml` | Sized to what each step actually does (~6–8 min execution; cold link needs the larger budget). Only meaningful because compile and execution are separate — do not merge the steps back together and keep these numbers. |
 
 ## Rules
 
