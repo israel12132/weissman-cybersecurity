@@ -438,10 +438,13 @@ pub fn spawn_pool_metrics_loop(
                 agents_online: u32::try_from(sh_online).unwrap_or(0),
                 async_jobs_pending: u64::try_from(sh_async).unwrap_or(0),
             };
-            crate::self_healing::record_diagnoses(&crate::self_healing::diagnose(
-                &snapshot,
-                &self_heal_thresholds,
-            ));
+            let diagnoses = crate::self_healing::diagnose(&snapshot, &self_heal_thresholds);
+            crate::self_healing::record_diagnoses(&diagnoses);
+            // Recover: apply the bounded, cooldown-gated recovery effects the diagnoses recommend
+            // (engage load-shed/backoff gates, drive dependency circuit breakers, raise a prune
+            // signal) and record `weissman_self_heal_recovery_total`. Feeds dependency health from
+            // the snapshot every round so the circuits also *close* when the platform recovers.
+            crate::self_heal_recovery::run_recovery(&snapshot, &diagnoses);
         }
     });
 }
