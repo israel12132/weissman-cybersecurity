@@ -424,44 +424,60 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
 
-      - name: Run Rust workspace tests (blocking gate)
-        # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
-        # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
-        # recompiles + links every test target (rust-lld, ~2300 tests after the main merge) which can
-        # exceed 15 min mid-link — under-sized budget, not a hang. 45 min absorbs the cold compile+link
-        # yet still kills a deadlock/pool-leak hang far below GitHub's 360-min default. (The sibling
-        # rust-audit job was seen timing out mid-compile at 30 min on the post-merge cold cache.)
-        # See docs/TECH_DEBT_flaky_db_test_hang.md.
-        timeout-minutes: 45
+      - name: Run DB-backed integration tests (blocking gate)
+        # SCOPED TO THE DB-BACKED TARGETS ONLY — the root-cause fix for the 45-min cold-compile
+        # timeout this step used to blow (run 30194074940: the IDENTICAL `cargo test --workspace
+        # --all-targets` finished in 7 min in the sibling `rust-audit` job yet timed out at 45 min
+        # here, on the same commit, same cache key). The old command recompiled + reran the ENTIRE
+        # ~2300-test `--all-targets` universe purely to *additionally* exercise a handful of
+        # DB-backed integration tests against live Postgres — every non-DB test it ran is already a
+        # hard blocking gate in `rust-audit` (which has no Postgres service, so DB tests self-skip
+        # there). Re-running that whole universe under a cold `--all-targets` link is the single
+        # dominant blocking-gate flake, so we run ONLY the tests whose coverage is UNIQUE to this
+        # job: the ones that need live Postgres.
+        #
+        # Coverage is preserved exactly and provably:
+        #   - Every NON-DB test → still hard-gated by `rust-audit` (identical `--workspace
+        #     --all-targets`), plus the lib-test ratchet in `rust-coverage`.
+        #   - Every DB-backed test → still runs here against live Postgres. The DB universe is
+        #     exactly 5 integration targets (audited two ways: the WEISSMAN_REQUIRE_DB_TESTS gate
+        #     and PgPool::connect usage; zero DB tests live in src/ or use #[sqlx::test]):
+        #       · crates/weissman-db/tests/rls_cross_tenant  — already re-run in full, post-boot,
+        #         by the "Live RLS cross-tenant isolation contract" step, so it is intentionally
+        #         NOT duplicated in this pre-boot step.
+        #       · fingerprint_engine/tests/{findings_persist,llm_metering,persist_real}_pool_starvation
+        #       · fingerprint_engine/tests/soar_playbook_e2e
+        # fingerprint_engine's lib is already warm-compiled by the "Build weissman-server + worker"
+        # step above (both depend on it), so this step only links 4 thin test binaries — seconds to
+        # a few minutes, never the full cold `--all-targets` build. 20 min is generous headroom for
+        # a slow runner yet catches a real DB deadlock/pool-leak hang far below the 45 min it used
+        # to need just to compile. See docs/TECH_DEBT_flaky_db_test_hang.md.
+        timeout-minutes: 20
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
           # Fail (don't skip) the DB-backed integration tests here, so a dropped
           # TEST_DATABASE_URL can never masquerade as a green run.
           WEISSMAN_REQUIRE_DB_TESTS: "1"
-        # Two contracts require the *running server*, not just a migrated DB, so they are
-        # enforced AFTER the server boots — not in this pre-boot gate where they can only
-        # false-fail:
-        #   - soar_playbook_e2e::isolate_dry_run_verify_and_revert_chain — dispatches an
-        #     armored SOAR action, which needs a live integration registered against the
-        #     running server; enforced end-to-end by the "SOAR playbook E2E contract" step
-        #     (scripts/verify_soar_playbook_e2e.mjs) below.
-        #   - rls_cross_tenant::weissman_app_cannot_read_other_tenant_clients — needs the
-        #     weissman_app role + forced-RLS the server boot provisions; re-run by the
-        #     "Live RLS cross-tenant isolation contract" step below.
-        # Everything else stays a hard blocking gate. Skip is by exact fn name (substring),
-        # so the server-free sibling test eight_soar_adapters_registered still runs here.
+        # `--skip isolate_dry_run_verify_and_revert_chain`: that soar test dispatches an armored
+        # SOAR action needing a live integration registered against the *running server*, not just
+        # a migrated DB, so it can only false-fail in this pre-boot step; it is enforced end-to-end
+        # AFTER boot by the "SOAR playbook E2E contract" step. The server-free sibling
+        # eight_soar_adapters_registered still runs here (skip is by exact fn-name substring).
         #
-        # `--test-threads=2`: this is the ONLY test run that exercises the DB-backed integration
-        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1). At full per-core parallelism those
-        # tests occasionally exhaust the shared connection pool and one acquire blocks forever —
-        # the intermittent multi-hour hang tracked in docs/TECH_DEBT_flaky_db_test_hang.md. Bounding
-        # concurrency keeps concurrent DB work under the pool ceiling so acquires never deadlock.
-        # It is the documented remediation, not a mask: every test still runs and still blocks.
+        # `--test-threads=2`: these DB-backed tests deliberately starve the shared connection pool;
+        # at full per-core parallelism an acquire could block forever (the intermittent multi-hour
+        # hang tracked in docs/TECH_DEBT_flaky_db_test_hang.md). Bounding concurrency keeps
+        # concurrent DB work under the pool ceiling so acquires never deadlock. Every listed test
+        # still runs and still blocks — remediation, not a mask.
         run: |
-          cargo test --workspace --all-targets -- \
+          cargo test -p fingerprint_engine \
+            --test findings_persist_pool_starvation \
+            --test llm_metering_pool_starvation \
+            --test persist_real_pool_starvation \
+            --test soar_playbook_e2e \
+            -- \
             --test-threads=2 \
-            --skip isolate_dry_run_verify_and_revert_chain \
-            --skip weissman_app_cannot_read_other_tenant_clients
+            --skip isolate_dry_run_verify_and_revert_chain
 
       - name: Free runner disk before Docker image build
         # By this point the job has a full debug target/, node_modules, and a built
