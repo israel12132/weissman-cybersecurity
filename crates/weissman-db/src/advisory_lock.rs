@@ -57,14 +57,19 @@ pub const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(15);
 /// prevent) and falls back to the default.
 pub const LOCK_TIMEOUT_ENV: &str = "WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS";
 
-/// Resolve the configured advisory-lock wait bound.
-pub fn lock_timeout() -> Duration {
-    std::env::var(LOCK_TIMEOUT_ENV)
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
+/// Pure parser behind [`lock_timeout`], split out so it can be tested without mutating the
+/// process environment — `std::env::set_var` races with any other thread reading the environment
+/// (and is `unsafe` from edition 2024), which is not something a test suite should introduce.
+fn parse_lock_timeout(raw: Option<&str>) -> Duration {
+    raw.and_then(|s| s.trim().parse::<u64>().ok())
         .filter(|ms| *ms > 0)
         .map(Duration::from_millis)
         .unwrap_or(DEFAULT_LOCK_TIMEOUT)
+}
+
+/// Resolve the configured advisory-lock wait bound.
+pub fn lock_timeout() -> Duration {
+    parse_lock_timeout(std::env::var(LOCK_TIMEOUT_ENV).ok().as_deref())
 }
 
 /// True when `err` is Postgres' `lock_not_available` (SQLSTATE `55P03`) — i.e. this module's
@@ -79,8 +84,11 @@ pub fn is_lock_timeout(err: &sqlx::Error) -> bool {
 /// Apply the transaction-scoped wait bound. Must run inside an open transaction; `SET LOCAL`
 /// outside one is a no-op that Postgres only warns about, which would silently restore the
 /// unbounded behaviour — so the callers below always pair it with an `_xact_` lock.
-async fn set_local_lock_timeout(conn: &mut sqlx::PgConnection) -> Result<(), sqlx::Error> {
-    let ms = lock_timeout().as_millis().max(1);
+async fn set_local_lock_timeout(
+    conn: &mut sqlx::PgConnection,
+    bound: Duration,
+) -> Result<(), sqlx::Error> {
+    let ms = bound.as_millis().max(1);
     // Interpolated, not bound: `SET` takes a literal, not a placeholder, and `ms` is a u128
     // derived from our own parse — no untrusted input reaches this string.
     sqlx::query(&format!("SET LOCAL lock_timeout = {ms}"))
@@ -98,7 +106,20 @@ pub async fn advisory_xact_lock(
     conn: &mut sqlx::PgConnection,
     key: i64,
 ) -> Result<(), sqlx::Error> {
-    set_local_lock_timeout(&mut *conn).await?;
+    advisory_xact_lock_with_timeout(conn, key, lock_timeout()).await
+}
+
+/// [`advisory_xact_lock`] with an explicit bound instead of the configured one.
+///
+/// Exists so the regression tests can drive a short bound without mutating the process
+/// environment (which races with any concurrent reader). Production code should call
+/// [`advisory_xact_lock`] and let the bound come from configuration.
+pub async fn advisory_xact_lock_with_timeout(
+    conn: &mut sqlx::PgConnection,
+    key: i64,
+    bound: Duration,
+) -> Result<(), sqlx::Error> {
+    set_local_lock_timeout(&mut *conn, bound).await?;
     sqlx::query("SELECT pg_advisory_xact_lock($1)")
         .bind(key)
         .execute(&mut *conn)
@@ -108,7 +129,7 @@ pub async fn advisory_xact_lock(
                 tracing::error!(
                     target: "weissman_db",
                     advisory_key = key,
-                    timeout_ms = lock_timeout().as_millis() as u64,
+                    timeout_ms = bound.as_millis() as u64,
                     "advisory lock wait exceeded its bound — another transaction is holding this key"
                 );
             }
@@ -126,7 +147,17 @@ pub async fn advisory_xact_lock_text(
     conn: &mut sqlx::PgConnection,
     key: &str,
 ) -> Result<(), sqlx::Error> {
-    set_local_lock_timeout(&mut *conn).await?;
+    advisory_xact_lock_text_with_timeout(conn, key, lock_timeout()).await
+}
+
+/// [`advisory_xact_lock_text`] with an explicit bound. See
+/// [`advisory_xact_lock_with_timeout`] for why this exists.
+pub async fn advisory_xact_lock_text_with_timeout(
+    conn: &mut sqlx::PgConnection,
+    key: &str,
+    bound: Duration,
+) -> Result<(), sqlx::Error> {
+    set_local_lock_timeout(&mut *conn, bound).await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
         .bind(key)
         .execute(&mut *conn)
@@ -136,7 +167,7 @@ pub async fn advisory_xact_lock_text(
                 tracing::error!(
                     target: "weissman_db",
                     advisory_key = key,
-                    timeout_ms = lock_timeout().as_millis() as u64,
+                    timeout_ms = bound.as_millis() as u64,
                     "advisory lock wait exceeded its bound — another transaction is holding this key"
                 );
             }
@@ -170,11 +201,21 @@ pub async fn advisory_xact_lock_text_or_skip(
     conn: &mut sqlx::PgConnection,
     key: &str,
 ) -> Result<bool, sqlx::Error> {
+    advisory_xact_lock_text_or_skip_with_timeout(conn, key, lock_timeout()).await
+}
+
+/// [`advisory_xact_lock_text_or_skip`] with an explicit bound. See
+/// [`advisory_xact_lock_with_timeout`] for why this exists.
+pub async fn advisory_xact_lock_text_or_skip_with_timeout(
+    conn: &mut sqlx::PgConnection,
+    key: &str,
+    bound: Duration,
+) -> Result<bool, sqlx::Error> {
     sqlx::query(&format!("SAVEPOINT {SKIP_SAVEPOINT}"))
         .execute(&mut *conn)
         .await?;
 
-    match advisory_xact_lock_text(&mut *conn, key).await {
+    match advisory_xact_lock_text_with_timeout(&mut *conn, key, bound).await {
         Ok(()) => {
             sqlx::query(&format!("RELEASE SAVEPOINT {SKIP_SAVEPOINT}"))
                 .execute(&mut *conn)
@@ -182,15 +223,28 @@ pub async fn advisory_xact_lock_text_or_skip(
             Ok(true)
         }
         Err(e) => {
+            // Restore the transaction to its pre-attempt state (this also reverts the
+            // `SET LOCAL lock_timeout`), then drop the savepoint so repeated calls in one
+            // transaction do not stack them.
             sqlx::query(&format!("ROLLBACK TO SAVEPOINT {SKIP_SAVEPOINT}"))
                 .execute(&mut *conn)
                 .await?;
+            sqlx::query(&format!("RELEASE SAVEPOINT {SKIP_SAVEPOINT}"))
+                .execute(&mut *conn)
+                .await?;
+
+            // ONLY contention is "skip". A connection drop, a syntax error or a permissions
+            // failure must not be laundered into `Ok(false)` — that would send the caller down
+            // its racy fail-open path on a real database fault, which is precisely the kind of
+            // silent degradation this module exists to remove.
+            if !is_lock_timeout(&e) {
+                return Err(e);
+            }
             tracing::warn!(
                 target: "weissman_db",
                 advisory_key = key,
-                contended = is_lock_timeout(&e),
                 error = %e,
-                "advisory lock skipped; caller continues without serialization"
+                "advisory lock contended; caller continues without serialization"
             );
             Ok(false)
         }
@@ -201,24 +255,30 @@ pub async fn advisory_xact_lock_text_or_skip(
 mod tests {
     use super::*;
 
+    /// Drives the parser directly rather than through the environment: `std::env::set_var` races
+    /// with any other thread reading the environment, so a test suite must not introduce it.
     #[test]
-    fn default_applies_when_env_is_absent_or_nonsense() {
-        // The suite is single-process; keep these on one test so the env is not raced.
-        std::env::remove_var(LOCK_TIMEOUT_ENV);
-        assert_eq!(lock_timeout(), DEFAULT_LOCK_TIMEOUT);
-
-        std::env::set_var(LOCK_TIMEOUT_ENV, "not-a-number");
-        assert_eq!(lock_timeout(), DEFAULT_LOCK_TIMEOUT);
+    fn default_applies_when_override_is_absent_or_nonsense() {
+        assert_eq!(parse_lock_timeout(None), DEFAULT_LOCK_TIMEOUT);
+        assert_eq!(
+            parse_lock_timeout(Some("not-a-number")),
+            DEFAULT_LOCK_TIMEOUT
+        );
+        assert_eq!(parse_lock_timeout(Some("")), DEFAULT_LOCK_TIMEOUT);
+        assert_eq!(parse_lock_timeout(Some("-1")), DEFAULT_LOCK_TIMEOUT);
 
         // 0 means "wait forever" to Postgres — precisely the failure mode this module exists
         // to remove, so it must never be honoured as an override.
-        std::env::set_var(LOCK_TIMEOUT_ENV, "0");
-        assert_eq!(lock_timeout(), DEFAULT_LOCK_TIMEOUT);
+        assert_eq!(parse_lock_timeout(Some("0")), DEFAULT_LOCK_TIMEOUT);
 
-        std::env::set_var(LOCK_TIMEOUT_ENV, "2500");
-        assert_eq!(lock_timeout(), Duration::from_millis(2500));
-
-        std::env::remove_var(LOCK_TIMEOUT_ENV);
+        assert_eq!(
+            parse_lock_timeout(Some("2500")),
+            Duration::from_millis(2500)
+        );
+        assert_eq!(
+            parse_lock_timeout(Some("  2500  ")),
+            Duration::from_millis(2500)
+        );
     }
 
     #[test]

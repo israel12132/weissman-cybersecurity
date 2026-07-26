@@ -5,6 +5,33 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Removed the `genpdf` dependency** from `fingerprint_engine`, clearing the
+  `RUSTSEC-2026-0187` `lopdf` deeply-nested-parse stack-overflow advisory (reached
+  only via `genpdf → printpdf → lopdf`) and dropping the whole unmaintained subtree
+  it pulled in — `time 0.2.x`, `stdweb`, `rusttype`, `stb_truetype`, `printpdf`,
+  `lopdf`. The `RUSTSEC-2026-0187` `cargo audit` / `deny.toml` ignore is removed, so
+  a reintroduction of `lopdf` now fails the build.
+  - Also dropped the stale `RUSTSEC-2026-0049` ignore — that advisory is no longer
+    detected on the current dependency lock (confirmed with `cargo audit`).
+  - The `RUSTSEC-2026-0098/0099/0104` ignores are **kept** — earlier config comments
+    mislabeled them as `time 0.2.x`, but they are `rustls-webpki 0.101.7` advisories
+    reached via the AWS SDK's legacy `rustls 0.21` hyper-0.14 connector, unrelated to
+    genpdf. Our AWS clients use the modern `rustls-aws-lc` path (`rustls 0.23.40` /
+    `rustls-webpki 0.103.13`), so the `0.21` subtree is inert; kept suppressed and
+    tracked for an aws-smithy bump that drops the legacy connector from defaults.
+- **Executive/board PDFs now render natively** via the existing hand-written
+  `%PDF-1.4` writer in `fingerprint_engine/src/pdf_report.rs` (base-14 Helvetica,
+  no font embedding, no third-party PDF crate). `executive_pdf::render_executive_board_pdf`
+  keeps the same public signature, so the report endpoint is unchanged.
+- Dropped the now-obsolete `WEISSMAN_GENPDF_FONT_DIR` env var and the
+  `fingerprint_engine/fonts/` Liberation-Sans staging directory.
+
+---
+
 ## [2026.06.2] — Liminal Boundary Engine — 2026-06-10
 
 ### Added

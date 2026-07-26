@@ -399,6 +399,32 @@ async fn api_findings_update_status(
             _ => {}
         }
 
+        // The FP/TP vote above only writes engine_confidence_adjustments. The
+        // findings read prefers each row's persisted confidence_multiplier /
+        // effective_risk snapshot, so without invalidation the analyst's verdict
+        // would never surface in the API (the snapshot is written at persist time
+        // and is not refreshed on feedback). NULL the cached snapshot for this
+        // (tenant, engine, signature_hash) — the multiplier's own key — so the next
+        // read recomputes both the multiplier and the derived risk live from the
+        // updated votes. Every finding sharing this signature is invalidated, which
+        // is correct: they all resolve to the one shared multiplier.
+        if matches!(
+            new_status.as_str(),
+            "FALSE_POSITIVE" | "FIXED" | "ACKNOWLEDGED" | "IN_PROGRESS"
+        ) && !engine.is_empty()
+            && !sig_hash.is_empty()
+        {
+            let _ = sqlx::query(
+                "UPDATE vulnerabilities SET confidence_multiplier = NULL, effective_risk = NULL \
+                 WHERE tenant_id = $1 AND source = $2 AND signature_hash = $3",
+            )
+            .bind(auth.tenant_id)
+            .bind(&engine)
+            .bind(&sig_hash)
+            .execute(&mut *tx)
+            .await;
+        }
+
         // Propagate status to all siblings in the cluster — single click, one
         // status across every engine's view of the same vulnerability.
         if let Some(cid) = cluster_id {

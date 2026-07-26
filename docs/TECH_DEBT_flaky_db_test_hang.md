@@ -168,6 +168,3 @@ helper and not from pool configuration a refactor could drop:
 
 - Give test-side `PgPoolOptions` an explicit small `acquire_timeout` anyway. Not needed for this
   hang (the 30 s default already bounds it) but it makes the failure message name the pool.
-- Capture `pg_stat_activity` / `pg_locks` on step failure so a *future* lock problem names the
-  holder without needing a repro. The bound makes the failure fast; it does not yet make it
-  self-describing.

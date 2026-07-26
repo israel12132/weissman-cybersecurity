@@ -21,7 +21,8 @@
 use sqlx::postgres::PgPoolOptions;
 use std::time::{Duration, Instant};
 use weissman_db::advisory_lock::{
-    advisory_xact_lock, advisory_xact_lock_text_or_skip, is_lock_timeout, LOCK_TIMEOUT_ENV,
+    advisory_xact_lock, advisory_xact_lock_text_or_skip_with_timeout,
+    advisory_xact_lock_with_timeout, is_lock_timeout,
 };
 
 /// Distinct per test so a shared CI database cannot make two tests contend with each other.
@@ -29,17 +30,18 @@ const KEY_BLOCKS: i64 = -8_070_010_001;
 const KEY_SKIPS: &str = "__weissman_advisory_lock_bound_skip__";
 
 /// Short enough that the whole suite stays fast, long enough not to trip on a loaded runner.
-const TEST_TIMEOUT_MS: u64 = 1_500;
-
-/// Shrink the helper's bound so a contended lock resolves in ~1.5 s instead of the 15 s default.
 ///
-/// Idempotent on purpose: `cargo test` runs a binary's tests on multiple threads, and
-/// `set_var` is process-global. Two tests writing the *same* value cannot race to a different
-/// one, and nothing is ever removed — a `remove_var` here would let one test blank the bound out
-/// from under a sibling still running.
-fn force_short_lock_timeout() {
-    std::env::set_var(LOCK_TIMEOUT_ENV, TEST_TIMEOUT_MS.to_string());
-}
+/// Passed **explicitly** to the `*_with_timeout` helpers rather than through
+/// `WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS`: `cargo test` runs a binary's tests on multiple threads,
+/// and `std::env::set_var` is process-global and races with any concurrent reader.
+const TEST_TIMEOUT: Duration = Duration::from_millis(1_500);
+
+/// Independent ceiling for the whole contended-lock attempt.
+///
+/// Without it, a regression back to an unbounded wait would make this test *hang* — reproducing
+/// the exact failure it exists to catch — until some far-away job timeout killed it with no
+/// output. With it, the regression fails fast and says so.
+const TEST_DEADLINE: Duration = Duration::from_secs(30);
 
 fn require_db_tests() -> bool {
     std::env::var("WEISSMAN_REQUIRE_DB_TESTS")
@@ -79,21 +81,24 @@ async fn a_contended_lock_times_out_instead_of_hanging_forever() {
     if url.is_empty() {
         return;
     }
-    force_short_lock_timeout();
     let pool = unbounded_pool(&url).await;
 
     // Holder: take the lock and keep the transaction open for the whole test.
     let mut holder = pool.begin().await.expect("begin holder tx");
-    advisory_xact_lock(&mut holder, KEY_BLOCKS)
+    advisory_xact_lock_with_timeout(&mut holder, KEY_BLOCKS, TEST_TIMEOUT)
         .await
         .expect("holder takes the lock uncontended");
 
     // Waiter: the identical call on a second connection must FAIL, not block.
     let mut waiter = pool.begin().await.expect("begin waiter tx");
     let started = Instant::now();
-    let err = advisory_xact_lock(&mut waiter, KEY_BLOCKS)
-        .await
-        .expect_err("a contended advisory lock must not be granted");
+    let err = tokio::time::timeout(
+        TEST_DEADLINE,
+        advisory_xact_lock_with_timeout(&mut waiter, KEY_BLOCKS, TEST_TIMEOUT),
+    )
+    .await
+    .expect("the contended lock never returned — the bound regressed to an unbounded wait")
+    .expect_err("a contended advisory lock must not be granted");
     let waited = started.elapsed();
 
     assert!(
@@ -103,8 +108,8 @@ async fn a_contended_lock_times_out_instead_of_hanging_forever() {
     // The point of the test: it *returned*. Assert it returned near the configured bound rather
     // than after some unrelated, much larger timeout — with generous slack for a loaded runner.
     assert!(
-        waited < Duration::from_millis(TEST_TIMEOUT_MS) + Duration::from_secs(20),
-        "lock wait took {waited:?}, far beyond the configured {TEST_TIMEOUT_MS}ms bound"
+        waited < TEST_TIMEOUT + Duration::from_secs(20),
+        "lock wait took {waited:?}, far beyond the configured {TEST_TIMEOUT:?} bound"
     );
 
     let _ = waiter.rollback().await;
@@ -117,11 +122,10 @@ async fn skip_variant_leaves_the_transaction_usable_after_a_timeout() {
     if url.is_empty() {
         return;
     }
-    force_short_lock_timeout();
     let pool = unbounded_pool(&url).await;
 
     let mut holder = pool.begin().await.expect("begin holder tx");
-    advisory_xact_lock(&mut holder, i64::from_le_bytes(*b"skipkey0"))
+    advisory_xact_lock_with_timeout(&mut holder, i64::from_le_bytes(*b"skipkey0"), TEST_TIMEOUT)
         .await
         .ok();
     // Hold the *text* key the waiter will contend on.
@@ -140,9 +144,13 @@ async fn skip_variant_leaves_the_transaction_usable_after_a_timeout() {
         .await
         .expect("read inherited lock_timeout");
 
-    let granted = advisory_xact_lock_text_or_skip(&mut waiter, KEY_SKIPS)
-        .await
-        .expect("the skip variant must not surface the timeout as an error");
+    let granted = tokio::time::timeout(
+        TEST_DEADLINE,
+        advisory_xact_lock_text_or_skip_with_timeout(&mut waiter, KEY_SKIPS, TEST_TIMEOUT),
+    )
+    .await
+    .expect("the skip variant never returned — the bound regressed to an unbounded wait")
+    .expect("the skip variant must not surface the timeout as an error");
     assert!(!granted, "contended lock must report not-granted");
 
     // The whole reason for the savepoint: without it this statement fails with
