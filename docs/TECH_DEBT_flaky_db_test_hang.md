@@ -1,87 +1,157 @@
-# TECH DEBT — Flaky DB-backed Rust workspace test hang (HIGH PRIORITY)
+# DB-backed Rust workspace test hang — root cause and fix
 
-**Status:** Open · **Priority:** High · **Area:** CI / DB-backed integration tests · **Filed:** 2026-07-18
+**Status:** Root-caused and fixed · **Area:** CI / DB-backed integration tests ·
+**Filed:** 2026-07-18 · **Root-caused:** 2026-07-26
 
 ## Symptom
 
 The `cargo test --workspace --all-targets` step that runs against a live Postgres service
-intermittently **hangs indefinitely** instead of completing in its normal ~5–7 minutes.
+intermittently **hangs indefinitely** instead of completing in its normal ~8–16 minutes.
 
-Observed instance: CI run `29650387309` (branch `claude/detection-tool-selection-engine-pviz0u`),
-job **"Engine wiring audit & API smoke"**, step **"Run Rust workspace tests (blocking gate)"** —
-started `15:49:09Z`, still `in_progress` **~69 minutes later** with no output progression. The
-commit under test only changed CI env vars (read in a later step), so it could not have caused the
-hang. The parallel `rust-audit` job ran the *same* test invocation successfully in ~5 minutes on
-the same commit — confirming the hang is **flaky / non-deterministic**, not a code regression.
+| Run | Job / step | Observed |
+|---|---|---|
+| `29650387309` | engine-wiring · Run Rust workspace tests | in_progress ~**69 min**, no output progression, no per-step timeout |
+| `30002805179` | rust-coverage · instrumented workspace run | deadlocked, hung to the 30-min guard |
+| `30154927534` (attempt 4) | engine-wiring · step 23 | 14:15:02 → ~15:01:52 = **46 m 50 s** against `timeout-minutes: 45` |
 
-Because there was no per-step timeout, the hung step was on track to ride GitHub Actions'
-**360-minute default job timeout**, burning a runner for hours and masking the underlying deadlock.
+Two properties made this hard to attribute: the *same* invocation succeeded in the sibling
+`rust-audit` job on the same commit, and the commit under test in the first instance only changed
+CI env vars read by a later step. It is genuinely non-deterministic, and it is not a code
+regression in the commit under test.
 
-## Mitigation (shipped)
+## Root cause (verified)
 
-Two layers, applied to **every** DB-backed Rust-test step in `.github/workflows/ci.yml`:
+**`pg_advisory_xact_lock()` waits forever, and in test binaries nothing bounded that wait.**
 
-1. **Prevention — `-- --test-threads=2`.** Bounding the test harness to 2 threads keeps concurrent
-   DB acquires under the shared-pool ceiling, so the pool can never be exhausted and no acquire
-   deadlocks. Every test still runs and still blocks the gate; only the *degree of parallelism* is
-   capped. This is the mechanism-level fix for the observed hang, not a mask.
-2. **Backstop — step-level `timeout-minutes`.** Should any *new* hang surface despite the bound, the
-   guard converts a silent multi-hour stall into a fast, visible failure instead of riding GitHub
-   Actions' 360-minute default job timeout.
+Four properties compose into the hang:
 
-| Job | Step | Normal | `--test-threads` | `timeout-minutes` |
-|-----|------|--------|------------------|-------------------|
-| `rust-audit` | Run Rust tests (blocking gate) | ~4–7 min | **2** | **15** |
-| `engine-wiring-and-smoke` | Run Rust workspace tests (blocking gate) | ~6–7 min | **2** | **15** |
-| `rust-coverage` | Coverage (workspace incl. integration tests) with a floor | ~20–30 min | **2** | **45** |
+1. **The primitive never gives up.** `pg_advisory_xact_lock()` blocks until the holder's
+   transaction ends. Postgres' deadlock detector only breaks true *cycles*; a plain
+   "A holds the key, B waits" chain is not a cycle, so B is never woken and never errors.
+2. **The keys are coarse and shared.** `fingerprint_engine::audit_log::insert_audit` locks on
+   `tenant_id` — the coarsest key in the codebase. Its 12 call sites sit on paths every session
+   and every scan crosses (login failure, SAML, OIDC, scan routing) plus SOAR, council, strategy
+   and self-improve. `weissman-job-bus::events::append_event` locks per `job_id` and fires on
+   every job-lifecycle transition. Tests reuse a small set of tenant ids, so unrelated test
+   binaries running concurrently against the one CI Postgres contend on the *same* advisory key
+   with no bound. Two further sites share the shape: `audit_log::backfill_tenant_hashes`, and —
+   added later by #211 — `auto_heal_job`'s per-`(tenant, finding)` start guard.
+3. **Only test connections were unbounded.** The product pools in `crates/weissman-db/src/lib.rs`
+   set `statement_timeout` in `after_connect`, which *does* count lock-wait time — so in the
+   server and worker a blocked advisory lock dies (crudely) after ~120 s. Every **test** pool is
+   built from a bare `PgPoolOptions::new()`, inheriting `lock_timeout = 0` and
+   `statement_timeout = 0` — *infinite*. The identical code path was bounded in production and
+   unbounded under `cargo test`.
+4. **Only one job actually runs these tests.** `rust-audit` and `rust-coverage` declare no
+   `services`, so the DB-backed tests skip there; `engine-wiring-and-smoke` declares
+   `postgres` + `redis`. That is precisely why the hang is specific to that job — and why the
+   sibling job "passing the same command" was never the exoneration it looked like.
 
-The `rust-coverage` step was the last to receive the thread bound: it was left on the timeout guard
-alone on the theory it "had not exhibited the hang" — falsified on run `30002805179`, where its
-instrumented `cargo llvm-cov --workspace` run deadlocked and hung to the 30-min guard. Its
-`timeout-minutes` was raised 30→45 at the same time because thread-bounding legitimately lengthens
-the instrumented run (parallelism traded for safety); the guard is sized to the honest 2-thread
-runtime, not to wait out a hang. Timeout margins stay well above the legitimate upper bound —
-generous enough to never false-kill a slow-but-legit run, tight enough to kill a genuine hang.
+### The pool-exhaustion hypothesis was wrong
 
-## Suspected root causes (to investigate)
+Earlier revisions of this document ranked **connection-pool exhaustion** as the most likely
+mechanism. That is falsified: sqlx's `PoolOptions` default `acquire_timeout` is **30 seconds**
+(`sqlx-core-0.8.6/src/pool/options.rs:160`), so a starved pool raises `PoolTimedOut` in 30 s. It
+cannot produce a 46-minute stall. Pool pressure was a *contributing* stressor — it widens the
+window in which one transaction sits on the advisory key — but it was never the thing that made
+the wait unbounded.
 
-`cargo test` runs test binaries **in parallel by default**, and multiple DB-backed integration
-tests share the single CI Postgres. Candidate mechanisms, most→least likely:
+## The fix
 
-1. **Connection-pool exhaustion / leak under parallel tests.** Several tests each open their own
-   `PgPool`; run concurrently they can exceed Postgres `max_connections` (default 100) or a pool's
-   own cap, and a test that acquires-and-never-releases (or holds a txn across an `.await` that
-   blocks on another test's lock) deadlocks waiting on `acquire()` — which has no cheap timeout in
-   test code. This mirrors the *product-side* pool-starvation class already fixed on this branch
-   (dedicated control-plane pool + bounded per-finding fan-out), suggesting the test harness has the
-   same latent shape.
-2. **Cross-test row/advisory-lock contention.** Two tests mutating the same tenant/table (or taking
-   the same Postgres advisory lock) can deadlock; Postgres breaks *some* deadlocks, but a lock held
-   across an application-level wait will not be detected and hangs until timeout.
-3. **`Mutex`/`OnceCell` poisoning or a global test fixture initialized under contention** — a
-   panicking test holding a `std::sync::Mutex` poisons it, and other tests block forever on `lock()`.
-4. **`tokio::test` runtime/task that never resolves** — e.g. awaiting a channel/lease/redis handle
-   that a concurrently-running test consumes.
+### 1. The bound is now intrinsic to the lock (`crates/weissman-db/src/advisory_lock.rs`)
 
-## Remediation directions (proper fix)
+Every advisory-lock acquisition in the workspace goes through one helper, which issues a
+transaction-scoped `SET LOCAL lock_timeout` immediately before the wait. The bound therefore
+travels with the *lock*, not with whichever pool the caller happened to construct — the non-local
+property that made this bug possible in the first place.
 
-- **Reproduce deterministically:** run the DB suite with `--test-threads=1` in a loop and with high
-  parallelism to bracket the flake; capture `pg_stat_activity` (state = `idle in transaction` /
-  `active` waiting on locks) and `SELECT * FROM pg_locks` at hang time.
-- **Bound every test-side pool acquire:** give test `PgPoolOptions` a small `acquire_timeout` so a
-  starved test **fails fast with a clear error** instead of hanging (the same lesson applied to the
-  product worker pools).
-- **Serialize or isolate contended tests:** use `serial_test` (or per-test unique tenants/schemas)
-  for tests that share global DB state; raise the CI Postgres `max_connections` only if the audit
-  shows legitimate concurrent demand rather than a leak.
-- **Add a test-level watchdog:** wrap DB-backed `#[tokio::test]` bodies in a `tokio::time::timeout`
-  so a hung future panics with context rather than hanging the whole `cargo test` process.
-- Consider running the DB-backed integration tests as a **dedicated, `--test-threads`-bounded**
-  invocation separate from the unit tests, to cap concurrent DB pressure.
+| Helper | Semantics | Used by |
+|---|---|---|
+| `advisory_xact_lock(conn, i64)` | Bounded wait; `Err` (SQLSTATE `55P03`) on timeout | `insert_audit`, `backfill_tenant_hashes` |
+| `advisory_xact_lock_text(conn, &str)` | Same, key folded via `hashtextextended(key, 0)` | `job-bus::append_event` |
+| `advisory_xact_lock_text_or_skip(conn, &str)` | Bounded wait inside a **savepoint**; `Ok(false)` on timeout, transaction stays usable | `auto_heal_job` start guard |
 
-## Acceptance criteria
+Default bound **15 s** (`WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS` to override; `0` is rejected because
+it means *infinite* to Postgres). Deliberately far below the 120 s app-pool `statement_timeout`,
+so a genuine lock problem surfaces as a precise `lock_not_available` naming the key rather than a
+generic statement timeout that could have come from anywhere.
 
-- Deterministic reproduction identified and the specific test(s) / shared resource named.
-- Root cause fixed (pool acquire bounded / contended tests isolated / poisoned-lock path removed).
-- DB-backed suite runs green under both `--test-threads=1` and default parallelism across ≥20 runs.
-- The `timeout-minutes` guards can then be treated as a backstop rather than the primary defense.
+Two design points that are easy to get wrong:
+
+- **This does not weaken serialization.** The three correctness-critical sites protect a
+  read-then-append pair on a tamper-evident hash chain. On timeout they return `Err`, the
+  caller's transaction aborts, and the protected work is **never** performed unserialized.
+  "Fail fast and loudly" replaces "hang forever" — not "hold the lock".
+- **Callers were audited for the new error path.** All 12 `insert_audit` call sites either
+  `let _ = …` and then immediately `commit()`, or log and commit — none run further statements on
+  the transaction afterwards, so an aborted transaction cannot corrupt a partially-applied write.
+  The one caller that propagates, `ceo::safe_mode::set_tenant_global_safe_mode`, writes
+  `system_configs` *and* the audit row in one transaction: a lock timeout now rolls the toggle
+  back and returns an error, rather than hanging while holding a connection. A security-relevant
+  config change not being applied without its audit record is the correct outcome.
+- **The `_or_skip` variant needs the savepoint.** In Postgres *any* error inside a transaction
+  aborts it, so every later statement fails with `25P02 current_transaction_is_aborted`. Without
+  the savepoint, `auto_heal_job`'s documented fail-open fallback would itself error out — the
+  "fail-open" branch was already unreachable before this change, because a bare
+  `pg_advisory_xact_lock` does not *error* when contended, it waits.
+
+### 2. Database-level backstop (`.github/workflows/ci.yml`)
+
+After migrations, before the Rust test step:
+
+```sql
+ALTER DATABASE weissman SET lock_timeout = '30s';
+ALTER DATABASE weissman SET idle_in_transaction_session_timeout = '300s';
+```
+
+Set at the **database** level so it is inherited by every connection from every pool in every test
+binary, none of which configure timeouts themselves. This catches what the helper cannot: blocking
+waits we do not own (sqlx's own migration advisory lock, a plain `SELECT … FOR UPDATE`, a DDL
+`ACCESS EXCLUSIVE` wait) and any future call site that forgets the helper.
+
+- `30s` > the helper's `15s`, so a helper-mediated lock still fails with its precise error rather
+  than this generic net.
+- `idle_in_transaction_session_timeout` reaps the lock **holder** — the other half of the hang. A
+  transaction that takes the key and then goes idle forever is cleared in 300 s, which is far above
+  any legitimate in-transaction pause by the server/worker on this database and far below the
+  45-minute step budget.
+- It runs **after** migrations so a slow DDL lock during the migration run is never bounded.
+
+### 3. Regression test (`crates/weissman-db/tests/advisory_lock_bound.rs`)
+
+Three DB-backed contracts, each deliberately built on a bare `PgPoolOptions::new()` — the exact
+unbounded pool shape every test in this workspace uses — so they prove the bound comes from the
+helper and not from pool configuration a refactor could drop:
+
+1. a contended lock returns `55P03` near the configured bound instead of hanging;
+2. the `_or_skip` variant leaves the caller's transaction usable *and* restores `lock_timeout`;
+3. the success path is unchanged — the lock is genuinely held afterwards.
+
+## Guards that must not be removed
+
+| Guard | Location | Purpose |
+|---|---|---|
+| `SET LOCAL lock_timeout` before every advisory lock | `crates/weissman-db/src/advisory_lock.rs` | The actual fix. Makes the wait bounded regardless of pool, environment or caller. |
+| `no_raw_advisory_locks` | `crates/weissman-db/tests/` | Makes Rule 1 below self-enforcing: fails the existing blocking `cargo test` gate if any Rust source outside the helper takes a blocking advisory lock. Both tech-debt documents in this repo record guards that were added and later silently lost; a rule stated only in prose is one of those. |
+| `ALTER DATABASE … lock_timeout / idle_in_transaction_session_timeout` | `.github/workflows/ci.yml` | Backstop for blocking waits we do not own and for future call sites that bypass the helper. |
+| `--test-threads=2` | `.github/workflows/ci.yml` (both Rust test steps) | Contention *pressure* reducer. Not the fix — it narrows the window, it does not bound the wait. Keep it: it also keeps concurrent DB work under the pool ceiling. |
+| `timeout-minutes: 45` | `.github/workflows/ci.yml` (both Rust test steps) | Last-resort backstop, sized to the honest cold-compile runtime (~16 min warm), not to wait out a hang. |
+
+## Rules
+
+1. **Never** call `pg_advisory_xact_lock` / `pg_advisory_lock` directly. Use
+   `weissman_db::advisory_lock`. An unbounded blocking primitive on a connection whose timeouts
+   are set somewhere else is how this bug happened.
+2. A guard whose "fail-open" branch is only reachable on *error* is not fail-open if the primitive
+   it guards blocks instead of erroring. Bound it, then the fallback is real.
+3. If you add a DB-backed test, it inherits the CI database's `lock_timeout` — assume any lock
+   wait can fail, and let it fail rather than retrying it into a hang.
+4. If you change any bound in the table above, update this table in the same commit.
+
+## Residual work (non-blocking)
+
+- Give test-side `PgPoolOptions` an explicit small `acquire_timeout` anyway. Not needed for this
+  hang (the 30 s default already bounds it) but it makes the failure message name the pool.
+- Capture `pg_stat_activity` / `pg_locks` on step failure so a *future* lock problem names the
+  holder without needing a repro. The bound makes the failure fast; it does not yet make it
+  self-describing.

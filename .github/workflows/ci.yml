@@ -180,9 +180,11 @@ jobs:
         # See docs/TECH_DEBT_flaky_db_test_hang.md.
         timeout-minutes: 45
         # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
-        # test step also struck this one (observed live). Bounding test concurrency keeps parallel
-        # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
-        # not a mask (every test still runs and still blocks). Runs well under the 15-min guard.
+        # test step also struck this one (observed live). Bounding test concurrency reduces the
+        # window in which two transactions contend, and keeps parallel DB/pool work under the
+        # ceiling. It is a pressure reducer, NOT the fix: the hang was an unbounded
+        # `pg_advisory_xact_lock` wait, now bounded in weissman_db::advisory_lock. Every test
+        # still runs and still blocks. See docs/TECH_DEBT_flaky_db_test_hang.md.
         run: cargo test --workspace --all-targets -- --test-threads=2
 
   security-scan:
@@ -423,6 +425,32 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
 
+      - name: Bound Postgres lock waits (CI database backstop)
+        # Defence in depth behind weissman_db::advisory_lock. That module bounds every advisory
+        # lock we take TODAY; this bounds every blocking wait any connection to this database can
+        # ever make — including ones we do not own (sqlx's own migration advisory lock, a plain
+        # `SELECT ... FOR UPDATE`, a DDL ACCESS EXCLUSIVE wait) and any call site added later that
+        # forgets the helper. Applied at the DATABASE level so it is inherited by every pool in
+        # every test binary, none of which configure timeouts themselves.
+        #
+        # Runs AFTER migrations so a slow DDL lock during the migration run is never bounded.
+        # 30s > the helper's 15s default, so a bounded advisory lock still fails with the precise
+        # `55P03 lock_not_available` naming the key rather than this generic net.
+        # `idle_in_transaction_session_timeout` reaps the lock HOLDER: a leaked transaction that
+        # holds a lock and goes idle is the other half of the hang. 300s is far above any
+        # legitimate in-transaction pause by the server/worker on this database, and far below the
+        # 45-minute step budget, so a genuine leak is cleared inside the job.
+        # See docs/TECH_DEBT_flaky_db_test_hang.md before changing either value.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER DATABASE weissman SET lock_timeout = '30s';
+          ALTER DATABASE weissman SET idle_in_transaction_session_timeout = '300s';
+          SQL
+          psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 \
+            -c "SHOW lock_timeout" -c "SHOW idle_in_transaction_session_timeout"
+
       - name: Run Rust workspace tests (blocking gate)
         # Fail-fast: this is the exact step that hung for 69 min in run 29650387309. Warm-cache
         # runtime is ~6-8 min (DB-backed `cargo test --workspace --all-targets`), but a cold runner
@@ -451,16 +479,40 @@ jobs:
         # so the server-free sibling test eight_soar_adapters_registered still runs here.
         #
         # `--test-threads=2`: this is the ONLY test run that exercises the DB-backed integration
-        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1). At full per-core parallelism those
-        # tests occasionally exhaust the shared connection pool and one acquire blocks forever —
-        # the intermittent multi-hour hang tracked in docs/TECH_DEBT_flaky_db_test_hang.md. Bounding
-        # concurrency keeps concurrent DB work under the pool ceiling so acquires never deadlock.
-        # It is the documented remediation, not a mask: every test still runs and still blocks.
+        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1) — the sibling rust-audit and
+        # rust-coverage jobs declare no `services`, so those tests skip there. That is why the
+        # intermittent multi-hour hang in docs/TECH_DEBT_flaky_db_test_hang.md was specific to this
+        # job. Root cause: an unbounded `pg_advisory_xact_lock` wait (a pool acquire cannot hang —
+        # sqlx defaults acquire_timeout to 30s); it is now bounded in weissman_db::advisory_lock
+        # and by the database-level backstop above. Thread-bounding stays as a contention-pressure
+        # reducer, not as the fix: every test still runs and still blocks.
         run: |
           cargo test --workspace --all-targets -- \
             --test-threads=2 \
             --skip isolate_dry_run_verify_and_revert_chain \
             --skip weissman_app_cannot_read_other_tenant_clients
+
+      - name: Dump Postgres lock state on test failure
+        # `!success()` not `failure()`: failure() is FALSE when a job is cancelled, which is
+        # exactly when a stuck-lock diagnosis matters most (same lesson as the Playwright
+        # artifact upload — see docs/TECH_DEBT_live_e2e_runtime.md).
+        # Makes a future lock problem name its holder instead of being a mystery: the bound above
+        # makes the failure fast, this makes it self-describing.
+        if: ${{ !success() }}
+        continue-on-error: true
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d weissman -x -c "
+            SELECT pid, state, wait_event_type, wait_event, xact_start, state_change,
+                   left(query, 200) AS query
+              FROM pg_stat_activity
+             WHERE datname = 'weissman' AND pid <> pg_backend_pid()
+             ORDER BY xact_start NULLS LAST;" || true
+          psql -h 127.0.0.1 -U postgres -d weissman -x -c "
+            SELECT locktype, granted, pid, mode, objid, classid
+              FROM pg_locks WHERE NOT granted OR locktype = 'advisory'
+             ORDER BY granted, pid;" || true
 
       - name: Free runner disk before Docker image build
         # By this point the job has a full debug target/, node_modules, and a built

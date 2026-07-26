@@ -19,6 +19,10 @@ tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 rand = "0.8"
+# Bounded advisory locks only. `pg_advisory_xact_lock` waits forever by contract, and whether
+# that wait is bounded must not depend on which pool the caller happened to build — see
+# weissman_db::advisory_lock and docs/TECH_DEBT_flaky_db_test_hang.md.
+weissman-db = { path = "../weissman-db" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

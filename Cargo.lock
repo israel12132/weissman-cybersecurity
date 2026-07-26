@@ -7328,6 +7328,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "weissman-db",
 ]
 
 [[package]]

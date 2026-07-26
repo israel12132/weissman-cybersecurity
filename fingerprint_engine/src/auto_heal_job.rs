@@ -532,10 +532,34 @@ pub async fn run_auto_heal_job(
     // this short guard transaction commits below (before the long sandbox work), so it only
     // serializes the check→transition, not the actual healing. Fail-open: if the lock can't be taken
     // we fall back to the (racy) count check rather than blocking the job.
-    let _ = sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("{tenant_id}:{finding_id}"))
-        .execute(&mut *tx)
-        .await;
+    //
+    // BOUNDED (weissman_db::advisory_lock): "fail-open" was only true for *errors* — a bare
+    // `pg_advisory_xact_lock` does not error when contended, it waits forever, so the fail-open
+    // branch was unreachable exactly when it was needed. The `_or_skip` variant bounds the wait
+    // AND wraps it in a savepoint, so a timeout leaves this transaction usable and the documented
+    // fallback (the racy count check below) can actually run — a bare bounded lock would abort
+    // the transaction and take the fallback down with it.
+    match weissman_db::advisory_lock::advisory_xact_lock_text_or_skip(
+        &mut *tx,
+        &format!("{tenant_id}:{finding_id}"),
+    )
+    .await
+    {
+        Ok(true) => {}
+        Ok(false) => tracing::warn!(
+            target: "auto_heal",
+            tenant_id,
+            finding_id = %finding_id,
+            "auto-heal start lock not taken; falling back to the racy running-dupe count check"
+        ),
+        Err(e) => tracing::warn!(
+            target: "auto_heal",
+            tenant_id,
+            finding_id = %finding_id,
+            error = %e,
+            "auto-heal start lock could not be attempted"
+        ),
+    }
 
     // Concurrency guard: never run the sandbox for a finding that another spec is already healing
     // (two workers picking up heals for the same finding would waste work and race on the branch).
