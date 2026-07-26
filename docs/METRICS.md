@@ -13,8 +13,8 @@ should link here rather than copying figures.
 | — agent-required | 48 | same |
 | Rust test fns (`#[test]`/`#[tokio::test]`) | 2369 | grep over workspace |
 | HTTP route registrations (`.route(`) | 335 | grep over `fingerprint_engine/src` + `backend` |
-| Migrations — `crates/weissman-db/migrations` | 92 |
-| Migrations — `fingerprint_engine/migrations` | 92 |
+| Migrations — `crates/weissman-db/migrations` | 92 | `ls crates/weissman-db/migrations` |
+| Migrations — `fingerprint_engine/migrations` | 92 | `ls fingerprint_engine/migrations` |
 
 **Reading the engine count honestly:** the 563 catalog IDs resolve to
 **295 distinct probe implementations** — 212 are

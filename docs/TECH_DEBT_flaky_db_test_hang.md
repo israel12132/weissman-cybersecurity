@@ -155,9 +155,12 @@ helper and not from pool configuration a refactor could drop:
 
 ## Rules
 
-1. **Never** call `pg_advisory_xact_lock` / `pg_advisory_lock` directly. Use
-   `weissman_db::advisory_lock`. An unbounded blocking primitive on a connection whose timeouts
-   are set somewhere else is how this bug happened.
+1. **Never** call `pg_advisory_xact_lock` / `pg_advisory_lock` directly from anywhere outside
+   `weissman_db::advisory_lock` — the helper is the one place that issues the raw statement, and
+   it does so immediately after setting the bound. An unbounded blocking primitive on a connection
+   whose timeouts are set somewhere else is how this bug happened. Enforced by
+   `crates/weissman-db/tests/no_raw_advisory_locks.rs`, whose `ALLOWED` list is the authoritative
+   set of exemptions.
 2. A guard whose "fail-open" branch is only reachable on *error* is not fail-open if the primitive
    it guards blocks instead of erroring. Bound it, then the fallback is real.
 3. If you add a DB-backed test, it inherits the CI database's `lock_timeout` — assume any lock
