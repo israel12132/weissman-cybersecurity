@@ -124,33 +124,34 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo audit (known CVEs in Rust deps)
-        # Each ignore below is a transitive advisory with NO fixed upgrade available;
-        # resolving means replacing the upstream crate (tracked as future work). Any
-        # NEW advisory still fails the build. Review this list on every dep bump.
+        # Each ignore below is a transitive advisory with NO fixed upgrade reachable from
+        # our own manifests; resolving means changing an upstream crate (tracked as future
+        # work). Any NEW advisory still fails the build. Review this list on every dep bump.
         #   RUSTSEC-2023-0071  rsa (Marvin timing attack) — via openidconnect (OIDC
         #                      SSO). No fixed rsa release exists; used for RS256 JWT
         #                      signature *verification*, not RSA decryption.
-        #   RUSTSEC-2026-0098/0099/0104  time 0.2.x — via genpdf→lopdf/printpdf (PDF
-        #                      reports). genpdf 0.2.0 is the latest/unmaintained;
-        #                      fixing requires migrating off genpdf.
-        #   RUSTSEC-2026-0187  lopdf (stack overflow on deeply-nested PDF *parsing*)
-        #                      — via genpdf→printpdf→lopdf 0.26, pinned by genpdf.
-        #                      We GENERATE PDFs, never parse untrusted ones, so the
-        #                      parser DoS is out of our surface. Tracked with genpdf.
-        #   RUSTSEC-2026-0049  rustls-webpki (CRL not authoritative by distribution
-        #                      point). tokio-tungstenite bumped 0.21 → 0.24 (rustls 0.23),
-        #                      removing the 0.22 path; any residual is via aws-config's
-        #                      rustls 0.21. We don't configure CRL revocation on WS/TLS
-        #                      clients, so the CRL-matching bug is out of our surface. Tracked
-        #                      with a tokio-tungstenite 0.24+ (rustls 0.23) bump.
+        #   RUSTSEC-2026-0098  rustls-webpki 0.101.7 — URI name constraints wrongly accepted
+        #   RUSTSEC-2026-0099  rustls-webpki 0.101.7 — wildcard name constraint wrongly accepted
+        #   RUSTSEC-2026-0104  rustls-webpki 0.101.7 — reachable panic parsing a malformed CRL
+        #                      All three ride in on rustls 0.21 via the AWS SDK's legacy
+        #                      hyper-0.14 connector (aws-smithy-http-client's default deps;
+        #                      aws-smithy-runtime does not set default-features=false on it).
+        #                      Our AWS clients use the modern rustls-aws-lc connector
+        #                      (rustls 0.23.40 / rustls-webpki 0.103.13), so the 0.21 path is
+        #                      compiled-in dead weight — we neither parse untrusted CRLs nor
+        #                      rely on webpki name constraints on the AWS TLS path. No
+        #                      manifest-level fix exists without forking the aws-smithy crates;
+        #                      tracked for an aws-smithy bump that drops the legacy connector.
+        # NOTE: the former genpdf->printpdf->lopdf advisories (incl. RUSTSEC-2026-0187) and
+        # the stale RUSTSEC-2026-0049 are gone — genpdf was replaced by the native %PDF-1.4
+        # writer in fingerprint_engine/src/pdf_report.rs and cargo-audit confirms they no
+        # longer fire, so they are intentionally NOT ignored (a regression would fail here).
         run: |
           cargo audit \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2026-0098 \
             --ignore RUSTSEC-2026-0099 \
-            --ignore RUSTSEC-2026-0104 \
-            --ignore RUSTSEC-2026-0187 \
-            --ignore RUSTSEC-2026-0049
+            --ignore RUSTSEC-2026-0104
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked

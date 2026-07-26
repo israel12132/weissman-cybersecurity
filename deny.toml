@@ -8,21 +8,29 @@ all-features = true
 version = 2
 yanked = "deny"
 # Only fail on unmaintained crates we could actually act on (workspace/direct);
-# the transitive unmaintained crates (stdweb/rusttype/stb_truetype/encoding/lzw
-# via genpdf→printpdf PDF export, rustls-pemfile via rustls) have no safe upgrade
-# and are pinned upstream — surfaced as warnings, tracked with the genpdf migration.
+# any transitive unmaintained crate (e.g. rustls-pemfile via rustls) has no safe
+# upgrade and is pinned upstream — surfaced as warnings. The genpdf→printpdf subtree
+# (stdweb/rusttype/stb_truetype/encoding/lzw) that previously dominated this list is
+# gone: PDF export is now a native %PDF-1.4 writer with no third-party PDF crate.
 unmaintained = "workspace"
 # Transitive advisories with no upstream fix yet — mirror of the documented
 # cargo-audit ignores in ci.yml. Re-review on every dependency bump.
 ignore = [
     "RUSTSEC-2023-0071", # rsa (Marvin timing) via openidconnect (OIDC) — no fixed release
-    "RUSTSEC-2026-0098", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
-    "RUSTSEC-2026-0099", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
-    "RUSTSEC-2026-0104", # time 0.2.x via genpdf->lopdf/printpdf (PDF export)
-    "RUSTSEC-2026-0187", # lopdf parse-DoS via genpdf->printpdf — we generate, never parse untrusted PDFs
-    # RUSTSEC-2026-0049 (rustls-webpki CRL matching) removed: the advisory is no longer
-    # present in the dependency tree (cargo-deny reported advisory-not-detected), so the
-    # ignore was stale. Re-add if a future dependency reintroduces the affected rustls path.
+    # rustls-webpki 0.101.7 (name-constraint acceptance + CRL-parse panic). Pulled by
+    # rustls 0.21 via the AWS SDK's legacy hyper-0.14 connector (aws-smithy-http-client
+    # default deps; aws-smithy-runtime does not disable them). Our AWS clients use the
+    # modern rustls-aws-lc path (rustls 0.23.40 / rustls-webpki 0.103.13), so the 0.21
+    # subtree is inert; no manifest-level fix without forking aws-smithy. Mirror of the
+    # cargo-audit ignores in ci.yml — re-review on every dependency bump.
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+    # NOT ignored (confirmed no longer detected on the current lock): RUSTSEC-2026-0049
+    # (stale rustls-webpki CRL distribution-point) and the genpdf->printpdf->lopdf subtree
+    # advisories incl. RUSTSEC-2026-0187 (lopdf parse-DoS) — genpdf was dropped for the
+    # native %PDF-1.4 writer in fingerprint_engine/src/pdf_report.rs. A regression that
+    # reintroduces any of them will fail this gate.
 ]
 
 [licenses]
