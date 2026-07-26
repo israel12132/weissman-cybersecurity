@@ -431,10 +431,12 @@ pub async fn llm_completion(
     user: &str,
     operation: &'static str,
 ) -> Result<String, LlmError> {
-    openai_chat::chat_completion_text(
+    // Route through the multi-provider failover chain (WEISSMAN_LLM_ENDPOINTS). With no chain
+    // configured the router resolves to the single default endpoint — identical to the previous
+    // direct call — so this is backward compatible while adding cross-provider failover. cfg.model
+    // is passed as the override so endpoints without their own model still use the fuzzer's model.
+    weissman_engines::llm_router::routed_chat_completion_text(
         client,
-        &cfg.base_url,
-        &cfg.model,
         Some(system),
         user,
         cfg.temperature,
@@ -442,6 +444,7 @@ pub async fn llm_completion(
         cfg.tenant_id,
         operation,
         true,
+        Some(&cfg.model),
     )
     .await
 }

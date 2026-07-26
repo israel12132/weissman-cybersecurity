@@ -25,7 +25,8 @@
 //! reuses the existing `WEISSMAN_LLM_API_KEY` bearer.
 
 use crate::openai_chat::{
-    chat_completion_text, endpoint_circuit_open, resolve_llm_model, LlmError, DEFAULT_LLM_BASE_URL,
+    chat_completion_text, chat_completion_text_json_object, endpoint_circuit_open,
+    resolve_llm_model, LlmError, DEFAULT_LLM_BASE_URL,
 };
 use serde::Deserialize;
 
@@ -132,12 +133,29 @@ pub fn failover_order(
     closed.into_iter().chain(open).collect()
 }
 
+/// Resolve the model to send to one endpoint. Precedence: the endpoint's own `model` field wins
+/// (each provider names its own model), else the caller's `model_override` (e.g. a dedicated
+/// planner model), else the platform default via [`resolve_llm_model`]. Pure except the final
+/// fallback, so the precedence branches are unit-tested.
+fn resolve_call_model(endpoint_model: &str, model_override: Option<&str>) -> String {
+    if !endpoint_model.trim().is_empty() {
+        return endpoint_model.to_string();
+    }
+    if let Some(m) = model_override.map(str::trim).filter(|m| !m.is_empty()) {
+        return m.to_string();
+    }
+    resolve_llm_model("")
+}
+
 /// Chat completion with automatic failover across the configured endpoint chain.
 ///
 /// Tries circuit-closed endpoints first; on a **retryable** error (transport / 5xx / 429 /
 /// timeout / circuit-open) it fails over to the next endpoint. A non-retryable (client-side)
 /// error returns immediately — failing over would just repeat it. Each endpoint's own retry +
 /// circuit breaker still apply inside [`chat_completion_text`].
+///
+/// `model_override` lets a caller prefer a specific model (e.g. a stronger planner) without
+/// pinning an endpoint; it applies only to endpoints that don't name their own model.
 #[allow(clippy::too_many_arguments)]
 pub async fn routed_chat_completion_text(
     client: &reqwest::Client,
@@ -148,31 +166,105 @@ pub async fn routed_chat_completion_text(
     tenant_id: Option<i64>,
     operation: &'static str,
     sanitize_user_input: bool,
+    model_override: Option<&str>,
+) -> Result<String, LlmError> {
+    routed_inner(
+        client,
+        system,
+        user,
+        temperature,
+        max_tokens,
+        tenant_id,
+        operation,
+        sanitize_user_input,
+        model_override,
+        false,
+    )
+    .await
+}
+
+/// Same circuit-aware failover as [`routed_chat_completion_text`], but requests a strict JSON
+/// object (OpenAI `response_format`) from each endpoint — for callers that must parse the reply
+/// as JSON (e.g. the NL-query planner). Endpoints that ignore `response_format` still return the
+/// prompt-driven text, so the caller should parse defensively.
+#[allow(clippy::too_many_arguments)]
+pub async fn routed_chat_completion_text_json_object(
+    client: &reqwest::Client,
+    system: Option<&str>,
+    user: &str,
+    temperature: f64,
+    max_tokens: u32,
+    tenant_id: Option<i64>,
+    operation: &'static str,
+    sanitize_user_input: bool,
+    model_override: Option<&str>,
+) -> Result<String, LlmError> {
+    routed_inner(
+        client,
+        system,
+        user,
+        temperature,
+        max_tokens,
+        tenant_id,
+        operation,
+        sanitize_user_input,
+        model_override,
+        true,
+    )
+    .await
+}
+
+/// Shared failover loop for both entrypoints. `json_mode` selects the strict-JSON per-endpoint
+/// call; everything else (ordering, retryable failover, metrics) is identical.
+#[allow(clippy::too_many_arguments)]
+async fn routed_inner(
+    client: &reqwest::Client,
+    system: Option<&str>,
+    user: &str,
+    temperature: f64,
+    max_tokens: u32,
+    tenant_id: Option<i64>,
+    operation: &'static str,
+    sanitize_user_input: bool,
+    model_override: Option<&str>,
+    json_mode: bool,
 ) -> Result<String, LlmError> {
     let endpoints = resolve_endpoints();
     let order = failover_order(&endpoints, endpoint_circuit_open);
     let mut last_err = LlmError::Unreachable("no llm endpoints configured".to_string());
 
     for ep in order {
-        let model = if ep.model.trim().is_empty() {
-            resolve_llm_model("")
+        let model = resolve_call_model(&ep.model, model_override);
+        let attempt = if json_mode {
+            chat_completion_text_json_object(
+                client,
+                &ep.base_url,
+                &model,
+                system,
+                user,
+                temperature,
+                max_tokens,
+                tenant_id,
+                operation,
+                sanitize_user_input,
+            )
+            .await
         } else {
-            ep.model.clone()
+            chat_completion_text(
+                client,
+                &ep.base_url,
+                &model,
+                system,
+                user,
+                temperature,
+                max_tokens,
+                tenant_id,
+                operation,
+                sanitize_user_input,
+            )
+            .await
         };
-        match chat_completion_text(
-            client,
-            &ep.base_url,
-            &model,
-            system,
-            user,
-            temperature,
-            max_tokens,
-            tenant_id,
-            operation,
-            sanitize_user_input,
-        )
-        .await
-        {
+        match attempt {
             Ok(text) => {
                 metrics::counter!(
                     "weissman_llm_router_requests_total",
@@ -288,5 +380,29 @@ mod tests {
         );
         let labels: Vec<&str> = order.iter().map(|e| e.label.as_str()).collect();
         assert_eq!(labels, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn model_resolution_endpoint_model_wins_over_override() {
+        // An endpoint that names its own model uses it, ignoring the caller override.
+        assert_eq!(
+            resolve_call_model("gpt-4o-mini", Some("planner-70b")),
+            "gpt-4o-mini"
+        );
+    }
+
+    #[test]
+    fn model_resolution_falls_back_to_override_when_endpoint_blank() {
+        // Endpoint has no model of its own ⇒ the caller override (e.g. planner model) applies.
+        assert_eq!(resolve_call_model("", Some("planner-70b")), "planner-70b");
+        // Whitespace-only endpoint model is treated as blank; whitespace override is ignored.
+        assert_eq!(
+            resolve_call_model("   ", Some("planner-70b")),
+            "planner-70b"
+        );
+        assert_eq!(
+            resolve_call_model("   ", Some("   ")),
+            resolve_llm_model("")
+        );
     }
 }
