@@ -43,6 +43,30 @@ the instrumented run (parallelism traded for safety); the guard is sized to the 
 runtime, not to wait out a hang. Timeout margins stay well above the legitimate upper bound —
 generous enough to never false-kill a slow-but-legit run, tight enough to kill a genuine hang.
 
+## Update (2026-07-26) — compile/execute split (permanent fix for the *mid-compile* timeout)
+
+A distinct failure mode kept recurring separately from the runtime hang above: the blocking
+Rust-test step timing out **mid-compile / mid-link** on a *cold* runner, before any test ran
+(e.g. engine-wiring in run `30188334763` hit the 45-min budget at ~46 min while the identical
+tests passed in the sibling `rust-audit` and `rust-coverage` jobs). Here the timeout was doing the
+wrong job — guarding a cold `cargo test --workspace --all-targets` compile+link (~2,300 targets
+under `rust-lld`) rather than a hung test.
+
+**Fix:** split compile from execution. Each blocking Rust-test step is now preceded by a dedicated
+`cargo test --workspace --all-targets --no-run` step that builds every test binary; the gate step
+then only *executes* (`cargo test … -- --test-threads=2 …`), reusing those binaries with no
+recompile. This makes each step's `timeout-minutes` meaningful:
+
+| Job | Compile step (`--no-run`) | Run step (execute only) |
+|-----|---------------------------|-------------------------|
+| `rust-audit` | Build Rust workspace + test binaries | Run Rust tests — **25 min** |
+| `engine-wiring-and-smoke` | Compile Rust test binaries (DB-backed gate) — **40 min** | Run Rust workspace tests — **25 min** |
+
+The run-step budget (25 min) now reflects the honest ~6–8 min execution time with generous
+headroom, and can no longer be consumed by a cold compile. The cold compile has its own budget and
+fails fast and legibly if *it* is the problem. This is complementary to `--test-threads=2` (which
+addresses the runtime deadlock) — together they cover both the compile-timeout and the hang.
+
 ## Suspected root causes (to investigate)
 
 `cargo test` runs test binaries **in parallel by default**, and multiple DB-backed integration
