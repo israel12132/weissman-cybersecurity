@@ -43,7 +43,9 @@ impl QuotaWindow {
             QuotaWindow::Daily => {
                 let day = dt.date_naive();
                 let next_day = day.succ_opt().unwrap_or(day);
-                next_day.and_hms_opt(0, 0, 0).map(|n| n.and_utc().timestamp())
+                next_day
+                    .and_hms_opt(0, 0, 0)
+                    .map(|n| n.and_utc().timestamp())
             }
             QuotaWindow::Monthly => {
                 let (y, m) = (dt.year(), dt.month());
@@ -128,15 +130,14 @@ pub async fn resolve_limit(
     default: u64,
 ) -> u64 {
     let key = format!("{resource}_{}_quota", window.as_str());
-    let override_val: Option<String> = sqlx::query_scalar(
-        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
-    )
-    .bind(tenant_id)
-    .bind(&key)
-    .fetch_optional(&mut **tx)
-    .await
-    .ok()
-    .flatten();
+    let override_val: Option<String> =
+        sqlx::query_scalar("SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2")
+            .bind(tenant_id)
+            .bind(&key)
+            .fetch_optional(&mut **tx)
+            .await
+            .ok()
+            .flatten();
     override_val
         .and_then(|s| s.trim().parse::<u64>().ok())
         .unwrap_or(default)
@@ -204,7 +205,13 @@ pub async fn report(
     .await?;
     let _ = tx.commit().await;
     // report reflects current usage without the +1 the next request would add.
-    Ok(evaluate(resource, window, used.unwrap_or(0).max(0) as u64, limit, now))
+    Ok(evaluate(
+        resource,
+        window,
+        used.unwrap_or(0).max(0) as u64,
+        limit,
+        now,
+    ))
 }
 
 #[cfg(test)]
@@ -254,7 +261,10 @@ mod tests {
     #[test]
     fn monthly_reset_rolls_over_year_in_december() {
         // 2026-12-15T00:00:00Z
-        let dec = Utc.with_ymd_and_hms(2026, 12, 15, 0, 0, 0).unwrap().timestamp() as u64;
+        let dec = Utc
+            .with_ymd_and_hms(2026, 12, 15, 0, 0, 0)
+            .unwrap()
+            .timestamp() as u64;
         let reset = QuotaWindow::Monthly.reset_at(dec);
         assert_eq!(QuotaWindow::Daily.period_key(reset), "2027-01-01");
     }
