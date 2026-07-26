@@ -58,6 +58,42 @@ pub fn is_scan_trigger_post(method: &axum::http::Method, path: &str) -> bool {
         || path.ends_with("/deception/generate")
 }
 
+/// Retry-After hint (seconds) advertised when the platform sheds scan intake. A conservative
+/// value: clients back off briefly and re-try; if the platform is still shedding they get 503
+/// again. Sized in the ballpark of the recovery shed TTL so a single retry usually lands healthy.
+const LOAD_SHED_RETRY_AFTER_SECS: u64 = 15;
+
+/// Pure admission decision: shed a request only when it is a scan-trigger POST **and** the platform
+/// is actively shedding load. Extracted for unit-testing without an axum request.
+#[must_use]
+pub fn should_shed_scan(is_scan_post: bool, load_shed_active: bool) -> bool {
+    is_scan_post && load_shed_active
+}
+
+/// 503 Service Unavailable + `Retry-After` for platform load-shed. Distinct from the per-tenant
+/// 429 (`rate_limited`): 503/`load_shed` means the *server* is temporarily protecting itself, not
+/// that this tenant exceeded a quota — so clients (and dashboards) can tell the two apart.
+fn load_shed_response() -> Response {
+    let mut resp = (
+        StatusCode::SERVICE_UNAVAILABLE,
+        axum::Json(serde_json::json!({
+            "ok": false,
+            "code": "load_shed",
+            "detail": format!(
+                "The platform is temporarily shedding load to recover. Retry in \
+                 {LOAD_SHED_RETRY_AFTER_SECS}s."
+            ),
+            "retry_after_seconds": LOAD_SHED_RETRY_AFTER_SECS,
+            "source": "self_healing",
+        })),
+    )
+        .into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&LOAD_SHED_RETRY_AFTER_SECS.to_string()) {
+        resp.headers_mut().insert("Retry-After", v);
+    }
+    resp
+}
+
 pub async fn tenant_scan_rate_limit_middleware(
     ConnectInfo(_peer): ConnectInfo<SocketAddr>,
     request: Request<Body>,
@@ -68,6 +104,23 @@ pub async fn tenant_scan_rate_limit_middleware(
     if !is_scan_trigger_post(&method, &path) {
         return next.run(request).await;
     }
+
+    // Platform self-healing load-shed — applies BEFORE per-tenant limits and even before
+    // AuthContext extraction, because it is a platform-wide protection. When the recovery engine
+    // has engaged `shed_load` (genuine critical saturation: DB pool exhausted or async backlog past
+    // its critical threshold), reject NEW heavy scan intake with 503 + Retry-After so the platform
+    // can drain and recover instead of piling on more work. No-op unless self-heal recovery is
+    // enabled AND actively shedding, and it auto-clears when the fault passes (TTL).
+    if should_shed_scan(true, crate::self_heal_recovery::load_shed_active()) {
+        metrics::counter!("weissman_self_heal_scan_shed_total").increment(1);
+        tracing::warn!(
+            target: "self_heal",
+            path = %path,
+            "shedding scan intake: platform load-shed engaged by self-healing recovery"
+        );
+        return load_shed_response();
+    }
+
     let Some(ctx) = request.extensions().get::<AuthContext>().cloned() else {
         return next.run(request).await;
     };
@@ -150,4 +203,50 @@ pub async fn tenant_scan_rate_limit_middleware(
     }
     rate_limit_metrics::record_scan_allowed(ctx.tenant_id, &path);
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Method;
+
+    #[test]
+    fn is_scan_trigger_post_matches_known_scan_routes() {
+        assert!(is_scan_trigger_post(
+            &Method::POST,
+            "/api/command-center/scan"
+        ));
+        assert!(is_scan_trigger_post(&Method::POST, "/api/ai-redteam/run"));
+        // Suffix-matched, tenant-prefixed routes still count.
+        assert!(is_scan_trigger_post(
+            &Method::POST,
+            "/api/tenant/42/cloud-scan/run"
+        ));
+        // Wrong method or non-scan path must not gate.
+        assert!(!is_scan_trigger_post(
+            &Method::GET,
+            "/api/command-center/scan"
+        ));
+        assert!(!is_scan_trigger_post(&Method::POST, "/api/health"));
+    }
+
+    #[test]
+    fn shed_only_when_scan_post_and_platform_shedding() {
+        assert!(should_shed_scan(true, true)); // scan POST while shedding ⇒ shed
+        assert!(!should_shed_scan(true, false)); // healthy platform ⇒ allow
+        assert!(!should_shed_scan(false, true)); // non-scan request ⇒ never shed here
+        assert!(!should_shed_scan(false, false));
+    }
+
+    #[test]
+    fn load_shed_response_is_503_with_retry_after() {
+        let resp = load_shed_response();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let ra = resp
+            .headers()
+            .get("Retry-After")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+        assert_eq!(ra, Some(LOAD_SHED_RETRY_AFTER_SECS));
+    }
 }
