@@ -431,7 +431,7 @@ pub async fn ask(
     }
 
     // 1) LLM → plan JSON.
-    let plan_json = match llm_to_plan(q).await {
+    let plan_json = match llm_to_plan(q, tenant_id).await {
         Ok(v) => v,
         Err(e) => {
             let r = bad(&format!("plan generation failed: {e}"));
@@ -573,57 +573,41 @@ Schema:
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
 "#;
 
-async fn llm_to_plan(question: &str) -> Result<Value, String> {
-    // We use the shared chat client. Same env config as `council`/`general` —
-    // OPENAI_BASE_URL / WEISSMAN_LLM_BASE_URL etc. Fail closed if no provider.
-    // Local-first ("sovereign") default: the same loopback vLLM the rest of the platform uses,
-    // so Ask Weissman runs fully on-box with no external key. Point at OpenAI by setting
-    // WEISSMAN_LLM_BASE_URL/OPENAI_BASE_URL + OPENAI_API_KEY (+ WEISSMAN_NL_QUERY_MODEL).
-    let base = std::env::var("WEISSMAN_LLM_BASE_URL")
-        .or_else(|_| std::env::var("OPENAI_BASE_URL"))
-        .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
-    // Default to the platform's resolved model (WEISSMAN_LLM_MODEL / Llama-3.2-3B) rather than an
-    // OpenAI-only id, so a local sovereign box works out of the box. Override per-use with
-    // WEISSMAN_NL_QUERY_MODEL when a stronger planner model is desired.
-    let model = std::env::var("WEISSMAN_NL_QUERY_MODEL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| weissman_engines::openai_chat::resolve_llm_model(""));
-    let api_key = std::env::var("OPENAI_API_KEY")
-        .or_else(|_| std::env::var("WEISSMAN_LLM_API_KEY"))
+async fn llm_to_plan(question: &str, tenant_id: i64) -> Result<Value, String> {
+    // Ask Weissman planner. Routes through the multi-provider failover chain
+    // (`weissman_engines::llm_router`, configured by WEISSMAN_LLM_ENDPOINTS) so the planner now
+    // inherits per-endpoint retry, circuit breaking, cross-provider failover, and per-tenant LLM
+    // usage metering — none of which the previous hand-rolled HTTP call had. With no chain set it
+    // resolves to the same single default endpoint (local-first "sovereign" vLLM), so on-box
+    // behavior is unchanged. Strict-JSON mode keeps the plan parseable; the question is untrusted
+    // user input, so it is sanitized. WEISSMAN_NL_QUERY_MODEL still selects a dedicated planner
+    // model (applied to any endpoint that does not name its own).
+    let model_override = std::env::var("WEISSMAN_NL_QUERY_MODEL")
         .ok()
         .filter(|s| !s.trim().is_empty());
-
-    let url = format!("{}/v1/chat/completions", base.trim_end_matches('/'));
-    let body = json!({
-        "model": model,
-        "temperature": 0.0,
-        "response_format": { "type": "json_object" },
-        "messages": [
-            { "role": "system", "content": PLANNER_PROMPT },
-            { "role": "user",   "content": question }
-        ]
-    });
+    let max_tokens: u32 = std::env::var("WEISSMAN_NL_QUERY_MAX_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1024)
+        .clamp(256, 8192);
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
-    let mut req = client.post(&url).json(&body);
-    if let Some(k) = api_key {
-        req = req.bearer_auth(k);
-    }
-    let resp = req.send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("LLM HTTP {}", resp.status()));
-    }
-    let v: Value = resp.json().await.map_err(|e| e.to_string())?;
-    let text = v
-        .pointer("/choices/0/message/content")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "no choices in response".to_string())?
-        .trim()
-        .to_string();
-    serde_json::from_str::<Value>(&text).map_err(|e| format!("invalid JSON from LLM: {e}"))
+    let text = weissman_engines::llm_router::routed_chat_completion_text_json_object(
+        &client,
+        Some(PLANNER_PROMPT),
+        question,
+        0.0,
+        max_tokens,
+        Some(tenant_id),
+        "nl_query_plan",
+        true,
+        model_override.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    serde_json::from_str::<Value>(text.trim()).map_err(|e| format!("invalid JSON from LLM: {e}"))
 }
 
 #[cfg(test)]
