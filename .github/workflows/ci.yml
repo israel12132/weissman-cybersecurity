@@ -11,14 +11,29 @@ permissions:
   contents: read
 
 # Cancel superseded in-progress runs. When a newer commit is pushed to the same
-# branch/PR, the older run for that ref is cancelled instead of running to completion.
-# This is what produced the stream of "Engine wiring" failures on already-superseded
-# SHAs (05a51d7 / 4b4196e / 6249d7b): each old commit's ~40-min live stack kept running
-# and failing at the doc-metrics gate long after a newer commit had fixed it. Grouped by
-# ref, so push-runs supersede push-runs and PR-runs supersede PR-runs. Tag runs
-# (refs/tags/v*) are NEVER cancelled, so a release build+publish always finishes.
+# branch/PR, the older run is cancelled instead of running to completion. This is what
+# produced the stream of "Engine wiring" failures on already-superseded SHAs
+# (05a51d7 / 4b4196e / 6249d7b): each old commit's ~40-min live stack kept running and
+# failing at the doc-metrics gate long after a newer commit had fixed it.
+#
+# Keyed on the BRANCH NAME, not `github.ref`. A branch with an open PR fires this workflow
+# twice — once for `push` (ref `refs/heads/<branch>`) and once for `pull_request` (ref
+# `refs/pull/<n>/merge`) — and under the old `github.ref` key those two keys differed, so
+# the runs never cancelled each other. Both then built the whole workspace in parallel and
+# fought for runner I/O. Measured on one commit (a4f5ce4, runs 30223674764 + 30223676128),
+# the identical `cargo test --workspace --all-targets --no-run` took 8m01s in one run and
+# 41m49s in the other before its runner was reclaimed ("The runner has received a shutdown
+# signal"), while the Postgres service logged 352-second fsync stalls. A third instance of
+# the same command sat at 3h24m. `github.head_ref` is the source branch on a PR run and
+# empty otherwise, so `head_ref || ref_name` collapses both events onto one key: one run
+# per branch. Tag runs (ref_name `v*`) are NEVER cancelled, so a release always finishes.
+#
+# The repo is part of the key because a branch NAME alone is not unique across repos: a fork
+# PR whose source branch is `main` would otherwise land in the same group as this repo's own
+# `main` pushes and cancel them. `github.event.pull_request.head.repo.full_name` is the fork
+# on a PR run, `github.repository` everywhere else.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
@@ -66,6 +81,23 @@ jobs:
   rust-audit:
     name: Rust — audit, lint, test
     runs-on: ubuntu-latest
+    # Cut debug info for this job's Rust build. THE dominant cost in the all-targets link is
+    # debug info: the workspace links ~2300 test harnesses, and the fingerprint_engine lib-test
+    # binary alone is ~2.7 GB with full `debug = 2`. Four `rust-lld` processes each mmap'ing a
+    # binary that size is what makes this step I/O-bound — it does not fail, it crawls (measured:
+    # the same command took 17m03s on one runner and blew a 60-min budget on another, run
+    # 30235471173, with four linkers still resident at the kill).
+    #
+    # `line-tables-only` rather than `0`: it keeps file+line in panic backtraces — so a failing
+    # test is still diagnosable — while dropping the variable/type DWARF that accounts for most
+    # of the size. This changes only debug metadata; no codegen, no behaviour, no test outcome.
+    #
+    # Set at JOB level on purpose. Cargo keys its fingerprint on the profile, so if the compile
+    # step and the test-run step disagreed the run step would recompile the whole workspace and
+    # defeat the compile/execute split entirely. One place, both steps.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
 
@@ -168,24 +200,29 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious
 
       - name: Build Rust workspace + test binaries
-        # Compile the lib, bins AND every test target here (`--no-run` builds the test
-        # harnesses too) so the blocking gate below only EXECUTES tests. Its timeout then
-        # guards a genuine hang (parallel-test deadlock / connection-pool leak), never a cold
-        # compile+link — the documented "timed out MID-COMPILE" false failure (run 30075974657).
-        # Subsumes the old `cargo build --workspace`. See docs/TECH_DEBT_flaky_db_test_hang.md.
+        # `--no-run` builds the test harnesses too, so the gate below only EXECUTES. Its timeout
+        # then measures test runtime rather than a cold compile+link — failure mode A in
+        # docs/TECH_DEBT_flaky_db_test_hang.md. Subsumes the old `cargo build --workspace`.
+        #
+        # Bounded for the same reason every other long step here is: without it this step has no
+        # ceiling below GitHub's 360-min job default, and it was observed sitting at 3h24m on a
+        # contended runner (run 30223676128) while the identical command finished in 17m03s in the
+        # duplicate run of the same commit. 60 min against a ~17-20 min healthy cold link: wide
+        # enough that only a genuinely sick runner trips it, tight enough to fail the same day.
+        # Deliberately NOT raised again after run 30235471173 tripped it — the fix for that is the
+        # job-level debug-info reduction above, not a bigger number.
+        timeout-minutes: 60
         run: cargo test --workspace --all-targets --no-run
 
       - name: Run Rust tests (blocking gate)
-        # Execution only — the binaries were built by the step above, so this never recompiles.
-        # Warm execution is ~6-8 min; 25 min is generous headroom yet still kills a genuine
-        # multi-hour hang far below GitHub's 360-min default. Separating compile from run is the
-        # permanent fix for the mid-compile timeout, not a budget bump.
+        # Execution only — the step above built the binaries, so this never recompiles. Warm
+        # execution is ~6 min; 25 min is generous headroom yet still kills a genuine multi-hour
+        # hang far below GitHub's 360-min default.
         timeout-minutes: 25
-        # `--test-threads=2`: the same intermittent multi-hour hang that struck the engine-wiring
-        # test step also struck this one (observed live). Bounding test concurrency keeps parallel
-        # DB/pool work under the ceiling so acquires never deadlock — the documented remediation,
-        # not a mask (every test still runs and still blocks).
-        # See docs/TECH_DEBT_flaky_db_test_hang.md.
+        # `--test-threads=2`: contention-pressure reducer. It narrows the window in which two
+        # transactions contend and keeps parallel DB/pool work under the pool ceiling. It is not
+        # what bounds a contended advisory lock — weissman_db::advisory_lock does that. Every test
+        # still runs and still blocks. See docs/TECH_DEBT_flaky_db_test_hang.md.
         run: cargo test --workspace --all-targets -- --test-threads=2
 
   security-scan:
@@ -318,6 +355,17 @@ jobs:
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
+    # Same debug-info cut as `rust-audit`, and it MUST match that job's values — see the long
+    # rationale there. Two independent reasons:
+    #   1. This job runs the very same `cargo test --workspace --all-targets --no-run`, so it
+    #      carries the same linker cost the setting exists to remove.
+    #   2. Both jobs restore the SAME cache key (`${{ runner.os }}-cargo-<Cargo.lock hash>`).
+    #      Cargo keys its fingerprint on the profile, so a mismatch would make each job's
+    #      restored `target/` a total miss for the other and force a full rebuild in both —
+    #      strictly worse than having no shared cache at all.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     # Job-level backstop. Without it this job inherited GitHub's 360-min default, so a live suite
     # with no internal bound could burn 4 h before anyone noticed (measured: 240 min). Every
     # long-running step below now carries its own tighter budget; this is the last line of defence.
@@ -426,22 +474,47 @@ jobs:
           WEISSMAN_MIGRATE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
         run: cargo run -q -p weissman-db --example run_migrate
 
+      - name: Bound Postgres lock waits (CI database backstop)
+        # Defence in depth behind weissman_db::advisory_lock. That module bounds every advisory
+        # lock we take TODAY; this bounds every blocking wait any connection to this database can
+        # ever make — including ones we do not own (sqlx's own migration advisory lock, a plain
+        # `SELECT ... FOR UPDATE`, a DDL ACCESS EXCLUSIVE wait) and any call site added later that
+        # forgets the helper. Applied at the DATABASE level so it is inherited by every pool in
+        # every test binary, none of which configure timeouts themselves.
+        #
+        # Runs AFTER migrations so a slow DDL lock during the migration run is never bounded.
+        # 30s > the helper's 15s default, so a bounded advisory lock still fails with the precise
+        # `55P03 lock_not_available` naming the key rather than this generic net.
+        # `idle_in_transaction_session_timeout` reaps the lock HOLDER: a leaked transaction that
+        # holds a lock and goes idle is the other half of the hang. 300s is far above any
+        # legitimate in-transaction pause by the server/worker on this database, and well below
+        # the 25-minute execution-gate budget below, so a genuine leak is cleared inside the job.
+        # See docs/TECH_DEBT_flaky_db_test_hang.md before changing either value.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER DATABASE weissman SET lock_timeout = '30s';
+          ALTER DATABASE weissman SET idle_in_transaction_session_timeout = '300s';
+          SQL
+          psql -h 127.0.0.1 -U postgres -d weissman -v ON_ERROR_STOP=1 \
+            -c "SHOW lock_timeout" -c "SHOW idle_in_transaction_session_timeout"
+
       - name: Compile Rust test binaries (DB-backed gate)
-        # Compile every test target up front (`--no-run`) so the blocking gate below only
-        # EXECUTES — its timeout then guards a genuine deadlock/pool-leak hang, never a cold
-        # compile+link. This exact step timed out MID-COMPILE (~46 min) on a cold runner in
-        # run 30188334763 while the identical tests passed in the sibling rust-audit + coverage
-        # jobs. Separating compile from run is the permanent fix, not a budget bump.
-        # See docs/TECH_DEBT_flaky_db_test_hang.md.
+        # Failure mode A in docs/TECH_DEBT_flaky_db_test_hang.md: this job has no pre-build step
+        # for test targets, so the gate below used to compile+link ~2300 test targets INSIDE its
+        # own timeout. That is what the repeated ~46-minute step-23 overruns actually were — in
+        # run 30188334763 the orphan processes at kill time were rustc/cc/collect2/rust-lld with
+        # no test binary running, while the Postgres service crash-looped under I/O starvation.
+        # Compiling here gives the link its own budget and makes the gate's timeout mean
+        # "the tests hung", which is the only thing a test timeout should ever mean.
         timeout-minutes: 40
         run: cargo test --workspace --all-targets --no-run
 
       - name: Run Rust workspace tests (blocking gate)
         # Execution only — the step above already built the binaries, so this never recompiles.
-        # This is the ONLY run that exercises the DB-backed integration suite (live Postgres +
-        # WEISSMAN_REQUIRE_DB_TESTS=1). Warm execution ~6-8 min; 25 min is generous headroom yet
-        # still kills a genuine multi-hour deadlock/pool-leak hang far below GitHub's 360-min
-        # default. See docs/TECH_DEBT_flaky_db_test_hang.md.
+        # Warm execution is ~6-8 min; 25 min is generous headroom yet still kills a genuine hang
+        # far below GitHub's 360-min default. See docs/TECH_DEBT_flaky_db_test_hang.md.
         timeout-minutes: 25
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
@@ -462,16 +535,59 @@ jobs:
         # so the server-free sibling test eight_soar_adapters_registered still runs here.
         #
         # `--test-threads=2`: this is the ONLY test run that exercises the DB-backed integration
-        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1). At full per-core parallelism those
-        # tests occasionally exhaust the shared connection pool and one acquire blocks forever —
-        # the intermittent multi-hour hang tracked in docs/TECH_DEBT_flaky_db_test_hang.md. Bounding
-        # concurrency keeps concurrent DB work under the pool ceiling so acquires never deadlock.
-        # It is the documented remediation, not a mask: every test still runs and still blocks.
+        # suite (live Postgres + WEISSMAN_REQUIRE_DB_TESTS=1) — the sibling rust-audit and
+        # rust-coverage jobs declare no `services`, so those tests skip there. Thread-bounding is
+        # a contention-pressure reducer: it narrows the window in which two transactions contend
+        # on the same advisory key. It is NOT what bounds the wait — weissman_db::advisory_lock
+        # and the database-level backstop above do that (failure mode B in the tech-debt doc; a
+        # pool acquire cannot hang, sqlx defaults acquire_timeout to 30s). Every test still runs
+        # and still blocks.
         run: |
           cargo test --workspace --all-targets -- \
             --test-threads=2 \
             --skip isolate_dry_run_verify_and_revert_chain \
             --skip weissman_app_cannot_read_other_tenant_clients
+
+      - name: Dump Postgres lock state on test failure
+        # `!success()` not `failure()`: failure() is FALSE when a job is cancelled, which is
+        # exactly when a stuck-lock diagnosis matters most (same lesson as the Playwright
+        # artifact upload — see docs/TECH_DEBT_live_e2e_runtime.md).
+        # Makes a future lock problem name its holder instead of being a mystery: the bound above
+        # makes the failure fast, this makes it self-describing.
+        if: ${{ !success() }}
+        continue-on-error: true
+        env:
+          PGPASSWORD: postgres
+        #
+        # `query` is emitted with literals redacted. The SHAPE of the statement is what names the
+        # culprit, not its values; sqlx uses prepared statements so bound values appear as $1/$2
+        # rather than inline, and the only way a value reaches this text is a non-parameterised
+        # literal. Both literal syntaxes are covered:
+        #   - dollar-quoted, `$$...$$` and `$tag$...$tag$` — this repo's migrations use them for
+        #     plpgsql function bodies, so they genuinely occur here;
+        #   - single-quoted, `'...'`.
+        # Dollar quotes are redacted FIRST: a dollar-quoted body may itself contain single quotes,
+        # and redacting those first would break the outer match. `$1`/`$2` placeholders survive
+        # because the tag class excludes whitespace.
+        #
+        # Fed via a QUOTED heredoc (<<'SQL'), not `psql -c "..."` — the regex contains `$`, which
+        # a double-quoted shell string would expand.
+        run: |
+          psql -h 127.0.0.1 -U postgres -d weissman -x <<'SQL' || true
+          SELECT pid, state, wait_event_type, wait_event, xact_start, state_change,
+                 left(regexp_replace(
+                        regexp_replace(query, '\$[A-Za-z_0-9]*\$.*?\$[A-Za-z_0-9]*\$',
+                                       '$<redacted>$', 'g'),
+                        '''[^'']*''', '''<redacted>''', 'g'), 200) AS query
+            FROM pg_stat_activity
+           WHERE datname = 'weissman' AND pid <> pg_backend_pid()
+           ORDER BY xact_start NULLS LAST;
+          SQL
+          psql -h 127.0.0.1 -U postgres -d weissman -x <<'SQL' || true
+          SELECT locktype, granted, pid, mode, objid, classid
+            FROM pg_locks WHERE NOT granted OR locktype = 'advisory'
+           ORDER BY granted, pid;
+          SQL
 
       - name: Free runner disk before Docker image build
         # By this point the job has a full debug target/, node_modules, and a built

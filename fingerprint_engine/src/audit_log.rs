@@ -143,10 +143,12 @@ pub async fn insert_audit(
     details: &str,
     ip_address: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("SELECT pg_advisory_xact_lock($1)")
-        .bind(tenant_id)
-        .execute(&mut **tx)
-        .await?;
+    // Serialize hash-chain appends per tenant. BOUNDED (weissman_db::advisory_lock): a bare
+    // `pg_advisory_xact_lock` waits forever, and this key is `tenant_id` — the coarsest key in
+    // the codebase, taken on every auth and scan-routing path — so one stuck holder wedged every
+    // other writer for that tenant. On timeout we return Err and the caller's transaction aborts;
+    // the chain is never appended to unserialized.
+    weissman_db::advisory_lock::advisory_xact_lock(&mut **tx, tenant_id).await?;
 
     let prev_hash: String = sqlx::query_scalar(
         r#"SELECT COALESCE(event_hash, '') FROM audit_logs
@@ -230,10 +232,9 @@ async fn backfill_tenant_hashes(pool: &PgPool, tenant_id: i64) -> Result<u64, sq
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return Ok(0);
     };
-    sqlx::query("SELECT pg_advisory_xact_lock($1)")
-        .bind(tenant_id)
-        .execute(&mut *tx)
-        .await?;
+    // Same per-tenant chain lock as `insert_audit`, and bounded for the same reason: a backfill
+    // racing a live writer must fail fast and be retried, not pin a connection indefinitely.
+    weissman_db::advisory_lock::advisory_xact_lock(&mut *tx, tenant_id).await?;
 
     let rows = sqlx::query(
         r#"SELECT id, created_at, actor_user_id,

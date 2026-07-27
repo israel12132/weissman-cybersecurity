@@ -116,10 +116,11 @@ pub async fn append_event(
         .await?;
 
     if !job_id.is_nil() {
-        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
-            .bind(job_id.to_string())
-            .execute(&mut *tx)
-            .await?;
+        // BOUNDED (weissman_db::advisory_lock) — a bare `pg_advisory_xact_lock` waits forever,
+        // which under `cargo test` (pools with no lock_timeout) turned a stuck producer into a
+        // wedged test binary. On timeout this returns Err, the transaction aborts and the event
+        // is not appended: the chain is never forked by an unserialized append.
+        weissman_db::advisory_lock::advisory_xact_lock_text(&mut *tx, &job_id.to_string()).await?;
     }
 
     let prev_hash: Option<String> = if job_id.is_nil() {

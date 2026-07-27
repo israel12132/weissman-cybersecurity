@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod advisory_lock;
 pub mod auth_access;
 pub mod auth_rotation;
 pub mod env_bootstrap;
