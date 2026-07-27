@@ -1372,7 +1372,19 @@ async fn api_auto_heal(
     let patch: String = r.try_get::<String, _>("generated_patch").unwrap_or_default();
     let poc_default: String = r.try_get::<String, _>("poc_exploit").unwrap_or_default();
     let _ = tx.commit().await;
-    let token = body.git_token.as_deref().unwrap_or("").trim();
+    // Token precedence: an explicit per-request git_token wins; otherwise fall back to the
+    // tenant's saved GitHub integration (Integration Manager, encrypted) or the deployment env.
+    let resolved_git_token = {
+        let bt = body.git_token.as_deref().unwrap_or("").trim().to_string();
+        if bt.is_empty() {
+            crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
+                .await
+                .unwrap_or_default()
+        } else {
+            bt
+        }
+    };
+    let token = resolved_git_token.as_str();
     let repo = body.repo_slug.as_deref().unwrap_or("").trim();
     if token.is_empty() || repo.is_empty() {
         return (
@@ -1794,7 +1806,18 @@ async fn api_heal_revert(
         )
             .into_response();
     }
-    let token = body.git_token.as_deref().unwrap_or("").trim().to_string();
+    // Token precedence: per-request git_token, else the tenant's saved GitHub integration
+    // (encrypted) or the deployment env.
+    let token = {
+        let bt = body.git_token.as_deref().unwrap_or("").trim().to_string();
+        if bt.is_empty() {
+            crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
+                .await
+                .unwrap_or_default()
+        } else {
+            bt
+        }
+    };
     let repo = body.repo_slug.as_deref().unwrap_or("").trim().to_string();
     if token.is_empty() || repo.is_empty() {
         return (
@@ -1910,7 +1933,19 @@ async fn api_heal_batch(
     if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
         return r;
     }
-    let token = body.git_token.as_deref().unwrap_or("").trim();
+    // Token precedence: an explicit per-request git_token wins; otherwise fall back to the
+    // tenant's saved GitHub integration (Integration Manager, encrypted) or the deployment env.
+    let resolved_git_token = {
+        let bt = body.git_token.as_deref().unwrap_or("").trim().to_string();
+        if bt.is_empty() {
+            crate::auto_heal::github_token_for_tenant(state.app_pool.as_ref(), auth.tenant_id)
+                .await
+                .unwrap_or_default()
+        } else {
+            bt
+        }
+    };
+    let token = resolved_git_token.as_str();
     let repo = body.repo_slug.as_deref().unwrap_or("").trim();
     if token.is_empty() || repo.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "git_token and repo_slug required"}))).into_response();
