@@ -582,7 +582,16 @@ async fn api_heal_readiness(
             || env_nonempty("DOCKER_HOST"),
         attestation: crate::finding_attestation::is_enabled(),
         slack_approvals: env_nonempty("WEISSMAN_SLACK_SIGNING_SECRET"),
-        configless_github: env_nonempty("WEISSMAN_GITHUB_TOKEN")
+        // A token counts as configured whether it came from the deployment env OR was saved
+        // in the UI (Integration Manager → "GitHub PR", stored encrypted). Without the second
+        // source this reported "not ready" even though auto-heal would successfully resolve
+        // the saved token and open PRs — see auto_heal::github_token_for_tenant.
+        configless_github: crate::auto_heal::github_token_for_tenant(
+            state.app_pool.as_ref(),
+            auth.tenant_id,
+        )
+        .await
+        .is_some()
             && (cfg.contains_key("auto_heal_repo_slug") || env_nonempty("WEISSMAN_AUTOHEAL_REPO")),
     };
     let report = crate::heal_readiness::evaluate_readiness(&signals);
