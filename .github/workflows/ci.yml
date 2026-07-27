@@ -27,8 +27,13 @@ permissions:
 # the same command sat at 3h24m. `github.head_ref` is the source branch on a PR run and
 # empty otherwise, so `head_ref || ref_name` collapses both events onto one key: one run
 # per branch. Tag runs (ref_name `v*`) are NEVER cancelled, so a release always finishes.
+#
+# The repo is part of the key because a branch NAME alone is not unique across repos: a fork
+# PR whose source branch is `main` would otherwise land in the same group as this repo's own
+# `main` pushes and cancel them. `github.event.pull_request.head.repo.full_name` is the fork
+# on a PR run, `github.repository` everywhere else.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
@@ -452,8 +457,8 @@ jobs:
         # `55P03 lock_not_available` naming the key rather than this generic net.
         # `idle_in_transaction_session_timeout` reaps the lock HOLDER: a leaked transaction that
         # holds a lock and goes idle is the other half of the hang. 300s is far above any
-        # legitimate in-transaction pause by the server/worker on this database, and far below the
-        # 45-minute step budget, so a genuine leak is cleared inside the job.
+        # legitimate in-transaction pause by the server/worker on this database, and well below
+        # the 25-minute execution-gate budget below, so a genuine leak is cleared inside the job.
         # See docs/TECH_DEBT_flaky_db_test_hang.md before changing either value.
         env:
           PGPASSWORD: postgres
@@ -523,10 +528,16 @@ jobs:
         continue-on-error: true
         env:
           PGPASSWORD: postgres
+        #
+        # `query` is emitted with single-quoted literals redacted. The SHAPE of the statement is
+        # what names the culprit, not its values; sqlx uses prepared statements so bound values
+        # appear as $1/$2 rather than inline, and the only way a value reaches this text is a
+        # non-parameterised literal. Redacting them keeps the diagnostic while keeping data out
+        # of a public CI log.
         run: |
           psql -h 127.0.0.1 -U postgres -d weissman -x -c "
             SELECT pid, state, wait_event_type, wait_event, xact_start, state_change,
-                   left(query, 200) AS query
+                   left(regexp_replace(query, '''[^'']*''', '''<redacted>''', 'g'), 200) AS query
               FROM pg_stat_activity
              WHERE datname = 'weissman' AND pid <> pg_backend_pid()
              ORDER BY xact_start NULLS LAST;" || true
