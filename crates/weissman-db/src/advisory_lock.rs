@@ -38,6 +38,23 @@
 //! connection. It is deliberately **not** reset after the lock is taken: the remainder of a
 //! transaction that needed serialization is exactly the code that must not block forever on a
 //! row lock either, and skipping the restore keeps this to one extra round trip on a hot path.
+//!
+//! # Row locks are the same bug
+//!
+//! `lock_timeout` is not advisory-lock-specific — Postgres applies it to *any* wait for *any*
+//! lock. `SELECT … FOR UPDATE` is therefore the same defect in different syntax: it blocks
+//! indefinitely under a bare test pool, for the same reason, with the same symptom (a wedged
+//! test binary and no diagnostic). Advisory-lock call sites were only the ones this workspace
+//! happened to notice first.
+//!
+//! So the bound is applied one level up as well: [`crate::set_tenant_tx`] — the single funnel
+//! every tenant transaction passes through — sets it alongside the RLS GUC, in the *same*
+//! statement, so it costs no extra round trip and covers every present and future blocking wait
+//! inside a tenant transaction rather than only the ones someone remembered to wrap.
+//! [`bound_lock_wait`] is public for the few transactions that do not carry a tenant GUC
+//! (`auth_refresh`, which runs on the auth pool).
+//!
+//! `FOR UPDATE SKIP LOCKED` (the job-queue claim path) never waits and is unaffected either way.
 
 use std::time::Duration;
 
@@ -55,7 +72,14 @@ pub const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(15);
 /// Mirrors the `WEISSMAN_APP_STATEMENT_TIMEOUT_MS` convention used by the pool builders.
 /// `0` is rejected (it means *infinite* to Postgres, which is the bug this module exists to
 /// prevent) and falls back to the default.
-pub const LOCK_TIMEOUT_ENV: &str = "WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS";
+pub const LOCK_TIMEOUT_ENV: &str = "WEISSMAN_LOCK_TIMEOUT_MS";
+
+/// Previous name for [`LOCK_TIMEOUT_ENV`], still honoured when the current one is unset.
+///
+/// The bound started out governing advisory locks only; it now bounds **every** lock wait in a
+/// tenant transaction (see [`bound_lock_wait`]), which made the old name actively misleading.
+/// Deployments that already set it keep working — the current name simply wins when both exist.
+pub const LEGACY_LOCK_TIMEOUT_ENV: &str = "WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS";
 
 /// Pure parser behind [`lock_timeout`], split out so it can be tested without mutating the
 /// process environment — `std::env::set_var` races with any other thread reading the environment
@@ -67,9 +91,34 @@ fn parse_lock_timeout(raw: Option<&str>) -> Duration {
         .unwrap_or(DEFAULT_LOCK_TIMEOUT)
 }
 
-/// Resolve the configured advisory-lock wait bound.
+/// Pure resolution of the two accepted env names, split out for the same reason as
+/// [`parse_lock_timeout`].
+///
+/// A *present* primary wins outright — including when its value is nonsense. Falling through to
+/// the legacy name on a typo would silently apply a different bound than the operator last
+/// edited, which is precisely the kind of non-local surprise this module exists to remove.
+fn resolve_lock_timeout(primary: Option<&str>, legacy: Option<&str>) -> Duration {
+    match primary {
+        Some(_) => parse_lock_timeout(primary),
+        None => parse_lock_timeout(legacy),
+    }
+}
+
+/// Resolve the configured lock-wait bound.
 pub fn lock_timeout() -> Duration {
-    parse_lock_timeout(std::env::var(LOCK_TIMEOUT_ENV).ok().as_deref())
+    resolve_lock_timeout(
+        std::env::var(LOCK_TIMEOUT_ENV).ok().as_deref(),
+        std::env::var(LEGACY_LOCK_TIMEOUT_ENV).ok().as_deref(),
+    )
+}
+
+/// The configured bound rendered as a Postgres `lock_timeout` value (milliseconds, as text).
+///
+/// Exists so a caller can fold the bound into a statement it was already sending — see
+/// [`crate::set_tenant_tx`], which passes this to `set_config` alongside the RLS GUC and so pays
+/// **no** extra round trip for it.
+pub fn lock_timeout_setting() -> String {
+    lock_timeout().as_millis().max(1).to_string()
 }
 
 /// True when `err` is Postgres' `lock_not_available` (SQLSTATE `55P03`) — i.e. this module's
@@ -81,10 +130,18 @@ pub fn is_lock_timeout(err: &sqlx::Error) -> bool {
     matches!(err, sqlx::Error::Database(db) if db.code().as_deref() == Some("55P03"))
 }
 
-/// Apply the transaction-scoped wait bound. Must run inside an open transaction; `SET LOCAL`
-/// outside one is a no-op that Postgres only warns about, which would silently restore the
-/// unbounded behaviour — so the callers below always pair it with an `_xact_` lock.
-async fn set_local_lock_timeout(
+/// Apply the transaction-scoped wait bound to **every** lock this transaction goes on to take.
+///
+/// `lock_timeout` is not advisory-lock-specific: Postgres applies it to any wait for any lock,
+/// so this one statement also bounds `SELECT … FOR UPDATE`, `UPDATE`/`DELETE` on a contended row,
+/// `LOCK TABLE` and DDL. That is why it is public — a transaction that takes a **blocking row
+/// lock** has exactly the failure mode this module was written for, and
+/// `SELECT … FOR UPDATE` is simply a different spelling of "wait forever by default".
+///
+/// Must run inside an open transaction; `SET LOCAL` outside one is a no-op that Postgres only
+/// warns about, which would silently restore the unbounded behaviour — so every caller pairs it
+/// with a transaction it has already begun.
+pub async fn bound_lock_wait(
     conn: &mut sqlx::PgConnection,
     bound: Duration,
 ) -> Result<(), sqlx::Error> {
@@ -119,13 +176,16 @@ pub async fn advisory_xact_lock_with_timeout(
     key: i64,
     bound: Duration,
 ) -> Result<(), sqlx::Error> {
-    set_local_lock_timeout(&mut *conn, bound).await?;
+    bound_lock_wait(&mut *conn, bound).await?;
     sqlx::query("SELECT pg_advisory_xact_lock($1)")
         .bind(key)
         .execute(&mut *conn)
         .await
-        .map_err(|e| {
-            if is_lock_timeout(&e) {
+        // `inspect_err`, not `map_err`: this only observes the error to log it and must return it
+        // unchanged. Saying so in the combinator keeps that guarantee from depending on the
+        // trailing `e` in a closure body.
+        .inspect_err(|e| {
+            if is_lock_timeout(e) {
                 tracing::error!(
                     target: "weissman_db",
                     advisory_key = key,
@@ -133,7 +193,6 @@ pub async fn advisory_xact_lock_with_timeout(
                     "advisory lock wait exceeded its bound — another transaction is holding this key"
                 );
             }
-            e
         })?;
     Ok(())
 }
@@ -157,13 +216,14 @@ pub async fn advisory_xact_lock_text_with_timeout(
     key: &str,
     bound: Duration,
 ) -> Result<(), sqlx::Error> {
-    set_local_lock_timeout(&mut *conn, bound).await?;
+    bound_lock_wait(&mut *conn, bound).await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
         .bind(key)
         .execute(&mut *conn)
         .await
-        .map_err(|e| {
-            if is_lock_timeout(&e) {
+        // See the sibling helper above: observe-and-rethrow, never transform.
+        .inspect_err(|e| {
+            if is_lock_timeout(e) {
                 tracing::error!(
                     target: "weissman_db",
                     advisory_key = key,
@@ -171,7 +231,6 @@ pub async fn advisory_xact_lock_text_with_timeout(
                     "advisory lock wait exceeded its bound — another transaction is holding this key"
                 );
             }
-            e
         })?;
     Ok(())
 }
@@ -279,6 +338,51 @@ mod tests {
             parse_lock_timeout(Some("  2500  ")),
             Duration::from_millis(2500)
         );
+    }
+
+    /// The legacy name must keep working for deployments that already set it, but must never
+    /// override a name the operator has set more recently.
+    #[test]
+    fn legacy_env_name_is_a_fallback_not_an_override() {
+        // Neither set → default.
+        assert_eq!(resolve_lock_timeout(None, None), DEFAULT_LOCK_TIMEOUT);
+
+        // Only the legacy name set → honoured, so an existing deployment is not silently
+        // reverted to the default by this rename.
+        assert_eq!(
+            resolve_lock_timeout(None, Some("2500")),
+            Duration::from_millis(2500)
+        );
+
+        // Both set → the current name wins.
+        assert_eq!(
+            resolve_lock_timeout(Some("1000"), Some("2500")),
+            Duration::from_millis(1000)
+        );
+
+        // Primary present but unparseable → default, NOT the legacy value. Falling through
+        // would apply a bound the operator did not last write, which is worse than being
+        // obviously wrong.
+        assert_eq!(
+            resolve_lock_timeout(Some("bogus"), Some("2500")),
+            DEFAULT_LOCK_TIMEOUT
+        );
+        // Same for the 0-means-infinite rejection.
+        assert_eq!(
+            resolve_lock_timeout(Some("0"), Some("2500")),
+            DEFAULT_LOCK_TIMEOUT
+        );
+    }
+
+    /// `set_config` takes text, and a `lock_timeout` of `0` means *infinite* — the exact bug
+    /// this module removes. The rendered value must never be `0`.
+    #[test]
+    fn rendered_setting_is_positive_milliseconds() {
+        let s = lock_timeout_setting();
+        let ms: u128 = s
+            .parse()
+            .expect("lock_timeout_setting must render an integer");
+        assert!(ms > 0, "rendered lock_timeout must never be 0 (= infinite)");
     }
 
     #[test]

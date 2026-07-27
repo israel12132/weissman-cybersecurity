@@ -41,6 +41,10 @@ async fn pool() -> Option<PgPool> {
     Some(
         PgPoolOptions::new()
             .max_connections(4)
+            // Explicit, not sqlx's 30 s default: a starved pool here should fail while the test
+            // output still points at this pool, not after a delay long enough to read as a hang.
+            // See docs/TECH_DEBT_flaky_db_test_hang.md.
+            .acquire_timeout(std::time::Duration::from_secs(5))
             .connect(&url)
             .await
             .expect("connect TEST_DATABASE_URL"),
@@ -164,14 +168,19 @@ async fn github_token_resolves_from_saved_integration_then_env() {
         .execute(&mut *c2)
         .await
         .expect("guc2");
-    sqlx::query("DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'")
-        .bind(TENANT)
-        .execute(&mut *c2)
-        .await
-        .expect("cleanup");
+    sqlx::query(
+        "DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
+    )
+    .bind(TENANT)
+    .execute(&mut *c2)
+    .await
+    .expect("cleanup");
     drop(c2);
 
-    std::env::set_var("WEISSMAN_GITHUB_TOKEN", "ghp_ENV_fallback_not_a_secret_00_zzzz");
+    std::env::set_var(
+        "WEISSMAN_GITHUB_TOKEN",
+        "ghp_ENV_fallback_not_a_secret_00_zzzz",
+    );
     let env_resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT).await;
     assert_eq!(
         env_resolved.as_deref(),

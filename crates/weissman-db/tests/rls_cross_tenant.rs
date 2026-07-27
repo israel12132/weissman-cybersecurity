@@ -63,6 +63,11 @@ async fn weissman_app_cannot_read_other_tenant_clients() {
     }
     let pool = PgPoolOptions::new()
         .max_connections(1)
+        // Explicit, not sqlx's 30 s default. With `max_connections(1)` any accidental second
+        // concurrent acquire is a deadlock against ourselves; 5 s makes that surface as a prompt,
+        // clearly-attributed `PoolTimedOut` instead of a half-minute stall that reads as a hang.
+        // See docs/TECH_DEBT_flaky_db_test_hang.md.
+        .acquire_timeout(std::time::Duration::from_secs(5))
         .connect(url.trim())
         .await
         .expect("connect TEST_DATABASE_URL");

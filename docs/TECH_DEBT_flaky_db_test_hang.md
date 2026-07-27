@@ -63,6 +63,13 @@ binary that size is what makes the step I/O-bound. Hence
 remediation that cannot be *observed to do something* is not evidence about the cause — check that
 your fix actually changed the state you blamed.
 
+**Confirmed.** On run `30239499487` (commit `156bcd1`) the same
+`cargo test --workspace --all-targets --no-run` that had twice been SIGKILLed at the 60-minute
+bound completed in **12 m 13 s** (05:37:13 → 05:49:26). Same command, same workspace, same runner
+class — the only change was the debug level. The test gate that follows it ran in **7 seconds**,
+which is also the cleanest evidence for the mode-A split: the tests were never the slow part.
+`engine-wiring`'s own compile step, carrying the identical job-level values, took **3 m 26 s**.
+
 Run `29650387309` (69 min, "no output progression") predates this analysis and its logs have
 expired; it is **not** attributed to either mode here.
 
@@ -125,10 +132,41 @@ property that made this bug possible in the first place.
 | `advisory_xact_lock_text(conn, &str)` | Same, key folded via `hashtextextended(key, 0)` | `job-bus::append_event` |
 | `advisory_xact_lock_text_or_skip(conn, &str)` | Bounded wait inside a **savepoint**; `Ok(false)` on timeout, transaction stays usable | `auto_heal_job` start guard |
 
-Default bound **15 s** (`WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS` to override; `0` is rejected because
-it means *infinite* to Postgres). Deliberately far below the 120 s app-pool `statement_timeout`,
-so a genuine lock problem surfaces as a precise `lock_not_available` naming the key rather than a
-generic statement timeout that could have come from anywhere.
+Default bound **15 s** (`WEISSMAN_LOCK_TIMEOUT_MS` to override; the earlier name
+`WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS` is still honoured as a fallback so existing deployments keep
+working, but it no longer describes the scope. `0` is rejected because it means *infinite* to
+Postgres). Deliberately far below the 120 s app-pool `statement_timeout`, so a genuine lock
+problem surfaces as a precise `lock_not_available` naming the key rather than a generic statement
+timeout that could have come from anywhere.
+
+### The same defect in different syntax: blocking row locks
+
+Bounding advisory locks closed the call sites this workspace *noticed*, not the defect. Postgres'
+`lock_timeout` is not advisory-lock-specific — it bounds any wait for any lock — and
+`SELECT … FOR UPDATE` blocks indefinitely by default for exactly the same reason, with exactly the
+same symptom. Four such sites existed, none of them bounded:
+`auth_refresh::rotate_refresh_token`, `council_hitl`, and two in `self_improve`.
+
+Reproduced directly (live Postgres 16, one session holding the row):
+
+| | Result |
+|---|---|
+| `lock_timeout = 0` — the bare test-pool shape | never returned; killed by an external 8 s timeout |
+| `lock_timeout = 1500ms` | `ERROR: canceling statement due to lock timeout` in **1580 ms** |
+
+The bound is applied one level up rather than at each site: `set_tenant_tx` — the single funnel
+every tenant transaction passes through (236 call sites across 87 files) — now sets `lock_timeout`
+**in the same `SELECT`** as the RLS GUC, so it costs no extra round trip and covers every future
+blocking wait rather than only the ones someone remembered to wrap.
+`advisory_lock::bound_lock_wait` is public for transactions that carry no tenant GUC —
+`auth_refresh` runs on the auth pool and calls it explicitly right after `begin()`.
+
+`FOR UPDATE SKIP LOCKED` (the job-queue claim path) never waits and needed no change.
+
+The row locks themselves are **kept**: they are what make read-then-write atomic, and in
+`rotate_refresh_token` specifically they are what stops two concurrent presentations of one
+refresh token from both succeeding. Bounding the wait does not weaken that — on timeout the
+statement errors, the transaction aborts, and neither rotation commits.
 
 Two design points that are easy to get wrong:
 
@@ -186,7 +224,9 @@ helper and not from pool configuration a refactor could drop:
 | Guard | Location | Purpose |
 |---|---|---|
 | `SET LOCAL lock_timeout` before every advisory lock | `crates/weissman-db/src/advisory_lock.rs` | The actual fix. Makes the wait bounded regardless of pool, environment or caller. |
-| `no_raw_advisory_locks` | `crates/weissman-db/tests/` | Makes Rule 1 below self-enforcing: fails the existing blocking `cargo test` gate if any Rust source outside the helper takes a blocking advisory lock. Both tech-debt documents in this repo record guards that were added and later silently lost; a rule stated only in prose is one of those. |
+| `no_unbounded_lock_waits` | `crates/weissman-db/tests/` | Makes Rules 1 and 2 below self-enforcing: fails the existing blocking `cargo test` gate if any Rust source takes a blocking advisory lock outside the helper, **or** a blocking row lock (`FOR UPDATE` / `FOR NO KEY UPDATE` / `FOR SHARE`) in a file not reviewed as bounded. Row-lock matching normalises whitespace across the whole file, so a `SKIP LOCKED` split onto its own line is correctly not flagged. Both tech-debt documents in this repo record guards that were added and later silently lost; a rule stated only in prose is one of those. |
+| `set_config('lock_timeout', …)` in `set_tenant_tx` | `crates/weissman-db/src/lib.rs` | Bounds **every** lock wait in **every** tenant transaction, from the single funnel all 236 call sites pass through. Must stay in the same `SELECT` as the RLS GUC — that is what makes it free. Deleting it silently restores unbounded `FOR UPDATE` waits under `cargo test`; `tenant_tx_lock_bound::begin_tenant_tx_applies_a_finite_lock_timeout` is the test that catches it. |
+| `tenant_tx_lock_bound` | `crates/weissman-db/tests/` | Three DB-backed contracts on deliberately bare pools: the bound is applied, a contended row lock errors instead of hanging, and the success path is unchanged. The first is the load-bearing one — a `!= 0` check alone would pass on the un-fixed code wherever the CI database backstop is present, so it asserts the exact configured value. |
 | `ALTER DATABASE … lock_timeout / idle_in_transaction_session_timeout` | `.github/workflows/ci.yml` | Backstop for blocking waits we do not own and for future call sites that bypass the helper. |
 | `--test-threads=2` | `.github/workflows/ci.yml` (both Rust test steps) | Contention *pressure* reducer. Not the fix — it narrows the window, it does not bound the wait. Keep it: it also keeps concurrent DB work under the pool ceiling. |
 | `--no-run` compile step before each Rust gate | `.github/workflows/ci.yml` (both Rust jobs) | Fix for mode A. Keeps cold compile+link out of the gate's budget so a test-step timeout means "the tests hung" and nothing else. Deleting it silently re-arms the 46-minute overrun. |
@@ -200,15 +240,30 @@ helper and not from pool configuration a refactor could drop:
    `weissman_db::advisory_lock` — the helper is the one place that issues the raw statement, and
    it does so immediately after setting the bound. An unbounded blocking primitive on a connection
    whose timeouts are set somewhere else is how this bug happened. Enforced by
-   `crates/weissman-db/tests/no_raw_advisory_locks.rs`, whose `ALLOWED` list is the authoritative
-   set of exemptions.
-2. A guard whose "fail-open" branch is only reachable on *error* is not fail-open if the primitive
+   `crates/weissman-db/tests/no_unbounded_lock_waits.rs`, whose `ADVISORY_ALLOWED` list is the
+   authoritative set of exemptions.
+2. **Never** take a blocking row lock (`FOR UPDATE`, `FOR NO KEY UPDATE`, `FOR SHARE`) in a
+   transaction that does not carry a `lock_timeout`. In practice: begin it with
+   `begin_tenant_tx`, or call `advisory_lock::bound_lock_wait` right after `begin()` when there is
+   no tenant GUC, or use `SKIP LOCKED` / `NOWAIT` if the work is genuinely skippable. Enforced by
+   the same test's `blocking_row_locks_live_only_in_reviewed_files`, whose `ROW_LOCK_ALLOWED` list
+   requires each entry to name the mechanism that bounds it.
+3. A guard whose "fail-open" branch is only reachable on *error* is not fail-open if the primitive
    it guards blocks instead of erroring. Bound it, then the fallback is real.
-3. If you add a DB-backed test, it inherits the CI database's `lock_timeout` — assume any lock
+4. If you add a DB-backed test, it inherits the CI database's `lock_timeout` — assume any lock
    wait can fail, and let it fail rather than retrying it into a hang.
-4. If you change any bound in the table above, update this table in the same commit.
+5. If you change any bound in the table above, update this table in the same commit.
 
 ## Residual work (non-blocking)
 
-- Give test-side `PgPoolOptions` an explicit small `acquire_timeout` anyway. Not needed for this
-  hang (the 30 s default already bounds it) but it makes the failure message name the pool.
+- ~~Give test-side `PgPoolOptions` an explicit small `acquire_timeout`.~~ **Done**, and the audit
+  behind it is worth keeping. Of the DB-backed test pools, four already set one deliberately
+  (`persist_real_pool_starvation`, `llm_metering_pool_starvation`, `findings_persist_pool_starvation`,
+  `soar_playbook_e2e` — 4–5 s, since starvation is what they test); two were bare only by omission
+  and now set 5 s (`tenant_quota_integration`, `rls_cross_tenant`).
+
+  The remaining two — `advisory_lock_bound` and `tenant_tx_lock_bound` — are bare **on purpose and
+  must stay bare**: they exist to prove the lock bound is intrinsic to the lock/transaction rather
+  than inherited from pool configuration, so configuring their pools would delete the property
+  they assert. If a future sweep "fixes" them for consistency, it has silently removed the
+  regression test for this entire document.
