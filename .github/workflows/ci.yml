@@ -559,22 +559,35 @@ jobs:
         env:
           PGPASSWORD: postgres
         #
-        # `query` is emitted with single-quoted literals redacted. The SHAPE of the statement is
-        # what names the culprit, not its values; sqlx uses prepared statements so bound values
-        # appear as $1/$2 rather than inline, and the only way a value reaches this text is a
-        # non-parameterised literal. Redacting them keeps the diagnostic while keeping data out
-        # of a public CI log.
+        # `query` is emitted with literals redacted. The SHAPE of the statement is what names the
+        # culprit, not its values; sqlx uses prepared statements so bound values appear as $1/$2
+        # rather than inline, and the only way a value reaches this text is a non-parameterised
+        # literal. Both literal syntaxes are covered:
+        #   - dollar-quoted, `$$...$$` and `$tag$...$tag$` — this repo's migrations use them for
+        #     plpgsql function bodies, so they genuinely occur here;
+        #   - single-quoted, `'...'`.
+        # Dollar quotes are redacted FIRST: a dollar-quoted body may itself contain single quotes,
+        # and redacting those first would break the outer match. `$1`/`$2` placeholders survive
+        # because the tag class excludes whitespace.
+        #
+        # Fed via a QUOTED heredoc (<<'SQL'), not `psql -c "..."` — the regex contains `$`, which
+        # a double-quoted shell string would expand.
         run: |
-          psql -h 127.0.0.1 -U postgres -d weissman -x -c "
-            SELECT pid, state, wait_event_type, wait_event, xact_start, state_change,
-                   left(regexp_replace(query, '''[^'']*''', '''<redacted>''', 'g'), 200) AS query
-              FROM pg_stat_activity
-             WHERE datname = 'weissman' AND pid <> pg_backend_pid()
-             ORDER BY xact_start NULLS LAST;" || true
-          psql -h 127.0.0.1 -U postgres -d weissman -x -c "
-            SELECT locktype, granted, pid, mode, objid, classid
-              FROM pg_locks WHERE NOT granted OR locktype = 'advisory'
-             ORDER BY granted, pid;" || true
+          psql -h 127.0.0.1 -U postgres -d weissman -x <<'SQL' || true
+          SELECT pid, state, wait_event_type, wait_event, xact_start, state_change,
+                 left(regexp_replace(
+                        regexp_replace(query, '\$[A-Za-z_0-9]*\$.*?\$[A-Za-z_0-9]*\$',
+                                       '$<redacted>$', 'g'),
+                        '''[^'']*''', '''<redacted>''', 'g'), 200) AS query
+            FROM pg_stat_activity
+           WHERE datname = 'weissman' AND pid <> pg_backend_pid()
+           ORDER BY xact_start NULLS LAST;
+          SQL
+          psql -h 127.0.0.1 -U postgres -d weissman -x <<'SQL' || true
+          SELECT locktype, granted, pid, mode, objid, classid
+            FROM pg_locks WHERE NOT granted OR locktype = 'advisory'
+           ORDER BY granted, pid;
+          SQL
 
       - name: Free runner disk before Docker image build
         # By this point the job has a full debug target/, node_modules, and a built
