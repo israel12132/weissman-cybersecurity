@@ -164,14 +164,19 @@ async fn github_token_resolves_from_saved_integration_then_env() {
         .execute(&mut *c2)
         .await
         .expect("guc2");
-    sqlx::query("DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'")
-        .bind(TENANT)
-        .execute(&mut *c2)
-        .await
-        .expect("cleanup");
+    sqlx::query(
+        "DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
+    )
+    .bind(TENANT)
+    .execute(&mut *c2)
+    .await
+    .expect("cleanup");
     drop(c2);
 
-    std::env::set_var("WEISSMAN_GITHUB_TOKEN", "ghp_ENV_fallback_not_a_secret_00_zzzz");
+    std::env::set_var(
+        "WEISSMAN_GITHUB_TOKEN",
+        "ghp_ENV_fallback_not_a_secret_00_zzzz",
+    );
     let env_resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT).await;
     assert_eq!(
         env_resolved.as_deref(),

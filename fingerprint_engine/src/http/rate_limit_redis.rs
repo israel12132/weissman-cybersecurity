@@ -53,6 +53,16 @@ fn shared() -> Option<Arc<RedisRateLimiter>> {
 }
 
 async fn incr_window(key: &str, window: Duration) -> Option<u64> {
+    // Self-healing fast-fail: if the Redis dependency circuit is open (sustained outage detected by
+    // the recovery engine), skip the connect+INCR — which would otherwise each pay REDIS_OP_TIMEOUT
+    // — and fall straight to the local limiter. `None` already means "Redis unavailable → local
+    // fallback", so this only makes the outage path faster; it is a no-op while Redis is healthy (or
+    // when self-heal recovery is disabled), and the circuit auto-probes back to closed on recovery.
+    if !crate::self_heal_recovery::dependency_available(
+        crate::self_heal_recovery::Dependency::Redis,
+    ) {
+        return None;
+    }
     let rl = shared()?;
     let mut conn = rl.conn().await.ok()?;
     let count: u64 = conn.incr(key, 1u64).await.ok()?;

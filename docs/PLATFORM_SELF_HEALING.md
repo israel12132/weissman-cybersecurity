@@ -104,8 +104,13 @@ lapse on their own. All state is process-wide and tenant-agnostic.
 |---|---|---|
 | `weissman_self_heal_diagnosis_total` | `subsystem`, `severity`, `action` | Incremented each 10s round a subsystem is diagnosed unhealthy, tagged with the recommended recovery. |
 | `weissman_self_heal_recovery_total` | `subsystem`, `action`, `outcome` | Incremented per round a recovery is considered: `outcome=executed` when the effect ran, `outcome=cooldown` when suppressed by the per-action window. |
+| `weissman_self_heal_scan_shed_total` | — | Incremented each time a scan-trigger POST is rejected with 503 because the load-shed gate is engaged (the intake edge honoring `load_shed_active()`). |
+| `weissman_self_heal_cron_backoff_total` | — | Incremented each cron tick the scan-schedule worker defers because `backoff_active()` is engaged (transient pressure). |
 
-Add to the Grafana/Prometheus layer (`deploy/observability`). A sustained nonzero
+Prometheus alerts for these signals ship in
+`deploy/observability/prometheus/weissman-alerts.yml` (group `weissman-platform-self-healing`):
+`WeissmanPlatformCriticalDiagnosis`, `WeissmanPlatformLoadShedding`,
+`WeissmanPlatformSustainedRecovery`, `WeissmanPlatformCronBackoff`. A sustained nonzero
 `diagnosis`/`executed` rate for a `{subsystem, action}` is the platform actively self-healing; a
 high `cooldown` rate means the fault is *sustained* (recovery already engaged, waiting out the
 window) — escalate to the runbook below.
@@ -122,12 +127,25 @@ window) — escalate to the runbook below.
 - **Shipped = detect → diagnose → recover.** The diagnose brain (`self_healing`) and the
   bounded recovery executor (`self_heal_recovery`) are both wired into the existing 10s loop,
   each with its own metric, over the observability already present.
-- **Next — adoption at the intake edge.** The recovery *state* is live and consumable, but the
-  win is only realized when heavy paths honor it: have scan/async-job admission check
-  `load_shed_active()` (reject/queue) and `backoff_active()` (delay), and have DB/Redis call
-  sites consult `dependency_available(dep)` to fail fast during an outage. Each adoption is a
-  small, isolated change guarded by the master switch.
+- **Adoption at the intake edge — all three gates now consumed.** The recovery *state* is only
+  worth the win when heavy paths honor it, and every gate now has a real consumer:
+  - **`load_shed_active()`** — scan-trigger POST admission (`http::tenant_scan_limit`) returns
+    **503 + Retry-After** (`weissman_self_heal_scan_shed_total`) when the platform is shedding, so
+    critical saturation sheds *new* scan intake instead of piling on.
+  - **`backoff_active()`** — the cron scan-schedule worker (`scan_schedule_worker`) defers its tick
+    (`weissman_self_heal_cron_backoff_total`) under transient pressure. Due scans stay due (their
+    `next_run_at` only advances once launched), so nothing is lost — new cron intake just waits for
+    a healthy tick, without starving the async worker that drains the backlog.
+  - **`dependency_available(Redis)`** — the distributed rate-limit hot path (`rate_limit_redis::
+    incr_window`) fast-fails to the local limiter when the Redis circuit is open, instead of paying
+    the connect/op timeout on every request during an outage.
+
+  All three are guarded by the master switch and auto-clear when the fault passes.
 - **Later** — durable cross-replica recovery state (today each replica self-heals from its own
-  in-memory gates), and auto-restart of stuck background workers.
+  in-memory gates; a Postgres-backed shared gate would coordinate a fleet), and auto-restart of
+  stuck background workers (the diagnosis + prune-request signals already exist; a supervised
+  restart wrapper is the remaining piece). Both are deliberately deferred: they change failure
+  semantics across replicas/processes and warrant their own design + soak, whereas the in-replica
+  loop above is complete and safe today.
 - Both `diagnose` and `plan_recovery` are intentionally **pure functions** so new rules and new
   effects can be added and tested independently of the sampling loop.

@@ -212,6 +212,20 @@ pub fn spawn_scan_schedule_worker(app_pool: Arc<PgPool>, auth_pool: Arc<PgPool>)
             if !cron_enabled() {
                 continue;
             }
+            // Self-healing backoff: under transient platform pressure (async backlog past the warn
+            // threshold, engaged by the recovery engine), defer this cron tick. Due scans stay due
+            // — their `next_run_at` is only advanced once a tick actually launches them — so they
+            // fire on the next healthy tick. This eases NEW cron intake without starving the async
+            // worker that drains the backlog. No-op unless self-heal recovery is enabled and backing
+            // off; auto-clears via TTL.
+            if crate::self_heal_recovery::backoff_active() {
+                metrics::counter!("weissman_self_heal_cron_backoff_total").increment(1);
+                tracing::debug!(
+                    target: "scan_schedule_worker",
+                    "deferring cron tick: self-healing backoff engaged (transient platform pressure)"
+                );
+                continue;
+            }
             tick(app_pool.as_ref(), auth_pool.as_ref()).await;
         }
     });
