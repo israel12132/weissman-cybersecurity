@@ -11,14 +11,24 @@ permissions:
   contents: read
 
 # Cancel superseded in-progress runs. When a newer commit is pushed to the same
-# branch/PR, the older run for that ref is cancelled instead of running to completion.
-# This is what produced the stream of "Engine wiring" failures on already-superseded
-# SHAs (05a51d7 / 4b4196e / 6249d7b): each old commit's ~40-min live stack kept running
-# and failing at the doc-metrics gate long after a newer commit had fixed it. Grouped by
-# ref, so push-runs supersede push-runs and PR-runs supersede PR-runs. Tag runs
-# (refs/tags/v*) are NEVER cancelled, so a release build+publish always finishes.
+# branch/PR, the older run is cancelled instead of running to completion. This is what
+# produced the stream of "Engine wiring" failures on already-superseded SHAs
+# (05a51d7 / 4b4196e / 6249d7b): each old commit's ~40-min live stack kept running and
+# failing at the doc-metrics gate long after a newer commit had fixed it.
+#
+# Keyed on the BRANCH NAME, not `github.ref`. A branch with an open PR fires this workflow
+# twice — once for `push` (ref `refs/heads/<branch>`) and once for `pull_request` (ref
+# `refs/pull/<n>/merge`) — and under the old `github.ref` key those two keys differed, so
+# the runs never cancelled each other. Both then built the whole workspace in parallel and
+# fought for runner I/O. Measured on one commit (a4f5ce4, runs 30223674764 + 30223676128),
+# the identical `cargo test --workspace --all-targets --no-run` took 8m01s in one run and
+# 41m49s in the other before its runner was reclaimed ("The runner has received a shutdown
+# signal"), while the Postgres service logged 352-second fsync stalls. A third instance of
+# the same command sat at 3h24m. `github.head_ref` is the source branch on a PR run and
+# empty otherwise, so `head_ref || ref_name` collapses both events onto one key: one run
+# per branch. Tag runs (ref_name `v*`) are NEVER cancelled, so a release always finishes.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
@@ -171,6 +181,13 @@ jobs:
         # `--no-run` builds the test harnesses too, so the gate below only EXECUTES. Its timeout
         # then measures test runtime rather than a cold compile+link — failure mode A in
         # docs/TECH_DEBT_flaky_db_test_hang.md. Subsumes the old `cargo build --workspace`.
+        #
+        # Bounded for the same reason every other long step here is: without it this step has no
+        # ceiling below GitHub's 360-min job default, and it was observed sitting at 3h24m on a
+        # contended runner (run 30223676128) while the identical command finished in 17m03s in the
+        # duplicate run of the same commit. A cold all-targets link is ~17-20 min, so 45 min is
+        # generous headroom that still fails fast and legibly instead of burning six hours.
+        timeout-minutes: 45
         run: cargo test --workspace --all-targets --no-run
 
       - name: Run Rust tests (blocking gate)

@@ -24,6 +24,25 @@ of this document merged them into one. They need different fixes.
 That is a budget/measurement problem, not a hang: the timeout was guarding the wrong thing. The
 fix is to give compilation its own step and budget so the gate's timeout measures *execution*.
 
+#### …and the compile itself was being starved by a duplicate CI run
+
+Splitting compile from execution exposed a second layer. `on:` fires this workflow for both
+`push` and `pull_request`, and the concurrency key was `github.ref` — which is
+`refs/heads/<branch>` for one and `refs/pull/<n>/merge` for the other. The two keys differ, so a
+branch with an open PR ran the **entire workflow twice, in parallel**, each run building the whole
+workspace. Commit `a4f5ce4` (runs `30223674764` + `30223676128`) shows what that does to the
+*identical* command, `cargo test --workspace --all-targets --no-run`:
+
+| Run | rust-audit compile | engine-wiring compile |
+|---|---|---|
+| `30223674764` (push) | **17 m 03 s** ✅ | **41 m 49 s**, then `The runner has received a shutdown signal` ❌ |
+| `30223676128` (PR) | **3 h 24 m**, still running | **8 m 01 s** ✅ |
+
+Same command, same commit, four wildly different outcomes — and the Postgres service container
+logged 352-second `fsync` stalls while it happened. That is runner I/O starvation, not a code
+problem. The concurrency key is now `head_ref || ref_name`, which collapses both events onto one
+key: one run per branch.
+
 Run `29650387309` (69 min, "no output progression") predates this analysis and its logs have
 expired; it is **not** attributed to either mode here.
 
@@ -151,7 +170,8 @@ helper and not from pool configuration a refactor could drop:
 | `ALTER DATABASE … lock_timeout / idle_in_transaction_session_timeout` | `.github/workflows/ci.yml` | Backstop for blocking waits we do not own and for future call sites that bypass the helper. |
 | `--test-threads=2` | `.github/workflows/ci.yml` (both Rust test steps) | Contention *pressure* reducer. Not the fix — it narrows the window, it does not bound the wait. Keep it: it also keeps concurrent DB work under the pool ceiling. |
 | `--no-run` compile step before each Rust gate | `.github/workflows/ci.yml` (both Rust jobs) | Fix for mode A. Keeps cold compile+link out of the gate's budget so a test-step timeout means "the tests hung" and nothing else. Deleting it silently re-arms the 46-minute overrun. |
-| `timeout-minutes: 25` on the gates, `40` on the compile step | `.github/workflows/ci.yml` | Sized to what each step actually does (~6–8 min execution; cold link needs the larger budget). Only meaningful because compile and execution are separate — do not merge the steps back together and keep these numbers. |
+| `timeout-minutes: 25` on the gates, `40`/`45` on the compile steps | `.github/workflows/ci.yml` | Sized to what each step actually does (~6–8 min execution; cold link ~17–20 min). Only meaningful because compile and execution are separate — do not merge the steps back together and keep these numbers. **Every** long step needs a ceiling: the rust-audit compile step originally had none and was observed sitting at 3h24m, which is the same "unbounded wait" mistake as mode B, one layer up. |
+| `concurrency.group` keyed on `head_ref \|\| ref_name` | `.github/workflows/ci.yml` | One CI run per branch. Keyed on `github.ref` a branch with an open PR ran the whole workflow **twice** in parallel (`refs/heads/<branch>` vs `refs/pull/<n>/merge`), and the two runs fought for runner I/O — see the timing table below. Reverting this key silently doubles CI load and reintroduces the contention. |
 
 ## Rules
 
