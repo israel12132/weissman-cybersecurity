@@ -106,3 +106,77 @@ async fn deny_flips_at_limit_boundary() {
         .expect("enforce");
     assert!(unlimited.allowed);
 }
+
+/// The auto-heal GitHub token resolver reads the tenant's saved "GitHub PR" integration
+/// (stored encrypted in integrations_registry, exactly as the Integration Manager UI writes
+/// it), decrypts it, and falls back to the deployment env — so a token entered once in the UI
+/// drives PR automation without being passed per request.
+#[tokio::test]
+async fn github_token_resolves_from_saved_integration_then_env() {
+    std::env::set_var(
+        "WEISSMAN_INTEGRATIONS_VAULT_KEY",
+        "weissman-itest-vault-key-please-32b+",
+    );
+    std::env::remove_var("GITHUB_TOKEN");
+    std::env::remove_var("WEISSMAN_GITHUB_TOKEN");
+    let Some(pool) = pool().await else { return };
+
+    // Encrypt the token exactly as the UI's integrations save path does.
+    let token = "ghp_EXAMPLE_itest_not_a_secret_0000_klmn";
+    let cfg = fingerprint_engine::soar::integrations_vault::encrypt_config(
+        &serde_json::json!({ "token": token, "default_repo": "o/r" }),
+    );
+    let registry =
+        serde_json::json!([{ "id": "github", "name": "GitHub PR", "category": "SOAR", "config": cfg }])
+            .to_string();
+
+    // Insert under the tenant GUC (system_configs enforces RLS).
+    let mut conn = pool.acquire().await.expect("conn");
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, false)")
+        .bind(TENANT.to_string())
+        .execute(&mut *conn)
+        .await
+        .expect("guc");
+    sqlx::query(
+        "INSERT INTO system_configs (tenant_id, key, value, description) \
+         VALUES ($1, 'integrations_registry', $2, 'itest') \
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
+    )
+    .bind(TENANT)
+    .bind(&registry)
+    .execute(&mut *conn)
+    .await
+    .expect("insert registry");
+    drop(conn);
+
+    // Resolves the decrypted token from the saved integration.
+    let resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT).await;
+    assert_eq!(
+        resolved.as_deref(),
+        Some(token),
+        "resolves the saved GitHub integration token"
+    );
+
+    // Remove the integration → falls back to the deployment env.
+    let mut c2 = pool.acquire().await.expect("conn2");
+    sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, false)")
+        .bind(TENANT.to_string())
+        .execute(&mut *c2)
+        .await
+        .expect("guc2");
+    sqlx::query("DELETE FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'")
+        .bind(TENANT)
+        .execute(&mut *c2)
+        .await
+        .expect("cleanup");
+    drop(c2);
+
+    std::env::set_var("WEISSMAN_GITHUB_TOKEN", "ghp_ENV_fallback_not_a_secret_00_zzzz");
+    let env_resolved = fingerprint_engine::auto_heal::github_token_for_tenant(&pool, TENANT).await;
+    assert_eq!(
+        env_resolved.as_deref(),
+        Some("ghp_ENV_fallback_not_a_secret_00_zzzz"),
+        "falls back to the env token when no integration is saved"
+    );
+    std::env::remove_var("WEISSMAN_GITHUB_TOKEN");
+}

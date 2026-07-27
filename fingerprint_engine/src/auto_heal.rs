@@ -620,6 +620,50 @@ pub async fn close_pull_request(
     Ok(())
 }
 
+/// Resolve the GitHub token for a tenant's PR automation without requiring it per request.
+///
+/// Precedence: the tenant's **GitHub integration** saved in the UI (Integration Manager →
+/// "GitHub PR"), which lives encrypted in the `integrations_registry` (decrypted via the
+/// integrations vault); then the deployment env (`WEISSMAN_GITHUB_TOKEN` / `GITHUB_TOKEN`).
+/// Returns `None` when nothing is configured. The plaintext is only ever materialized here,
+/// in-memory, to authenticate the GitHub API call — never logged or persisted.
+pub async fn github_token_for_tenant(pool: &sqlx::PgPool, tenant_id: i64) -> Option<String> {
+    if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
+        let raw: Option<String> = sqlx::query_scalar(
+            "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        let _ = tx.commit().await;
+        if let Some(items) = raw.and_then(|s| serde_json::from_str::<Vec<Value>>(&s).ok()) {
+            for item in &items {
+                let id = item.get("id").and_then(Value::as_str).unwrap_or("");
+                let category = item.get("category").and_then(Value::as_str).unwrap_or("");
+                // The UI registers this integration as id "github" / "GitHub PR".
+                if id == "github" || category.eq_ignore_ascii_case("source_control") {
+                    if let Some(cfg) = item.get("config") {
+                        let decrypted = crate::soar::integrations_vault::decrypt_config(cfg);
+                        if let Some(tok) = decrypted.get("token").and_then(Value::as_str) {
+                            let t = tok.trim();
+                            if !t.is_empty() {
+                                return Some(t.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    std::env::var("WEISSMAN_GITHUB_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("GITHUB_TOKEN").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 /// Create a branch and PR from a single file (legacy); PR opened immediately after commit.
 pub async fn create_branch_and_pr(
     token: &str,
