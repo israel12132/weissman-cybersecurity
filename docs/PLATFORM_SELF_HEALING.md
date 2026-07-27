@@ -107,7 +107,10 @@ lapse on their own. All state is process-wide and tenant-agnostic.
 | `weissman_self_heal_scan_shed_total` | — | Incremented each time a scan-trigger POST is rejected with 503 because the load-shed gate is engaged (the intake edge honoring `load_shed_active()`). |
 | `weissman_self_heal_cron_backoff_total` | — | Incremented each cron tick the scan-schedule worker defers because `backoff_active()` is engaged (transient pressure). |
 
-Add to the Grafana/Prometheus layer (`deploy/observability`). A sustained nonzero
+Prometheus alerts for these signals ship in
+`deploy/observability/prometheus/weissman-alerts.yml` (group `weissman-platform-self-healing`):
+`WeissmanPlatformCriticalDiagnosis`, `WeissmanPlatformLoadShedding`,
+`WeissmanPlatformSustainedRecovery`, `WeissmanPlatformCronBackoff`. A sustained nonzero
 `diagnosis`/`executed` rate for a `{subsystem, action}` is the platform actively self-healing; a
 high `cooldown` rate means the fault is *sustained* (recovery already engaged, waiting out the
 window) — escalate to the runbook below.
