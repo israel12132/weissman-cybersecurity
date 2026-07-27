@@ -355,6 +355,17 @@ jobs:
   engine-wiring-and-smoke:
     name: Engine wiring audit & API smoke
     runs-on: ubuntu-latest
+    # Same debug-info cut as `rust-audit`, and it MUST match that job's values — see the long
+    # rationale there. Two independent reasons:
+    #   1. This job runs the very same `cargo test --workspace --all-targets --no-run`, so it
+    #      carries the same linker cost the setting exists to remove.
+    #   2. Both jobs restore the SAME cache key (`${{ runner.os }}-cargo-<Cargo.lock hash>`).
+    #      Cargo keys its fingerprint on the profile, so a mismatch would make each job's
+    #      restored `target/` a total miss for the other and force a full rebuild in both —
+    #      strictly worse than having no shared cache at all.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     # Job-level backstop. Without it this job inherited GitHub's 360-min default, so a live suite
     # with no internal bound could burn 4 h before anyone noticed (measured: 240 min). Every
     # long-running step below now carries its own tighter budget; this is the last line of defence.
