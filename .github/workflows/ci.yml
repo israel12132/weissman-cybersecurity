@@ -81,6 +81,23 @@ jobs:
   rust-audit:
     name: Rust — audit, lint, test
     runs-on: ubuntu-latest
+    # Cut debug info for this job's Rust build. THE dominant cost in the all-targets link is
+    # debug info: the workspace links ~2300 test harnesses, and the fingerprint_engine lib-test
+    # binary alone is ~2.7 GB with full `debug = 2`. Four `rust-lld` processes each mmap'ing a
+    # binary that size is what makes this step I/O-bound — it does not fail, it crawls (measured:
+    # the same command took 17m03s on one runner and blew a 60-min budget on another, run
+    # 30235471173, with four linkers still resident at the kill).
+    #
+    # `line-tables-only` rather than `0`: it keeps file+line in panic backtraces — so a failing
+    # test is still diagnosable — while dropping the variable/type DWARF that accounts for most
+    # of the size. This changes only debug metadata; no codegen, no behaviour, no test outcome.
+    #
+    # Set at JOB level on purpose. Cargo keys its fingerprint on the profile, so if the compile
+    # step and the test-run step disagreed the run step would recompile the whole workspace and
+    # defeat the compile/execute split entirely. One place, both steps.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
 
@@ -182,36 +199,6 @@ jobs:
       - name: Clippy (correctness + suspicious bug gate)
         run: cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious
 
-      - name: Reclaim disk before the all-targets link
-        # The job's only other disk-free runs BEFORE `cargo install cargo-audit` and
-        # `cargo install cargo-deny`, which each build a large binary from source, and before
-        # Clippy fills target/ with check artifacts. So the heaviest link in the job — every test
-        # harness in a 350k-LOC workspace, four concurrent `rust-lld` processes each mmap'ing a
-        # multi-GB debug binary — starts with the LEAST headroom of any point in the job. That is
-        # the documented rust-lld disk-exhaustion mode (see the earlier free-disk step): the link
-        # does not fail cleanly, it crawls. Measured: this step finished in 17m03s on an
-        # uncompressed runner (run 30223674764) but blew a 45-minute budget on run 30232283273
-        # with four linkers still resident at the kill.
-        #
-        # `cargo clean -p` the two installed tools' build dirs is not possible (they install to
-        # ~/.cargo/bin and their target dirs are already gone), so reclaim the runner images
-        # instead. `df -h /` before and after makes the headroom a recorded number rather than a
-        # guess — if a future timeout here shows ample free space, the cause is NOT disk.
-        run: |
-          echo "--- before ---"; df -h /
-          sudo rm -rf \
-            /usr/share/dotnet \
-            /usr/local/lib/android \
-            /opt/ghc /usr/local/.ghcup \
-            /opt/hostedtoolcache \
-            /usr/local/share/boost \
-            /usr/share/swift \
-            /usr/local/share/powershell \
-            /usr/local/lib/node_modules \
-            /opt/microsoft || true
-          sudo docker image prune -af || true
-          echo "--- after ---"; df -h /
-
       - name: Build Rust workspace + test binaries
         # `--no-run` builds the test harnesses too, so the gate below only EXECUTES. Its timeout
         # then measures test runtime rather than a cold compile+link — failure mode A in
@@ -222,6 +209,8 @@ jobs:
         # contended runner (run 30223676128) while the identical command finished in 17m03s in the
         # duplicate run of the same commit. 60 min against a ~17-20 min healthy cold link: wide
         # enough that only a genuinely sick runner trips it, tight enough to fail the same day.
+        # Deliberately NOT raised again after run 30235471173 tripped it — the fix for that is the
+        # job-level debug-info reduction above, not a bigger number.
         timeout-minutes: 60
         run: cargo test --workspace --all-targets --no-run
 

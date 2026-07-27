@@ -43,6 +43,26 @@ logged 352-second `fsync` stalls while it happened. That is runner I/O starvatio
 problem. The concurrency key is now `head_ref || ref_name`, which collapses both events onto one
 key: one run per branch.
 
+#### A wrong turn worth recording: "it must be disk"
+
+With the duplicate run eliminated, `rust-audit`'s compile step still blew its budget. The first
+theory was disk headroom — that job frees disk *before* `cargo install cargo-audit`/`cargo-deny`
+and Clippy, so the heaviest link starts with the least free space. A second reclaim step was added
+immediately before the link, printing `df -h /` either side.
+
+**It was a no-op, and the timing proved it.** In run `30235471173` that step occupied the 15
+seconds between 04:05:59 and 04:06:14 — because it deleted the *same paths* the job's existing
+free-disk step had already deleted at startup. It could not free anything, so it never tested the
+hypothesis it was meant to test. The compile then ran the full 60 minutes and was killed with four
+`rust-lld` still resident.
+
+The actual dominant cost is **debug info**, not free space: ~2300 test harnesses, and the
+`fingerprint_engine` lib-test binary alone is ~2.7 GB at `debug = 2`. Four linkers each mmap'ing a
+binary that size is what makes the step I/O-bound. Hence
+`CARGO_PROFILE_{DEV,TEST}_DEBUG=line-tables-only` at job level. The lesson generalises: a
+remediation that cannot be *observed to do something* is not evidence about the cause — check that
+your fix actually changed the state you blamed.
+
 Run `29650387309` (69 min, "no output progression") predates this analysis and its logs have
 expired; it is **not** attributed to either mode here.
 
@@ -171,7 +191,7 @@ helper and not from pool configuration a refactor could drop:
 | `--test-threads=2` | `.github/workflows/ci.yml` (both Rust test steps) | Contention *pressure* reducer. Not the fix — it narrows the window, it does not bound the wait. Keep it: it also keeps concurrent DB work under the pool ceiling. |
 | `--no-run` compile step before each Rust gate | `.github/workflows/ci.yml` (both Rust jobs) | Fix for mode A. Keeps cold compile+link out of the gate's budget so a test-step timeout means "the tests hung" and nothing else. Deleting it silently re-arms the 46-minute overrun. |
 | `timeout-minutes: 25` on the gates, `40`/`60` on the compile steps | `.github/workflows/ci.yml` | Sized to what each step actually does (~6–8 min execution; cold link ~17–20 min healthy). Only meaningful because compile and execution are separate — do not merge the steps back together and keep these numbers. **Every** long step needs a ceiling: the rust-audit compile step originally had none and was observed sitting at 3h24m, which is the same "unbounded wait" mistake as mode B, one layer up. |
-| `Reclaim disk before the all-targets link` | `.github/workflows/ci.yml` (rust-audit) | The job's other disk-free runs *before* `cargo install cargo-audit`/`cargo-deny` and Clippy, so the heaviest link in the job started with the least headroom — measured 17m03s healthy vs blowing a 45-min budget with four `rust-lld` still resident (run 30232283273). Prints `df -h /` either side so a future timeout here is diagnosable: ample free space would prove the cause is *not* disk. |
+| `CARGO_PROFILE_DEV_DEBUG` / `CARGO_PROFILE_TEST_DEBUG` = `line-tables-only` | `.github/workflows/ci.yml` (rust-audit, **job-level**) | Debug info is the dominant cost in the all-targets link (~2300 test harnesses; the fingerprint_engine lib-test binary alone is ~2.7 GB at `debug = 2`). Keeps file+line in backtraces, drops the rest. Must stay at **job** level: cargo fingerprints on the profile, so if the compile and run steps disagreed the run step would recompile everything and defeat the compile/execute split. |
 | `concurrency.group` keyed on `head_ref \|\| ref_name` | `.github/workflows/ci.yml` | One CI run per branch. Keyed on `github.ref` a branch with an open PR ran the whole workflow **twice** in parallel (`refs/heads/<branch>` vs `refs/pull/<n>/merge`), and the two runs fought for runner I/O — see the timing table below. Reverting this key silently doubles CI load and reintroduces the contention. |
 
 ## Rules
