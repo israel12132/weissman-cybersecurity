@@ -270,25 +270,34 @@ helper and not from pool configuration a refactor could drop:
   they assert. If a future sweep "fixes" them for consistency, it has silently removed the
   regression test for this entire document.
 
-- **Open: `std::env::set_var` races in two test files.** A different flakiness mechanism from the
-  one this document root-caused, found while auditing for it, recorded here so it is not lost.
+- ~~`std::env::set_var` races in two test files.~~ **Done.** A different flakiness mechanism from
+  the one this document root-caused, found while auditing for it.
 
-  `cargo test` runs the tests *within one binary* on multiple threads, and `set_var` is
-  process-global — so it races with any concurrent reader in the same file. (Across files it is
-  harmless: each integration test file is its own process.) Rust 2024 makes the call `unsafe` for
-  exactly this reason. The dangerous shape is a **set/remove pair**, where one test clearing a
-  variable another test depends on produces a failure that does not reproduce:
+  `cargo test` runs the tests *within one binary* on multiple threads, and `setenv`/`unsetenv` are
+  not thread-safe in glibc: they can reallocate the `environ` array while another thread walks it,
+  leaving a concurrent reader dereferencing freed memory. That is a crash, not a wrong value, and
+  it is why Rust 2024 marks `set_var` `unsafe`. (Across *files* it is harmless — each integration
+  test file is its own process.)
 
-  | File | Tests | Env mutations | Risk |
+  The subtle part is who counts as a reader. Neither file had a test that named the mutated
+  variables, which is what made this look safe. But `Command::spawn` copies the whole environment
+  and `reqwest::Client::builder().build()` reads the proxy variables, so almost every test in both
+  files was a reader without mentioning the environment at all.
+
+  | File | Mutations before | After | How |
   |---|---|---|---|
-  | `fingerprint_engine/tests/auto_heal_roundtrip.rs` | 10 | 4 | **Real** — sets then removes `WEISSMAN_VERIFY_CLONE_URL_OVERRIDE` |
-  | `fingerprint_engine/tests/tenant_quota_integration.rs` | 3 | 5 | **Real** — sets then removes `GITHUB_TOKEN` / `WEISSMAN_GITHUB_TOKEN` |
-  | `fingerprint_engine/tests/benchmark_repro.rs` | 1 | 1 | None — a single test has nothing to race |
-  | `fingerprint_engine/tests/persist_real_pool_starvation.rs` | 1 | 1 | None — same |
+  | `fingerprint_engine/tests/auto_heal_roundtrip.rs` | 4 | 2 | `NO_PROXY` pair deleted outright — see below; the remaining pair is serialised |
+  | `fingerprint_engine/tests/tenant_quota_integration.rs` | 5 | 5 | Serialised — the mutation *is* the assertion and cannot be designed away |
 
-  Not fixed here deliberately. The fix is to serialize the env-touching tests (or inject the
-  config instead of reading the environment), which means restructuring tests this change does not
-  otherwise touch, immediately before a merge — the risk of breaking a currently-green gate
-  outweighs closing a latent race. `crates/weissman-db/src/advisory_lock.rs` and its tests show the
-  pattern to copy: they take an explicit `*_with_timeout` parameter precisely so the suite never
-  has to mutate the environment.
+  Two of the four mutations were removed rather than guarded, by fixing the product instead of the
+  test. The tests set `NO_PROXY` because `http_probe` builds a `reqwest` client that honours proxy
+  environment variables, which would otherwise send a `127.0.0.1` probe to the proxy. That is wrong
+  everywhere, not just under test: the proxy resolves `127.0.0.1` against *its own* loopback, so a
+  deployment with `HTTP_PROXY` set either fails every ephemeral verification probe or silently
+  probes the wrong host. `http_probe` now calls `.no_proxy()` when the target is loopback, so the
+  tests have nothing left to set.
+
+  What genuinely cannot be removed is `tenant_quota_integration`'s env mutation: that test asserts
+  the token *falls back to the environment*, so the mutation is the thing under test. Those files
+  serialise their async tests on a `tokio::sync::Mutex` (async-aware, because the guard is held
+  across `.await` and a `std::sync::Mutex` guard would make the futures non-`Send`).

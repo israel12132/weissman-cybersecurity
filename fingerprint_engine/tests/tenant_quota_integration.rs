@@ -51,8 +51,21 @@ async fn pool() -> Option<PgPool> {
     )
 }
 
+/// Serialises this file's tests against the process-environment mutation below.
+///
+/// `github_token_resolves_from_saved_integration_then_env` must set and clear `GITHUB_TOKEN` /
+/// `WEISSMAN_GITHUB_TOKEN` — proving the env fallback *is* what it asserts, so the mutation cannot
+/// be designed away. But `setenv`/`unsetenv` are not thread-safe in glibc: they can reallocate
+/// `environ` while another thread walks it, leaving a concurrent reader dereferencing freed
+/// memory. Rust 2024 marks `set_var` `unsafe` for exactly this reason.
+///
+/// The sibling quota tests reach a live database, and connecting reads the environment, so they
+/// are readers. Serialising is what keeps the writer from overlapping them.
+static ENV_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn increments_are_atomic_and_monotonic() {
+    let _env_guard = ENV_GUARD.lock().await;
     let Some(pool) = pool().await else { return };
     const RES: &str = "itest_scans_mono";
     // Baseline (unlimited so allowed is always true).
@@ -79,6 +92,7 @@ async fn increments_are_atomic_and_monotonic() {
 
 #[tokio::test]
 async fn deny_flips_at_limit_boundary() {
+    let _env_guard = ENV_GUARD.lock().await;
     let Some(pool) = pool().await else { return };
     const RES: &str = "itest_scans_deny";
     // Current usage for this period.
@@ -117,6 +131,7 @@ async fn deny_flips_at_limit_boundary() {
 /// drives PR automation without being passed per request.
 #[tokio::test]
 async fn github_token_resolves_from_saved_integration_then_env() {
+    let _env_guard = ENV_GUARD.lock().await;
     std::env::set_var(
         "WEISSMAN_INTEGRATIONS_VAULT_KEY",
         "weissman-itest-vault-key-please-32b+",
