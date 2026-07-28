@@ -138,3 +138,23 @@ groups:
         annotations:
           summary: "Cron scans deferred by self-healing backoff"
           description: "The scan-schedule worker has been deferring cron ticks for 10m due to sustained transient pressure (async backlog past the warn threshold). Scheduled scans are delayed, not lost."
+
+      # Durable cross-replica coordination (self_heal_shared, opt-in via
+      # WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED). The fleet gate lifts load-shed/backoff from a
+      # single replica to the whole fleet; these surface a fleet-wide engagement and a shared-store
+      # outage (which fails open to local-only gating).
+      - alert: WeissmanFleetLoadShedding
+        expr: max(weissman_self_heal_shared_gate_active{gate="load_shed"}) > 0
+        for: 5m
+        labels: { severity: critical, service: weissman-server }
+        annotations:
+          summary: "Fleet-wide self-healing load-shed engaged"
+          description: "The durable cross-replica load-shed gate has been engaged for 5m — at least one replica diagnosed critical saturation and the whole fleet is now shedding new scan intake. Investigate DB pool / async backlog across the fleet."
+
+      - alert: WeissmanSelfHealSharedStoreErrors
+        expr: rate(weissman_self_heal_shared_refresh_total{outcome="error"}[5m]) > 0
+        for: 15m
+        labels: { severity: warning, service: weissman-server }
+        annotations:
+          summary: "Self-healing shared-gate store unreachable"
+          description: "Cross-replica self-heal refresh has been failing for 15m — replicas are degraded to local-only gating (fail-open, no lost work). Check Postgres reachability from the fleet."

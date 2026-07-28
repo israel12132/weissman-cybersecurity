@@ -300,15 +300,50 @@ pub fn run_recovery(snapshot: &HealthSnapshot, diags: &[Diagnosis]) {
 
 /// Whether heavy new work should be shed/queued right now (a `shed_load` recovery is engaged).
 /// Intake paths consult this to protect a saturated platform. Reads "off" when recovery is disabled.
+///
+/// ORs in the **fleet** gate ([`crate::self_heal_shared::shed_active`]): when cross-replica
+/// coordination is enabled, load-shed engaged on *any* replica sheds intake here too. The recovery
+/// master switch stays the outer kill switch — disabled ⇒ this replica neither honors the local nor
+/// the fleet gate — and the shared reader is itself off unless coordination is enabled, so this is
+/// exactly today's local behavior by default.
 #[must_use]
 pub fn load_shed_active() -> bool {
-    config().enabled && controller().shed_active_at(now_secs())
+    if !config().enabled {
+        return false;
+    }
+    controller().shed_active_at(now_secs()) || crate::self_heal_shared::shed_active()
 }
 
 /// Whether a soft backoff is engaged (transient pressure). Reads "off" when recovery is disabled.
+/// ORs in the fleet backoff gate ([`crate::self_heal_shared::backoff_active`]) — see
+/// [`load_shed_active`].
 #[must_use]
 pub fn backoff_active() -> bool {
-    config().enabled && controller().backoff_active_at(now_secs())
+    if !config().enabled {
+        return false;
+    }
+    controller().backoff_active_at(now_secs()) || crate::self_heal_shared::backoff_active()
+}
+
+/// Absolute epoch-secs the **local** load-shed gate is engaged until (0 ⇒ off). Feeds the
+/// cross-replica publisher ([`crate::self_heal_shared::publish_gates`]); independent of the
+/// shared-state flag, but still 0 when recovery itself is disabled.
+#[must_use]
+pub fn local_shed_until() -> u64 {
+    if !config().enabled {
+        return 0;
+    }
+    controller().shed_until.load(Ordering::SeqCst)
+}
+
+/// Absolute epoch-secs the **local** backoff gate is engaged until (0 ⇒ off). See
+/// [`local_shed_until`].
+#[must_use]
+pub fn local_backoff_until() -> u64 {
+    if !config().enabled {
+        return 0;
+    }
+    controller().backoff_until.load(Ordering::SeqCst)
 }
 
 /// Whether a dependency is currently allowed (circuit closed/half-open) vs failing fast (open).
