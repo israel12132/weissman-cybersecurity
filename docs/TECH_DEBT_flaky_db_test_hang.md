@@ -269,3 +269,26 @@ helper and not from pool configuration a refactor could drop:
   than inherited from pool configuration, so configuring their pools would delete the property
   they assert. If a future sweep "fixes" them for consistency, it has silently removed the
   regression test for this entire document.
+
+- **Open: `std::env::set_var` races in two test files.** A different flakiness mechanism from the
+  one this document root-caused, found while auditing for it, recorded here so it is not lost.
+
+  `cargo test` runs the tests *within one binary* on multiple threads, and `set_var` is
+  process-global — so it races with any concurrent reader in the same file. (Across files it is
+  harmless: each integration test file is its own process.) Rust 2024 makes the call `unsafe` for
+  exactly this reason. The dangerous shape is a **set/remove pair**, where one test clearing a
+  variable another test depends on produces a failure that does not reproduce:
+
+  | File | Tests | Env mutations | Risk |
+  |---|---|---|---|
+  | `fingerprint_engine/tests/auto_heal_roundtrip.rs` | 10 | 4 | **Real** — sets then removes `WEISSMAN_VERIFY_CLONE_URL_OVERRIDE` |
+  | `fingerprint_engine/tests/tenant_quota_integration.rs` | 3 | 5 | **Real** — sets then removes `GITHUB_TOKEN` / `WEISSMAN_GITHUB_TOKEN` |
+  | `fingerprint_engine/tests/benchmark_repro.rs` | 1 | 1 | None — a single test has nothing to race |
+  | `fingerprint_engine/tests/persist_real_pool_starvation.rs` | 1 | 1 | None — same |
+
+  Not fixed here deliberately. The fix is to serialize the env-touching tests (or inject the
+  config instead of reading the environment), which means restructuring tests this change does not
+  otherwise touch, immediately before a merge — the risk of breaking a currently-green gate
+  outweighs closing a latent race. `crates/weissman-db/src/advisory_lock.rs` and its tests show the
+  pattern to copy: they take an explicit `*_with_timeout` parameter precisely so the suite never
+  has to mutate the environment.
