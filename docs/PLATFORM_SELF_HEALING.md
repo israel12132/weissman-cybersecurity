@@ -1,7 +1,8 @@
 # Platform Self-Healing
 
-**Status:** shipped (detect → diagnose → **recover**). **Modules:** `fingerprint_engine::self_healing`
-(diagnose) + `fingerprint_engine::self_heal_recovery` (execute).
+**Status:** shipped (detect → diagnose → **recover**, in-replica + opt-in fleet coordination).
+**Modules:** `fingerprint_engine::self_healing` (diagnose) + `fingerprint_engine::self_heal_recovery`
+(execute) + `fingerprint_engine::self_heal_shared` (durable cross-replica gate).
 
 ## Why
 
@@ -84,6 +85,39 @@ suppression, circuit trip/recover — is unit-tested without a live stack. The l
 backoff gates **auto-expire**: if the fault clears, no new engagement refreshes them and they
 lapse on their own. All state is process-wide and tenant-agnostic.
 
+### Durable cross-replica coordination (`self_heal_shared`)
+
+By default each replica self-heals from its **own** in-memory gates. But a load balancer spreads
+new scan intake across every replica, so a local load-shed only sheds ~1/N of the intake while the
+platform is critically saturated. `self_heal_shared` lifts the `shed_load` / `backoff` gates to a
+**fleet** signal backed by a tiny Postgres table (`weissman_self_heal_gate`):
+
+```text
+each replica's 10s health loop, after run_recovery:
+   publish_gates(app_pool, local_shed_until, local_backoff_until)   ── best-effort ──▶ weissman_self_heal_gate
+       (only writes a gate still locally engaged; upsert EXTENDS via GREATEST)              (row per gate,
+                                                                                             expires_at = now()+ttl)
+   refresh(app_pool)  ◀── best-effort ── fleet-max remaining TTL (DB clock) ──────────────────────┘
+       (caches into per-replica atomics)
+
+hot path:  load_shed_active() / backoff_active()  =  local gate  OR  self_heal_shared cached fleet gate
+```
+
+- **Opt-in, off by default.** `WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED` must be truthy — it changes
+  cross-process failure semantics, so it is never on by accident. Disabled ⇒ publish/refresh are
+  no-ops and readers see only their local gate (exactly today's behavior).
+- **Fail-open.** Both DB calls are best-effort. A publish error is logged and dropped; a refresh
+  error leaves the cache untouched (each cached expiry is absolute, so it drains on its own without
+  flapping). A shared-store outage degrades to local-only gating — it never wedges intake.
+- **Clock-skew robust.** Expiry is anchored to the DB clock on every write (`now() + ttl`) and the
+  remaining time is computed by the DB on read, so replica/DB clock skew cannot over- or
+  under-hold a gate.
+- **Hot path stays lock-free.** Readers only ever touch process-local atomics (refreshed once per
+  10s round); no request ever queries Postgres. The SQL is exercised end-to-end against a live DB
+  by `tests/self_heal_shared_integration.rs`, and the decision core is pure-unit-tested.
+- **Bounded & tenant-agnostic.** At most two rows (PK on `gate`); engagements overwrite and readers
+  filter on `expires_at > now()`. Platform-wide operational state — no `tenant_id`, no RLS.
+
 ## Configuration
 
 | Env var | Default | Meaning |
@@ -97,6 +131,8 @@ lapse on their own. All state is process-wide and tenant-agnostic.
 | `WEISSMAN_SELFHEAL_BACKOFF_TTL_SECS` | `20` | How long a `backoff` gate stays engaged before auto-clearing. |
 | `WEISSMAN_SELFHEAL_DEP_CIRCUIT_THRESHOLD` | `3` | Consecutive dependency failures before its circuit opens (fail-fast). |
 | `WEISSMAN_SELFHEAL_DEP_CIRCUIT_COOLDOWN_SECS` | `15` | Seconds an open dependency circuit waits before probing (half-open). |
+| `WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED` | `false` | Master switch for **cross-replica** gate coordination (`1`/`true`/`yes`/`on` enables; off ⇒ local-only gates, no shared DB reads/writes). |
+| `WEISSMAN_REPLICA_ID` | *(hostname)* | Replica id written to `weissman_self_heal_gate.engaged_by` for observability; falls back to `HOSTNAME`, else `unknown`. |
 
 ## Observability
 
@@ -106,11 +142,15 @@ lapse on their own. All state is process-wide and tenant-agnostic.
 | `weissman_self_heal_recovery_total` | `subsystem`, `action`, `outcome` | Incremented per round a recovery is considered: `outcome=executed` when the effect ran, `outcome=cooldown` when suppressed by the per-action window. |
 | `weissman_self_heal_scan_shed_total` | — | Incremented each time a scan-trigger POST is rejected with 503 because the load-shed gate is engaged (the intake edge honoring `load_shed_active()`). |
 | `weissman_self_heal_cron_backoff_total` | — | Incremented each cron tick the scan-schedule worker defers because `backoff_active()` is engaged (transient pressure). |
+| `weissman_self_heal_shared_gate_active` | `gate` | Gauge (1/0) — whether the **fleet** load-shed/backoff gate is engaged as this replica last observed it (cross-replica coordination). |
+| `weissman_self_heal_shared_publish_total` | `gate`, `outcome` | Incremented per health round a locally-engaged gate is published to the shared store (`outcome` = ok or error). |
+| `weissman_self_heal_shared_refresh_total` | `outcome` | Incremented per health round the fleet gate view is refreshed from the shared store (`outcome` = ok or error; sustained error ⇒ degraded to local-only, fail-open). |
 
 Prometheus alerts for these signals ship in
 `deploy/observability/prometheus/weissman-alerts.yml` (group `weissman-platform-self-healing`):
 `WeissmanPlatformCriticalDiagnosis`, `WeissmanPlatformLoadShedding`,
-`WeissmanPlatformSustainedRecovery`, `WeissmanPlatformCronBackoff`. A sustained nonzero
+`WeissmanPlatformSustainedRecovery`, `WeissmanPlatformCronBackoff`, `WeissmanFleetLoadShedding`,
+`WeissmanSelfHealSharedStoreErrors`. A sustained nonzero
 `diagnosis`/`executed` rate for a `{subsystem, action}` is the platform actively self-healing; a
 high `cooldown` rate means the fault is *sustained* (recovery already engaged, waiting out the
 window) — escalate to the runbook below.
@@ -141,11 +181,13 @@ window) — escalate to the runbook below.
     the connect/op timeout on every request during an outage.
 
   All three are guarded by the master switch and auto-clear when the fault passes.
-- **Later** — durable cross-replica recovery state (today each replica self-heals from its own
-  in-memory gates; a Postgres-backed shared gate would coordinate a fleet), and auto-restart of
-  stuck background workers (the diagnosis + prune-request signals already exist; a supervised
-  restart wrapper is the remaining piece). Both are deliberately deferred: they change failure
-  semantics across replicas/processes and warrant their own design + soak, whereas the in-replica
-  loop above is complete and safe today.
+- **Durable cross-replica coordination — shipped (opt-in).** `self_heal_shared` (above) backs the
+  load-shed/backoff gates with a Postgres row so an engagement on any replica sheds/defers intake
+  fleet-wide, not just locally. Off by default (`WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED`), fail-open,
+  clock-skew robust, hot-path lock-free.
+- **Later** — supervised auto-restart of stuck background workers (the diagnosis + prune-request
+  signals already exist; a heartbeat watchdog that aborts and respawns a stalled worker task is the
+  remaining piece). Deferred deliberately: it changes intra-process task-lifecycle semantics and
+  warrants its own design + soak, whereas the loop above is complete and safe today.
 - Both `diagnose` and `plan_recovery` are intentionally **pure functions** so new rules and new
   effects can be added and tested independently of the sampling loop.

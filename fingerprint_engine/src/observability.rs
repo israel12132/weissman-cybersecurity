@@ -445,6 +445,18 @@ pub fn spawn_pool_metrics_loop(
             // signal) and record `weissman_self_heal_recovery_total`. Feeds dependency health from
             // the snapshot every round so the circuits also *close* when the platform recovers.
             crate::self_heal_recovery::run_recovery(&snapshot, &diagnoses);
+            // Durable cross-replica coordination (opt-in: WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED):
+            // publish any locally-engaged load-shed/backoff gate to the shared store, then refresh
+            // this replica's cached view of the fleet gate. Makes shedding/backoff apply fleet-wide
+            // instead of only on the replica that diagnosed the fault. Both calls are best-effort
+            // and fail-open — no-ops when the flag is off or Postgres is unreachable.
+            crate::self_heal_shared::publish_gates(
+                app_pool.as_ref(),
+                crate::self_heal_recovery::local_shed_until(),
+                crate::self_heal_recovery::local_backoff_until(),
+            )
+            .await;
+            crate::self_heal_shared::refresh(app_pool.as_ref()).await;
         }
     });
 }
