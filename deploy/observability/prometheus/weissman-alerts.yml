@@ -158,3 +158,13 @@ groups:
         annotations:
           summary: "Self-healing shared-gate store unreachable"
           description: "Cross-replica self-heal refresh has been failing for 15m — replicas are degraded to local-only gating (fail-open, no lost work). Check Postgres reachability from the fleet."
+
+      # Supervised background loops (fingerprint_engine::supervised). A restart is recovery working;
+      # a SUSTAINED restart rate is a loop that keeps crashing or wedging and cannot make progress.
+      - alert: WeissmanSupervisedTaskRestarting
+        expr: sum by (task, reason) (rate(weissman_supervised_restart_total[5m])) > 0
+        for: 15m
+        labels: { severity: warning, service: weissman-server }
+        annotations:
+          summary: "Supervised loop restarting: {{ $labels.task }} ({{ $labels.reason }})"
+          description: "Background loop {{ $labels.task }} has been restarting ({{ $labels.reason }}) for 15m — it keeps panicking or wedging and cannot make sustained progress. Supervision is keeping it alive (bounded backoff), but the underlying cause needs attention."
