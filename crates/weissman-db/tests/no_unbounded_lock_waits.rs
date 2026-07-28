@@ -41,13 +41,25 @@ const ADVISORY_ALLOWED: &[&str] = &[
 
 /// Row-level lock clauses that **wait** when the row is already locked.
 ///
+/// All **four** of Postgres' row-lock modes are listed, deliberately. `FOR KEY SHARE` is the
+/// weakest of them and is easy to leave out — it is usually taken implicitly for foreign-key
+/// checks rather than written by hand — but an explicit one waits indefinitely exactly like
+/// `FOR UPDATE` does. A guard whose whole value is exhaustiveness cannot cover three quarters of
+/// the cases. None is currently written anywhere in the tree; this is here so the *first* one
+/// has to be bounded.
+///
 /// Matched case-sensitively and uppercase, which is how SQL is written throughout this workspace.
 /// That is not laziness: it is what keeps ordinary Rust like `for share in [...]` from being
 /// flagged, without needing to parse Rust to tell code from a query string.
 ///
-/// `FOR UPDATE` is not a substring of `FOR NO KEY UPDATE` (the `NO KEY ` sits between), so the
-/// three needles do not shadow one another.
-const ROW_LOCK_NEEDLES: &[&str] = &["FOR UPDATE", "FOR NO KEY UPDATE", "FOR SHARE"];
+/// No needle is a substring of another — `NO KEY ` and `KEY ` sit between the words in the long
+/// forms — so they cannot shadow one another and the order here does not matter.
+const ROW_LOCK_NEEDLES: &[&str] = &[
+    "FOR UPDATE",
+    "FOR NO KEY UPDATE",
+    "FOR SHARE",
+    "FOR KEY SHARE",
+];
 
 /// Clauses that make a row lock non-blocking, so a match followed by one of these is fine.
 ///

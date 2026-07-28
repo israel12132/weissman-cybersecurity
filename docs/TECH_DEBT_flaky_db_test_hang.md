@@ -224,7 +224,7 @@ helper and not from pool configuration a refactor could drop:
 | Guard | Location | Purpose |
 |---|---|---|
 | `SET LOCAL lock_timeout` before every advisory lock | `crates/weissman-db/src/advisory_lock.rs` | The actual fix. Makes the wait bounded regardless of pool, environment or caller. |
-| `no_unbounded_lock_waits` | `crates/weissman-db/tests/` | Makes Rules 1 and 2 below self-enforcing: fails the existing blocking `cargo test` gate if any Rust source takes a blocking advisory lock outside the helper, **or** a blocking row lock (`FOR UPDATE` / `FOR NO KEY UPDATE` / `FOR SHARE`) in a file not reviewed as bounded. Row-lock matching normalises whitespace across the whole file, so a `SKIP LOCKED` split onto its own line is correctly not flagged. Both tech-debt documents in this repo record guards that were added and later silently lost; a rule stated only in prose is one of those. |
+| `no_unbounded_lock_waits` | `crates/weissman-db/tests/` | Makes Rules 1 and 2 below self-enforcing: fails the existing blocking `cargo test` gate if any Rust source takes a blocking advisory lock outside the helper, **or** a blocking row lock (any of the four modes: `FOR UPDATE` / `FOR NO KEY UPDATE` / `FOR SHARE` / `FOR KEY SHARE`) in a file not reviewed as bounded. Row-lock matching normalises whitespace across the whole file, so a `SKIP LOCKED` split onto its own line is correctly not flagged. Both tech-debt documents in this repo record guards that were added and later silently lost; a rule stated only in prose is one of those. |
 | `set_config('lock_timeout', …)` in `set_tenant_tx` | `crates/weissman-db/src/lib.rs` | Bounds **every** lock wait in **every** tenant transaction, from the single funnel all 236 call sites pass through. Must stay in the same `SELECT` as the RLS GUC — that is what makes it free. Deleting it silently restores unbounded `FOR UPDATE` waits under `cargo test`; `tenant_tx_lock_bound::begin_tenant_tx_applies_a_finite_lock_timeout` is the test that catches it. |
 | `tenant_tx_lock_bound` | `crates/weissman-db/tests/` | Three DB-backed contracts on deliberately bare pools: the bound is applied, a contended row lock errors instead of hanging, and the success path is unchanged. The first is the load-bearing one — a `!= 0` check alone would pass on the un-fixed code wherever the CI database backstop is present, so it asserts the exact configured value. |
 | `ALTER DATABASE … lock_timeout / idle_in_transaction_session_timeout` | `.github/workflows/ci.yml` | Backstop for blocking waits we do not own and for future call sites that bypass the helper. |
@@ -242,7 +242,9 @@ helper and not from pool configuration a refactor could drop:
    whose timeouts are set somewhere else is how this bug happened. Enforced by
    `crates/weissman-db/tests/no_unbounded_lock_waits.rs`, whose `ADVISORY_ALLOWED` list is the
    authoritative set of exemptions.
-2. **Never** take a blocking row lock (`FOR UPDATE`, `FOR NO KEY UPDATE`, `FOR SHARE`) in a
+2. **Never** take a blocking row lock — all four modes (`FOR UPDATE`, `FOR NO KEY UPDATE`,
+   `FOR SHARE`, `FOR KEY SHARE`) wait indefinitely by default, including the weak
+   `FOR KEY SHARE` — in a
    transaction that does not carry a `lock_timeout`. In practice: begin it with
    `begin_tenant_tx`, or call `advisory_lock::bound_lock_wait` right after `begin()` when there is
    no tenant GUC, or use `SKIP LOCKED` / `NOWAIT` if the work is genuinely skippable. Enforced by
