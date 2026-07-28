@@ -32,7 +32,7 @@ const KEY_SKIPS: &str = "__weissman_advisory_lock_bound_skip__";
 /// Short enough that the whole suite stays fast, long enough not to trip on a loaded runner.
 ///
 /// Passed **explicitly** to the `*_with_timeout` helpers rather than through
-/// `WEISSMAN_ADVISORY_LOCK_TIMEOUT_MS`: `cargo test` runs a binary's tests on multiple threads,
+/// `WEISSMAN_LOCK_TIMEOUT_MS`: `cargo test` runs a binary's tests on multiple threads,
 /// and `std::env::set_var` is process-global and races with any concurrent reader.
 const TEST_TIMEOUT: Duration = Duration::from_millis(1_500);
 

@@ -51,8 +51,17 @@ function countMatches(pattern, globPaths) {
 }
 
 function rustTestCount() {
-  // #[test] and #[tokio::test] attributes across the Rust workspace.
-  return countMatches('^\\s*#\\[(tokio::)?test\\]', 'fingerprint_engine backend crates fuzz_core');
+  // #[test] and #[tokio::test] attributes across the Rust workspace, INCLUDING the parameterized
+  // form `#[tokio::test(flavor = "multi_thread", worker_threads = N)]`.
+  //
+  // The `(\(.*\))?` group is not cosmetic: without it this metric silently undercounted. Every
+  // multi-threaded async test in the workspace carries arguments, so 12 real tests were invisible
+  // to a number this file exists to make trustworthy — and the undercount was self-concealing,
+  // since the figure still moved whenever a plain `#[test]` was added.
+  return countMatches(
+    '^\\s*#\\[(tokio::)?test(\\(.*\\))?\\]',
+    'fingerprint_engine backend crates fuzz_core',
+  );
 }
 
 function routeCount() {
@@ -99,7 +108,7 @@ should link here rather than copying figures.
 | — real live probes | ${e.real_probe} | same (${e.distinct_real_implementations} distinct impls) |
 | — aliases | ${e.alias} | same |
 | — agent-required | ${e.agent_required} | same |
-| Rust test fns (\`#[test]\`/\`#[tokio::test]\`) | ${tests} | grep over workspace |
+| Rust test fns (\`#[test]\`/\`#[tokio::test]\`, incl. parameterized) | ${tests} | grep over workspace |
 | HTTP route registrations (\`.route(\`) | ${routes} | grep over \`fingerprint_engine/src\` + \`backend\` |
 ${migLines}
 

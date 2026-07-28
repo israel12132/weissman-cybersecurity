@@ -201,6 +201,19 @@ pub async fn rotate_refresh_token(
 ) -> Result<(i64, i64, String), RefreshTokenError> {
     let th = hash_token(raw);
     let mut tx = pool.begin().await?;
+    // Bound the `FOR UPDATE` below. This runs on the AUTH pool with no tenant GUC, so it does
+    // not pass through `set_tenant_tx` and would otherwise inherit the connection's
+    // `lock_timeout` — 0, i.e. *infinite*, under any bare test pool.
+    //
+    // The row lock is deliberate and stays: it is what makes "validate, revoke, re-issue" atomic
+    // and so what stops two concurrent presentations of the same refresh token from both
+    // succeeding (token replay). Bounding the wait does not weaken that — on timeout the
+    // statement errors, the transaction aborts, and neither rotation is committed.
+    weissman_db::advisory_lock::bound_lock_wait(
+        &mut tx,
+        weissman_db::advisory_lock::lock_timeout(),
+    )
+    .await?;
     let row = sqlx::query(
         r#"SELECT id, user_id, tenant_id FROM user_refresh_tokens
            WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()

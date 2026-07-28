@@ -284,15 +284,42 @@ pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
     connect_intel(t).await
 }
 
-/// Set RLS GUC for this transaction only (`true` = transaction-local).
+/// Set the RLS GUC **and** the lock-wait bound for this transaction only (`true` =
+/// transaction-local, reverted automatically at commit/rollback — it cannot leak onto a pooled
+/// connection).
+///
+/// # Why `lock_timeout` is set here
+///
+/// Every tenant transaction in the workspace funnels through this call, which makes it the one
+/// place where "no wait in this transaction is unbounded" can be established for present *and*
+/// future call sites, instead of relying on each one to remember.
+///
+/// The bound matters because `SELECT … FOR UPDATE` waits forever by default, exactly like the
+/// advisory locks in [`advisory_lock`] — and for exactly the same reason it went unnoticed: the
+/// product pools set `statement_timeout`, so the wait dies (crudely) in production, while every
+/// test pool is a bare `PgPoolOptions::new()` with `lock_timeout = 0` and
+/// `statement_timeout = 0`, i.e. *infinite*. A contended row lock under `cargo test` therefore
+/// hung the whole test binary with no diagnostic — the failure documented in
+/// `docs/TECH_DEBT_flaky_db_test_hang.md`.
+///
+/// Both GUCs go in **one** `SELECT`, so this costs no extra round trip over the RLS GUC alone.
+/// `set_config` is used rather than `SET LOCAL` precisely because it composes into that single
+/// statement and takes its value as a bind parameter.
+///
+/// This does not weaken serialization: a contended lock now fails fast with SQLSTATE `55P03`
+/// and the transaction aborts, so the protected work is never performed unserialized.
 pub async fn set_tenant_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: i64,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
-        .bind(tenant_id.to_string())
-        .execute(&mut **tx)
-        .await?;
+    sqlx::query(
+        "SELECT set_config('app.current_tenant_id', $1, true), \
+                set_config('lock_timeout', $2, true)",
+    )
+    .bind(tenant_id.to_string())
+    .bind(advisory_lock::lock_timeout_setting())
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 

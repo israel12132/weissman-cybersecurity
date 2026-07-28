@@ -41,6 +41,10 @@ async fn pool() -> Option<PgPool> {
     Some(
         PgPoolOptions::new()
             .max_connections(4)
+            // Explicit, not sqlx's 30 s default: a starved pool here should fail while the test
+            // output still points at this pool, not after a delay long enough to read as a hang.
+            // See docs/TECH_DEBT_flaky_db_test_hang.md.
+            .acquire_timeout(std::time::Duration::from_secs(5))
             .connect(&url)
             .await
             .expect("connect TEST_DATABASE_URL"),
