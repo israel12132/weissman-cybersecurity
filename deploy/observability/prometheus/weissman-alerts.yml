@@ -149,7 +149,7 @@ groups:
         labels: { severity: critical, service: weissman-server }
         annotations:
           summary: "Fleet-wide self-healing load-shed engaged"
-          description: "The durable cross-replica load-shed gate has been engaged for 5m — at least one replica diagnosed critical saturation and the whole fleet is now shedding new scan intake. Investigate DB pool / async backlog across the fleet."
+          description: "The durable cross-replica load-shed gate has been engaged for 5m — at least one replica detected sustained saturation (DB-pool pressure or a critical async backlog) and the whole fleet is now shedding new scan intake. Investigate DB pool / async backlog across the fleet."
 
       - alert: WeissmanSelfHealSharedStoreErrors
         expr: rate(weissman_self_heal_shared_refresh_total{outcome="error"}[5m]) > 0

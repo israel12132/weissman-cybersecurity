@@ -55,6 +55,12 @@ pub const REFRESH_SQL: &str =
     "SELECT gate, CEIL(EXTRACT(EPOCH FROM (expires_at - now())))::bigint AS secs_left \
      FROM weissman_self_heal_gate WHERE expires_at > now()";
 
+/// Hard ceiling on each shared-gate DB call. Publish/refresh run inside the 10s health-loop tick,
+/// so a slow-but-reachable Postgres (lock contention, a network hiccup) must fail *promptly* through
+/// the fail-open path rather than block the whole tick — "fail-open" has to cover *slow*, not only
+/// *unreachable*.
+const SHARED_GATE_DB_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// Which fleet gate a shared row / cache slot refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SharedGate {
@@ -190,12 +196,15 @@ pub async fn publish_gates(pool: &PgPool, local_shed_until: u64, local_backoff_u
             continue;
         }
         let ttl = i64::try_from(remaining_ttl(until, now)).unwrap_or(i64::MAX);
-        let res = sqlx::query(PUBLISH_SQL)
+        let exec = sqlx::query(PUBLISH_SQL)
             .bind(gate.as_str())
             .bind(ttl)
             .bind(rid)
-            .execute(pool)
-            .await;
+            .execute(pool);
+        // Timeout → PoolTimedOut so a slow store flows through the same fail-open error path.
+        let res = tokio::time::timeout(SHARED_GATE_DB_TIMEOUT, exec)
+            .await
+            .unwrap_or(Err(sqlx::Error::PoolTimedOut));
         let outcome = if res.is_ok() { "ok" } else { "error" };
         metrics::counter!(
             "weissman_self_heal_shared_publish_total",
@@ -223,9 +232,11 @@ pub async fn refresh(pool: &PgPool) {
         return;
     }
     // The DB computes remaining seconds on its own clock, so gating is skew-robust.
-    let rows = sqlx::query_as::<_, (String, i64)>(REFRESH_SQL)
-        .fetch_all(pool)
-        .await;
+    let fetch = sqlx::query_as::<_, (String, i64)>(REFRESH_SQL).fetch_all(pool);
+    // Timeout → PoolTimedOut so a slow store leaves the cache untouched (drains on its own epoch).
+    let rows = tokio::time::timeout(SHARED_GATE_DB_TIMEOUT, fetch)
+        .await
+        .unwrap_or(Err(sqlx::Error::PoolTimedOut));
     let now = now_secs();
     match rows {
         Ok(rows) => {

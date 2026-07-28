@@ -92,7 +92,7 @@ new scan intake across every replica, so a local load-shed only sheds ~1/N of th
 platform is critically saturated. `self_heal_shared` lifts the `shed_load` / `backoff` gates to a
 **fleet** signal backed by a tiny Postgres table (`weissman_self_heal_gate`):
 
-```
+```text
 each replica's 10s health loop, after run_recovery:
    publish_gates(app_pool, local_shed_until, local_backoff_until)   ── best-effort ──▶ weissman_self_heal_gate
        (only writes a gate still locally engaged; upsert EXTENDS via GREATEST)              (row per gate,
@@ -143,8 +143,8 @@ hot path:  load_shed_active() / backoff_active()  =  local gate  OR  self_heal_s
 | `weissman_self_heal_scan_shed_total` | — | Incremented each time a scan-trigger POST is rejected with 503 because the load-shed gate is engaged (the intake edge honoring `load_shed_active()`). |
 | `weissman_self_heal_cron_backoff_total` | — | Incremented each cron tick the scan-schedule worker defers because `backoff_active()` is engaged (transient pressure). |
 | `weissman_self_heal_shared_gate_active` | `gate` | Gauge (1/0) — whether the **fleet** load-shed/backoff gate is engaged as this replica last observed it (cross-replica coordination). |
-| `weissman_self_heal_shared_publish_total` | `gate`, `outcome` | Incremented per health round a locally-engaged gate is published to the shared store (`outcome=ok|error`). |
-| `weissman_self_heal_shared_refresh_total` | `outcome` | Incremented per health round the fleet gate view is refreshed from the shared store (`outcome=ok|error`; sustained `error` ⇒ degraded to local-only, fail-open). |
+| `weissman_self_heal_shared_publish_total` | `gate`, `outcome` | Incremented per health round a locally-engaged gate is published to the shared store (`outcome` = ok or error). |
+| `weissman_self_heal_shared_refresh_total` | `outcome` | Incremented per health round the fleet gate view is refreshed from the shared store (`outcome` = ok or error; sustained error ⇒ degraded to local-only, fail-open). |
 
 Prometheus alerts for these signals ship in
 `deploy/observability/prometheus/weissman-alerts.yml` (group `weissman-platform-self-healing`):
