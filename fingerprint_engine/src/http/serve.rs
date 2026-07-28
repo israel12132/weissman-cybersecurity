@@ -1715,7 +1715,8 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
         .layer(middleware::from_fn(
             crate::http::login_rate_limit_middleware,
         ))
-        .layer(middleware::from_fn(
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
             crate::http::tenant_scan_limit::tenant_scan_rate_limit_middleware,
         ))
         .layer(middleware::from_fn(

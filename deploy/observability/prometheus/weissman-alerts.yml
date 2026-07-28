@@ -101,3 +101,40 @@ groups:
         annotations:
           summary: "Self-healing success rate below 80%"
           description: "weissman_heal_success_rate < 0.8 while healing is active."
+
+  # Platform self-healing (fingerprint_engine::self_healing + self_heal_recovery). The 10s health
+  # loop diagnoses the platform's own health and executes bounded recovery; these alerts surface a
+  # sustained fault the recovery layer is actively working around. See docs/PLATFORM_SELF_HEALING.md.
+  - name: weissman-platform-self-healing
+    rules:
+      - alert: WeissmanPlatformCriticalDiagnosis
+        expr: sum by (subsystem) (rate(weissman_self_heal_diagnosis_total{severity="critical"}[5m])) > 0
+        for: 5m
+        labels: { severity: critical, service: weissman-server }
+        annotations:
+          summary: "Platform self-diagnosis critical: {{ $labels.subsystem }}"
+          description: "The self-healing loop has diagnosed {{ $labels.subsystem }} as critically unhealthy for 5m (postgres/redis down, pool saturated, or async backlog past critical)."
+
+      - alert: WeissmanPlatformLoadShedding
+        expr: rate(weissman_self_heal_scan_shed_total[5m]) > 0
+        for: 5m
+        labels: { severity: critical, service: weissman-server }
+        annotations:
+          summary: "Platform is shedding scan intake"
+          description: "New scan-trigger POSTs have been rejected with 503 for 5m because the self-healing load-shed gate is engaged — the platform is critically saturated. Investigate DB pool / async backlog."
+
+      - alert: WeissmanPlatformSustainedRecovery
+        expr: sum by (subsystem, action) (rate(weissman_self_heal_recovery_total{outcome="cooldown"}[10m])) > 0
+        for: 15m
+        labels: { severity: warning, service: weissman-server }
+        annotations:
+          summary: "Self-healing recovery sustained: {{ $labels.subsystem }} / {{ $labels.action }}"
+          description: "Recovery for {{ $labels.subsystem }}/{{ $labels.action }} has stayed engaged (cooldown-suppressed rounds) for 15m — the fault is not transient. The platform is coping, but the underlying cause needs attention."
+
+      - alert: WeissmanPlatformCronBackoff
+        expr: rate(weissman_self_heal_cron_backoff_total[5m]) > 0
+        for: 10m
+        labels: { severity: warning, service: weissman-worker }
+        annotations:
+          summary: "Cron scans deferred by self-healing backoff"
+          description: "The scan-schedule worker has been deferring cron ticks for 10m due to sustained transient pressure (async backlog past the warn threshold). Scheduled scans are delayed, not lost."

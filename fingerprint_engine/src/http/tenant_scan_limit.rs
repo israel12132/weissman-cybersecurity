@@ -1,7 +1,7 @@
 //! Per-tenant rate limits for scan / engine enqueue POSTs (after JWT auth).
 
 use axum::body::Body;
-use axum::extract::ConnectInfo;
+use axum::extract::{ConnectInfo, State};
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -13,8 +13,26 @@ use std::num::NonZeroU32;
 use std::sync::{Arc, OnceLock};
 
 use crate::auth_jwt::AuthContext;
+use crate::http::serve::AppState;
+use crate::tenant_quota::{self, QuotaWindow};
 
 use super::rate_limit_metrics;
+
+/// Plan-based monthly scan quota is opt-in (default off) so behaviour is unchanged unless an
+/// operator enables it. When on, per-tenant overrides come from `system_configs`
+/// (`scans_monthly_quota`); this env is the fallback ceiling (`0` = unlimited).
+fn scan_quota_enabled() -> bool {
+    std::env::var("WEISSMAN_SCAN_QUOTA_ENABLED")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn default_monthly_scan_quota() -> u64 {
+    std::env::var("WEISSMAN_DEFAULT_MONTHLY_SCAN_QUOTA")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(0)
+}
 
 fn per_tenant_scan_per_minute() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::scan_limit_per_minute()).unwrap_or(NonZeroU32::MIN)
@@ -58,7 +76,44 @@ pub fn is_scan_trigger_post(method: &axum::http::Method, path: &str) -> bool {
         || path.ends_with("/deception/generate")
 }
 
+/// Retry-After hint (seconds) advertised when the platform sheds scan intake. A conservative
+/// value: clients back off briefly and re-try; if the platform is still shedding they get 503
+/// again. Sized in the ballpark of the recovery shed TTL so a single retry usually lands healthy.
+const LOAD_SHED_RETRY_AFTER_SECS: u64 = 15;
+
+/// Pure admission decision: shed a request only when it is a scan-trigger POST **and** the platform
+/// is actively shedding load. Extracted for unit-testing without an axum request.
+#[must_use]
+pub fn should_shed_scan(is_scan_post: bool, load_shed_active: bool) -> bool {
+    is_scan_post && load_shed_active
+}
+
+/// 503 Service Unavailable + `Retry-After` for platform load-shed. Distinct from the per-tenant
+/// 429 (`rate_limited`): 503/`load_shed` means the *server* is temporarily protecting itself, not
+/// that this tenant exceeded a quota — so clients (and dashboards) can tell the two apart.
+fn load_shed_response() -> Response {
+    let mut resp = (
+        StatusCode::SERVICE_UNAVAILABLE,
+        axum::Json(serde_json::json!({
+            "ok": false,
+            "code": "load_shed",
+            "detail": format!(
+                "The platform is temporarily shedding load to recover. Retry in \
+                 {LOAD_SHED_RETRY_AFTER_SECS}s."
+            ),
+            "retry_after_seconds": LOAD_SHED_RETRY_AFTER_SECS,
+            "source": "self_healing",
+        })),
+    )
+        .into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&LOAD_SHED_RETRY_AFTER_SECS.to_string()) {
+        resp.headers_mut().insert("Retry-After", v);
+    }
+    resp
+}
+
 pub async fn tenant_scan_rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
     ConnectInfo(_peer): ConnectInfo<SocketAddr>,
     request: Request<Body>,
     next: Next,
@@ -68,9 +123,83 @@ pub async fn tenant_scan_rate_limit_middleware(
     if !is_scan_trigger_post(&method, &path) {
         return next.run(request).await;
     }
+
+    // Platform self-healing load-shed — applies BEFORE per-tenant limits and even before
+    // AuthContext extraction, because it is a platform-wide protection. When the recovery engine
+    // has engaged `shed_load` (genuine critical saturation: DB pool exhausted or async backlog past
+    // its critical threshold), reject NEW heavy scan intake with 503 + Retry-After so the platform
+    // can drain and recover instead of piling on more work. No-op unless self-heal recovery is
+    // enabled AND actively shedding, and it auto-clears when the fault passes (TTL).
+    if should_shed_scan(true, crate::self_heal_recovery::load_shed_active()) {
+        metrics::counter!("weissman_self_heal_scan_shed_total").increment(1);
+        tracing::warn!(
+            target: "self_heal",
+            path = %path,
+            "shedding scan intake: platform load-shed engaged by self-healing recovery"
+        );
+        return load_shed_response();
+    }
+
     let Some(ctx) = request.extensions().get::<AuthContext>().cloned() else {
         return next.run(request).await;
     };
+
+    // Plan-based monthly scan quota (opt-in). A tenant over its monthly budget is rejected
+    // outright, independent of the short-horizon per-minute limiter below. Fail-open on a
+    // quota-store error so a transient DB blip never blocks legitimate scans.
+    if scan_quota_enabled() {
+        match tenant_quota::enforce(
+            state.app_pool.as_ref(),
+            ctx.tenant_id,
+            "scans",
+            QuotaWindow::Monthly,
+            default_monthly_scan_quota(),
+        )
+        .await
+        {
+            Ok(d) if !d.allowed => {
+                let retry = d
+                    .reset_at_unix
+                    .saturating_sub(tenant_quota::now_unix())
+                    .max(1);
+                rate_limit_metrics::record_scan_denied(ctx.tenant_id, &path);
+                tracing::warn!(
+                    target: "rate_limit",
+                    tenant_id = ctx.tenant_id,
+                    used = d.used,
+                    limit = d.limit,
+                    "monthly scan quota exceeded"
+                );
+                let mut resp = (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    axum::Json(serde_json::json!({
+                        "ok": false,
+                        "code": "quota_exceeded",
+                        "detail": format!(
+                            "Monthly scan quota reached ({} of {}). Resets in {}s.",
+                            d.used, d.limit, retry
+                        ),
+                        "resource": "scans",
+                        "window": "monthly",
+                        "used": d.used,
+                        "limit": d.limit,
+                        "remaining": 0,
+                        "reset_at_unix": d.reset_at_unix,
+                        "retry_after_seconds": retry,
+                    })),
+                )
+                    .into_response();
+                if let Ok(v) = axum::http::HeaderValue::from_str(&retry.to_string()) {
+                    resp.headers_mut().insert("Retry-After", v);
+                }
+                return resp;
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(target: "rate_limit", error = %e, "scan quota check failed; allowing");
+            }
+        }
+    }
 
     let limit = per_tenant_scan_per_minute().get() as u64;
     if super::rate_limit_redis::is_enabled() {
@@ -150,4 +279,50 @@ pub async fn tenant_scan_rate_limit_middleware(
     }
     rate_limit_metrics::record_scan_allowed(ctx.tenant_id, &path);
     next.run(request).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Method;
+
+    #[test]
+    fn is_scan_trigger_post_matches_known_scan_routes() {
+        assert!(is_scan_trigger_post(
+            &Method::POST,
+            "/api/command-center/scan"
+        ));
+        assert!(is_scan_trigger_post(&Method::POST, "/api/ai-redteam/run"));
+        // Suffix-matched, tenant-prefixed routes still count.
+        assert!(is_scan_trigger_post(
+            &Method::POST,
+            "/api/tenant/42/cloud-scan/run"
+        ));
+        // Wrong method or non-scan path must not gate.
+        assert!(!is_scan_trigger_post(
+            &Method::GET,
+            "/api/command-center/scan"
+        ));
+        assert!(!is_scan_trigger_post(&Method::POST, "/api/health"));
+    }
+
+    #[test]
+    fn shed_only_when_scan_post_and_platform_shedding() {
+        assert!(should_shed_scan(true, true)); // scan POST while shedding ⇒ shed
+        assert!(!should_shed_scan(true, false)); // healthy platform ⇒ allow
+        assert!(!should_shed_scan(false, true)); // non-scan request ⇒ never shed here
+        assert!(!should_shed_scan(false, false));
+    }
+
+    #[test]
+    fn load_shed_response_is_503_with_retry_after() {
+        let resp = load_shed_response();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let ra = resp
+            .headers()
+            .get("Retry-After")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+        assert_eq!(ra, Some(LOAD_SHED_RETRY_AFTER_SECS));
+    }
 }
