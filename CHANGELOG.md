@@ -49,6 +49,12 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **SOAR playbook E2E verifier is hermetic.** `scripts/verify_soar_playbook_e2e.mjs`
+  fired against a hard-coded `tenant_id: 1` / `client_id: 1`, violating the
+  `soar_action_executions.client_id → clients(id)` foreign key on any stack where
+  that row was never seeded. It now takes the tenant from the login response and
+  seeds its own probe client, mirroring the fix already applied to the Rust
+  `soar_playbook_e2e` integration test.
 - **i18n `defaultValue` ratchet re-armed at zero.** The last two inline fallbacks
   (`common.clear` in `pages/RemediationHub.jsx`) are keyed in `en`/`he`, and
   `scripts/i18n-defaultvalue-baseline.json` — still pinned at the historical 223
