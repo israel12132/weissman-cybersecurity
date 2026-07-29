@@ -17,17 +17,12 @@ unmaintained = "workspace"
 # cargo-audit ignores in ci.yml. Re-review on every dependency bump.
 ignore = [
     "RUSTSEC-2023-0071", # rsa (Marvin timing) via openidconnect (OIDC) — no fixed release
-    # rustls-webpki 0.101.7 (name-constraint acceptance + CRL-parse panic). Pulled by
-    # rustls 0.21 via the AWS SDK's legacy hyper-0.14 connector (aws-smithy-http-client
-    # default deps; aws-smithy-runtime does not disable them). Our AWS clients use the
-    # modern rustls-aws-lc path (rustls 0.23.40 / rustls-webpki 0.103.13), so the 0.21
-    # subtree is inert; no manifest-level fix without forking aws-smithy. Mirror of the
-    # cargo-audit ignores in ci.yml — re-review on every dependency bump.
-    "RUSTSEC-2026-0098",
-    "RUSTSEC-2026-0099",
-    "RUSTSEC-2026-0104",
-    # NOT ignored (confirmed no longer detected on the current lock): RUSTSEC-2026-0049
-    # (stale rustls-webpki CRL distribution-point) and the genpdf->printpdf->lopdf subtree
+    # RUSTSEC-2026-0098/0099/0104 (rustls-webpki 0.101.7) are NO LONGER ignored: the AWS
+    # SDK crates were switched to default-features = false + the modern rustls-aws-lc
+    # connector (see fingerprint_engine/Cargo.toml), so the legacy rustls 0.21 subtree that
+    # pulled that rustls-webpki is gone from the lock. Reintroducing it now fails this gate.
+    # Also NOT ignored (confirmed absent on the current lock): RUSTSEC-2026-0049 (stale
+    # rustls-webpki CRL distribution-point) and the genpdf->printpdf->lopdf subtree
     # advisories incl. RUSTSEC-2026-0187 (lopdf parse-DoS) — genpdf was dropped for the
     # native %PDF-1.4 writer in fingerprint_engine/src/pdf_report.rs. A regression that
     # reintroduces any of them will fail this gate.

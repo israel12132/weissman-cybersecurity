@@ -78,46 +78,54 @@ petgraph = "0.6"
 bollard = "0.16"
 # Deception: active cloud injection (AWS). Requires Rust ≥1.91 (aws-smithy-* / aws-sdk-* MSRV).
 aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
+# All aws-sdk-* crates: default-features = false to drop their default `rustls` feature,
+# which pulls aws-smithy-runtime/tls-rustls -> the legacy hyper-0.14 connector on
+# rustls 0.21 / rustls-webpki 0.101.7 (RUSTSEC-2026-0098/0099/0104). We re-enable exactly
+# the rest of each crate's own default set — `default-https-client` (the MODERN connector,
+# aws-smithy-http-client/rustls-aws-lc on rustls 0.23), `rt-tokio`, and the per-crate extras
+# (`sigv4a` for STS/EventBridge, `sigv4a` + `http-1x` for S3). TLS behaviour is unchanged —
+# the SDK still auto-builds a default HTTPS client — only the vulnerable 0.21 chain is dropped.
+# aws-config is left as-is: its default set has no legacy `rustls` feature.
 aws-config = "1.1"
-aws-sdk-iam = "1.14"
-aws-sdk-sts = "1.14"
-aws-sdk-s3 = "1.14"
-aws-sdk-ec2 = "1.14"
-aws-sdk-ssm = "1.14"
-aws-sdk-cloudtrail = "1.14"
-aws-sdk-rds = "1.14"
-aws-sdk-lambda = "1.14"
-aws-sdk-kms = "1.14"
-aws-sdk-accessanalyzer = "1.14"
-aws-sdk-guardduty = "1.14"
-aws-sdk-config = "1.14"
-aws-sdk-eks = "1.14"
-aws-sdk-elasticloadbalancingv2 = "1.14"
-aws-sdk-secretsmanager = "1.14"
-aws-sdk-sns = "1.14"
-aws-sdk-sqs = "1.14"
-aws-sdk-s3control = "1.14"
-aws-sdk-ecs = "1.14"
-aws-sdk-elasticache = "1.14"
-aws-sdk-ecr = "1.14"
-aws-sdk-acm = "1.14"
-aws-sdk-dynamodb = "1.14"
-aws-sdk-apigateway = "1.14"
-aws-sdk-apigatewayv2 = "1.14"
-aws-sdk-opensearch = "1.14"
-aws-sdk-cloudfront = "1.14"
-aws-sdk-route53 = "1.14"
-aws-sdk-eventbridge = "1.14"
-aws-sdk-wafv2 = "1.14"
-aws-sdk-cloudwatchlogs = "1.14"
-aws-sdk-redshift = "1.14"
-aws-sdk-docdb = "1.14"
-aws-sdk-neptune = "1.14"
-aws-sdk-memorydb = "1.14"
-aws-sdk-backup = "1.14"
-aws-sdk-organizations = "1.14"
-aws-sdk-sfn = "1.14"
-aws-sdk-ssoadmin = "1.14"
+aws-sdk-iam = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sts = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a"] }
+aws-sdk-s3 = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a", "http-1x"] }
+aws-sdk-ec2 = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-ssm = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-cloudtrail = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-rds = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-lambda = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-kms = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-accessanalyzer = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-guardduty = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-config = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-eks = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-elasticloadbalancingv2 = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-secretsmanager = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sns = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sqs = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-s3control = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-ecs = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-elasticache = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-ecr = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-acm = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-dynamodb = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-apigateway = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-apigatewayv2 = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-opensearch = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-cloudfront = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-route53 = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-eventbridge = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio", "sigv4a"] }
+aws-sdk-wafv2 = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-cloudwatchlogs = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-redshift = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-docdb = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-neptune = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-memorydb = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-backup = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-organizations = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sfn = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-ssoadmin = { version = "1.14", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-types = "1"
 tokio-util = { version = "0.7", features = ["codec"] }
 lettre = { version = "0.11.22", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
