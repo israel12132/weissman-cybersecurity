@@ -6,6 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { GROUP_SMOKE_PLAN, FINDINGS_E2E_PLAN, collectApprovedDomains } from './lib/group_smoke_plan.mjs'
+import { retryScanIntake } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -115,30 +116,6 @@ async function login() {
   return r.status === 200 ? r.data?.access_token || null : null
 }
 
-// Scan intake is shed transiently under load: 503 `load_shed` (self-heal recovery engages when
-// the DB pool or async backlog crosses its critical threshold) and 429 `rate_limited` (per-tenant
-// burst limit). Both are self-protecting, not terminal, and both advertise `retry_after_seconds`
-// precisely so a correct client backs off and retries — the server's documented contract. A live
-// E2E driving many scans through one IP legitimately trips this; the pytest contract already rides
-// out 429 the same way. Each job here is polled to completion before the next, so the backlog
-// drains between engines and one short wait almost always lands healthy.
-const ENQUEUE_RETRIES = Number(process.env.WEISSMAN_FINDINGS_E2E_ENQUEUE_RETRIES || 6)
-const ENQUEUE_WAIT_CAP_MS = 20000
-
-async function enqueueScan(token, body) {
-  let res = await api('POST', '/api/command-center/scan', { token, body })
-  for (let attempt = 1; attempt <= ENQUEUE_RETRIES && (res.status === 503 || res.status === 429); attempt += 1) {
-    const hinted = Number(res.data?.retry_after_seconds)
-    const waitMs = Number.isFinite(hinted) && hinted > 0
-      ? Math.min(hinted * 1000, ENQUEUE_WAIT_CAP_MS)
-      : Math.min(1500 * attempt, ENQUEUE_WAIT_CAP_MS)
-    console.log(`  … ${body.engine}: intake ${res.data?.code || res.status}; backing off ${Math.round(waitMs / 1000)}s (retry ${attempt}/${ENQUEUE_RETRIES})`)
-    await sleep(waitMs)
-    res = await api('POST', '/api/command-center/scan', { token, body })
-  }
-  return res
-}
-
 async function main() {
   console.log(`verify_engine_groups_findings_e2e: ${BASE}`)
   if (!PASSWORD) { fail('credentials missing'); process.exit(1) }
@@ -166,7 +143,10 @@ async function main() {
     const fresh = await login()
     if (fresh) token = fresh
 
-    const scan = await enqueueScan(token, body)
+    const scan = await retryScanIntake(
+      () => api('POST', '/api/command-center/scan', { token, body }),
+      { label },
+    )
     if (scan.status !== 202 || !scan.data?.job_id) {
       fail(`${label}: enqueue HTTP ${scan.status}${scan.data?.code ? ` (${scan.data.code})` : ''}`)
       continue

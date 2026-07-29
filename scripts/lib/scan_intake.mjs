@@ -1,0 +1,50 @@
+// Shared retry for scan-intake POSTs across the live E2E suite.
+//
+// The platform transiently sheds NEW scan intake with two distinct, self-protecting codes, both
+// advertising Retry-After / `retry_after_seconds` precisely so a correct client backs off and
+// retries instead of failing the contract:
+//   * 503 `load_shed`    — self-heal recovery, engaged when the DB pool or async backlog crosses its
+//                          critical threshold; auto-clears on a TTL as the platform drains.
+//   * 429 `rate_limited` — per-tenant / per-IP burst limit (all live E2E traffic rides one IP, so a
+//                          legitimate burst trips a limit no real distributed client ever hits).
+//
+// A live E2E driving many scans through 127.0.0.1 legitimately trips these; honoring the server's
+// documented back-off is correct client behaviour, NOT a way to weaken the protection. Callers poll
+// each job to completion before the next, so the backlog drains between scans and one short wait
+// almost always lands healthy. Honor the server's own hint (capped) rather than a blind fixed sleep.
+
+const RETRIES = Number(process.env.WEISSMAN_SCAN_INTAKE_RETRIES || 6)
+const WAIT_CAP_MS = 20000
+const SHED_CODES = new Set([429, 503])
+
+export function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Run one scan-intake POST via `attempt`, retrying while the platform sheds it (429/503).
+//   attempt       () => Promise<nativeResponse>  — performs one POST, returns the script's own shape
+//   opts.label    string   — log label (engine / scenario) for the back-off line
+//   opts.retries  number   — max retries (default WEISSMAN_SCAN_INTAKE_RETRIES or 6)
+//   opts.statusOf (r) => number  — extract the HTTP status (default r.status)
+//   opts.retryAfterOf (r) => number|string  — extract the seconds hint (default r.data.retry_after_seconds)
+// Returns the final native response unchanged (non-shed status, or the last shed after exhausting
+// retries — the caller still makes the final accept/fail decision on it).
+export async function retryScanIntake(attempt, opts = {}) {
+  const { label = 'scan', retries = RETRIES } = opts
+  const statusOf = opts.statusOf || ((r) => r?.status)
+  const retryAfterOf = opts.retryAfterOf || ((r) => r?.data?.retry_after_seconds)
+  let res = await attempt()
+  for (let i = 1; i <= retries && SHED_CODES.has(statusOf(res)); i += 1) {
+    const hint = Number(retryAfterOf(res))
+    const waitMs = Number.isFinite(hint) && hint > 0
+      ? Math.min(hint * 1000, WAIT_CAP_MS)
+      : Math.min(1500 * i, WAIT_CAP_MS)
+    console.log(
+      `  … ${label}: scan intake shed (HTTP ${statusOf(res)}); backing off ${Math.round(waitMs / 1000)}s ` +
+        `(retry ${i}/${retries})`,
+    )
+    await sleep(waitMs)
+    res = await attempt()
+  }
+  return res
+}

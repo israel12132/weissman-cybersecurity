@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { retryScanIntake } from './lib/scan_intake.mjs'
 
 const BASE_URL = process.env.WEISSMAN_SMOKE_BASE_URL || 'http://127.0.0.1'
 const LOGIN_EMAIL = process.env.WEISSMAN_SMOKE_LOGIN_EMAIL || process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost'
@@ -303,11 +304,18 @@ function summarize(scenario, jobId, job) {
 async function runScenario(headers, clientId, scenario) {
   if (scenario.kind === 'top-tier-health-probe') {
     const body = { ...scenario.payload, client_id: clientId }
-    const queued = await api('/api/engines/top-tier/health-probe', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    })
+    const queued = await retryScanIntake(
+      () => api('/api/engines/top-tier/health-probe', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      }),
+      {
+        label: `${scenario.source} (top-tier-health-probe)`,
+        statusOf: (r) => r.response.status,
+        retryAfterOf: (r) => r.body?.retry_after_seconds,
+      },
+    )
     if (!queued.response.ok) {
       throw new Error(`top-tier health probe queue failed (${queued.response.status}): ${JSON.stringify(queued.body)}`)
     }
@@ -318,11 +326,18 @@ async function runScenario(headers, clientId, scenario) {
   }
 
   const body = { ...scenario.payload, client_id: clientId, timeout: 45 }
-  const queued = await api('/api/command-center/scan', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
+  const queued = await retryScanIntake(
+    () => api('/api/command-center/scan', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    }),
+    {
+      label: scenario.source || scenario.payload?.engine || 'ui-scan',
+      statusOf: (r) => r.response.status,
+      retryAfterOf: (r) => r.body?.retry_after_seconds,
+    },
+  )
   if (!queued.response.ok) {
     throw new Error(`scan queue failed (${queued.response.status}): ${JSON.stringify(queued.body)}`)
   }

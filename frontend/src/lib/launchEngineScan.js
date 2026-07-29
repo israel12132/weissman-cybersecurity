@@ -1,4 +1,5 @@
 import { apiFetch } from './apiBase'
+import { apiFetchScanIntake } from './scanIntakeRetry'
 import { buildScanPayload, mergeScanBody, normalizeIntegrations } from './engineClientPrefill'
 
 /** Fetch normalized client integrations (credentials, OAST, LLM, etc.). */
@@ -35,7 +36,7 @@ export async function launchEngineScan({
   })
   if (timeout != null) body.timeout = timeout
 
-  const r = await apiFetch('/api/command-center/scan', {
+  const r = await apiFetchScanIntake('/api/command-center/scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -56,7 +57,7 @@ export async function postEngineScan(customBody, integrations = undefined) {
     ints = await fetchClientIntegrations(customBody.client_id)
   }
   const body = mergeScanBody(engineId, customBody, ints)
-  const r = await apiFetch('/api/command-center/scan', {
+  const r = await apiFetchScanIntake('/api/command-center/scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
