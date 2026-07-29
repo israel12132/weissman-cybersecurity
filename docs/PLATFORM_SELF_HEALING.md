@@ -2,7 +2,8 @@
 
 **Status:** shipped (detect → diagnose → **recover**, in-replica + opt-in fleet coordination).
 **Modules:** `fingerprint_engine::self_healing` (diagnose) + `fingerprint_engine::self_heal_recovery`
-(execute) + `fingerprint_engine::self_heal_shared` (durable cross-replica gate).
+(execute) + `fingerprint_engine::self_heal_shared` (durable cross-replica gate) +
+`fingerprint_engine::supervised` (background-loop restart/watchdog).
 
 ## Why
 
@@ -133,6 +134,11 @@ hot path:  load_shed_active() / backoff_active()  =  local gate  OR  self_heal_s
 | `WEISSMAN_SELFHEAL_DEP_CIRCUIT_COOLDOWN_SECS` | `15` | Seconds an open dependency circuit waits before probing (half-open). |
 | `WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED` | `false` | Master switch for **cross-replica** gate coordination (`1`/`true`/`yes`/`on` enables; off ⇒ local-only gates, no shared DB reads/writes). |
 | `WEISSMAN_REPLICA_ID` | *(hostname)* | Replica id written to `weissman_self_heal_gate.engaged_by` for observability; falls back to `HOSTNAME`, else `unknown`. |
+| `WEISSMAN_SUPERVISOR_ENABLED` | `true` | Master switch for background-loop supervision (`0`/`false`/`no`/`off` runs each supervised loop once, unsupervised — today's fire-and-forget). |
+| `WEISSMAN_SUPERVISOR_BASE_BACKOFF_SECS` | `2` | First restart's backoff; doubles each subsequent restart. |
+| `WEISSMAN_SUPERVISOR_MAX_BACKOFF_SECS` | `60` | Cap on the restart backoff (a crash-loop settles here instead of hot-spinning). |
+| `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS` | `0` (off) | If > 0, a supervised loop that has not beaten its heartbeat for this many seconds is aborted and restarted. Set it above the loop's poll interval **plus** a worst-case iteration so a legitimately long tick is not mistaken for a hang. `0` ⇒ panic/exit restart only. |
+| `WEISSMAN_SUPERVISOR_WATCHDOG_POLL_SECS` | `10` | How often the watchdog checks the heartbeat (when stuck-detection is on). |
 
 ## Observability
 
@@ -145,12 +151,14 @@ hot path:  load_shed_active() / backoff_active()  =  local gate  OR  self_heal_s
 | `weissman_self_heal_shared_gate_active` | `gate` | Gauge (1/0) — whether the **fleet** load-shed/backoff gate is engaged as this replica last observed it (cross-replica coordination). |
 | `weissman_self_heal_shared_publish_total` | `gate`, `outcome` | Incremented per health round a locally-engaged gate is published to the shared store (`outcome` = ok or error). |
 | `weissman_self_heal_shared_refresh_total` | `outcome` | Incremented per health round the fleet gate view is refreshed from the shared store (`outcome` = ok or error; sustained error ⇒ degraded to local-only, fail-open). |
+| `weissman_supervised_restart_total` | `task`, `reason` | Incremented when a supervised background loop is restarted; `reason` = exited, panicked, cancelled, or stuck. A sustained rate is a crash/stuck loop. |
+| `weissman_supervised_up` | `task` | Gauge (1/0) — whether the supervised loop's task is currently running. |
 
 Prometheus alerts for these signals ship in
 `deploy/observability/prometheus/weissman-alerts.yml` (group `weissman-platform-self-healing`):
 `WeissmanPlatformCriticalDiagnosis`, `WeissmanPlatformLoadShedding`,
 `WeissmanPlatformSustainedRecovery`, `WeissmanPlatformCronBackoff`, `WeissmanFleetLoadShedding`,
-`WeissmanSelfHealSharedStoreErrors`. A sustained nonzero
+`WeissmanSelfHealSharedStoreErrors`, `WeissmanSupervisedTaskRestarting`. A sustained nonzero
 `diagnosis`/`executed` rate for a `{subsystem, action}` is the platform actively self-healing; a
 high `cooldown` rate means the fault is *sustained* (recovery already engaged, waiting out the
 window) — escalate to the runbook below.
@@ -185,9 +193,21 @@ window) — escalate to the runbook below.
   load-shed/backoff gates with a Postgres row so an engagement on any replica sheds/defers intake
   fleet-wide, not just locally. Off by default (`WEISSMAN_SELFHEAL_SHARED_STATE_ENABLED`), fail-open,
   clock-skew robust, hot-path lock-free.
-- **Later** — supervised auto-restart of stuck background workers (the diagnosis + prune-request
-  signals already exist; a heartbeat watchdog that aborts and respawns a stalled worker task is the
-  remaining piece). Deferred deliberately: it changes intra-process task-lifecycle semantics and
-  warrants its own design + soak, whereas the loop above is complete and safe today.
+- **Supervised background loops — shipped (`supervised`).** A long-lived loop that panics used to
+  die silently for the rest of the process lifetime; `crate::supervised::supervise` restarts it with
+  bounded exponential backoff (metric `weissman_supervised_restart_total{task,reason}`), and — given
+  a `Heartbeat` the loop bumps each iteration — a watchdog aborts and restarts a *stuck* loop (one
+  wedged on a dependency call with no timeout). The pure core (`next_backoff_secs`, `is_stuck`,
+  `join_reason`) is unit-tested; the restart glue by an async test.
+  - **Adopted:** the cron **`scan_schedule_worker`** now runs under supervision (panic/exit restart
+    always on; stuck-detection opt-in via `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS`, since a
+    fleet-wide sweep is a legitimately long tick that must not read as a hang). A restarted cron loop
+    is safe — it just re-polls due schedules, which are idempotent (`next_run_at` only advances on
+    launch).
+  - **Next adopters** (module ready, wiring is mechanical): the 10s health/self-heal loop
+    (`spawn_pool_metrics_loop`) and the worker's stale-lock reclaimer — both currently die silently
+    on panic. They are deliberately staged after their own soak, since restarting the health loop
+    resets in-memory recovery state (gates re-derive on the next round; the durable fleet gate above
+    survives a restart regardless).
 - Both `diagnose` and `plan_recovery` are intentionally **pure functions** so new rules and new
   effects can be added and tested independently of the sampling loop.
