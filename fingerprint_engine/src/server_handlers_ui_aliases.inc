@@ -323,61 +323,169 @@ fn merge_control_statuses(
         .collect()
 }
 
-/// UI framework slugs that carry a canonical control set (see `static_framework_controls`). These
-/// are the frameworks a compliance artifact can be reconciled against for orphaned controls.
-const COMPLIANCE_UI_SLUGS: &[&str] = &[
-    "iso27001", "soc2", "nis2", "gdpr", "iec62443", "pci", "csa-ccm", "cis", "nist", "hipaa",
-    "fedramp",
+/// Fallback framework catalog, used only when the dynamic `compliance_frameworks` table is
+/// unavailable (e.g. before its migration is applied). Mirrors the historical hardcoded list plus
+/// CIS (now fully mapped). The authoritative list lives in the database.
+///
+/// NIST / HIPAA / FedRAMP are intentionally absent: they carry a canonical control set in
+/// `static_framework_controls` but no live evidence mapping, so listing them as in-scope would
+/// (correctly) void every official artifact through the listed-but-unmapped signal.
+const FALLBACK_FRAMEWORKS: &[(&str, &str, &str)] = &[
+    (
+        "iso27001",
+        "ISO/IEC 27001:2022",
+        "Information Security Management",
+    ),
+    ("soc2", "SOC 2 Type II", "Trust Services Criteria"),
+    (
+        "nis2",
+        "NIS 2 Directive",
+        "EU Network and Information Security",
+    ),
+    ("gdpr", "GDPR", "EU General Data Protection Regulation"),
+    ("iec62443", "IEC 62443", "OT / Industrial Cybersecurity"),
+    ("pci", "PCI DSS 4.0", "Payment Card Industry"),
+    ("csa-ccm", "CSA CCM", "Cloud Controls Matrix"),
+    (
+        "cis",
+        "CIS Benchmarks",
+        "Center for Internet Security Controls",
+    ),
 ];
 
-/// Orphaned controls for one framework slug: canonical requirements with no covering row in the
-/// live control-mapping catalog. Returns a 503 `Response` if the catalog cannot be loaded (fail
-/// closed on the artifact rather than assert an unverifiable clean state). An unsupported or
-/// not-yet-onboarded framework yields an empty list.
-async fn compliance_orphaned_controls(
+/// One enabled row from the dynamic `compliance_frameworks` catalog.
+#[derive(Debug, Clone)]
+struct ListedFramework {
+    slug: String,
+    name: String,
+    scope: String,
+}
+
+/// Load the enabled compliance frameworks from the dynamic catalog, ordered for display. Returns an
+/// empty vec on any DB error (e.g. before the migration lands) so callers fall back gracefully.
+async fn load_listed_frameworks(state: &Arc<AppState>) -> Vec<ListedFramework> {
+    match sqlx::query(
+        "SELECT slug, name, scope FROM compliance_frameworks WHERE enabled ORDER BY display_order, slug",
+    )
+    .fetch_all(state.app_pool.as_ref())
+    .await
+    {
+        Ok(rows) => rows
+            .into_iter()
+            .filter_map(|r| {
+                Some(ListedFramework {
+                    slug: r.try_get::<String, _>("slug").ok()?,
+                    name: r.try_get::<String, _>("name").ok()?,
+                    scope: r.try_get::<String, _>("scope").ok().unwrap_or_default(),
+                })
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Enabled framework slugs from the dynamic catalog, falling back to `FALLBACK_FRAMEWORKS`.
+async fn listed_framework_slugs(state: &Arc<AppState>) -> Vec<String> {
+    let listed = load_listed_frameworks(state).await;
+    if listed.is_empty() {
+        FALLBACK_FRAMEWORKS
+            .iter()
+            .map(|(s, _, _)| s.to_string())
+            .collect()
+    } else {
+        listed.into_iter().map(|f| f.slug).collect()
+    }
+}
+
+fn catalog_unavailable() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({ "ok": false, "detail": "Control-mapping catalog unavailable" })),
+    )
+        .into_response()
+}
+
+/// Unified orphaned-control verdict for one framework — the single gate every official compliance
+/// artifact passes through. It folds together every signal that voids such an artifact:
+///   1. **coverage gap** — a canonical requirement with no covering row in
+///      `compliance_control_mappings` (`find_orphaned_controls`);
+///   2. **listed-but-unmapped** — a framework the platform lists as in-scope that carries no live
+///      control mapping at all (an entire framework of silent rot);
+///   3. **dead predicate** — a control in `compliance_mappings` whose every row is structurally
+///      dead (`find_dead_predicate_controls`, ported from the parallel integrity work — one gate,
+///      not two).
+///
+/// Fails closed (503) if a catalog cannot be loaded, rather than asserting an unverifiable clean
+/// state. `listed` marks whether the framework appears in the enabled dynamic catalog.
+async fn compliance_framework_orphans(
     state: &Arc<AppState>,
     framework_slug: &str,
+    listed: bool,
 ) -> Result<Vec<crate::compliance_engine::OrphanedControl>, Response> {
+    use crate::compliance_engine::OrphanedControl;
     let expected: Vec<(String, String)> = static_framework_controls(framework_slug)
         .into_iter()
         .map(|(id, title)| (id.to_string(), title.to_string()))
         .collect();
-    if expected.is_empty() {
+    // An unlisted framework with no canonical control set is out of scope for the gate entirely.
+    if expected.is_empty() && !listed {
         return Ok(Vec::new());
     }
     let db_fw = crate::compliance_engine::normalize_framework_slug(framework_slug)
         .unwrap_or_else(|| framework_slug.to_uppercase());
-    let mapping_ids: Vec<String> = match crate::compliance_engine::load_control_mappings(
+
+    let control_map_ids: Vec<String> = match crate::compliance_engine::load_control_mappings(
         state.app_pool.as_ref(),
         Some(&db_fw),
     )
     .await
     {
         Ok(m) => m.into_iter().map(|r| r.control_id).collect(),
-        Err(_) => {
-            return Err((
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "ok": false, "detail": "Control-mapping catalog unavailable" })),
-            )
-                .into_response());
-        }
+        Err(_) => return Err(catalog_unavailable()),
     };
-    Ok(crate::compliance_engine::find_orphaned_controls(
-        &expected,
-        &mapping_ids,
+
+    // (1) coverage gap
+    let mut orphans = crate::compliance_engine::find_orphaned_controls(&expected, &control_map_ids);
+
+    // (2) listed but carrying no live control mapping at all
+    if listed && control_map_ids.is_empty() {
+        if expected.is_empty() {
+            orphans.push(OrphanedControl {
+                control_id: "*".into(),
+                control_title: "Framework is listed but has no live control mapping".into(),
+            });
+        } else {
+            orphans = expected
+                .iter()
+                .map(|(id, title)| OrphanedControl {
+                    control_id: id.clone(),
+                    control_title: title.clone(),
+                })
+                .collect();
+        }
+    }
+
+    // (3) dead-predicate rot in the finding->control catalog
+    let mappings = match crate::compliance_engine::load_mappings(state.app_pool.as_ref()).await {
+        Ok(m) => m,
+        Err(_) => return Err(catalog_unavailable()),
+    };
+    let dead = crate::compliance_engine::find_dead_predicate_controls(&mappings, &db_fw);
+
+    Ok(crate::compliance_engine::merge_orphaned_controls(
+        orphans, dead,
     ))
 }
 
-/// Aggregate orphaned controls across several framework slugs, tagged with the owning framework.
-/// Used to gate the cross-framework evidence pack: its validity depends on the whole live-mapping
-/// catalog being consistent, so any onboarded framework with gaps voids the pack.
-async fn compliance_orphaned_controls_across(
+/// Aggregate orphaned controls across the whole enabled compliance surface, tagged with framework.
+/// Gates the cross-framework evidence pack: any listed framework with rot voids the pack.
+async fn compliance_orphaned_controls_across_listed(
     state: &Arc<AppState>,
-    slugs: &[&str],
 ) -> Result<Vec<Value>, Response> {
+    let slugs = listed_framework_slugs(state).await;
     let mut out: Vec<Value> = Vec::new();
-    for slug in slugs {
-        for o in compliance_orphaned_controls(state, slug).await? {
+    for slug in &slugs {
+        for o in compliance_framework_orphans(state, slug, true).await? {
             out.push(json!({
                 "framework": slug,
                 "control_id": o.control_id,
@@ -388,25 +496,32 @@ async fn compliance_orphaned_controls_across(
     Ok(out)
 }
 
-/// GET /api/compliance/frameworks — UI expects a list of supported frameworks. Map from posture.
+/// GET /api/compliance/frameworks — the supported frameworks, from the dynamic
+/// `compliance_frameworks` catalog (falls back to the historical list only if the table is
+/// unavailable). `dynamic` reports which source served the list.
 async fn api_compliance_frameworks_list(
     State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<AuthContext>,
+    Extension(_auth): Extension<AuthContext>,
 ) -> Response {
-    // Until the dedicated frameworks table ships, derive the list from finding compliance tags
-    // and the well-known tag taxonomy used by engine_probes::default_compliance().
-    let _ = state;
-    let _ = auth;
-    let frameworks = vec![
-        ("iso27001", "ISO/IEC 27001:2022", "Information Security Management"),
-        ("soc2",      "SOC 2 Type II",       "Trust Services Criteria"),
-        ("nis2",      "NIS 2 Directive",     "EU Network and Information Security"),
-        ("gdpr",      "GDPR",                "EU General Data Protection Regulation"),
-        ("iec62443",  "IEC 62443",           "OT / Industrial Cybersecurity"),
-        ("pci",       "PCI DSS 4.0",         "Payment Card Industry"),
-        ("csa-ccm",   "CSA CCM",             "Cloud Controls Matrix"),
-    ];
-    let out: Vec<Value> = frameworks
+    let listed = load_listed_frameworks(&state).await;
+    let (rows, dynamic): (Vec<(String, String, String)>, bool) = if listed.is_empty() {
+        (
+            FALLBACK_FRAMEWORKS
+                .iter()
+                .map(|(id, name, scope)| (id.to_string(), name.to_string(), scope.to_string()))
+                .collect(),
+            false,
+        )
+    } else {
+        (
+            listed
+                .into_iter()
+                .map(|f| (f.slug, f.name, f.scope))
+                .collect(),
+            true,
+        )
+    };
+    let out: Vec<Value> = rows
         .into_iter()
         .map(|(id, name, scope)| {
             json!({
@@ -417,7 +532,11 @@ async fn api_compliance_frameworks_list(
             })
         })
         .collect();
-    (StatusCode::OK, Json(json!({ "ok": true, "frameworks": out }))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({ "ok": true, "dynamic": dynamic, "frameworks": out })),
+    )
+        .into_response()
 }
 
 /// GET /api/compliance/frameworks/:framework_id/controls — live status from mapped findings.
@@ -499,8 +618,13 @@ async fn api_compliance_frameworks_report(
             .into_response();
     }
 
-    // --- Live control-mapping enforcement gate (orphaned controls only) ---
-    let orphaned = match compliance_orphaned_controls(&state, &framework_id).await {
+    // --- Unified control-mapping enforcement gate ---
+    // Coverage gap + listed-but-unmapped + dead-predicate rot, all through one gate/watermark.
+    let is_listed = listed_framework_slugs(&state)
+        .await
+        .iter()
+        .any(|s| s == &framework_id);
+    let orphaned = match compliance_framework_orphans(&state, &framework_id, is_listed).await {
         Ok(o) => o,
         Err(resp) => return resp,
     };

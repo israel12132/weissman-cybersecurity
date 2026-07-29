@@ -5,7 +5,7 @@
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use sqlx::Executor;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct ComplianceMappingRow {
@@ -572,6 +572,79 @@ pub fn framework_slug_for_db(db_framework: &str) -> Option<&'static str> {
     }
 }
 
+// --- Complementary "dead-predicate" integrity check ------------------------------------------
+// Ported from the parallel integrity work (PR #180) and unified under the single enforcement
+// pipeline: this detects a *different* rot than `find_orphaned_controls`. Where the latter finds
+// a requirement with no covering row in the control→evidence catalog (`compliance_control_mappings`),
+// this finds a control in the finding→control catalog (`compliance_mappings`) whose every row is
+// structurally dead — no cloud rule id and no vulnerability predicate — so it can never be
+// violated and is silently reported "compliant". Both verdicts feed one gate and one watermark.
+
+/// A mapping row is *actionable* when it carries at least one predicate that can ever match a live
+/// finding — a cloud rule id or a vulnerability signal (source/title/min-severity). A row with none
+/// of these is structurally dead: it contributes a control to the catalog but can never be
+/// evaluated, so that control is always reported "compliant" regardless of reality.
+pub fn mapping_row_is_actionable(m: &ComplianceMappingRow) -> bool {
+    let non_empty =
+        |v: &Option<String>| v.as_deref().map(|s| !s.trim().is_empty()).unwrap_or(false);
+    let has_cloud = non_empty(&m.cloud_rule_id);
+    let has_vuln = non_empty(&m.vuln_source_contains)
+        || non_empty(&m.vuln_title_contains)
+        || non_empty(&m.vuln_min_severity);
+    has_cloud || has_vuln
+}
+
+/// Controls (as [`OrphanedControl`]) in the `compliance_mappings` catalog for one framework whose
+/// every row is structurally dead (see [`mapping_row_is_actionable`]). Deterministic order
+/// (control_id). Empty result means every mapped control has at least one actionable rule.
+pub fn find_dead_predicate_controls(
+    mappings: &[ComplianceMappingRow],
+    framework_db: &str,
+) -> Vec<OrphanedControl> {
+    let fw_upper = framework_db.to_uppercase();
+    // control_id -> (title, has at least one actionable row).
+    let mut seen: HashMap<String, (String, bool)> = HashMap::new();
+    for m in mappings {
+        if m.framework.to_uppercase() != fw_upper {
+            continue;
+        }
+        let entry = seen
+            .entry(m.control_id.clone())
+            .or_insert_with(|| (m.control_title.clone(), false));
+        if mapping_row_is_actionable(m) {
+            entry.1 = true;
+        }
+    }
+    let mut out: Vec<OrphanedControl> = seen
+        .into_iter()
+        .filter_map(|(id, (title, actionable))| {
+            if actionable {
+                None
+            } else {
+                Some(OrphanedControl {
+                    control_id: id,
+                    control_title: title,
+                })
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| a.control_id.cmp(&b.control_id));
+    out
+}
+
+/// Merge two orphaned-control lists (coverage-gap + dead-predicate) into one deduplicated,
+/// sorted verdict for the unified gate. Dedup is by `control_id`.
+pub fn merge_orphaned_controls(
+    coverage_gap: Vec<OrphanedControl>,
+    dead_predicate: Vec<OrphanedControl>,
+) -> Vec<OrphanedControl> {
+    let mut by_id: BTreeMap<String, OrphanedControl> = BTreeMap::new();
+    for o in coverage_gap.into_iter().chain(dead_predicate.into_iter()) {
+        by_id.entry(o.control_id.clone()).or_insert(o);
+    }
+    by_id.into_values().collect()
+}
+
 #[cfg(test)]
 mod control_coverage_tests {
     use super::*;
@@ -806,6 +879,223 @@ mod control_coverage_tests {
         let orphans = find_orphaned_controls(&controls, &ids);
         assert!(orphans.is_empty(), "CIS still orphaned: {orphans:?}");
         assert_eq!(report_gate(&orphans, false), ReportGate::Allow);
+    }
+
+    // --- Complementary dead-predicate detection (ported from PR #180, unified here) ---
+
+    fn mrow(
+        id: i64,
+        framework: &str,
+        control_id: &str,
+        cloud: Option<&str>,
+        vsrc: Option<&str>,
+    ) -> ComplianceMappingRow {
+        ComplianceMappingRow {
+            id,
+            framework: framework.to_string(),
+            control_id: control_id.to_string(),
+            control_title: format!("Control {control_id}"),
+            rule_key: format!("rk-{id}"),
+            cloud_rule_id: cloud.map(str::to_string),
+            vuln_source_contains: vsrc.map(str::to_string),
+            vuln_title_contains: None,
+            vuln_min_severity: None,
+        }
+    }
+
+    #[test]
+    fn dead_predicate_controls_flag_only_fully_dead_controls() {
+        let mappings = vec![
+            mrow(1, "SOC2", "CC6.1", Some("s3-public-acl"), None), // actionable
+            mrow(2, "SOC2", "CC9.9", None, None),                  // dead
+            mrow(3, "SOC2", "CC9.9", Some("  "), Some("")),        // still dead (blank predicates)
+        ];
+        let dead = find_dead_predicate_controls(&mappings, "soc2"); // case-insensitive
+        assert_eq!(dead.len(), 1);
+        assert_eq!(dead[0].control_id, "CC9.9");
+        // A control saved by any single actionable row is not dead.
+        let saved = vec![
+            mrow(1, "ISO27001", "A.8.1", None, None),
+            mrow(2, "ISO27001", "A.8.1", Some("iam-mfa"), None),
+        ];
+        assert!(find_dead_predicate_controls(&saved, "ISO27001").is_empty());
+    }
+
+    #[test]
+    fn dead_predicate_is_framework_scoped() {
+        let mappings = vec![
+            mrow(1, "SOC2", "CC6.1", Some("s3-public-acl"), None),
+            mrow(2, "GDPR", "Art.32", None, None), // dead, other framework
+        ];
+        assert!(find_dead_predicate_controls(&mappings, "SOC2").is_empty());
+        assert_eq!(find_dead_predicate_controls(&mappings, "GDPR").len(), 1);
+    }
+
+    /// The shipped finding→control catalog must not contain a structurally dead control for any
+    /// framework the platform lists: such a control is silently "compliant" forever. Reading the
+    /// real migration keeps this honest as rows are added.
+    #[test]
+    fn shipped_finding_catalog_has_no_dead_predicate_controls() {
+        const PHASE3_SQL: &str =
+            include_str!("../migrations/20250330120006_phase3_cloud_compliance.sql");
+        // Parse `('FRAMEWORK', 'CONTROL', 'TITLE', 'rule_key', <cloud>, <src>, <title>, <sev>),`
+        let mut rows: Vec<ComplianceMappingRow> = Vec::new();
+        for (i, line) in PHASE3_SQL.lines().enumerate() {
+            let t = line.trim().trim_end_matches(',').trim_end_matches(';');
+            if !t.starts_with("('") || !t.ends_with(')') {
+                continue;
+            }
+            let fields: Vec<String> = t[1..t.len() - 1]
+                .split(", ")
+                .map(|f| f.trim().to_string())
+                .collect();
+            if fields.len() != 8 {
+                continue;
+            }
+            let unquote = |f: &str| -> Option<String> {
+                if f == "NULL" {
+                    None
+                } else {
+                    Some(f.trim_matches('\'').to_string())
+                }
+            };
+            rows.push(ComplianceMappingRow {
+                id: i as i64,
+                framework: fields[0].trim_matches('\'').to_string(),
+                control_id: fields[1].trim_matches('\'').to_string(),
+                control_title: fields[2].trim_matches('\'').to_string(),
+                rule_key: fields[3].trim_matches('\'').to_string(),
+                cloud_rule_id: unquote(&fields[4]),
+                vuln_source_contains: unquote(&fields[5]),
+                vuln_title_contains: unquote(&fields[6]),
+                vuln_min_severity: unquote(&fields[7]),
+            });
+        }
+        assert!(
+            !rows.is_empty(),
+            "parser drifted from the migration: no mapping rows parsed"
+        );
+        for fw in [
+            "ISO27001", "SOC2", "GDPR", "NIS2", "IEC62443", "PCI", "CSA-CCM", "CIS",
+        ] {
+            let dead = find_dead_predicate_controls(&rows, fw);
+            assert!(
+                dead.is_empty(),
+                "{fw} has dead-predicate controls: {dead:?}"
+            );
+        }
+    }
+
+    const ONBOARDING_SQL: &str = include_str!(
+        "../migrations/20260729120000_compliance_frameworks_dynamic_and_onboarding.sql"
+    );
+
+    /// Drift proof: every framework the onboarding migration lists as enabled must fully map its
+    /// canonical control set, so the unified gate `Allow`s its report. Mirrors
+    /// `static_framework_controls` in `server_handlers_ui_aliases.inc`.
+    #[test]
+    fn onboarded_frameworks_fully_map_their_controls_and_allow() {
+        let cases: &[(&str, &[(&str, &str)])] = &[
+            (
+                "SOC2",
+                &[
+                    ("CC6.1", "Logical and physical access controls"),
+                    ("CC6.6", "Cloud network security"),
+                    ("CC6.7", "Cryptographic controls"),
+                    ("CC7.1", "Detection and monitoring"),
+                ],
+            ),
+            (
+                "NIS2",
+                &[
+                    ("Art.21(2)(d)", "Supply-chain security"),
+                    ("Art.21(2)(h)", "Use of cryptography"),
+                    ("Art.21(2)(i)", "Access control"),
+                ],
+            ),
+            ("GDPR", &[("Art.32", "Security of processing")]),
+            (
+                "IEC62443",
+                &[
+                    ("FR-1", "Identification and authentication"),
+                    ("FR-3", "System integrity"),
+                ],
+            ),
+            ("PCI", &[("4.1", "Strong cryptography on public networks")]),
+            ("CSA-CCM", &[("DCS-04", "Data classification")]),
+        ];
+        for (db_fw, controls) in cases {
+            let ids = ids_for(ONBOARDING_SQL, db_fw);
+            assert!(!ids.is_empty(), "{db_fw} must be seeded by the migration");
+            let orphans = find_orphaned_controls(&expected(controls), &ids);
+            assert!(orphans.is_empty(), "{db_fw} still orphaned: {orphans:?}");
+            assert_eq!(report_gate(&orphans, false), ReportGate::Allow);
+        }
+    }
+
+    /// Every slug the migration seeds into `compliance_frameworks` must be a framework the platform
+    /// can actually reconcile — otherwise listing it voids every artifact via listed-but-unmapped.
+    #[test]
+    fn every_listed_framework_slug_normalizes_and_is_mapped() {
+        let slugs: Vec<String> = ONBOARDING_SQL
+            .lines()
+            .filter_map(|l| {
+                let t = l.trim();
+                let rest = t.strip_prefix("('")?;
+                let end = rest.find('\'')?;
+                let slug = &rest[..end];
+                // Catalog rows use lowercase UI slugs; control-mapping rows use uppercase names.
+                if slug.chars().any(|c| c.is_ascii_uppercase()) {
+                    None
+                } else {
+                    Some(slug.to_string())
+                }
+            })
+            .collect();
+        assert_eq!(
+            slugs.len(),
+            8,
+            "expected 8 seeded framework slugs, got {slugs:?}"
+        );
+        for slug in &slugs {
+            let db = normalize_framework_slug(slug)
+                .unwrap_or_else(|| panic!("slug {slug} must normalize to a catalog framework"));
+            // Mapped either by an earlier migration (ISO27001/CIS) or by this one.
+            let mut ids = seeded_control_ids(&db);
+            ids.extend(ids_for(ONBOARDING_SQL, &db));
+            assert!(
+                !ids.is_empty(),
+                "listed framework {slug} ({db}) carries no live control mapping"
+            );
+        }
+    }
+
+    #[test]
+    fn merge_orphaned_controls_dedupes_by_id_and_sorts() {
+        let coverage = vec![
+            OrphanedControl {
+                control_id: "A.9".into(),
+                control_title: "Access".into(),
+            },
+            OrphanedControl {
+                control_id: "A.5".into(),
+                control_title: "Org".into(),
+            },
+        ];
+        let dead = vec![
+            OrphanedControl {
+                control_id: "A.9".into(),
+                control_title: "Access (dead)".into(),
+            },
+            OrphanedControl {
+                control_id: "A.12".into(),
+                control_title: "Ops".into(),
+            },
+        ];
+        let merged = merge_orphaned_controls(coverage, dead);
+        let ids: Vec<&str> = merged.iter().map(|o| o.control_id.as_str()).collect();
+        assert_eq!(ids, vec!["A.12", "A.5", "A.9"]); // sorted, A.9 deduped (coverage title wins)
+        assert_eq!(merged[2].control_title, "Access");
     }
 }
 
