@@ -199,8 +199,9 @@ window) — escalate to the runbook below.
   a `Heartbeat` the loop bumps each iteration — a watchdog aborts and restarts a *stuck* loop (one
   wedged on a dependency call with no timeout). The pure core (`next_backoff_secs`, `is_stuck`,
   `join_reason`) is unit-tested; the restart glue by an async test.
-  - **Adopted:** all three long-lived loops now run under supervision (panic/exit restart always on;
-    stuck-detection opt-in via `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS`):
+  - **Adopted:** all three long-lived loops now run under supervision (panic/exit restart on by
+    default — disable with `WEISSMAN_SUPERVISOR_ENABLED=false`, which runs each loop once,
+    unsupervised; stuck-detection opt-in via `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS`):
     - the cron **`scan_schedule_worker`** (`task="scan_schedule_worker"`, ~60s cadence) — a restarted
       cron loop is safe, it just re-polls due schedules, which are idempotent (`next_run_at` only
       advances on launch); a fleet-wide sweep is a legitimately long tick that must not read as a hang.

@@ -297,10 +297,11 @@ pub fn spawn_pool_metrics_loop(
     // Supervise the 10s health/self-heal loop (crate::supervised): a panic inside it would otherwise
     // silently kill platform self-diagnosis, bounded recovery, and every gauge on /api/metrics for
     // the rest of the process lifetime. Supervision restarts it with bounded backoff and a
-    // `weissman_supervised_restart_total{task="pool_metrics_loop"}` signal. Panic/exit restart is
-    // always on and safe: recovery state is re-derived every round (the in-memory gates re-engage on
-    // the next diagnosis, and the durable fleet gate from #225 survives a restart regardless), so a
-    // revived loop simply resumes diagnosing. Stuck-detection (abort+restart a tick wedged on e.g. a
+    // `weissman_supervised_restart_total{task="pool_metrics_loop"}` signal. Panic/exit restart is on
+    // by default (it needs no extra opt-in, unlike stuck-detection; the WEISSMAN_SUPERVISOR_ENABLED
+    // kill switch runs the loop once, unsupervised) and safe: recovery state is re-derived every
+    // round (the in-memory gates re-engage on the next diagnosis, and the durable fleet gate from
+    // #225 survives a restart regardless), so a revived loop simply resumes diagnosing. Stuck-detection (abort+restart a tick wedged on e.g. a
     // `fetch_one` against an unreachable Postgres with no statement timeout) is OPT-IN via
     // WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS — see the note in spawn_stale_lock_reclaim_loop on
     // sizing a single global deadline above the longest supervised loop's cadence.
