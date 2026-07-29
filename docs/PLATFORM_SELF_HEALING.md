@@ -137,7 +137,7 @@ hot path:  load_shed_active() / backoff_active()  =  local gate  OR  self_heal_s
 | `WEISSMAN_SUPERVISOR_ENABLED` | `true` | Master switch for background-loop supervision (`0`/`false`/`no`/`off` runs each supervised loop once, unsupervised — today's fire-and-forget). |
 | `WEISSMAN_SUPERVISOR_BASE_BACKOFF_SECS` | `2` | First restart's backoff; doubles each subsequent restart. |
 | `WEISSMAN_SUPERVISOR_MAX_BACKOFF_SECS` | `60` | Cap on the restart backoff (a crash-loop settles here instead of hot-spinning). |
-| `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS` | `0` (off) | If > 0, a supervised loop that has not beaten its heartbeat for this many seconds is aborted and restarted. Set it above the loop's poll interval **plus** a worst-case iteration so a legitimately long tick is not mistaken for a hang. `0` ⇒ panic/exit restart only. |
+| `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS` | `0` (off) | If > 0, a supervised loop that has not beaten its heartbeat for this many seconds is aborted and restarted. This is a single **global** deadline across all supervised loops — set it above the **longest** loop's cadence (the 300s reclaimer) so a legitimately slow tick is not mistaken for a hang (see "Sizing the stuck deadline" below). `0` ⇒ panic/exit restart only. |
 | `WEISSMAN_SUPERVISOR_WATCHDOG_POLL_SECS` | `10` | How often the watchdog checks the heartbeat (when stuck-detection is on). |
 
 ## Observability
@@ -199,15 +199,21 @@ window) — escalate to the runbook below.
   a `Heartbeat` the loop bumps each iteration — a watchdog aborts and restarts a *stuck* loop (one
   wedged on a dependency call with no timeout). The pure core (`next_backoff_secs`, `is_stuck`,
   `join_reason`) is unit-tested; the restart glue by an async test.
-  - **Adopted:** the cron **`scan_schedule_worker`** now runs under supervision (panic/exit restart
-    always on; stuck-detection opt-in via `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS`, since a
-    fleet-wide sweep is a legitimately long tick that must not read as a hang). A restarted cron loop
-    is safe — it just re-polls due schedules, which are idempotent (`next_run_at` only advances on
-    launch).
-  - **Next adopters** (module ready, wiring is mechanical): the 10s health/self-heal loop
-    (`spawn_pool_metrics_loop`) and the worker's stale-lock reclaimer — both currently die silently
-    on panic. They are deliberately staged after their own soak, since restarting the health loop
-    resets in-memory recovery state (gates re-derive on the next round; the durable fleet gate above
-    survives a restart regardless).
+  - **Adopted:** all three long-lived loops now run under supervision (panic/exit restart always on;
+    stuck-detection opt-in via `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS`):
+    - the cron **`scan_schedule_worker`** (`task="scan_schedule_worker"`, ~60s cadence) — a restarted
+      cron loop is safe, it just re-polls due schedules, which are idempotent (`next_run_at` only
+      advances on launch); a fleet-wide sweep is a legitimately long tick that must not read as a hang.
+    - the **10s health/self-heal loop** (`spawn_pool_metrics_loop`, `task="pool_metrics_loop"`) — a
+      restarted loop re-derives recovery state (in-memory gates re-engage on the next diagnosis; the
+      durable fleet gate above survives a restart regardless), so a revived loop simply resumes.
+    - the worker's **stale-lock reclaimer** (`spawn_stale_lock_reclaim_loop`,
+      `task="stale_lock_reclaim"`, 300s cadence) — reclaim is idempotent (it only frees locks already
+      past their lease).
+  - **Sizing the stuck deadline:** `WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS` is a single **global**
+    deadline shared by every supervised loop. Set it above the **longest** loop's cadence — the 300s
+    reclaimer — otherwise that loop (which legitimately beats only once per 300s tick) is false-flagged
+    stuck and abort-restarted every cycle. A value above 300s catches a genuinely wedged tick in any
+    loop without false positives. `0` (default) ⇒ panic/exit restart only, no watchdog.
 - Both `diagnose` and `plan_recovery` are intentionally **pure functions** so new rules and new
   effects can be added and tested independently of the sampling loop.

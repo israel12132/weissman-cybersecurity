@@ -114,24 +114,49 @@ pub async fn enqueue(
 pub fn spawn_stale_lock_reclaim_loop(pool: Arc<PgPool>) {
     weissman_job_bus::spawn_coordinator_if_enabled((*pool).clone());
 
+    // Supervise the reclaim loop (crate::supervised): a panic would otherwise silently stop legacy
+    // stale-lock reclaim — the fallback that frees jobs orphaned by a crashed worker — for the rest
+    // of the process lifetime. Supervision restarts it with bounded backoff and a
+    // `weissman_supervised_restart_total{task="stale_lock_reclaim"}` signal. Panic/exit restart is
+    // always safe: reclaim is idempotent (it only frees locks already past their lease). The one-time
+    // swarm-coordinator spawn above stays OUTSIDE supervision — it is setup, not the restart-able loop.
+    //
+    // Stuck-detection (abort+restart a tick wedged on an unreachable Postgres) is OPT-IN via
+    // WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS. That knob is a single GLOBAL deadline shared by every
+    // supervised loop, and this loop has the LONGEST cadence (300s) — so a correct value must exceed
+    // 300s, otherwise this loop (which legitimately beats only once per 300s tick) would be
+    // false-flagged stuck and abort-restarted every cycle. A deadline above 300s catches a genuinely
+    // wedged tick in any of the loops (health 10s / cron ~60s / reclaim 300s) without false positives.
+    let cfg = crate::supervised::SupervisorConfig::from_env();
+    let hb = crate::supervised::Heartbeat::new();
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_secs(300));
-        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        loop {
-            tick.tick().await;
-            match weissman_db::job_queue::reclaim_stale_running_locks(pool.as_ref()).await {
-                Ok(n) if n > 0 => tracing::info!(
-                    target: "async_jobs",
-                    reclaimed = n,
-                    "legacy stale lock reclaim (fallback)"
-                ),
-                Ok(_) => {}
-                Err(e) => tracing::warn!(
-                    target: "async_jobs",
-                    error = %e,
-                    "stale lock reclaim failed"
-                ),
+        crate::supervised::supervise("stale_lock_reclaim", cfg, Some(hb), move |hb| {
+            let pool = pool.clone();
+            async move {
+                let mut tick = tokio::time::interval(Duration::from_secs(300));
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tick.tick().await;
+                    // Liveness beat for the watchdog — before the (blocking) reclaim query.
+                    if let Some(ref h) = hb {
+                        h.beat();
+                    }
+                    match weissman_db::job_queue::reclaim_stale_running_locks(pool.as_ref()).await {
+                        Ok(n) if n > 0 => tracing::info!(
+                            target: "async_jobs",
+                            reclaimed = n,
+                            "legacy stale lock reclaim (fallback)"
+                        ),
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!(
+                            target: "async_jobs",
+                            error = %e,
+                            "stale lock reclaim failed"
+                        ),
+                    }
+                }
             }
-        }
+        })
+        .await;
     });
 }

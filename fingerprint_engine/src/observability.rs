@@ -294,16 +294,39 @@ pub fn spawn_pool_metrics_loop(
     auth_pool: Arc<sqlx::PgPool>,
     intel_pool: Arc<sqlx::PgPool>,
 ) {
+    // Supervise the 10s health/self-heal loop (crate::supervised): a panic inside it would otherwise
+    // silently kill platform self-diagnosis, bounded recovery, and every gauge on /api/metrics for
+    // the rest of the process lifetime. Supervision restarts it with bounded backoff and a
+    // `weissman_supervised_restart_total{task="pool_metrics_loop"}` signal. Panic/exit restart is
+    // always on and safe: recovery state is re-derived every round (the in-memory gates re-engage on
+    // the next diagnosis, and the durable fleet gate from #225 survives a restart regardless), so a
+    // revived loop simply resumes diagnosing. Stuck-detection (abort+restart a tick wedged on e.g. a
+    // `fetch_one` against an unreachable Postgres with no statement timeout) is OPT-IN via
+    // WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS — see the note in spawn_stale_lock_reclaim_loop on
+    // sizing a single global deadline above the longest supervised loop's cadence.
+    let cfg = crate::supervised::SupervisorConfig::from_env();
+    let hb = crate::supervised::Heartbeat::new();
     tokio::spawn(async move {
-        let self_heal_thresholds = crate::self_healing::Thresholds::from_env();
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
-        tick.tick().await;
-        // Cheap pool/dependency gauges run every 10s tick; the heavier heal_requests aggregation
-        // (a full GROUP BY) runs at a slower cadence to keep it off the /api/metrics hot path.
-        let mut iter: u64 = 0;
-        loop {
-            tick.tick().await;
-            iter = iter.wrapping_add(1);
+        crate::supervised::supervise("pool_metrics_loop", cfg, Some(hb), move |hb| {
+            let app_pool = app_pool.clone();
+            let auth_pool = auth_pool.clone();
+            let intel_pool = intel_pool.clone();
+            async move {
+                let self_heal_thresholds = crate::self_healing::Thresholds::from_env();
+                let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
+                tick.tick().await;
+                // Cheap pool/dependency gauges run every 10s tick; the heavier heal_requests
+                // aggregation (a full GROUP BY) runs at a slower cadence to keep it off the
+                // /api/metrics hot path.
+                let mut iter: u64 = 0;
+                loop {
+                    tick.tick().await;
+                    // Liveness beat for the watchdog — every iteration, before any (potentially
+                    // blocking) query, so a slow-but-progressing tick is not mistaken for a hang.
+                    if let Some(ref h) = hb {
+                        h.beat();
+                    }
+                    iter = iter.wrapping_add(1);
             metrics::gauge!("weissman_db_pool_size", "pool" => "app").set(app_pool.size() as f64);
             metrics::gauge!("weissman_db_pool_idle", "pool" => "app")
                 .set(app_pool.num_idle() as f64);
@@ -457,7 +480,10 @@ pub fn spawn_pool_metrics_loop(
             )
             .await;
             crate::self_heal_shared::refresh(app_pool.as_ref()).await;
-        }
+                }
+            }
+        })
+        .await;
     });
 }
 
