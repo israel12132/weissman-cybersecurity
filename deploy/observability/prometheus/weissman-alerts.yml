@@ -167,4 +167,4 @@ groups:
         labels: { severity: warning, service: weissman-server }
         annotations:
           summary: "Supervised loop restarting: {{ $labels.task }} ({{ $labels.reason }})"
-          description: "Background loop {{ $labels.task }} has been restarting ({{ $labels.reason }}) for 15m — it keeps panicking or wedging and cannot make sustained progress. Supervision is keeping it alive (bounded backoff), but the underlying cause needs attention."
+          description: "Background loop {{ $labels.task }} has been restarting ({{ $labels.reason }}) for 15m — it keeps exiting, panicking, being cancelled, or becoming stuck and cannot make sustained progress. Supervision is keeping it alive (bounded backoff), but the underlying cause needs attention."

@@ -27,7 +27,9 @@
 //!
 //! # Testability
 //! The decision core ([`next_backoff_secs`], [`is_stuck`], [`join_reason`]) is **pure** and
-//! unit-tested; the restart glue is covered by an async test that a panicking factory is restarted.
+//! unit-tested. The restart glue is covered by async tests: an *exiting* task is respawned, a
+//! *stuck* heartbeat-bearing task is aborted by the watchdog and respawned (reason `"stuck"`), and
+//! disabled supervision runs the factory exactly once.
 
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -96,10 +98,16 @@ impl SupervisorConfig {
         let d = Self::default();
         Self {
             enabled: env_bool("WEISSMAN_SUPERVISOR_ENABLED", d.enabled),
+            // Clamp to >= 1 (like the other two below): `next_backoff_secs` treats base == 0 as
+            // "always 0 backoff", so a `WEISSMAN_SUPERVISOR_BASE_BACKOFF_SECS=0` misconfig would
+            // silently defeat the crash-loop protection the module promises (a hard crash-loop would
+            // hot-spin). The pure `next_backoff_secs(_, 0, _)` semantics are unchanged; only the
+            // env-loaded config is floored.
             base_backoff_secs: env_u64(
                 "WEISSMAN_SUPERVISOR_BASE_BACKOFF_SECS",
                 d.base_backoff_secs,
-            ),
+            )
+            .max(1),
             max_backoff_secs: env_u64("WEISSMAN_SUPERVISOR_MAX_BACKOFF_SECS", d.max_backoff_secs)
                 .max(1),
             stuck_deadline_secs: env_u64(
@@ -258,6 +266,12 @@ pub async fn supervise<F, Fut>(
 
 /// Wait for the task to finish, OR — polling the heartbeat — abort and reap it if it goes stuck.
 /// Returns the restart reason (`"stuck"` when the watchdog fired).
+///
+/// Cancellation is cooperative: `handle.abort()` only takes effect at the task's next `.await`, so
+/// the reap (`(&mut handle).await`) can hang if the supervised loop wedges in a non-yielding section
+/// (a tight CPU loop, or synchronous/blocking work). Supervised loops must therefore stay
+/// cooperative — bound their dependency calls and move CPU-bound or blocking work off the async task
+/// (e.g. `spawn_blocking`) so a stuck iteration is actually abortable.
 async fn supervise_watch(
     mut handle: tokio::task::JoinHandle<()>,
     hb: Arc<Heartbeat>,
@@ -312,9 +326,18 @@ mod tests {
         assert!(!is_stuck(1_000, 9_999, 0)); // deadline 0 disables
     }
 
-    #[test]
-    fn join_reason_maps_outcomes() {
+    #[tokio::test]
+    async fn join_reason_maps_outcomes() {
         assert_eq!(join_reason(&Ok(())), "exited");
+        // A real cancelled JoinError (spawn then abort) maps to "cancelled" — deterministic and
+        // backtrace-noise-free, unlike a panic. The panic arm is covered by `is_panic()` in std.
+        let handle = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+        });
+        handle.abort();
+        let res = handle.await;
+        assert!(res.is_err(), "aborted task must yield a JoinError");
+        assert_eq!(join_reason(&res), "cancelled");
     }
 
     #[test]
@@ -360,6 +383,38 @@ mod tests {
         assert!(
             count.load(Ordering::SeqCst) >= 2,
             "an exiting task must be restarted by the supervisor"
+        );
+    }
+
+    #[tokio::test]
+    async fn stuck_task_is_aborted_and_restarted() {
+        // The watchdog branch: a heartbeat-bearing task that never beats and never returns can only
+        // be ended by stuck-detection. supervise() beats once per (re)start, so real wall-clock time
+        // must exceed the deadline before the poll sees it as stuck — hence a 1s deadline/poll and a
+        // generous timeout. Reaching count >= 2 proves the watchdog aborted the first task (reason
+        // "stuck") and respawned it. 0 base backoff keeps the restart immediate.
+        let count = Arc::new(AtomicU32::new(0));
+        let c = count.clone();
+        let hb = Heartbeat::new();
+        let cfg = SupervisorConfig {
+            enabled: true,
+            base_backoff_secs: 0,
+            max_backoff_secs: 1,
+            stuck_deadline_secs: 1,
+            watchdog_poll_secs: 1,
+        };
+        let fut = supervise("test_stuck", cfg, Some(hb), move |_| {
+            let c = c.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                // Never beats, never returns: only the watchdog's abort can end this iteration.
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
+        let _ = tokio::time::timeout(Duration::from_secs(20), fut).await;
+        assert!(
+            count.load(Ordering::SeqCst) >= 2,
+            "a stuck task must be aborted by the watchdog and restarted"
         );
     }
 
