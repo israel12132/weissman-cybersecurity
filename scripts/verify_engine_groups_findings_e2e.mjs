@@ -6,6 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { GROUP_SMOKE_PLAN, FINDINGS_E2E_PLAN, collectApprovedDomains } from './lib/group_smoke_plan.mjs'
+import { retryScanIntake } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -142,9 +143,12 @@ async function main() {
     const fresh = await login()
     if (fresh) token = fresh
 
-    const scan = await api('POST', '/api/command-center/scan', { token, body })
+    const scan = await retryScanIntake(
+      () => api('POST', '/api/command-center/scan', { token, body }),
+      { label },
+    )
     if (scan.status !== 202 || !scan.data?.job_id) {
-      fail(`${label}: enqueue HTTP ${scan.status}`)
+      fail(`${label}: enqueue HTTP ${scan.status}${scan.data?.code ? ` (${scan.data.code})` : ''}`)
       continue
     }
     ok(`${label}: queued ${scan.data.job_id}`)

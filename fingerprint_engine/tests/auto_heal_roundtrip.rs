@@ -40,8 +40,24 @@ fn git(repo: &Path, args: &[&str]) {
 
 // ─────────────────────────────── (A) git patch/collect ───────────────────────────────
 
+/// Serialises the tests in this file that read or write the process environment.
+///
+/// `docker_full_roundtrip_verify_patch_ephemeral` sets `WEISSMAN_VERIFY_CLONE_URL_OVERRIDE` and
+/// clears it again. `setenv`/`unsetenv` are not thread-safe in glibc: they can reallocate the
+/// `environ` array while another thread is walking it, and a concurrent reader then dereferences
+/// freed memory. Rust 2024 marks `set_var` `unsafe` for exactly this reason.
+///
+/// The other tests here are readers even though none of them names an environment variable —
+/// `Command::spawn` copies the whole environment, and `reqwest::Client::builder().build()` reads
+/// the proxy variables. So the writer must not overlap them.
+///
+/// A `tokio::sync::Mutex` rather than `std::sync::Mutex`: the guard is held across `.await`
+/// points, which would make these futures non-`Send`.
+static ENV_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn git_patch_apply_and_collect_multifile() {
+    let _env_guard = ENV_GUARD.lock().await;
     if !tool_present("git") || !tool_present("patch") {
         eprintln!("SKIP git_patch_apply_and_collect_multifile: git/patch not available");
         return;
@@ -137,6 +153,7 @@ async fn git_patch_apply_and_collect_multifile() {
 
 #[tokio::test]
 async fn git_collect_errors_on_no_change() {
+    let _env_guard = ENV_GUARD.lock().await;
     if !tool_present("git") {
         eprintln!("SKIP: git not available");
         return;
@@ -205,15 +222,9 @@ async fn spawn_probe_server(mode: Arc<AtomicU8>) -> u16 {
     port
 }
 
-fn ensure_localhost_no_proxy() {
-    // http_probe honors env proxies; keep localhost direct so the tests are portable.
-    std::env::set_var("NO_PROXY", "127.0.0.1,localhost");
-    std::env::set_var("no_proxy", "127.0.0.1,localhost");
-}
-
 #[tokio::test]
 async fn probe_verdict_fixed() {
-    ensure_localhost_no_proxy();
+    let _env_guard = ENV_GUARD.lock().await;
     let mode = Arc::new(AtomicU8::new(0));
     let port = spawn_probe_server(mode.clone()).await;
     let exploit = format!("http://127.0.0.1:{port}/exploit");
@@ -235,7 +246,7 @@ async fn probe_verdict_fixed() {
 
 #[tokio::test]
 async fn probe_verdict_still_vulnerable() {
-    ensure_localhost_no_proxy();
+    let _env_guard = ENV_GUARD.lock().await;
     let mode = Arc::new(AtomicU8::new(0));
     let port = spawn_probe_server(mode).await;
     let exploit = format!("http://127.0.0.1:{port}/exploit");
@@ -251,7 +262,7 @@ async fn probe_verdict_still_vulnerable() {
 
 #[tokio::test]
 async fn probe_verdict_broke_app_5xx() {
-    ensure_localhost_no_proxy();
+    let _env_guard = ENV_GUARD.lock().await;
     let mode = Arc::new(AtomicU8::new(0));
     let port = spawn_probe_server(mode.clone()).await;
     let exploit = format!("http://127.0.0.1:{port}/exploit");
@@ -265,7 +276,7 @@ async fn probe_verdict_broke_app_5xx() {
 
 #[tokio::test]
 async fn probe_verdict_broke_app_health_down() {
-    ensure_localhost_no_proxy();
+    let _env_guard = ENV_GUARD.lock().await;
     let mode = Arc::new(AtomicU8::new(0));
     let port = spawn_probe_server(mode.clone()).await;
     let exploit = format!("http://127.0.0.1:{port}/exploit");
@@ -286,7 +297,7 @@ async fn probe_verdict_broke_app_health_down() {
 
 #[tokio::test]
 async fn probe_connection_refused_is_zero() {
-    ensure_localhost_no_proxy();
+    let _env_guard = ENV_GUARD.lock().await;
     // Bind then drop → nothing listening on that port.
     let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = l.local_addr().unwrap().port();
@@ -350,6 +361,7 @@ fn parse_curl_request_roundtrips() {
 
 #[tokio::test]
 async fn docker_full_roundtrip_verify_patch_ephemeral() {
+    let _env_guard = ENV_GUARD.lock().await;
     // Strictly opt-in: needs WEISSMAN_IT_DOCKER=1 + a real docker socket + a fixture image whose
     // CMD serves the bind-mounted /app. In this sandbox there is no socket → it always no-ops.
     if std::env::var("WEISSMAN_IT_DOCKER").as_deref() != Ok("1") {

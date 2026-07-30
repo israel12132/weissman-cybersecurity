@@ -291,18 +291,39 @@ pub fn rewrite_localhost_url(url: &str, host: &str, port: u16) -> String {
     format!("http://{}:{}/", host, port)
 }
 
+/// True when the URL's host is a loopback address, which must never be reached through a proxy.
+///
+/// Proxying a loopback request is wrong everywhere, not just under test: the proxy would resolve
+/// `127.0.0.1` against *its own* loopback, so the probe either fails or — worse — silently probes
+/// the wrong host. A deployment with `HTTP_PROXY` set would otherwise route every ephemeral
+/// verification probe through it, since `reqwest` reads proxy variables from the environment when
+/// the client is built.
+fn is_loopback_url(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+        None => false,
+    }
+}
+
 pub async fn http_probe(
     method: reqwest::Method,
     url: &str,
     headers: &reqwest::header::HeaderMap,
     body: Option<&[u8]>,
 ) -> (u16, String) {
-    let client = match reqwest::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_millis(EXPLOIT_TIMEOUT_MS))
         .danger_accept_invalid_certs(weissman_core::tls_policy::danger_accept_invalid_certs())
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-    {
+        .redirect(reqwest::redirect::Policy::limited(5));
+    if is_loopback_url(url) {
+        builder = builder.no_proxy();
+    }
+    let client = match builder.build() {
         Ok(c) => c,
         Err(_) => return (0, "client build failed".into()),
     };

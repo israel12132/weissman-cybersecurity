@@ -1,4 +1,5 @@
 import { GROUP_SMOKE_PLAN, collectApprovedDomains } from './lib/group_smoke_plan.mjs'
+import { retryScanIntake } from './lib/scan_intake.mjs'
 
 const BASE_URL = process.env.WEISSMAN_SMOKE_BASE_URL || 'http://127.0.0.1:18000'
 const LOGIN_EMAIL = process.env.WEISSMAN_SMOKE_LOGIN_EMAIL || process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost'
@@ -6,7 +7,6 @@ const LOGIN_PASSWORD = process.env.WEISSMAN_SMOKE_LOGIN_PASSWORD || process.env.
 const TENANT_SLUG = process.env.WEISSMAN_TENANT_SLUG || 'default'
 const CLIENT_NAME = process.env.WEISSMAN_SMOKE_CLIENT_NAME || 'CI Smoke Client'
 const POLL_TIMEOUT_MS = Number(process.env.WEISSMAN_SMOKE_POLL_TIMEOUT_MS || 180000)
-const SUBMIT_RETRIES = Number(process.env.WEISSMAN_SMOKE_SUBMIT_RETRIES || 3)
 const BETWEEN_RUN_DELAY_MS = Number(process.env.WEISSMAN_SMOKE_DELAY_MS || 1200)
 
 function sleep(ms) {
@@ -106,10 +106,10 @@ async function ensureClient(headers) {
 }
 
 async function submitScan(headers, clientId, entry) {
-  let attempt = 0
-  while (attempt < SUBMIT_RETRIES) {
-    attempt += 1
-    const result = await api('/api/command-center/scan', {
+  // Ride out transient scan-intake shedding (429 rate_limited / 503 load_shed), honoring the
+  // server's Retry-After hint. See scripts/lib/scan_intake.mjs for the contract.
+  const result = await retryScanIntake(
+    () => api('/api/command-center/scan', {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -124,16 +124,17 @@ async function submitScan(headers, clientId, entry) {
         target: entry.target,
         timeout: 45,
       }),
-    })
-    if (result.response.ok) {
-      return result.body
-    }
-    if (result.response.status !== 429) {
-      throw new Error(`scan submit failed for ${entry.group}/${entry.engine} (${result.response.status}): ${JSON.stringify(result.body)}`)
-    }
-    await sleep(1500 * attempt)
+    }),
+    {
+      label: `${entry.group}/${entry.engine}`,
+      statusOf: (r) => r.response.status,
+      retryAfterOf: (r) => r.body?.retry_after_seconds,
+    },
+  )
+  if (result.response.ok) {
+    return result.body
   }
-  throw new Error(`scan submit rate-limited for ${entry.group}/${entry.engine} after ${SUBMIT_RETRIES} attempts`)
+  throw new Error(`scan submit failed for ${entry.group}/${entry.engine} (${result.response.status}): ${JSON.stringify(result.body)}`)
 }
 
 async function waitForJob(headers, jobId) {

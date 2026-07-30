@@ -164,8 +164,14 @@ async function enqueueScan(engine, auth) {
       Object.assign(auth, await loginAuth())
       continue
     }
-    if (enq.status === 429) {
-      const wait = Math.min(15_000, 2000 * (attempt + 1))
+    // Transient scan-intake shed — 429 `rate_limited` or 503 `load_shed` (self-heal recovery).
+    // Both advertise `retry_after_seconds`; honor it (capped) so a legitimate shed is waited out
+    // rather than treated as a hard enqueue failure.
+    if (enq.status === 429 || enq.status === 503) {
+      const hint = Number(enq.data?.retry_after_seconds)
+      const wait = Number.isFinite(hint) && hint > 0
+        ? Math.min(20_000, hint * 1000)
+        : Math.min(15_000, 2000 * (attempt + 1))
       await sleep(wait)
       continue
     }
