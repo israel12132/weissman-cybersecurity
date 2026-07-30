@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FixedSizeList as List } from 'react-window'
+import { List } from 'react-window'
 
 const NS = 'components.intelWidgets.liveIntelTerminal'
 
@@ -83,15 +83,14 @@ export default function LiveIntelTerminal({ events, highlightedEventId, connecti
           </div>
         ) : (
           <List
-            ref={listRef}
-            height={Math.max(200, listHeight)}
-            itemCount={parsed.length}
-            itemSize={ROW_HEIGHT}
-            width="100%"
+            listRef={listRef}
+            style={{ height: Math.max(200, listHeight) }}
+            rowCount={parsed.length}
+            rowHeight={ROW_HEIGHT}
+            rowComponent={Row}
+            rowProps={{}}
             className="scrollbar-thin"
-          >
-            {Row}
-          </List>
+          />
         )}
       </div>
     </div>
