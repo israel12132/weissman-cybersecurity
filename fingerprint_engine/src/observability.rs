@@ -68,13 +68,25 @@ fn build_otel_layer(
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "dev".to_string());
-    let provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_resource(opentelemetry_sdk::Resource::new(vec![
-            opentelemetry::KeyValue::new("service.name", service_name),
-            opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
-            opentelemetry::KeyValue::new("deployment.environment", deployment_env),
-        ]))
+    // OTel 0.31 API (moved with tracing-opentelemetry 0.33):
+    //  * `TracerProvider` is now `SdkTracerProvider` (the trait keeps the old name, so the
+    //    `opentelemetry::trace::TracerProvider as _` import above is still what gives us `.tracer()`).
+    //  * `with_batch_exporter` no longer takes a runtime — since 0.30 the batch span processor owns
+    //    a dedicated background thread instead of being generic over an async runtime, so the old
+    //    `opentelemetry_sdk::runtime::Tokio` argument is gone.
+    //  * `Resource::new(vec![..])` is replaced by the builder, which also layers in the SDK's
+    //    default resource detectors before our explicit attributes.
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(
+            opentelemetry_sdk::Resource::builder()
+                .with_attributes(vec![
+                    opentelemetry::KeyValue::new("service.name", service_name),
+                    opentelemetry::KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+                    opentelemetry::KeyValue::new("deployment.environment", deployment_env),
+                ])
+                .build(),
+        )
         .build();
     let tracer = provider.tracer("weissman");
     opentelemetry::global::set_tracer_provider(provider);
