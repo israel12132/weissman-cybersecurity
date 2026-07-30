@@ -98,10 +98,15 @@ pub fn walk_protobuf_wire(buf: &[u8]) -> Vec<ProtoField> {
                 };
                 i += ln;
                 let len = len as usize;
-                if i + len > buf.len() {
+                // `len` is an attacker-supplied varint; `i + len` can wrap in release builds
+                // and defeat the bound, so add checked and bail on overflow or out-of-range.
+                let Some(end) = i.checked_add(len) else {
+                    break;
+                };
+                if end > buf.len() {
                     break;
                 }
-                let slice = buf[i..i + len].to_vec();
+                let slice = buf[i..end].to_vec();
                 i += len;
                 slice
             }

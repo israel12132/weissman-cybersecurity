@@ -824,7 +824,13 @@ async fn post_raw(
     let status = resp.status().as_u16();
     let text = resp.text().await.unwrap_or_default();
     let text = if text.len() > 65_536 {
-        text[..65_536].to_string()
+        // Truncate on a UTF-8 char boundary — a plain byte slice at 65_536 panics if it
+        // splits a multi-byte char, and the body is attacker-controlled (a scanned target).
+        let mut end = 65_536;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text[..end].to_string()
     } else {
         text
     };
