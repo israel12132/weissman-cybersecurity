@@ -557,7 +557,13 @@ async fn send_probe(req: reqwest::RequestBuilder) -> Option<HttpProbe> {
         .collect();
     let body_text = resp.text().await.unwrap_or_default();
     let body_text = if body_text.len() > 65_536 {
-        body_text[..65_536].to_string()
+        // Truncate on a UTF-8 char boundary — a plain byte slice at 65_536 panics if it
+        // splits a multi-byte char, and the body is attacker-controlled (a scanned target).
+        let mut end = 65_536;
+        while !body_text.is_char_boundary(end) {
+            end -= 1;
+        }
+        body_text[..end].to_string()
     } else {
         body_text
     };

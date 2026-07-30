@@ -97,11 +97,20 @@ pub fn walk_protobuf_wire(buf: &[u8]) -> Vec<ProtoField> {
                     break;
                 };
                 i += ln;
-                let len = len as usize;
-                if i + len > buf.len() {
+                // `len` is an attacker-supplied u64 varint. `as usize` would truncate on a
+                // 32-bit target (2^32 -> 0), silently passing the bound below, so convert
+                // checked. `i + len` can also wrap even on 64-bit, so add checked too; bail
+                // on either failure or an out-of-range slice.
+                let Ok(len) = usize::try_from(len) else {
+                    break;
+                };
+                let Some(end) = i.checked_add(len) else {
+                    break;
+                };
+                if end > buf.len() {
                     break;
                 }
-                let slice = buf[i..i + len].to_vec();
+                let slice = buf[i..end].to_vec();
                 i += len;
                 slice
             }

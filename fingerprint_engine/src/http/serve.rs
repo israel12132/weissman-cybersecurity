@@ -85,9 +85,7 @@ pub struct AppState {
     /// step. Defense-in-depth: even if validation breaks, Postgres rejects writes.
     pub read_only_pool: Option<Arc<PgPool>>,
     started_at: Instant,
-    #[allow(dead_code)]
     timing_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
-    #[allow(dead_code)]
     redteam_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     radar_broadcast_tx: Arc<tokio::sync::broadcast::Sender<String>>,
     /// PoE SSE: registry job_id -> list of bounded client channels; updates_tx feeds distributor that sends only to that job's subscribers.
@@ -417,7 +415,7 @@ async fn default_tenant_id(auth_pool: &PgPool) -> Option<i64> {
 async fn poe_job_from_db(pool: &PgPool, tenant_id: i64, job_id: &str) -> Option<PoEJobState> {
     let mut tx = db::begin_tenant_tx(pool, tenant_id).await.ok()?;
     let row = sqlx::query(
-        "SELECT job_id, status, run_id, message, error, COALESCE(findings_json,'[]') FROM poe_jobs WHERE job_id = $1",
+        "SELECT job_id, status, run_id, message, error, COALESCE(findings_json,'[]') AS findings_json FROM poe_jobs WHERE job_id = $1",
     )
     .bind(job_id)
     .fetch_optional(&mut *tx)
@@ -1469,6 +1467,15 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).
     crate::telemetry_bus::spawn_bridge("telemetry", (*state.telemetry_broadcast_tx).clone());
     crate::telemetry_bus::spawn_bridge("swarm", (*state.swarm_broadcast_tx).clone());
+    // The timing / redteam / radar live streams are produced by the async worker (a separate
+    // process), which publishes to the Redis topics `weissman:bus:{timing,redteam,radar}` (see
+    // async_job_executor::from_env). The WS handlers here subscribe to the matching in-process
+    // broadcast channels, so without these bridges the server never feeds them and every client
+    // of /ws/timing, /ws/ai-redteam and /ws/threat-intel receives nothing. Bridge them exactly
+    // like telemetry/swarm above (no-op when REDIS_URL is unset).
+    crate::telemetry_bus::spawn_bridge("timing", (*state.timing_broadcast_tx).clone());
+    crate::telemetry_bus::spawn_bridge("redteam", (*state.redteam_broadcast_tx).clone());
+    crate::telemetry_bus::spawn_bridge("radar", (*state.radar_broadcast_tx).clone());
     tokio::spawn(async {
         let wid = format!("server:{}", std::process::id());
         let fleet =

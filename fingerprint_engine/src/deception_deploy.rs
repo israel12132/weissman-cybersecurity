@@ -1,5 +1,6 @@
 //! Active deployment of honeytokens into cloud (AWS). Uses discovered or provided credentials to inject fake keys.
 
+use aws_config::BehaviorVersion;
 use aws_credential_types::Credentials;
 use aws_sdk_iam::config::Region;
 use aws_sdk_iam::Client as IamClient;
@@ -23,6 +24,7 @@ pub async fn deploy_honeytoken_aws(
 ) -> DeployResult {
     let creds = Credentials::from_keys(access_key_id, secret_access_key, None);
     let config = aws_sdk_iam::Config::builder()
+        .behavior_version(BehaviorVersion::latest())
         .region(Region::new(region.to_string()))
         .credentials_provider(creds)
         .build();
