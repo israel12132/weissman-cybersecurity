@@ -97,9 +97,13 @@ pub fn walk_protobuf_wire(buf: &[u8]) -> Vec<ProtoField> {
                     break;
                 };
                 i += ln;
-                let len = len as usize;
-                // `len` is an attacker-supplied varint; `i + len` can wrap in release builds
-                // and defeat the bound, so add checked and bail on overflow or out-of-range.
+                // `len` is an attacker-supplied u64 varint. `as usize` would truncate on a
+                // 32-bit target (2^32 -> 0), silently passing the bound below, so convert
+                // checked. `i + len` can also wrap even on 64-bit, so add checked too; bail
+                // on either failure or an out-of-range slice.
+                let Ok(len) = usize::try_from(len) else {
+                    break;
+                };
                 let Some(end) = i.checked_add(len) else {
                     break;
                 };
