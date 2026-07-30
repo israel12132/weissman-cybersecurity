@@ -29,19 +29,23 @@ pytestmark = pytest.mark.skipif(
 def _request_with_retry(
     inner: httpx.Client, method: str, url: str, *, _retries: int = 6, **kwargs
 ) -> httpx.Response:
-    """Retry while the per-IP limiter throttles (429), honoring Retry-After. The live stack drives
-    all traffic through a single IP (127.0.0.1), so a legitimate burst can trip the 30/s-per-IP
-    limit no real client ever hits — the API answers 429 + Retry-After precisely so a correct
-    client waits and retries instead of failing the contract."""
+    """Retry while scan intake is shed transiently, honoring Retry-After. Two distinct codes, both
+    self-protecting and both advertising Retry-After precisely so a correct client waits and retries
+    instead of failing the contract:
+      * 429 `rate_limited` — the live stack drives all traffic through a single IP (127.0.0.1), so a
+        legitimate burst can trip the 30/s-per-IP limit no real client ever hits;
+      * 503 `load_shed` — self-heal recovery sheds new scan intake when the DB pool or async backlog
+        crosses its critical threshold, and auto-clears on a TTL as the platform drains.
+    The 15s load-shed hint is honored up to a 20s cap, so a single wait usually lands healthy."""
     resp = inner.request(method, url, **kwargs)
     attempt = 0
-    while resp.status_code == 429 and attempt < _retries:
+    while resp.status_code in (429, 503) and attempt < _retries:
         ra = resp.headers.get("retry-after")
         try:
             wait = float(ra) if ra else 0.4 * (attempt + 1)
         except (TypeError, ValueError):
             wait = 0.4 * (attempt + 1)
-        time.sleep(min(wait, 3.0))
+        time.sleep(min(wait, 20.0))
         resp = inner.request(method, url, **kwargs)
         attempt += 1
     return resp

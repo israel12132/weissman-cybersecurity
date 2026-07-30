@@ -210,8 +210,9 @@ pub fn spawn_scan_schedule_worker(app_pool: Arc<PgPool>, auth_pool: Arc<PgPool>)
     // Stuck-detection (abort+restart a wedged tick) is OPT-IN via WEISSMAN_SUPERVISOR_STUCK_DEADLINE_SECS,
     // because a legitimately long tick — a fleet-wide sweep of due schedules — must not be mistaken
     // for a hang; the deadline has to exceed the poll interval plus a worst-case tick. Panic/exit
-    // restart is always on and safe (a restarted cron loop just re-polls due schedules, which are
-    // idempotent — `next_run_at` only advances once a schedule actually launches).
+    // restart is on by default (disable via the WEISSMAN_SUPERVISOR_ENABLED kill switch) and safe (a
+    // restarted cron loop just re-polls due schedules, which are idempotent — `next_run_at` only
+    // advances once a schedule actually launches).
     let cfg = crate::supervised::SupervisorConfig::from_env();
     let hb = crate::supervised::Heartbeat::new();
     tokio::spawn(async move {

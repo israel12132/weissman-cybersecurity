@@ -8,6 +8,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { retryScanIntake } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -214,30 +215,39 @@ async function main() {
   else fail('tenant_github_config', `HTTP ${cfgPost.status}`)
 
   // Reject unknown engine
-  const unknown = await req('POST', '/api/command-center/scan', {
-    ...auth,
-    body: { engine: 'not_a_real_engine_xyz', client_id: Number(clientId), target: 'https://example.com' },
-  })
+  const unknown = await retryScanIntake(
+    () => req('POST', '/api/command-center/scan', {
+      ...auth,
+      body: { engine: 'not_a_real_engine_xyz', client_id: Number(clientId), target: 'https://example.com' },
+    }),
+    { label: 'reject_unknown_engine' },
+  )
   if (unknown.status === 400) ok('reject_unknown_engine', 'HTTP 400')
   else fail('reject_unknown_engine', `HTTP ${unknown.status}`)
 
   // Scope reject
-  const badScope = await req('POST', '/api/command-center/scan', {
-    ...auth,
-    body: {
-      engine: 'microsecond_timing',
-      client_id: Number(clientId),
-      target: 'https://totally-not-in-scope.invalid',
-    },
-  })
+  const badScope = await retryScanIntake(
+    () => req('POST', '/api/command-center/scan', {
+      ...auth,
+      body: {
+        engine: 'microsecond_timing',
+        client_id: Number(clientId),
+        target: 'https://totally-not-in-scope.invalid',
+      },
+    }),
+    { label: 'scope_reject' },
+  )
   if (badScope.status === 403 || badScope.status === 400) ok('scope_reject', `HTTP ${badScope.status}`)
   else fail('scope_reject', `expected 403/400 got ${badScope.status}`)
 
   // Targetless intel (threat_intel_run)
-  const intel = await req('POST', '/api/command-center/scan', {
-    ...auth,
-    body: { engine: 'zero_day_radar', client_id: Number(clientId) },
-  })
+  const intel = await retryScanIntake(
+    () => req('POST', '/api/command-center/scan', {
+      ...auth,
+      body: { engine: 'zero_day_radar', client_id: Number(clientId) },
+    }),
+    { label: 'intel_enqueue' },
+  )
   if (intel.status === 202 && intel.data?.job_id) {
     ok('intel_enqueue', `job=${intel.data.job_id}`)
     await pollJob(intel.data.job_id, auth, { label: 'intel_job_poll' })
@@ -252,20 +262,23 @@ async function main() {
   // engine (like every other job_param) to keep the run fast and bounded — a
   // trimmed baseline/payload sweep over one URL with a hard 45s ceiling — while
   // still exercising the full enqueue → worker → findings pipeline.
-  const timing = await req('POST', '/api/command-center/scan', {
-    ...auth,
-    body: {
-      engine: 'microsecond_timing',
-      client_id: Number(clientId),
-      target: 'https://example.com',
-      github_token: MASK,
-      timing_baseline_samples: 12,
-      timing_payload_samples: 20,
-      timing_payload_variants: 2,
-      timing_max_urls: 1,
-      timing_budget_secs: 45,
-    },
-  })
+  const timing = await retryScanIntake(
+    () => req('POST', '/api/command-center/scan', {
+      ...auth,
+      body: {
+        engine: 'microsecond_timing',
+        client_id: Number(clientId),
+        target: 'https://example.com',
+        github_token: MASK,
+        timing_baseline_samples: 12,
+        timing_payload_samples: 20,
+        timing_payload_variants: 2,
+        timing_max_urls: 1,
+        timing_budget_secs: 45,
+      },
+    }),
+    { label: 'timing_enqueue' },
+  )
   if (timing.status === 202 && timing.data?.job_id) {
     ok('timing_enqueue', timing.data.job_id)
     const peek = await req('GET', `/api/jobs/${timing.data.job_id}`, auth)
@@ -287,17 +300,20 @@ async function main() {
   }
 
   // command_center_engine — osint (primary production path)
-  const osint = await req('POST', '/api/command-center/scan', {
-    ...auth,
-    body: {
-      engine: 'osint',
-      client_id: Number(clientId),
-      target: 'https://example.com',
-      depth: '1',
-      github_token: MASK,
-      aws_external_id: MASK,
-    },
-  })
+  const osint = await retryScanIntake(
+    () => req('POST', '/api/command-center/scan', {
+      ...auth,
+      body: {
+        engine: 'osint',
+        client_id: Number(clientId),
+        target: 'https://example.com',
+        depth: '1',
+        github_token: MASK,
+        aws_external_id: MASK,
+      },
+    }),
+    { label: 'osint_enqueue' },
+  )
   if (osint.status === 202 && osint.data?.job_id) {
     ok('osint_enqueue', `${osint.data.job_id} kind=${osint.data?.job_kind || '?'}`)
     const peek = await req('GET', `/api/jobs/${osint.data.job_id}`, auth)
