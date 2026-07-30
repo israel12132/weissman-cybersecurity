@@ -2,9 +2,8 @@
    No third-party font requests (works under the strict CSP, offline, private). */
 @import './styles/tokens.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* Respect the OS "reduce motion" preference (WCAG 2.3.3). framer-motion is
    handled separately via <MotionConfig reducedMotion="user">; this neutralizes
