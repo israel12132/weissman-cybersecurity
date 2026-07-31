@@ -47,7 +47,7 @@ rich
 beautifulsoup4
 
 # --- Testing & QA ---
-pytest>=7.4.0
+pytest>=9.1.1
 pytest-cov>=4.1.0
 pytest-asyncio>=0.21.0
 pytest-mock>=3.11.0
@@ -57,7 +57,7 @@ prometheus-client>=0.17.0
 
 # --- Secrets Management ---
 hvac>=1.2.0  # HashiCorp Vault client
-cryptography>=41.0.0  # Field-level encryption
+cryptography>=49.0.0  # Field-level encryption
 
 # NOTE: Flask and flask-swagger-ui removed - Swagger UI now served by Rust backend
 # (see openapi_generator.py for optional standalone Flask utility if needed for development)
@@ -66,4 +66,7 @@ cryptography>=41.0.0  # Field-level encryption
 playwright>=1.60.0
 
 # --- SIEM Integration ---
-elasticsearch>=8.11.0
+# NOTE: no module imports `elasticsearch` anywhere in the tree (production is Rust-only; the
+# Python layer under legacy/ is deprecated). Kept here — with the floor raised past the 8.x
+# line — rather than removed, since dropping a declared integration is a product decision.
+elasticsearch>=9.4.1
