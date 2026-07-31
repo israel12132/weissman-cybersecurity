@@ -32,7 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-ipnetwork = "0.20"
+ipnetwork = "0.21"
 urlencoding = "2.1"
 rand = "0.10"
 # Full-stack server: live API + dashboard, no dummy
@@ -137,7 +137,7 @@ metrics = "0.24"
 metrics-exporter-prometheus = "0.17"
 # HPC: lock-free async channels + zero-copy helpers; NUMA CPU bind (Linux) via hwloc.
 bytes = "1.6"
-flume = { version = "0.11", default-features = false, features = ["async"] }
+flume = { version = "0.12", default-features = false, features = ["async"] }
 governor = "0.6"
 moka = { version = "0.12", features = ["future"] }
 thiserror = "1"
