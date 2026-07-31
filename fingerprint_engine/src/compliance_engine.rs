@@ -945,7 +945,7 @@ mod control_coverage_tests {
     }
 
     const ONBOARDING_SQL: &str = include_str!(
-        "../migrations/20260716120000_compliance_frameworks_dynamic_and_onboarding.sql"
+        "../migrations/20260731120000_compliance_frameworks_dynamic_and_onboarding.sql"
     );
 
     #[test]
@@ -992,12 +992,24 @@ mod control_coverage_tests {
     #[test]
     fn merge_orphaned_controls_dedupes_by_id_and_sorts() {
         let coverage = vec![
-            OrphanedControl { control_id: "A.9".into(), control_title: "Access".into() },
-            OrphanedControl { control_id: "A.5".into(), control_title: "Org".into() },
+            OrphanedControl {
+                control_id: "A.9".into(),
+                control_title: "Access".into(),
+            },
+            OrphanedControl {
+                control_id: "A.5".into(),
+                control_title: "Org".into(),
+            },
         ];
         let dead = vec![
-            OrphanedControl { control_id: "A.9".into(), control_title: "Access (dead)".into() },
-            OrphanedControl { control_id: "A.12".into(), control_title: "Ops".into() },
+            OrphanedControl {
+                control_id: "A.9".into(),
+                control_title: "Access (dead)".into(),
+            },
+            OrphanedControl {
+                control_id: "A.12".into(),
+                control_title: "Ops".into(),
+            },
         ];
         let merged = merge_orphaned_controls(coverage, dead);
         let ids: Vec<&str> = merged.iter().map(|o| o.control_id.as_str()).collect();
