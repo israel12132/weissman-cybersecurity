@@ -7,6 +7,7 @@ Skip when WEISSMAN_E2E_BASE is unset. Run via:
 
 from __future__ import annotations
 
+import math
 import os
 import time
 
@@ -53,10 +54,19 @@ def _request_with_retry(
     attempt = 0
     while resp.status_code in (429, 503) and attempt < _retries:
         ra = resp.headers.get("retry-after")
+        fallback = 0.4 * (attempt + 1)
         try:
-            wait = float(ra) if ra else 0.4 * (attempt + 1)
+            wait = float(ra) if ra else fallback
         except (TypeError, ValueError):
-            wait = 0.4 * (attempt + 1)
+            wait = fallback
+        # `float()` happily returns -1.0, nan and inf, but time.sleep() rejects non-positive and
+        # non-finite waits with a ValueError — which would surface INSTEAD of the HTTP failure we
+        # are actually retrying and make the real cause unreadable. RFC 7231 also permits an
+        # HTTP-date form of Retry-After that float() cannot parse. Treat every unusable hint the
+        # same way: fall back to the linear back-off. Mirrors the guard the Node client already
+        # has (`Number.isFinite(hint) && hint > 0` in scripts/lib/scan_intake.mjs).
+        if not math.isfinite(wait) or wait <= 0:
+            wait = fallback
         time.sleep(min(wait, _WAIT_CAP_S))
         resp = inner.request(method, url, **kwargs)
         attempt += 1
