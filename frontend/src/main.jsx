@@ -53,7 +53,15 @@ function mount() {
     ReactDOM.createRoot(root).render(
       <React.StrictMode>
         <RootErrorBoundary>
-          <BrowserRouter basename="/command-center">
+          <BrowserRouter
+            basename="/command-center"
+            // Opt in to v7 behaviour while still on v6, so the version bump itself carries no
+            // behaviour change. `v7_startTransition` wraps route state updates in
+            // React.startTransition: during a lazy-chunk load the PREVIOUS page stays on screen
+            // instead of the <React.Suspense fallback={<RouteLoader />}> below flashing in.
+            // `v7_relativeSplatPath` fixes relative-link resolution inside splat routes.
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          >
             <TacticalProviders>
               <React.Suspense fallback={<RouteLoader />}>
                 <TacticalApp />
