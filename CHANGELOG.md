@@ -7,6 +7,61 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ## [Unreleased]
 
+### Added
+
+- **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
+  authoritative list of in-scope frameworks (migration
+  `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to
+  `weissman-db`). `GET /api/compliance/frameworks` reads from it and reports which
+  source served the list via a `dynamic` flag, falling back to the historical list
+  only when the table is unavailable. The hardcoded Rust vec is gone.
+- **Six frameworks onboarded to the live control-mapping gate** — SOC2, NIS2, GDPR,
+  IEC62443, PCI and CSA-CCM. Each canonical control is bound to a verified,
+  audit-traceable, **evidence-only** platform source (Postgres RLS isolation,
+  tamper-evident audit hash chain, distributed login lockout, startup-enforced TLS
+  policy, agentless cloud posture, live vulnerability management). No engines were
+  modified and no stale-engine references introduced. Previously these frameworks
+  were listed in the UI but carried no live mappings, so they passed the enforcement
+  gate un-evaluated.
+
+### Changed
+
+- **One compliance integrity gate, not two.** The parallel mapping-integrity work is
+  unified into the single `report_gate` + diagonal `Tm` watermark pipeline.
+  `compliance_framework_orphans` folds three signals for every official artifact
+  (framework PDF report **and** signed evidence pack):
+  1. coverage gap (`find_orphaned_controls`),
+  2. **listed-but-unmapped** — a framework the catalog lists but that carries no live
+     control mapping now voids the artifact,
+  3. **dead predicate** (`find_dead_predicate_controls`) — a control in
+     `compliance_mappings` whose every row is structurally dead (no cloud rule id, no
+     vulnerability predicate) can never be violated, so it is silently reported
+     "compliant" forever.
+- **Evidence pack is gated on the enabled compliance surface**, not a hardcoded slug
+  list. `find_orphaned_controls` returns *no* orphans for a framework with zero live
+  mappings (it cannot tell "not onboarded" from "fully covered"), so every framework in
+  the old `COMPLIANCE_UI_SLUGS` list that carried no mappings — SOC2, NIS2, GDPR,
+  IEC62443, PCI, CSA-CCM, plus NIST / HIPAA / FedRAMP — passed the gate untested. That
+  hole is now closed from both sides: the six product frameworks are genuinely mapped,
+  and the listed-but-unmapped signal fails any framework the catalog lists without
+  mappings. NIST / HIPAA / FedRAMP are deliberately not listed until their evidence
+  sources exist, so they are out of scope rather than silently "compliant".
+
+### Fixed
+
+- **SOAR playbook E2E verifier is hermetic.** `scripts/verify_soar_playbook_e2e.mjs`
+  fired against a hard-coded `tenant_id: 1` / `client_id: 1`, violating the
+  `soar_action_executions.client_id → clients(id)` foreign key on any stack where
+  that row was never seeded. It now takes the tenant from the login response and
+  seeds its own probe client, mirroring the fix already applied to the Rust
+  `soar_playbook_e2e` integration test.
+- **i18n `defaultValue` ratchet re-armed at zero.** The last two inline fallbacks
+  (`common.clear` in `pages/RemediationHub.jsx`) are keyed in `en`/`he`, and
+  `scripts/i18n-defaultvalue-baseline.json` — still pinned at the historical 223
+  occurrences long after the migration finished, so it silently permitted a full
+  regression — is tightened to `{}`. Any new inline `defaultValue` now fails the
+  build. Closes item 1 of `docs/PRODUCT_DEBT_BACKLOG.md`.
+
 ### Security
 
 - **Removed the `genpdf` dependency** from `fingerprint_engine`, clearing the

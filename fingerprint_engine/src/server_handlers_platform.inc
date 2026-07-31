@@ -3881,11 +3881,11 @@ async fn api_compliance_evidence_pack(
     let tid = auth.tenant_id;
     let framework_filter = q.get("framework").map(|s| s.trim().to_string());
 
-    // --- Live control-mapping enforcement gate (orphaned controls only) ---
-    // The pack is cross-framework, so its validity depends on the whole live-mapping catalog being
-    // consistent: any onboarded framework with orphaned controls voids the pack.
-    let orphaned_controls = match compliance_orphaned_controls_across(&state, COMPLIANCE_UI_SLUGS).await
-    {
+    // --- Unified control-mapping enforcement gate ---
+    // The pack is cross-framework, so its validity depends on the whole enabled compliance surface
+    // being consistent: any listed framework with orphaned controls (coverage gap, listed-but-
+    // unmapped, or dead-predicate rot) voids the pack.
+    let orphaned_controls = match compliance_orphaned_controls_across_listed(&state).await {
         Ok(o) => o,
         Err(resp) => return resp,
     };

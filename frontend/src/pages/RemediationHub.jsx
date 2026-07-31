@@ -288,8 +288,8 @@ export default function RemediationHub() {
                 variant="unstyled"
                 type="button"
                 onClick={() => setSearch('')}
-                aria-label={t('common.clear', { defaultValue: 'Clear search' })}
-                title={t('common.clear', { defaultValue: 'Clear search' })}
+                aria-label={t('common.clear')}
+                title={t('common.clear')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
               >
                 <X className="w-3.5 h-3.5" />
