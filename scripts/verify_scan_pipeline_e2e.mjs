@@ -8,7 +8,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { retryScanIntake } from './lib/scan_intake.mjs'
+import { retryScanIntake, retryLogin } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -139,9 +139,9 @@ async function main() {
   if (health.status === 200) ok('health', 'DB reachable')
   else { fail('health', `HTTP ${health.status}`); process.exit(1) }
 
-  const login = await req('POST', '/api/login', {
+  const login = await retryLogin(() => req('POST', '/api/login', {
     body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
-  })
+  }))
   const token = login.data?.access_token || login.data?.token || ''
   const cookie = cookieHeader(login.setCookie)
   if (login.status === 200 && (token || cookie)) ok('login', EMAIL)

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { retryScanIntake } from './lib/scan_intake.mjs'
+import { retryScanIntake, retryLogin } from './lib/scan_intake.mjs'
 
 const BASE_URL = process.env.WEISSMAN_SMOKE_BASE_URL || 'http://127.0.0.1'
 const LOGIN_EMAIL = process.env.WEISSMAN_SMOKE_LOGIN_EMAIL || process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost'
@@ -198,11 +198,14 @@ async function api(path, options = {}) {
 }
 
 async function login() {
-  const { response, body } = await api('/api/login', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: LOGIN_EMAIL, password: LOGIN_PASSWORD, tenant_slug: TENANT_SLUG }),
-  })
+  const { response, body } = await retryLogin(
+    () => api('/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: LOGIN_EMAIL, password: LOGIN_PASSWORD, tenant_slug: TENANT_SLUG }),
+    }),
+    { statusOf: (r) => r?.response?.status, retryAfterOf: (r) => r?.body?.retry_after_seconds },
+  )
   if (!response.ok || !body?.access_token) {
     throw new Error(`login failed (${response.status}): ${JSON.stringify(body)}`)
   }

@@ -1,4 +1,5 @@
-// Shared retry for scan-intake POSTs across the live E2E suite.
+// Shared shed-aware retry for the live E2E suite: scan-intake POSTs and the logins that precede
+// them.
 //
 // The platform transiently sheds NEW scan intake with two distinct, self-protecting codes, both
 // advertising Retry-After / `retry_after_seconds` precisely so a correct client backs off and
@@ -27,16 +28,17 @@ export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Run one scan-intake POST via `attempt`, retrying while the platform sheds it (429/503).
-//   attempt       () => Promise<nativeResponse>  — performs one POST, returns the script's own shape
+// Run one request via `attempt`, retrying while the platform sheds it (429/503).
+//   attempt       () => Promise<nativeResponse>  — performs one request, returns the script's own shape
 //   opts.label    string   — log label (engine / scenario) for the back-off line
+//   opts.what     string   — what was shed, for the log line (default 'scan intake')
 //   opts.retries  number   — max retries (default WEISSMAN_SCAN_INTAKE_RETRIES or 6)
 //   opts.statusOf (r) => number  — extract the HTTP status (default r.status)
 //   opts.retryAfterOf (r) => number|string  — extract the seconds hint (default r.data.retry_after_seconds)
 // Returns the final native response unchanged (non-shed status, or the last shed after exhausting
 // retries — the caller still makes the final accept/fail decision on it).
-export async function retryScanIntake(attempt, opts = {}) {
-  const { label = 'scan', retries = RETRIES } = opts
+export async function retryShed(attempt, opts = {}) {
+  const { label = 'scan', what = 'scan intake', retries = RETRIES } = opts
   const statusOf = opts.statusOf || ((r) => r?.status)
   const retryAfterOf = opts.retryAfterOf || ((r) => r?.data?.retry_after_seconds)
   let res = await attempt()
@@ -46,11 +48,30 @@ export async function retryScanIntake(attempt, opts = {}) {
       ? Math.min(hint * 1000, WAIT_CAP_MS)
       : Math.min(1500 * i, WAIT_CAP_MS)
     console.log(
-      `  … ${label}: scan intake shed (HTTP ${statusOf(res)}); backing off ${Math.round(waitMs / 1000)}s ` +
+      `  … ${label}: ${what} shed (HTTP ${statusOf(res)}); backing off ${Math.round(waitMs / 1000)}s ` +
         `(retry ${i}/${retries})`,
     )
     await sleep(waitMs)
     res = await attempt()
   }
   return res
+}
+
+// Scan-intake POSTs. Unchanged behaviour and log wording; retryShed carries the loop.
+export async function retryScanIntake(attempt, opts = {}) {
+  return retryShed(attempt, { ...opts, what: 'scan intake' })
+}
+
+// Logins.
+//
+// Every live E2E step authenticates before it does anything, and they all ride one IP, so the
+// per-IP login limiter (http/login_rate_limit.rs) legitimately trips partway through a CI job that
+// chains many of these steps back to back. Until this existed the limiter's 429 was simply read as
+// "wrong password": each script's login helper treated any non-200 as fatal and exited immediately,
+// so a shed login failed the whole contract in about a second while the server was actively telling
+// the client to wait 60s and try again. Honoring that hint here is the same correctness argument as
+// for scan intake — the limiter still protects the server, the client just stops misreporting a
+// back-off as an authentication failure.
+export async function retryLogin(attempt, opts = {}) {
+  return retryShed(attempt, { label: 'auth', ...opts, what: 'login' })
 }
