@@ -7,6 +7,7 @@ Skip when WEISSMAN_E2E_BASE is unset. Run via:
 
 from __future__ import annotations
 
+import math
 import os
 import time
 
@@ -26,6 +27,11 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+# Ceiling on a single honored Retry-After wait. Must exceed the largest hint the server sends
+# (60s, login per-IP limit) — see _request_with_retry.
+_WAIT_CAP_S = 75.0
+
+
 def _request_with_retry(
     inner: httpx.Client, method: str, url: str, *, _retries: int = 6, **kwargs
 ) -> httpx.Response:
@@ -36,16 +42,32 @@ def _request_with_retry(
         legitimate burst can trip the 30/s-per-IP limit no real client ever hits;
       * 503 `load_shed` — self-heal recovery sheds new scan intake when the DB pool or async backlog
         crosses its critical threshold, and auto-clears on a TTL as the platform drains.
-    The 15s load-shed hint is honored up to a 20s cap, so a single wait usually lands healthy."""
+    The cap must stay ABOVE every Retry-After the server actually sends, or honoring the hint is
+    silently defeated: a 20s cap truncated the login limiter's documented 60s hint (see
+    http/login_rate_limit.rs, `retry_after_secs = 60`) to a third of the requested wait, so the
+    retries burned out inside one quota window and every test errored on the /api/login fixture
+    with 429 once the earlier live steps had spent the per-IP budget. 75s clears the 60s login hint
+    and the 15s load-shed hint with margin. This only raises the CEILING on a wait the server itself
+    asked for — the healthy path still waits exactly the hint, so it costs nothing when nothing is
+    throttled."""
     resp = inner.request(method, url, **kwargs)
     attempt = 0
     while resp.status_code in (429, 503) and attempt < _retries:
         ra = resp.headers.get("retry-after")
+        fallback = 0.4 * (attempt + 1)
         try:
-            wait = float(ra) if ra else 0.4 * (attempt + 1)
+            wait = float(ra) if ra else fallback
         except (TypeError, ValueError):
-            wait = 0.4 * (attempt + 1)
-        time.sleep(min(wait, 20.0))
+            wait = fallback
+        # `float()` happily returns -1.0, nan and inf, but time.sleep() rejects non-positive and
+        # non-finite waits with a ValueError — which would surface INSTEAD of the HTTP failure we
+        # are actually retrying and make the real cause unreadable. RFC 7231 also permits an
+        # HTTP-date form of Retry-After that float() cannot parse. Treat every unusable hint the
+        # same way: fall back to the linear back-off. Mirrors the guard the Node client already
+        # has (`Number.isFinite(hint) && hint > 0` in scripts/lib/scan_intake.mjs).
+        if not math.isfinite(wait) or wait <= 0:
+            wait = fallback
+        time.sleep(min(wait, _WAIT_CAP_S))
         resp = inner.request(method, url, **kwargs)
         attempt += 1
     return resp

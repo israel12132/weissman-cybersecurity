@@ -14,7 +14,13 @@
 // almost always lands healthy. Honor the server's own hint (capped) rather than a blind fixed sleep.
 
 const RETRIES = Number(process.env.WEISSMAN_SCAN_INTAKE_RETRIES || 6)
-const WAIT_CAP_MS = 20000
+// Ceiling on a single honored back-off. It must stay ABOVE every Retry-After the server actually
+// sends, or "honor the hint" is silently defeated: at 20s the login limiter's documented 60s hint
+// (http/login_rate_limit.rs, `retry_after_secs = 60`) was truncated to a third of the requested
+// wait, so retries burned out inside one quota window instead of riding it out. 75s clears the 60s
+// login hint and the 15s load-shed hint with margin. This raises only the CEILING — the healthy
+// path still waits exactly what the server asked for, so it costs nothing when nothing is shed.
+const WAIT_CAP_MS = 75000
 const SHED_CODES = new Set([429, 503])
 
 export function sleep(ms) {
