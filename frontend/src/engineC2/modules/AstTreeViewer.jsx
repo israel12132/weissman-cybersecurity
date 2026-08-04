@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { FixedSizeList as List } from 'react-window'
+import { List } from 'react-window'
 import CopyButton from '../../components/ui/CopyButton'
 import { capAstMutations, prefetchAstCapWasm } from '../astCapWasm'
 
@@ -7,8 +7,7 @@ const ROW_HEIGHT = 36
 const VIEWPORT_ROWS = 14
 const MAX_BYTES_ESTIMATE = 50 * 1024 * 1024
 
-function AstRow({ index, style, data }) {
-  const { items } = data
+function AstRow({ index, style, items }) {
   const text = items[index] ?? ''
   return (
     <div
@@ -104,15 +103,13 @@ export default function AstTreeViewer({
         )}
       </div>
       <List
-        height={height}
-        itemCount={capped.length}
-        itemSize={ROW_HEIGHT}
-        width="100%"
-        itemData={{ ...itemData, onCopy }}
+        style={{ height }}
+        rowCount={capped.length}
+        rowHeight={ROW_HEIGHT}
+        rowComponent={MemoAstRow}
+        rowProps={{ ...itemData, onCopy }}
         overscanCount={8}
-      >
-        {MemoAstRow}
-      </List>
+      />
     </div>
   )
 }
