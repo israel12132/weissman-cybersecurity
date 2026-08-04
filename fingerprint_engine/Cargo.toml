@@ -147,10 +147,14 @@ rand_core = "0.6"
 redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls", "connect"] }
 native-tls = "0.2"
-opentelemetry = "0.27"
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.27", default-features = false, features = ["http-proto", "reqwest-client"] }
-tracing-opentelemetry = "0.28"
+# The OTel family must move together with tracing-opentelemetry: 0.33 is built against
+# opentelemetry/opentelemetry_sdk 0.32, so leaving the core crates at 0.27 compiles TWO
+# incompatible opentelemetry versions into the tree and `layer().with_tracer(tracer)` fails to
+# type-check (the SDK tracer does not implement the *other* version's `Tracer` trait).
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = ["http-proto", "reqwest-client"] }
+tracing-opentelemetry = "0.33"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # System libhwloc via pkg-config (install libhwloc-dev). Vendored build needs autoconf/automake.
