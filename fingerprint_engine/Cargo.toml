@@ -153,7 +153,13 @@ native-tls = "0.2"
 # type-check (the SDK tracer does not implement the *other* version's `Tracer` trait).
 opentelemetry = "0.32"
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.32", default-features = false, features = ["http-proto", "reqwest-client"] }
+# NOTE the exporter's HTTP client must be the BLOCKING one. `with_batch_exporter` (below, in
+# observability.rs) builds the default `BatchSpanProcessor`, which since 0.30 owns a dedicated OS
+# thread and drives the export future with `futures_executor::block_on` — that thread has no Tokio
+# reactor. The async `reqwest-client` feature would compile fine and then panic at runtime
+# ("there is no reactor running") on the first export. `reqwest-blocking-client` is also what this
+# crate's own default feature set selects, for exactly this reason.
+opentelemetry-otlp = { version = "0.32", default-features = false, features = ["http-proto", "reqwest-blocking-client"] }
 tracing-opentelemetry = "0.33"
 
 [target.'cfg(target_os = "linux")'.dependencies]

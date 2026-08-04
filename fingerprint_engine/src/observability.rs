@@ -37,6 +37,24 @@ pub fn install_sovereign_panic_hook() {
     }));
 }
 
+/// The OTLP tracer provider, retained so spans buffered by the batch processor can be flushed on
+/// exit. `None` until [`init_tracing_from_env`] runs with `WEISSMAN_OTLP_ENDPOINT` set.
+static OTEL_PROVIDER: OnceLock<opentelemetry_sdk::trace::SdkTracerProvider> = OnceLock::new();
+
+/// Flush and stop OTLP span export. Call as one of the LAST steps before process exit — 0.32
+/// removed `global::shutdown_tracer_provider()`, and simply dropping the provider does not
+/// guarantee buffered spans are exported.
+///
+/// No-op when OTLP export was never enabled. Blocking (the batch processor runs on its own thread),
+/// so from async code call it via `spawn_blocking` rather than on a runtime worker.
+pub fn shutdown_otel_tracing() {
+    if let Some(provider) = OTEL_PROVIDER.get() {
+        if let Err(e) = provider.shutdown() {
+            eprintln!("[Weissman][otel] provider shutdown failed: {e}");
+        }
+    }
+}
+
 /// Build an OpenTelemetry OTLP tracing layer when `WEISSMAN_OTLP_ENDPOINT` is set
 /// (e.g. `http://otel-collector:4318/v1/traces`). Exports spans over OTLP/HTTP using
 /// the existing reqwest stack. Returns `None` when unset or on exporter build failure,
@@ -89,6 +107,12 @@ fn build_otel_layer(
         )
         .build();
     let tracer = provider.tracer("weissman");
+    // Keep an owned handle in addition to registering globally. 0.32 removed
+    // `global::shutdown_tracer_provider()`, so a flush on exit is only possible through a retained
+    // `SdkTracerProvider` — see [`shutdown_otel_tracing`]. Dropping the last reference is NOT a
+    // substitute: the batch processor's buffered spans are only guaranteed to be exported by an
+    // explicit `shutdown()`.
+    let _ = OTEL_PROVIDER.set(provider.clone());
     opentelemetry::global::set_tracer_provider(provider);
 
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
