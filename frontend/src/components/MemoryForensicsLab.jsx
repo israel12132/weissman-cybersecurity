@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { FixedSizeList as List } from 'react-window'
+import { List } from 'react-window'
 import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
 import StandaloneLabShell from './ui/StandaloneLabShell'
@@ -498,14 +498,13 @@ export default function MemoryForensicsLab() {
                   <span className="text-[var(--text-muted)]">{t(`${NS}.empty`)}</span>
                 ) : (
                   <List
-                    height={HEX_VIEWER_HEIGHT}
-                    itemCount={hexRowCount}
-                    itemSize={HEX_ROW_HEIGHT}
-                    width="100%"
+                    style={{ height: HEX_VIEWER_HEIGHT }}
+                    rowCount={hexRowCount}
+                    rowHeight={HEX_ROW_HEIGHT}
+                    rowComponent={HexRow}
+                    rowProps={{}}
                     overscanCount={10}
-                  >
-                    {HexRow}
-                  </List>
+                  />
                 )}
               </div>
               <div className="px-3 py-2 border-t border-[var(--border-default)] text-[var(--text-muted)] text-xs">
@@ -518,14 +517,13 @@ export default function MemoryForensicsLab() {
                   <span className="text-[var(--text-muted)]">{t(`${NS}.none`)}</span>
                 ) : (
                   <List
-                    height={HEX_VIEWER_HEIGHT}
-                    itemCount={rawChunks.length}
-                    itemSize={RAW_ROW_HEIGHT}
-                    width="100%"
+                    style={{ height: HEX_VIEWER_HEIGHT }}
+                    rowCount={rawChunks.length}
+                    rowHeight={RAW_ROW_HEIGHT}
+                    rowComponent={RawChunkRow}
+                    rowProps={{}}
                     overscanCount={15}
-                  >
-                    {RawChunkRow}
-                  </List>
+                  />
                 )}
               </div>
             </div>
