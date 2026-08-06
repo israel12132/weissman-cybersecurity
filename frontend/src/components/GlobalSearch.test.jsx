@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup, within } from '@testing-library/rea
 // --- Mocks: keep the palette isolated from router/auth/i18n/network ---
 const navigateSpy = vi.fn()
 let mockPathname = '/findings'
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => navigateSpy,
   useLocation: () => ({ pathname: mockPathname }),
 }))

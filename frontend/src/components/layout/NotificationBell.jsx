@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Bell, Check, Trash2, ExternalLink } from 'lucide-react'
 import { useNotifications } from '../../context/NotificationContext'

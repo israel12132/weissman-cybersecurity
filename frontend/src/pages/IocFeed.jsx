@@ -5,7 +5,7 @@
  * (IPs, domains, URLs, hashes) from persisted findings. Route: /iocs
  */
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Crosshair, Search } from 'lucide-react'

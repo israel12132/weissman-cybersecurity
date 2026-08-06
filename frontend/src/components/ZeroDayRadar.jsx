@@ -3,7 +3,7 @@
  * Module 7: Global Threat Radar — live intel feed, synthesis terminal, zero-day exposure banner.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import EvidenceNotice from './ui/EvidenceNotice'

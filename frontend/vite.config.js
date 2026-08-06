@@ -72,7 +72,7 @@ function manualChunkForId(id) {
   // lib/cn no longer sharing the `clsx` module with these libs — means no app
   // chunk is dragged into this vendor chunk.)
   if (
-    /\/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|recharts|@xyflow|framer-motion|lucide-react|@tanstack\/react-table|react-window|react-simple-maps|i18next|react-i18next|i18next-browser-languagedetector)\//.test(
+    /\/node_modules\/(react|react-dom|react-router|scheduler|recharts|@xyflow|framer-motion|lucide-react|@tanstack\/react-table|react-window|i18next|react-i18next|i18next-browser-languagedetector)\//.test(
       id,
     )
   ) {

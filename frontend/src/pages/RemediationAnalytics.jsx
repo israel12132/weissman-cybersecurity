@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Activity, GitPullRequest, AlertTriangle, FileText, Search } from 'lucide-react'
 import PageShell from './PageShell'

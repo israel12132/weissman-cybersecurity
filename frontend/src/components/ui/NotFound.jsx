@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Compass, LayoutDashboard, Radar, ShieldAlert } from 'lucide-react'
 import Logo from '../Logo'

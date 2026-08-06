@@ -3,7 +3,7 @@
  * Horizontal pipeline (Commit -> Build -> Test -> Deploy), red stages, modal with Attacker's Playbook.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'

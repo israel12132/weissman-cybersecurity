@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.22.0"
   },
   "type": "module",
   "scripts": {
@@ -27,18 +27,19 @@
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.10.1",
+    "d3-geo": "2.0.2",
     "framer-motion": "^11.11.0",
     "i18next": "^26.3.0",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^1.28.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "react-i18next": "^17.0.8",
-    "react-router-dom": "^6.22.0",
-    "react-simple-maps": "^3.0.0",
+    "react-router": "^8.3.0",
     "react-window": "^2.2.7",
     "recharts": "^3.10.1",
     "three": "^0.160.0",
+    "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
   },
   "devDependencies": {
@@ -48,8 +49,8 @@
     "@playwright/test": "^1.49.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "^4.1.8",
     "autoprefixer": "^10.4.16",

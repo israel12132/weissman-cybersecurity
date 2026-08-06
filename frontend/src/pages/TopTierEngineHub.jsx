@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { Search } from 'lucide-react'
 import { TOP_TIER_ENGINE_IDS } from '../lib/topTierEngineProfiles'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'

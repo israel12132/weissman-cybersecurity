@@ -3,7 +3,7 @@
  * Fetches live from /api/clients/:id, /api/clients/:id/report/crypto-proof. No mock data.
  */
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useTranslation, Trans } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'

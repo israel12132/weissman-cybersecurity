@@ -3,7 +3,7 @@
  */
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter } from 'react-router'
 import { bootstrapTacticalShell } from './boot/tacticalBoot'
 import RouteLoader from './components/ui/RouteLoader'
 import './i18n'

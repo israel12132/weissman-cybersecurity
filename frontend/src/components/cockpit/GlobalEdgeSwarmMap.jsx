@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from 'react-simple-maps'
 import { Radio, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../utils/apiFetch'
 import Button from '../ui/Button'
-// Vendored locally (see world-atlas dependency) so the map needs no external
-// CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
-import worldGeography from 'world-atlas/countries-110m.json'
+import GeoWorldMap, { GeoMarker } from '../ui/GeoWorldMap'
 
 const NS = 'components.cockpitWidgets.globalEdgeSwarmMap'
 
@@ -100,39 +97,30 @@ export default function GlobalEdgeSwarmMap() {
       {error && <div className="text-sm text-red-400">{error}</div>}
 
       <div className="flex-1 rounded-2xl border border-white/10 bg-[var(--bg-0)]/90 overflow-hidden min-h-[320px]">
-        <ComposableMap
-          projectionConfig={{ scale: 140 }}
+        <GeoWorldMap
+          projection="geoEqualEarth"
+          projectionScale={140}
+          center={[20, 0]}
+          zoom={0.85}
+          geographyFill="rgba(30,30,40,0.9)"
+          geographyStroke="rgba(139,92,246,0.25)"
+          geographyStrokeWidth={0.4}
           style={{ width: '100%', height: '100%', minHeight: 320 }}
         >
-          <ZoomableGroup center={[20, 0]} zoom={0.85}>
-            <Geographies geography={worldGeography}>
-              {({ geographies }) =>
-                geographies.map((geo) => (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill="rgba(30,30,40,0.9)"
-                    stroke="rgba(139,92,246,0.25)"
-                    strokeWidth={0.4}
-                  />
-                ))
-              }
-            </Geographies>
-            {nodes.map((n) => {
-              const lat = n.latitude != null ? n.latitude : fallbackCoord(n.region_code || '', n.pop_label || '')[0]
-              const lng = n.longitude != null ? n.longitude : fallbackCoord(n.region_code || '', n.pop_label || '')[1]
-              const jobs = n.active_jobs ?? 0
-              return (
-                <Marker key={n.id} coordinates={[lng, lat]}>
-                  <circle r={6 + Math.min(jobs, 8)} fill="rgba(167,139,250,0.95)" stroke="#fff" strokeWidth={1} />
-                  <text textAnchor="middle" y={-12} fill="rgba(221,214,254,0.95)" fontSize={9} style={{ fontFamily: 'ui-monospace, monospace' }}>
-                    {n.pop_label || n.region_code || t(`${NS}.popFallback`)}
-                  </text>
-                </Marker>
-              )
-            })}
-          </ZoomableGroup>
-        </ComposableMap>
+          {nodes.map((n) => {
+            const lat = n.latitude != null ? n.latitude : fallbackCoord(n.region_code || '', n.pop_label || '')[0]
+            const lng = n.longitude != null ? n.longitude : fallbackCoord(n.region_code || '', n.pop_label || '')[1]
+            const jobs = n.active_jobs ?? 0
+            return (
+              <GeoMarker key={n.id} coordinates={[lng, lat]}>
+                <circle r={6 + Math.min(jobs, 8)} fill="rgba(167,139,250,0.95)" stroke="#fff" strokeWidth={1} />
+                <text textAnchor="middle" y={-12} fill="rgba(221,214,254,0.95)" fontSize={9} style={{ fontFamily: 'ui-monospace, monospace' }}>
+                  {n.pop_label || n.region_code || t(`${NS}.popFallback`)}
+                </text>
+              </GeoMarker>
+            )
+          })}
+        </GeoWorldMap>
       </div>
 
       {nodes.length === 0 && !loading && (

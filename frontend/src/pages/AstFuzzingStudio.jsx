@@ -8,7 +8,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { useInsideEngineC2, useC2AbortSignal } from '../engineC2/EngineC2Boundary'
 import AstTreeViewer from '../engineC2/modules/AstTreeViewer'
 import { useResolvedEngineManifest } from '../engineC2/EngineManifestContext'
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
 

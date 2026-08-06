@@ -9,7 +9,7 @@
  * (mapped engines), `/api/dashboard/exec-kpis` (KPI strip). No fabricated chains.
  */
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'

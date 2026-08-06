@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../utils/apiFetch'

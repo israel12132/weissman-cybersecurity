@@ -2,7 +2,7 @@
  * Forensic evidence banner for standalone lab / war-room panels.
  * Resolves copy from routeEvidence or an explicit i18n key.
  */
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import EvidenceNotice from './EvidenceNotice'
 import { resolveRouteEvidence } from '../../lib/routeEvidence'

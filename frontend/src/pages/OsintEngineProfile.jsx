@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { createColumnHelper } from '@tanstack/react-table'
 import DataTable from '../components/ui/DataTable'
 import PageShell from './PageShell'
