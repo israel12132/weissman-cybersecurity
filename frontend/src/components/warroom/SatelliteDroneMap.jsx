@@ -13,7 +13,7 @@ const US_CENTER = [37.09, -95.71]
 const PATROL_IDLE_MS = 30000
 const PATROL_PAN_SPEED = 0.08
 
-/** stableGeoFromLabel returns [lat, lng]; react-simple-maps expects [lng, lat]. */
+/** stableGeoFromLabel returns [lat, lng]; the map expects [lng, lat]. */
 function geoForTarget(domainOrName) {
   const [lat, lng] = stableGeoFromLabel(domainOrName)
   return [lng, lat]
