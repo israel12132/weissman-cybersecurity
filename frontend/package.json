@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.22.0"
   },
   "type": "module",
   "scripts": {
@@ -27,7 +27,7 @@
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.10.1",
-    "d3-geo": "^2.0.2",
+    "d3-geo": "2.0.2",
     "framer-motion": "^11.11.0",
     "i18next": "^26.3.0",
     "i18next-browser-languagedetector": "^8.2.1",
