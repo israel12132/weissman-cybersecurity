@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { apiFetch } from '../utils/apiFetch'
 import { isHttpUrl } from '../utils/safeUrl'
 import AppShell from './layout/AppShell'

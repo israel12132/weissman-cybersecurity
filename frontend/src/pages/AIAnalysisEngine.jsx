@@ -3,7 +3,7 @@
  * `/api/findings/clusters` and `/api/findings` fallbacks. No fabricated intel.
  */
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search } from 'lucide-react';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Wrench, Zap, CheckCircle, Clock, AlertTriangle, ShieldCheck, Search, X, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import PageShell from './PageShell'

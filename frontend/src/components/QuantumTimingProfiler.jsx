@@ -3,7 +3,7 @@
  * WebSocket stream: baseline (blue) vs payload (red) latency in μs; live Z-Score and confidence %.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
   LineChart,

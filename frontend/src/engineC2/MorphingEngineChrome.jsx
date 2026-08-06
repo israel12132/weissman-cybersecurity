@@ -1,7 +1,7 @@
 /**
  * Morphing Engine C2 Chrome — polymorphic layout assembled from backend manifest capabilities.
  */
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import AppShell from '../components/layout/AppShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'

@@ -5,7 +5,7 @@ vi.mock('react-i18next', () => {
   const t = (k) => k
   return { useTranslation: () => ({ t }) }
 })
-vi.mock('react-router-dom', () => ({ Link: ({ children }) => <a>{children}</a> }))
+vi.mock('react-router', () => ({ Link: ({ children }) => <a>{children}</a> }))
 vi.mock('../../context/ClientContext', () => ({
   useClient: () => ({ selectedClientId: 'c1', selectedClient: { id: 'c1' } }),
 }))

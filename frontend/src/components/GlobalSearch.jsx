@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Command, Search, Zap, CornerDownLeft, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

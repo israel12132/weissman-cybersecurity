@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Menu, X } from 'lucide-react'
 import Logo from '../Logo'

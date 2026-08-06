@@ -3,7 +3,7 @@
  * Sources: leak_hunter, darkweb_intel, dark_web_monitor, typosquatting_monitor.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Eye, Search, ShieldAlert, Radio, Filter } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'

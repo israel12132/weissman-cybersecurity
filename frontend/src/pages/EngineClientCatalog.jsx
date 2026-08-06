@@ -9,7 +9,7 @@
  */
 import { firstClientTarget } from '../lib/clientTarget'
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { ENGINE_GROUP_DEFS, getEnginesByGroup } from '../lib/enginesRegistry'

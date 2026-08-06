@@ -3,7 +3,7 @@
  * Entropy Gauge (Richter scale), Deception Badge, Hex Heatmap (Memory X-Ray).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { List } from 'react-window'
 import { apiFetch } from '../utils/apiFetch'

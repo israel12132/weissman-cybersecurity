@@ -4,7 +4,7 @@ import { sessionHasRole } from '../../lib/roles'
 
 // Keep the guard isolated from router/i18n; drive auth via a mutable stub so we
 // can exercise every branch (loading, unauthenticated, denied, allowed).
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   Navigate: ({ to }) => <div data-testid="redirect">redirect:{to}</div>,
   Link: ({ to, children }) => <a href={to}>{children}</a>,
   useLocation: () => ({ pathname: '/admin' }),

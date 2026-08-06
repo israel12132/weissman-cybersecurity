@@ -3,7 +3,7 @@
  * Left: Our LLM (Attacker) payloads. Right: Target LLM (Defender) responses. Center: JAILBREAK SUCCESS / SECURE.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { INTEL_MAP_QUICKNAV } from './lib/appNav'
 import { useTranslation } from 'react-i18next'
 import CinematicBackground from './components/CinematicBackground'
