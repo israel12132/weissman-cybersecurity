@@ -22,6 +22,12 @@ const RETRIES = Number(process.env.WEISSMAN_SCAN_INTAKE_RETRIES || 6)
 // login hint and the 15s load-shed hint with margin. This raises only the CEILING — the healthy
 // path still waits exactly what the server asked for, so it costs nothing when nothing is shed.
 const WAIT_CAP_MS = 75000
+// Ceiling on the CUMULATIVE back-off across one call's retries. WAIT_CAP_MS bounds a SINGLE wait;
+// without this, six retries against a repeated 60s hint would sit here for six minutes of CI time
+// before returning the shed response the caller was always going to act on. One honored 60s wait
+// clears the login limiter's quota window, so allowing one is what this needs to permit. It does
+// not touch the burst case: six 1.5s fallback waits total 9s, far inside the budget.
+const WAIT_TOTAL_BUDGET_MS = 90000
 const SHED_CODES = new Set([429, 503])
 
 export function sleep(ms) {
@@ -42,11 +48,14 @@ export async function retryShed(attempt, opts = {}) {
   const statusOf = opts.statusOf || ((r) => r?.status)
   const retryAfterOf = opts.retryAfterOf || ((r) => r?.data?.retry_after_seconds)
   let res = await attempt()
+  let spentMs = 0
   for (let i = 1; i <= retries && SHED_CODES.has(statusOf(res)); i += 1) {
     const hint = Number(retryAfterOf(res))
     const waitMs = Number.isFinite(hint) && hint > 0
       ? Math.min(hint * 1000, WAIT_CAP_MS)
       : Math.min(1500 * i, WAIT_CAP_MS)
+    if (spentMs + waitMs > WAIT_TOTAL_BUDGET_MS) break
+    spentMs += waitMs
     console.log(
       `  … ${label}: ${what} shed (HTTP ${statusOf(res)}); backing off ${Math.round(waitMs / 1000)}s ` +
         `(retry ${i}/${retries})`,

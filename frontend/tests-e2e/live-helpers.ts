@@ -30,6 +30,12 @@ const RETRY_AFTER_CAP_MS = 75_000
 // the whole 12-minute globalTimeout in two tests. One honored 60s wait clears the login window, so
 // this only has to allow one, and it keeps the worst case inside the 180s per-test timeout.
 const RETRY_AFTER_TOTAL_BUDGET_MS = 90_000
+// The platform sheds with two codes, and both carry a Retry-After: 429 from the rate limiters and
+// 503 from self-heal load shedding. scripts/lib/scan_intake.mjs has always treated them as one set;
+// this side only ever retried 429, so a 503 fell through to `apiLogin`'s non-success check and
+// failed the run on a back-off the server expected us to wait out. Anything else — 401, 500 — still
+// passes straight through and fails fast.
+const isShed = (status: number) => status === 429 || status === 503
 
 /**
  * Retry a live-stack API call while the platform sheds it (429). The live E2E drives ALL browser +
@@ -44,7 +50,7 @@ export async function apiRequestWithRetry(
 ): Promise<APIResponse> {
   let r = await fn()
   let spentMs = 0
-  for (let attempt = 0; attempt < retries && r.status() === 429; attempt += 1) {
+  for (let attempt = 0; attempt < retries && isShed(r.status()); attempt += 1) {
     const ra = Number(r.headers()['retry-after'])
     const waitMs = Number.isFinite(ra) && ra > 0
       ? Math.min(ra * 1000, RETRY_AFTER_CAP_MS)
@@ -183,7 +189,7 @@ export async function uiLogin(page: Page) {
   }
   let loginResp = await submitOnce()
   let shedSpentMs = 0
-  for (let attempt = 0; attempt < 3 && (loginResp.status() === 429 || loginResp.status() === 503); attempt += 1) {
+  for (let attempt = 0; attempt < 3 && isShed(loginResp.status()); attempt += 1) {
     const ra = Number(loginResp.headers()['retry-after'])
     const waitMs = Number.isFinite(ra) && ra > 0
       ? Math.min(ra * 1000, RETRY_AFTER_CAP_MS)
