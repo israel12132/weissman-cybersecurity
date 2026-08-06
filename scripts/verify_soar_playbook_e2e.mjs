@@ -9,6 +9,8 @@
  *     node scripts/verify_soar_playbook_e2e.mjs
  */
 
+import { retryLogin } from './lib/scan_intake.mjs';
+
 const BASE = process.env.WEISSMAN_SMOKE_BASE_URL || 'http://127.0.0.1:18000';
 const EMAIL = process.env.WEISSMAN_SMOKE_LOGIN_EMAIL || process.env.WEISSMAN_ADMIN_EMAIL || 'admin@localhost';
 const PASSWORD = process.env.WEISSMAN_SMOKE_LOGIN_PASSWORD || process.env.WEISSMAN_ADMIN_PASSWORD || 'changeme';
@@ -24,7 +26,11 @@ const REQUIRED_ADAPTERS = [
   'servicenow',
 ];
 
-async function api(path, options = {}) {
+// Status-preserving fetch. `api` below throws on any non-2xx, which is the right default for this
+// contract's assertions but destroys the one thing a shed response is for: its status and
+// Retry-After hint. Callers that must distinguish "shed, retry" from "genuinely failed" go through
+// this instead and decide for themselves.
+async function apiRaw(path, options = {}) {
   const response = await fetch(`${BASE}${path}`, options);
   const rawText = await response.text();
   let body = rawText;
@@ -33,6 +39,11 @@ async function api(path, options = {}) {
   } catch {
     /* keep text */
   }
+  return { response, body };
+}
+
+async function api(path, options = {}) {
+  const { response, body } = await apiRaw(path, options);
   if (!response.ok) {
     throw new Error(`${path} HTTP ${response.status}: ${typeof body === 'string' ? body : JSON.stringify(body)}`);
   }
@@ -40,11 +51,17 @@ async function api(path, options = {}) {
 }
 
 async function login() {
-  const res = await api('/api/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
-  });
+  const { response, body: res } = await retryLogin(
+    () => apiRaw('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+    }),
+    { statusOf: (r) => r?.response?.status, retryAfterOf: (r) => r?.body?.retry_after_seconds },
+  );
+  if (!response.ok) {
+    throw new Error(`/api/login HTTP ${response.status}: ${typeof res === 'string' ? res : JSON.stringify(res)}`);
+  }
   const token = res.access_token || res.token;
   if (!token) {
     throw new Error('login did not return access_token');

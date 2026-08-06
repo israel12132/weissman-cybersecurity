@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { GROUP_SMOKE_PLAN, FINDINGS_E2E_PLAN, collectApprovedDomains } from './lib/group_smoke_plan.mjs'
-import { retryScanIntake } from './lib/scan_intake.mjs'
+import { retryScanIntake, retryLogin } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -110,9 +110,9 @@ async function findingsForEngine(token, clientId, engine) {
 }
 
 async function login() {
-  const r = await api('POST', '/api/login', {
+  const r = await retryLogin(() => api('POST', '/api/login', {
     body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
-  })
+  }))
   return r.status === 200 ? r.data?.access_token || null : null
 }
 

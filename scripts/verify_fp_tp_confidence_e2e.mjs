@@ -4,6 +4,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { retryLogin } from './lib/scan_intake.mjs'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
@@ -51,9 +52,9 @@ async function main() {
   console.log(`verify_fp_tp_confidence_e2e: ${BASE}`)
   if (!PASSWORD) { fail('credentials'); process.exit(1) }
 
-  const login = await api('POST', '/api/login', {
+  const login = await retryLogin(() => api('POST', '/api/login', {
     body: { email: EMAIL, password: PASSWORD, tenant_slug: TENANT },
-  })
+  }))
   const token = login.data?.access_token
   if (login.status !== 200 || !token) { fail('login'); process.exit(1) }
   ok('login', EMAIL)
