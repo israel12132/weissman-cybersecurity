@@ -1,15 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker, Line } from 'react-simple-maps'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 import { useWarRoomSound } from '../../hooks/useWarRoomSound'
 import { stableGeoFromLabel } from '../../lib/stableGeoFromLabel'
 import { apiFetch } from '../../utils/apiFetch'
-// Vendored locally (see world-atlas dependency) so the map needs no external
-// CDN — keeps cdn.jsdelivr.net out of the CSP connect-src and works offline.
-import worldGeography from 'world-atlas/countries-110m.json'
+import GeoWorldMap, { GeoMarker, GeoLine } from '../ui/GeoWorldMap'
 
 const NS = 'components.cockpitWidgets.satelliteDroneMap'
 const US_CENTER = [37.09, -95.71]
@@ -137,99 +134,88 @@ export default function SatelliteDroneMap() {
       transition={{ duration: 0.4 }}
     >
       <div className="absolute inset-0">
-        <ComposableMap
+        <GeoWorldMap
           projection="geoMercator"
-          projectionConfig={{ scale: 147 }}
+          projectionScale={147}
+          center={center}
+          zoom={zoom}
+          geographyFill="#0f172a"
+          geographyStroke="rgba(71, 85, 105, 0.4)"
+          geographyStrokeWidth={0.4}
+          geographyStyle={{ outline: 'none' }}
           style={{ width: '100%', height: '100%' }}
         >
-          <ZoomableGroup center={center} zoom={zoom}>
-            <Geographies geography={worldGeography}>
-              {({ geographies }) =>
-                geographies.map((geo) => (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill="#0f172a"
-                    stroke="rgba(71, 85, 105, 0.4)"
-                    strokeWidth={0.4}
-                    style={{ outline: 'none' }}
-                  />
-                ))
-              }
-            </Geographies>
-            {targetCoordsList.length > 1 && (
-              <Line
-                coordinates={[
-                  [(usCenter || US_CENTER)[1], (usCenter || US_CENTER)[0]],
-                  // targetCoordsList already holds [lng, lat] (from geoForTarget),
-                  // the order react-simple-maps expects — same as the markers below.
-                  ...targetCoordsList,
-                ]}
-                stroke="#22d3ee"
-                strokeWidth={1}
-                strokeDasharray="4 3"
-                strokeOpacity={0.6}
-                fill="none"
-              />
+          {targetCoordsList.length > 1 && (
+            <GeoLine
+              coordinates={[
+                [(usCenter || US_CENTER)[1], (usCenter || US_CENTER)[0]],
+                // targetCoordsList already holds [lng, lat] (from geoForTarget),
+                // the order the map expects — same as the markers below.
+                ...targetCoordsList,
+              ]}
+              stroke="#22d3ee"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+              strokeOpacity={0.6}
+            />
+          )}
+          <GeoMarker coordinates={usMapCenter}>
+            <motion.circle
+              r={4}
+              fill="#22d3ee"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            />
+            <circle r={6} fill="none" stroke="#22d3ee" strokeWidth={1} opacity={0.6} />
+          </GeoMarker>
+          {targetCoordsList.map((coord, idx) => (
+            <GeoMarker key={`t-${idx}`} coordinates={coord}>
+              <circle r={3} fill="#f97316" fillOpacity={0.9} stroke="#f97316" strokeWidth={1} />
+            </GeoMarker>
+          ))}
+          <AnimatePresence>
+            {targetCoord && (
+              <GeoMarker key="target" coordinates={targetCoord}>
+                <motion.circle
+                  r={5}
+                  fill="#f97316"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.5, type: 'spring' }}
+                />
+                <circle r={8} fill="none" stroke="#f97316" strokeWidth={1.5} opacity={0.5} />
+              </GeoMarker>
             )}
-            <Marker coordinates={usMapCenter}>
-              <motion.circle
-                r={4}
-                fill="#22d3ee"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              />
-              <circle r={6} fill="none" stroke="#22d3ee" strokeWidth={1} opacity={0.6} />
-            </Marker>
-            {targetCoordsList.map((coord, idx) => (
-              <Marker key={`t-${idx}`} coordinates={coord}>
-                <circle r={3} fill="#f97316" fillOpacity={0.9} stroke="#f97316" strokeWidth={1} />
-              </Marker>
-            ))}
-            <AnimatePresence>
-              {targetCoord && (
-                <Marker key="target" coordinates={targetCoord}>
-                  <motion.circle
-                    r={5}
-                    fill="#f97316"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.5, type: 'spring' }}
-                  />
-                  <circle r={8} fill="none" stroke="#f97316" strokeWidth={1.5} opacity={0.5} />
-                </Marker>
-              )}
-            </AnimatePresence>
-            {mapZoomComplete && vulnMarkers.length > 0 && (
-              <>
-                {vulnMarkers.map((m, i) => {
-                  const dataGlitch = lastLatencyMs != null && lastLatencyMs > 500
-                  return (
-                    <Marker key={i} coordinates={m.coord}>
-                      <motion.g
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: i * 0.05 }}
-                        className={dataGlitch ? 'animate-glitch' : ''}
-                      >
-                        <circle r={6} fill="#ef4444" className="animate-pulse" />
-                        <circle
-                          r={10}
-                          fill="none"
-                          stroke="#ef4444"
-                          strokeWidth={2}
-                          opacity={0.6}
-                          style={{ filter: dataGlitch ? 'drop-shadow(0 0 12px #ef4444)' : 'drop-shadow(0 0 6px #ef4444)' }}
-                        />
-                      </motion.g>
-                    </Marker>
-                  )
-                })}
-              </>
-            )}
-          </ZoomableGroup>
-        </ComposableMap>
+          </AnimatePresence>
+          {mapZoomComplete && vulnMarkers.length > 0 && (
+            <>
+              {vulnMarkers.map((m, i) => {
+                const dataGlitch = lastLatencyMs != null && lastLatencyMs > 500
+                return (
+                  <GeoMarker key={i} coordinates={m.coord}>
+                    <motion.g
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={dataGlitch ? 'animate-glitch' : ''}
+                    >
+                      <circle r={6} fill="#ef4444" className="animate-pulse" />
+                      <circle
+                        r={10}
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        opacity={0.6}
+                        style={{ filter: dataGlitch ? 'drop-shadow(0 0 12px #ef4444)' : 'drop-shadow(0 0 6px #ef4444)' }}
+                      />
+                    </motion.g>
+                  </GeoMarker>
+                )
+              })}
+            </>
+          )}
+        </GeoWorldMap>
       </div>
       <div className="absolute bottom-2 left-2 text-[10px] font-mono text-white/50 uppercase tracking-wider">
         {statusLabel}
