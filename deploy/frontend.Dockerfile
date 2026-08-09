@@ -19,8 +19,11 @@ COPY shared ./shared
 COPY scripts ./scripts
 COPY frontend/package.json frontend/package-lock.json* ./frontend/
 RUN mkdir -p frontend/src/wasm
+    # Pin the CLI to the wasm-bindgen crate version in Cargo.lock (0.2.122). An unpinned
+    # `cargo install` picks the latest, which mismatches the compiled .wasm's schema and
+    # fails the build ("schema version mismatch") — a classic non-reproducible-build trap.
 RUN rustup target add wasm32-unknown-unknown \
-    && cargo install wasm-bindgen-cli --locked \
+    && cargo install wasm-bindgen-cli --locked --version 0.2.122 \
     && bash scripts/build-ui-provenance-wasm.sh \
     && bash scripts/build-ast-cap-wasm.sh
 

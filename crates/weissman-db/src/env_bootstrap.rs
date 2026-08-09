@@ -50,16 +50,37 @@ pub fn load_process_environment() {
         let _ = dotenvy::from_path_override(deploy);
     }
 
-    // Dev-only: metrics endpoint is fail-closed without WEISSMAN_METRICS_TOKEN (see observability.rs).
-    if std::env::var("WEISSMAN_METRICS_TOKEN")
-        .map(|s| s.trim().is_empty())
-        .unwrap_or(true)
+    // Dev-only convenience: give the metrics endpoint a token when none is set so local
+    // runs work. NEVER in production — a source-committed token would satisfy the
+    // WEISSMAN_METRICS_TOKEN startup guard with a publicly-known value, leaving /api/metrics
+    // readable by anyone. In production the guard must see the operator's real token (or
+    // fail closed).
+    if !is_production_env()
+        && std::env::var("WEISSMAN_METRICS_TOKEN")
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
     {
         std::env::set_var(
             "WEISSMAN_METRICS_TOKEN",
             "dev-metrics-token-32-bytes-minimum-xx",
         );
     }
+}
+
+/// Production detection mirroring weissman_core::tls_policy::is_production_environment.
+/// Duplicated (not imported) because weissman-db does not depend on weissman-core.
+fn is_production_env() -> bool {
+    ["WEISSMAN_ENV", "RUST_ENV", "NODE_ENV", "APP_ENV", "RAILS_ENV"]
+        .iter()
+        .any(|var| {
+            std::env::var(var)
+                .ok()
+                .map(|v| {
+                    let t = v.trim();
+                    t.eq_ignore_ascii_case("production") || t.eq_ignore_ascii_case("prod")
+                })
+                .unwrap_or(false)
+        })
 }
 
 /// True if the URL has a non-empty userinfo segment before `@`.

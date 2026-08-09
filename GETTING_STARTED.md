@@ -17,7 +17,7 @@
 
 ---
 
-## Quick start (~5 minutes)
+## Quick start
 
 **Production / customer deploy (one command):**
 
@@ -25,19 +25,30 @@
 ./start_weissman_live.sh --url https://your-company.example
 ```
 
+First boot compiles the Rust workspace and builds the frontend + WASM inside Docker, so
+budget **20–40 minutes** on a fresh host (subsequent boots reuse the images and are ~1 min).
+The launcher waits up to 45 min for health — raise `WEISSMAN_BOOT_TIMEOUT` (seconds) on a
+slow box.
+
 **Local dev (hot-reload UI):**
 
 ```bash
-cp PRODUCTION.env.template .env
-# Edit: WEISSMAN_JWT_SECRET, WEISSMAN_ADMIN_PASSWORD, DATABASE_URL, REDIS_URL
+# 1) Bring up just the datastores (compose service names, not host binaries):
+docker compose up -d postgres redis
 
-docker start weissman-postgres weissman-redis   # or: docker compose up -d postgres redis
-cargo build -p weissman-server
-./target/debug/weissman-server
+# 2) Point the server at them and run it (bare-metal path; DATABASE_URL is required):
+export DATABASE_URL=postgres://weissman_app:weissman_dev_secret@127.0.0.1:5432/weissman
+export REDIS_URL=redis://127.0.0.1:6379/0
+cargo run -p weissman-server        # or ./start_weissman.sh with .env.local
 
+# 3) Hot-reload UI (proxies /api → :8000):
 cd frontend && npm ci && npm run dev
 # → http://localhost:5173/command-center/login
 ```
+
+> The datastores are only reachable on the host if you publish their ports. The default
+> compose file `expose`s them on the internal network only; for local bare-metal dev add a
+> `ports:` mapping or run Postgres/Redis directly on the host.
 
 **Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` from `.env`.
 

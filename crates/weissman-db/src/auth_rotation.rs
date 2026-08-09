@@ -111,9 +111,36 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    match ro_url.as_deref().and_then(parse_pg_user_password) {
-        Some((user, pw)) => {
-            alter_role_password(&pool, &user, &pw).await?;
+    // Branch on whether a DSN is CONFIGURED, not on whether it carries a password. A
+    // peer-auth DSN (postgresql://weissman_ro@/db?host=/var/run/postgresql) is a valid,
+    // deliberate configuration with no password — it must NOT be treated as "unconfigured"
+    // and stripped of LOGIN, or /api/ask breaks on every boot.
+    match ro_url {
+        Some(url) => {
+            // Set the password only when the DSN carries one (peer-auth carries none).
+            if let Some((user, pw)) = parse_pg_user_password(&url) {
+                alter_role_password(&pool, &user, &pw).await?;
+            }
+            // Ensure the role can log in (a prior no-DSN boot may have stripped it).
+            let role = parse_pg_user(&url).unwrap_or_else(|| "weissman_ro".to_string());
+            if role.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                match sqlx::query(&format!("ALTER ROLE {role} LOGIN"))
+                    .execute(&pool)
+                    .await
+                {
+                    Ok(_) => tracing::info!(
+                        target: "auth_rotation",
+                        role = %role,
+                        "read-only NL->SQL role LOGIN ensured"
+                    ),
+                    Err(e) => tracing::warn!(
+                        target: "auth_rotation",
+                        role = %role,
+                        error = %e,
+                        "could not restore LOGIN on read-only role"
+                    ),
+                }
+            }
         }
         None => {
             // No read-only DSN configured. /api/ask is disabled anyway (no ro pool), so the
@@ -143,6 +170,29 @@ pub async fn sync_role_passwords_from_env_on_boot() -> Result<(), sqlx::Error> {
     }
 
     Ok(())
+}
+
+/// Parse just the role name from `postgresql://user[:password]@host/db` (password optional,
+/// unlike [`parse_pg_user_password`]). Used to ensure LOGIN on a peer-auth read-only DSN.
+fn parse_pg_user(url: &str) -> Option<String> {
+    let rest = url
+        .trim()
+        .strip_prefix("postgres://")
+        .or_else(|| url.trim().strip_prefix("postgresql://"))?;
+    let at = rest.find('@')?;
+    let userinfo = &rest[..at];
+    if userinfo.is_empty() {
+        return None;
+    }
+    let user = match userinfo.find(':') {
+        Some(colon) => &userinfo[..colon],
+        None => userinfo,
+    };
+    if user.is_empty() {
+        None
+    } else {
+        Some(user.to_string())
+    }
 }
 
 /// Apply `ALTER ROLE weissman_auth PASSWORD ...` when rotation env vars are set.

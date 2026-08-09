@@ -41,7 +41,14 @@ mkdir -p "${BIN_DIR}"
 
 BASE_URL="${WEISSMAN_SERVER%/}/install/binaries/${PLATFORM}"
 echo "[weissman-agent] downloading ${BASE_URL}/weissman-agent"
-curl -sSL --fail "${BASE_URL}/weissman-agent" -o "${BIN_PATH}.tmp"
+if ! curl -sSL --fail "${BASE_URL}/weissman-agent" -o "${BIN_PATH}.tmp"; then
+    echo "[weissman-agent] no agent binary published for platform '${PLATFORM}'." >&2
+    echo "  The server image ships the binary for its own architecture only. To offer this" >&2
+    echo "  platform, build it on the server (scripts/package_agent_binaries.sh cross-compiles" >&2
+    echo "  all Linux targets) and place it at \$WEISSMAN_AGENT_BIN_DIR/${PLATFORM}/weissman-agent." >&2
+    rm -f "${BIN_PATH}.tmp"
+    exit 4
+fi
 EXPECTED_SHA=$(curl -sSL --fail "${BASE_URL}/weissman-agent.sha256" | awk '{print $1}')
 ACTUAL_SHA=$(sha256sum "${BIN_PATH}.tmp" 2>/dev/null | awk '{print $1}')
 if [ -z "${ACTUAL_SHA}" ]; then

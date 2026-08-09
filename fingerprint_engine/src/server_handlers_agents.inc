@@ -20,23 +20,55 @@ fn agent_bin_root() -> std::path::PathBuf {
     std::path::PathBuf::from("./bin/agents")
 }
 
-fn resolve_agent_binary(platform: &str) -> std::path::PathBuf {
-    let platform = platform.trim().to_lowercase();
+/// `/install/binaries/:platform/weissman-agent` is a public, unauthenticated route, so
+/// `platform` is attacker-controlled and is used as a path segment under the agent-binary
+/// root. Accept only a conservative charset — no separators, no `..`, no NUL, no absolute
+/// paths — so a crafted segment cannot escape the root.
+fn sanitize_agent_platform(platform: &str) -> Option<String> {
+    let p = platform.trim().to_ascii_lowercase();
+    if p.is_empty() || p.len() > 64 {
+        return None;
+    }
+    if !p
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return None;
+    }
+    // "." and ".." pass the charset check above but are traversal, not platform names.
+    if p.chars().all(|c| c == '.') {
+        return None;
+    }
+    Some(p)
+}
+
+/// Locate the endpoint-agent binary for `platform`, or `None` when we have nothing safe and
+/// architecture-correct to serve (the caller turns that into a 404).
+fn resolve_agent_binary(platform: &str) -> Option<std::path::PathBuf> {
+    let platform = sanitize_agent_platform(platform)?;
     let root = agent_bin_root();
-    let sub = root.join(&platform);
-    let named = if platform.contains("windows") {
-        sub.join("weissman-agent.exe")
+    let file_name = if platform.contains("windows") {
+        "weissman-agent.exe"
     } else {
-        sub.join("weissman-agent")
+        "weissman-agent"
     };
+
+    let named = root.join(&platform).join(file_name);
     if named.is_file() {
-        return named;
+        return Some(named);
     }
-    if platform.contains("windows") {
-        root.join("weissman-agent.exe")
-    } else {
-        root.join("weissman-agent")
+
+    // Legacy flat layout (bare-metal dev, where agent_bin_root() resolves to
+    // target/release). Only serve it when the requested platform actually matches the
+    // architecture this process is running on — otherwise an aarch64 endpoint asking an
+    // x86-64 server would download an ELF it cannot execute.
+    if platform.contains(std::env::consts::ARCH) {
+        let flat = root.join(file_name);
+        if flat.is_file() {
+            return Some(flat);
+        }
     }
+    None
 }
 
 /// Return the bash installer. Path: GET /install/agent.sh.
@@ -61,20 +93,19 @@ async fn install_agent_ps1() -> Response {
 }
 
 async fn install_agent_binary(axum::extract::Path(platform): axum::extract::Path<String>) -> Response {
-    let file_path = resolve_agent_binary(&platform);
-    if !file_path.is_file() {
+    let Some(file_path) = resolve_agent_binary(&platform) else {
+        // `platform` is attacker-controlled: report it as an escaped JSON value only, never
+        // interpolated into a copy-pasteable shell command.
         return (
             StatusCode::NOT_FOUND,
             Json(json!({
                 "ok": false,
-                "detail": format!(
-                    "Agent binary not found for platform '{}'. Build with: cargo build -p weissman-agent --release && mkdir -p bin/agents/{platform} && cp target/release/weissman-agent bin/agents/{platform}/",
-                    platform
-                ),
+                "detail": format!("No agent binary published for platform '{platform}'."),
+                "hint": "Build it with `cargo build -p weissman-agent --release` and install it at $WEISSMAN_AGENT_BIN_DIR/<platform>/weissman-agent, or run scripts/package_agent_binaries.sh to cross-compile every supported target.",
             })),
         )
             .into_response();
-    }
+    };
     match tokio::fs::read(&file_path).await {
         Ok(bytes) => {
             let mut h = axum::http::HeaderMap::new();
@@ -99,10 +130,9 @@ async fn install_agent_binary(axum::extract::Path(platform): axum::extract::Path
 async fn install_agent_binary_sha256(
     axum::extract::Path(platform): axum::extract::Path<String>,
 ) -> Response {
-    let file_path = resolve_agent_binary(&platform);
-    if !file_path.is_file() {
+    let Some(file_path) = resolve_agent_binary(&platform) else {
         return (StatusCode::NOT_FOUND, "binary missing").into_response();
-    }
+    };
     match tokio::fs::read(&file_path).await {
         Ok(bytes) => {
             let mut h = sha2::Sha256::new();

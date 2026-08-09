@@ -41,11 +41,35 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
         return;
     };
 
-    let password_ok = !hash.is_empty() && matches!(bcrypt::verify(&password, &hash), Ok(true));
-    if password_ok && is_active {
+    // Only WRITE the password hash during first-boot bootstrap (when there is no usable
+    // hash yet). Re-hashing from WEISSMAN_ADMIN_PASSWORD on every boot would silently
+    // revert a password the operator changed in the UI back to the env value — directly
+    // contradicting the launcher's "change the admin password after first login" guidance,
+    // and reviving the original password (which is echoed in the boot banner and stored in
+    // .env) forever. A disabled account is still re-activated for recovery, but its
+    // existing credential is preserved.
+    if !hash.is_empty() {
+        if is_active {
+            return; // healthy account — never touch the operator's chosen password
+        }
+        if let Err(e) = sqlx::query("UPDATE users SET is_active = true WHERE id = $1")
+            .bind(user_id)
+            .execute(app_pool)
+            .await
+        {
+            tracing::warn!(target: "auth_bootstrap", user_id, error = %e, "admin reactivation failed");
+            return;
+        }
+        tracing::info!(
+            target: "auth_bootstrap",
+            user_id,
+            email = %email,
+            "Re-activated disabled admin (existing password preserved)"
+        );
         return;
     }
 
+    // First boot: no credential yet — seed it from WEISSMAN_ADMIN_PASSWORD.
     let new_hash = match bcrypt::hash(&password, 12) {
         Ok(h) => h,
         Err(e) => {
@@ -61,7 +85,7 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
             .execute(app_pool)
             .await
     {
-        tracing::warn!(target: "auth_bootstrap", user_id, error = %e, "admin credential sync update failed");
+        tracing::warn!(target: "auth_bootstrap", user_id, error = %e, "admin credential bootstrap failed");
         return;
     }
 
@@ -69,7 +93,6 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
         target: "auth_bootstrap",
         user_id,
         email = %email,
-        reactivated = !is_active,
-        "Admin credentials synced from WEISSMAN_ADMIN_* env"
+        "Admin credential bootstrapped from WEISSMAN_ADMIN_* env (first boot)"
     );
 }

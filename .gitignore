@@ -77,3 +77,8 @@ dump.rdb
 
 # Stale member lock — the workspace build uses the root Cargo.lock (see deploy/*.Dockerfile).
 fingerprint_engine/Cargo.lock
+
+# Alertmanager delivery secrets (populate locally; never commit)
+monitoring/alertmanager-secrets/*
+!monitoring/alertmanager-secrets/README.md
+!monitoring/alertmanager-secrets/.gitkeep

@@ -69,6 +69,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
+      # Read-only role for "Ask Weissman" (NL->SQL, /api/ask). SELECT-only, 15s statement
+      # timeout, RLS-scoped (migration 20260608140300). Without it the endpoint returns 503.
+      WEISSMAN_READ_ONLY_DATABASE_URL: postgresql://${DB_RO_USER:-weissman_ro}:${DB_RO_PASSWORD:-weissman_ro_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_MIGRATIONS_DIR: /srv/migrations
       REDIS_URL: redis://redis:6379/0
@@ -77,6 +80,9 @@ services:
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env (openssl rand -base64 48)}"
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
+      # Zero-trust job bus HMAC signing (server signs, worker verifies — they MUST match).
+      # Required >=32 chars in production; security_startup.rs fails the boot closed without it.
+      WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_ADMIN_EMAIL: ${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
       WEISSMAN_ADMIN_PASSWORD: "${WEISSMAN_ADMIN_PASSWORD:?Set WEISSMAN_ADMIN_PASSWORD in .env}"
       # HTTPS-only session cookies in production (WEISSMAN_ENV=production); default 0 for local http://localhost
@@ -86,7 +92,10 @@ services:
       # Production: set WEISSMAN_ENV=production + WEISSMAN_METRICS_TOKEN (≥32 chars) in `.env`
       WEISSMAN_ENV: ${WEISSMAN_ENV:-}
       WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:-}
-      # Optional first-boot master (`db::MASTER_BOOTSTRAP_EMAIL`); hash at runtime from password or inject bcrypt hash
+      # Optional first-boot master admin. All THREE must reach the container or the feature
+      # is inert: crates/weissman-db/src/lib.rs skips bootstrap unless WEISSMAN_MASTER_BOOTSTRAP_EMAIL
+      # is set together with a password or bcrypt hash. (EMAIL was previously never plumbed.)
+      WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ${WEISSMAN_MASTER_BOOTSTRAP_EMAIL:-}
       WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
       WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}
       PORT: "8000"
@@ -125,6 +134,8 @@ services:
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}"
+      # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
+      WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
     depends_on:
       backend:
@@ -201,18 +212,26 @@ services:
           echo "WARN: WEISSMAN_METRICS_TOKEN unset — create /etc/prometheus/metrics_token manually for scrape auth" >&2
           : > /etc/prometheus/metrics_token
         fi
-        WEB_ARGS=""
-        if [ -s /etc/prometheus/web.yml ]; then
-          WEB_ARGS="--web.config.file=/etc/prometheus/web.yml"
+        # Require a REGULAR non-empty file. `[ -s ]` alone is true for a directory (its
+        # size is non-zero), and Docker silently creates web.yml as a directory when the
+        # host bind source is missing — which used to launch Prometheus with
+        # --web.config.file pointing at a directory, and it exited 1 in a crash loop.
+        # Fail closed: refuse to start unauthenticated rather than expose :9090 wide open.
+        if [ ! -f /etc/prometheus/web.yml ] || [ ! -s /etc/prometheus/web.yml ]; then
+          echo "FATAL: /etc/prometheus/web.yml is missing or empty — run 'scripts/sync_monitoring_admin.sh prometheus' before starting the monitoring profile (the launcher does this in preflight)." >&2
+          exit 1
         fi
         exec /bin/prometheus \
           --config.file=/etc/prometheus/prometheus.yml \
           --storage.tsdb.path=/prometheus \
           --storage.tsdb.retention.time=30d \
-          --web.enable-lifecycle \
-          $${WEB_ARGS}
+          --web.config.file=/etc/prometheus/web.yml
+    # Bound to loopback: the banner advertises 127.0.0.1:9090, and Prometheus exposes the
+    # full metric set (tenant ids, host telemetry, DB internals). Publishing on all
+    # interfaces would expose it to anyone who can reach the host. --web.enable-lifecycle
+    # is intentionally dropped (nothing POSTs /-/reload; it would allow remote /-/quit).
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     depends_on:
       - backend
     restart: unless-stopped
@@ -230,8 +249,11 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${WEISSMAN_ADMIN_PASSWORD:-weissman-grafana-dev}}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: http://localhost:3000
+    # Loopback only, matching the advertised URL. Grafana has its own login, but keeping
+    # it off public interfaces by default is safer; front it with the reverse proxy/TLS
+    # (or change this mapping) to expose it.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - weissman_grafana:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -250,6 +272,14 @@ services:
     profiles: [monitoring]
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Persist silences + the notification log, else they are lost on every restart
+      # (an operator's "silence this alert for 4h" would evaporate).
+      - weissman_alertmanager:/alertmanager
+      # Delivery secrets as files (api_url_file / routing_key_file / url_file). The config
+      # loads and Alertmanager starts even when these are empty/absent; drop real values
+      # in to activate Slack/PagerDuty/heartbeat. Previously the config used un-substituted
+      # ${SLACK_WEBHOOK_URL} placeholders with no envsubst step, so it crash-looped on boot.
+      - ./monitoring/alertmanager-secrets:/etc/alertmanager/secrets:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     expose:
@@ -323,4 +353,5 @@ volumes:
   weissman_pg:
   weissman_prometheus:
   weissman_grafana:
+  weissman_alertmanager:
   weissman_tempo:

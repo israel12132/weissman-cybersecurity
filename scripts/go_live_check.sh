@@ -75,13 +75,24 @@ done
 [[ -f deploy/k8s/network-policies.yaml ]] && ok "network policies manifest" || bad "network policies"
 
 section "Production secrets contract"
-for var in WEISSMAN_JWT_SECRET WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET WEISSMAN_METRICS_TOKEN; do
+# Every secret the prod overlay hard-requires (${VAR:?}) must be LISTED in the template so
+# the manual `cp PRODUCTION.env.template .env` path has a line to fill. (Empty is correct
+# in the template — the launcher generates the values.)
+for var in WEISSMAN_JWT_SECRET WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET \
+           WEISSMAN_METRICS_TOKEN REDIS_PASSWORD POSTGRES_PASSWORD DB_APP_PASSWORD DB_AUTH_PASSWORD; do
   if grep -q "^${var}=" PRODUCTION.env.template; then
     ok "PRODUCTION.env.template lists $var"
   else
     bad "PRODUCTION.env.template missing $var"
   fi
 done
+# If a real .env is present (a deployed host), also assert the secrets are non-empty.
+if [[ -f .env ]]; then
+  for var in WEISSMAN_JWT_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET REDIS_PASSWORD; do
+    val="$(grep -E "^${var}=" .env | tail -1 | cut -d= -f2-)"
+    if [[ -n "${val// }" ]]; then ok ".env has a value for $var"; else bad ".env has an EMPTY $var"; fi
+  done
+fi
 
 section "Database migrations"
 if [[ -d crates/weissman-db/migrations ]] && ls crates/weissman-db/migrations/*.sql >/dev/null 2>&1; then

@@ -1,6 +1,14 @@
 # Alertmanager configuration for Weissman Cybersecurity
-# Set SLACK_WEBHOOK_URL and PAGERDUTY_ROUTING_KEY env vars for live alerting.
 # https://prometheus.io/docs/alerting/latest/configuration/
+#
+# Delivery secrets are read from files under /etc/alertmanager/secrets (mounted from
+# ./monitoring/alertmanager-secrets). This config is VALID and Alertmanager starts even
+# when those files are empty/absent, so the default stack boots with alerting inert;
+# populate the files to turn each channel on. (The previous ${SLACK_WEBHOOK_URL}-style
+# placeholders were never substituted by any step and crash-looped the container.)
+#   slack_webhook_url        -> #security-alerts / #security-warnings Slack Incoming Webhook
+#   pagerduty_routing_key    -> PagerDuty Events API v2 routing key
+#   watchdog_heartbeat_url   -> external dead-man's-switch ping URL
 
 global:
   resolve_timeout: 5m
@@ -34,16 +42,15 @@ receivers:
 
   - name: 'critical-alerts'
     slack_configs:
-      - api_url: '${SLACK_WEBHOOK_URL}'
+      - api_url_file: '/etc/alertmanager/secrets/slack_webhook_url'
         channel: '#security-alerts'
         title: '[CRITICAL] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
         send_resolved: true
-    # PagerDuty paging for critical alerts. PAGERDUTY_ROUTING_KEY is substituted at
-    # deploy time (same envsubst pattern as SLACK_WEBHOOK_URL); leave it unset to run
+    # PagerDuty paging for critical alerts. Leave the routing-key file empty to run
     # Slack-only.
     pagerduty_configs:
-      - routing_key: '${PAGERDUTY_ROUTING_KEY}'
+      - routing_key_file: '/etc/alertmanager/secrets/pagerduty_routing_key'
         description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         severity: 'critical'
         send_resolved: true
@@ -53,12 +60,12 @@ receivers:
     # (healthchecks.io, Dead Man's Snitch, or a PagerDuty heartbeat integration).
     # The endpoint must alarm when it STOPS receiving this ping.
     webhook_configs:
-      - url: '${WATCHDOG_HEARTBEAT_URL}'
+      - url_file: '/etc/alertmanager/secrets/watchdog_heartbeat_url'
         send_resolved: false
 
   - name: 'warning-alerts'
     slack_configs:
-      - api_url: '${SLACK_WEBHOOK_URL}'
+      - api_url_file: '/etc/alertmanager/secrets/slack_webhook_url'
         channel: '#security-warnings'
         title: '[WARNING] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'

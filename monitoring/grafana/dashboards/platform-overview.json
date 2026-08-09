@@ -19,8 +19,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
-          "legendFormat": "{{endpoint}}",
+          "expr": "sum(rate(http_requests_total[1m])) by (path)",
+          "legendFormat": "{{path}}",
           "datasource": { "type": "prometheus", "uid": "DS_PROMETHEUS" }
         }
       ],
@@ -96,8 +96,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "targets": [
         {
-          "expr": "sum(rate(weissman_rate_limit_violations_total[1m])) by (key_prefix) * 60",
-          "legendFormat": "{{key_prefix}}",
+          "expr": "sum(rate(weissman_rate_limit_violations_total[1m])) by (path) * 60",
+          "legendFormat": "{{path}}",
           "datasource": { "type": "prometheus", "uid": "DS_PROMETHEUS" }
         }
       ],

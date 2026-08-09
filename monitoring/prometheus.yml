@@ -52,7 +52,10 @@ scrape_configs:
     static_configs:
       - targets:
           - http://backend:8000/api/health
-          - http://gateway:80/status
+          # nginx-unprivileged listens on 8080 INSIDE the container; "80:8080" in compose is
+          # only the host publish mapping, so on the compose network it is gateway:8080.
+          # /command-center/ is the SPA shell — a real gateway-served route, unlike /status.
+          - http://gateway:8080/command-center/
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

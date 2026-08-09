@@ -46,6 +46,18 @@ jobs:
       - name: Check fingerprint_engine ↔ weissman-db migrations
         run: bash scripts/check-migration-sync.sh
 
+  launcher-contract:
+    name: Production launcher contract
+    runs-on: ubuntu-latest
+    # Nothing else in CI exercises start_weissman_live.sh — which is exactly how a
+    # swallowed CLI flag and a never-generated production secret both shipped. These
+    # checks are static + stubbed: no Docker daemon, no containers, no network.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Launcher flag / secret / bind-mount contract
+        run: bash scripts/test_launcher_contract.sh
+
   python-audit:
     name: Python — pip-audit & lint
     runs-on: ubuntu-latest

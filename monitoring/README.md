@@ -25,9 +25,9 @@ job `weissman-backend`).
 ## Available metrics (real names)
 
 ### HTTP / request
-- `http_requests_total{endpoint, method, status}` — request counter (5xx = `status=~"5.."`).
-- `http_request_duration_seconds_bucket{endpoint, le}` — latency histogram (use
-  `histogram_quantile(0.99, …)` for P99).
+- `http_requests_total{path, method, status}` — request counter (5xx = `status=~"5.."`).
+- `http_request_duration_seconds_bucket{path, le}` — latency histogram (use
+  `histogram_quantile(0.99, …)` for P99). NOTE: the route label is `path`, not `endpoint`.
 
 ### Database & runtime
 - `weissman_db_pool_size`, `weissman_db_pool_idle` — connection-pool gauges.

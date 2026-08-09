@@ -1,0 +1,25 @@
+# Throwaway overlay for an ISOLATED live-boot verification of the fixed stack.
+# Distinct image tags + alternate host ports so it never collides with a running
+# `weissman-cybersecurity` deployment. Run under its own project name:
+#   COMPOSE_PROJECT_NAME=weissman-verify docker compose \
+#     -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.verify.yml \
+#     --profile monitoring up -d --build
+# Tear down with: docker compose -p weissman-verify ... down -v
+#
+# NOTE: `!override` REPLACES the inherited ports list (Compose merges lists by append
+# otherwise, which would re-add the production host ports and collide).
+services:
+  backend:
+    image: weissman-backend:verify
+  worker:
+    image: weissman-backend:verify
+  gateway:
+    image: weissman-gateway:verify
+    ports: !override
+      - "8090:8080"
+  prometheus:
+    ports: !override
+      - "127.0.0.1:9099:9090"
+  grafana:
+    ports: !override
+      - "127.0.0.1:3001:3000"

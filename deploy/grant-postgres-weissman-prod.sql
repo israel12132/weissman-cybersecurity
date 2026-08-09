@@ -1,19 +1,23 @@
--- Production Postgres role grants + password rotation (run as superuser after migrations).
--- NEVER leave weissman_dev_secret / weissman_auth_dev in production DATABASE_URL.
-
--- 1) Rotate passwords (generate: openssl rand -base64 32)
--- ALTER ROLE weissman_app PASSWORD 'STRONG_APP_PASSWORD';
--- ALTER ROLE weissman_auth PASSWORD 'STRONG_AUTH_PASSWORD';
--- ALTER ROLE weissman_ro PASSWORD 'STRONG_RO_PASSWORD';
+-- Production Postgres role grants (run as superuser after migrations).
+--
+-- Password rotation is AUTOMATIC on boot: weissman_db::auth_rotation::
+-- sync_role_passwords_from_env_on_boot aligns weissman_app / weissman_auth / weissman_ro
+-- with the passwords in DATABASE_URL / WEISSMAN_AUTH_DATABASE_URL /
+-- WEISSMAN_READ_ONLY_DATABASE_URL using WEISSMAN_MIGRATE_URL (superuser). You no longer
+-- need to hand-run ALTER ROLE ... PASSWORD; just set strong values in .env.
+--
+-- weissman_app is the RLS-scoped application role. This file grants ONLY what that role
+-- needs. It deliberately does NOT grant anything to weissman_auth or weissman_ro: those
+-- roles' privileges are owned end-to-end by the sqlx migrations (e.g. the auth-hardening
+-- migrations REVOKE direct SELECT on public.users from the BYPASSRLS weissman_auth role,
+-- and the NL->SQL migration whitelists exactly the tables weissman_ro may read). Widening
+-- them here would silently undo that hardening — so we don't.
 
 GRANT CONNECT ON DATABASE weissman TO weissman_app, weissman_auth;
 GRANT USAGE ON SCHEMA public TO weissman_app, weissman_auth;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO weissman_app;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO weissman_app;
 
--- weissman_auth: login lookups only (BYPASSRLS via migration 20250328120004)
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO weissman_auth;
-
--- Default privileges for future migrations
+-- Default privileges for future migrations (weissman_app only — see note above).
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO weissman_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO weissman_app;

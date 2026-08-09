@@ -20,10 +20,13 @@ groups:
           summary: "High HTTP 5xx error rate"
           description: "5xx error rate is {{ $value | humanizePercentage }} (threshold: 5%) over the last 5 minutes"
 
-      # High request latency P99
+      # High request latency P99.
+      # NOTE: the histogram is labeled `path` (fingerprint_engine/src/observability.rs),
+      # NOT `endpoint` — querying `endpoint` collapsed every route into one empty-labeled
+      # series and made the scan filter below match nothing.
       - alert: HighRequestLatency
         expr: |
-          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[10m])) by (le, endpoint))
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[10m])) by (le, path))
           > 5
         for: 10m
         labels:
@@ -31,12 +34,12 @@ groups:
           category: performance
         annotations:
           summary: "High P99 request latency"
-          description: "P99 latency for {{ $labels.endpoint }} is {{ $value }}s (threshold: 5s)"
+          description: "P99 latency for {{ $labels.path }} is {{ $value }}s (threshold: 5s)"
 
       # Scan duration P99 high (uses the scan-specific histogram if emitted)
       - alert: SlowScans
         expr: |
-          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{endpoint=~".*/scan.*"}[10m])) by (le))
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{path=~".*/scan.*"}[10m])) by (le))
           > 300
         for: 10m
         labels:
@@ -68,16 +71,24 @@ groups:
           summary: "Weissman backend is down"
           description: "The backend target {{ $labels.instance }} has been unreachable for 2 minutes"
 
-      # Worker process down
-      - alert: WorkerDown
-        expr: up{job="weissman-worker"} == 0
-        for: 5m
-        labels:
-          severity: critical
-          category: availability
-        annotations:
-          summary: "Weissman worker is down"
-          description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes; scan jobs may be stalled"
+      # Worker process down.
+      # DISABLED: the weissman-worker binary exposes no /metrics endpoint and there is no
+      # `weissman-worker` scrape job in prometheus.yml, so `up{job="weissman-worker"}` never
+      # has a series and this rule can NEVER fire — it was silent "coverage" that masked a
+      # real gap. To restore genuine worker alerting, give the worker a metrics listener,
+      # add a matching scrape job, then re-enable an `up{job="weissman-worker"} == 0` rule.
+      # Until then the worker's liveness is covered by its Docker healthcheck
+      # (docker-compose.yml: cat /proc/1/comm) and by the stalled-jobs signal below.
+      #
+      # - alert: WorkerDown
+      #   expr: up{job="weissman-worker"} == 0
+      #   for: 5m
+      #   labels:
+      #     severity: critical
+      #     category: availability
+      #   annotations:
+      #     summary: "Weissman worker is down"
+      #     description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes; scan jobs may be stalled"
 
       # Prometheus self-monitoring
       - alert: PrometheusConfigReloadFailed

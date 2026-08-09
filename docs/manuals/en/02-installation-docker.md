@@ -54,9 +54,22 @@ POSTGRES_PASSWORD=<strong>
 
 ### 2. Build and start
 
+**Recommended (one command):**
+
 ```bash
-docker compose up -d --build
+./start_weissman_live.sh --url https://your.domain
 ```
+
+This generates secrets, applies the production overlay, and runs the health checks for you.
+
+**Manual compose** — you MUST include the production overlay, or you get dev defaults
+(weak DB/JWT secrets, no Redis password, production guards disabled):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile monitoring up -d --build
+```
+
+Plain `docker compose up -d --build` (base file only) is for local development, not production.
 
 Services started:
 - `postgres` — pgvector/pgvector:pg16
@@ -114,9 +127,13 @@ Full list: `PRODUCTION.env.template`, manual 06.
 
 ```bash
 git pull
-docker compose up -d --build
-docker compose logs backend | grep -i migrat
+# Keep the production overlay on upgrade — bare `docker compose up` would strip Redis auth
+# and the production guards from a hardened deployment.
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile monitoring up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs backend | grep -i migrat
 ```
+
+Or simply re-run `./start_weissman_live.sh` (it carries the correct `-f` set).
 
 Migrations run idempotently at backend start.
 

@@ -14,20 +14,52 @@
 #   ./start_weissman_live.sh status
 #   ./start_weissman_live.sh logs [service]
 #
-# Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended, ports 80 + 3000 free.
+# Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended,
+# ports 80 + 3000 + 9090 free (9090/3000 only when monitoring is enabled).
 # =============================================================================
 set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Weissman LIVE — one command, full production stack.
+
+Usage:
+  ./start_weissman_live.sh [start] [flags]   first boot / re-deploy (generates .env secrets)
+  ./start_weissman_live.sh stop              stop the stack, keep data volumes
+  ./start_weissman_live.sh reset             stop AND destroy all data volumes
+  ./start_weissman_live.sh status            show container status + API health
+  ./start_weissman_live.sh logs [service]    follow logs (all services, or one)
+
+Flags (start only):
+  --url https://your.domain   public HTTPS origin the reverse proxy serves (WEISSMAN_PUBLIC_BASE_URL)
+  --email admin@your.domain   admin login address (first boot only)
+  --no-monitoring             skip Prometheus / Grafana / Alertmanager
+  --no-build                  reuse existing images instead of rebuilding
+  -h, --help                  this message
+
+Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended,
+ports 80 + 3000 + 9090 free (3000/9090 only with monitoring enabled).
+USAGE
+}
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.prod.yml)
 COMPOSE=(docker compose "${COMPOSE_FILES[@]}")
-PROFILES=(--profile monitoring)
+# Built by resolve_profiles() once we know which optional stacks are on.
+PROFILES=()
 
 PUBLIC_URL="${WEISSMAN_PUBLIC_BASE_URL:-}"
 ADMIN_EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
+# Captured from the shell BEFORE .env is sourced. `source .env` would otherwise overwrite an
+# operator's `WEISSMAN_OAST_DOMAIN=... ./start_weissman_live.sh` with the template's blank
+# line, enabling the oast profile but starting the listener with an empty domain.
+OAST_DOMAIN_CLI="${WEISSMAN_OAST_DOMAIN:-}"
 WITH_MONITORING=1
+# OAST out-of-band listener: on automatically when WEISSMAN_OAST_DOMAIN is set (it needs a
+# DNS zone the operator delegates), off otherwise.
+WITH_OAST=0
 SKIP_BUILD=0
 
 if [[ $# -gt 0 && "$1" =~ ^(start|stop|status|logs|reset)$ ]]; then
@@ -39,6 +71,23 @@ fi
 
 log()  { printf '[weissman-live] %s\n' "$*"; }
 die()  { log "ERROR: $*" >&2; exit 1; }
+
+# Recompute PROFILES from the toggles. Compose resolves service names against ENABLED
+# profiles only, so `compose ps -q prometheus` without --profile monitoring finds nothing —
+# which used to make wait_healthy() spin until timeout even on a healthy stack.
+resolve_profiles() {
+  # if-blocks (not `cond && action`): a trailing `cond && action` that evaluates false
+  # returns 1, which under `set -e` would abort the caller.
+  PROFILES=()
+  if [[ "$WITH_MONITORING" -eq 1 ]]; then PROFILES+=(--profile monitoring); fi
+  if [[ "$WITH_OAST" -eq 1 ]]; then PROFILES+=(--profile oast); fi
+  return 0
+}
+
+# docker compose with the active profiles applied to every subcommand.
+dc() {
+  "${COMPOSE[@]}" "${PROFILES[@]}" "$@"
+}
 
 gen_secret() {
   openssl rand -base64 48 | tr -d '\n/'
@@ -53,8 +102,11 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+# NOTE: callers pass only the flags — the leading `start|stop|...` word (when present) is
+# already consumed by the dispatcher above. Do NOT shift here: an extra shift silently ate
+# the first flag, which made the documented `--url https://your.domain` form die with
+# "unknown flag: https://your.domain" and made `--no-monitoring` a no-op.
 parse_args() {
-  shift || true
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --url)
@@ -76,7 +128,7 @@ parse_args() {
         shift
         ;;
       -h|--help)
-        sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+        usage
         exit 0
         ;;
       *)
@@ -86,9 +138,58 @@ parse_args() {
   done
 }
 
+# True when something is listening on $1. Returns 2 when we have no way to tell, so the
+# caller can warn instead of silently "passing" the check (the old code piped `ss` through
+# 2>/dev/null, so a host without iproute2 skipped port detection without saying so).
+port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"
+  else
+    return 2
+  fi
+}
+
+check_ports_free() {
+  # Every port this stack PUBLISHES to the host. 9090 (Prometheus) was missing, so a
+  # conflict there only surfaced as a `compose up` failure after .env had been rewritten.
+  local ports=(80)
+  if [[ "$WITH_MONITORING" -eq 1 ]]; then
+    ports+=(3000 9090)
+  fi
+  # OAST may be enabled via the shell env OR a pre-existing .env; check_ports_free runs
+  # before .env is sourced, so consult both (not just the pre-source WITH_OAST latch).
+  if [[ "$WITH_OAST" -eq 1 || -n "$OAST_DOMAIN_CLI" || -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then
+    # OAST HTTP callback catcher (TCP). The DNS listener is UDP and not pre-checked here.
+    local ohp; ohp="$(env_get WEISSMAN_OAST_HTTP_PORT)"
+    ports+=("${WEISSMAN_OAST_HTTP_PORT:-${ohp:-9091}}")
+  fi
+
+  local unknown=0 port rc
+  for port in "${ports[@]}"; do
+    port_in_use "$port" && rc=0 || rc=$?
+    case "$rc" in
+      0)
+        # Already ours (a previous run of this stack) is fine; anything else is a conflict.
+        if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${port}->"; then
+          die "port :${port} is already in use — free it or run ./start_weissman_live.sh stop"
+        fi
+        ;;
+      2) unknown=1 ;;
+    esac
+  done
+  if [[ "$unknown" -eq 1 ]]; then
+    log "WARN: neither 'ss' nor 'netstat' found — skipping host port pre-check (install iproute2 for a clearer error on conflicts)"
+  fi
+}
+
 check_prereqs() {
   need_cmd docker
   need_cmd openssl
+  # wait_healthy() and verify_live() both probe the stack over HTTP.
+  need_cmd curl
   docker compose version >/dev/null 2>&1 || die "docker compose v2 required"
   docker info >/dev/null 2>&1 || die "Docker daemon not running — start dockerd first"
 
@@ -99,21 +200,7 @@ check_prereqs() {
     [[ -f "$ROOT/$f" ]] || die "missing $f — run: node scripts/sync-engine-ui-manifests.mjs && node scripts/generate_engine_requirements.mjs"
   done
 
-  if [[ "$WITH_MONITORING" -eq 1 ]]; then
-    for port in 80 3000; do
-      if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"; then
-        if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${port}->"; then
-          die "port :${port} is already in use — free it or use ./start_weissman_live.sh stop"
-        fi
-      fi
-    done
-  else
-    if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ':80$'; then
-      if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ':80->'; then
-        die "port :80 is already in use"
-      fi
-    fi
-  fi
+  check_ports_free
 }
 
 env_get() {
@@ -128,8 +215,11 @@ env_set() {
   if [[ -f .env ]] && grep -qE "^${key}=" .env; then
     local tmp
     tmp="$(mktemp)"
-    awk -v k="$key" -v v="$val" '
-      BEGIN { done=0 }
+    # Pass the value through the ENVIRONMENT, not `awk -v`: -v applies C-escape processing,
+    # so a value containing a backslash (or \n, \t) would be silently corrupted. ENVIRON is
+    # taken literally. Keys are safe identifiers (used in the anchored regex).
+    WEISSMAN_ENVSET_K="$key" WEISSMAN_ENVSET_V="$val" awk '
+      BEGIN { k=ENVIRON["WEISSMAN_ENVSET_K"]; v=ENVIRON["WEISSMAN_ENVSET_V"]; done=0 }
       $0 ~ "^" k "=" { print k "=" v; done=1; next }
       { print }
       END { if (!done) print k "=" v }
@@ -162,14 +252,27 @@ ensure_env() {
   fi
 
   # --- Compose / DB secrets ---
+  # Every secret that fingerprint_engine/src/security_startup.rs demands in production must
+  # be generated here, or the server and worker fail closed at boot and the stack never
+  # becomes healthy. Keep this list in sync with that file's guards.
   local keys=(
     POSTGRES_PASSWORD
     REDIS_PASSWORD
     DB_APP_PASSWORD
     DB_AUTH_PASSWORD
+    # Read-only role for "Ask Weissman" (NL->SQL). Required by the prod overlay's
+    # WEISSMAN_READ_ONLY_DATABASE_URL; without it /api/ask is 503 and the boot role-sync
+    # strips LOGIN from weissman_ro.
+    DB_RO_PASSWORD
     WEISSMAN_JWT_SECRET
     WEISSMAN_METRICS_TOKEN
     WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
+    # Zero-trust job bus HMAC (security_startup.rs:146) — required by BOTH server and
+    # worker in production, with no JWT fallback.
+    WEISSMAN_JOB_ORCHESTRATOR_SECRET
+    # Bearer for the OAST correlation API, shared by the listener and the engines. Generated
+    # up front so enabling OAST later only needs WEISSMAN_OAST_DOMAIN; unused while OAST off.
+    WEISSMAN_OAST_API_KEY
   )
   for key in "${keys[@]}"; do
     local cur
@@ -205,6 +308,12 @@ ensure_env() {
     log "WEISSMAN_PUBLIC_BASE_URL=https://localhost — pass --url https://your.domain for real deploys"
   fi
 
+  # Persist a shell-provided OAST domain so it survives `source .env` (the template ships a
+  # blank line that would otherwise clobber it) and actually reaches the oast container.
+  if [[ -n "$OAST_DOMAIN_CLI" ]]; then
+    env_set WEISSMAN_OAST_DOMAIN "$OAST_DOMAIN_CLI"
+  fi
+
   # shellcheck disable=SC1091
   set -a && source .env && set +a
 
@@ -220,18 +329,22 @@ validate_env() {
   local url="${WEISSMAN_PUBLIC_BASE_URL:-}"
   [[ -n "$url" ]] || die "WEISSMAN_PUBLIC_BASE_URL is empty — use --url https://your.domain"
 
-  if [[ "${#WEISSMAN_JWT_SECRET}" -lt 48 ]]; then
-    die "WEISSMAN_JWT_SECRET must be >= 48 chars in production (regenerate with: openssl rand -base64 48)"
-  fi
-  if [[ "${#WEISSMAN_METRICS_TOKEN}" -lt 32 ]]; then
-    die "WEISSMAN_METRICS_TOKEN must be >= 32 chars"
-  fi
-  if [[ "${#WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET}" -lt 32 ]]; then
-    die "WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET must be >= 32 chars"
-  fi
-  if [[ "${#WEISSMAN_ADMIN_PASSWORD}" -lt 12 ]]; then
-    die "WEISSMAN_ADMIN_PASSWORD must be >= 12 chars"
-  fi
+  # Read through a local first: `${#VAR}` cannot be combined with `:-`, and a bare
+  # `${#VAR}` on a .env that is missing the key would trip `set -u` with an opaque
+  # "unbound variable" instead of the explanatory message below.
+  require_len() {
+    local name="$1" min="$2" hint="${3:-}" val="${!1:-}"
+    if (( ${#val} < min )); then
+      die "$name must be >= ${min} chars${hint:+ — $hint}"
+    fi
+  }
+  require_len WEISSMAN_JWT_SECRET 48 "regenerate with: openssl rand -base64 48"
+  require_len WEISSMAN_METRICS_TOKEN 32
+  require_len WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET 32
+  # security_startup.rs:146 rejects anything shorter for BOTH weissman-server and
+  # weissman-worker; catching it here beats waiting out the health-check timeout.
+  require_len WEISSMAN_JOB_ORCHESTRATOR_SECRET 32 "regenerate with: openssl rand -base64 48"
+  require_len WEISSMAN_ADMIN_PASSWORD 12
 
   local weak_frags=(weissman_dev_secret weissman_auth_dev)
   for key in DB_APP_PASSWORD DB_AUTH_PASSWORD POSTGRES_PASSWORD; do
@@ -262,59 +375,143 @@ compose_up() {
   if [[ "$SKIP_BUILD" -eq 0 ]]; then
     up_args+=(--build)
   fi
+  local extras=""
+  if [[ "$WITH_MONITORING" -eq 1 ]]; then extras+=" + monitoring"; fi
+  if [[ "$WITH_OAST" -eq 1 ]]; then extras+=" + OAST listener"; fi
+  log "Starting LIVE stack (Postgres, Redis, API, Worker, Gateway${extras})..."
+  dc "${up_args[@]}"
+}
+
+# Services this run expects to come up, in the order we report them.
+stack_services() {
+  printf '%s\n' postgres redis backend worker gateway
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
-    log "Starting full LIVE stack + monitoring (Postgres, Redis, API, Worker, Gateway, Prometheus, Grafana, Alertmanager)..."
-    "${COMPOSE[@]}" "${PROFILES[@]}" "${up_args[@]}"
-  else
-    log "Starting LIVE stack (Postgres, Redis, API, Worker, Gateway)..."
-    "${COMPOSE[@]}" "${up_args[@]}"
+    printf '%s\n' prometheus grafana alertmanager
+  fi
+  if [[ "$WITH_OAST" -eq 1 ]]; then
+    printf '%s\n' oast
   fi
 }
 
+# Dump whatever we know about a service that never became healthy.
+diagnose_service() {
+  local svc="$1"
+  log "--- $svc (last 60 log lines) ---"
+  dc logs "$svc" --tail 60 2>&1 || true
+}
+
 wait_healthy() {
-  log "Waiting for services to become healthy (first boot may take several minutes while images build)..."
-  local deadline=$((SECONDS + 900))
-  local services=(postgres redis backend worker gateway)
-  if [[ "$WITH_MONITORING" -eq 1 ]]; then
-    services+=(prometheus grafana alertmanager)
-  fi
+  # First boot compiles the whole Rust workspace, cargo-installs wasm-bindgen-cli, builds
+  # two WASM crates, runs `npm ci` and a Vite production build. On a modest host that is
+  # comfortably more than the old 15-minute budget, and blowing the deadline tore down an
+  # otherwise-fine deploy. Default to 45 minutes; override for slower or faster machines.
+  local timeout="${WEISSMAN_BOOT_TIMEOUT:-2700}"
+  log "Waiting up to $((timeout / 60)) min for services to become healthy (first boot builds images — this is the slow part)..."
+
+  local deadline=$((SECONDS + timeout))
+  local services
+  mapfile -t services < <(stack_services)
+
+  # Track restarts per service so a container that is crash-looping fails fast with its
+  # logs instead of silently eating the whole timeout: a looping container alternates
+  # between "restarting" and "running", and the old check accepted "running".
+  declare -A restarts=()
+  local stalled_svc="" stalled_reason=""
 
   while (( SECONDS < deadline )); do
     local all_ok=1
+    stalled_svc="" stalled_reason=""
+
+    local svc
     for svc in "${services[@]}"; do
-      local cid status
-      cid="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true)"
+      local cid state health running restarting count
+      cid="$(dc ps -q "$svc" 2>/dev/null || true)"
       if [[ -z "$cid" ]]; then
-        all_ok=0
+        all_ok=0; stalled_svc="$svc"; stalled_reason="no container yet"
         break
       fi
-      status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo missing)"
-      if [[ "$status" != "healthy" && "$status" != "running" ]]; then
-        all_ok=0
+
+      # One inspect, several fields — cheaper and race-free versus several calls.
+      IFS='|' read -r state health running restarting count < <(
+        docker inspect -f \
+          '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.Running}}|{{.State.Restarting}}|{{.RestartCount}}' \
+          "$cid" 2>/dev/null || echo 'missing|none|false|false|0'
+      )
+
+      if [[ "${restarts[$svc]:-0}" != "$count" && "${restarts[$svc]:-unset}" != "unset" ]]; then
+        log "WARN: $svc restarted (count $count) — it is probably failing at startup"
+      fi
+      restarts["$svc"]="$count"
+
+      # A container that has restarted repeatedly is not "slow", it is broken.
+      if (( count >= 3 )); then
+        log "ERROR: $svc has restarted ${count} times — aborting early instead of waiting out the timeout."
+        diagnose_service "$svc"
+        die "$svc is crash-looping; fix the error above and re-run"
+      fi
+
+      if [[ "$restarting" == "true" || "$running" != "true" ]]; then
+        all_ok=0; stalled_svc="$svc"; stalled_reason="state=$state restarting=$restarting"
+        break
+      fi
+      # With a healthcheck, only "healthy" counts ("starting"/"unhealthy" do not). Without
+      # one, a genuinely running, non-restarting container is the best signal available.
+      if [[ "$health" != "none" && "$health" != "healthy" ]]; then
+        all_ok=0; stalled_svc="$svc"; stalled_reason="health=$health"
         break
       fi
     done
+
     if [[ "$all_ok" -eq 1 ]]; then
       if curl -sf "http://127.0.0.1/api/health" >/dev/null 2>&1; then
         return 0
       fi
+      stalled_svc="gateway"; stalled_reason="containers healthy but http://127.0.0.1/api/health is not answering"
     fi
     sleep 5
   done
 
-  log "Timed out — recent backend logs:"
-  "${COMPOSE[@]}" logs backend --tail 40 || true
-  die "stack did not pass health checks within 15 minutes"
+  log "Timed out after $((timeout / 60)) min — last blocker: ${stalled_svc:-unknown} (${stalled_reason:-unknown})"
+  dc ps || true
+  diagnose_service "${stalled_svc:-backend}"
+  [[ "${stalled_svc:-backend}" == "backend" ]] || diagnose_service backend
+  die "stack did not pass health checks within $((timeout / 60)) minutes (raise WEISSMAN_BOOT_TIMEOUT if the build is simply slow)"
 }
 
 verify_live() {
   log "Verifying live endpoints..."
-  curl -sf "http://127.0.0.1/api/health" | grep -q '"status"' || die "/api/health failed"
+  # /api/health returns a compact JSON body (axum::Json -> serde_json, no spaces) whose
+  # success marker is "ok":true — see fingerprint_engine/src/server_handlers_rest.inc.
+  # It has NEVER had a "status" key, so the old `grep '"status"'` failed every healthy
+  # deploy: wait_healthy passed, then verify_live died one line later and the operator
+  # never saw the banner or the generated admin password.
+  local health
+  health="$(curl -sf "http://127.0.0.1/api/health")" || die "/api/health did not answer"
+  grep -q '"ok":true' <<<"$health" || die "/api/health returned an unexpected body: $health"
+  # postgres_ok can momentarily read false on a cold pool (2s ping timeout right after
+  # migrations); warn rather than abort so a slow first boot is not misread as failure.
+  grep -q '"postgres_ok":true' <<<"$health" \
+    || log "WARN: backend reports postgres_ok=false — check: ./start_weissman_live.sh logs postgres"
+
   curl -sf "http://127.0.0.1/command-center/" >/dev/null || die "/command-center/ failed"
-  curl -sf "http://127.0.0.1/api/config/public" >/dev/null || die "/api/config/public failed"
+  # NOTE: do not probe /api/config/public here — despite the name it is behind auth_guard
+  # (not in PUBLIC_ROUTES) and returns 401 unauthenticated, and its body leaks tenant_id.
+  # The gateway->backend hop is already exercised by /api/health above.
 
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
     curl -sf "http://127.0.0.1:3000/login" >/dev/null || die "Grafana :3000 not reachable"
+    # Prometheus is behind the basic-auth web config generated during preflight, so an
+    # unauthenticated probe must answer 401 and an authenticated one 200. Anything else
+    # (connection refused, 200 without auth) means it started without that config — the
+    # banner would otherwise advertise a credentialled URL that is open or dead.
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:9090/-/ready" || echo 000)"
+    case "$code" in
+      401) : ;;
+      000) die "Prometheus :9090 not reachable — check: ./start_weissman_live.sh logs prometheus" ;;
+      200) log "WARN: Prometheus :9090 is answering WITHOUT authentication — regenerate monitoring/prometheus-web.generated.yml (scripts/sync_monitoring_admin.sh prometheus) and restart it" ;;
+      *)   log "WARN: Prometheus :9090 returned HTTP ${code} (expected 401 behind basic auth)" ;;
+    esac
   fi
 
   log "All live checks passed."
@@ -325,16 +522,33 @@ print_banner() {
   set -a && source .env && set +a
 
   local login_email="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
+  local base="${WEISSMAN_PUBLIC_BASE_URL%/}"
   cat <<EOF
 
 ================================================================================
   WEISSMAN LIVE — production stack is running
 ================================================================================
-  Command Center : http://127.0.0.1/command-center/login
-  Public URL     : ${WEISSMAN_PUBLIC_BASE_URL}  (set TLS/reverse-proxy to match)
+  Command Center : ${base}/command-center/login   (the URL users log in at)
+  Local access   : http://127.0.0.1/command-center/  (this host only)
   API health     : http://127.0.0.1/api/health
   Admin email    : ${login_email}
 EOF
+  # Production forces Secure-only session cookies (WEISSMAN_COOKIE_SECURE=1). Browsers do
+  # not send Secure cookies over plain http:// (except sometimes localhost), so logging in
+  # over anything but HTTPS silently fails to keep a session — and sends the password in
+  # cleartext. Warn loudly when the configured origin is not https.
+  case "$base" in
+    https://*) : ;;
+    *)
+      cat <<EOF
+
+  !! WARNING: WEISSMAN_PUBLIC_BASE_URL is not HTTPS ($base).
+     Session cookies are Secure-only in production, so login will NOT persist over http
+     except on this host's loopback, and the admin password would cross the wire in clear.
+     Put TLS in front of :80 and re-run with --url https://your.domain before real use.
+EOF
+      ;;
+  esac
   if [[ -n "${ADMIN_PASSWORD_PLAIN:-}" ]]; then
     cat <<EOF
   Admin password : ${ADMIN_PASSWORD_PLAIN}  (SAVE THIS — also in .env)
@@ -345,9 +559,6 @@ EOF
 EOF
   fi
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
-    if [[ -x "${ROOT}/scripts/sync_monitoring_admin.sh" ]]; then
-      "${ROOT}/scripts/sync_monitoring_admin.sh" all || log "WARN: monitoring credential sync failed (run scripts/sync_monitoring_admin.sh)"
-    fi
     cat <<EOF
   Grafana        : http://127.0.0.1:3000  (${login_email} / same as WEISSMAN_ADMIN_PASSWORD)
   Prometheus     : http://127.0.0.1:9090  (${login_email} / same password — health targets UI)
@@ -357,7 +568,7 @@ EOF
   cat <<EOF
 
   Services:
-$("${COMPOSE[@]}" "${PROFILES[@]}" ps --format '    - {{.Name}}: {{.Status}}' 2>/dev/null || "${COMPOSE[@]}" ps)
+$(dc ps --format '    - {{.Name}}: {{.Status}}' 2>/dev/null || dc ps)
 
   Stop stack     : ./start_weissman_live.sh stop
   Logs           : ./start_weissman_live.sh logs
@@ -372,33 +583,89 @@ $("${COMPOSE[@]}" "${PROFILES[@]}" ps --format '    - {{.Name}}: {{.Status}}' 2>
 EOF
 }
 
+# Must run BEFORE compose_up. docker-compose.yml bind-mounts
+# monitoring/prometheus-web.generated.yml, which is gitignored and therefore absent from a
+# fresh clone — and the Docker daemon materialises a missing bind source as a DIRECTORY.
+# Prometheus then gets a directory as its --web.config.file and never starts. Generating
+# the file first makes that impossible. (This used to run inside print_banner, i.e. after
+# the stack was already up and after verify_live had "confirmed" monitoring worked.)
+preflight_monitoring() {
+  [[ "$WITH_MONITORING" -eq 1 ]] || return 0
+  [[ -x "${ROOT}/scripts/sync_monitoring_admin.sh" ]] || {
+    log "WARN: scripts/sync_monitoring_admin.sh missing or not executable — Prometheus will start unauthenticated"
+    return 0
+  }
+  log "Generating Prometheus basic-auth config..."
+  "${ROOT}/scripts/sync_monitoring_admin.sh" prometheus \
+    || die "could not generate monitoring/prometheus-web.generated.yml — Prometheus would start without authentication (re-run scripts/sync_monitoring_admin.sh prometheus to see the error)"
+}
+
 cmd_start() {
   parse_args "$@"
+  # OAST needs a DNS zone the operator delegates, so it is opt-in via WEISSMAN_OAST_DOMAIN.
+  # Peek the shell env before .env exists so port checks line up on first boot.
+  if [[ -n "${WEISSMAN_OAST_DOMAIN:-}" ]]; then WITH_OAST=1; fi
   check_prereqs
   ensure_env
+  # ensure_env sources .env, which may itself define WEISSMAN_OAST_DOMAIN.
+  if [[ -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then WITH_OAST=1; fi
+  resolve_profiles
+  if [[ "$WITH_OAST" -eq 0 ]]; then
+    log "OAST listener disabled (WEISSMAN_OAST_DOMAIN unset) — blind SSRF/XXE/Log4Shell callbacks will not be correlated. Set WEISSMAN_OAST_DOMAIN to a delegated zone to enable."
+  fi
   validate_env
+  preflight_monitoring
   compose_up
   wait_healthy
   verify_live
+  # Grafana keeps credentials in its own volume, so its password can only be aligned once
+  # the container is actually running — unlike the Prometheus config, which must exist first.
+  if [[ "$WITH_MONITORING" -eq 1 && -x "${ROOT}/scripts/sync_monitoring_admin.sh" ]]; then
+    "${ROOT}/scripts/sync_monitoring_admin.sh" grafana \
+      || log "WARN: Grafana credential sync failed — run: scripts/sync_monitoring_admin.sh grafana"
+  fi
   print_banner
 }
 
+# For non-start commands: infer which optional stacks are present from .env so
+# ps / logs / down operate on their containers too.
+resolve_optional_stacks_from_env() {
+  if [[ -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then WITH_OAST=1; fi
+  resolve_profiles
+}
+
 cmd_reset() {
+  resolve_optional_stacks_from_env
+  # `reset` sits one word away from `start` in the same dispatcher and destroys every
+  # customer scan, finding, and audit record. Make it deliberate.
+  if [[ -t 0 && "${WEISSMAN_ASSUME_YES:-0}" != "1" ]]; then
+    log "This DESTROYS all Postgres/Redis/Grafana/Prometheus data for this deployment."
+    read -r -p "[weissman-live] Type 'destroy' to confirm: " reply
+    [[ "$reply" == "destroy" ]] || die "aborted — nothing was deleted"
+  elif [[ "${WEISSMAN_ASSUME_YES:-0}" != "1" ]]; then
+    die "refusing to destroy data non-interactively — re-run with WEISSMAN_ASSUME_YES=1 if that is really what you want"
+  fi
   log "Full teardown — stopping stack and destroying Postgres/Redis/Grafana/Prometheus volumes..."
-  "${COMPOSE[@]}" "${PROFILES[@]}" down -v --remove-orphans 2>/dev/null || "${COMPOSE[@]}" down -v --remove-orphans
+  dc down -v --remove-orphans
   log "Volumes cleared. Re-deploy with: ./start_weissman_live.sh"
 }
 
 cmd_stop() {
+  resolve_optional_stacks_from_env
   log "Stopping Weissman LIVE stack..."
-  "${COMPOSE[@]}" "${PROFILES[@]}" down --remove-orphans 2>/dev/null || "${COMPOSE[@]}" down --remove-orphans
-  log "Stopped (data volumes preserved — use 'docker compose down -v' to wipe DB)."
+  dc down --remove-orphans
+  log "Stopped (data volumes preserved — use './start_weissman_live.sh reset' to wipe the DB)."
 }
 
 cmd_status() {
-  # shellcheck disable=SC1091
-  [[ -f .env ]] && set -a && source .env && set +a
-  "${COMPOSE[@]}" "${PROFILES[@]}" ps 2>/dev/null || "${COMPOSE[@]}" ps
+  if [[ -f .env ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+  resolve_optional_stacks_from_env
+  dc ps
   echo ""
   if curl -sf "http://127.0.0.1/api/health" >/dev/null 2>&1; then
     log "API: healthy"
@@ -408,11 +675,13 @@ cmd_status() {
 }
 
 cmd_logs() {
+  [[ -f .env ]] && { set -a; source .env; set +a; }
+  resolve_optional_stacks_from_env
   local svc="${1:-}"
   if [[ -n "$svc" ]]; then
-    "${COMPOSE[@]}" "${PROFILES[@]}" logs -f "$svc"
+    dc logs -f "$svc"
   else
-    "${COMPOSE[@]}" "${PROFILES[@]}" logs -f
+    dc logs -f
   fi
 }
 

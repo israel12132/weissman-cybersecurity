@@ -44,19 +44,36 @@ RUN cargo build -p weissman-server -p weissman-worker -p weissman-agent \
     --release --locked
 
 FROM debian:bookworm-slim AS runtime
+# BuildKit sets TARGETARCH (amd64/arm64); the classic builder does not, so fall back to
+# the runtime image's own dpkg architecture. Either way this resolves to the ONE
+# architecture this image was actually compiled for.
+ARG TARGETARCH
 # git + patch are runtime deps of the auto-heal verification sandbox: it shells out
 # to `git clone`/`git diff` (to capture the applied fix) and `patch` (to apply the diff).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 postgresql-client xmlsec1 libhwloc15 libudev1 curl procps git patch \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd -r -s /bin/false -u 65532 weissman \
-    && mkdir -p /srv/bin/agents/linux-x86_64-gnu /srv/bin/agents/linux-aarch64-gnu
+RUN useradd -r -s /bin/false -u 65532 weissman
 COPY --from=build /build/target/release/weissman-server /usr/local/bin/weissman-server
 COPY --from=build /build/target/release/weissman-worker /usr/local/bin/weissman-worker
-COPY --from=build /build/target/release/weissman-agent /srv/bin/agents/linux-x86_64-gnu/weissman-agent
-COPY --from=build /build/target/release/weissman-agent /srv/bin/agents/linux-aarch64-gnu/weissman-agent
-RUN chmod 755 /srv/bin/agents/linux-x86_64-gnu/weissman-agent \
-    /srv/bin/agents/linux-aarch64-gnu/weissman-agent
+# weissman-agent is compiled natively for THIS image's architecture only. Publishing the
+# same ELF under a second, foreign platform directory handed ARM endpoints an x86-64
+# binary ("Exec format error" on first run), so install it solely under the directory
+# that matches the build architecture. /install/binaries/<other-arch>/weissman-agent then
+# returns the handler's clean 404 instead of a binary that cannot execute.
+# Multi-arch: `docker buildx build --platform linux/amd64,linux/arm64`, or pre-populate
+# /srv/bin/agents with scripts/package_agent_binaries.sh (cross-compiles all 4 targets).
+COPY --from=build /build/target/release/weissman-agent /tmp/weissman-agent
+RUN set -eu; \
+    arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch" in \
+      amd64) platform=linux-x86_64-gnu ;; \
+      arm64) platform=linux-aarch64-gnu ;; \
+      *) echo "backend.Dockerfile: unsupported agent architecture '$arch'" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p "/srv/bin/agents/$platform"; \
+    mv /tmp/weissman-agent "/srv/bin/agents/$platform/weissman-agent"; \
+    chmod 755 "/srv/bin/agents/$platform/weissman-agent"
 # No-tx migration pre-runner reads SQL from disk at runtime (compile-time CARGO_MANIFEST_DIR is /build/...).
 COPY --from=build /build/crates/weissman-db/migrations /srv/migrations
 ENV WEISSMAN_MIGRATIONS_DIR=/srv/migrations
