@@ -478,6 +478,9 @@ jobs:
       - name: Doc metrics sync (fail on drift)
         run: node scripts/sync_doc_metrics.mjs --check
 
+      - name: Doc metric references (fail on drift in README/AGENTS/runbooks)
+        run: node scripts/verify_doc_metrics.mjs
+
       - name: Frontend↔backend route contract
         run: node scripts/verify_frontend_route_contract.mjs
 

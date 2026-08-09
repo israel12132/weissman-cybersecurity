@@ -3159,6 +3159,7 @@ fn reshape_containment_rule_for_ui(row: Value) -> Value {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)] // JSON request-body shape; some fields accepted but not yet consumed
 struct UiContainmentRuleBody {
     name: String,
     #[serde(default)]

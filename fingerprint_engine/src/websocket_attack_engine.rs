@@ -796,6 +796,7 @@ async fn ws_session_exchange(
     })
 }
 
+#[allow(dead_code)] // several probe toggles parsed but not wired into current checks
 struct MessageProbeCfg {
     read_ms: u64,
     max_messages: usize,

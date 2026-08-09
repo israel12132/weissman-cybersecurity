@@ -61,6 +61,7 @@ fn ingest_source(
 
 #[derive(Debug, Default)]
 struct DefenseTelemetry {
+    #[allow(dead_code)] // loaded from telemetry query; not read in current dashboard
     chronos_events_24h: i64,
     chronos_freezes_24h: i64,
     cognitive_sessions_24h: i64,

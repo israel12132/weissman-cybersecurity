@@ -63,6 +63,7 @@ const KNOWN_VULN_TAG_PATTERNS: &[(&str, &str, &str)] = &[
 struct Settings {
     intensity: Intensity,
     timeout_ms: u64,
+    #[allow(dead_code)] // parsed from settings; not read after refactor
     concurrency: usize,
     namespace: Option<String>,
     repositories: Vec<String>,

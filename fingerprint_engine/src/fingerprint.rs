@@ -164,6 +164,7 @@ fn normalize_tech(s: &str) -> String {
     }
 }
 
+#[allow(dead_code)] // exercised by unit tests; prod call site removed in audit
 fn from_server_header(value: &str) -> Option<String> {
     let v = value.trim();
     if v.is_empty() {

@@ -5,6 +5,7 @@ struct SovereignConfigBody {
     rotation_step_secs: Option<i32>,
     port_pool_min: Option<i32>,
     port_pool_max: Option<i32>,
+    #[allow(dead_code)] // accepted in JSON body; not yet consumed
     active: Option<bool>,
 }
 

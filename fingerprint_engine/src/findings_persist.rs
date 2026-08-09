@@ -87,6 +87,7 @@ where
 }
 
 /// Lower-case severity from an arbitrary value, defaulting to `info`.
+#[allow(dead_code)] // exercised by unit tests; prod call site removed in audit
 fn normalize_severity(raw: Option<&str>) -> String {
     let s = raw.unwrap_or("info").trim().to_ascii_lowercase();
     match s.as_str() {

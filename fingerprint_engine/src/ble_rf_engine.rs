@@ -65,6 +65,7 @@ struct PostureConfig {
     mqtt_ports: Vec<u16>,
     coap_ports: Vec<u16>,
     extra_paths: Vec<String>,
+    #[allow(dead_code)] // parsed from params; not read after refactor
     timeout_ms: u64,
 }
 

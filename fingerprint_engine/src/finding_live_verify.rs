@@ -30,6 +30,7 @@ pub struct LiveVerifyResult {
 }
 
 struct FindingRow {
+    #[allow(dead_code)] // selected from DB row; not read after mapping
     id: i64,
     finding_id: String,
     title: String,

@@ -299,6 +299,7 @@ struct PlantedProbe {
     channel: &'static str,
     token: String,
     embed: String,
+    #[allow(dead_code)] // set when probe planted; not read after refactor
     sent: bool,
 }
 

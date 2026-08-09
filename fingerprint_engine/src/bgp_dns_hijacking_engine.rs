@@ -1406,6 +1406,7 @@ fn parse_soa_mname(soa: &str) -> Option<String> {
 }
 
 /// Parse SOA serial (third field) from DoH `data`.
+#[allow(dead_code)] // exercised by unit tests; prod call site removed in audit
 fn parse_soa_serial(soa: &str) -> Option<u32> {
     let parts: Vec<&str> = soa.split_whitespace().collect();
     if parts.len() >= 3 {

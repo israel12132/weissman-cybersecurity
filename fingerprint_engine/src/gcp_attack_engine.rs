@@ -576,6 +576,7 @@ struct Signals {
 }
 
 struct Collector<'a> {
+    #[allow(dead_code)] // held for lifetime/config context; not read after refactor
     cfg: &'a GcpScanConfig,
     findings: Vec<Value>,
     nodes: Vec<Value>,

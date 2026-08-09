@@ -60,6 +60,7 @@ const DEFAULT_LOGIN: &str = "https://login.microsoftonline.com";
 /// Well-known privileged Azure RBAC role-definition GUIDs.
 const ROLE_OWNER: &str = "8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
 const ROLE_USER_ACCESS_ADMIN: &str = "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9";
+#[allow(dead_code)] // referenced by unit tests (negative case for is_high_priv_role)
 const ROLE_CONTRIBUTOR: &str = "b24988ac-6180-42a0-ab88-20f7382dd24c";
 
 /// Sensitive service ports — exposure to the internet on any of these is a real risk.

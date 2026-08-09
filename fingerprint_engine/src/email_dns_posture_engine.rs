@@ -1685,6 +1685,7 @@ fn rsa_key_bits(p_b64: &str) -> Option<u32> {
 
 // ─── MTA-STS / TLS-RPT / BIMI / DNSSEC / CAA / DANE ──────────────────────────────
 
+#[allow(dead_code)] // several MTA-STS facts collected but not read in current reporting
 struct TransportFacts {
     mta_sts_present: bool,
     mta_sts_mode: Option<String>,
@@ -1703,6 +1704,7 @@ struct MtaStsFacts {
     mode: Option<String>,
     max_age: Option<u64>,
     mx_hosts: Vec<String>,
+    #[allow(dead_code)] // parsed from MTA-STS policy; not read in current reporting
     policy_id: Option<String>,
     dns_id: Option<String>,
     cert_valid: Option<bool>,
@@ -2019,6 +2021,7 @@ struct BimiFacts {
     logo_url: Option<String>,
     logo_reachable: Option<bool>,
     logo_content_type: Option<String>,
+    #[allow(dead_code)] // derived from BIMI logo URL; not read in current reporting
     logo_https: bool,
     vmc_url: Option<String>,
     vmc_reachable: Option<bool>,
@@ -2548,6 +2551,7 @@ async fn smtp_probe(host: &str, port: u16, timeout_ms: u64) -> Option<SmtpResult
 #[derive(Clone, Debug)]
 struct MxTlsCertInfo {
     host: String,
+    #[allow(dead_code)] // captured with cert info; not read in current reporting
     port: u16,
     issuer: String,
     subject: String,

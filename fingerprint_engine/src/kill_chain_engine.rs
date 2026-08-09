@@ -53,6 +53,7 @@ impl KillChainStage {
 }
 
 /// Classify free-text evidence into a kill-chain stage (deterministic heuristics).
+#[allow(dead_code)] // exercised by unit tests; prod call site removed in audit
 fn classify_stage(signal: &str) -> KillChainStage {
     let s = signal.to_ascii_lowercase();
     if s.contains("webhook")

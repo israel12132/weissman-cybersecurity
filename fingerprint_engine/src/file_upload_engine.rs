@@ -285,8 +285,10 @@ struct Endpoint {
 enum EndpointProtocol {
     #[default]
     Multipart,
+    #[allow(dead_code)] // handled in match arms; not currently constructed by detection
     GraphqlUpload,
     Base64Json,
+    #[allow(dead_code)] // handled in match arms; not currently constructed by detection
     Put,
 }
 
@@ -398,25 +400,6 @@ fn build_multipart_body(
     body.extend_from_slice(content);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
     body
-}
-
-fn build_multipart_part(
-    boundary: &str,
-    field: &str,
-    filename: &str,
-    content_type: Option<&str>,
-    content: &str,
-    disposition: DispositionMode,
-) -> String {
-    String::from_utf8_lossy(&build_multipart_body(
-        boundary,
-        field,
-        filename,
-        content_type,
-        content.as_bytes(),
-        disposition,
-    ))
-    .into_owned()
 }
 
 fn urlencoding_encode(s: &str) -> String {

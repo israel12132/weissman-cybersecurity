@@ -864,41 +864,6 @@ async fn post_sse(client: &reqwest::Client, url: &str, payload: &Value) -> Optio
     Some(probe_to_http(resp).await)
 }
 
-async fn post_with_origin(
-    client: &reqwest::Client,
-    url: &str,
-    payload: &Value,
-    origin: &str,
-) -> Option<HttpProbe> {
-    let resp = client
-        .post(url)
-        .header("Origin", origin)
-        .json(payload)
-        .send()
-        .await
-        .ok()?;
-    Some(probe_to_http(resp).await)
-}
-
-async fn options_cors_probe(
-    client: &reqwest::Client,
-    url: &str,
-    origin: &str,
-) -> Option<HttpProbe> {
-    let resp = client
-        .request(reqwest::Method::OPTIONS, url)
-        .header("Origin", origin)
-        .header("Access-Control-Request-Method", "POST")
-        .header(
-            "Access-Control-Request-Headers",
-            "content-type, authorization, x-api-key",
-        )
-        .send()
-        .await
-        .ok()?;
-    Some(probe_to_http(resp).await)
-}
-
 async fn post_json_with_headers(
     client: &reqwest::Client,
     url: &str,
@@ -1183,6 +1148,7 @@ struct SchemaSummary {
     has_subscriptions: bool,
     sensitive_fields: Vec<String>,
     dangerous_mutations: Vec<String>,
+    #[allow(dead_code)] // collected during schema parse; not read after refactor
     id_accessors: Vec<IdAccessor>,
     graph: Vec<Value>,
 }

@@ -581,6 +581,7 @@ async fn concurrent_get_mutation_wave(
     collected
 }
 
+#[allow(dead_code)] // local copy exercised by unit tests; prod uses pentest_memory::target_host_for_memory
 fn target_host_for_memory(target_url: &str) -> String {
     target_url
         .trim_start_matches("https://")

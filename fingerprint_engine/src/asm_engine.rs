@@ -609,6 +609,7 @@ async fn crtsh_subdomains(client: &reqwest::Client, domain: &str, cap: usize) ->
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct HttpPosture {
+    #[allow(dead_code)] // set during probe; not read after refactor
     reachable: bool,
     status: u16,
     final_url: String,

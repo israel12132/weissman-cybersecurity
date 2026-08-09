@@ -487,6 +487,7 @@ pub const TRANSPORT_PROBE_MODULES: &[&str] = &[
 
 #[derive(Clone, Debug, Default)]
 struct PortTlsObservation {
+    #[allow(dead_code)] // recorded during scan; not read after refactor
     port: u16,
     tls_ok: bool,
     ocsp_stapled: Option<bool>,
@@ -533,6 +534,7 @@ fn resolve_addr(host: &str, port: u16) -> Option<SocketAddr> {
     (host, port).to_socket_addrs().ok()?.next()
 }
 
+#[allow(dead_code)] // exercised by unit tests; prod call site removed in audit
 fn version_label(v: SslVersion) -> &'static str {
     match v {
         SslVersion::TLS1 => "TLS 1.0",
@@ -562,6 +564,7 @@ struct HandshakeObservation {
     ocsp_stapled: bool,
     alpn_h2: bool,
     mtls_required: Option<bool>,
+    #[allow(dead_code)] // captured from handshake failure; not read after refactor
     error_hint: Option<String>,
 }
 
@@ -3693,7 +3696,6 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     );
     let do_reporting = tri(&cfg, "check_reporting_headers", preset("reporting"));
     let do_uir = tri(&cfg, "check_upgrade_insecure_requests", preset("uir"));
-    let mut must_staple_required = false;
 
     let client = build_client(timeout_ms, true);
     let client_no_redirect = build_client(timeout_ms, false);
@@ -3744,7 +3746,7 @@ pub async fn run_mtls_grpc_result_ctx(target: &str, ctx: &EngineRunContext) -> E
     }
     if do_must_staple {
         let port = tls_ports.first().copied().unwrap_or(443);
-        must_staple_required = probe_must_staple_extension(
+        let must_staple_required = probe_must_staple_extension(
             &host,
             target,
             port,

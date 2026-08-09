@@ -1,7 +1,6 @@
 const ENGINE_ID: &str = "cache_poisoning";
 const CB_PARAM: &str = "wzcb";
 const DEFAULT_POISON_DOMAIN: &str = "poison.example";
-const PROBE_CATEGORIES_TOTAL: usize = 55;
 
 static HTTP_REQUESTS: AtomicU64 = AtomicU64::new(0);
 

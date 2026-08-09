@@ -539,6 +539,7 @@ pub(crate) struct LoginSurface {
     status: u16,
     federated: bool,
     mfa_hint: bool,
+    #[allow(dead_code)] // detected on login surface; not read after refactor
     captcha_hint: bool,
 }
 
