@@ -11,6 +11,7 @@ import { SkeletonWidgetGrid, SkeletonBar } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.riskGraphVisualization';
 
@@ -34,20 +35,13 @@ function exportNodesCsv(nodes) {
   const header = ['id', 'name', 'severity', 'risk_score', 'node_type', 'is_choke_point'];
   const rows = nodes.map((n) => [
     n.id ?? '',
-    (n.name || n.label || '').replace(/"/g, '""'),
+    n.name || n.label || '',
     n.severity ?? '',
     n.risk_score ?? '',
     n.node_type ?? '',
     n.is_choke_point ? 'yes' : 'no',
   ]);
-  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `risk-graph-nodes-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(rows, header, 'risk-graph-nodes');
 }
 
 /** Simple force-directed layout (no external deps). */

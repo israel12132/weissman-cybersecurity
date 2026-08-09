@@ -13,9 +13,15 @@ export async function fetchEngineHistorySummary({ force = false } = {}) {
     fetchPromise = apiFetch('/api/engines/history-summary')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        const engines = data?.engines && typeof data.engines === 'object' ? data.engines : {}
-        cachedSummary = engines
-        return engines
+        if (data?.engines && typeof data.engines === 'object') {
+          cachedSummary = data.engines
+          return cachedSummary
+        }
+        // Do NOT cache an empty/failed response: caching `{}` pinned "no run
+        // history" for every engine card for the tab's lifetime, indistinguishable
+        // from a platform that has genuinely never run a scan. Return last-known
+        // (or {}) for this call only and leave the cache untouched to allow retry.
+        return cachedSummary || {}
       })
       .catch(() => cachedSummary || {})
       .finally(() => {

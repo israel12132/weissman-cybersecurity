@@ -493,9 +493,19 @@ struct CeoScanIntervalBody {
 
 async fn api_ceo_god_mode_scan_interval_patch(
     State(state): State<Arc<AppState>>,
-    Extension(_auth): Extension<AuthContext>,
+    Extension(auth): Extension<AuthContext>,
     Json(body): Json<CeoScanIntervalBody>,
 ) -> Response {
+    // This writes the 'default' tenant's scan cadence via a SECURITY DEFINER RPC that bypasses
+    // RLS, so a CEO of any other tenant could otherwise change another org's orchestrator cadence.
+    // Restrict the platform-wide write to superadmins.
+    if !auth.is_superadmin {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "ok": false, "detail": "global scan interval requires superadmin" })),
+        )
+            .into_response();
+    }
     match crate::ceo::god_mode::default_scan_interval_secs_set(
         state.app_pool.as_ref(),
         body.scan_interval_secs,
@@ -563,7 +573,7 @@ async fn api_ceo_tenant_engines_get(
 /// PUT/PATCH body: `{ "engine_id": "asm", "enabled": true }` — updates `system_configs.active_engines` for **`tenants.slug = default`** (orchestrator policy).
 async fn api_ceo_tenant_engines_put(
     State(state): State<Arc<AppState>>,
-    Extension(_auth): Extension<AuthContext>,
+    Extension(auth): Extension<AuthContext>,
     Json(body): Json<CeoTenantEnginesBody>,
 ) -> Response {
     let policy_tid = match crate::ceo::default_tenant_id(state.auth_pool.as_ref()).await {
@@ -586,6 +596,16 @@ async fn api_ceo_tenant_engines_put(
                 .into_response();
         }
     };
+    // The write targets the 'default' (platform policy) tenant, discarding the caller's tenant.
+    // A CEO of any other tenant must not be able to toggle another org's orchestrator engines,
+    // so gate the cross-tenant write on superadmin.
+    if !auth.is_superadmin && auth.tenant_id != policy_tid {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "ok": false, "detail": "orchestrator engine policy is platform-wide; requires superadmin" })),
+        )
+            .into_response();
+    }
     match crate::ceo::patch_tenant_active_engine(
         state.app_pool.as_ref(),
         policy_tid,

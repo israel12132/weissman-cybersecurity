@@ -108,7 +108,15 @@ def ensure_user_exists(db: Session) -> None:
     if db.query(UserModel).count() > 0:
         return
     email = (os.getenv("ADMIN_EMAIL") or "admin@weissman.local").strip().lower()
-    password = os.getenv("ADMIN_PASSWORD") or "ChangeMe123!"
+    password = os.getenv("ADMIN_PASSWORD")
+    if not password:
+        from src.config import is_production
+        if is_production():
+            # Never plant a repo-published default password / MFA-off admin in production.
+            raise RuntimeError(
+                "ADMIN_PASSWORD must be set in production; refusing to seed a default admin"
+            )
+        password = "ChangeMe123!"
     secret = pyotp.random_base32()
     user = UserModel(
         email=email,

@@ -260,7 +260,9 @@ export default function EngineRoomTab() {
           {t('engines.show_only_enabled')}
         </label>
         <span className="text-[11px] font-mono text-white/35">
-          {t('engines.matches', { count: filteredRegistry.length })}
+          {filteredRegistry.length === 1
+            ? t('engines.matches', { count: filteredRegistry.length })
+            : t('engines.matches_plural', { count: filteredRegistry.length })}
         </span>
       </div>
 

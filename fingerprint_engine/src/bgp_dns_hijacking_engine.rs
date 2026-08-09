@@ -1379,19 +1379,19 @@ fn is_more_specific_v4(child: &str, parent: &str) -> bool {
     let (Some(cl), Some(pl)) = (c_len, p_len) else {
         return false;
     };
-    if cl <= pl {
+    if cl <= pl || cl > 32 || pl > 32 {
         return false;
     }
-    let c_parts: Vec<&str> = c_net.split('.').collect();
-    let p_parts: Vec<&str> = p_net.split('.').collect();
-    if c_parts.len() != 4 || p_parts.len() != 4 {
+    let (Ok(c_ip), Ok(p_ip)) = (
+        c_net.parse::<std::net::Ipv4Addr>(),
+        p_net.parse::<std::net::Ipv4Addr>(),
+    ) else {
         return false;
-    }
-    let full_octets = (pl / 8) as usize;
-    c_parts
-        .iter()
-        .take(full_octets)
-        .eq(p_parts.iter().take(full_octets))
+    };
+    // Compare on the parent mask, not on whole octets: `10.1.32.0/24` is NOT inside
+    // `10.1.16.0/20`, but the old octet-only check treated it as a more-specific.
+    let mask = u32::MAX.checked_shl(32 - u32::from(pl)).unwrap_or(0);
+    (u32::from(c_ip) & mask) == (u32::from(p_ip) & mask)
 }
 
 /// Parse SOA MNAME from DoH `data` (`"ns1.example.com. hostmaster..."`).
@@ -3122,7 +3122,19 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
                 .iter()
                 .map(|(n, ips, ad, st)| json!({ "resolver": n, "ips": ips, "ad": ad, "rcode": st }))
                 .collect();
-            if !consistent {
+            // GeoDNS / round-robin / CDN fronting legitimately returns different-but-overlapping
+            // A-sets across independent resolvers. Only a FULLY DISJOINT answer set (no IP
+            // shared by all resolvers, with every resolver having answered) is the hijack
+            // signature; a partial overlap is downgraded to a low "load-balanced" note.
+            let all_answered = !ip_sets.iter().any(|(_, s)| s.is_empty());
+            let global_intersection: BTreeSet<String> = ip_sets
+                .iter()
+                .skip(1)
+                .fold(first.clone(), |acc, (_, s)| {
+                    acc.intersection(s).cloned().collect()
+                });
+            let disjoint = all_answered && global_intersection.is_empty();
+            if !consistent && disjoint {
                 resolver_diverged = true;
                 threat_compromised.dns = true;
                 critical_signal = true;
@@ -3131,7 +3143,7 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
                     "critical",
                     "T1557",
                     &format!(
-                        "Independent validating resolvers returned different A records for {domain}. Divergence is the canonical signature of DNS cache poisoning, split-horizon hijack, or a BGP interception in progress against one resolver's path."
+                        "Independent validating resolvers returned fully disjoint A records for {domain} (no address in common). Disjoint divergence is the canonical signature of DNS cache poisoning, split-horizon hijack, or a BGP interception in progress against one resolver's path."
                     ),
                     target,
                     "Confirm the authoritative answer out-of-band, enable DNSSEC so clients reject forged records, and alert on resolver-answer divergence in monitoring. If a BGP interception is suspected, contact upstreams and file an RPKI ROA for the prefix.",
@@ -3139,7 +3151,23 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
                     Evidence::new()
                         .with("domain", domain.clone())
                         .with("resolvers", json!(detail))
-                        .check("answers_consistent", false, "resolver A-record sets differ"),
+                        .check("answers_consistent", false, "resolver A-record sets are disjoint"),
+                ));
+            } else if !consistent {
+                findings.push(bgp_finding(
+                    &format!("DNS answers differ but overlap across resolvers for {domain} (likely load-balanced)"),
+                    "low",
+                    "T1557",
+                    &format!(
+                        "Independent resolvers returned different but overlapping A records for {domain}. This is the normal signature of GeoDNS / round-robin / CDN fronting rather than a hijack. Escalation is reserved for fully disjoint answers."
+                    ),
+                    target,
+                    "Confirm the authoritative answer set out-of-band if the overlap is unexpected; enable DNSSEC so clients reject forged records.",
+                    0.5,
+                    Evidence::new()
+                        .with("domain", domain.clone())
+                        .with("resolvers", json!(detail))
+                        .check("answers_consistent", false, "overlapping A-record sets"),
                 ));
             } else {
                 findings.push(bgp_finding(

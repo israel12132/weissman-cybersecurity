@@ -118,10 +118,10 @@ export default function OobVerification() {
   const listFindings = useMemo(() => callbacks.map((c, i) => ({
     id: c.id || i,
     severity: 'medium',
-    title: c.remote_addr || c.method || 'callback',
-    type: probeType,
-    description: c.user_agent || c.path || '',
-    resource: c.received_at || '',
+    title: c.source_ip || c.channel || 'callback',
+    type: c.probe_type || probeType,
+    description: c.payload || c.user_agent || c.http_method || '',
+    resource: c.timestamp || '',
   })), [callbacks, probeType])
 
   const recentListFindings = useMemo(() => recentHits.map((c, i) => ({

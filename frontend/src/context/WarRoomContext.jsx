@@ -24,22 +24,36 @@ export function WarRoomProvider({ children }) {
   const [lastTelemetry, setLastTelemetry] = useState(null)
   const latencyIndexRef = useRef(0)
   const activityTsRef = useRef({})
+  const confirmTimerRef = useRef(null)
+  const refuseTimerRef = useRef(null)
 
   const setLastLatencyMs = useCallback((ms) => setLastLatencyMsState(ms), [])
 
+  // Timers are provider-owned: the previous implementation returned a cleanup
+  // function that no caller used, so nothing cleared them — rapid re-invocations
+  // stacked independent timers (an early one could null the confirmation flash
+  // while a later one was still meant to show) and they fired after unmount.
   const confirmCommand = useCallback((source, meta = null) => {
     setCommandRefused(false)
     setCommandConfirmed({ source, meta })
-    const t = setTimeout(() => setCommandConfirmed(null), 2200)
-    return () => clearTimeout(t)
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    confirmTimerRef.current = setTimeout(() => setCommandConfirmed(null), 2200)
   }, [])
 
   const refuseCommand = useCallback(() => {
     setCommandConfirmed(null)
     setCommandRefused(true)
-    const t = setTimeout(() => setCommandRefused(false), 2500)
-    return () => clearTimeout(t)
+    if (refuseTimerRef.current) clearTimeout(refuseTimerRef.current)
+    refuseTimerRef.current = setTimeout(() => setCommandRefused(false), 2500)
   }, [])
+
+  useEffect(
+    () => () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+      if (refuseTimerRef.current) clearTimeout(refuseTimerRef.current)
+    },
+    [],
+  )
 
   const addLatency = useCallback((ms) => {
     setLatencyHistory((prev) => {
@@ -118,6 +132,10 @@ export function WarRoomProvider({ children }) {
   useEffect(() => {
     const t = setInterval(() => {
       setEngineActivityCount((prev) => {
+        // Steady state (nothing to decay): return the SAME object so React bails out
+        // of the render. Returning a fresh `{}` here forced a full provider + consumer
+        // render every second forever, even when the app was idle and backgrounded.
+        if (Object.keys(prev).length === 0) return prev
         const next = {}
         for (const k of Object.keys(prev)) {
           const v = (prev[k] || 0) * 0.85

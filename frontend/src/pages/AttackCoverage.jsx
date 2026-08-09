@@ -9,6 +9,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Grid3x3, Search } from 'lucide-react'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
@@ -31,20 +32,13 @@ function tacticColor(i) {
 
 function coverageCsv(tactics) {
   const header = ['tactic', 'technique_id', 'technique_name', 'engine_count', 'engines']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const rows = []
   for (const tac of tactics) {
     for (const tech of tac.techniques || []) {
-      rows.push([tac.tactic, tech.id, tech.name, tech.engine_count, (tech.engines || []).join(' ')].map(esc).join(','))
+      rows.push([tac.tactic, tech.id, tech.name, tech.engine_count, (tech.engines || []).join(' ')])
     }
   }
-  const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-attack-coverage-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(rows, header, 'weissman-attack-coverage')
 }
 
 export default function AttackCoverage() {

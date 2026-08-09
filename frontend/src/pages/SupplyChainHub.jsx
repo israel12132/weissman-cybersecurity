@@ -218,17 +218,28 @@ export default function SupplyChainHub() {
   const handleRefresh = useCallback(async () => {
     setRefreshLoading(true)
     try {
-      const d = await apiFetch('/api/engines/history/supply_chain?limit=1')
-      const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
-      const last = runs[0]
-      const findings = Array.isArray(last?.findings) ? last.findings : []
-      setFindingsByEngine((prev) => ({ ...prev, supply_chain: findings }))
-    } catch {
-      // live-only: no demo fallback
+      const results = await Promise.allSettled(
+        SUPPLY_ENGINE_IDS.map((id) => apiFetch(`/api/engines/history/${id}?limit=1`)),
+      )
+      const updates = {}
+      let anyFailed = false
+      results.forEach((res, i) => {
+        const id = SUPPLY_ENGINE_IDS[i]
+        if (res.status === 'fulfilled') {
+          const d = res.value
+          const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
+          const last = runs[0]
+          updates[id] = Array.isArray(last?.findings) ? last.findings : []
+        } else {
+          anyFailed = true
+        }
+      })
+      setFindingsByEngine((prev) => ({ ...prev, ...updates }))
+      if (anyFailed) showToast('error', t('findings.load_error'))
     } finally {
       setRefreshLoading(false)
     }
-  }, [])
+  }, [showToast, t])
 
   return (
     <PageShell

@@ -17,13 +17,18 @@ export function loadEnginesRegistry() {
     ).then((mod) => {
       registryModule = mod
       return mod
+    }).catch((err) => {
+      // Clear the memoized promise so a later call can retry instead of
+      // permanently resolving to the same rejection.
+      registryPromise = null
+      throw err
     })
   }
   return registryPromise
 }
 
 export function prefetchEnginesRegistry() {
-  void loadEnginesRegistry()
+  void loadEnginesRegistry().catch(() => undefined)
 }
 
 export function getEnginesRegistrySync() {

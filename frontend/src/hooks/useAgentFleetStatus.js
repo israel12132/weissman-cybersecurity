@@ -2,20 +2,31 @@ import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '../utils/apiFetch'
 
 let cachedPayload = null
+let cachedAt = 0
 let fetchPromise = null
+// The fleet gates agent-required engine surfaces; a stale snapshot leaves an
+// operator either blocked after enrolling an agent or dispatching scans at an
+// offline fleet. Re-fetch after this window rather than pinning it for the tab.
+const CACHE_TTL_MS = 30_000
+
+function fleetCacheValid() {
+  return cachedPayload != null && Date.now() - cachedAt < CACHE_TTL_MS
+}
 
 async function fetchAgentStatus(force = false) {
-  if (!force && cachedPayload) return cachedPayload
+  if (!force && fleetCacheValid()) return cachedPayload
   if (!fetchPromise || force) {
     fetchPromise = apiFetch('/api/agents/status')
       .then((data) => {
         cachedPayload = data || { agents: [], online_count: 0 }
+        cachedAt = Date.now()
         return cachedPayload
       })
       .catch(() => {
-        const empty = { agents: [], online_count: 0 }
-        if (!cachedPayload) cachedPayload = empty
-        return cachedPayload
+        // Do NOT cache the empty fallback: a single transient boot failure must
+        // not pin an empty fleet (and thus block agent surfaces) for the session.
+        // Leave the cache untouched so the next load retries.
+        return cachedPayload || { agents: [], online_count: 0 }
       })
       .finally(() => {
         fetchPromise = null
@@ -26,6 +37,7 @@ async function fetchAgentStatus(force = false) {
 
 export function invalidateAgentFleetCache() {
   cachedPayload = null
+  cachedAt = 0
   fetchPromise = null
 }
 
@@ -36,7 +48,7 @@ export function useAgentFleetStatus() {
   const [error, setError] = useState(null)
 
   const load = useCallback(async (force = false) => {
-    if (!force && cachedPayload) {
+    if (!force && fleetCacheValid()) {
       setPayload(cachedPayload)
       setLoading(false)
       return cachedPayload

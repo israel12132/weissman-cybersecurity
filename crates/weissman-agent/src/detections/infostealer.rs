@@ -178,13 +178,18 @@ fn push_chromium_family(
         let profile_dir = base.join(profile);
         for (file, label_suffix, sev) in artifacts {
             let p = profile_dir.join(file);
+            // Carry the per-artifact severity and description through instead of discarding them —
+            // otherwise every Chromium artifact (including `History`) shipped as `critical` via the
+            // post-probe fallback, drowning the genuinely critical Login Data / Local State signals.
             hits.push(StoreHit {
                 category: "browser",
                 label: format!("{browser} {label_suffix}"),
                 path: p,
+                severity: *sev,
+                mitre: "T1555.003",
+                detail: (*label_suffix).to_string(),
                 ..Default::default()
             });
-            let _ = sev; // severity set after probe
         }
     }
 }

@@ -3,10 +3,36 @@ import { useCallback, useRef, useEffect } from 'react'
 function useAudioContext() {
   const ctxRef = useRef(null)
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    ctxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    if (typeof window === 'undefined') return undefined
+    // Guard construction: where neither global exists, `new undefined()` throws a
+    // TypeError from inside the effect and blanks the route.
+    const Ctor = window.AudioContext || window.webkitAudioContext
+    if (!Ctor) return undefined
+    let ctx
+    try {
+      ctx = new Ctor()
+    } catch {
+      return undefined
+    }
+    ctxRef.current = ctx
+    // Autoplay policy creates the context `suspended` until a user gesture; without
+    // a resume every scheduled oscillator is silent. Unlock on the first interaction.
+    const unlock = () => {
+      // resume() can reject if the context was closed between the gesture and this
+      // call (fast unmount) — nothing to recover, so swallow to undefined.
+      if (ctx.state === 'suspended') ctx.resume().catch(() => undefined)
+    }
+    window.addEventListener('pointerdown', unlock)
+    window.addEventListener('keydown', unlock)
     return () => {
-      if (ctxRef.current) ctxRef.current.close()
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+      try {
+        ctx.close()
+      } catch {
+        /* already closed / unsupported — non-fatal */
+      }
+      ctxRef.current = null
     }
   }, [])
   return ctxRef
@@ -19,7 +45,7 @@ export function useWarRoomSound() {
 
   const playZoom = useCallback(() => {
     const ctx = audioRef.current
-    if (!ctx) return
+    if (!ctx || ctx.state !== 'running') return
     try {
       const now = ctx.currentTime
       const osc = ctx.createOscillator()
@@ -39,7 +65,7 @@ export function useWarRoomSound() {
 
   const playBlip = useCallback(() => {
     const ctx = audioRef.current
-    if (!ctx) return
+    if (!ctx || ctx.state !== 'running') return
     try {
       const now = ctx.currentTime
       const osc = ctx.createOscillator()
@@ -58,7 +84,7 @@ export function useWarRoomSound() {
 
   const startAlarmHum = useCallback(() => {
     const ctx = audioRef.current
-    if (!ctx) return
+    if (!ctx || ctx.state !== 'running') return
     try {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { openSseStream } from '../lib/sseStream'
 
 const TelemetryContext = createContext(null)
@@ -116,12 +116,19 @@ export function TelemetryProvider({ children }) {
 
   const clearActivity = useCallback(() => setActivity([]), [])
 
-  const value = {
-    toasts, addToast, removeToast,
-    progressByEngine, addProgress,
-    activity, clearActivity, connected,
-    subscribe,
-  }
+  // Memoize so the value identity only changes when a real slice changes — the SSE
+  // handler re-renders this provider on every frame, and without this each frame
+  // handed all 6+ consumers a fresh object and forced a full re-render. The
+  // callbacks are all useCallback([])-stable, so the effective deps are the 4 states.
+  const value = useMemo(
+    () => ({
+      toasts, addToast, removeToast,
+      progressByEngine, addProgress,
+      activity, clearActivity, connected,
+      subscribe,
+    }),
+    [toasts, progressByEngine, activity, connected, addToast, removeToast, addProgress, clearActivity, subscribe],
+  )
   return (
     <TelemetryContext.Provider value={value}>
       {children}

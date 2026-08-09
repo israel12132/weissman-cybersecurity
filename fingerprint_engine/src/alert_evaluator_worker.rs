@@ -122,20 +122,6 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 continue;
             }
 
-            let already: Option<i64> = sqlx::query_scalar(
-                r#"SELECT id FROM weissman_alert_rule_fires
-                   WHERE rule_id = $1 AND finding_id = $2 LIMIT 1"#,
-            )
-            .bind(rule_id)
-            .bind(fid)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten();
-            if already.is_some() {
-                continue;
-            }
-
             let channels: Vec<String> = actions
                 .get("channels")
                 .and_then(|v| v.as_array())
@@ -159,10 +145,14 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
                 source: source.clone(),
             };
 
+            // The INSERT itself is the dedup gate: the (rule_id, finding_id) unique index makes a
+            // duplicate a no-op via ON CONFLICT DO NOTHING (no RETURNING row), which avoids the
+            // unique-violation that would otherwise poison the transaction and fail the dedup open.
             let fire_id: Option<i64> = sqlx::query_scalar(
                 r#"INSERT INTO weissman_alert_rule_fires
                    (tenant_id, rule_id, finding_id, channels, delivered)
                    VALUES ($1, $2, $3, $4, false)
+                   ON CONFLICT (rule_id, finding_id) DO NOTHING
                    RETURNING id"#,
             )
             .bind(tenant_id)
@@ -174,18 +164,21 @@ async fn evaluate_tenant(app_pool: &PgPool, tenant_id: i64) -> Result<u32, Strin
             .ok()
             .flatten();
 
+            // No row returned ⇒ this (rule, finding) already fired ⇒ skip delivery.
+            let Some(fire_id) = fire_id else {
+                continue;
+            };
+
             let delivered =
                 deliver_alert(app_pool, tenant_id, &rule_info, &finding_info, &channels).await;
 
             if delivered {
-                if let Some(id) = fire_id {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_alert_rule_fires SET delivered = true WHERE id = $1",
-                    )
-                    .bind(id)
-                    .execute(&mut *tx)
-                    .await;
-                }
+                let _ = sqlx::query(
+                    "UPDATE weissman_alert_rule_fires SET delivered = true WHERE id = $1",
+                )
+                .bind(fire_id)
+                .execute(&mut *tx)
+                .await;
             }
 
             fired += 1;

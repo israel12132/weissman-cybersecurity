@@ -19,7 +19,9 @@ _RETRY_BACKOFF_BASE = 0.5
 
 
 def _binary_path() -> Path | None:
-    base = Path(__file__).resolve().parent.parent.parent / "fingerprint_engine"
+    # This file lives at <repo>/legacy/python-src/engines/_rust_runner.py, so the
+    # repo root is FOUR parents up (engines -> python-src -> legacy -> <repo>).
+    base = Path(__file__).resolve().parent.parent.parent.parent / "fingerprint_engine"
     for name in ["target/release/fingerprint_engine", "target/debug/fingerprint_engine"]:
         p = base / name
         if p.exists():

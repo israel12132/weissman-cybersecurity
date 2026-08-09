@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const SCROLL_DURATION_MS = 8000
 
@@ -9,6 +9,13 @@ const SCROLL_DURATION_MS = 8000
  */
 export default function EmergencyAlert({ message, onComplete }) {
   const [visible, setVisible] = useState(!!message)
+  // Keep the latest onComplete in a ref so the timer effect depends only on `message`.
+  // Depending on the unstable onComplete prop restarted the 8s timer on every parent
+  // re-render, so the banner could keep resetting and never actually complete.
+  const onCompleteRef = useRef(onComplete)
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+  }, [onComplete])
 
   useEffect(() => {
     if (!message) {
@@ -19,10 +26,10 @@ export default function EmergencyAlert({ message, onComplete }) {
     const totalMs = SCROLL_DURATION_MS
     const t = setTimeout(() => {
       setVisible(false)
-      onComplete?.()
+      onCompleteRef.current?.()
     }, totalMs)
     return () => clearTimeout(t)
-  }, [message, onComplete])
+  }, [message])
 
   if (!visible || !message) return null
 

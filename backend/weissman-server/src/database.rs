@@ -24,8 +24,16 @@ pub async fn connect_pools() -> Result<Pools, sqlx::Error> {
         ));
     }
     let app = fingerprint_engine::db::connect_app(database_url.trim()).await?;
-    let auth_url =
-        std::env::var("WEISSMAN_AUTH_DATABASE_URL").unwrap_or_else(|_| database_url.clone());
+    let auth_url = std::env::var("WEISSMAN_AUTH_DATABASE_URL").unwrap_or_else(|_| {
+        // Surface the fallback: silently reusing DATABASE_URL runs login/user-management as
+        // `weissman_app` instead of `weissman_auth`, discarding the role separation the migrations
+        // construct — with no other signal that it happened.
+        tracing::warn!(
+            target: "weissman_db",
+            "WEISSMAN_AUTH_DATABASE_URL unset — auth pool reusing DATABASE_URL; weissman_app/weissman_auth role separation disabled"
+        );
+        database_url.clone()
+    });
     if let Err(msg) = weissman_db::env_bootstrap::validate_database_url(auth_url.trim()) {
         return Err(sqlx::Error::Configuration(
             format!("WEISSMAN_AUTH_DATABASE_URL: {}", msg).into(),

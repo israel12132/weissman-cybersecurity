@@ -23,20 +23,35 @@ pub async fn deploy_and_stream_ebpf(
     client_id: &str,
     ingest_url: &str,
 ) -> Result<(), String> {
-    let cmd = match auth {
-        SshAuth::Key { key_path } => {
-            let path = key_path.to_string_lossy();
-            format!(
-                "ssh -o StrictHostKeyChecking=no -o ConnectTimeout={} -i {} -p {} {}@{} 'bpftrace -e \"tracepoint:syscalls:sys_enter_openat {{ printf(\\\"%d\\n\\\", pid); }}\" 2>/dev/null || echo NO_BPFTRACE'",
-                SSH_TIMEOUT_SECS, path, port, username, host
-            )
-        }
+    let key_path = match auth {
+        SshAuth::Key { key_path } => key_path.clone(),
         SshAuth::Password(_) => {
             return Err("Password auth for eBPF deploy not supported (use key)".to_string());
         }
     };
-    let mut child = Command::new("sh")
-        .args(["-c", &cmd])
+    // SECURITY: never build a shell string from caller-supplied host/username. Those values
+    // originate from scan-request JSON; interpolating them into `sh -c` was a remote command
+    // injection (e.g. host = "x; rm -rf / #"). Invoke ssh directly with each value as its own
+    // argv element so no local shell ever parses them. The remote command below is a fixed
+    // literal, not user input.
+    if host.starts_with('-') || username.starts_with('-') {
+        // Reject destinations ssh could parse as an option (e.g. -oProxyCommand=...).
+        return Err("invalid host or username".to_string());
+    }
+    const REMOTE_CMD: &str = r#"bpftrace -e "tracepoint:syscalls:sys_enter_openat { printf(\"%d\n\", pid); }" 2>/dev/null || echo NO_BPFTRACE"#;
+    let mut child = Command::new("ssh")
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg(format!("ConnectTimeout={}", SSH_TIMEOUT_SECS))
+        .arg("-i")
+        .arg(key_path.as_os_str())
+        .arg("-p")
+        .arg(port.to_string())
+        .arg("-l")
+        .arg(username)
+        .arg(host)
+        .arg(REMOTE_CMD)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()

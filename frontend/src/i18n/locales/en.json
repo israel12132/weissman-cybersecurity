@@ -65,7 +65,10 @@
     "saving": "Saving…",
     "on": "on",
     "off": "off",
-    "enabled": "Enabled"
+    "enabled": "Enabled",
+    "export_pdf": "Export PDF",
+    "reset": "Reset",
+    "running": "Running…"
   },
   "a11y": {
     "skip_to_content": "Skip to main content",
@@ -425,7 +428,10 @@
     "scan_confirm_full": "Queue the baseline scan bundle (OSINT, ASM, leak hunter, discovery, supply chain, BOLA/IDOR, TLS, WAF bypass) for \"{{name}}\"?",
     "track_suffix": "once scans complete.",
     "compute_title": "Compute the FAIR-aligned blast-radius now",
-    "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only."
+    "evidence_notice": "Client roster from GET /api/clients. FAIR blast-radius from GET /api/financial-risk/:clientId (recompute via ?recompute=1). Baseline scans queue via POST /api/clients/:id/scan/run-all — tenant-scoped live records only.",
+    "fleet_attack_none": "No fleet attack techniques observed.",
+    "portfolio_worst_none": "No matching clients.",
+    "scan_action": "Launch Scan"
   },
   "auth": {
     "tenant_slug": "Tenant slug",
@@ -843,7 +849,8 @@
     "generate_report": "Generate Report",
     "generate_report_desc": "Export PDF/CSV",
     "attack_surface": "Attack Surface",
-    "attack_surface_desc": "View ASM graph"
+    "attack_surface_desc": "View ASM graph",
+    "integrations": "Integrations"
   },
   "clients": {
     "title": "Clients",
@@ -1007,7 +1014,8 @@
     "remediation_playbook": "Remediation Playbook",
     "telemetry": "Scan Telemetry",
     "awaiting": "Awaiting assessment…",
-    "findings": "Findings"
+    "findings": "Findings",
+    "no_findings": "No findings yet — configure target and run scan."
   },
   "iacSecurity": {
     "title": "IaC Security Center",
@@ -1628,7 +1636,10 @@
       "scan_started": "Scan started: {{count}} job(s) queued.",
       "scan_started_ok": "Scan started successfully!",
       "scan_start_failed": "Failed to start scan",
-      "evidence_notice": "Scheduled scan definitions from GET/POST /api/scan-schedules. Cron fires enqueue real POST /api/command-center/scan jobs — empty calendar means no schedules configured yet."
+      "evidence_notice": "Scheduled scan definitions from GET/POST /api/scan-schedules. Cron fires enqueue real POST /api/command-center/scan jobs — empty calendar means no schedules configured yet.",
+      "delete_failed": "Failed to delete schedule",
+      "delete_success": "Schedule deleted",
+      "delete_title": "Delete schedule"
     },
     "systemConfiguration": {
       "title": "System Configuration",
@@ -1989,7 +2000,9 @@
       "program_risk": "risk",
       "program_sla_overdue": "Overdue {{days}}d",
       "program_sla_due": "Due in {{days}}d",
-      "program_sla_unknown": "No SLA clock"
+      "program_sla_unknown": "No SLA clock",
+      "program_no_match": "No remediation actions match.",
+      "program_search": "Search remediation actions…"
     },
     "alertRulesEngine": {
       "title": "Alert Rules Engine",
@@ -2008,7 +2021,18 @@
       "delete_confirm": "Are you sure you want to delete this alert rule?",
       "test_success": "Test successful! {{count}} findings matched this rule.",
       "test_failed": "Test failed. Check rule conditions.",
-      "evidence_notice": "Detection rules from GET/POST /api/alert-rules. Firings correlate to live finding events in your tenant — rules never evaluate against synthetic event feeds."
+      "evidence_notice": "Detection rules from GET/POST /api/alert-rules. Firings correlate to live finding events in your tenant — rules never evaluate against synthetic event feeds.",
+      "delete_failed": "Failed to delete rule",
+      "delete_success": "Rule deleted",
+      "delete_title": "Delete rule",
+      "load_failed": "Failed to load alert rules",
+      "rule_disabled": "Rule disabled",
+      "rule_enabled": "Rule enabled",
+      "save_created": "Rule created",
+      "save_updated": "Rule updated",
+      "save_failed": "Failed to save rule",
+      "test_error": "Failed to test rule",
+      "toggle_failed": "Failed to toggle rule"
     },
     "adminManagement": {
       "search_users": "Search users…",
@@ -2034,7 +2058,10 @@
       "user_created": "User created successfully",
       "user_updated": "User updated successfully",
       "user_deleted": "User deleted successfully",
-      "evidence_notice": "Tenant administration, user roster, and RBAC mutations via authenticated /api/admin/* and /api/users endpoints. Every change is audit-logged to GET /api/audit-logs."
+      "evidence_notice": "Tenant administration, user roster, and RBAC mutations via authenticated /api/admin/* and /api/users endpoints. Every change is audit-logged to GET /api/audit-logs.",
+      "deactivate_title": "Deactivate user",
+      "deactivate_confirm": "Deactivate user {{email}}? They will lose access immediately.",
+      "deactivate_action": "Deactivate"
     },
     "complianceFrameworks": {
       "title": "Compliance Frameworks",
@@ -2110,7 +2137,8 @@
       "framework_score": "{{score}}% compliant",
       "gap_title": "Gap Analysis",
       "gap_body": "{{count}} controls are non-compliant in {{framework}}. Address these gaps to improve certification readiness.",
-      "open_remediation": "Open Remediation Hub"
+      "open_remediation": "Open Remediation Hub",
+      "posture_no_match": "No frameworks match."
     },
     "clientNew": {
       "title": "Add New Client",
@@ -2209,7 +2237,9 @@
       "complete_missing": "Missing requirements — go back to previous steps",
       "ready_title": "Client ready — all module requirements satisfied",
       "gaps_title": "Missing requirements — {{pct}}% ready",
-      "fix_in_settings": "Update missing fields in client settings"
+      "fix_in_settings": "Update missing fields in client settings",
+      "aws_external_id": "AWS External ID",
+      "configure_tenant": "Configure tenant"
     },
     "threatIntelHub": {
       "title": "Threat Intelligence Hub",
@@ -2878,7 +2908,10 @@
       "saving": "Saving…",
       "save_changes": "Save Changes",
       "last_test": "Last tested: {{time}}",
-      "evidence_notice": "SIEM, ticketing, and webhook integrations configured via GET/PUT /api/integrations. Delivery health reflects last successful outbound call — credentials never echoed to the UI."
+      "evidence_notice": "SIEM, ticketing, and webhook integrations configured via GET/PUT /api/integrations. Delivery health reflects last successful outbound call — credentials never echoed to the UI.",
+      "delete_failed": "Failed to delete integration",
+      "delete_success": "Integration deleted",
+      "delete_title": "Delete integration"
     },
     "killChainOrchestrator": {
       "title": "Kill Chain Orchestrator",
@@ -3223,7 +3256,13 @@
           "description": "NPM/PyPI impersonation package detection"
         }
       },
-      "evidence_notice": "SBOM, dependency, and typosquat findings from POST /api/command-center/scan (sbom_analyzer / typosquatting_monitor / supply_chain engines). Package rows map to verifiable registry lookups."
+      "evidence_notice": "SBOM, dependency, and typosquat findings from POST /api/command-center/scan (sbom_analyzer / typosquatting_monitor / supply_chain engines). Package rows map to verifiable registry lookups.",
+      "aggregated_findings": "Supply Chain Findings",
+      "empty_findings_body": "Run any engine above to populate live findings.",
+      "empty_findings_title": "No supply chain findings yet",
+      "open_command_center": "Open CI/CD Command Center →",
+      "ready_body": "Select a client and run a supply-chain engine.",
+      "ready_title": "Ready to scan"
     },
     "digitalTwinSimulator": {
       "title": "Digital Twin Live Probes",
@@ -3722,7 +3761,11 @@
       "cancel": "Cancel",
       "saving": "Saving...",
       "save_secret": "Save Secret",
-      "evidence_notice": "Executive evidence vault entries from GET /api/ceo/vault and related /api/ceo/* endpoints. Genesis HPC and vaccine artifacts require CEO RBAC — no placeholder crown-jewel rows."
+      "evidence_notice": "Executive evidence vault entries from GET /api/ceo/vault and related /api/ceo/* endpoints. Genesis HPC and vaccine artifacts require CEO RBAC — no placeholder crown-jewel rows.",
+      "delete_failed": "Failed to delete secret",
+      "delete_success": "Secret deleted",
+      "delete_title": "Delete secret",
+      "load_failed": "Failed to load secrets"
     },
     "identityContextManager": {
       "title": "Identity Context Manager",
@@ -3752,7 +3795,10 @@
       "anomalies_label": "Anomalies",
       "recent_activity": "Recent Activity",
       "close": "Close",
-      "evidence_notice": "Identity context and IdP discovery from GET /api/identity-context and client-scoped SaaS/IdP endpoints. Correlation rows map to live SSO/OAuth metadata — not sample Entra tenants."
+      "evidence_notice": "Identity context and IdP discovery from GET /api/identity-context and client-scoped SaaS/IdP endpoints. Correlation rows map to live SSO/OAuth metadata — not sample Entra tenants.",
+      "oauth_hub_title": "OAuth & token security hub",
+      "oauth_hub_body": "Review OAuth grants, token scopes and third-party app risk in the dedicated identity security console.",
+      "oauth_hub_cta": "Open identity security"
     },
     "ceoCommandCenter": {
       "title": "CEO command center",
@@ -3797,7 +3843,11 @@
       "load_failed": "Failed to load engagements (HTTP {{status}}) {{detail}}",
       "create_failed": "Create failed",
       "close_failed": "Close failed",
-      "network_error": "Network error"
+      "network_error": "Network error",
+      "close_action": "Close engagement",
+      "close_success": "Engagement closed",
+      "close_title": "Close engagement",
+      "create_success": "Engagement created"
     },
     "clientEvidenceVault": {
       "title": "Evidence Vault",
@@ -3837,7 +3887,9 @@
       "delete_failed": "Delete failed",
       "load_client_failed": "Failed to load client (HTTP {{status}})",
       "load_failed": "Failed to load evidence (HTTP {{status}}) {{detail}}",
-      "network_error": "Network error"
+      "network_error": "Network error",
+      "delete_success": "Evidence deleted",
+      "delete_title": "Delete evidence"
     },
     "roeApprovals": {
       "title": "ROE Approvals",
@@ -3856,7 +3908,13 @@
       "approve_failed": "Approve failed (HTTP {{status}})",
       "reject_failed": "Reject failed (HTTP {{status}})",
       "network_error": "Network error",
-      "evidence_notice": "Rules-of-Engagement requests from GET /api/roe and approval mutations via POST /api/roe/:id/approve. No scan executes until RoE is approved for the target scope."
+      "evidence_notice": "Rules-of-Engagement requests from GET /api/roe and approval mutations via POST /api/roe/:id/approve. No scan executes until RoE is approved for the target scope.",
+      "approve_success": "Override request approved",
+      "reject_action": "Reject",
+      "reject_reason_label": "Reason",
+      "reject_reason_placeholder": "Reason for rejection…",
+      "reject_success": "Override request rejected",
+      "reject_title": "Reject override request"
     },
     "councilHitlQueue": {
       "title": "Council HITL Queue",
@@ -3924,7 +3982,8 @@
       "verified": "✓ VERIFIED",
       "not_verified": "NOT VERIFIED",
       "run_failed": "Run failed",
-      "evidence_notice": "Closed-loop verification re-runs remediated findings via POST /api/command-center/scan and compares against GET /api/findings history — confirms fixes on live targets."
+      "evidence_notice": "Closed-loop verification re-runs remediated findings via POST /api/command-center/scan and compares against GET /api/findings history — confirms fixes on live targets.",
+      "select_client": "— Select client —"
     },
     "mobileSecurity": {
       "title": "Mobile & App Security",
@@ -4171,7 +4230,8 @@
         "jumpcloud": "JumpCloud",
         "duo": "Duo",
         "adfs": "ADFS (on-prem)"
-      }
+      },
+      "copy_manual_title": "Copy manually"
     },
     "oastDashboard": {
       "title": "OAST / OOB Dashboard",
@@ -4279,7 +4339,11 @@
       "kpi_running": "Running",
       "kpi_findings": "Findings",
       "empty_client_title": "Select a client to run OSINT",
-      "empty_client_body": "Choose a client from the run panel to scope reconnaissance against authorized domains."
+      "empty_client_body": "Choose a client from the run panel to scope reconnaissance against authorized domains.",
+      "col_discovered": "Discovered",
+      "col_severity": "Severity",
+      "col_title": "Title",
+      "col_type": "Type"
     },
     "superpositionCollapse": {
       "title": "Risk Superposition Collapse",
@@ -4377,7 +4441,17 @@
       "poison_lib": "Poison library",
       "cognitive_feed": "Bot starvation sessions",
       "findings": "{{engine}} findings",
-      "no_findings": "No findings yet — configure and run"
+      "no_findings": "No findings yet — configure and run",
+      "auto_freeze": "Auto-freeze on critical signal",
+      "chronos_observation_window": "Observation window (ms)",
+      "chronos_sample_interval": "Sample interval (ms)",
+      "deploy_ebpf": "Deploy eBPF sensor",
+      "ebpf_ssh_title": "eBPF SSH deployment",
+      "ebpf_ssh_host": "SSH host",
+      "ebpf_ssh_user": "SSH user",
+      "ebpf_ssh_port": "SSH port",
+      "ebpf_ssh_key_pem": "SSH private key (PEM)",
+      "ebpf_ssh_key_path": "SSH key path"
     },
     "topTierEngineProfile": {
       "unknown_engine": "Unknown Top-Tier engine: {{id}}",
@@ -4434,7 +4508,8 @@
       "col_created": "Created",
       "evidence_notice": "Audit, history, and exports from GET /api/engines/top-tier/* and POST /api/command-center/scan — live engine evidence only.",
       "empty_jobs_title": "No jobs tracked yet",
-      "empty_jobs_body": "Queue a scan from the run panel to populate job history for this Top-Tier engine."
+      "empty_jobs_body": "Queue a scan from the run panel to populate job history for this Top-Tier engine.",
+      "command_center": "Command Center"
     },
     "ssoDashboard": {
       "title": "SSO & Identity Providers",
@@ -4846,13 +4921,137 @@
       "coverage_enabled": "Enabled",
       "coverage_executed": "Executed",
       "coverage_passed": "Passed",
-      "coverage_failed": "Failed"
+      "coverage_failed": "Failed",
+      "client": "Client",
+      "concurrency": "Concurrency",
+      "hide_params": "▾ Parameters",
+      "show_params": "▸ Parameters",
+      "probe_categories": "Probe categories",
+      "posture_dimensions": "Posture dimensions",
+      "hardening_roadmap": "Hardening roadmap",
+      "scan_failed": "Scan failed",
+      "scanning": "⟳ Scanning…",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "last_completed": "Last completed: {{time}}",
+      "badge": "DNS / DNSSEC / BGP / RPKI",
+      "title": "DNS & BGP Hijack-Resistance",
+      "subtitle": "World-class hijack resistance — authoritative NS direct query, recursive consensus, DNSSEC, RPKI/BGP/IRR, RDAP lock, TLS bind, dual-stack & compound detection. Live, read-only.",
+      "critical_signal": "Critical hijack signal — multi-plane corroboration detected",
+      "discovery_graph": "Autonomous discovery graph",
+      "expected_a_ips": "Expected A IPs (allow-list)",
+      "expected_asns": "Expected origin ASNs",
+      "expected_countries": "Expected countries (ISO-2, geo check)",
+      "first_actions": "First actions",
+      "hijack_resistance": "Hijack-Resistance",
+      "incident_bundle": "SOC incident bundle",
+      "low_ttl_threshold": "Low-TTL threshold (s)",
+      "max_ct_hosts": "Max CT hosts to discover",
+      "no_findings": "No exposures returned — hijack-resistance posture appears strong.",
+      "queued": "Posture scan queued ({{jobId}})",
+      "resolver_timing_factor": "Resolver timing factor (×)",
+      "resolvers": "Custom resolvers (name=DoH-URL per line)",
+      "ripe_base": "RIPEstat base URL",
+      "run_scan": "▶ Run Posture Scan",
+      "run_to_populate": "Run a posture scan to assess DNS resolution & BGP routing integrity.",
+      "select_client_warning": "Select an in-scope client and target domain to run the posture scan.",
+      "subdomains": "Static subdomain wordlist (optional)",
+      "target_domain": "Target domain",
+      "target_required": "A target domain is required",
+      "threat_planes": "Threat planes",
+      "timeout_ms": "Timeout (ms)"
     },
     "webCachePosture": {
-      "evidence_notice": "Web cache poisoning and header-smuggling probes via POST /api/command-center/scan (cache_poisoning). Each hit is a reproducible HTTP response differential on your authorized target."
+      "evidence_notice": "Web cache poisoning and header-smuggling probes via POST /api/command-center/scan (cache_poisoning). Each hit is a reproducible HTTP response differential on your authorized target.",
+      "client": "Client",
+      "concurrency": "Concurrency",
+      "hide_params": "▾ Parameters",
+      "show_params": "▸ Parameters",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "probe_categories": "Probe categories",
+      "posture_dimensions": "Posture dimensions",
+      "hardening_roadmap": "Hardening roadmap",
+      "scan_failed": "Scan failed",
+      "scanning": "⟳ Scanning…",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "target_url": "Target URL",
+      "target_required": "A target URL is required",
+      "weak_areas": "Weak areas:",
+      "include_info": "Include informational findings",
+      "last_completed": "Last completed: {{time}}",
+      "badge": "WEB CACHE / CDN EDGE",
+      "title": "Web Cache Poisoning & Deception",
+      "subtitle": "v11 SEALED — 51 real-probe categories, configurable canary domain, duplicate-header + If-Modified-Since oracles, competitive coverage manifest. Cache-buster isolated. Zero fabrication.",
+      "attack_chains": "Attack chains (confirmed primitives)",
+      "beyond_score": "Beyond {{n}}/100",
+      "cache_hardening": "Cache Hardening",
+      "canary_domain": "Canary poison domain",
+      "category": "Category",
+      "cdn_playbook": "CDN hardening playbook",
+      "competitive_parity": "Parity {{n}}/100",
+      "compliance_map": "Compliance mapping",
+      "confirmed_primitives": "{{n}} confirmed",
+      "coverage_manifest": "Competitive coverage",
+      "deception_exts": "Cache-deception extensions",
+      "defense_controls": "Required defense controls",
+      "exploitability": "Exploitability {{n}}/100",
+      "extra_headers": "Extra unkeyed headers",
+      "max_paths": "Max paths (0=auto)",
+      "no_findings": "No cache-poisoning or deception primitive observed — cache-key hygiene looks strong.",
+      "path_concurrency": "Parallel path fan-out",
+      "paths": "Paths to test",
+      "poison_window": "Poison window ~{{n}}s",
+      "probes": "probes",
+      "probes_run": "Probes enabled:",
+      "query_param": "Query unkeyed param name",
+      "queued": "Posture scan queued ({{jobId}})",
+      "risk_matrix": "Risk matrix (category × severity)",
+      "run_scan": "▶ Run Posture Scan",
+      "run_to_populate": "Run a posture scan to assess cache-key security, unkeyed-input poisoning and web cache deception.",
+      "sealed": "SEALED",
+      "select_client_warning": "Select an in-scope client and target URL to run the posture scan.",
+      "shared_cache_no": "No shared cache observed",
+      "shared_cache_yes": "Shared cache detected",
+      "timeout_ms": "Per-probe timeout (ms)",
+      "top_primitives": "Top primitives (triage)"
     },
     "httpSmugglingPosture": {
-      "evidence_notice": "HTTP request-smuggling and desync tests via POST /api/command-center/scan (http_smuggling). Desync evidence requires live front/back-end behavior on the authorized host."
+      "evidence_notice": "HTTP request-smuggling and desync tests via POST /api/command-center/scan (http_smuggling). Desync evidence requires live front/back-end behavior on the authorized host.",
+      "client": "Client",
+      "concurrency": "Concurrency",
+      "hide_params": "▾ Parameters",
+      "show_params": "▸ Parameters",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "probe_categories": "Probe categories",
+      "scan_failed": "Scan failed",
+      "scanning": "⟳ Scanning…",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "target_url": "Target URL",
+      "target_required": "A target URL is required",
+      "weak_areas": "Weak areas:",
+      "include_info": "Include informational findings",
+      "last_completed": "Last completed: {{time}}",
+      "badge": "HTTP DESYNC / SMUGGLING",
+      "title": "HTTP Request Smuggling & Desync Posture",
+      "subtitle": "Raw-wire HTTP/1.1 desync arsenal: CL.TE / TE.CL / 0.CL / TE.TE, TE obfuscation oracle, dual-response & timing oracles, HTTP pipeline, h2c upgrade, chunk extensions, client-side desync, H2 downgrade schism, attack-path synthesis & 0–100 posture grade. PortSwigger + BishopFox class — evidence-only.",
+      "canary_prefix": "Smuggle canary prefix",
+      "desync_resistance": "Desync Resistance",
+      "no_findings": "No HTTP desync indicators observed — front/back-end parsing appears consistent.",
+      "paths": "Paths to test",
+      "queued": "Desync scan queued ({{jobId}})",
+      "run_scan": "▶ Run Desync Scan",
+      "run_to_populate": "Run a desync scan to assess CL.TE/TE.CL confusion, TE obfuscation, pipeline behaviour and protocol-boundary fractures.",
+      "select_client_warning": "Select an in-scope client and target URL to run the desync posture scan.",
+      "timeout_ms": "Per-probe timeout (ms)",
+      "worst": "Worst: {{sev}}"
     },
     "emailDnsPosture": {
       "evidence_notice": "Email authentication posture (SPF/DKIM/DMARC/BIMI) from POST /api/command-center/scan (email_dns_posture). MX and TXT lookups are live — misconfigurations map to real deliverability risk.",
@@ -5282,10 +5481,49 @@
       "inv_runall": "Run all ({{count}}) — stealth",
       "inv_runall_hint": "Stealth-dispatch every matching engine (rate-limited, jittered, WAF-safe)",
       "inv_batch_ok": "Stealth batch queued: {{count}} engines · {{waves}} waves · ~{{eta}} drip",
-      "inv_batch_err": "Deploy failed: {{detail}}"
+      "inv_batch_err": "Deploy failed: {{detail}}",
+      "title": "Threat Analysis Center",
+      "subtitle": "Multi-stage attack correlation across network, identity and exposure signals.",
+      "attack_chain": "Attack chain",
+      "correlation_incidents": "Correlation incidents",
+      "detections": "Detections (network / identity)",
+      "error_title": "Failed to load threat analysis",
+      "exposure_no_match": "No techniques match.",
+      "findings_analyzed": "{{n}} findings analyzed",
+      "goal": "Goal",
+      "incident_score": "Incident score",
+      "multi_stage": "Multi-stage incidents",
+      "no_client_body": "Select a client to run multi-stage threat correlation.",
+      "no_client_title": "No client selected",
+      "no_incidents": "No correlated incidents",
+      "persist": "Persist incidents",
+      "persisted": "{{n}} incidents persisted",
+      "persisting": "Persisting…",
+      "reached_objective": "Reached objective",
+      "target": "Target"
     },
     "engineReliability": {
-      "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater."
+      "evidence_notice": "Engine SLO, error budgets, and circuit-breaker state from GET /api/engines/telemetry and GET /api/engines/capabilities. Counters reflect real worker execution — no uptime theater.",
+      "title": "Engine Reliability",
+      "subtitle": "Live health, self-heal and reality classification for every engine.",
+      "total_engines": "Total Engines",
+      "remote_capable": "Remote Capable",
+      "real_probes": "Real Probes",
+      "aliases": "Aliases",
+      "agent_required": "Agent Required",
+      "all": "All",
+      "legend": "Legend",
+      "col_engine": "Engine",
+      "engines_observed": "Engines Observed",
+      "failed_note": "{{failed}} failed",
+      "never_run": "never run",
+      "no_match": "No engines match the current filters.",
+      "only_remote": "Remote-capable only",
+      "only_runs": "With runs only",
+      "recovery_rate": "Recovery Rate",
+      "search_ph": "Search engines...",
+      "shown": "Shown",
+      "total_runs": "Total Runs"
     },
     "nexusSovereignSwarm": {
       "evidence_notice": "Swarm deployments queue via POST /api/command-center/scan (nexus_sovereign_swarm). Live agent fleet status from GET /api/agents/status. WebSocket telemetry streams real worker events — never scripted hive animations."
@@ -5310,6 +5548,96 @@
     },
     "intelMap": {
       "evidence_notice": "Geographic intel overlay from GET /api/findings geo tags and GET /api/threat-intel/feed — map pins appear only when findings include resolvable location metadata."
+    },
+    "fileUploadLab": {
+      "client": "Client",
+      "hide_params": "▾ Parameters",
+      "show_params": "▸ Parameters",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "posture_dimensions": "Posture dimensions",
+      "hardening_roadmap": "Hardening roadmap",
+      "scan_failed": "Scan failed",
+      "scanning": "⟳ Scanning…",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "target_url": "Target URL",
+      "target_required": "A target URL is required",
+      "weak_areas": "Weak areas:",
+      "include_info": "Include informational findings",
+      "badge": "UNRESTRICTED UPLOAD / RCE",
+      "title": "File Upload Security Lab",
+      "subtitle": "Apex-grade upload arsenal: RTLO/NFKC bypass, cloud-native paths (Vercel/Firebase/R2), gzip/Expect-continue, overwrite oracle, path entropy + remediation urgency, XLSM/PDF-JS surfaces — plus full Omega/Ultra wave. 23-dimension posture, enterprise risk tier — benign canaries, evidence only.",
+      "attack_paths": "Attack paths",
+      "attack_reference": "Attack reference",
+      "auth_cookie": "Session cookie",
+      "auth_header": "Authorization header",
+      "bypass_matrix": "Bypass matrix",
+      "canary_token": "Canary token",
+      "empty_ready": "Run an upload scan to assess bypass resistance.",
+      "extra_endpoints": "Extra endpoints",
+      "field_names": "Field names",
+      "no_findings": "No upload vulnerabilities verified — posture is strong or endpoints not reachable.",
+      "oast_host": "OAST callback host (optional)",
+      "probe_coverage": "Probe coverage manifest",
+      "queued": "Upload scan queued ({{jobId}})",
+      "run_scan": "▶ Run Upload Scan",
+      "stack_pack": "Platform pack",
+      "toxic_combinations": "Toxic combinations",
+      "upload_paths": "Upload paths",
+      "upload_posture": "Upload Posture"
+    },
+    "pkiTlsPosture": {
+      "client": "Client",
+      "hide_params": "▾ Parameters",
+      "show_params": "▸ Parameters",
+      "intensity": "Intensity",
+      "intensity_light": "Light",
+      "intensity_normal": "Normal",
+      "intensity_aggressive": "Aggressive",
+      "probe_categories": "Probe categories",
+      "scan_failed": "Scan failed",
+      "scanning": "⟳ Scanning…",
+      "select_client": "— Select client —",
+      "select_client_first": "Select a client first",
+      "last_completed": "Last completed: {{time}}",
+      "badge": "SSL-LABS CLASS · LIVE HANDSHAKES",
+      "title": "PKI / TLS Command Center",
+      "subtitle": "Real OpenSSL handshakes: protocol matrix, cipher enumeration, certificate forensics, vulnerability heuristics, HSTS/CAA/DANE/CT, SSL-Labs-style grading & PCI/NIST compliance tags. Every control maps 1:1 to engine parameters.",
+      "cipher_limit": "Cipher walk depth",
+      "no_findings": "No TLS endpoints reachable on the selected ports.",
+      "ports": "TLS ports",
+      "protocols": "Protocols (blank = all)",
+      "queued": "TLS scan queued ({{jobId}})",
+      "run_scan": "▶ Run TLS Assessment",
+      "run_to_populate": "Run a TLS assessment to map protocols, ciphers, certificates, and transport hardening with live handshakes.",
+      "select_client_warning": "Select an in-scope client and target to run the TLS assessment.",
+      "sni": "SNI override",
+      "starttls": "STARTTLS",
+      "target": "Target host / URL",
+      "target_required": "A target host/URL is required",
+      "timeout_ms": "Handshake timeout (ms)",
+      "tls_posture": "TLS Posture",
+      "worst": "Worst: {{sev}}"
+    },
+    "transportSecurity": {
+      "badge": "TLS / mTLS / gRPC / HTTP HARDENING",
+      "title": "Transport Security Command Center",
+      "subtitle": "Agentless world-class transport posture: live TLS handshakes, weak-crypto matrix, gRPC/gRPC-Web/Connect-RPC, mTLS enforcement, HSTS/CSP/cookies, h2c/HTTP/3, DANE/CAA/CT, TRACE/CORS, cert fingerprint matrix, attack-path synthesis & 0–100 grade — every finding evidence-backed.",
+      "client": "Client",
+      "grade": "Grade",
+      "intensity": "Intensity",
+      "no_findings": "No transport exposure observed.",
+      "profile": "Profile",
+      "queued": "Transport scan queued ({{id}})",
+      "run_hint": "Run a scan to assess TLS, mTLS, gRPC and HTTP hardening.",
+      "score": "Transport posture",
+      "select_client": "Select a client first",
+      "select_client_opt": "— Select —",
+      "target": "Target",
+      "target_required": "Target required"
     }
   },
   "components": {
@@ -5371,7 +5699,8 @@
     "neuralEngineWeb": {
       "title": "Neural engine web",
       "no_clients": "No clients yet",
-      "no_engines": "No engines active"
+      "no_engines": "No engines active",
+      "idle": "Idle — awaiting engine activity"
     },
     "cockpitWidgets": {
       "protectedRoute": {
@@ -5726,7 +6055,10 @@
           "paths_wordlist": "Paths (wordlist)",
           "targets": "Targets",
           "paths": "Paths"
-        }
+        },
+        "no_attack_surface": "No attack surface data yet.",
+        "no_trend": "No trend data",
+        "no_zero_day": "No zero-day activity"
       },
       "execKpiStrip": {
         "no_change_vs_24h": "No change vs. 24h",
@@ -6765,7 +7097,8 @@
       "statusAcknowledged": "Acknowledged",
       "statusInProgress": "In Progress",
       "statusFixed": "Fixed",
-      "statusFalsePositive": "False Positive"
+      "statusFalsePositive": "False Positive",
+      "noRemediation": "No remediation guidance available."
     },
     "globalSearch": {
       "placeholder": "Search anything... (pages, engines, findings, clients)",
@@ -6905,7 +7238,8 @@
       "resolvedIps": "resolved ips"
     },
     "evidence_notice": "Live target profile from GET /api/intel/target-profile — provenance, service fingerprint, and engine selection.",
-    "search_placeholder": "Filter engines…"
+    "search_placeholder": "Filter engines…",
+    "searchEngines": "Search engines…"
   },
   "stealthOps": {
     "title": "Stealth Operations",
@@ -6948,7 +7282,8 @@
     "noRequests": "No requests in flight. Launch a scan to see the queue shape traffic per target.",
     "evidence_notice": "Live pacing telemetry from GET /api/stealth/status — concurrency caps, saturation, and per-host admission.",
     "search_placeholder": "Filter hosts…",
-    "no_match": "No matching hosts"
+    "no_match": "No matching hosts",
+    "noMatch": "No hosts match your filters."
   },
   "engineAccounting": {
     "title": "Capability accounting · honest count",
@@ -6958,5 +7293,25 @@
     "agentRequired": "Agent-required",
     "remotelyDetecting": "Remotely detecting",
     "ratioLabel": "Distinct capability ratio (distinct real probes ÷ advertised IDs)"
+  },
+  "serverlessSec": {
+    "title": "Serverless Security Command Center",
+    "subtitle": "Agentless FaaS posture — Lambda, Azure Functions, Vercel, Netlify, Cloudflare Workers — Wiz-grade attack-path synthesis",
+    "hero_desc": "Evidence-only remote assessment: platform fingerprinting, env leaks, CORS, IaC exposure, event injection — every finding backed by a real HTTP signal.",
+    "control": "Serverless Control Column",
+    "scope": "Probe Scope",
+    "paths": "Path Corpora",
+    "tuning": "Tuning & Transport",
+    "extra_headers": "Extra Headers",
+    "add_header": "Add",
+    "header_name": "Header",
+    "header_value": "Value",
+    "remove_header": "Remove header",
+    "no_headers": "No custom headers — Authorization/Bearer sent separately.",
+    "output": "Output & Synthesis",
+    "run": "Run Serverless Scan",
+    "no_findings": "No findings yet — configure target and run scan.",
+    "telemetry": "Live Telemetry",
+    "reference": "Attack Reference"
   }
 }

@@ -1211,7 +1211,7 @@ export default function NexusSovereignSwarm() {
   const [oracleSynth, setOracleSynth] = useState(null)
   const [launchingEngine, setLaunchingEngine] = useState(null)
   const [liveEvents, setLiveEvents] = useState([])
-  const [lastEventId, setLastEventId] = useState(0)
+  const lastEventIdRef = useRef(0)
   const [customPresets, setCustomPresets] = useState(() => loadCustomPresets())
   const [configSchema, setConfigSchema] = useState(null)
   const [schemaParity, setSchemaParity] = useState(null)
@@ -1525,7 +1525,7 @@ export default function NexusSovereignSwarm() {
     const poll = () => {
       // Skip the 2.5s swarm-events poll while the tab is hidden (no background hammering).
       if (typeof document !== 'undefined' && document.hidden) return
-      apiFetch(`/api/swarm/events?client_id=${selectedClientId}&since_id=${lastEventId}`)
+      apiFetch(`/api/swarm/events?client_id=${selectedClientId}&since_id=${lastEventIdRef.current}`)
         .then((d) => {
           if (!d?.events?.length) return
           setLiveEvents((prev) => {
@@ -1538,7 +1538,7 @@ export default function NexusSovereignSwarm() {
             return merged.slice(-48)
           })
           const maxId = Math.max(...d.events.map((e) => e.id ?? 0))
-          if (maxId > lastEventId) setLastEventId(maxId)
+          if (maxId > lastEventIdRef.current) lastEventIdRef.current = maxId
         })
         // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
         .catch(() => {})
@@ -1546,7 +1546,7 @@ export default function NexusSovereignSwarm() {
     poll()
     const id = setInterval(poll, 2500)
     return () => clearInterval(id)
-  }, [running, selectedClientId, lastEventId, params.emit_live_telemetry])
+  }, [running, selectedClientId, params.emit_live_telemetry])
 
   const handleRun = useCallback(async (opts = {}) => {
     const dryRun = !!opts.dryRun || !!params.dry_run
@@ -1558,7 +1558,7 @@ export default function NexusSovereignSwarm() {
     setFindings([])
     setOracleSynth(null)
     setLiveEvents([])
-    setLastEventId(0)
+    lastEventIdRef.current = 0
     connectSwarmWs()
     appendLine(`[NSSI] ${dryRun ? 'Planning dry-run' : 'Initializing hive deployment'} — ${params.agent_count} agents (${paramCount} params)…`)
     if (params.endpoint_bridge && !dryRun) {

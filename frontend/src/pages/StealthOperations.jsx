@@ -62,7 +62,7 @@ export default function StealthOperations() {
   const [loading, setLoading] = useState(true)
   const [pacing, setPacing] = useState(null) // editable draft, seeded once from status
   const [saving, setSaving] = useState(false)
-  const [saveMsg, setSaveMsg] = useState('')
+  const [saveMsg, setSaveMsg] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const timer = useRef(null)
 
@@ -119,9 +119,9 @@ export default function StealthOperations() {
         jitter_max_ms: fresh.config.jitter_max_ms,
         min_interval_ms: fresh.config.min_interval_ms,
       })
-      setSaveMsg(t('stealthOps.applied'))
+      setSaveMsg({ ok: true, text: t('stealthOps.applied') })
     } catch (err) {
-      setSaveMsg((err && err.message) || 'save failed')
+      setSaveMsg({ ok: false, text: (err && err.message) || 'save failed' })
     } finally {
       setSaving(false)
     }
@@ -328,9 +328,9 @@ export default function StealthOperations() {
                 </Button>
                 {saveMsg && (
                   <span
-                    className={`text-xs font-mono ${saveMsg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}
+                    className={`text-xs font-mono ${saveMsg.ok ? 'text-emerald-400' : 'text-rose-400'}`}
                   >
-                    {saveMsg}
+                    {saveMsg.text}
                   </span>
                 )}
               </div>

@@ -150,14 +150,16 @@ pub async fn run_dns_anomaly(engine: &str) -> anyhow::Result<Vec<Value>> {
             .await
             .unwrap_or_default();
         let mut suspicious = Vec::new();
-        for line in udp.lines().chain(tcp.lines()).skip(1) {
-            // local_address is column 1 in /proc/net/{tcp,udp} (e.g. "0100007F:0035").
+        // Skip each file's OWN header row — `.skip(1)` on the *chained* iterator would only drop
+        // /proc/net/udp's header and parse /proc/net/tcp's header line as data.
+        for line in udp.lines().skip(1).chain(tcp.lines().skip(1)) {
             let col = line.split_whitespace().nth(2).unwrap_or("");
-            // Remote-end column is index 2; format ip:port_hex. We want non-53 port to DNS-style traffic.
+            // ip:port_hex; flag DNS-style traffic on non-standard ports.
             if let Some((_, port_hex)) = col.split_once(':') {
                 if let Ok(port) = u16::from_str_radix(port_hex, 16) {
-                    // 53 = standard DNS, 853 = DoT, 443 = DoH, 5353 = mDNS.
-                    if matches!(port, 5300..=5500 | 8053 | 10053 | 65353) {
+                    // Exclude 5353 (mDNS/Bonjour) — it is a standard well-known DNS-family port and
+                    // appears on essentially every LAN host, so flagging it is a pure false positive.
+                    if port != 5353 && matches!(port, 5300..=5500 | 8053 | 10053 | 65353) {
                         suspicious.push(port);
                     }
                 }

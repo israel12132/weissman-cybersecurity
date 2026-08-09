@@ -11,7 +11,10 @@ rule_files:
   - /etc/prometheus/rules/weissman-alerts.yml
 
 scrape_configs:
-  - job_name: weissman-server
+  # job_name MUST be weissman-backend: every SLO recording rule and burn-rate
+  # alert is scoped `http_requests_total{job="weissman-backend"}`, so a different
+  # job label makes them all evaluate to no-data.
+  - job_name: weissman-backend
     metrics_path: /api/metrics
     scheme: https
     # The metrics endpoint requires an auth token. Point this at a file holding
@@ -21,9 +24,10 @@ scrape_configs:
       credentials_file: /etc/prometheus/secrets/weissman-metrics-token
     static_configs:
       - targets:
-          - weissman-server:8080
+          # The server binds 8000 (WEISSMAN default; k8s containerPort 8000) — 8080 was wrong.
+          - weissman-server:8000
         labels:
-          service: weissman-server
+          service: weissman-backend
     # In Kubernetes, prefer service discovery instead of static_configs, e.g.:
     # kubernetes_sd_configs:
     #   - role: pod

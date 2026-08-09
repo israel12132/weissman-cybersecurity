@@ -92,7 +92,23 @@ export default function PortfolioPosturePanel() {
   )
 
   if (loading) return <div className="mb-2"><SkeletonWidgetGrid count={4} /></div>
-  if (error || !data || Number(data.client_count) === 0) return null
+  if (error) {
+    return (
+      <div className="bg-black/40 backdrop-blur-md border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+        <span className="text-[11px] font-mono text-rose-400">{t('errors.loading_failed', { detail: error })}</span>
+        <Button
+          variant="unstyled"
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border border-white/15 text-white/70 hover:bg-white/10 disabled:opacity-40 transition-colors"
+        >
+          {t('common.retry')}
+        </Button>
+      </div>
+    )
+  }
+  if (!data || Number(data.client_count) === 0) return null
 
   const dist = data.grade_distribution || {}
   const total = gradeTotal(dist)

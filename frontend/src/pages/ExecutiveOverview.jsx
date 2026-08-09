@@ -10,7 +10,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { LayoutDashboard, ArrowRight, Search } from 'lucide-react'
+import { LayoutDashboard, ArrowRight, Search, AlertTriangle } from 'lucide-react'
 import PageShell from './PageShell'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -18,6 +18,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd, postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
+import Button from '../components/ui/Button'
 
 const NS = 'pages.executiveOverview'
 
@@ -73,7 +74,7 @@ export default function ExecutiveOverview() {
   const { t } = useTranslation()
   const { clients, selectedClientId, setSelectedClientId } = useClient()
 
-  const [global, setGlobal] = useState({ loading: true, posture: null, coverage: null, iocs: null, intel: null, ueba: null, crypto: null })
+  const [global, setGlobal] = useState({ loading: true, error: false, posture: null, coverage: null, iocs: null, intel: null, ueba: null, crypto: null })
   const [client, setClient] = useState({ loading: false, financial: null, attack: null })
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -86,15 +87,19 @@ export default function ExecutiveOverview() {
   const loadGlobal = useCallback(async () => {
     setGlobal((g) => ({ ...g, loading: true }))
     // Each signal is independent — one failure must not blank the others.
-    const [posture, coverage, iocs, intel, ueba, crypto] = await Promise.all([
-      getJson('/api/security/posture-score').catch(() => null),
-      getJson('/api/attack-coverage').catch(() => null),
-      getJson('/api/soc/iocs').catch(() => null),
-      getJson('/api/intel/status').catch(() => null),
-      getJson('/api/ueba/anomalies?limit=500').catch(() => null),
-      getJson('/api/crypto/capabilities').catch(() => null),
+    // allSettled distinguishes a rejected probe (outage) from a fulfilled-but-empty
+    // one, so a platform-wide failure can be surfaced instead of reading as "no data".
+    const results = await Promise.allSettled([
+      getJson('/api/security/posture-score'),
+      getJson('/api/attack-coverage'),
+      getJson('/api/soc/iocs'),
+      getJson('/api/intel/status'),
+      getJson('/api/ueba/anomalies?limit=500'),
+      getJson('/api/crypto/capabilities'),
     ])
-    setGlobal({ loading: false, posture, coverage, iocs, intel, ueba, crypto })
+    const [posture, coverage, iocs, intel, ueba, crypto] = results.map((r) => (r.status === 'fulfilled' ? r.value : null))
+    const error = results.every((r) => r.status === 'rejected')
+    setGlobal({ loading: false, error, posture, coverage, iocs, intel, ueba, crypto })
   }, [])
 
   const loadClient = useCallback(async (cid) => {
@@ -186,6 +191,18 @@ export default function ExecutiveOverview() {
     >
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        {global.error && !global.loading && (
+          <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-center justify-between gap-4">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {t('common.error')}
+            </span>
+            <Button variant="unstyled" type="button" onClick={loadGlobal} className="text-xs font-medium text-red-100 underline underline-offset-2">
+              {t('common.retry')}
+            </Button>
+          </div>
+        )}
 
         {/* Global posture row */}
         <div>

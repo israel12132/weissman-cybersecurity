@@ -151,21 +151,13 @@ class RateLimiter:
         window_start = now - self.window_seconds
 
         try:
-            # Use Redis pipeline for atomic operations
+            # First: prune the expired entries and count the current window WITHOUT
+            # recording this request yet. A rejected request must not insert a member
+            # (that would push the sliding window forward and extend its own lockout
+            # indefinitely — the naive zadd-then-check bug). Matches _check_memory.
             pipe = r.pipeline()
-
-            # Remove expired entries from sorted set
             pipe.zremrangebyscore(key, 0, window_start)
-
-            # Count current entries in window
             pipe.zcard(key)
-
-            # Add current timestamp
-            pipe.zadd(key, {str(now): now})
-
-            # Set expiration on the key
-            pipe.expire(key, self.window_seconds + 10)
-
             results = pipe.execute()
             count_before_add = results[1]
 
@@ -188,6 +180,12 @@ class RateLimiter:
                     max_calls=self.max_calls,
                     window_seconds=self.window_seconds,
                 )
+
+            # Admitted: only now record this request and refresh the TTL.
+            pipe = r.pipeline()
+            pipe.zadd(key, {str(now): now})
+            pipe.expire(key, self.window_seconds + 10)
+            pipe.execute()
 
             logger.debug(
                 "rate_limiter: %s allowed for %s (%d/%d calls)",

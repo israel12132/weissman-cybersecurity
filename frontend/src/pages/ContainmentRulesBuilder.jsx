@@ -12,9 +12,11 @@ import { confirmDialog } from '../utils/confirmDialog';
 
 import { useFirstTenantClientId, withClientId } from '../lib/aliasClient';
 import Button from '../components/ui/Button'
+import { useToast } from '../components/ui/Toaster'
 
 export default function ContainmentRulesBuilder() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { clientId, loading: clientLoading } = useFirstTenantClientId();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +56,7 @@ export default function ContainmentRulesBuilder() {
       );
     } catch (error) {
       console.error('Failed to toggle rule:', error);
+      toast.error(t('common.error'));
     }
   };
 
@@ -66,6 +69,7 @@ export default function ContainmentRulesBuilder() {
       setRules((prev) => prev.filter((r) => r.id !== ruleId));
     } catch (error) {
       console.error('Failed to delete rule:', error);
+      toast.error(t('common.error'));
     }
   };
 
@@ -334,6 +338,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
   const dialogRef = useRef(null)
   useFocusTrap(dialogRef, true)
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: rule?.name || '',
     description: rule?.description || '',
@@ -356,6 +361,7 @@ function RuleModal({ rule, clientId, onClose, onSave }) {
       onSave();
     } catch (error) {
       console.error('Failed to save rule:', error);
+      toast.error(t('common.error'));
     } finally {
       setSaving(false);
     }

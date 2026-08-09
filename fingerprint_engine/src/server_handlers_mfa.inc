@@ -25,6 +25,24 @@ async fn api_auth_mfa_verify(
         )
             .into_response();
     };
+    // `users` is FORCE RLS (policy: tenant_id = current_setting('app.current_tenant_id')).
+    // The bare app pool never sets that GUC (DB default = '0'), so these lookups MUST run
+    // inside a tenant-scoped transaction or they silently match zero rows.
+    let mut vtx = match db::begin_tenant_tx(&state.app_pool, ctx.tenant_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(target: "auth", error = %e, "MFA verify tenant tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Authentication service temporarily unavailable",
+                    "code": "auth_degraded"
+                })),
+            )
+                .into_response();
+        }
+    };
     let row = match sqlx::query(
         r#"SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled, false) AS mfa_enabled,
                   COALESCE(NULLIF(trim(email), ''), '') AS email
@@ -32,7 +50,7 @@ async fn api_auth_mfa_verify(
     )
     .bind(ctx.user_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(state.app_pool.as_ref())
+    .fetch_optional(&mut *vtx)
     .await
     {
         Ok(Some(row)) => row,
@@ -56,6 +74,7 @@ async fn api_auth_mfa_verify(
                 .into_response();
         }
     };
+    let _ = vtx.commit().await;
     let stored_secret: String = row.try_get("mfa_secret").unwrap_or_default();
     let secret: String = crate::auth_mfa::decrypt_secret_at_rest(&stored_secret);
     let enabled: bool = row.try_get("mfa_enabled").unwrap_or(false);
@@ -90,14 +109,17 @@ async fn api_auth_mfa_verify(
     if !crate::auth_mfa::is_secret_encrypted(&stored_secret) {
         let reencrypted = crate::auth_mfa::encrypt_secret_at_rest(&secret);
         if crate::auth_mfa::is_secret_encrypted(&reencrypted) {
-            let _ = sqlx::query(
-                "UPDATE users SET mfa_secret = $1 WHERE id = $2 AND tenant_id = $3",
-            )
-            .bind(reencrypted)
-            .bind(ctx.user_id)
-            .bind(ctx.tenant_id)
-            .execute(state.app_pool.as_ref())
-            .await;
+            if let Ok(mut rtx) = db::begin_tenant_tx(&state.app_pool, ctx.tenant_id).await {
+                let _ = sqlx::query(
+                    "UPDATE users SET mfa_secret = $1 WHERE id = $2 AND tenant_id = $3",
+                )
+                .bind(reencrypted)
+                .bind(ctx.user_id)
+                .bind(ctx.tenant_id)
+                .execute(&mut *rtx)
+                .await;
+                let _ = rtx.commit().await;
+            }
         }
     }
     let mut tx = match db::begin_tenant_tx(&state.app_pool, ctx.tenant_id).await {
@@ -169,27 +191,81 @@ async fn api_auth_mfa_setup(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let secret = crate::auth_mfa::generate_secret();
-    let email_row = sqlx::query_scalar::<_, String>(
-        "SELECT email FROM users WHERE id = $1 AND tenant_id = $2",
+    // `users` is FORCE RLS; all reads/writes must run inside a tenant-scoped tx.
+    let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa setup tenant tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "MFA service temporarily unavailable"})),
+            )
+                .into_response();
+        }
+    };
+    let cur = sqlx::query(
+        "SELECT COALESCE(NULLIF(trim(email),''), '') AS email, COALESCE(mfa_enabled, false) AS mfa_enabled
+         FROM users WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
-    .fetch_optional(state.app_pool.as_ref())
+    .fetch_optional(&mut *tx)
     .await
     .ok()
-    .flatten()
-    .unwrap_or_else(|| format!("user{}", auth.user_id));
+    .flatten();
+    let already_enabled = cur
+        .as_ref()
+        .and_then(|r| r.try_get::<bool, _>("mfa_enabled").ok())
+        .unwrap_or(false);
+    // Do not let a caller holding only a session cookie silently reset an active
+    // enrollment (which would clear mfa_enabled and desync the authenticator).
+    // Re-enrolling requires first disabling MFA, which is gated on a current TOTP code.
+    if already_enabled {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok": false,
+                "detail": "MFA is already enabled. Disable it (requires your current code) before re-enrolling."
+            })),
+        )
+            .into_response();
+    }
+    let email_row = cur
+        .as_ref()
+        .and_then(|r| r.try_get::<String, _>("email").ok())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("user{}", auth.user_id));
     let otpauth = crate::auth_mfa::otpauth_uri(&secret, &email_row).unwrap_or_default();
     // Persist the seed encrypted at rest; the plaintext `secret` is only returned
     // once (below) so the user can enrol it in their authenticator app.
-    let _ = sqlx::query(
+    match sqlx::query(
         "UPDATE users SET mfa_secret = $1, mfa_enabled = false WHERE id = $2 AND tenant_id = $3",
     )
     .bind(crate::auth_mfa::encrypt_secret_at_rest(&secret))
     .bind(auth.user_id)
     .bind(auth.tenant_id)
-    .execute(state.app_pool.as_ref())
-    .await;
+    .execute(&mut *tx)
+    .await
+    {
+        Ok(r) if r.rows_affected() == 1 => {
+            let _ = tx.commit().await;
+        }
+        Ok(_) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"ok": false, "detail": "MFA state not updated"})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa persist failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "MFA state persist failed"})),
+            )
+                .into_response();
+        }
+    }
     (
         StatusCode::OK,
         Json(json!({
@@ -206,12 +282,24 @@ async fn api_auth_mfa_enable(
     Extension(auth): Extension<AuthContext>,
     body: axum::extract::Json<MfaEnableBody>,
 ) -> Response {
+    // `users` is FORCE RLS; the read and the write must share a tenant-scoped tx.
+    let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa enable tenant tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "MFA service temporarily unavailable"})),
+            )
+                .into_response();
+        }
+    };
     let row = sqlx::query(
         "SELECT COALESCE(mfa_secret,'') AS mfa_secret FROM users WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
-    .fetch_optional(state.app_pool.as_ref())
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
@@ -233,13 +321,33 @@ async fn api_auth_mfa_enable(
         )
             .into_response();
     }
-    let _ = sqlx::query(
+    match sqlx::query(
         "UPDATE users SET mfa_enabled = true WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
-    .execute(state.app_pool.as_ref())
-    .await;
+    .execute(&mut *tx)
+    .await
+    {
+        Ok(r) if r.rows_affected() == 1 => {
+            let _ = tx.commit().await;
+        }
+        Ok(_) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"ok": false, "detail": "MFA state not updated"})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa persist failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "MFA state persist failed"})),
+            )
+                .into_response();
+        }
+    }
     (
         StatusCode::OK,
         Json(json!({"ok": true, "mfa_enabled": true})),
@@ -256,16 +364,23 @@ async fn api_auth_mfa_status(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
-    let row = sqlx::query(
-        "SELECT COALESCE(mfa_enabled, false) AS mfa_enabled, COALESCE(mfa_secret,'') AS mfa_secret
-         FROM users WHERE id = $1 AND tenant_id = $2",
-    )
-    .bind(auth.user_id)
-    .bind(auth.tenant_id)
-    .fetch_optional(state.app_pool.as_ref())
-    .await
-    .ok()
-    .flatten();
+    let row = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(mut tx) => {
+            let r = sqlx::query(
+                "SELECT COALESCE(mfa_enabled, false) AS mfa_enabled, COALESCE(mfa_secret,'') AS mfa_secret
+                 FROM users WHERE id = $1 AND tenant_id = $2",
+            )
+            .bind(auth.user_id)
+            .bind(auth.tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten();
+            let _ = tx.commit().await;
+            r
+        }
+        Err(_) => None,
+    };
     let enabled = row
         .as_ref()
         .and_then(|r| r.try_get::<bool, _>("mfa_enabled").ok())
@@ -291,13 +406,25 @@ async fn api_auth_mfa_disable(
     Extension(auth): Extension<AuthContext>,
     body: axum::extract::Json<MfaDisableBody>,
 ) -> Response {
+    // `users` is FORCE RLS; the read and the write must share a tenant-scoped tx.
+    let mut tx = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa disable tenant tx failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "MFA service temporarily unavailable"})),
+            )
+                .into_response();
+        }
+    };
     let row = sqlx::query(
         "SELECT COALESCE(mfa_secret,'') AS mfa_secret, COALESCE(mfa_enabled,false) AS mfa_enabled
          FROM users WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
-    .fetch_optional(state.app_pool.as_ref())
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
@@ -331,13 +458,33 @@ async fn api_auth_mfa_disable(
         )
             .into_response();
     }
-    let _ = sqlx::query(
+    match sqlx::query(
         "UPDATE users SET mfa_enabled = false, mfa_secret = '' WHERE id = $1 AND tenant_id = $2",
     )
     .bind(auth.user_id)
     .bind(auth.tenant_id)
-    .execute(state.app_pool.as_ref())
-    .await;
+    .execute(&mut *tx)
+    .await
+    {
+        Ok(r) if r.rows_affected() == 1 => {
+            let _ = tx.commit().await;
+        }
+        Ok(_) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"ok": false, "detail": "MFA state not updated"})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(target: "auth_mfa", error = %e, "mfa persist failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "MFA state persist failed"})),
+            )
+                .into_response();
+        }
+    }
     (
         StatusCode::OK,
         Json(json!({"ok": true, "mfa_enabled": false})),

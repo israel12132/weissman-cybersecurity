@@ -560,7 +560,8 @@ pub async fn persist_engine_findings(
         // still persist (audit trail) but the inbox stays clean. Membership is checked against the
         // set preloaded once above (no per-finding round-trip); matched hashes get their hit_count
         // bumped in a single statement before commit.
-        let suppressed = active_suppressions.contains(&signature_hash);
+        let suppressed =
+            fp_feedback::is_suppressed_by(&active_suppressions, &signature_hash, &target_url);
         if suppressed {
             suppression_hits.push(signature_hash.clone());
         }
@@ -570,7 +571,7 @@ pub async fn persist_engine_findings(
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
         // and *do not* reset status — analyst-set workflow states (ACKNOWLEDGED, FIXED,
         // FALSE_POSITIVE) must survive the next scan. last_seen_at tracks recurrence.
-        let upserted_id: i64 = sqlx::query_scalar(
+        let (upserted_id, vuln_is_new): (i64, bool) = sqlx::query_as(
             r#"INSERT INTO vulnerabilities
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
@@ -599,7 +600,7 @@ pub async fn persist_engine_findings(
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
-               RETURNING id"#,
+               RETURNING id, (xmax = 0) AS is_new"#,
         )
         .bind(run_id)
         .bind(tenant_id)
@@ -668,6 +669,7 @@ pub async fn persist_engine_findings(
                 cvss: Some(cvss),
                 epss_score,
                 kev_listed,
+                is_new_member: vuln_is_new,
             },
         )
         .await

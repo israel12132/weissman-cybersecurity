@@ -33,7 +33,8 @@ export default function AssetHexGrid({ clientId: clientIdProp = null }) {
     apiFetch('/api/clients')
       .then((data) => {
         if (cancelled) return
-        const first = (data?.clients ?? [])[0]
+        const list = Array.isArray(data) ? data : (data?.clients ?? [])
+        const first = list[0]
         setClientId(first?.id ?? null)
       })
       .catch(() => {

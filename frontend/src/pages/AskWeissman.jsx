@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { Trash2 } from 'lucide-react'
 import { apiFetch } from '../utils/apiFetch'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -21,31 +22,19 @@ function fmtCell(v) {
 
 function exportTranscriptCsv(history) {
   const header = ['timestamp', 'question', 'status', 'plan', 'sql', 'row_count', 'elapsed_ms', 'error']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...history
-      .filter((turn) => !turn.pending)
-      .map((turn) =>
-        [
-          turn.t ? new Date(turn.t).toISOString() : '',
-          turn.q,
-          turn.error ? 'error' : turn.ok ? 'ok' : 'unknown',
-          turn.plan,
-          turn.sql,
-          turn.row_count,
-          turn.elapsed_ms,
-          turn.error,
-        ].map(esc).join(','),
-      ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-ask-transcript-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = history
+    .filter((turn) => !turn.pending)
+    .map((turn) => [
+      turn.t ? new Date(turn.t).toISOString() : '',
+      turn.q,
+      turn.error ? 'error' : turn.ok ? 'ok' : 'unknown',
+      turn.plan,
+      turn.sql,
+      turn.row_count,
+      turn.elapsed_ms,
+      turn.error,
+    ])
+  downloadCsv(rows, header, 'weissman-ask-transcript')
 }
 
 function StatusBadge({ ok, error, t }) {

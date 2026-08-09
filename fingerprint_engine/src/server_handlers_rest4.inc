@@ -23,6 +23,18 @@ async fn api_deep_fuzz(
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
     }
+    // Rules-of-engagement scope gate (blocks out-of-scope hosts + RFC1918/metadata addresses).
+    // Without it this offensive engine could be pointed at any host on the internet or intranet.
+    if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        target,
+        body.client_id,
+    )
+    .await
+    {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
+    }
     let mut map = serde_json::Map::new();
     map.insert("target".into(), json!(target));
     if let Some(cid) = body.client_id {
@@ -341,6 +353,16 @@ async fn api_timing_scan_run(
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
     }
+    if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        target,
+        body.client_id.as_ref().and_then(|c| c.trim().parse::<i64>().ok()),
+    )
+    .await
+    {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
+    }
     let client_id_resp = body.client_id.clone();
     let mut map = serde_json::Map::new();
     map.insert("target".into(), json!(target));
@@ -401,6 +423,16 @@ async fn api_ai_redteam_run(
     let target = body.target.as_deref().unwrap_or("").trim();
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "target required"}))).into_response();
+    }
+    if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        target,
+        body.client_id.as_ref().and_then(|c| c.trim().parse::<i64>().ok()),
+    )
+    .await
+    {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
     }
     let client_id_resp = body.client_id.clone();
     let mut map = serde_json::Map::new();
@@ -832,9 +864,15 @@ async fn api_poe_scan_stream(
     Extension(auth): Extension<AuthContext>,
     Path(job_id): Path<String>,
 ) -> Response {
-    let initial = poe_job_json_from_db(state.app_pool.as_ref(), auth.tenant_id, &job_id)
-        .await
-        .unwrap_or_else(|| "{}".to_string());
+    // Only subscribe to a job that actually exists for THIS tenant. Falling through with "{}"
+    // registered a permanently-orphaned sender under an arbitrary job_id (a slow leak the
+    // forwarder can never prune), and — because job_ids are tenant-unique v4 UUIDs — this check
+    // also prevents a caller from attaching to another tenant's job stream.
+    let Some(initial) =
+        poe_job_json_from_db(state.app_pool.as_ref(), auth.tenant_id, &job_id).await
+    else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "job not found"}))).into_response();
+    };
     let (tx, rx) = flume::bounded::<String>(128);
     state
         .poe_job_registry
@@ -948,7 +986,8 @@ async fn api_identity_contexts_list(
             })
         })
         .collect();
-    (StatusCode::OK, Json(Value::Array(out))).into_response()
+    // IdentityMatrixTab reads `d.contexts`; a bare array left the tab permanently empty.
+    (StatusCode::OK, Json(json!({"contexts": out}))).into_response()
 }
 
 async fn api_identity_contexts_add(
@@ -1249,15 +1288,22 @@ async fn api_runtime_traces_list(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    // The panel reads `d.traces` and passes `?finding_id=` — honour both.
+    let finding_filter: Option<String> = q
+        .get("finding_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!([]))).into_response();
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"traces": []}))).into_response();
     };
     let rows = sqlx::query(
         r#"SELECT id, run_id, finding_id, trace_id, source_file, line_number, function_name, payload_hash, metadata, created_at
-           FROM runtime_traces WHERE client_id = $1 ORDER BY id DESC LIMIT 200"#,
+           FROM runtime_traces WHERE client_id = $1 AND ($2::text IS NULL OR finding_id = $2) ORDER BY id DESC LIMIT 200"#,
     )
     .bind(id)
+    .bind(finding_filter.as_deref())
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
@@ -1279,7 +1325,7 @@ async fn api_runtime_traces_list(
             })
         })
         .collect();
-    (StatusCode::OK, Json(Value::Array(out))).into_response()
+    (StatusCode::OK, Json(json!({"traces": out}))).into_response()
 }
 
 async fn api_runtime_traces_ingest(
@@ -3146,12 +3192,28 @@ struct TemplateEngineRunBody {
 
 /// POST /api/template-engine/run — execute a template (built-in by id, or inline YAML).
 async fn api_template_engine_run(
-    Extension(_auth): Extension<AuthContext>,
+    Extension(auth): Extension<AuthContext>,
     Json(body): Json<TemplateEngineRunBody>,
 ) -> Response {
+    // Match the sibling api_fuzz_ast_preview gate — this executes attacker-supplied HTTP.
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
     let target = body.target_url.trim().to_string();
     if target.is_empty() {
         return (StatusCode::BAD_REQUEST, Json(json!({"error":"target_url required"}))).into_response();
+    }
+    // SSRF egress guard: resolve the destination and reject loopback/private/reserved/metadata
+    // hosts (169.254.169.254, RFC1918, *.internal, ...). Mirror run_template's scheme defaulting.
+    // NOTE: an absolute step path in the template can still override the base inside
+    // template_engine::run_template — closing that fully requires a guard in template_engine.rs.
+    let normalized = if target.starts_with("http://") || target.starts_with("https://") {
+        target.clone()
+    } else {
+        format!("https://{target}")
+    };
+    if let Err(detail) = crate::security_hardening::validate_outbound_url(&normalized).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail}))).into_response();
     }
     let yaml = if let Some(y) = body.template_yaml.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         y.to_string()

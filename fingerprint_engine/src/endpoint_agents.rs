@@ -324,11 +324,17 @@ impl AgentRegistry {
     }
 
     pub async fn send(&self, agent_uuid: &str, msg: ServerToAgent) -> Result<(), String> {
-        let g = self.inner.read().await;
-        let Some(entry) = g.get(agent_uuid) else {
-            return Err("agent not connected".into());
+        // Clone the sender out and DROP the RwLock read guard before the awaited send.
+        // Holding the read guard across `tx.send(..).await` would let one stalled agent
+        // (full bounded channel) block every writer and deadlock the whole registry.
+        let tx = {
+            let g = self.inner.read().await;
+            let Some(entry) = g.get(agent_uuid) else {
+                return Err("agent not connected".into());
+            };
+            entry.tx.clone()
         };
-        entry.tx.send(msg).await.map_err(|e| e.to_string())
+        tx.send(msg).await.map_err(|e| e.to_string())
     }
 
     pub async fn is_online(&self, agent_uuid: &str) -> bool {
@@ -758,16 +764,16 @@ pub async fn mark_seen(
     agent_uuid: &Uuid,
     status: &str,
 ) -> Result<(), sqlx::Error> {
-    let mut conn = pool.acquire().await?;
-    crate::db::set_tenant_conn(&mut *conn, tenant_id).await?;
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         "UPDATE endpoint_agents SET last_seen_at = now(), status = $2 WHERE agent_uuid = $1 AND tenant_id = $3",
     )
     .bind(agent_uuid)
     .bind(status)
     .bind(tenant_id)
-    .execute(&mut *conn)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -859,22 +865,21 @@ pub async fn task_scan_job_id(pool: &PgPool, tenant_id: i64, task_uuid: &str) ->
     let Ok(uuid) = Uuid::parse_str(task_uuid) else {
         return None;
     };
-    let mut conn = pool.acquire().await.ok()?;
-    crate::db::set_tenant_conn(&mut *conn, tenant_id)
-        .await
-        .ok()?;
-    sqlx::query_scalar::<_, Option<String>>(
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await.ok()?;
+    let scan_job_id = sqlx::query_scalar::<_, Option<String>>(
         r#"SELECT params->>'scan_job_id' FROM endpoint_agent_tasks
             WHERE task_uuid = $1 AND tenant_id = $2"#,
     )
     .bind(uuid)
     .bind(tenant_id)
-    .fetch_optional(&mut *conn)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten()
     .flatten()
-    .filter(|s| !s.trim().is_empty())
+    .filter(|s| !s.trim().is_empty());
+    tx.commit().await.ok()?;
+    scan_job_id
 }
 
 /// Periodic UEBA baseline sampling for every online endpoint agent (leader-only).
@@ -1035,8 +1040,7 @@ pub async fn mark_task_status(
     findings_count: i32,
     error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    let mut conn = pool.acquire().await?;
-    crate::db::set_tenant_conn(&mut *conn, tenant_id).await?;
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"UPDATE endpoint_agent_tasks
               SET status = $2,
@@ -1050,8 +1054,9 @@ pub async fn mark_task_status(
     .bind(findings_count)
     .bind(error)
     .bind(tenant_id)
-    .execute(&mut *conn)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 

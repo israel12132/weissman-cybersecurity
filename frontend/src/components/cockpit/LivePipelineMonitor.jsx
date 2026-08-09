@@ -220,16 +220,15 @@ export default function LivePipelineMonitor() {
               onEdgesChange={onDagEdgesChange}
               fitView
               className="bg-transparent"
-              nodeClassName="dag-node"
             >
               <Background color="#22d3ee" gap={12} size={0.5} />
               <Controls className="bg-black/60 border-white/10" />
               <MiniMap className="bg-black/60" />
             </ReactFlow>
             <style>{`
-              .dag-node-done .react-flow__node { border-color: #10b981; background: rgba(16,185,129,0.15); }
-              .dag-node-current .react-flow__node { border-color: #22d3ee; background: rgba(34,211,238,0.15); animation: pulse 1.5s ease-in-out infinite; }
-              .dag-node-pending .react-flow__node { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
+              .react-flow__node.dag-node-done { border-color: #10b981; background: rgba(16,185,129,0.15); }
+              .react-flow__node.dag-node-current { border-color: #22d3ee; background: rgba(34,211,238,0.15); animation: pulse 1.5s ease-in-out infinite; }
+              .react-flow__node.dag-node-pending { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); }
             `}</style>
           </div>
         )}

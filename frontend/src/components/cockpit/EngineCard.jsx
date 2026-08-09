@@ -149,6 +149,8 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
     let cancelled = false
     loadEnginesRegistry().then((mod) => {
       if (!cancelled) setRegistryEntry(mod.ENGINES_BY_ID?.[engineId] ?? null)
+    }).catch(() => {
+      if (!cancelled) setRegistryEntry(null)
     })
     return () => {
       cancelled = true

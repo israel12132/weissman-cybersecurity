@@ -571,9 +571,11 @@ fn parse_cert_details(cert: &openssl::x509::X509) -> TlsCertDetails {
     let not_after = cert.not_after().to_owned();
     let now = openssl::asn1::Asn1Time::days_from_now(0).ok();
     let expired = now.as_ref().is_some_and(|n| not_after <= *n);
+    // `Asn1TimeRef::diff` computes `compare - self`, so `now.diff(not_after)` yields
+    // `not_after - now` — positive while the cert is still valid, negative once expired.
     let days_until_expiry = now
         .as_ref()
-        .and_then(|n| not_after.diff(n.as_ref()).ok())
+        .and_then(|n| n.diff(&not_after).ok())
         .map(|diff| i64::from(diff.days))
         .unwrap_or(0);
     let pkey = cert.public_key().ok();

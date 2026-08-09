@@ -72,6 +72,28 @@ pub fn orchestrator_key_from_env() -> Option<Vec<u8>> {
     Some(trimmed.as_bytes().to_vec())
 }
 
+/// Resolve the forensic-DLQ bundle seal key with ONE trimmed precedence, so the worker (which
+/// seals the bundle) and `enqueue_forensic_dlq` (which re-derives the seal to verify it) never
+/// disagree: `WEISSMAN_FORENSIC_SEAL_SECRET` → `WEISSMAN_JOB_ORCHESTRATOR_SECRET` →
+/// `WEISSMAN_JWT_SECRET`. Trimmed on both sides so a trailing newline in a k8s Secret / .env value
+/// cannot silently produce two different HMAC keys and a permanent "bundle seal mismatch".
+#[must_use]
+pub fn forensic_seal_key_from_env() -> Option<Vec<u8>> {
+    for var in [
+        "WEISSMAN_FORENSIC_SEAL_SECRET",
+        "WEISSMAN_JOB_ORCHESTRATOR_SECRET",
+        "WEISSMAN_JWT_SECRET",
+    ] {
+        if let Ok(s) = std::env::var(var) {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.as_bytes().to_vec());
+            }
+        }
+    }
+    None
+}
+
 fn signing_bytes(
     v: u8,
     job_id: Uuid,

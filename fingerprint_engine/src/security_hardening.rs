@@ -188,10 +188,26 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
     {
         return Err("cloud metadata endpoints are blocked");
     }
-    if std::env::var("WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS")
-        .map(|v| v != "1" && !v.eq_ignore_ascii_case("true"))
-        .unwrap_or(true)
-    {
+    if !allow_private_scan_targets() {
+        // Block IP-literal targets in private/reserved/CGNAT/loopback ranges. The three
+        // string literals below cannot catch 10.x, 192.168.x, 172.16-31.x, 100.64/10,
+        // 127.0.0.2, 169.254.169.253, or an IPv4-mapped `[::ffff:127.0.0.1]`. (A DNS name
+        // that resolves internally still needs the resolving guard in the caller; this closes
+        // the IP-literal SSRF holes without changing this fn's synchronous signature.)
+        let literal_ip: Option<IpAddr> = match parsed.host() {
+            Some(url::Host::Ipv4(v4)) => Some(IpAddr::V4(v4)),
+            Some(url::Host::Ipv6(v6)) => {
+                Some(v6.to_ipv4_mapped().map(IpAddr::V4).unwrap_or(IpAddr::V6(v6)))
+            }
+            _ => None,
+        };
+        if let Some(ip) = literal_ip {
+            if is_private_or_reserved_ip(&ip) {
+                return Err(
+                    "private, loopback or reserved IP targets are blocked unless WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS=1",
+                );
+            }
+        }
         if host == "localhost" || host == "127.0.0.1" || host == "::1" {
             return Err("loopback targets blocked unless WEISSMAN_ALLOW_PRIVATE_SCAN_TARGETS=1");
         }

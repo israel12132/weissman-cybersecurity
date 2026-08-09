@@ -973,7 +973,11 @@ async fn scan_storage(
                 let qualified = format!("{sub}:{name}");
 
                 if allow_public {
-                    f.public_storage.push(qualified.clone());
+                    // Guard against double-counting: Resource Graph (ARG) runs first and may have
+                    // already recorded this resource under the identical `{sub}:{name}` key.
+                    if !f.public_storage.contains(&qualified) {
+                        f.public_storage.push(qualified.clone());
+                    }
                     let ev = Evidence::new()
                         .with("subscription", sub.to_string())
                         .with("storage_account", name.clone())
@@ -1562,7 +1566,9 @@ async fn scan_acr(
                 .unwrap_or(true);
             let qualified = format!("{sub}:{name}");
             if admin {
-                f.acr_admin_enabled.push(qualified.clone());
+                if !f.acr_admin_enabled.contains(&qualified) {
+                    f.acr_admin_enabled.push(qualified.clone());
+                }
                 graph.upsert(
                     &format!("acr:{name}"),
                     "container_registry",
@@ -1653,7 +1659,9 @@ async fn scan_aks(
                 .unwrap_or(false);
             if !private && !authorized {
                 let qualified = format!("{sub}:{name}");
-                f.public_aks.push(qualified);
+                if !f.public_aks.contains(&qualified) {
+                    f.public_aks.push(qualified);
+                }
                 graph.upsert(
                     &format!("aks:{name}"),
                     "kubernetes",
@@ -1812,7 +1820,9 @@ async fn scan_cosmos(
                 .unwrap_or(false);
             if public {
                 let qualified = format!("{sub}:{name}");
-                f.public_cosmos.push(qualified);
+                if !f.public_cosmos.contains(&qualified) {
+                    f.public_cosmos.push(qualified);
+                }
                 graph.upsert(
                     &format!("cosmos:{name}"),
                     "cosmos_db",
@@ -2251,10 +2261,11 @@ async fn run_external_surface(cfg: &ArsenalConfig, target: &str) -> EngineResult
     // 0. Azure subdomain takeover (dangling CNAME → azurewebsites.net / blob / Front Door …).
     scan_azure_subdomain_takeover(cfg, target, &domain, &mut findings).await;
 
-    // 1. Azure AD tenant discovery (federation realm).
+    // 1. Azure AD tenant discovery (federation realm). Entra resolves the OpenID config by
+    //    *verified domain*; subdomains are not verified domains, so use the apex, not `host`.
     let oidc = format!(
         "{}/{}/.well-known/openid-configuration",
-        DEFAULT_LOGIN, host
+        DEFAULT_LOGIN, domain
     );
     if let Some(p) = http_get(&client, &oidc).await {
         if p.status == 200

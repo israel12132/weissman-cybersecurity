@@ -208,10 +208,14 @@ let model = openai_chat::resolve_model_with_fallback(
 - Higher cost but no local hardware needed
 
 ### Mode 3: Ollama
-- Run Ollama locally
-- Use `http://127.0.0.1:11434` (note: different port and no `/v1`)
+- Run Ollama locally (its OpenAI-compatible server listens on port `11434`)
+- Set `WEISSMAN_LLM_BASE_URL="http://127.0.0.1:11434"` (or the `llm_base_url` system_config).
+  `normalize_openai_base_url` appends `/v1` automatically, so it reaches Ollama's
+  OpenAI-compatible `/v1/chat/completions` endpoint — do **not** add `/v1` yourself.
 - Limited OpenAI compatibility
-- Set `ollama_base_url` in tenant configs
+- Note: the legacy `ollama_base_url` tenant config is **not** read by the LLM path. Migration
+  `20250406120000_llm_vllm_system_configs.sql` seeds `llm_base_url` from it once; thereafter all
+  AI features read `llm_base_url` / `WEISSMAN_LLM_BASE_URL`.
 
 ## Troubleshooting
 

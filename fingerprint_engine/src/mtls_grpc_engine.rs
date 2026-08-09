@@ -937,7 +937,7 @@ async fn probe_certificate(
             ),
             &[("category", json!("tls_certificate"))],
         ));
-    } else if cert.days_until_expiry <= 14 {
+    } else if (0..=14).contains(&cert.days_until_expiry) {
         posture.cert_expiring_soon = true;
         findings.push(with_fields(
             finding_rich(
@@ -1425,7 +1425,15 @@ async fn probe_tls_session_matrix(
             }
         }
 
-        if check_mtls && obs.tls_ok && obs.mtls_required == Some(false) {
+        // Anonymous TLS is the entire point of public HTTPS (443/8443), so asserting mTLS
+        // there is a guaranteed false positive. Only flag on non-public-HTTPS ports the
+        // operator explicitly added to `ports` (internal/service listeners).
+        if check_mtls
+            && obs.tls_ok
+            && obs.mtls_required == Some(false)
+            && port != 443
+            && port != 8443
+        {
             posture.mtls_not_enforced = true;
             findings.push(with_fields(
                 finding_rich(
@@ -1493,7 +1501,10 @@ async fn probe_grpc_surface(
         }
 
         let tls_obs = probe_port_tls(host, port, 6000, false, false, false).await;
-        if open && !tls_obs.tls_ok {
+        // `tls_ok` reflects only the pinned TLS 1.2 handshake; a TLS 1.3-only endpoint
+        // sets `tls13` instead. Treat the port as encrypted if either succeeded, else a
+        // hardened 1.3-only gRPC service is falsely reported as cleartext.
+        if open && !(tls_obs.tls_ok || tls_obs.tls13) {
             posture.plaintext_grpc_port = true;
             findings.push(with_fields(
                 finding_rich(
@@ -1663,33 +1674,37 @@ async fn probe_weak_crypto_matrix(
     findings: &mut Vec<Value>,
     posture: &mut TransportPosture,
 ) {
+    // `@SECLEVEL=0` is required so OpenSSL 3 does not reject these legacy filters at
+    // `set_cipher_list` time (default SECLEVEL 1+ removes RC4/3DES/NULL/EXPORT before a
+    // packet is sent, which made these probes silent false negatives). static-RSA uses an
+    // explicit suite list rather than `HIGH:!DHE:...`, which resolved to ADH/PSK suites.
     let suites = [
         (
-            "RC4-SHA:RC4-MD5",
+            "RC4-SHA:RC4-MD5:@SECLEVEL=0",
             "RC4",
             "critical",
             "RC4 stream cipher — biased keystream (CVE-2013-2566)",
         ),
         (
-            "DES-CBC3-SHA",
+            "DES-CBC3-SHA:@SECLEVEL=0",
             "3DES",
             "high",
             "64-bit block SWEET32 (CVE-2016-2183)",
         ),
         (
-            "EXP",
+            "EXP:@SECLEVEL=0",
             "EXPORT",
             "critical",
             "EXPORT-grade — FREAK/LOGJAM (CVE-2015-0204)",
         ),
         (
-            "NULL-MD5:NULL-SHA",
+            "NULL-MD5:NULL-SHA:@SECLEVEL=0",
             "NULL",
             "critical",
             "NULL cipher — no encryption",
         ),
         (
-            "HIGH:!DHE:!ECDHE:!ECDH",
+            "AES128-SHA:AES256-SHA:AES128-GCM-SHA256:@SECLEVEL=0",
             "static-RSA",
             "medium",
             "Static RSA key exchange — no forward secrecy",
@@ -2118,7 +2133,28 @@ fn tcp_h2c_preface_blocking(host: &str, port: u16, timeout_ms: u64) -> bool {
         return false;
     }
     let mut buf = [0u8; 128];
-    matches!(tcp.read(&mut buf), Ok(n) if n > 0)
+    let Ok(n) = tcp.read(&mut buf) else {
+        return false;
+    };
+    // A cleartext HTTP/2 server answers the connection preface with a SETTINGS frame on
+    // stream 0. Merely receiving bytes is not enough: a TLS listener returns an alert/handshake
+    // record, an HTTP/1.1 server returns "HTTP/1.1 ...", and banner-first services (SSH/SMTP)
+    // send arbitrary bytes — all of which previously counted as "h2c live".
+    if n < 9 {
+        return false;
+    }
+    if buf[0] == 0x15 || buf[0] == 0x16 {
+        return false; // TLS alert (0x15) / handshake (0x16) record
+    }
+    if buf.starts_with(b"HTTP/1.") {
+        return false;
+    }
+    let frame_len =
+        (u32::from(buf[0]) << 16) | (u32::from(buf[1]) << 8) | u32::from(buf[2]);
+    let frame_type = buf[3];
+    let stream_id = u32::from_be_bytes([buf[5], buf[6], buf[7], buf[8]]) & 0x7fff_ffff;
+    // SETTINGS = type 0x04, always on stream 0; its payload is a multiple of 6 bytes.
+    frame_type == 0x04 && stream_id == 0 && frame_len % 6 == 0
 }
 
 fn ct_shadow_host_patterns(names: &HashSet<String>) -> Vec<String> {

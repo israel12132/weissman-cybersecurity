@@ -25,9 +25,10 @@ job `weissman-backend`).
 ## Available metrics (real names)
 
 ### HTTP / request
-- `http_requests_total{path, method, status}` — request counter (5xx = `status=~"5.."`).
-- `http_request_duration_seconds_bucket{path, le}` — latency histogram (use
-  `histogram_quantile(0.99, …)` for P99). NOTE: the route label is `path`, not `endpoint`.
+- `http_requests_total{method, path, status}` — request counter (5xx = `status=~"5.."`).
+  Note the label is `path` (a normalized route bucket), not `endpoint`.
+- `http_request_duration_seconds_bucket{method, path, status, le}` — latency histogram (use
+  `histogram_quantile(0.99, …)` for P99).
 
 ### Database & runtime
 - `weissman_db_pool_size`, `weissman_db_pool_idle` — connection-pool gauges.
@@ -80,8 +81,11 @@ amtool check-config monitoring/alertmanager.yml
 - `watchdog-heartbeat` → external heartbeat monitor (`WATCHDOG_HEARTBEAT_URL`) — its
   **absence** is the alarm (dead-man's switch).
 
-Secrets are injected at deploy time via envsubst: `SLACK_WEBHOOK_URL`,
-`PAGERDUTY_ROUTING_KEY`, `WATCHDOG_HEARTBEAT_URL`.
+Secrets are read from files via Alertmanager's native `*_file` options
+(`slack_api_url` / `pagerduty_routing_key` / `watchdog_url` under
+`/etc/alertmanager/secrets/`) — the minimal `prom/alertmanager` image ships no
+envsubst. Committed placeholders in `monitoring/secrets/` let the stack start;
+operators overwrite them with real values (see `monitoring/secrets/README.md`).
 
 ## Grafana dashboards
 
@@ -92,10 +96,11 @@ Provisioned from `monitoring/grafana/dashboards/`:
 
 ## Optional exporters
 
-`monitoring/prometheus.yml` keeps the `redis` / `postgres` / `node` exporter scrape jobs
-**commented out on purpose** — enabling them without first deploying the matching exporter
-services (`redis-exporter`, `pg-exporter`, `node-exporter`) produces perpetually-"down"
-targets and noisy `TargetDown` alerts. Deploy the exporters first, then uncomment.
+`monitoring/prometheus.yml` scrapes the `redis` / `postgres` / `node` exporters, and
+`monitoring/alerts/infra-alerts.yml` alerts on `up{job=~"node|postgres|redis|blackbox-http"} == 0`.
+These jobs are **active**, so the matching exporter services (`redis-exporter`,
+`postgres-exporter`, `node-exporter`) must be deployed — bring them up with the
+`monitoring` compose profile — or the targets stay "down" and fire `TargetDown`.
 
 ## Distributed tracing (OpenTelemetry)
 

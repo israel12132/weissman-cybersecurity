@@ -6,6 +6,7 @@ import { TOP_TIER_ENGINE_IDS } from '../lib/topTierEngineProfiles'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { apiFetch } from '../utils/apiFetch'
 import { openSseStream } from '../lib/sseStream'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
@@ -167,28 +168,18 @@ export default function TopTierEngineHub() {
   function exportAuditCsv() {
     const rows = Array.isArray(audit?.engines) ? audit.engines : []
     const header = ['engine_id', 'label', 'execution_path', 'canonical_engine', 'is_production_runnable', 'known_in_catalog']
-    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = [
-      header.join(','),
-      ...rows.map((r) => {
-        const engine = ENGINES_BY_ID[r.engine_id]
-        return [
-          r.engine_id,
-          engine?.label || '',
-          r.execution_path || '',
-          r.canonical_engine || '',
-          r.is_production_runnable ? 'yes' : 'no',
-          r.known_in_catalog ? 'yes' : 'no',
-        ].map(esc).join(',')
-      }),
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `top-tier-audit-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    const csvRows = rows.map((r) => {
+      const engine = ENGINES_BY_ID[r.engine_id]
+      return [
+        r.engine_id,
+        engine?.label || '',
+        r.execution_path || '',
+        r.canonical_engine || '',
+        r.is_production_runnable ? 'yes' : 'no',
+        r.known_in_catalog ? 'yes' : 'no',
+      ]
+    })
+    downloadCsv(csvRows, header, 'top-tier-audit')
   }
 
   function probeBadge(status) {

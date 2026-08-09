@@ -4,14 +4,6 @@ export async function fetchBattlespaceTopology(clientId) {
   return apiFetch(`/api/battlespace/topology/${clientId}`)
 }
 
-export async function fetchStripsTechniques() {
-  try {
-    return await apiFetch('/api/battlespace/techniques')
-  } catch {
-    return { techniques: [] }
-  }
-}
-
 export async function fetchShadowPreview({ clientId, techniqueId, goal }) {
   return apiFetch('/api/battlespace/shadow-preview', {
     method: 'POST',

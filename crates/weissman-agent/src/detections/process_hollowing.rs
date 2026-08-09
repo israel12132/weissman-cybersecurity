@@ -44,15 +44,20 @@ pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
         if hashes.contains_key(&abs) {
             continue;
         }
-        let bytes = match tokio::fs::read(&abs).await {
-            Ok(b) => b,
-            Err(_) => {
-                continue; // permission denied, etc.
-            }
+        // Read only the first 4 KiB (PE/ELF header) instead of materialising the whole executable
+        // in RAM — Chrome/Electron/JVM images are hundreds of MB and this runs over 500+ processes.
+        use tokio::io::AsyncReadExt as _;
+        let mut f = match tokio::fs::File::open(&abs).await {
+            Ok(f) => f,
+            Err(_) => continue, // permission denied, etc.
+        };
+        let mut buf = [0u8; 4096];
+        let n = match f.read(&mut buf).await {
+            Ok(n) => n,
+            Err(_) => continue,
         };
         let mut h = Sha256::new();
-        // Cap at 4 KiB to keep this fast over 500+ processes.
-        h.update(&bytes[..bytes.len().min(4096)]);
+        h.update(&buf[..n]);
         let hex = hex::encode(h.finalize());
         hashes.insert(abs, hex);
     }

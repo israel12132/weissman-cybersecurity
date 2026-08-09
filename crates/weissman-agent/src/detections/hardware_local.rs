@@ -140,6 +140,14 @@ pub async fn run_cold_boot(engine: &str) -> anyhow::Result<Vec<Value>> {
             encryption_on = out.to_ascii_lowercase().contains("protection on");
         }
     }
+    #[cfg(target_os = "macos")]
+    {
+        // Without this branch macOS never sets `encryption_on`, so every Mac emitted a permanent,
+        // unfixable HIGH "FDE not confirmed" finding regardless of its real FileVault state.
+        if let Some(out) = run_cmd_lossy("fdesetup", &["status"]).await {
+            encryption_on = out.contains("FileVault is On");
+        }
+    }
 
     if !encryption_on {
         findings.push(finding(

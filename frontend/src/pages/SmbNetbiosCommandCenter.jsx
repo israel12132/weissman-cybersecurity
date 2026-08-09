@@ -289,7 +289,7 @@ function isMetrics(f) {
 }
 
 function PipeMatrixPanel({ matrix, L }) {
-  if (!matrix || typeof matrix !== 'object') return null
+  if (!matrix || typeof matrix !== 'object' || Object.keys(matrix).length === 0) return null
   const shares = Array.isArray(matrix.admin_shares) ? matrix.admin_shares : []
   return (
     <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 mb-6">
@@ -784,7 +784,7 @@ export default function SmbNetbiosCommandCenter() {
   })
 
   const pipeMatrix = useMemo(
-    () => metrics?.smb_metrics?.pipe_matrix || metrics?.evidence?.pipe_matrix || {},
+    () => metrics?.smb_metrics?.pipe_matrix ?? metrics?.evidence?.pipe_matrix ?? null,
     [metrics],
   )
 

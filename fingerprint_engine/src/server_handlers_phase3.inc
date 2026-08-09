@@ -287,12 +287,10 @@ async fn api_client_integrations_patch(
             return (StatusCode::BAD_REQUEST, Json(json!({"ok": false, "detail": msg}))).into_response();
         }
     }
-    let ext = body
-        .aws_external_id
-        .as_deref()
-        .unwrap_or(cur_ext.as_str())
-        .trim()
-        .to_string();
+    let ext = match body.aws_external_id.as_deref().map(str::trim) {
+        Some(v) if !v.starts_with('•') => v.to_string(),
+        _ => cur_ext.trim().to_string(),
+    };
     let gcp = body
         .gcp_project_id
         .as_deref()

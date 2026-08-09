@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { Search, ShieldCheck } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -42,28 +43,16 @@ function statusI18nKey(status) {
 
 function exportQueueCsv(items) {
   const header = ['id', 'status', 'estimated_severity', 'target_brief', 'client_id', 'proposed_at', 'fired_job_id']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...items.map((item) =>
-      [
-        item.id,
-        item.status,
-        item.estimated_severity,
-        item.target_brief,
-        item.client_id,
-        item.proposed_at,
-        item.fired_job_id,
-      ].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-hitl-queue-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = items.map((item) => [
+    item.id,
+    item.status,
+    item.estimated_severity,
+    item.target_brief,
+    item.client_id,
+    item.proposed_at,
+    item.fired_job_id,
+  ])
+  downloadCsv(rows, header, 'weissman-hitl-queue')
 }
 
 function StatusBadge({ status }) {

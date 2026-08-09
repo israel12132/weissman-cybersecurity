@@ -37,7 +37,12 @@ fn parse_pg_user_password(url: &str) -> Option<(String, String)> {
 }
 
 fn percent_decode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
+    // Decode into a BYTE buffer and interpret the whole thing as UTF-8 once at the end. Pushing
+    // each decoded byte as a `char` (char::from(u8)) maps it to U+0000..=U+00FF (Latin-1) and
+    // re-encodes as UTF-8, so a multibyte sequence like `%C3%A9` (é) would become the two-char
+    // string `Ã©` — a different password than sqlx's DSN parser derives, silently locking the app
+    // out of the DB after rotation.
+    let mut out: Vec<u8> = Vec::with_capacity(s.len());
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
@@ -45,15 +50,15 @@ fn percent_decode(s: &str) -> String {
             if let Ok(v) =
                 u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
             {
-                out.push(char::from(v));
+                out.push(v);
                 i += 3;
                 continue;
             }
         }
-        out.push(char::from(bytes[i]));
+        out.push(bytes[i]);
         i += 1;
     }
-    out
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 async fn alter_role_password(
@@ -62,6 +67,14 @@ async fn alter_role_password(
     password: &str,
 ) -> Result<(), sqlx::Error> {
     if !role.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        // Don't silently no-op: a percent-encoded/hyphenated/quoted username makes the boot-time
+        // rotation skip this role, so the operator believes a shipped dev-default was rotated when
+        // it was not. Surface it rather than returning a clean Ok.
+        tracing::warn!(
+            target: "auth_rotation",
+            role,
+            "role name failed the identifier allowlist — password rotation skipped"
+        );
         return Ok(());
     }
     let stmt = format!(
@@ -242,5 +255,13 @@ mod tests {
         let (_, p2) =
             parse_pg_user_password("postgres://weissman_auth:hel%2Blo@localhost/weissman").unwrap();
         assert_eq!(p2, "hel+lo");
+    }
+
+    #[test]
+    fn percent_decode_reassembles_multibyte_utf8() {
+        // `%C3%A9` is UTF-8 for `é`; it must decode to the single char, not Latin-1 mojibake `Ã©`.
+        let (_, p) =
+            parse_pg_user_password("postgres://u:p%C3%A9ss@h/db").unwrap();
+        assert_eq!(p, "péss");
     }
 }

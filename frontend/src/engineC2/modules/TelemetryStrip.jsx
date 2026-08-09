@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTelemetry } from '../../context/TelemetryContext'
 
@@ -42,10 +42,4 @@ export default function TelemetryStrip({ engineId, live = true, memory = false }
       </ul>
     </div>
   )
-}
-
-// silence unused import if telemetry context missing events
-export function TelemetryStripPlaceholder() {
-  useEffect(() => {}, [])
-  return null
 }

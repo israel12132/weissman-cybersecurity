@@ -19,9 +19,11 @@ pub fn apply(router: Router) -> Router {
             )
         })
         .unwrap_or(false);
-    let is_prod = std::env::var("WEISSMAN_ENV")
-        .map(|v| v.trim().eq_ignore_ascii_case("production"))
-        .unwrap_or(false);
+    // Use the canonical production detector (checks WEISSMAN_ENV/RUST_ENV/NODE_ENV/APP_ENV/RAILS_ENV
+    // and accepts the `prod` shorthand) — not a bespoke `WEISSMAN_ENV == "production"` check that a
+    // deploy marked `WEISSMAN_ENV=prod` or `APP_ENV=production` would slip past, silently stripping
+    // CSP/HSTS/X-Frame-Options off every response.
+    let is_prod = weissman_core::tls_policy::is_production_environment();
     if disabled && !is_prod {
         return router;
     }
@@ -58,7 +60,10 @@ pub fn apply(router: Router) -> Router {
             HeaderValue::from_static(
                 // 'wasm-unsafe-eval' is required for the SPA's WebAssembly modules (AST-cap /
                 // provenance); 'unsafe-inline' in style-src covers React inline styles / framer-motion.
-                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests",
+                // connect-src is 'self' only: per CSP L3 that already matches same-origin ws://wss://
+                // for the app's own /ws/* endpoints. Bare `ws:`/`wss:` are scheme-sources that match
+                // EVERY host, letting any XSS foothold exfiltrate over an arbitrary WebSocket.
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests",
             ),
         ))
 }

@@ -8,6 +8,11 @@ async fn api_system_config_alias(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
+    // This alias is a GET, so mutation_rbac_middleware never runs. It reads system_configs,
+    // which holds integration credentials — gate it to admins, matching the PUT arm.
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let Ok(mut tx) = crate::db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -25,19 +30,27 @@ async fn api_system_config_alias(
     // Anything we don't have a default place for goes under `extra`.
     fn bucket_for(key: &str) -> &'static str {
         match key {
-            "org_name" | "region" | "support_email" | "logo_url" | "tenant_slug" => "general",
+            "org_name" | "region" | "support_email" | "logo_url" | "tenant_slug"
+            | "timezone" | "language" | "date_format" => "general",
             "mfa_required" | "enforce_scope_strict" | "session_timeout_minutes"
-            | "password_min_length" | "allowed_login_ips" => "security",
+            | "password_min_length" | "allowed_login_ips"
+            | "password_max_age" | "password_require_uppercase" | "password_require_numbers"
+            | "password_require_special" | "session_timeout" | "max_concurrent_sessions" => "security",
             "default_timeout" | "max_concurrency" | "active_engines"
             | "asm_ports" | "asm_port_timeout_ms" | "auto_retry"
-            | "ai_daily_scan_quota" | "ai_heavy_entitled" => "scanning",
+            | "ai_daily_scan_quota" | "ai_heavy_entitled" | "max_retries" => "scanning",
             "slack_webhook_url" | "alert_webhook_url" | "pagerduty_routing_key"
             | "github_token" | "shodan_api_key" | "censys_api_id" | "censys_api_secret"
-            | "smtp_host" | "smtp_user" | "smtp_password" => "integrations",
-            "findings_retention_days" | "audit_retention_days" | "scan_logs_retention_days" => "retention",
-            "worker_pool" | "scan_concurrency" | "fuzz_qps" | "ws_keepalive_secs" => "performance",
+            | "smtp_host" | "smtp_user" | "smtp_password"
+            | "webhook_url" | "siem_type" | "siem_endpoint" | "smtp_server" | "smtp_port" => "integrations",
+            "findings_retention_days" | "audit_retention_days" | "scan_logs_retention_days"
+            | "scan_results_retention" | "audit_logs_retention" | "findings_retention"
+            | "metrics_retention" => "retention",
+            "worker_pool" | "scan_concurrency" | "fuzz_qps" | "ws_keepalive_secs"
+            | "worker_threads" | "cache_ttl" | "max_memory" | "db_pool_size" => "performance",
             "ai_redteam_endpoint" | "adversarial_strategy" => "scanning",
             _ if key.starts_with("compliance_") => "compliance",
+            _ if key.starts_with("framework_") => "compliance",
             _ => "extra",
         }
     }
@@ -57,13 +70,30 @@ async fn api_system_config_alias(
         buckets.insert(label, serde_json::Map::new());
     }
 
+    // Denylist-by-default: any config key that looks like a credential is masked before it
+    // leaves the server, so a newly-added secret key is protected without a code change.
+    fn is_secret_config_key(key: &str) -> bool {
+        let k = key.to_ascii_lowercase();
+        k.contains("token")
+            || k.contains("secret")
+            || k.contains("password")
+            || k.contains("webhook")
+            || k.contains("routing_key")
+            || k.contains("api_key")
+            || k.ends_with("_key")
+    }
+
     for r in rows {
         let key: String = r.try_get("key").unwrap_or_default();
         let raw: String = r.try_get("value").unwrap_or_default();
         if key.is_empty() {
             continue;
         }
-        let v = if let Ok(parsed) = serde_json::from_str::<Value>(&raw) {
+        let v = if is_secret_config_key(&key) && !raw.trim().is_empty() {
+            // The SPA treats this sentinel as "unchanged" on write-back, so a masked
+            // round-trip does not clobber the stored secret.
+            Value::String("••••••••".to_string())
+        } else if let Ok(parsed) = serde_json::from_str::<Value>(&raw) {
             parsed
         } else if raw.eq_ignore_ascii_case("true") || raw.eq_ignore_ascii_case("false") {
             Value::Bool(raw.eq_ignore_ascii_case("true"))
@@ -262,7 +292,10 @@ async fn load_compliance_evidence(
     .await
     .unwrap_or_default();
     let vuln_rows = sqlx::query(
-        "SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity FROM vulnerabilities",
+        "SELECT COALESCE(source,'') AS source, COALESCE(title,'') AS title, COALESCE(severity,'') AS severity \
+         FROM vulnerabilities \
+         WHERE COALESCE(status, 'OPEN') NOT IN ('FALSE_POSITIVE', 'FIXED', 'VERIFIED_FIXED') \
+         LIMIT 5000",
     )
     .fetch_all(&mut *tx)
     .await
@@ -307,17 +340,39 @@ fn merge_control_statuses(
         return only_live;
     }
 
+    // Family-containment roll-up. The canonical control ids (e.g. ISO `A.8`) are parents of the
+    // live mapping ids (e.g. `A.8.5`), so an EXACT `live_map.get(id)` never matched and every
+    // canonical control silently defaulted to "compliant" — findings could not move the report.
+    // Match the same parent/child predicate the gate uses, and default to "not_assessed" (not
+    // "compliant") when no live evidence maps to a control, so a lack of evidence never inflates
+    // the compliance percentage.
+    fn control_ids_related(a: &str, b: &str) -> bool {
+        fn is_child(child: &str, parent: &str) -> bool {
+            child.len() > parent.len()
+                && child.starts_with(parent)
+                && matches!(child.as_bytes()[parent.len()], b'.' | b' ' | b'(')
+        }
+        a == b || is_child(a, b) || is_child(b, a)
+    }
+
     static_rows
         .into_iter()
         .map(|(id, title)| {
-            if let Some(row) = live_map.get(id) {
-                row.clone()
+            let related: Vec<&crate::compliance_engine::ControlStatusRow> = live_map
+                .values()
+                .filter(|r| control_ids_related(&r.control_id, id))
+                .collect();
+            let status = if related.is_empty() {
+                "not_assessed".to_string()
+            } else if let Some(bad) = related.iter().find(|r| r.status != "compliant") {
+                bad.status.clone()
             } else {
-                crate::compliance_engine::ControlStatusRow {
-                    control_id: id.to_string(),
-                    control_title: title.to_string(),
-                    status: "compliant".into(),
-                }
+                "compliant".to_string()
+            };
+            crate::compliance_engine::ControlStatusRow {
+                control_id: id.to_string(),
+                control_title: title.to_string(),
+                status,
             }
         })
         .collect()
@@ -361,16 +416,20 @@ struct ListedFramework {
     scope: String,
 }
 
-/// Load the enabled compliance frameworks from the dynamic catalog, ordered for display. Returns an
-/// empty vec on any DB error (e.g. before the migration lands) so callers fall back gracefully.
-async fn load_listed_frameworks(state: &Arc<AppState>) -> Vec<ListedFramework> {
+/// Load the enabled compliance frameworks from the dynamic catalog, ordered for display.
+/// Returns `Err` only on a genuine DB failure (e.g. before the migration lands) so callers can
+/// fall back to `FALLBACK_FRAMEWORKS`; `Ok(vec![])` is a legitimately empty catalog (every
+/// framework taken out of scope) and MUST NOT resurrect the hardcoded list.
+async fn load_listed_frameworks(
+    state: &Arc<AppState>,
+) -> Result<Vec<ListedFramework>, sqlx::Error> {
     match sqlx::query(
         "SELECT slug, name, scope FROM compliance_frameworks WHERE enabled ORDER BY display_order, slug",
     )
     .fetch_all(state.app_pool.as_ref())
     .await
     {
-        Ok(rows) => rows
+        Ok(rows) => Ok(rows
             .into_iter()
             .filter_map(|r| {
                 Some(ListedFramework {
@@ -379,21 +438,23 @@ async fn load_listed_frameworks(state: &Arc<AppState>) -> Vec<ListedFramework> {
                     scope: r.try_get::<String, _>("scope").ok().unwrap_or_default(),
                 })
             })
-            .collect(),
-        Err(_) => Vec::new(),
+            .collect()),
+        Err(e) => {
+            tracing::warn!(target: "compliance", error = %e, "compliance_frameworks catalog load failed; using fallback list");
+            Err(e)
+        }
     }
 }
 
-/// Enabled framework slugs from the dynamic catalog, falling back to `FALLBACK_FRAMEWORKS`.
+/// Enabled framework slugs from the dynamic catalog. Falls back to `FALLBACK_FRAMEWORKS` only on a
+/// DB error — an empty-but-successful catalog means "no frameworks in scope".
 async fn listed_framework_slugs(state: &Arc<AppState>) -> Vec<String> {
-    let listed = load_listed_frameworks(state).await;
-    if listed.is_empty() {
-        FALLBACK_FRAMEWORKS
+    match load_listed_frameworks(state).await {
+        Ok(listed) => listed.into_iter().map(|f| f.slug).collect(),
+        Err(_) => FALLBACK_FRAMEWORKS
             .iter()
             .map(|(s, _, _)| s.to_string())
-            .collect()
-    } else {
-        listed.into_iter().map(|f| f.slug).collect()
+            .collect(),
     }
 }
 
@@ -447,8 +508,12 @@ async fn compliance_framework_orphans(
     // (1) coverage gap
     let mut orphans = crate::compliance_engine::find_orphaned_controls(&expected, &control_map_ids);
 
-    // (2) listed but carrying no live control mapping at all
-    if listed && control_map_ids.is_empty() {
+    // (2) carrying no live control mapping at all. This must fire regardless of `listed`:
+    // an UNLISTED framework that nonetheless has a canonical control set (nist/hipaa/fedramp
+    // via normalize_framework_slug) previously slipped through here — `find_orphaned_controls`
+    // returns empty when there are zero mapping ids — and produced a clean "100% compliant"
+    // PDF. Treat every canonical control as orphaned so the gate blocks/voids the artifact.
+    if control_map_ids.is_empty() {
         if expected.is_empty() {
             orphans.push(OrphanedControl {
                 control_id: "*".into(),
@@ -503,24 +568,25 @@ async fn api_compliance_frameworks_list(
     State(state): State<Arc<AppState>>,
     Extension(_auth): Extension<AuthContext>,
 ) -> Response {
-    let listed = load_listed_frameworks(&state).await;
-    let (rows, dynamic): (Vec<(String, String, String)>, bool) = if listed.is_empty() {
-        (
-            FALLBACK_FRAMEWORKS
-                .iter()
-                .map(|(id, name, scope)| (id.to_string(), name.to_string(), scope.to_string()))
-                .collect(),
-            false,
-        )
-    } else {
-        (
-            listed
-                .into_iter()
-                .map(|f| (f.slug, f.name, f.scope))
-                .collect(),
-            true,
-        )
-    };
+    // Only a DB error falls back to the hardcoded list; an empty catalog is served as-is so an
+    // operator who has taken every framework out of scope sees exactly that.
+    let (rows, dynamic): (Vec<(String, String, String)>, bool) =
+        match load_listed_frameworks(&state).await {
+            Ok(listed) => (
+                listed
+                    .into_iter()
+                    .map(|f| (f.slug, f.name, f.scope))
+                    .collect(),
+                true,
+            ),
+            Err(_) => (
+                FALLBACK_FRAMEWORKS
+                    .iter()
+                    .map(|(id, name, scope)| (id.to_string(), name.to_string(), scope.to_string()))
+                    .collect(),
+                false,
+            ),
+        };
     let out: Vec<Value> = rows
         .into_iter()
         .map(|(id, name, scope)| {

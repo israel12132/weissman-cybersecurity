@@ -258,12 +258,27 @@ pub async fn verify_oob_token_seen_with_client(client: &reqwest::Client, token: 
             "User-Agent",
             crate::fuzz_http_pool::random_fuzz_user_agent(),
         );
-    if let Some(k) = tenant_oast_api_key().or_else(|| {
-        std::env::var("WEISSMAN_OAST_API_KEY")
+    // NEVER leak the platform WEISSMAN_OAST_API_KEY to a tenant-controlled listener host: a tenant
+    // admin can set `oast_listener_url` to any host, and that key is the sole credential guarding
+    // every tenant's OOB interaction records. Attach the env key only when the resolved URL's host
+    // equals WEISSMAN_OAST_LISTENER_URL's host; a tenant listener override sends only its own key.
+    let api_key = tenant_oast_api_key().or_else(|| {
+        let platform_host = std::env::var("WEISSMAN_OAST_LISTENER_URL")
             .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-    }) {
+            .and_then(|u| reqwest::Url::parse(u.trim()).ok())
+            .and_then(|u| u.host_str().map(str::to_ascii_lowercase));
+        let url_host = reqwest::Url::parse(&url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_ascii_lowercase));
+        match (platform_host, url_host) {
+            (Some(ph), Some(uh)) if ph == uh => std::env::var("WEISSMAN_OAST_API_KEY")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
+            _ => None,
+        }
+    });
+    if let Some(k) = api_key {
         req = req.header("Authorization", format!("Bearer {}", k));
     }
     let Ok(resp) = req.send().await else {

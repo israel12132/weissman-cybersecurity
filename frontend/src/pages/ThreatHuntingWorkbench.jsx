@@ -13,6 +13,7 @@ import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid, SkeletonCard } from '../components/ui/Skeleton'
@@ -81,20 +82,13 @@ function exportIocsCsv(iocs) {
   const header = ['type', 'value', 'source', 'severity', 'added', 'tags']
   const rows = iocs.map((ioc) => [
     ioc.type,
-    (ioc.value || '').replace(/"/g, '""'),
+    ioc.value || '',
     ioc.source,
     ioc.severity,
     ioc.added,
     (ioc.tags || []).join(';'),
   ])
-  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `threat-hunting-iocs-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(rows, header, 'threat-hunting-iocs')
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -446,7 +440,7 @@ export default function ThreatHuntingWorkbench() {
       actions={(
         <ShellScanActions
           onRefresh={loadHuntData}
-          onExport={() => { if (activeTab === 'iocs') exportIocsCsv(iocs); else exportCsv() }}
+          onExport={() => { if (activeTab === 'iocs') exportIocsCsv(visibleIocs); else exportCsv() }}
           refreshLoading={campaignsLoading}
           exportDisabled={!filteredFindings.length}
         />
@@ -553,7 +547,7 @@ export default function ThreatHuntingWorkbench() {
                 {iocs.length > 0 && visibleIocs.length === 0 ? (
                   <div className="text-center py-8 text-[var(--text-muted)]">{t('weissmanFindings.filtered_title')}</div>
                 ) : (
-                  <IocTable iocs={visibleIocs} t={t} onExport={() => exportIocsCsv(iocs)} />
+                  <IocTable iocs={visibleIocs} t={t} onExport={() => exportIocsCsv(visibleIocs)} />
                 )}
               </motion.div>
             )}

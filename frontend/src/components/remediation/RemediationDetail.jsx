@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   X, Wrench, Sparkles, ShieldCheck, AlertTriangle, Download, GitPullRequest,
@@ -7,6 +7,7 @@ import {
 import { apiFetch } from '../../utils/apiFetch'
 import { apiUrl } from '../../lib/apiBase'
 import Button from '../ui/Button'
+import useFocusTrap from '../../hooks/useFocusTrap'
 
 /**
  * RemediationDetail — the "wow" surface. For a single finding it shows a bilingual (he/en)
@@ -103,6 +104,17 @@ export default function RemediationDetail({ finding, onClose }) {
   const clientId = finding?.client_id
   const findingId = finding?.finding_id
   const sev = String(finding?.severity || 'info').toLowerCase()
+
+  // Dialog a11y: trap focus, close on Escape, and expose role/aria-modal so AT
+  // announces the drawer as a modal dialog.
+  const panelRef = useRef(null)
+  const titleId = useId()
+  useFocusTrap(panelRef, true)
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const loadBrief = useCallback(async (refresh = false) => {
     if (!clientId || !findingId) return
@@ -252,13 +264,19 @@ export default function RemediationDetail({ finding, onClose }) {
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- modal backdrop click-to-dismiss; Escape/close button provide keyboard path */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl h-full bg-[#0b0f14] border-l border-white/10 overflow-y-auto shadow-2xl">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative w-full max-w-2xl h-full bg-[#0b0f14] border-l border-white/10 overflow-y-auto shadow-2xl"
+      >
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[#0b0f14]/95 backdrop-blur border-b border-white/10 p-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Wrench className="w-4 h-4 text-cyan-400 shrink-0" />
-              <h3 className="text-sm font-semibold text-white truncate">{finding?.title || findingId}</h3>
+              <h3 id={titleId} className="text-sm font-semibold text-white truncate">{finding?.title || findingId}</h3>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase" style={{ color: SEV_COLOR[sev] || SEV_COLOR.info, background: `${SEV_COLOR[sev] || SEV_COLOR.info}18` }}>{sev}</span>

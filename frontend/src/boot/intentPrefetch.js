@@ -3,7 +3,7 @@
  */
 import { matchRouteChunk, normalizeRoutePath } from '../routing/routePrefetchMap'
 
-/** @type {Map<string, Promise<unknown>>} */
+/** @type {Set<string>} */
 const inflight = new Set()
 
 /** Attack-chain heuristics: preload likely next operator surfaces. */
@@ -18,17 +18,6 @@ const CHAIN_PREDICT = {
   '/template-engine': ['/ast-fuzzing', '/file-upload-lab'],
   '/ast-fuzzing': ['/template-engine', '/feedback-loop'],
   '/intel-map': ['/threat-intel', '/risk-graph', '/dark-web'],
-}
-
-let swController = null
-
-export function attachServiceWorker(controller) {
-  swController = controller
-}
-
-function postSwPrefetch(urls) {
-  if (!swController?.active) return
-  swController.active.postMessage({ type: 'PREFETCH_CHUNKS', urls })
 }
 
 /**
@@ -61,7 +50,6 @@ export function predictChainFromRoute(pathname) {
 
   const run = () => {
     for (const p of chain) prefetchRoute(p)
-    postSwPrefetch(chain.map((p) => `/command-center${p}`))
   }
 
   if (typeof requestIdleCallback === 'function') {

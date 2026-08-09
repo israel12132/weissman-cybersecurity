@@ -1002,23 +1002,22 @@ async fn nssi_emit(ctx: &EngineRunContext, event: &str, detail: Value) {
         crate::telemetry_bus::publish_bus("telemetry", &msg).await;
     }
     if let (Some(pool), Some(tenant_id)) = (ctx.app_pool.as_ref(), ctx.tenant_id) {
-        if let Ok(mut conn) = pool.acquire().await {
-            if crate::db::set_tenant_conn(&mut *conn, tenant_id)
-                .await
-                .is_ok()
-            {
-                let _ = sqlx::query(
-                    r#"INSERT INTO swarm_events (tenant_id, client_id, agent, event, detail_json, ts_ms)
-                       VALUES ($1, $2, $3, $4, $5, $6)"#,
-                )
-                .bind(tenant_id)
-                .bind(ctx.client_id)
-                .bind("NSSI")
-                .bind(event)
-                .bind(sqlx::types::Json(detail))
-                .bind(ts)
-                .execute(&mut *conn)
-                .await;
+        if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await {
+            let inserted = sqlx::query(
+                r#"INSERT INTO swarm_events (tenant_id, client_id, agent, event, detail_json, ts_ms)
+                   VALUES ($1, $2, $3, $4, $5, $6)"#,
+            )
+            .bind(tenant_id)
+            .bind(ctx.client_id)
+            .bind("NSSI")
+            .bind(event)
+            .bind(sqlx::types::Json(detail))
+            .bind(ts)
+            .execute(&mut *tx)
+            .await
+            .is_ok();
+            if inserted {
+                let _ = tx.commit().await;
             }
         }
     }
@@ -1977,21 +1976,15 @@ async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<Str
     else {
         return (paths, bases);
     };
-    let Ok(mut conn) = pool.acquire().await else {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return (paths, bases);
     };
-    if crate::db::set_tenant_conn(&mut *conn, tenant_id)
-        .await
-        .is_err()
-    {
-        return (paths, bases);
-    }
     if let Ok(Some(domains_json)) = sqlx::query_scalar::<_, String>(
         "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
     )
     .bind(client_id)
     .bind(tenant_id)
-    .fetch_optional(&mut *conn)
+    .fetch_optional(&mut *tx)
     .await
     {
         if let Ok(v) = serde_json::from_str::<Value>(&domains_json) {
@@ -2012,7 +2005,7 @@ async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<Str
     )
     .bind(client_id)
     .bind(tenant_id)
-    .fetch_optional(&mut *conn)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
@@ -2036,10 +2029,11 @@ async fn load_db_surface_extras(ctx: &EngineRunContext) -> (Vec<String>, Vec<Str
     )
     .bind(tenant_id)
     .bind(client_id)
-    .fetch_all(&mut *conn)
+    .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
     paths.extend(title_paths);
+    let _ = tx.commit().await;
     (paths, bases)
 }
 
@@ -3017,24 +3011,20 @@ async fn count_endpoint_agents(ctx: &EngineRunContext) -> u32 {
     else {
         return 0;
     };
-    let Ok(mut conn) = pool.acquire().await else {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return 0;
     };
-    if crate::db::set_tenant_conn(&mut *conn, tenant_id)
-        .await
-        .is_err()
-    {
-        return 0;
-    }
-    sqlx::query_scalar::<_, i64>(
+    let count = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM endpoint_agents WHERE tenant_id = $1 AND client_id = $2 AND status = 'online'",
     )
     .bind(tenant_id)
     .bind(client_id)
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *tx)
     .await
     .map(|n| n.max(0) as u32)
-    .unwrap_or(0)
+    .unwrap_or(0);
+    let _ = tx.commit().await;
+    count
 }
 
 fn signal_to_finding(s: &ProbeSignal) -> Value {

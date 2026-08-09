@@ -122,12 +122,21 @@ function discoverScanHubScenarios() {
     // not the page's real scan engine.
     const engineMatch = src.match(/ENGINE_ID\s*=\s*['"]([a-z0-9_]+)['"]/)
       || src.match(/engine(?:Id)?\s*[:=]\s*['"]([a-z0-9_]+)['"]/i)
-    const engine = engineMatch?.[1] || 'recon'
+    // A scan-wired page with NO derivable engine cannot be verified against its own
+    // engine — substituting a 'recon' default (the previous behaviour) proves only
+    // that the shared recon engine works and would green-light a broken engine behind
+    // this page's Run button. Surface it as a discovery skip instead.
+    if (!engineMatch) {
+      console.warn(
+        `[audit] skipping ${source}: no ENGINE_ID/engine declaration — cannot verify this page's real scan engine`,
+      )
+      continue
+    }
+    const engine = engineMatch[1]
     // A page that declares an engine string which isn't a real catalog engine is a
     // discovery false-positive (scraped text / namespace constant), not a scan target —
-    // skip it rather than submitting a fabricated engine that 400s. Pages with no engine
-    // declaration keep the 'recon' default (they exercise a real scan path).
-    if (engineMatch && knownEngines && !knownEngines.has(engine)) {
+    // skip it rather than submitting a fabricated engine that 400s.
+    if (knownEngines && !knownEngines.has(engine)) {
       console.warn(
         `[audit] skipping ${source}: derived engine '${engine}' is not a known scan engine `
           + '(likely demo/config text or a namespace constant, not the page\'s scan target)',

@@ -182,7 +182,6 @@ export default function RiskGraphTab() {
             onEdgesChange={onEdgesChange}
             fitView
             className="bg-[#0a0a0a]"
-            nodeClassName="rounded-lg border border-white/10 bg-black/60 text-white"
           >
             <Background color="#333" gap={16} />
             <Controls className="!bg-black/80 !border-white/10" />

@@ -5,6 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search } from 'lucide-react';
 import { apiFetch } from '../utils/apiFetch'
@@ -249,20 +250,10 @@ async function loadIntelPatterns() {
 
 function exportPatternsCsv(patterns) {
   const header = ['id', 'name', 'category', 'severity', 'confidence', 'member_count', 'kev', 'last_seen']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...patterns.map((p) =>
-      [p.id, p.name, p.category, p.severity, Math.round(p.confidence * 100), p.memberCount, p.kevListed, p.lastSeen].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-ai-patterns-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = patterns.map((p) => [
+    p.id, p.name, p.category, p.severity, Math.round(p.confidence * 100), p.memberCount, p.kevListed, p.lastSeen,
+  ])
+  downloadCsv(rows, header, 'weissman-ai-patterns')
 }
 
 export default function AIAnalysisEngine() {

@@ -4,9 +4,9 @@
 //! auditable, per-tenant policy with a bilingual (he/en) rationale.
 //!
 //! [`evaluate_policy`] is a **pure function** (unit-tested); [`HealPolicy::load`] reads the tenant's
-//! `system_configs` overrides and falls back to safe defaults. The decision is **advisory** — it is
-//! surfaced on the report/JSON/SARIF so an operator (or a future automation) can act on it — it never
-//! merges anything on its own.
+//! `system_configs` overrides and falls back to safe defaults. The decision is **advisory by
+//! default**; when `WEISSMAN_HEAL_AUTO_MERGE` is enabled, `auto_heal_job` consumes an `auto_merge`
+//! disposition (via `should_auto_merge`) to squash-merge the PR — see `docs/AUTO-HEAL.md`.
 
 use serde::Serialize;
 use sqlx::PgPool;

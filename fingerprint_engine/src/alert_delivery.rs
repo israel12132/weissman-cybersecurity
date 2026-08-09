@@ -296,7 +296,10 @@ async fn deliver_channel(
                 tracing::warn!(target: "alert_delivery", "webhook channel: no URL configured");
                 return false;
             };
-            post_json(client, &url, &alert_payload("webhook", rule, finding)).await
+            // Sign generic alert webhooks (the channel a SOAR/automation consumer acts on) so a
+            // party who merely learns the receiver URL cannot inject forged Weissman alerts.
+            // Slack/Teams/PagerDuty stay on post_json — those are authenticated by their URL secret.
+            post_json_signed(client, &url, &alert_payload("webhook", rule, finding)).await
         }
         "slack" | "teams" => {
             let Some(url) = resolve_webhook_url(config, "slack") else {
@@ -409,7 +412,8 @@ pub async fn notify_soar_dispatch_failure(
 
     let mut delivered = false;
     if let Some(url) = config.alert_webhook_url.as_deref() {
-        delivered |= post_json(&client, url, &payload).await;
+        // Generic webhook → sign it (see deliver_channel). Slack stays on the unsigned poster.
+        delivered |= post_json_signed(&client, url, &payload).await;
     }
     if let Some(url) = config.slack_webhook_url.as_deref() {
         delivered |= post_json(&client, url, &payload).await;

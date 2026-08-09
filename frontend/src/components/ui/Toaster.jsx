@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
 import Button from './Button'
 
@@ -79,16 +79,18 @@ export function ToastProvider({ children }) {
     setItems((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  const toast = {
+  const toast = useMemo(() => ({
     success: (m, o) => push('success', m, o),
     error: (m, o) => push('error', m, o),
     warning: (m, o) => push('warning', m, o),
     info: (m, o) => push('info', m, o),
     dismiss,
-  }
+  }), [push, dismiss])
+
+  const ctxValue = useMemo(() => ({ toast }), [toast])
 
   return (
-    <ToastCtx.Provider value={{ toast }}>
+    <ToastCtx.Provider value={ctxValue}>
       {children}
       <ToastViewport items={items} dismiss={dismiss} />
     </ToastCtx.Provider>
@@ -125,7 +127,7 @@ export function ToastViewport({ items, dismiss, className = '' }) {
       aria-label="Notifications"
     >
       {items.map((t) => (
-        <PremiumToastItem key={t.id} {...t} onDismiss={() => dismiss(t.id)} />
+        <PremiumToastItem key={t.id} {...t} onDismiss={dismiss} />
       ))}
     </div>
   )
@@ -165,6 +167,7 @@ function useDismissTimer({ ttl, onDismiss, paused }) {
 }
 
 export function PremiumToastItem({
+  id,
   variant = 'info',
   message,
   subtitle,
@@ -181,8 +184,8 @@ export function PremiumToastItem({
 
   const handleDismiss = useCallback(() => {
     setExiting(true)
-    setTimeout(onDismiss, 180)
-  }, [onDismiss])
+    setTimeout(() => onDismiss(id), 180)
+  }, [onDismiss, id])
 
   useDismissTimer({ ttl, onDismiss: handleDismiss, paused })
 

@@ -13,10 +13,11 @@
  *    cannot execute script, so this does not reintroduce an XSS sink.
  *  - font-src 'self'              → fonts are self-hosted under /fonts.
  *  - img-src 'self' data: blob:   → charts/maps, favicon SVG, generated blobs.
- *  - connect-src 'self' https: wss: ws: → the API origin is configurable at
- *    runtime (VITE_API_BASE_URL / window.__WEISSMAN_API_BASE__) and the app
- *    opens websockets, so the network scheme allow-list is intentionally broad
- *    while still blocking non-network exfiltration schemes.
+ *  - connect-src 'self' wss: ws: → fetch/XHR are same-origin only; the bare
+ *    wss:/ws: schemes cover the app's websockets. NOTE: a split-origin API
+ *    (VITE_API_BASE_URL pointing fetch at another host) is NOT permitted by this
+ *    same-origin fetch policy — such a deployment must add that concrete API
+ *    origin to connect-src (here or at the proxy/CDN layer) before it will work.
  *  - worker-src 'self' blob:      → the battlespace force-simulation web worker.
  *  - object-src 'none', base-uri 'self', form-action 'self' → hardening.
  *
@@ -26,7 +27,7 @@
  */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
   "img-src 'self' data: blob:",

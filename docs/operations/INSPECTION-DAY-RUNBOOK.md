@@ -11,10 +11,10 @@
 | Metric | Value | Verification command |
 |--------|-------|----------------------|
 | Production engines | **563** | `node scripts/verify_engine_wiring.mjs` |
-| Command Center routes | **112** | `node scripts/weissman-ui-audit.mjs` |
-| UI pages audited | **95/95** | `node scripts/weissman-ui-audit.mjs` |
-| Real probes | **300** | `node scripts/engine_reality_audit.mjs` |
-| Agent-required surfaces | **45** | same |
+| Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
+| UI pages audited | **111/111** | `node scripts/weissman-ui-audit.mjs` |
+| Real probes | **303** | `node scripts/engine_reality_audit.mjs` |
+| Agent-required surfaces | **48** | same |
 | JWT secret minimum (production) | **48 characters** | `fingerprint_engine/src/security_startup.rs` |
 | Destructive / metrics / job-bus secrets | **≥32 characters** | `PRODUCTION.env.template` |
 
@@ -117,10 +117,10 @@ Run live (or show CI logs):
 ```bash
 node scripts/verify_engine_wiring.mjs      # 0 gaps
 node scripts/engine_reality_audit.mjs      # 0 no_path
-node scripts/weissman-ui-audit.mjs         # 112 routes, 95 pages
+node scripts/weissman-ui-audit.mjs         # 130 routes, 111 pages
 ```
 
-Explain taxonomy: **300 real_probe**, **213 alias**, **45 agent_required** — no fake findings.
+Explain taxonomy: **303 real_probe**, **212 alias**, **48 agent_required** — no fake findings.
 
 ### Minutes 20–26 — SDLC, CI, and audit gates
 

@@ -1,4 +1,4 @@
-// Admin User Management APIs for CEO/Superadmin only
+// Admin User Management APIs for admin, CEO or superadmin (see require_admin_access)
 // Routes: GET/POST /api/admin/users, PATCH /api/admin/users/:id, POST /api/admin/users/:id/deactivate
 
 use axum::{
@@ -63,7 +63,7 @@ async fn allow_ceo_role_assignment(
         })
 }
 
-/// Check if the caller is superadmin or CEO (uses live DB role, not JWT alone).
+/// Check if the caller is admin, CEO or superadmin (uses live DB role, not JWT alone).
 async fn require_admin_access(pool: &PgPool, auth: &AuthContext) -> Result<AuthContext, Response> {
     let auth = match crate::auth_refresh::revalidate_auth_context(pool, auth).await {
         Ok(Some(a)) => a,
@@ -91,7 +91,7 @@ async fn require_admin_access(pool: &PgPool, auth: &AuthContext) -> Result<AuthC
     } else {
         Err((
             StatusCode::FORBIDDEN,
-            Json(json!({"ok": false, "detail": "Superadmin or CEO role required"})),
+            Json(json!({"ok": false, "detail": "admin, CEO or superadmin role required"})),
         )
             .into_response())
     }
@@ -232,6 +232,15 @@ pub async fn api_admin_users_create(
         )
             .into_response();
     }
+    // bcrypt silently truncates at 72 bytes, so a longer passphrase would authenticate on any
+    // 72-byte prefix collision. Reject over-long input rather than discarding its entropy.
+    if body.password.as_bytes().len() > 72 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "Password must be at most 72 bytes"})),
+        )
+            .into_response();
+    }
 
     // Hash password with bcrypt
     let hash = match bcrypt::hash(&body.password, bcrypt::DEFAULT_COST) {
@@ -248,11 +257,28 @@ pub async fn api_admin_users_create(
 
     let role = body.role.trim().to_lowercase();
     let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
-    let role = if valid_roles.contains(&role.as_str()) {
-        role
-    } else {
-        "viewer".to_string()
-    };
+    // Reject unknown roles instead of silently downgrading to "viewer": a botched or typo'd
+    // role otherwise creates a user the operator did not intend.
+    if !valid_roles.contains(&role.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo"})),
+        )
+            .into_response();
+    }
+
+    // Rank guard on create (mirrors the update path and ensure_can_manage_target): a
+    // non-superadmin may only create a user of strictly lower effective rank. Without this an
+    // `admin` could mint a peer-`admin` sock-puppet and defeat the two-person ROE approval control.
+    if !auth.is_superadmin
+        && crate::rbac::role_rank(&role) >= effective_rank(&auth.role, auth.is_superadmin)
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"ok": false, "detail": "Cannot create a user of equal or higher privilege"})),
+        )
+            .into_response();
+    }
 
     if role == crate::rbac::roles::CEO {
         if let Err(r) = crate::rbac::require_can_assign_ceo(&auth) {
@@ -398,20 +424,37 @@ pub async fn api_admin_users_update(
         return r;
     }
 
-    // Validate role if provided
-    let valid_role = body
-        .role
-        .as_ref()
-        .map(|r| {
+    // Authorization must be separate from change detection: a non-superadmin who sends
+    // `{"is_superadmin": ...}` must be denied (403), not silently reported "No changes" (which
+    // happened because the change-detection gate folded `&& auth.is_superadmin` into it).
+    if body.is_superadmin.is_some() && !auth.is_superadmin {
+        let _ = tx.rollback().await;
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"ok": false, "detail": "Only superadmin can modify superadmin status"})),
+        )
+            .into_response();
+    }
+
+    // Validate role if provided — reject an unknown role (400) instead of collapsing it to None,
+    // which is indistinguishable from "field omitted" and silently swallows a typo'd promotion.
+    let valid_role: Option<String> = match body.role.as_ref() {
+        Some(r) => {
             let role = r.trim().to_lowercase();
             let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
             if valid_roles.contains(&role.as_str()) {
                 Some(role)
             } else {
-                None
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo"})),
+                )
+                    .into_response();
             }
-        })
-        .flatten();
+        }
+        None => None,
+    };
 
     if let Some(ref role) = valid_role {
         if role == crate::rbac::roles::CEO {
@@ -436,9 +479,11 @@ pub async fn api_admin_users_update(
         }
     }
 
-    // Check if there are any changes to make
+    // Check if there are any changes to make. Authorization for the superadmin field was
+    // already enforced above, so change detection no longer needs the `&& auth.is_superadmin`
+    // clause (which is what made the denial branch unreachable).
     let has_role_change = valid_role.is_some();
-    let has_superadmin_change = body.is_superadmin.is_some() && auth.is_superadmin;
+    let has_superadmin_change = body.is_superadmin.is_some();
 
     if !has_role_change && !has_superadmin_change {
         return (

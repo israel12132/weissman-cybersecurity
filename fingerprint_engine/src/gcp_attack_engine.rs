@@ -581,6 +581,9 @@ struct Collector<'a> {
     nodes: Vec<Value>,
     edges: Vec<Value>,
     sig: Signals,
+    /// Project-level `enable-oslogin` (from `commonInstanceMetadata`). Instances inherit it, so
+    /// an instance with no per-instance key is only non-compliant when the project is also off.
+    project_oslogin: bool,
 }
 
 impl<'a> Collector<'a> {
@@ -591,6 +594,7 @@ impl<'a> Collector<'a> {
             nodes: Vec::new(),
             edges: Vec::new(),
             sig: Signals::default(),
+            project_oslogin: false,
         }
     }
 
@@ -896,13 +900,13 @@ async fn scan_project(
         scan_service_account_keys(client, cfg, col, project, target, &root).await;
     }
     if cfg.check_compute {
+        // Project metadata first: it sets `col.project_oslogin`, which per-instance assessment
+        // uses to avoid flagging every VM in a project that enforces OS Login at project scope.
+        scan_project_metadata(client, col, project, target).await;
         scan_compute_instances(client, cfg, col, project, target, &root).await;
     }
     if cfg.check_firewall {
         scan_firewalls(client, cfg, col, project, target, &root).await;
-    }
-    if cfg.check_compute {
-        scan_project_metadata(client, col, project, target).await;
     }
     if cfg.check_storage {
         scan_storage(client, cfg, col, project, target, &root).await;
@@ -1043,15 +1047,12 @@ async fn scan_project_iam(
             if let Some((_, technique, severity)) =
                 PRIVESC_ROLES.iter().find(|(r, _, _)| *r == role)
             {
-                // Only the principals an attacker might plausibly pivot through (named identities and
-                // service accounts), not Google-managed service agents which are expected.
+                // Only the principals an attacker might plausibly pivot through: exclude
+                // Google-managed service agents (expected). The previous first predicate was a
+                // tautology (`A || (B && C) || D` is true for every well-formed member string),
+                // so it narrowed nothing — `is_google_managed_agent` is the only real filter.
                 let risky: Vec<&String> = members
                     .iter()
-                    .filter(|m| {
-                        !m.contains("gserviceaccount.com")
-                            || m.contains("@") && !m.contains(".iam.gserviceaccount.com")
-                            || m.starts_with("serviceAccount:")
-                    })
                     .filter(|m| !is_google_managed_agent(m))
                     .collect();
                 if !risky.is_empty() {
@@ -1296,10 +1297,13 @@ fn assess_instance(col: &mut Collector<'_>, project: &str, target: &str, root: &
 
     // Metadata flags
     let meta = instance_metadata_map(inst);
+    // Fall back to the project-level flag when the instance carries no explicit key: GCP's
+    // recommended pattern is to set enable-oslogin once in project metadata and let instances
+    // inherit it, so an absent per-instance key on such a project is compliant, not a finding.
     let oslogin = meta
         .get("enable-oslogin")
         .map(|v| is_truthy(v))
-        .unwrap_or(false);
+        .unwrap_or(col.project_oslogin);
     let serial_enabled = meta
         .get("serial-port-enable")
         .map(|v| is_truthy(v))
@@ -1308,11 +1312,6 @@ fn assess_instance(col: &mut Collector<'_>, project: &str, target: &str, root: &
         .get("disable-legacy-endpoints")
         .map(|v| is_truthy(v))
         .unwrap_or(false);
-    let block_project_ssh = meta
-        .get("block-project-ssh-keys")
-        .map(|v| is_truthy(v))
-        .unwrap_or(false);
-
     let can_ip_forward = inst
         .get("canIpForward")
         .and_then(Value::as_bool)
@@ -1396,9 +1395,6 @@ fn assess_instance(col: &mut Collector<'_>, project: &str, target: &str, root: &
             &format!("Instance '{name}' ({zone}) does not enforce OS Login (enable-oslogin). OS Login centralises SSH access on IAM and supports MFA; without it, instance/project SSH keys grant standing access that is hard to audit."),
             Evidence::new().with("instance", name).check("enable-oslogin", false, "absent"),
         );
-    }
-    if !default_sa && !block_project_ssh && !oslogin {
-        // project-wide SSH keys reachable
     }
     if serial_enabled {
         col.push(
@@ -1525,6 +1521,11 @@ async fn scan_firewalls(
         for rule in allowed {
             let proto = rule.get("IPProtocol").and_then(Value::as_str).unwrap_or("");
             let ports_all = rule.get("ports").is_none(); // absence = all ports
+            // Ports are only meaningful for tcp/udp. GCP omits the `ports` key for
+            // icmp/esp/ah/sctp/etc., so a missing key does NOT mean "all TCP ports" there —
+            // treating it that way fabricated 16 port findings for a benign `allow icmp` rule.
+            let proto_l = proto.to_ascii_lowercase();
+            let port_bearing = matches!(proto_l.as_str(), "tcp" | "udp" | "6" | "17");
             let ports: Vec<u32> = rule
                 .get("ports")
                 .and_then(Value::as_array)
@@ -1536,7 +1537,7 @@ async fn scan_firewalls(
                 })
                 .unwrap_or_default();
 
-            if (proto == "all" || proto.is_empty()) && ports_all {
+            if (proto == "all" || proto.is_empty() || proto == "0") && ports_all {
                 col.sig.open_admin_port = true;
                 let node = format!("fw:{project}:{name}");
                 col.add_node(&node, name, "firewall", "takeover");
@@ -1555,7 +1556,7 @@ async fn scan_firewalls(
                 continue;
             }
             for (port, label, cis, sev) in DANGEROUS_PORTS {
-                let hit = ports_all || ports.contains(port);
+                let hit = (ports_all && port_bearing) || ports.contains(port);
                 if hit {
                     if matches!(*sev, "critical" | "high") {
                         col.sig.open_admin_port = true;
@@ -1636,6 +1637,9 @@ async fn scan_project_metadata(
             }
         }
     }
+    // Instances inherit the project-level flag; record it so assess_instance can treat an
+    // instance with no per-instance key as compliant when the project enforces OS Login.
+    col.project_oslogin = oslogin;
     if !oslogin {
         col.push(
             Domain::Identity,
@@ -2235,8 +2239,11 @@ async fn scan_external_surface(cfg: &GcpScanConfig, col: &mut Collector<'_>, tar
         format!("https://{}", host.trim_end_matches('/'))
     };
 
-    // 1) GCE metadata SSRF surface (only meaningful when scanning from inside GCP, but always a
-    //    valuable signal; reported with the precise endpoint).
+    // 1) GCE metadata reachability is a property of the SCAN ORIGIN (the worker's own
+    //    link-local 169.254.x metadata server), never of the customer `target`. Emitting it
+    //    as a finding bound to `target` fabricates a critical finding about a resource the
+    //    customer does not own and leaks the platform's own project metadata cross-tenant, so
+    //    it is recorded only as an internal debug signal — never as a finding, never with body.
     if cfg.check_metadata {
         let metadata_url = "http://metadata.google.internal/computeMetadata/v1/?recursive=true";
         if let Ok(resp) = client
@@ -2247,10 +2254,10 @@ async fn scan_external_surface(cfg: &GcpScanConfig, col: &mut Collector<'_>, tar
             .await
         {
             if resp.status().as_u16() == 200 {
-                let body = resp.text().await.unwrap_or_default();
-                col.push(Domain::Network, "GCE metadata server reachable from scan origin", "critical", "T1552.005", "4.x", target, 0.9,
-                    &format!("The GCE metadata server ({metadata_url}) responded. It exposes project metadata, SSH keys, startup scripts and — critically — OAuth2 access tokens for the instance's service account. Any SSRF reaching this endpoint yields cloud credentials. Preview: {}", body.chars().take(200).collect::<String>()),
-                    Evidence::new().with("endpoint", metadata_url).check("metadata.google.internal", true, "200"));
+                tracing::debug!(
+                    target: "gcp_engine",
+                    "scan origin can reach the GCE metadata server (self-host signal, not attributed to target)"
+                );
             }
         }
     }

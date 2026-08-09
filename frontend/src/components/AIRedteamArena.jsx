@@ -36,10 +36,11 @@ export default function AIRedteamArena() {
       .then((list) => {
         const c = Array.isArray(list) ? list.find((x) => String(x.id) === String(clientId)) : null
         setClient(c || null)
-        if (c?.domains_json) {
+        if (c?.domains) {
           try {
-            const domains = JSON.parse(c.domains_json)
-            if (domains?.[0]) setTarget(domains[0])
+            const domains = typeof c.domains === 'string' ? JSON.parse(c.domains) : c.domains
+            const first = Array.isArray(domains) ? domains[0] : null
+            if (first) setTarget(first)
           } catch (_) { /* best-effort; non-fatal */ }
         }
       })

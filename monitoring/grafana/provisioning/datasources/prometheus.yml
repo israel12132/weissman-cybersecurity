@@ -7,6 +7,9 @@ datasources:
     # explicit datasource and fall back to isDefault below.
     uid: DS_PROMETHEUS
     type: prometheus
+    # Stable uid so dashboards and the Tempo tracesToMetrics link can reference it
+    # explicitly (a panel that names a missing uid does NOT fall back to default).
+    uid: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true

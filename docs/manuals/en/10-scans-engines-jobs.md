@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Operate Weissman's **545 production security engines**, understand job queue mechanics, Command Center hubs, agent-required gates, and scan scheduling for SOC operators.
+Operate Weissman's **563 production security engines**, understand job queue mechanics, Command Center hubs, agent-required gates, and scan scheduling for SOC operators.
 
 ---
 
@@ -17,7 +17,7 @@ Operate Weissman's **545 production security engines**, understand job queue mec
 
 ## Engine catalog overview
 
-Weissman ships **545+ production engines** registered in `PRODUCTION_ENGINE_IDS` (`backend/weissman-core/src/models/engine.rs`).
+Weissman ships **563 production engines** registered in `PRODUCTION_ENGINE_IDS` (`backend/weissman-core/src/models/engine.rs`).
 
 Each engine is wired to a **real execution path** verified by CI script `scripts/verify_engine_wiring.mjs` (build fails on gaps).
 

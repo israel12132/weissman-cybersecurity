@@ -275,20 +275,26 @@ async fn routed_inner(
                 return Ok(text);
             }
             Err(e) => {
-                let retryable = e.retryable();
+                // Advance the chain not only for retryable transport errors but also for
+                // endpoint-fatal-but-request-valid failures (401/403 auth, 404 model-not-found,
+                // empty content) — a differently-provisioned provider may still serve the request.
+                // Only a genuinely bad request (400-class) aborts immediately, since every endpoint
+                // would reject it identically.
+                let try_next = e.should_try_next_endpoint();
                 metrics::counter!(
                     "weissman_llm_router_requests_total",
                     "endpoint" => ep.label.clone(),
-                    "outcome" => if retryable { "failover" } else { "error" },
+                    "outcome" => if try_next { "failover" } else { "error" },
                 )
                 .increment(1);
-                if !retryable {
+                if !try_next {
                     return Err(e);
                 }
                 tracing::warn!(
                     target: "llm_router",
                     endpoint = %ep.label,
-                    "llm endpoint failed with a retryable error; failing over to next"
+                    error = %e,
+                    "llm endpoint failed; failing over to next"
                 );
                 last_err = e;
             }

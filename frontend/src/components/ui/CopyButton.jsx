@@ -1,6 +1,24 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import Button from './Button'
+
+/** Legacy fallback for non-secure origins where navigator.clipboard is unavailable. */
+function fallbackCopy(text) {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
 
 /**
  * Copy-to-clipboard control for monospace / technical fields.
@@ -13,15 +31,27 @@ import Button from './Button'
  */
 export default function CopyButton({ value, label = 'Copy', size = 'sm', className = '' }) {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  const markCopied = useCallback(() => {
+    setCopied(true)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setCopied(false), 2000)
+  }, [])
 
   const copy = useCallback(() => {
     const text = value != null ? String(value) : ''
     if (!text.trim()) return
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }, [value])
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(markCopied)
+        .catch(() => { if (fallbackCopy(text)) markCopied() })
+    } else if (fallbackCopy(text)) {
+      markCopied()
+    }
+  }, [value, markCopied])
 
   const iconSize = size === 'md' ? 'w-3.5 h-3.5' : 'w-3 h-3'
   const pad = size === 'md' ? 'p-1.5' : 'p-1'

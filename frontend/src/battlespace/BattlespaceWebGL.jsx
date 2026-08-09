@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useMemo } from 'react'
 
 const VERT = `#version 300 es
 in vec2 a_pos;
@@ -100,8 +100,14 @@ export default function BattlespaceWebGL({
   const panRef = useRef({ x: 0, y: 0 })
   const zoomRef = useRef(1)
   const dragRef = useRef(null)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const allNodes = [...nodes, ...shadowNodes]
+  const allNodes = useMemo(() => [...nodes, ...shadowNodes], [nodes, shadowNodes])
+  // id → index lookup so the per-frame edge pass is O(edges) instead of
+  // O(edges × nodes) findIndex scans.
+  const nodeIndexById = useMemo(() => {
+    const m = new Map()
+    allNodes.forEach((n, i) => m.set(String(n.id), i))
+    return m
+  }, [allNodes])
 
   const render = useCallback(() => {
     const canvas = canvasRef.current
@@ -138,8 +144,8 @@ export default function BattlespaceWebGL({
       const key = `${s}->${t}`
       const isShadow = !!e.is_shadow
       if (intentMask?.relevantEdges && !intentMask.relevantEdges.has(key) && !isShadow) continue
-      const si = allNodes.findIndex((n) => String(n.id) === s)
-      const ti = allNodes.findIndex((n) => String(n.id) === t)
+      const si = nodeIndexById.get(s) ?? -1
+      const ti = nodeIndexById.get(t) ?? -1
       if (si < 0 || ti < 0 || !positions) continue
       lineVerts.push(positions[si * 2], positions[si * 2 + 1], positions[ti * 2], positions[ti * 2 + 1])
       edgeCount++
@@ -201,7 +207,7 @@ export default function BattlespaceWebGL({
     gl.uniform1f(gl.getUniformLocation(prog.points, 'u_zoom'), zoom)
     gl.drawArrays(gl.POINTS, 0, count)
     ;[b1, b2, b3].forEach((b) => gl.deleteBuffer(b))
-  }, [allNodes, edges, shadowEdges, positions, intentMask, focusId])
+  }, [allNodes, nodeIndexById, edges, shadowEdges, positions, intentMask, focusId])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -217,7 +223,10 @@ export default function BattlespaceWebGL({
       points: linkProgram(gl, vs, fs),
       lines: linkProgram(gl, lvs, lfs),
     }
-    if (!programsRef.current.points && !programsRef.current.lines) {
+    // `points` is required by render() (it bails at `!prog.points`), so a failed
+    // points program means GL is unusable — mark it so. A `lines`-only failure
+    // still renders nodes, so keep glRef in that case.
+    if (!programsRef.current.points) {
       glRef.current = null
     }
     return () => {
@@ -276,6 +285,7 @@ export default function BattlespaceWebGL({
         }
       }}
       onMouseUp={() => { dragRef.current = null }}
+      onMouseLeave={() => { dragRef.current = null }}
       onClick={(e) => {
         const node = pickNode(e.clientX, e.clientY)
         if (node && onNodePick) onNodePick(node)

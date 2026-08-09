@@ -18,6 +18,9 @@ export function useComputeWorker() {
 
   useEffect(() => {
     if (!supported) return undefined
+    // Stable Map instance for this mount — capture it so the cleanup drains the
+    // exact same pending set (and eslint doesn't flag ref access in cleanup).
+    const pendingRequests = pending.current
     let worker
     try {
       worker = new Worker(new URL('../workers/computeStats.worker.js', import.meta.url), {
@@ -38,9 +41,16 @@ export function useComputeWorker() {
       // Reject everything in flight; future calls fall back to the main thread.
       for (const p of pending.current.values()) p.reject(new Error('worker error'))
       pending.current.clear()
+      worker.terminate()
+      workerRef.current = null
     }
     workerRef.current = worker
     return () => {
+      // Settle any in-flight requests before terminating: after terminate() no
+      // onmessage will ever arrive to drain them, so an awaiting caller would hang
+      // forever (its try/finally never runs). Mirror the onerror drain.
+      for (const p of pendingRequests.values()) p.reject(new Error('worker terminated'))
+      pendingRequests.clear()
       worker.terminate()
       workerRef.current = null
     }

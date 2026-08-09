@@ -12,6 +12,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { confirmDialog } from '../utils/confirmDialog'
 import useFocusTrap from '../hooks/useFocusTrap'
 import Button from '../components/ui/Button'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const columnHelper = createColumnHelper()
 
@@ -535,23 +536,13 @@ export default function AdminManagement() {
               id="adminmgmt-export-users-btn"
               type="button"
               onClick={() => {
-                const csv = ['Email,Role,Superadmin,Active']
-                  .concat(
-                    users.map(
-                      (u) =>
-                        `${u.email},${u.role || 'viewer'},${u.is_superadmin ? 'yes' : 'no'},${
-                          u.is_active !== false ? 'yes' : 'no'
-                        }`
-                    )
-                  )
-                  .join('\n')
-                const blob = new Blob([csv], { type: 'text/csv' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = 'weissman_users_export.csv'
-                a.click()
-                URL.revokeObjectURL(url)
+                const rows = users.map((u) => [
+                  u.email,
+                  u.role || 'viewer',
+                  u.is_superadmin ? 'yes' : 'no',
+                  u.is_active !== false ? 'yes' : 'no',
+                ])
+                downloadCsv(rows, ['Email', 'Role', 'Superadmin', 'Active'], 'weissman-users')
               }}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
@@ -560,7 +551,7 @@ export default function AdminManagement() {
             <Button variant="unstyled"
               id="adminmgmt-audit-log-btn"
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/audit-log')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               📋 View Audit Logs
@@ -576,7 +567,7 @@ export default function AdminManagement() {
             <Button variant="unstyled"
               id="adminmgmt-system-settings-btn"
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/system-config')}
               className="px-4 py-3 rounded-xl text-sm font-medium border border-[var(--border-strong)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--row-hover-bg)] text-left"
             >
               ⚙️ System Settings

@@ -54,7 +54,7 @@ jobs:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
         run: |
           if [ -z "${RENOVATE_TOKEN}" ]; then
-            echo "::notice title=Renovate skipped::RENOVATE_TOKEN secret is not set. Add a PAT (repo + workflow scopes) as RENOVATE_TOKEN to enable dependency updates."
+            echo "::warning title=Renovate inert::RENOVATE_TOKEN secret is not set — this scheduled run updated nothing (github-actions SHA-pinning, dependency PRs). Add a PAT (repo + workflow scopes) as RENOVATE_TOKEN, or install the hosted Renovate app and delete this workflow."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"

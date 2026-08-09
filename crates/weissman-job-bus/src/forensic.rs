@@ -23,21 +23,27 @@ pub struct MemorySnapshot {
 
 impl MemorySnapshot {
     pub fn capture_current() -> Self {
-        let (rss, vm) = proc_status_memory().unwrap_or((0, 0));
+        let (rss, vm, threads) = proc_status_memory().unwrap_or((0, 0, 1));
+        // Real fd count — a hardcoded `open_fds: None`/`thread_count: 1` is actively misleading for
+        // exactly the failure modes this bundle exists to diagnose (leaked threads, fd exhaustion).
+        let open_fds = std::fs::read_dir("/proc/self/fd")
+            .map(|d| d.count() as u32)
+            .ok();
         Self {
             rss_kb: rss,
             vm_size_kb: vm,
-            thread_count: 1,
-            open_fds: None,
+            thread_count: threads,
+            open_fds,
             captured_at: chrono::Utc::now().to_rfc3339(),
         }
     }
 }
 
-fn proc_status_memory() -> Option<(u64, u64)> {
+fn proc_status_memory() -> Option<(u64, u64, u32)> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
     let mut rss = 0u64;
     let mut vm = 0u64;
+    let mut threads = 1u32;
     for line in status.lines() {
         if let Some(v) = line.strip_prefix("VmRSS:") {
             rss = v.trim().split_whitespace().next()?.parse().ok()?;
@@ -45,8 +51,16 @@ fn proc_status_memory() -> Option<(u64, u64)> {
         if let Some(v) = line.strip_prefix("VmSize:") {
             vm = v.trim().split_whitespace().next()?.parse().ok()?;
         }
+        if let Some(v) = line.strip_prefix("Threads:") {
+            threads = v
+                .trim()
+                .split_whitespace()
+                .next()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1);
+        }
     }
-    Some((rss, vm))
+    Some((rss, vm, threads))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,6 +144,10 @@ pub async fn enqueue_forensic_dlq(
     if seal != bundle.bundle_seal {
         return Err(JobBusError::Forensic("bundle seal mismatch".into()));
     }
+    // `weissman_job_forensic_dlq` is FORCE ROW LEVEL SECURITY and `weissman_app` is NOBYPASSRLS;
+    // scope the INSERT to the bundle's tenant so its WITH CHECK passes (an unscoped pool inherits
+    // the database default GUC '0' and the insert is rejected). Mirrors `events::append_event`.
+    let mut tx = weissman_db::begin_tenant_tx(pool, bundle.tenant_id).await?;
     let id: Uuid = sqlx::query_scalar(
         r#"INSERT INTO weissman_job_forensic_dlq
              (job_id, tenant_id, worker_id, failure_class, stack_trace,
@@ -152,8 +170,9 @@ pub async fn enqueue_forensic_dlq(
             .as_ref()
             .map(|e| sqlx::types::Json(e.clone())),
     )
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     tracing::error!(
         target: "job_bus",
         %id,

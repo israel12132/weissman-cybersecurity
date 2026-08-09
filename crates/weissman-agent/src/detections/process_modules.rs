@@ -114,14 +114,16 @@ pub async fn run_unusual_runtime(engine: &str) -> anyhow::Result<Vec<Value>> {
 
 fn running_from_writable_directory(path: &Path) -> bool {
     let p = path.to_string_lossy().to_ascii_lowercase();
+    // Deliberately excludes `\users\` and `/home/`: a bare home-directory match flags every
+    // browser, editor and user-installed tool as a DLL-search-order-hijack candidate, producing
+    // dozens-to-hundreds of false positives per scan. Only genuinely transient/world-writable
+    // staging directories remain.
     [
-        "\\users\\",
         "\\appdata\\local\\temp\\",
         "\\temp\\",
         "/tmp/",
         "/var/tmp/",
         "/dev/shm/",
-        "/home/",
     ]
     .iter()
     .any(|needle| p.contains(needle))

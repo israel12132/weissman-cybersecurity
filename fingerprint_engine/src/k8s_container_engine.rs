@@ -908,8 +908,11 @@ impl Collector {
                 }
             }
 
-            // Anonymous reachability of /api/v1: 200 list ⇒ anonymous-auth; 401/403 ⇒ gated-but-exposed.
-            if let Some(p) = api_probe.as_ref() {
+            // Anonymous reachability of /api/v1 must be judged WITHOUT the operator's bearer token:
+            // a 200 from a token-bearing probe reflects the supplied credential, not anonymous-auth,
+            // so using `api_probe` here reported a hardened cluster as "ANONYMOUS".
+            let anon_api_probe = get(client, &url(scheme, host, port, "/api/v1"), None).await;
+            if let Some(p) = anon_api_probe.as_ref() {
                 if p.status == 200 && is_api_list(&p.body) {
                     self.sig.anon_api = true;
                     self.add_node(
@@ -952,9 +955,11 @@ impl Collector {
             }
 
             // When anonymous, quantify the blast radius: secrets / pods / nodes / service accounts.
+            // These are "anonymous read" findings, so they must probe WITHOUT the token (None),
+            // else the operator's credential would fabricate anonymous-exposure findings.
             if self.sig.anon_api {
                 self.probe_anonymous_enumeration(
-                    client, host, port, scheme, token, intensity, target, &node_id,
+                    client, host, port, scheme, None, intensity, target, &node_id,
                 )
                 .await;
             }
@@ -1747,7 +1752,10 @@ impl Collector {
             self.add_node("internet", "Internet", "root", "exposed");
             self.add_edge("internet", &node_id, "reachable", "kubelet reachable");
 
-            if let Some(p) = pods.as_ref() {
+            // Anonymous kubelet reachability must be judged without the operator's token, else a
+            // token-authenticated 200 is misreported as anonymous exposure.
+            let anon_pods = get(client, &url(scheme, host, port, "/pods"), None).await;
+            if let Some(p) = anon_pods.as_ref() {
                 if p.status == 200 && p.body.to_ascii_lowercase().contains("\"items\"") {
                     self.sig.kubelet_anon_read = true;
                     // On the read-write port, anonymous /pods means anonymous-auth is on ⇒ exec is open.
@@ -1811,11 +1819,20 @@ impl Collector {
             // configz leaks the live kubelet configuration (incl. whether anonymous-auth is enabled).
             if let Some(p) = get(client, &url(scheme, host, port, "/configz"), token).await {
                 if p.status == 200 && p.body.to_ascii_lowercase().contains("kubeletconfig") {
-                    let anon = p
-                        .body
-                        .to_ascii_lowercase()
-                        .contains("\"anonymous\":{\"enabled\":true")
-                        || p.body.to_ascii_lowercase().contains("\"enabled\":true");
+                    // Parse the config: the bare `"enabled":true` substring also matches the
+                    // webhook block (`"webhook":{"enabled":true}`) of a hardened kubelet, so it
+                    // reported anonymous auth on nodes that explicitly set anonymous.enabled=false.
+                    let anon = serde_json::from_str::<serde_json::Value>(&p.body)
+                        .ok()
+                        .and_then(|v| {
+                            v.pointer("/kubeletconfig/authentication/anonymous/enabled")
+                                .and_then(serde_json::Value::as_bool)
+                        })
+                        .unwrap_or_else(|| {
+                            p.body
+                                .to_ascii_lowercase()
+                                .contains("\"anonymous\":{\"enabled\":true")
+                        });
                     let ev = Evidence::new()
                         .with("endpoint", endpoint.clone())
                         .with("path", "/configz")
@@ -2345,7 +2362,9 @@ impl Collector {
             let gated = v2.status == 401;
             let mut repos = 0usize;
             let mut anon = false;
-            if let Some(cat) = get(client, &url(scheme, host, port, "/v2/_catalog"), token).await {
+            // "ANONYMOUS catalog listing" must be probed without the operator's token, else a
+            // token-authenticated 200 is misreported as anonymous.
+            if let Some(cat) = get(client, &url(scheme, host, port, "/v2/_catalog"), None).await {
                 if cat.status == 200 && cat.body.contains("repositories") {
                     anon = true;
                     self.sig.registry_anon_catalog = true;

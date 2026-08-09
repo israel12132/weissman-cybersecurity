@@ -157,7 +157,7 @@ export default function IocFeed() {
         cell: (ctx) =>
           ctx.row.original.finding_id ? (
             <Link
-              to="/findings"
+              to={{ pathname: '/findings', search: `?q=${encodeURIComponent(ctx.row.original.finding_id)}` }}
               className="text-[11px] font-mono text-cyan-400/80 hover:text-cyan-300 underline underline-offset-2 whitespace-nowrap"
             >
               {t(`${NS}.view_finding`)}

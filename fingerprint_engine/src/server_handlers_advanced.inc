@@ -935,7 +935,8 @@ async fn api_playbooks_create(
     let _ = tx.commit().await;
     match id_res {
         Ok(id) => (StatusCode::CREATED, Json(json!({"ok": true, "id": id}))).into_response(),
-        Err(e) => (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": e.to_string()}))).into_response(),
+        Err(sqlx::Error::Database(db)) if db.is_unique_violation() => (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": "a playbook with this name already exists"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }
 
@@ -968,7 +969,8 @@ async fn api_playbooks_update(
     match res {
         Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": e.to_string()}))).into_response(),
+        Err(sqlx::Error::Database(db)) if db.is_unique_violation() => (StatusCode::CONFLICT, Json(json!({"ok": false, "detail": "a playbook with this name already exists"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": scrub_internal_error(&e)}))).into_response(),
     }
 }
 
@@ -1174,6 +1176,20 @@ async fn api_ueba_ingest(
     Extension(auth): Extension<AuthContext>,
     Json(p): Json<crate::ueba_detector::UebaIngestPayload>,
 ) -> Response {
+    // The real ingest path is the in-process /ws/agent handler; agent JWTs can never reach this
+    // HTTP route (verify_token_for_request requires a user access context). Any human caller here
+    // is supplying an arbitrary agent_id/client_id, which forges behavioural baselines/anomalies.
+    // Restrict it to admins and range-check hour_of_week so it cannot be used to poison detection.
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    if !(0..=167).contains(&p.hour_of_week) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "hour_of_week must be in 0..=167"})),
+        )
+            .into_response();
+    }
     match crate::ueba_detector::ingest_sample(&state.app_pool, auth.tenant_id, p).await {
         Ok(s) => (StatusCode::OK, Json(json!({"ok": true, "summary": s}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response(),

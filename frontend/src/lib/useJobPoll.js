@@ -19,17 +19,23 @@ export function useJobPoll(jobId, { onUpdate, onComplete, intervalMs = 2000, ena
     let iv = null
 
     async function poll() {
-      const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
-      const job = await r.json().catch(() => null)
-      if (cancelled || !r.ok || !job) return
-      onUpdateRef.current?.(job)
-      const status = (job.status || '').toLowerCase()
-      if (TERMINAL.has(status)) {
-        onCompleteRef.current?.(job)
-        // Job is finished — stop hitting the endpoint (the hook contract is
-        // "poll until terminal"; without this it polls forever once done).
-        cancelled = true
-        if (iv) clearInterval(iv)
+      try {
+        const r = await apiFetch(`/api/jobs/${encodeURIComponent(jobId)}`)
+        const job = await r.json().catch(() => null)
+        if (cancelled || !r.ok || !job) return
+        onUpdateRef.current?.(job)
+        const status = (job.status || '').toLowerCase()
+        if (TERMINAL.has(status)) {
+          onCompleteRef.current?.(job)
+          // Job is finished — stop hitting the endpoint (the hook contract is
+          // "poll until terminal"; without this it polls forever once done).
+          cancelled = true
+          if (iv) clearInterval(iv)
+        }
+      } catch (_) {
+        // apiFetch rejects on transport failure / circuit-open BEFORE the !r.ok
+        // guard above. Swallow it so the rejection can't escape as an
+        // unhandledrejection every tick; the next interval simply retries.
       }
     }
 

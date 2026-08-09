@@ -279,7 +279,8 @@ services:
       # loads and Alertmanager starts even when these are empty/absent; drop real values
       # in to activate Slack/PagerDuty/heartbeat. Previously the config used un-substituted
       # ${SLACK_WEBHOOK_URL} placeholders with no envsubst step, so it crash-looped on boot.
-      - ./monitoring/alertmanager-secrets:/etc/alertmanager/secrets:ro
+      # Committed placeholders in monitoring/secrets/ let the stack start (see its README).
+      - ./monitoring/secrets:/etc/alertmanager/secrets:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     expose:

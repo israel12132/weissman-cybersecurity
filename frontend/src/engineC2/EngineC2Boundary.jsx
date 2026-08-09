@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 const EngineC2BoundaryContext = createContext(false)
 const EngineC2ControlContext = createContext(null)
@@ -20,7 +20,7 @@ export function useInsideEngineC2() {
   if (!inside) {
     throw new Error(
       'ENGINE C2 UI BYPASS: tool surface rendered outside MorphingEngineChrome. ' +
-        'Wrap with withMorphingEngineChrome() or PageShell.',
+        'Wrap the page in PageShell (which applies MorphingEngineChrome).',
     )
   }
 }
@@ -46,7 +46,9 @@ export function EngineC2ControlProvider({ children, killSwitchEnabled = false })
   const resetKill = useCallback(() => {
     setKilled(false)
     setKillReason('')
-    abortRef.current = null
+    // Don't null the ref here — the consumer's effect re-registers a fresh
+    // controller on the killed→false transition, so a second Emergency Stop
+    // after a Reset still has a live controller to abort.
   }, [])
 
   const value = useMemo(
@@ -87,11 +89,21 @@ export function useEngineC2Control() {
 export function useC2AbortSignal() {
   const { registerAbort, killed } = useEngineC2Control()
   const controllerRef = useRef(null)
-
-  if (!controllerRef.current || controllerRef.current.signal.aborted) {
+  if (!controllerRef.current) {
     controllerRef.current = new AbortController()
-    registerAbort(controllerRef.current)
   }
+
+  // Register (and re-register) the controller with the provider from an effect
+  // so we never mutate the shared abort ref during render. After a kill→reset
+  // cycle the previous controller is already aborted; swap in a fresh one so the
+  // NEXT Emergency Stop still aborts in-flight work.
+  useEffect(() => {
+    if (controllerRef.current.signal.aborted) {
+      controllerRef.current = new AbortController()
+    }
+    registerAbort(controllerRef.current)
+    return () => registerAbort(null)
+  }, [killed, registerAbort])
 
   return { signal: controllerRef.current.signal, killed }
 }

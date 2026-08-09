@@ -21,7 +21,9 @@ pub use error::JobBusError;
 pub use events::{append_event, fetch_event_chain_hash, JobEventKind, JobEventRecord};
 pub use forensic::{enqueue_forensic_dlq, ForensicBundle, MemorySnapshot};
 pub use lease::{DistributedLease, LeaseHandle};
-pub use signing::{sign_job_envelope, verify_job_envelope, SignedJobEnvelope};
+pub use signing::{
+    forensic_seal_key_from_env, sign_job_envelope, verify_job_envelope, SignedJobEnvelope,
+};
 pub use swarm::{spawn_coordinator_if_enabled, SwarmCoordinator, WorkerSwarm};
 
 use serde_json::{json, Value};
@@ -111,6 +113,13 @@ impl JobBus {
             if env.job_id != job_id {
                 return Err(JobBusError::SignatureMismatch(
                     "envelope job_id mismatch".into(),
+                ));
+            }
+            // The HMAC binds tenant_id; enforce it so a claim under a different tenant than the
+            // envelope was signed for cannot mis-attribute the tamper-evident event chain.
+            if env.tenant_id != tenant_id {
+                return Err(JobBusError::SignatureMismatch(
+                    "envelope tenant_id mismatch".into(),
                 ));
             }
         } else if self.redis.is_some() {
@@ -203,6 +212,11 @@ impl JobBus {
             json!({ "worker_id": lease.worker_id(), "lock_secs": lock_secs }),
         )
         .await?;
+        // Project the LeaseExtended event so `weissman_async_jobs.locked_until` is actually
+        // pushed forward. Without this the read-model lock is frozen at claim+lock_secs and the
+        // reclaim sweep re-queues every job that runs longer than one lease window, causing
+        // duplicate execution. Every other `on_*` handler projects its event.
+        project_event(&self.pool, &record).await?;
         self.publish_stream(&record).await;
         Ok(())
     }
@@ -270,7 +284,13 @@ impl JobBus {
         if let Some(l) = lease {
             let _ = l.release().await;
         }
-        let dlq_id = enqueue_forensic_dlq(&self.pool, &bundle, self.signing_key.as_deref()).await?;
+        // Re-seal with the SAME dedicated forensic-key resolution the worker used to build the
+        // bundle — not `self.signing_key` (the orchestrator key). Using two different keys
+        // guaranteed a "bundle seal mismatch" whenever WEISSMAN_FORENSIC_SEAL_SECRET was set (the
+        // documented config), which left the exhausted job stuck `running` and looping forever.
+        let forensic_key = crate::signing::forensic_seal_key_from_env();
+        let dlq_id =
+            enqueue_forensic_dlq(&self.pool, &bundle, forensic_key.as_deref()).await?;
         let record = append_event(
             &self.pool,
             bundle.job_id,

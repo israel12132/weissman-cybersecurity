@@ -53,10 +53,12 @@ const Avatar = forwardRef(function Avatar(
   },
   ref,
 ) {
-  const [errored, setErrored] = useState(false)
+  // Track which src failed rather than a bare boolean, so a new src automatically
+  // retries instead of being pinned to the fallback for every avatar in a recycled slot.
+  const [erroredSrc, setErroredSrc] = useState(null)
   const sizing = SIZES[size] ?? SIZES.md
   const radius = shape === 'square' ? 'rounded-lg' : 'rounded-full'
-  const showImage = Boolean(src) && !errored
+  const showImage = Boolean(src) && erroredSrc !== src
   const initials = getInitials(name)
 
   return (
@@ -75,7 +77,7 @@ const Avatar = forwardRef(function Avatar(
         <img
           src={src}
           alt={alt ?? name ?? ''}
-          onError={() => setErrored(true)}
+          onError={() => setErroredSrc(src)}
           className={cn('size-full object-cover', radius)}
         />
       ) : (

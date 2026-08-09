@@ -2560,14 +2560,18 @@ struct MxTlsCertInfo {
 }
 
 fn smtp_starttls_cert_blocking(host: &str, port: u16, timeout_ms: u64) -> Option<MxTlsCertInfo> {
-    use openssl::ssl::{Ssl, SslConnector, SslMethod, SslStream};
+    use openssl::ssl::{Ssl, SslConnector, SslMethod, SslStream, SslVerifyMode};
     use std::io::{Read, Write};
-    use std::net::TcpStream;
+    use std::net::{TcpStream, ToSocketAddrs};
     use std::time::Duration;
 
     let host = host.trim_end_matches('.');
-    let mut stream = TcpStream::connect((host, port)).ok()?;
     let to = Duration::from_millis(timeout_ms.clamp(1000, 15000));
+    // Connect with a deadline: std `TcpStream::connect` has no connect timeout and would block on
+    // the OS SYN-retry budget (~130s) against a DROPed/filtered SMTP port, pinning a spawn_blocking
+    // thread far past the operator's timeout_ms (4 ports × ~130s per target).
+    let addr = (host, port).to_socket_addrs().ok()?.next()?;
+    let mut stream = TcpStream::connect_timeout(&addr, to).ok()?;
     stream.set_read_timeout(Some(to)).ok()?;
     stream.set_write_timeout(Some(to)).ok()?;
 
@@ -2592,7 +2596,13 @@ fn smtp_starttls_cert_blocking(host: &str, port: u16, timeout_ms: u64) -> Option
         return None;
     }
 
-    let connector = SslConnector::builder(SslMethod::tls()).ok()?.build();
+    // Inspect the cert regardless of chain trust: the default builder inherits
+    // SslVerifyMode::PEER, which aborts the handshake on any untrusted/self-signed/expired chain
+    // — exactly the certs the expired/self-signed findings below need to observe. Trust is derived
+    // separately from verify_result() after the handshake.
+    let mut b = SslConnector::builder(SslMethod::tls()).ok()?;
+    b.set_verify(SslVerifyMode::NONE);
+    let connector = b.build();
     let mut ssl = Ssl::new(connector.context()).ok()?;
     ssl.set_hostname(host).ok()?;
     let mut ssl_stream = SslStream::new(ssl, stream).ok()?;

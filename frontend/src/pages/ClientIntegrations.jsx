@@ -57,6 +57,7 @@ export default function ClientIntegrations() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+  const [awsExtIdMask, setAwsExtIdMask] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState({
     aws_cross_account_role_arn: '',
@@ -94,6 +95,7 @@ export default function ClientIntegrations() {
             authorization: e.authorization?.configured ? '••••••••' : '',
           }))
         : [{ url: '', model: '', authorization: '' }]
+      setAwsExtIdMask(d.aws_external_id?.masked || '')
       patch({
         aws_cross_account_role_arn: d.aws_cross_account_role_arn || '',
         aws_external_id: d.aws_external_id?.masked || '',
@@ -155,21 +157,28 @@ export default function ClientIntegrations() {
           model: e.model.trim() || undefined,
           authorization: e.authorization.trim() || undefined,
         }))
+      const body = {
+        aws_cross_account_role_arn: form.aws_cross_account_role_arn.trim(),
+        gcp_project_id: form.gcp_project_id.trim(),
+        azure_subscription_id: form.azure_subscription_id.trim(),
+        azure_tenant_id: form.azure_tenant_id.trim(),
+        ad_domain: form.ad_domain.trim(),
+        repo_urls: repos,
+        agent_platforms: form.agent_platforms,
+        industrial_ot_enabled: form.industrial_ot_enabled,
+        ip_ranges: ips,
+        llm_secops_endpoints: llm,
+      }
+      // Only send aws_external_id when the operator actually entered a new value.
+      // The loaded field holds a masked placeholder (••••••••<tail>); re-sending it
+      // would overwrite the stored secret, so omit the key to let the backend keep it.
+      const extId = form.aws_external_id.trim()
+      if (extId && extId !== awsExtIdMask && !extId.startsWith('•')) {
+        body.aws_external_id = extId
+      }
       await apiFetch(`/api/clients/${id}/integrations`, {
         method: 'PATCH',
-        body: {
-          aws_cross_account_role_arn: form.aws_cross_account_role_arn.trim(),
-          aws_external_id: form.aws_external_id.trim(),
-          gcp_project_id: form.gcp_project_id.trim(),
-          azure_subscription_id: form.azure_subscription_id.trim(),
-          azure_tenant_id: form.azure_tenant_id.trim(),
-          ad_domain: form.ad_domain.trim(),
-          repo_urls: repos,
-          agent_platforms: form.agent_platforms,
-          industrial_ot_enabled: form.industrial_ot_enabled,
-          ip_ranges: ips,
-          llm_secops_endpoints: llm,
-        },
+        body,
       })
       setSaved(true)
       await load()

@@ -146,7 +146,13 @@ const MICROSECOND_TIMING_CI_PARAMS = {
   timing_budget_secs: 45,
 }
 
-/** Shared one-engine-per-group smoke / findings E2E plan. */
+/**
+ * Shared per-group smoke / findings E2E plan — one engine for 14 of the 15
+ * engineGroupDefs groups. NOTE: the `defense` group is intentionally NOT covered
+ * here yet (its engines — chronos, cognitive_starvation, liquid_matrix,
+ * sovereign_active_defense_fusion — have not been validated against the CI live
+ * stack); do not describe this as full one-engine-per-group coverage.
+ */
 export const GROUP_SMOKE_PLAN = [
   { group: 'recon', engine: 'recon', target: 'example.com' },
   { group: 'web', engine: 'jwt_attack', target: 'https://example.com', params: JWT_ATTACK_CI_PARAMS },

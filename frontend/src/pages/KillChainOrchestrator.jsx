@@ -229,8 +229,9 @@ function buildChainsFromFindings(findings) {
         .map((id, i) => (phaseFindings[id].length > 0 ? i : -1))
         .filter((i) => i >= 0)
       const highestPhaseIdx = phasesWithFindings.length ? Math.max(...phasesWithFindings) : -1
-      const activePhaseIdx = Math.min(highestPhaseIdx + 1, PHASE_SEQUENCE.length - 1)
-      const completedPhases = phasesWithFindings.length ? activePhaseIdx : 0
+      const completedPhases = phasesWithFindings.length
+        ? Math.min(highestPhaseIdx + 1, PHASE_SEQUENCE.length)
+        : 0
 
       const riskScore = computeChainRiskScore(groupFindings)
       const severity = scoreToRiskLevel(riskScore)
@@ -318,7 +319,7 @@ function normalizeApiChains(apiChains) {
       .filter((i) => i >= 0)
     const highestPhaseIdx = phasesWithFindings.length ? Math.max(...phasesWithFindings) : -1
     const completedPhases = phasesWithFindings.length
-      ? Math.min(highestPhaseIdx + 1, PHASE_SEQUENCE.length - 1)
+      ? Math.min(highestPhaseIdx + 1, PHASE_SEQUENCE.length)
       : 0
     const riskScore = chain.phase_progress != null
       ? Math.round(Number(chain.phase_progress))

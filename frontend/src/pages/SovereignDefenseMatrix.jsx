@@ -102,7 +102,7 @@ export default function SovereignDefenseMatrix() {
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [jobId, setJobId] = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [autoRun, setAutoRun] = useState(true)
+  const [autoRun, setAutoRun] = useState(false)
   const autoRanRef = useRef(false)
 
   const engineId = ENGINES[tab]
@@ -134,12 +134,14 @@ export default function SovereignDefenseMatrix() {
 
   const loadDashboard = useCallback(async () => {
     if (!clientId) return
-    const dash = await apiFetch(`/api/sovereign-defense/${clientId}/dashboard`).catch(() => null)
-    if (dash) setDashboard(dash)
-    const ce = await apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`).catch(() => null)
-    if (ce) setChronosEvents(ce)
-    const cs = await apiFetch(`/api/sovereign-defense/${clientId}/cognitive/sessions`).catch(() => null)
-    if (cs) setCognitiveSessions(cs)
+    const [dash, ce, cs] = await Promise.allSettled([
+      apiFetch(`/api/sovereign-defense/${clientId}/dashboard`),
+      apiFetch(`/api/sovereign-defense/${clientId}/chronos/events`),
+      apiFetch(`/api/sovereign-defense/${clientId}/cognitive/sessions`),
+    ])
+    if (dash.status === 'fulfilled' && dash.value) setDashboard(dash.value)
+    if (ce.status === 'fulfilled' && ce.value) setChronosEvents(ce.value)
+    if (cs.status === 'fulfilled' && cs.value) setCognitiveSessions(cs.value)
   }, [clientId])
 
   const loadPoisonLib = useCallback(async () => {
@@ -160,8 +162,9 @@ export default function SovereignDefenseMatrix() {
   useEffect(() => {
     loadDashboard()
   }, [loadDashboard])
-  // Hidden-tab-aware: no 3s dashboard refetch while the tab is in the background.
-  useVisiblePolling(loadDashboard, 3000)
+  // Hidden-tab-aware: no dashboard refetch while the tab is in the background.
+  // 10s cadence — the panels are 24h rollups, so sub-10s polling is pure waste.
+  useVisiblePolling(loadDashboard, 10000)
 
   const runEngine = useCallback(async (isAuto = false) => {
     if (!clientId || !target.trim()) {

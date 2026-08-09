@@ -37,8 +37,15 @@ install_one() {
     cargo build -p weissman-agent --release --target "$rust_target"
     cp "target/${rust_target}/release/weissman-agent" "$dest"
   else
-    echo "[weissman] warn: skipping ${platform} (no rustup / cross target ${rust_target})"
-    cp "$HOST_BIN" "$dest"
+    # Do NOT fall back to copying the host binary here: that would publish a
+    # wrong-architecture ELF under ${platform}/ and hash it into MANIFEST.sha256,
+    # so the installer's SHA-256 integrity check would PASS on a binary that
+    # cannot exec on the target host. Skip the platform entirely instead — the
+    # server then returns its existing 404 for this platform rather than a
+    # broken binary that vouches for itself.
+    echo "[weissman] warn: skipping ${platform} — cannot cross-build ${rust_target} (no rustup); refusing to publish a wrong-arch binary" >&2
+    rmdir "bin/agents/${platform}" 2>/dev/null || true
+    return 0
   fi
 
   chmod 755 "$dest"

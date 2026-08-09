@@ -94,11 +94,10 @@ fn truncate_for_error(s: &str) -> String {
     if s.len() <= ERROR_BODY_MAX_CHARS {
         return s.to_string();
     }
-    format!(
-        "{}… (truncated, {} bytes total)",
-        &s[..ERROR_BODY_MAX_CHARS],
-        s.len()
-    )
+    // Byte-slicing at a fixed offset panics when the cut lands mid-UTF-8-sequence (GitHub error
+    // bodies and serde_json output can contain non-ASCII). Truncate on a char boundary instead.
+    let truncated: String = s.chars().take(ERROR_BODY_MAX_CHARS).collect();
+    format!("{}… (truncated, {} bytes total)", truncated, s.len())
 }
 
 /// Sends a request built by `make` on each attempt; retries rate limits and transient failures.

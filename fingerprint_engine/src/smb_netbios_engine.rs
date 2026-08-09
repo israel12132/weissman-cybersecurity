@@ -27,8 +27,8 @@
 //!   * **NBNS domain-controller role** — `<1C>` / `<1B>` suffixes in the node-status table.
 //!   * **Posture score** — weighted aggregate of every observed weakness for executive dashboards.
 //!   * **MS17-010 TRANS2 fingerprint** — sends the same Trans2 probe used by Nessus / Nmap
-//!     `smb-vuln-ms17-010`; `STATUS_INSUFF_SERVER_RESOURCES` (0xC0000205) = patched, any other
-//!     answer on an SMBv1 host = likely vulnerable (reported with observed NTSTATUS only).
+//!     `smb-vuln-ms17-010`; `STATUS_INSUFF_SERVER_RESOURCES` (0xC0000205) = likely vulnerable,
+//!     `STATUS_ACCESS_DENIED`/any other answer on an SMBv1 host = patched (reported with observed NTSTATUS only).
 //!   * **Extended RPC pipe cartography** — `\efsrpc` (PetitPotam), `\netlogon` (Zerologon surface),
 //!     `\winreg`, `\atsvc`, `\srvsvc`, `\wkssvc` plus existing SAMR/LSARPC/SVCCTL/spoolss/epmapper.
 //!   * **NTLMv1 / LM weakness** — parsed from real NTLM type-2 negotiate flags on the wire.
@@ -1458,7 +1458,8 @@ fn parse_smb1_status(resp: &[u8]) -> Option<u32> {
 }
 
 /// MS17-010 safe fingerprint: Trans2 with TotalDataCount=8192 (Nmap/Nessus class).
-/// Patched hosts return `STATUS_INSUFF_SERVER_RESOURCES` (0xC0000205).
+/// Vulnerable (unpatched) hosts return `STATUS_INSUFF_SERVER_RESOURCES` (0xC0000205);
+/// patched hosts return `STATUS_ACCESS_DENIED`.
 fn build_smb1_trans2_ms17_check() -> Vec<u8> {
     let mut smb = Vec::new();
     smb.extend_from_slice(&[0xFF, b'S', b'M', b'B']);
@@ -1514,7 +1515,10 @@ async fn ms17_010_trans2_probe(host: &str, port: u16, timeout_ms: u64) -> Option
     let resp = read_nbss(&mut stream, timeout_ms).await?;
     let status = parse_smb1_status(&resp)?;
     Some(Ms17Trans2Result {
-        patched: status == STATUS_INSUFF_SERVER_RESOURCES,
+        // 0xC0000205 (STATUS_INSUFF_SERVER_RESOURCES) is the *vulnerable* signature per the
+        // Nmap/Nessus MS17-010 oracle; patched hosts return STATUS_ACCESS_DENIED. So the host
+        // is patched only when the status is NOT INSUFF_SERVER_RESOURCES.
+        patched: status != STATUS_INSUFF_SERVER_RESOURCES,
         status,
     })
 }
@@ -1674,9 +1678,10 @@ fn ntlm_weak_auth_labels(flags: u32) -> Vec<&'static str> {
     if flags & 0x0000_0080 != 0 {
         out.push("LM");
     }
-    if flags & 0x0200_0000 == 0 {
-        out.push("no_extended_session_security");
-    }
+    // NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY is 0x00080000 (tested above); the previous
+    // check here used 0x02000000, which is NTLMSSP_NEGOTIATE_VERSION. Servers that simply omit
+    // the optional Version field (common on Samba/hardened Windows) were falsely flagged, so
+    // the wrong-constant duplicate is removed.
     out
 }
 
@@ -2628,13 +2633,13 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                             .with("port", port)
                             .with("ntstatus", format!("0x{:08X}", ms17.status))
                             .with("ntstatus_name", st_name)
-                            .check("ms17_010_trans2", true, "Trans2 probe returned STATUS_INSUFF_SERVER_RESOURCES (patched behavior)");
+                            .check("ms17_010_trans2", true, "Trans2 probe did NOT return STATUS_INSUFF_SERVER_RESOURCES (0xC0000205) — patched behavior");
                         findings.push(finding_rich(
                             ENGINE_ID,
                             &format!("MS17-010 Trans2 probe: patched response ({})", st_name),
                             "info",
                             "T1210",
-                            "The MS17-010 Trans2 fingerprint probe returned STATUS_INSUFF_SERVER_RESOURCES — the post-patch behavior documented by Nessus/Nmap. SMBv1 is still enabled (bad hygiene) but this specific Trans2 oracle indicates the EternalBlue kernel path is likely patched.",
+                            "The MS17-010 Trans2 fingerprint probe did not return STATUS_INSUFF_SERVER_RESOURCES (0xC0000205) — patched hosts answer with STATUS_ACCESS_DENIED or similar, the post-patch behavior documented by Nessus/Nmap. SMBv1 is still enabled (bad hygiene) but this specific Trans2 oracle indicates the EternalBlue kernel path is likely patched.",
                             target,
                             0.45,
                             ev,
@@ -2648,7 +2653,7 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                             .check(
                                 "ms17_010_trans2",
                                 true,
-                                "Trans2 probe did NOT return patched NTSTATUS 0xC0000205",
+                                "Trans2 probe returned STATUS_INSUFF_SERVER_RESOURCES (0xC0000205) — the vulnerable signature",
                             );
                         findings.push(finding_rich(
                             ENGINE_ID,
@@ -2658,7 +2663,7 @@ pub async fn run_smb_netbios_result(target: &str, ctx: &EngineRunContext) -> Eng
                             ),
                             "critical",
                             "T1210",
-                            "On an SMBv1-enabled host, the MS17-010 Trans2 fingerprint did not return the patched STATUS_INSUFF_SERVER_RESOURCES response — the same oracle used by enterprise scanners before exploitation. Treat as critical: apply MS17-010 immediately or disable SMBv1.",
+                            "On an SMBv1-enabled host, the MS17-010 Trans2 fingerprint returned STATUS_INSUFF_SERVER_RESOURCES (0xC0000205) — the vulnerable signature documented by Nessus/Nmap (patched hosts return STATUS_ACCESS_DENIED). Treat as critical: apply MS17-010 immediately or disable SMBv1.",
                             target,
                             0.95,
                             ev,

@@ -1,7 +1,6 @@
 //! Immutable audit trail (append-only rows) with per-tenant SHA-256 hash chain.
 
 use chrono::{DateTime, Utc};
-use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
@@ -311,10 +310,19 @@ pub struct AuditExportEntry {
     pub chain_valid: bool,
 }
 
-/// Verify hash chain for exported rows (ordered ascending by id).
+/// Verify hash chain for exported rows (ordered ascending by id). Anchors at genesis (empty
+/// prev_hash) — correct only for the first page (`offset == 0`).
 pub fn verify_chain(entries: &[AuditExportEntry]) -> bool {
-    let mut expected_prev = String::new();
-    let mut chain_started = false;
+    verify_chain_from(entries, "")
+}
+
+/// Like [`verify_chain`] but seeds the expected previous hash with `anchor_prev` — the
+/// `event_hash` of the row immediately preceding this page. Required for paginated exports
+/// (`offset > 0`), whose first row's `prev_hash` is the previous page's last `event_hash`,
+/// not the genesis empty string (otherwise every page past the first falsely reports "tamper").
+pub fn verify_chain_from(entries: &[AuditExportEntry], anchor_prev: &str) -> bool {
+    let mut expected_prev = anchor_prev.to_string();
+    let mut chain_started = !anchor_prev.is_empty();
     for entry in entries {
         if entry.prev_hash != expected_prev {
             return false;
@@ -422,36 +430,24 @@ pub async fn export_for_tenant(
         });
     }
 
-    let chain_intact = verify_chain(&entries);
+    // For a paginated page (offset > 0), anchor verification on the event_hash of the row
+    // immediately preceding this page, else the first row's non-genesis prev_hash would falsely
+    // report a broken chain on every page past the first.
+    let anchor_prev: String = if offset > 0 {
+        sqlx::query_scalar::<_, Option<String>>(
+            "SELECT event_hash FROM audit_logs WHERE tenant_id = $1 ORDER BY id ASC LIMIT 1 OFFSET $2",
+        )
+        .bind(tenant_id)
+        .bind(offset - 1)
+        .fetch_optional(&mut **tx)
+        .await?
+        .flatten()
+        .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let chain_intact = verify_chain_from(&entries, &anchor_prev);
     Ok((entries, total, chain_intact))
-}
-
-pub async fn list_recent(
-    tx: &mut Transaction<'_, Postgres>,
-    limit: i64,
-) -> Result<Vec<Value>, sqlx::Error> {
-    let rows = sqlx::query(
-        "SELECT id, created_at, actor_user_id, user_label, action_type, details, ip_address, prev_hash, event_hash FROM audit_logs ORDER BY id DESC LIMIT $1",
-    )
-    .bind(limit)
-    .fetch_all(&mut **tx)
-    .await?;
-    let mut out = Vec::with_capacity(rows.len());
-    for r in rows {
-        let uid: Option<i64> = r.try_get("actor_user_id").ok();
-        out.push(json!({
-            "id": r.try_get::<i64, _>("id").unwrap_or(0),
-            "timestamp": r.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at").map(|d| d.to_rfc3339()).unwrap_or_default(),
-            "user_id": uid,
-            "user": r.try_get::<String, _>("user_label").unwrap_or_default(),
-            "action_type": r.try_get::<String, _>("action_type").unwrap_or_default(),
-            "details": r.try_get::<String, _>("details").unwrap_or_default(),
-            "ip_address": r.try_get::<String, _>("ip_address").unwrap_or_default(),
-            "prev_hash": r.try_get::<String, _>("prev_hash").unwrap_or_default(),
-            "event_hash": r.try_get::<Option<String>, _>("event_hash").ok().flatten(),
-        }));
-    }
-    Ok(out)
 }
 
 /// Resolve email for audit labels (auth pool; `auth.v_user_lookup` + BYPASSRLS audit).

@@ -102,7 +102,8 @@ export default function RateLimitAnalytics() {
       severity: 'high',
       title: v.endpoint || v.key || 'violation',
       type: 'rate_limit_violation',
-      description: String(v.count ?? v.hits ?? ''),
+      description: String(v.attempts ?? v.count ?? v.hits ?? ''),
+      resource: v.time || '',
     })),
     ...(endpoints || []).map((e, i) => ({
       id: `ep-${i}`,

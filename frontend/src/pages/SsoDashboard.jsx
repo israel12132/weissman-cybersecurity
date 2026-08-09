@@ -383,10 +383,10 @@ export default function SsoDashboard() {
 
   const listFindings = useMemo(() => idps.map((idp) => ({
     id: idp.id,
-    severity: idp.enabled === false ? 'medium' : 'info',
+    severity: idp.active === false ? 'medium' : 'info',
     title: idp.name || idp.vendor_hint || idp.id,
     type: idp.vendor_hint || 'idp',
-    description: idp.entity_id || idp.issuer || '',
+    description: idp.issuer_url || idp.saml_idp_sso_url || idp.sp_entity_id || '',
   })), [idps])
 
   const {

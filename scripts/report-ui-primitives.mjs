@@ -16,8 +16,39 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// Resolve the vendored parser from the frontend workspace (same as weissman-ui-audit.mjs).
+const require = createRequire(path.join(root, 'frontend/package.json'))
+const { parse } = require('@babel/parser')
+const _traverse = require('@babel/traverse')
+const traverse = _traverse.default ?? _traverse
+
+// Count JSX <button …> elements carrying a className attribute. A regex like
+// /<button\b[^>]*className=/ cannot cross the `>` inside a JSX arrow-function
+// prop (onClick={() => …}), so it silently under-counts the dominant idiom and
+// froze the ratchet at 0. Parse the AST instead.
+function countAdHocButtons(src, file) {
+  let ast
+  try {
+    ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'importAttributes'] })
+  } catch (err) {
+    console.error(`  ! parse failed for ${file}: ${err.message}`)
+    return 0
+  }
+  let count = 0
+  traverse(ast, {
+    JSXOpeningElement({ node }) {
+      if (node.name?.type !== 'JSXIdentifier' || node.name.name !== 'button') return
+      const hasClassName = node.attributes.some(
+        (a) => a.type === 'JSXAttribute' && a.name?.name === 'className',
+      )
+      if (hasClassName) count += 1
+    },
+  })
+  return count
+}
 const srcDir = path.join(root, 'frontend', 'src')
 // The shared design-system primitives legitimately render raw <button>/<table> (they ARE the
 // Button / DataTable everyone else adopts), so they're exempt from the button/table checks.
@@ -28,7 +59,6 @@ const PRIMITIVE_DIR = path.join(srcDir, 'components', 'ui')
  * regress real behavior (server-side pagination, expandable rows, heatmaps, etc.).
  */
 const TABLE_EXCEPTIONS = new Set([
-  'AuditLog.jsx', // server-side offset pagination + expandable JSON payload rows
   'AskWeissman.jsx', // dynamic NL→SQL result preview: columns are arbitrary (Object.keys(rows[0])),
   //                    a lightweight inline transcript grid — not a sortable/filterable data table
   'IacSecurityCenter.jsx', // RiskHeatmap: a framework × severity matrix with per-cell severity
@@ -52,6 +82,10 @@ const allFiles = listFiles(srcDir)
 const rawTablePages = []
 const rawButtonCounts = []
 const colorCounts = []
+// Track which TABLE_EXCEPTIONS actually shielded a raw <table> this run, so a
+// stale exemption (its page migrated to DataTable) fails the gate instead of
+// silently leaving a blanket exemption open.
+const usedExceptions = new Set()
 
 // Hard-coded neutral Tailwind scales that DON'T flip in light mode (unlike the
 // CSS-var tokens). Semantic scales (red/green/amber/cyan…) are intentionally
@@ -64,13 +98,14 @@ for (const full of allFiles) {
   const base = path.basename(full)
   const isPrimitive = full.startsWith(PRIMITIVE_DIR + path.sep)
   const src = fs.readFileSync(full, 'utf8')
-  if (!isPrimitive && /<table[\s>]/.test(src) && !TABLE_EXCEPTIONS.has(base)) {
-    rawTablePages.push(file)
+  if (!isPrimitive && /<table[\s>]/.test(src)) {
+    if (TABLE_EXCEPTIONS.has(base)) usedExceptions.add(base)
+    else rawTablePages.push(file)
   }
   if (!isPrimitive) {
-    const btnMatches = src.match(/<button\b[^>]*className=/g)
-    if (btnMatches && btnMatches.length) {
-      rawButtonCounts.push({ file, count: btnMatches.length })
+    const btnCount = countAdHocButtons(src, file)
+    if (btnCount > 0) {
+      rawButtonCounts.push({ file, count: btnCount })
     }
   }
   const colorMatches = src.match(NEUTRAL_COLOR_RE)
@@ -106,6 +141,16 @@ for (const { file, count } of colorCounts.slice(0, 10)) {
 }
 console.log('──────────────────────────────────────────────────────────────')
 
+// --- Stale-exception guard ---------------------------------------------------
+// A TABLE_EXCEPTIONS entry that no longer shields any raw <table> (its page
+// migrated to DataTable) is dead: it would silently exempt a future hand-rolled
+// table in that file. Fail the ratchet so the exemption gets removed.
+const staleExceptions = [...TABLE_EXCEPTIONS].filter((e) => !usedExceptions.has(e))
+if (staleExceptions.length) {
+  console.error(`\n✖ Stale TABLE_EXCEPTIONS (no raw <table> found today): ${staleExceptions.join(', ')}`)
+  console.error('  Remove them from TABLE_EXCEPTIONS — the page(s) no longer render a raw table.')
+}
+
 // --- Regression ratchet ------------------------------------------------------
 const totalButtons = rawButtonCounts.reduce((s, r) => s + r.count, 0)
 const current = {
@@ -131,11 +176,13 @@ if (mode.includes('--check')) {
   }
   const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
   const regressions = Object.keys(current).filter((k) => current[k] > (baseline[k] ?? 0))
-  if (regressions.length) {
-    console.error('\n✖ UI-primitive debt increased vs baseline (adoption must not regress):')
-    for (const k of regressions) console.error(`    ${k}: ${baseline[k]} → ${current[k]}`)
-    console.error('  Use the shared ui/DataTable + ui/Button primitives, or refresh the')
-    console.error('  baseline (--write-baseline) if the increase is genuinely justified.')
+  if (regressions.length || staleExceptions.length) {
+    if (regressions.length) {
+      console.error('\n✖ UI-primitive debt increased vs baseline (adoption must not regress):')
+      for (const k of regressions) console.error(`    ${k}: ${baseline[k]} → ${current[k]}`)
+      console.error('  Use the shared ui/DataTable + ui/Button primitives, or refresh the')
+      console.error('  baseline (--write-baseline) if the increase is genuinely justified.')
+    }
     process.exit(1)
   }
   console.log('\n✓ No UI-primitive regressions vs baseline.', current)

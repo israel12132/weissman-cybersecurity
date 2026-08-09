@@ -1,24 +1,19 @@
 #!/usr/bin/env node
 /**
  * Generates Hebrew engine encyclopedia appendix for WEISSMAN-COMMAND-CENTER-BOOK.md
+ *
+ * Reads the engine catalog and the agent-required set from source-of-truth modules
+ * instead of regex-scraping enginesRegistry.js. The old single-quote-only regex
+ * silently dropped any engine whose `description` used double quotes (it contained
+ * an apostrophe) and mis-attributed the following engine's description; the
+ * hard-coded AGENT_REQUIRED set had also drifted from the Rust array.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { writeFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { loadEngineReality } from './lib/engine_reality.mjs'
 
-const AGENT_REQUIRED = new Set([
-  'process_hollowing', 'dll_hijacking_engine', 'process_inventory', 'av_bypass_engine',
-  'log_tampering_engine', 'anti_debug_evasion', 'rootkit_simulation', 'memory_forensics_evasion',
-  'usb_enumeration', 'dns_tunneling_c2', 'icmp_covert', 'bootkit_uefi', 'persistence_mechanism',
-  'polymorphic_engine', 'ransomware_emulation', 'acoustic_exfil', 'em_exfil_engine', 'optical_exfil',
-  'keyboard_acoustic', 'screen_capture_exfil', 'clipboard_hijack', 'insider_exfil',
-  'storage_covert_channel', 'arp_spoofing_engine', 'vlan_hopping_attack', 'dhcp_attack_engine',
-  'wifi_attack_engine', 'bluetooth_attack_engine', 'lte_5g_attack', 'wpa3_attack_engine',
-  'packet_injection_engine', 'network_tap_advanced', 'multicast_attack', 'nat_traversal_attack',
-  'sim_swap_engine', 'bluetooth_mobile_attack', 'nfc_relay_attack', 'deepfake_voice_engine',
-  'pretexting_engine', 'insider_threat_engine', 'physical_social_eng', 'lorawan_attack',
-  'lora_attack', 'voltage_glitch_attack', 'tpm_firmware_attack', 'cold_boot_attack',
-  'infostealer_emulation',
-])
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 const GROUP_HE = {
   recon: 'מודיעין ו-Recon',
@@ -35,25 +30,23 @@ const GROUP_HE = {
   social: 'הנדסה חברתית',
   mobile: 'מובייל',
   data: 'דליפת מידע',
+  defense: 'הגנה ו-Blue Team',
 }
 
-const root = join(process.cwd())
-const src = readFileSync(join(root, 'frontend/src/lib/enginesRegistry.js'), 'utf8')
-const re =
-  /id:\s*'([^']+)'[\s\S]*?label:\s*'([^']+)'[\s\S]*?group:\s*'([^']+)'[\s\S]*?mitre:\s*'([^']*)'[\s\S]*?description:\s*'([^']*)'[\s\S]*?requiresTarget:\s*(true|false)/g
+const { registry, agentRequired } = await loadEngineReality(root)
 
-const engines = []
-let m
-while ((m = re.exec(src))) {
-  engines.push({
-    id: m[1],
-    label: m[2],
-    group: m[3],
-    mitre: m[4],
-    description: m[5],
-    requiresTarget: m[6] === 'true',
-    agent: AGENT_REQUIRED.has(m[1]),
-  })
+const engines = registry.map((e) => ({
+  id: e.id,
+  label: e.label,
+  group: e.group,
+  mitre: e.mitre,
+  description: e.description ?? '',
+  requiresTarget: Boolean(e.requiresTarget),
+  agent: agentRequired.has(e.id),
+}))
+
+if (engines.length !== registry.length) {
+  throw new Error(`engine count mismatch: ${engines.length} generated vs ${registry.length} in registry`)
 }
 
 const byGroup = {}

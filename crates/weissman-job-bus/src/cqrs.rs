@@ -11,8 +11,26 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
     if event.job_id.is_nil() {
         return Ok(());
     }
+    // Events that do not mutate the read model — no DB round-trip needed.
+    if matches!(
+        event.kind,
+        JobEventKind::JobDispatched | JobEventKind::ExploitFired | JobEventKind::WorkerTerminated
+    ) {
+        return Ok(());
+    }
+
+    // Scope the projection to the event's tenant. `weissman_async_jobs` is FORCE ROW LEVEL
+    // SECURITY and `weissman_app` is NOBYPASSRLS; the database-level default
+    // `app.current_tenant_id = '0'` (migration 20260602180000) collapses an unscoped pool's
+    // policy to `tenant_id = 0`, so without a tenant GUC every UPDATE below matches 0 rows and
+    // silently returns Ok(()) for real tenants — the read model never advances. Mirrors the
+    // tenant transaction that `events::append_event` already opens for the write side.
+    let mut tx = weissman_db::begin_tenant_tx(pool, event.tenant_id).await?;
+
     match event.kind {
-        JobEventKind::JobDispatched => Ok(()),
+        JobEventKind::JobDispatched
+        | JobEventKind::ExploitFired
+        | JobEventKind::WorkerTerminated => {}
         JobEventKind::WorkerClaimed => {
             let worker_id = event
                 .payload
@@ -26,9 +44,8 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             )
             .bind(event.job_id)
             .bind(worker_id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
         JobEventKind::LeaseAcquired | JobEventKind::LeaseExtended => {
             let lock_secs = event
@@ -44,11 +61,9 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             )
             .bind(event.job_id)
             .bind(lock_secs)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
-        JobEventKind::ExploitFired => Ok(()),
         JobEventKind::JobCompleted => {
             let result = event.payload.get("result").cloned().unwrap_or(Value::Null);
             // Status guard: only a job still `running` may transition to `completed`.
@@ -62,9 +77,8 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             )
             .bind(event.job_id)
             .bind(sqlx::types::Json(result))
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
         JobEventKind::JobFailed => {
             let err = event
@@ -72,17 +86,18 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                 .get("error")
                 .and_then(Value::as_str)
                 .unwrap_or("unknown");
+            // Status guard (mirrors JobCompleted): only a `running` job may be failed, so a late
+            // failure from a superseded worker cannot overwrite a job another worker already re-ran.
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'failed', last_error = $2,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
-                   WHERE id = $1"#,
+                   WHERE id = $1 AND status = 'running'"#,
             )
             .bind(event.job_id)
             .bind(err)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
         JobEventKind::JobRetryScheduled => {
             let err = event
@@ -92,7 +107,8 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                 .unwrap_or("unknown");
             // Exponential backoff by attempt (5s, 10s, 20s … capped at 1h), matching the
             // legacy `fail_job` path. A fixed 5s retry in the zero-trust path caused a retry
-            // storm for a persistently failing job.
+            // storm for a persistently failing job. Status guard prevents a late retry event
+            // from resurrecting an already-completed/dead job.
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'pending', last_error = $2,
@@ -101,13 +117,12 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                            + (LEAST(3600, 5 * POWER(2, LEAST(GREATEST(attempt_count, 0), 10)))::int
                               * interval '1 second'),
                        updated_at = now()
-                   WHERE id = $1"#,
+                   WHERE id = $1 AND status = 'running'"#,
             )
             .bind(event.job_id)
             .bind(err)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
         JobEventKind::JobOrphaned => {
             let reason = event
@@ -124,9 +139,8 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             )
             .bind(event.job_id)
             .bind(format!("orphaned: {reason}"))
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
         JobEventKind::ForensicDlqEnqueued => {
             let err = event
@@ -134,18 +148,21 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                 .get("failure_class")
                 .and_then(Value::as_str)
                 .unwrap_or("forensic_dlq");
+            // Status guard: only a `running` job may be dead-lettered, so a late DLQ event from a
+            // superseded worker cannot mark another worker's completed run `dead`.
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'dead', last_error = $2,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
-                   WHERE id = $1"#,
+                   WHERE id = $1 AND status = 'running'"#,
             )
             .bind(event.job_id)
             .bind(err)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
-            Ok(())
         }
-        JobEventKind::WorkerTerminated => Ok(()),
     }
+
+    tx.commit().await?;
+    Ok(())
 }

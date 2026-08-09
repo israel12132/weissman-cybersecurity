@@ -168,6 +168,11 @@ async fn api_audit_logs(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    // The audit trail (actor emails, IPs, targets, ROE decisions) is admin-only; a plain GET
+    // otherwise bypasses mutation_rbac_middleware and is readable by any viewer.
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     // Server-side pagination + optional action / actor filter so the UI doesn't pull 500 rows.
     let limit: i64 = q
         .get("limit")
@@ -267,6 +272,10 @@ async fn api_audit_export(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    // Exporting up to 50k audit rows (actor emails, IPs, details) is admin-only.
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let limit: i64 = q
         .get("limit")
         .and_then(|s| s.parse::<i64>().ok())
@@ -342,6 +351,11 @@ async fn api_audit_export(
 }
 
 async fn api_enterprise_settings_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
+    // alert_webhook_url is a bearer credential for the customer's alert channel; the PATCH is
+    // admin-gated, so the GET must be too (a plain GET otherwise skips mutation_rbac_middleware).
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"global_safe_mode": false, "alert_webhook_url": ""}))).into_response();
     };
@@ -381,28 +395,43 @@ async fn api_enterprise_settings_patch(
     let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
     if let Some(v) = body.global_safe_mode {
         let s = if v { "true" } else { "false" };
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             "INSERT INTO system_configs (tenant_id, key, value, description) VALUES ($1, 'global_safe_mode', $2, 'Production-safe scan throttling') ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
         )
         .bind(auth.tenant_id)
         .bind(s)
         .execute(&mut *tx)
-        .await;
+        .await
+        {
+            tracing::error!(target: "enterprise_settings", tenant_id = auth.tenant_id, error = %e, "safe_mode upsert failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "settings not persisted"}))).into_response();
+        }
         let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &actor, "safe_mode_toggled", &format!("global_safe_mode={}", s), &ip).await;
     }
     if let Some(url) = body.alert_webhook_url {
         let trimmed = url.trim();
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             "INSERT INTO system_configs (tenant_id, key, value, description) VALUES ($1, 'alert_webhook_url', $2, 'Slack/Discord webhook') ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value",
         )
         .bind(auth.tenant_id)
         .bind(trimmed)
         .execute(&mut *tx)
-        .await;
+        .await
+        {
+            tracing::error!(target: "enterprise_settings", tenant_id = auth.tenant_id, error = %e, "alert_webhook upsert failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "settings not persisted"}))).into_response();
+        }
         let _ = audit_log::insert_audit(&mut tx, auth.tenant_id, Some(auth.user_id), &actor, "alerts_settings_updated", "alert_webhook_url updated", &ip).await;
     }
-    let _ = tx.commit().await;
-    (StatusCode::OK, Json(json!({"ok": true, "message": "enterprise settings updated"}))).into_response()
+    // A discarded commit (or an audit-append that aborted the tx) previously reported success
+    // while nothing was persisted — the safe-mode kill switch would silently no-op.
+    match tx.commit().await {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true, "message": "enterprise settings updated"}))).into_response(),
+        Err(e) => {
+            tracing::error!(target: "enterprise_settings", tenant_id = auth.tenant_id, error = %e, "settings commit failed");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": "settings not persisted"}))).into_response()
+        }
+    }
 }
 
 async fn api_system_backup(
@@ -1803,18 +1832,28 @@ async fn api_scan_all_engines(
     let engines: Vec<String> = if let Some(ref custom_engines) = body.engines {
         custom_engines.clone()
     } else {
-        // Fetch from client config
-        let config_result: Option<Value> = sqlx::query_scalar(
-            "SELECT config FROM clients WHERE id = $1 AND tenant_id = $2"
-        )
-        .bind(body.client_id)
-        .bind(auth.tenant_id)
-        .fetch_optional(state.app_pool.as_ref())
-        .await
-        .ok()
-        .flatten();
-        
-        config_result
+        // enabled_engines lives inside the TEXT `client_configs` JSON blob — there is no `config`
+        // column, and `clients` is FORCE RLS so this must run inside a tenant tx (bare-pool reads
+        // match zero rows and silently widen the engine set to the full KNOWN_ENGINE_IDS list).
+        let cfg_text: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+            Ok(mut tx) => {
+                let r = sqlx::query_scalar::<_, String>(
+                    "SELECT COALESCE(NULLIF(trim(client_configs), ''), '') FROM clients WHERE id = $1 AND tenant_id = $2",
+                )
+                .bind(body.client_id)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                let _ = tx.commit().await;
+                r
+            }
+            Err(_) => None,
+        };
+
+        cfg_text
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
             .and_then(|c| c.get("enabled_engines").cloned())
             .and_then(|e| e.as_array().cloned())
             .map(|arr| arr.into_iter().filter_map(|v| v.as_str().map(String::from)).collect())
@@ -1848,15 +1887,22 @@ async fn api_scan_all_engines(
     let target = if let Some(ref t) = body.target {
         t.clone()
     } else {
-        let domains_result: Option<String> = sqlx::query_scalar(
-            "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2"
-        )
-        .bind(body.client_id)
-        .bind(auth.tenant_id)
-        .fetch_optional(state.app_pool.as_ref())
-        .await
-        .ok()
-        .flatten();
+        let domains_result: Option<String> = match db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+            Ok(mut tx) => {
+                let r = sqlx::query_scalar::<_, String>(
+                    "SELECT domains FROM clients WHERE id = $1 AND tenant_id = $2",
+                )
+                .bind(body.client_id)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
+                let _ = tx.commit().await;
+                r
+            }
+            Err(_) => None,
+        };
 
         domains_result
             .and_then(|d| {
@@ -1866,6 +1912,27 @@ async fn api_scan_all_engines(
             })
             .unwrap_or_default()
     };
+
+    // A blank target would otherwise enqueue a no-op scan that still consumes quota AND skip the
+    // scope check. Reject it, and always run scope validation before enqueueing.
+    if target.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "No scan target resolved for this client"})),
+        )
+            .into_response();
+    }
+    if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        &target,
+        Some(body.client_id),
+    )
+    .await
+    {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail})))
+            .into_response();
+    }
 
     // Queue scan-all-engines job
     let payload = json!({
@@ -1935,6 +2002,23 @@ async fn api_scan_discovered_domains(
             Json(json!({"ok": false, "detail": "domains list required"})),
         )
             .into_response();
+    }
+
+    for d in &body.domains {
+        if d.trim().is_empty() {
+            continue;
+        }
+        if let Err(detail) = crate::security_hardening::validate_scan_target_in_scope(
+            state.app_pool.as_ref(),
+            auth.tenant_id,
+            d,
+            Some(body.client_id),
+        )
+        .await
+        {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok": false, "detail": detail})))
+                .into_response();
+        }
     }
 
     // Default engines for domain scanning (recon-focused)

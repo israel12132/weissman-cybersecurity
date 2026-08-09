@@ -33,6 +33,7 @@ export default function IntegrationManager() {
   const { toast } = useToast();
   const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [testingConnection, setTestingConnection] = useState(null);
   const [dryRunTests, setDryRunTests] = useState(true);
   const [addModal, setAddModal] = useState(false);
@@ -56,11 +57,14 @@ export default function IntegrationManager() {
   const fetchIntegrations = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const data = await api.get('/api/integrations');
       setIntegrations(data.integrations || []);
       setVaultEnabled(Boolean(data.vault_enabled));
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
+      // Distinguish a failed load from a genuinely empty list.
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -106,6 +110,16 @@ export default function IntegrationManager() {
       );
     } catch (error) {
       console.error('Connection test failed:', error);
+      // A thrown request never reached the optimistic update above — surface the
+      // failure so it is not mistaken for a passing test.
+      setIntegrations((prev) =>
+        prev.map((i) =>
+          i.id === integrationId
+            ? { ...i, status: 'error', last_test: new Date().toISOString() }
+            : i
+        )
+      );
+      toast.error(t('common.error'));
     } finally {
       setTestingConnection(null);
     }
@@ -177,6 +191,17 @@ export default function IntegrationManager() {
       )}
     >
       <div className="space-y-6">
+        {loadError && (
+          <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-center justify-between gap-4">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {t('common.error')}
+            </span>
+            <Button variant="unstyled" type="button" onClick={fetchIntegrations} className="text-xs font-medium text-red-100 underline underline-offset-2">
+              {t('common.retry')}
+            </Button>
+          </div>
+        )}
         {vaultEnabled && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             Vault encryption active — integration secrets stored encrypted at rest (AES-256-GCM).

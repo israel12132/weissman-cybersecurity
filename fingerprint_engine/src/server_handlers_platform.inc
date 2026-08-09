@@ -258,6 +258,26 @@ async fn api_global_search(
     (StatusCode::OK, Json(json!({ "ok": true, "results": results }))).into_response()
 }
 
+/// Load the raw (UNREDACTED) integrations registry for a tenant. Write paths MUST use this rather
+/// than round-tripping through `api_integrations_list`, whose redaction replaces every secret with
+/// a "••••••••" placeholder that would then be persisted over the real encrypted credential.
+async fn load_integrations_raw(state: &Arc<AppState>, tenant_id: i64) -> Vec<Value> {
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, tenant_id).await else {
+        return vec![];
+    };
+    let raw: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'integrations_registry'",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+    let _ = tx.commit().await;
+    raw.and_then(|s| serde_json::from_str::<Vec<Value>>(&s).ok())
+        .unwrap_or_default()
+}
+
 /// GET /api/integrations — configured third-party integrations (stored in system_configs).
 async fn api_integrations_list(
     State(state): State<Arc<AppState>>,
@@ -302,12 +322,13 @@ async fn api_integrations_list(
 
     if integrations.is_empty() {
         if let Some(url) = webhook.filter(|u| !u.trim().is_empty()) {
+            let _ = url; // the URL is a bearer credential — expose only that it is configured.
             integrations.push(json!({
                 "id": "alert_webhook",
                 "name": "Alert Webhook",
                 "category": "Communication",
                 "status": "connected",
-                "config": { "url": url },
+                "config": { "url": "••••••••", "configured": true },
                 "last_test": null,
             }));
         }
@@ -365,21 +386,8 @@ async fn api_integrations_post(
     if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
         return r;
     }
-    let list_resp = api_integrations_list(
-        State(state.clone()),
-        Extension(auth.clone()),
-    )
-    .await;
-    let mut list: Vec<Value> = vec![];
-    if let Ok(bytes) = axum::body::to_bytes(list_resp.into_body(), 1_048_576).await {
-        if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
-            list = v
-                .get("integrations")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-        }
-    }
+    // Load the UNREDACTED registry so other integrations' encrypted credentials survive this write.
+    let mut list: Vec<Value> = load_integrations_raw(&state, auth.tenant_id).await;
     let entry = json!({
         "id": body.id,
         "name": body.name,
@@ -409,21 +417,8 @@ async fn api_integrations_delete(
     if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
         return r;
     }
-    let list_resp = api_integrations_list(
-        State(state.clone()),
-        Extension(auth.clone()),
-    )
-    .await;
-    let mut list: Vec<Value> = vec![];
-    if let Ok(bytes) = axum::body::to_bytes(list_resp.into_body(), 1_048_576).await {
-        if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
-            list = v
-                .get("integrations")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-        }
-    }
+    // Load the UNREDACTED registry so the surviving integrations keep their real credentials.
+    let mut list: Vec<Value> = load_integrations_raw(&state, auth.tenant_id).await;
     list.retain(|i| i.get("id").and_then(Value::as_str) != Some(id.as_str()));
     match integrations_save(&state.app_pool, auth.tenant_id, &list).await {
         Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
@@ -3819,34 +3814,14 @@ async fn api_compliance_control_mappings_coverage(
     // longer knows. Stale references never void an artifact — see the enforcement gate below.
     let stale_engine_refs = crate::compliance_engine::find_stale_engine_references(&rows, is_known);
 
-    // The real consistency verdict: compliance requirements a report would assert on that have no
-    // covering row in the live catalog. Reconciled per framework against its canonical control set,
-    // and only for frameworks already onboarded to live mapping (>=1 row).
-    let mut orphaned_controls: Vec<Value> = Vec::new();
-    for cov in &coverage {
-        let Some(slug) = crate::compliance_engine::framework_slug_for_db(&cov.framework) else {
-            continue;
-        };
-        let expected: Vec<(String, String)> = static_framework_controls(slug)
-            .into_iter()
-            .map(|(id, title)| (id.to_string(), title.to_string()))
-            .collect();
-        if expected.is_empty() {
-            continue;
-        }
-        let mapping_ids: Vec<String> = rows
-            .iter()
-            .filter(|m| m.framework == cov.framework)
-            .map(|m| m.control_id.clone())
-            .collect();
-        for o in crate::compliance_engine::find_orphaned_controls(&expected, &mapping_ids) {
-            orphaned_controls.push(json!({
-                "framework": cov.framework,
-                "control_id": o.control_id,
-                "control_title": o.control_title,
-            }));
-        }
-    }
+    // The real consistency verdict must be byte-identical to the enforcement gate that voids
+    // artifacts — otherwise `?framework=CIS` (or an unknown value) could report `consistent: true`
+    // while every other framework is broken. Use the shared cross-listed gate; the `coverage`
+    // payload above still reflects the caller's `?framework=` filter.
+    let orphaned_controls: Vec<Value> = match compliance_orphaned_controls_across_listed(&state).await {
+        Ok(o) => o,
+        Err(resp) => return resp,
+    };
 
     (
         StatusCode::OK,
@@ -3910,6 +3885,19 @@ async fn api_compliance_evidence_pack(
             .into_response();
     }
 
+    // `vulnerabilities` is FORCE RLS — a bare-pool read matches zero rows (DB default GUC = '0'),
+    // which silently produced a "certified consistent" evidence pack containing no findings. Run
+    // the read inside a tenant tx like the audit-chain and SOAR sections below already do.
+    let mut vtx = match db::begin_tenant_tx(&state.app_pool, tid).await {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": scrub_internal_error(&e) })),
+            )
+                .into_response();
+        }
+    };
     let rows: Vec<(String, String, String, Value)> = match sqlx::query_as(
         r#"SELECT COALESCE(title,''), COALESCE(severity,'info'), COALESCE(source,''),
                   COALESCE(raw_data, '{}'::jsonb)
@@ -3920,7 +3908,7 @@ async fn api_compliance_evidence_pack(
     )
     .bind(tid)
     .bind(client_id)
-    .fetch_all(state.app_pool.as_ref())
+    .fetch_all(&mut *vtx)
     .await
     {
         Ok(r) => r,
@@ -3932,6 +3920,7 @@ async fn api_compliance_evidence_pack(
                 .into_response();
         }
     };
+    let _ = vtx.commit().await;
 
     let mut by_framework: std::collections::BTreeMap<String, Vec<Value>> =
         std::collections::BTreeMap::new();
@@ -3978,14 +3967,40 @@ async fn api_compliance_evidence_pack(
         }
     };
 
+    // Verify the ENTIRE audit chain, not just the oldest 1000 rows. Page in id-order with a 1-row
+    // overlap between pages so a break spanning a page boundary is still caught. (The fully correct
+    // form is a single streaming verify carrying prev_hash across pages — that belongs in
+    // audit_log.rs; this handler-side paging is the in-scope equivalent.)
     let audit_chain_intact = match db::begin_tenant_tx(&state.app_pool, tid).await {
         Ok(mut tx) => {
-            let ok = crate::audit_log::export_for_tenant(&mut tx, tid, 1000, 0)
-                .await
-                .map(|(_, _, intact)| intact)
-                .unwrap_or(false);
+            const PAGE: i64 = 5000;
+            let mut offset: i64 = 0;
+            let mut intact = true;
+            loop {
+                match crate::audit_log::export_for_tenant(&mut tx, tid, PAGE, offset).await {
+                    Ok((entries, _total, page_intact)) => {
+                        let n = entries.len() as i64;
+                        if n == 0 {
+                            break;
+                        }
+                        if !page_intact {
+                            intact = false;
+                            break;
+                        }
+                        if n < PAGE {
+                            break;
+                        }
+                        // Overlap the last verified row into the next page to bridge the boundary.
+                        offset += PAGE - 1;
+                    }
+                    Err(_) => {
+                        intact = false;
+                        break;
+                    }
+                }
+            }
             let _ = tx.commit().await;
-            ok
+            intact
         }
         Err(_) => false,
     };

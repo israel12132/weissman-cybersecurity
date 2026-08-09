@@ -66,8 +66,7 @@ async fn persist_swarm_event(
     detail: Value,
     ts_ms: i64,
 ) -> Result<(), sqlx::Error> {
-    let mut conn = pool.acquire().await?;
-    db::set_tenant_conn(&mut *conn, tenant_id).await?;
+    let mut tx = db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO swarm_events (tenant_id, client_id, agent, event, detail_json, ts_ms)
            VALUES ($1, $2, $3, $4, $5, $6)"#,
@@ -78,8 +77,9 @@ async fn persist_swarm_event(
     .bind(event)
     .bind(sqlx::types::Json(detail))
     .bind(ts_ms)
-    .execute(&mut *conn)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 

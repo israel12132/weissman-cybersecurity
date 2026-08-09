@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import {
   Calendar,
   ChevronLeft,
@@ -104,28 +105,16 @@ function ActionBadge({ action }) {
 
 function exportCsv(rows) {
   const header = ['id', 'created_at', 'action', 'actor', 'target', 'details', 'client_ip']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((e) =>
-      [
-        e.id,
-        e.created_at,
-        e.action,
-        e.actor_email || e.user_id,
-        extractTarget(e),
-        e.details,
-        e.client_ip,
-      ].map(esc).join(',')
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-audit-log-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const data = rows.map((e) => [
+    e.id,
+    e.created_at,
+    e.action,
+    e.actor_email || e.user_id,
+    extractTarget(e),
+    e.details,
+    e.client_ip,
+  ])
+  downloadCsv(data, header, 'weissman-audit-log')
 }
 
 export default function AuditLog() {

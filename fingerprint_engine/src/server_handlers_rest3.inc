@@ -19,18 +19,32 @@ async fn api_client_attack_surface_graph(
         let _ = tx.commit().await;
         return (StatusCode::OK, Json(json!({ "nodes": [], "edges": [], "run_id": null, "message": "No ASM graph yet." }))).into_response();
     };
-    let nodes_rows = sqlx::query("SELECT node_id, label, node_type, status, cname_target, raw_finding FROM asm_graph_nodes WHERE run_id = $1 AND client_id = $2 ORDER BY id")
+    // A read failure here (RLS mismatch, lock/statement timeout) must not masquerade as an empty
+    // attack surface — the genuinely-empty case already returned above with an explicit message.
+    let nodes_rows = match sqlx::query("SELECT node_id, label, node_type, status, cname_target, raw_finding FROM asm_graph_nodes WHERE run_id = $1 AND client_id = $2 ORDER BY id")
         .bind(run_id)
         .bind(id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
-    let edges_rows = sqlx::query("SELECT from_id, to_id, edge_type FROM asm_graph_edges WHERE run_id = $1 AND client_id = $2 ORDER BY id")
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(target: "asm_graph", client_id = id, error = %e, "asm graph nodes read failed");
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes": [], "edges": [], "run_id": run_id, "partial": true, "message": "graph data temporarily unavailable"}))).into_response();
+        }
+    };
+    let edges_rows = match sqlx::query("SELECT from_id, to_id, edge_type FROM asm_graph_edges WHERE run_id = $1 AND client_id = $2 ORDER BY id")
         .bind(run_id)
         .bind(id)
         .fetch_all(&mut *tx)
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(target: "asm_graph", client_id = id, error = %e, "asm graph edges read failed");
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"nodes": [], "edges": [], "run_id": run_id, "partial": true, "message": "graph data temporarily unavailable"}))).into_response();
+        }
+    };
     let vuln_rows = sqlx::query("SELECT finding_id, title, severity FROM vulnerabilities WHERE client_id = $1 AND source = 'semantic_ai_fuzz' ORDER BY id DESC LIMIT 50")
         .bind(id)
         .fetch_all(&mut *tx)
@@ -125,17 +139,23 @@ async fn api_client_semantic_reasoning(
 }
 
 async fn api_system_configs_get(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
+    // system_configs holds integration credentials; the write path is admin-gated, so the read
+    // must be too (a plain GET otherwise bypasses mutation_rbac_middleware).
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
+    // Denylist-by-default so a newly-added secret key (e.g. slack_webhook_url) is masked without a
+    // code change — the previous fixed list omitted the webhook URLs entirely.
     fn mask_config_value(key: &str, value: &str) -> String {
-        const SECRET_KEYS: &[&str] = &[
-            "github_token",
-            "oast_api_key",
-            "smtp_password",
-            "censys_api_secret",
-            "pagerduty_routing_key",
-            "shodan_api_key",
-            "gitlab_token",
-        ];
-        if SECRET_KEYS.contains(&key) && !value.trim().is_empty() {
+        let k = key.to_ascii_lowercase();
+        let is_secret = k.contains("token")
+            || k.contains("secret")
+            || k.contains("password")
+            || k.contains("webhook")
+            || k.contains("routing_key")
+            || k.contains("api_key")
+            || k.ends_with("_key");
+        if is_secret && !value.trim().is_empty() {
             return "••••••••".to_string();
         }
         value.to_string()

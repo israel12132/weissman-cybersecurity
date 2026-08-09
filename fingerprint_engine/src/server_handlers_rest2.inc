@@ -85,7 +85,12 @@ async fn api_client_export_csv(
             .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
             .unwrap_or_default()
             .replace('"', "\"\"");
-        csv.push_str(&format!("VLN-{},{},{},{},{},{}\n", idv, title, sev, src, st, disc));
+        // Quote every field (embedded quotes already doubled above) — RFC 4180, so a comma or
+        // newline in a title cannot shift subsequent columns.
+        csv.push_str(&format!(
+            "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
+            idv, title, sev, src, st, disc
+        ));
     }
     let filename = format!("Weissman_findings_client_{}.csv", id);
     let mut res = Response::new(Body::from(csv));
@@ -549,11 +554,14 @@ async fn api_findings_export_csv(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
+    // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
+    // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
+    // DoS from any viewer. 50k mirrors the audit export cap.
     let rows = sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
-         FROM vulnerabilities ORDER BY discovered_at DESC",
+         FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 50000",
     )
     .fetch_all(&mut *tx)
     .await
@@ -607,7 +615,7 @@ async fn api_openapi_spec() -> Response {
             }
         },
         "servers": [
-            { "url": "/api", "description": "API server" }
+            { "url": "/", "description": "API server" }
         ],
         "security": [
             { "BearerAuth": [] },
@@ -680,7 +688,7 @@ async fn api_openapi_spec() -> Response {
                     "responses": {
                         "200": { "description": "Login successful; JWT in response body and HttpOnly cookie." },
                         "401": { "description": "Invalid credentials" },
-                        "429": { "description": "Rate limited (5 req/min per IP)" }
+                        "429": { "description": "Rate limited per IP — see WEISSMAN_LOGIN_PER_MINUTE (default 8/min, burst 12)" }
                     }
                 }
             },

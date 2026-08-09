@@ -1,9 +1,7 @@
-import { attachServiceWorker } from './intentPrefetch'
-
 export async function registerTacticalServiceWorker() {
   if (!('serviceWorker' in navigator) || import.meta.env.DEV) return null
   try {
-    // The service worker is a progressive enhancement (offline shell + intent prefetch). It must
+    // The service worker is a progressive enhancement (offline app shell). It must
     // NEVER gate first paint. `bootstrapTacticalShell()` awaits this in a Promise.all *before*
     // React mounts, so if `register()` stalls — observed in headless Chromium and on restrictive
     // live hosts where the SW script or its scope is served unexpectedly — the app is stranded on
@@ -15,7 +13,6 @@ export async function registerTacticalServiceWorker() {
       }),
       new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
     ])
-    if (reg) attachServiceWorker(reg)
     return reg
   } catch (e) {
     if (import.meta.env.DEV) console.warn('[tactical-sw] registration failed', e)

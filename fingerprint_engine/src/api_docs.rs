@@ -16,12 +16,9 @@ pub async fn api_docs_swagger() -> Response {
         header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=3600"),
     );
-    // Allow embedding only on our own origin (the global CSP already covers this — this
-    // header is a defence-in-depth for old browsers).
-    resp.headers_mut().insert(
-        header::X_FRAME_OPTIONS,
-        HeaderValue::from_static("SAMEORIGIN"),
-    );
+    // NOTE: X-Frame-Options is set authoritatively by the global security-headers layer
+    // (`SetResponseHeaderLayer::overriding` → DENY). A per-handler value here would be silently
+    // overwritten before reaching the client, so it is intentionally not set.
     resp
 }
 
@@ -40,14 +37,6 @@ mod tests {
                 .to_str()
                 .unwrap(),
             "public, max-age=3600"
-        );
-        assert_eq!(
-            resp.headers()
-                .get(header::X_FRAME_OPTIONS)
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "SAMEORIGIN"
         );
     }
 }

@@ -45,6 +45,10 @@ const Select = forwardRef(function Select(
   const id = idProp ?? autoId
   const hintId = hint || error ? `${id}-hint` : undefined
   const hasError = Boolean(error)
+  // When the caller supplies neither value nor defaultValue, an uncontrolled select
+  // would auto-select the first enabled option and never show the placeholder. Default
+  // the selection to the empty placeholder in that case.
+  const isControlled = props.value !== undefined || props.defaultValue !== undefined
 
   const field = (
     <div className={cn('relative', wrapperClassName)}>
@@ -53,6 +57,7 @@ const Select = forwardRef(function Select(
         id={id}
         disabled={disabled}
         required={required}
+        defaultValue={!isControlled && placeholder ? '' : undefined}
         aria-invalid={hasError || undefined}
         aria-describedby={hintId}
         className={cn(
@@ -74,7 +79,7 @@ const Select = forwardRef(function Select(
         {...props}
       >
         {placeholder && (
-          <option value="" disabled>
+          <option value="" disabled={required} hidden>
             {placeholder}
           </option>
         )}

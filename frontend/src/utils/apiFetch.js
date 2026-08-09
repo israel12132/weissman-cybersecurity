@@ -116,12 +116,21 @@ export async function apiFetch(url, options = {}) {
   if (cb) cb.onTrialStart()
 
   const retryOrThrow = async (error) => {
-    if (cb) cb.onFailure()
     const status = error?.status
+    const isAbort = error?.name === 'AbortError'
+    if (cb) {
+      if (isAbort) {
+        // client cancelled - leave the breaker untouched
+      } else if (status === undefined || status >= 500) {
+        cb.onFailure()
+      } else {
+        cb.onSuccess()
+      }
+    }
     const retryable = status === undefined || isRetryableStatus(status)
     // 429 is surfaced immediately (apiBase fired the shared toast + Retry-After
     // drives the wait), never auto-retried.
-    if (status !== 429 && retryable && _attempt < retries) {
+    if (!isAbort && status !== 429 && retryable && _attempt < retries) {
       const base = typeof retryDelay === 'number' ? retryDelay : retryBaseMs
       const delay = computeBackoffDelay(_attempt, { baseMs: base, maxMs: retryMaxMs })
       await sleep(delay)
@@ -161,16 +170,32 @@ export async function apiFetch(url, options = {}) {
     return retryOrThrow(error)
   }
 
-  // Success path: the backend answered cleanly → close the breaker.
-  if (cb) cb.onSuccess()
-
   // Explicit raw bypass: return the unparsed 2xx Response (PDF/CSV downloads,
   // tolerant-parse callers) before the JSON sniff/validation below.
-  if (raw) return response
+  if (raw) {
+    // The backend answered cleanly → close the breaker.
+    if (cb) cb.onSuccess()
+    return response
+  }
 
   const contentType = response.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
-    let data = await response.json()
+    let data
+    try {
+      data = await response.json()
+    } catch (parseError) {
+      // A 2xx that advertises JSON but carries a truncated/empty body (proxy cut a
+      // response short, gzip fault, stale content-type on an empty body) must not be
+      // silently credited to the breaker as a success — route it through retryOrThrow
+      // with an HTTP-shaped error so callers can classify it and retries can fire.
+      const err = new Error('Malformed JSON response')
+      err.status = response.status
+      err.cause = parseError
+      err.response = response
+      return retryOrThrow(err)
+    }
+    // Only close the breaker once we have a clean decode.
+    if (cb) cb.onSuccess()
     // Strict boundary: drop malformed/tampered shapes before they reach React.
     data = validateAtBoundary(data, validate)
     // Cryptographic integrity: verify provenance/attestation when required.
@@ -180,6 +205,8 @@ export async function apiFetch(url, options = {}) {
     return data
   }
 
+  // Non-JSON 2xx — backend answered cleanly → close the breaker.
+  if (cb) cb.onSuccess()
   return response
 }
 

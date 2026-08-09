@@ -121,11 +121,9 @@ async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) 
         }) => {
             let idx = seq.fetch_add(1, Ordering::SeqCst);
             let detail_ref = detail.as_deref();
-            match pool.acquire().await {
-                Ok(mut conn) => {
-                    if let Err(e) = crate::db::set_tenant_conn(&mut *conn, *tenant_id).await {
-                        tracing::error!(target: "verification_sandbox", error = %e, "set_tenant_conn for step log");
-                    } else if let Err(e) = sqlx::query(
+            match crate::db::begin_tenant_tx(pool, *tenant_id).await {
+                Ok(mut tx) => {
+                    if let Err(e) = sqlx::query(
                         r#"INSERT INTO heal_verification_steps
                            (tenant_id, job_id, step_index, step_label, detail, step_ts)
                            VALUES ($1, $2, $3, $4, $5, $6)"#,
@@ -136,14 +134,16 @@ async fn push_step(sink: &Option<StepSink>, step: &str, detail: Option<String>) 
                     .bind(step)
                     .bind(detail_ref)
                     .bind(ts)
-                    .execute(&mut *conn)
+                    .execute(&mut *tx)
                     .await
                     {
                         tracing::error!(target: "verification_sandbox", error = %e, "heal_verification_steps insert");
+                    } else if let Err(e) = tx.commit().await {
+                        tracing::error!(target: "verification_sandbox", error = %e, "heal_verification_steps commit");
                     }
                 }
                 Err(e) => {
-                    tracing::error!(target: "verification_sandbox", error = %e, "pool acquire for step log")
+                    tracing::error!(target: "verification_sandbox", error = %e, "begin_tenant_tx for step log")
                 }
             }
         }
@@ -1145,15 +1145,9 @@ async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
             job_id,
             ..
         }) => {
-            let Ok(mut conn) = pool.acquire().await else {
+            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, *tenant_id).await else {
                 return Vec::new();
             };
-            if crate::db::set_tenant_conn(&mut *conn, *tenant_id)
-                .await
-                .is_err()
-            {
-                return Vec::new();
-            }
             let rows = sqlx::query(
                 r#"SELECT step_label, detail, step_ts FROM heal_verification_steps
                    WHERE tenant_id = $1 AND job_id = $2
@@ -1161,10 +1155,11 @@ async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
             )
             .bind(*tenant_id)
             .bind(*job_id)
-            .fetch_all(&mut *conn)
+            .fetch_all(&mut *tx)
             .await
             .unwrap_or_default();
-            rows.into_iter()
+            let steps = rows
+                .into_iter()
                 .filter_map(|r| {
                     Some(VerificationStep {
                         step: r.try_get("step_label").ok()?,
@@ -1172,7 +1167,9 @@ async fn collect_steps_only(sink: &Option<StepSink>) -> Vec<VerificationStep> {
                         ts: r.try_get("step_ts").ok()?,
                     })
                 })
-                .collect()
+                .collect();
+            let _ = tx.commit().await;
+            steps
         }
     }
 }

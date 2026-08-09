@@ -236,6 +236,24 @@ impl LlmError {
         self.client_body().retryable
     }
 
+    /// Whether *this endpoint* cannot serve the request but *another* provider in the failover
+    /// chain still might — i.e. the router should advance to the next endpoint rather than abort.
+    /// Covers all retryable transport/5xx/429 errors plus endpoint-fatal-but-request-valid cases:
+    /// auth failure (401/403), model-not-found (404), and empty content from a hung/OOM upstream.
+    /// A genuinely bad request (400/422/…) is NOT chain-continuable: every endpoint rejects it
+    /// identically, so the router returns it immediately.
+    #[must_use]
+    pub fn should_try_next_endpoint(&self) -> bool {
+        if self.retryable() {
+            return true;
+        }
+        match self {
+            LlmError::Http { status, .. } => matches!(status, 401 | 403 | 404),
+            LlmError::EmptyContent => true,
+            _ => false,
+        }
+    }
+
     fn client_body(&self) -> LlmClientErrorBody {
         match self {
             LlmError::CircuitOpen { cooldown_secs } => LlmClientErrorBody {
@@ -921,13 +939,23 @@ pub async fn create_embedding(
 /// Build a client with timeout suitable for local inference.
 #[must_use]
 pub fn llm_http_client(timeout_secs: u64) -> reqwest::Client {
+    let timeout = Duration::from_secs(timeout_secs.max(1));
     reqwest::Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
-        .timeout(Duration::from_secs(timeout_secs.max(1)))
+        .timeout(timeout)
         // Match high fan-out from parallel scan workers to a local vLLM server (Ryzen-class throughput).
         .pool_max_idle_per_host(64)
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .unwrap_or_else(|e| {
+            // `reqwest::Client::new()` carries NO request timeout, degrading "fail fast" into
+            // "hang forever" (the retry wrapper only retries on timeout/connect). Preserve the
+            // timeout on the fallback so a stuck endpoint still errors out.
+            tracing::error!(target: "llm", error = %e, "llm_http_client builder failed; using timeout-preserving fallback");
+            reqwest::Client::builder()
+                .timeout(timeout)
+                .build()
+                .unwrap_or_default()
+        })
 }
 
 /// Same as [`chat_completion_text`] for synchronous callers (e.g. blocking pipeline analysis).

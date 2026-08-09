@@ -6,6 +6,10 @@ import {
 } from '../lib/apiBase'
 import { apiFetch } from '../utils/apiFetch'
 import { effectiveRole, sessionRoleRank, sessionHasRole } from '../lib/roles'
+import { queryClient } from '../lib/queryClient'
+import { invalidateAgentFleetCache } from '../hooks/useAgentFleetStatus'
+import { invalidateEngineCapabilitiesCache } from '../lib/useEngineCapabilities'
+import { invalidateEngineHistorySummary } from '../lib/engineHistorySummary'
 
 const AuthContext = createContext(null)
 
@@ -173,6 +177,19 @@ export function AuthProvider({ children }) {
       /* still clear local state */
     }
     clearStoredAccessToken()
+    // Tear down every cross-request cache so the next login in this same tab
+    // (shared/kiosk workstation) can never be served the previous tenant's data:
+    //  - the react-query cache (tenant-agnostic keys, up to gcTime),
+    //  - the hand-rolled module singletons (agent fleet, engine capabilities,
+    //    engine history summary) which otherwise live for the tab's lifetime.
+    try {
+      queryClient.clear()
+    } catch (_) {
+      /* query cache teardown is best-effort — non-fatal */
+    }
+    invalidateAgentFleetCache()
+    invalidateEngineCapabilitiesCache()
+    invalidateEngineHistorySummary()
     // Clear tab-scoped app state that can carry tenant data across a re-login on
     // a shared/kiosk workstation (the notification inbox persists findings).
     try {

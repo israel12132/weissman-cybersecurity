@@ -1,15 +1,8 @@
 //! Best-effort repair for small-model JSON (Qwen / Llama): markdown fences, outer object slicing with
 //! brace balancing (fixes `first {` + `last }` grabbing wrong span), and a few trailing-comma passes.
 
-use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::sync::LazyLock;
-
-static TRAIL_COMMA_BEFORE_BRACE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r",\s*}").expect("regex"));
-static TRAIL_COMMA_BEFORE_BRACKET: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r",\s*]").expect("regex"));
 
 /// Strip ``` / ```json fences and return the first block that looks like JSON.
 #[must_use]
@@ -68,14 +61,65 @@ pub fn extract_balanced_object(raw: &str) -> Option<String> {
     None
 }
 
-fn relax_trailing_commas(mut s: String) -> String {
+/// One string-aware pass: drop a `,` that (ignoring whitespace) precedes a `}` or `]` **only when
+/// it sits outside a JSON string**. A naive `,\s*}` / `,\s*]` regex would also rewrite those
+/// sequences inside string values — silently corrupting generated attack payloads such as
+/// template-injection `{{7*7, }}`, shell/JSON fragments and regexes.
+fn drop_outside_string_trailing_commas(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut in_str = false;
+    let mut esc = false;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if in_str {
+            out.push(b);
+            if esc {
+                esc = false;
+            } else if b == b'\\' {
+                esc = true;
+            } else if b == b'"' {
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        if b == b'"' {
+            in_str = true;
+            out.push(b);
+            i += 1;
+            continue;
+        }
+        if b == b',' {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if j < bytes.len() && (bytes[j] == b'}' || bytes[j] == b']') {
+                // Skip this comma; the intervening whitespace and the closer are copied normally.
+                i += 1;
+                continue;
+            }
+        }
+        out.push(b);
+        i += 1;
+    }
+    // Only ASCII commas are ever dropped and every other byte is copied verbatim, so the byte
+    // stream stays valid UTF-8; fall back to the input on the impossible error.
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+fn relax_trailing_commas(input: &str) -> String {
+    let mut s = input.to_string();
+    // Repeat so a chain like `[1,],}` (a dropped comma exposing another trailing comma) fully
+    // resolves, mirroring the previous multi-pass behaviour.
     for _ in 0..12 {
-        let next = TRAIL_COMMA_BEFORE_BRACE.replace_all(&s, "}");
-        let next = TRAIL_COMMA_BEFORE_BRACKET.replace_all(&next, "]");
+        let next = drop_outside_string_trailing_commas(&s);
         if next == s {
             break;
         }
-        s = next.to_string();
+        s = next;
     }
     s
 }
@@ -90,7 +134,7 @@ pub fn deserialize_llm_json<T: DeserializeOwned>(raw: &str) -> Result<T, String>
         if let Ok(v) = serde_json::from_str::<T>(&obj) {
             return Ok(v);
         }
-        let relaxed = relax_trailing_commas(obj);
+        let relaxed = relax_trailing_commas(&obj);
         if let Ok(v) = serde_json::from_str::<T>(&relaxed) {
             return Ok(v);
         }
@@ -163,6 +207,21 @@ mod tests {
                 count: 3
             }
         );
+    }
+
+    #[test]
+    fn relax_trailing_commas_preserves_string_contents() {
+        // A `, }` INSIDE a string value must survive; only the structural trailing comma is dropped.
+        assert_eq!(
+            relax_trailing_commas("{\"a\":\"x, }\",}"),
+            "{\"a\":\"x, }\"}"
+        );
+    }
+
+    #[test]
+    fn relax_trailing_commas_payload_value_intact() {
+        let v: Value = deserialize_llm_json("{\"payload\":\"{{7*7, }}\",}").unwrap();
+        assert_eq!(v["payload"], serde_json::json!("{{7*7, }}"));
     }
 
     #[test]

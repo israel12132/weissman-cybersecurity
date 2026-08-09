@@ -60,8 +60,11 @@ change** (fewest files, then fewest bytes) — i.e. the cleanest proven fix. If 
 reason (still-vulnerable / broke-app / didn't-apply, plus the sandbox error and the files the last
 patch touched) back to `remediation_patch::regenerate_patch`. The regenerated diff is re-validated
 (`security_hardening::validate_remediation_patch`) and re-verified, up to `WEISSMAN_HEAL_MAX_ATTEMPTS`
-(default 3, shared with the tournament budget). Temperature climbs per attempt. Every attempt streams
-a step into `heal_verification_steps`, so the UI shows the whole journey. The winning patch is persisted.
+(default 3; a sequential self-repair counter **independent** of the tournament size — the initial
+verification, whether a single verify or the tournament winner, counts as attempt 1). Temperature
+climbs per attempt. Every attempt streams a step into `heal_verification_steps`, so the UI shows the
+whole journey. The winning patch is persisted. Worst case, one heal runs
+`WEISSMAN_HEAL_TOURNAMENT_SIZE + (WEISSMAN_HEAL_MAX_ATTEMPTS − 1)` sandbox verifications.
 
 ## Delivery channels (`heal_channels::DeliveryChannel`)
 
@@ -125,8 +128,12 @@ Per-tenant policy lives in `system_configs` (safe defaults shown): `heal_auto_me
 i.e. a verified, **attested**, within-envelope fix — is squash-merged automatically
 (`auto_heal::merge_pull_request`), and its `heal_requests` row flips to `auto_merged`. Everything else
 stays a PR for human review. The merge is best-effort and never fails the heal; `broke_app`/`hold`
-outcomes are never auto-merged, and with no attestation key nothing auto-merges (attestation is
-required by default).
+outcomes are never auto-merged. Note: the attestation key is derived from `WEISSMAN_JWT_SECRET`
+(`finding_attestation.rs`), which production refuses to boot without (≥48 chars, `security_startup.rs`),
+so in any production deployment attestation is always available and every verified fix is attested.
+The `heal_require_attestation_for_merge` policy (default `true`) therefore records provenance rather
+than acting as a merge gate — the effective gates on auto-merge are `WEISSMAN_HEAL_AUTO_MERGE=1`, the
+severity ceiling, and the attempts ceiling.
 
 ## Closed loop
 
@@ -228,7 +235,7 @@ without requiring a Docker socket:
 
 | Variable                                | Default        | Effect                                            |
 |-----------------------------------------|----------------|---------------------------------------------------|
-| `WEISSMAN_HEAL_MAX_ATTEMPTS`            | `3`            | Total generation budget (tournament + self-repair, 1–10) |
+| `WEISSMAN_HEAL_MAX_ATTEMPTS`            | `3`            | Sequential self-repair rounds after the initial verification (1–10); independent of the tournament size |
 | `WEISSMAN_HEAL_TOURNAMENT_SIZE`         | `1`            | Candidate tournament size (≥2 enables it, max 6)  |
 | `WEISSMAN_HEAL_TOURNAMENT_CONCURRENCY`  | `2`            | Max candidates verified in parallel (1–6)         |
 | `WEISSMAN_HEAL_DEDUP_HOURS`             | `24`           | Duplicate-PR dedup window (0 disables)            |

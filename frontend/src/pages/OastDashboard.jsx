@@ -106,7 +106,7 @@ export default function OastDashboard() {
   useVisiblePolling(() => reloadCallbacks({ silent: true }), 5000)
 
   const listFindings = useMemo(() => callbacks.map((cb, i) => {
-    const confirmed = cb.probe_confirmed ?? cb.confirmed ?? true
+    const confirmed = cb.probe_confirmed ?? cb.confirmed ?? false
     return {
       id: cb.id ?? i,
       severity: confirmed ? 'critical' : 'info',

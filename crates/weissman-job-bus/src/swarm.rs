@@ -146,23 +146,43 @@ impl SwarmCoordinator {
 
     async fn tick(&self) -> Result<(), JobBusError> {
         let pool = self.bus.pool();
+        // Cross-tenant scan: set the RLS GUC to '' (the policy's unrestricted branch) so the
+        // coordinator sees every tenant's running jobs. On a NOBYPASSRLS pool the database default
+        // GUC '0' would otherwise limit this to tenant 0, leaving all real jobs un-monitored.
+        let mut tx = pool.begin().await?;
+        sqlx::query("SELECT set_config('app.current_tenant_id', '', true)")
+            .execute(&mut *tx)
+            .await?;
         let rows = sqlx::query(
             r#"SELECT id, tenant_id, COALESCE(worker_id, '') AS worker_id
                FROM weissman_async_jobs WHERE status = 'running'"#,
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         for row in rows {
-            let job_id: Uuid = row.try_get("id")?;
-            let tenant_id: i64 = row.try_get("tenant_id")?;
-            let worker_id: String = row.try_get("worker_id")?;
+            // Handle each row independently: a failure on one job must not skip the rest of the pass
+            // (head-of-line blocking would keep the same failing row wedging the tail every tick).
+            let (job_id, tenant_id, worker_id): (Uuid, i64, String) =
+                match (row.try_get("id"), row.try_get("tenant_id"), row.try_get("worker_id")) {
+                    (Ok(a), Ok(b), Ok(c)) => (a, b, c),
+                    _ => continue,
+                };
             if worker_id.is_empty() {
                 continue;
             }
             let key = format!("{}{}", SWARM_REGISTRY_PREFIX, worker_id);
             let mut conn = self.redis.clone();
-            let alive: bool = conn.exists(&key).await.unwrap_or(false);
+            // A Redis error is NOT evidence the worker is dead. `unwrap_or(false)` treated an outage
+            // as "everyone is dead" and orphaned the entire in-flight fleet — skip the row instead.
+            let alive: bool = match conn.exists(&key).await {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::warn!(target: "job_bus_swarm", worker_id = %worker_id, error = %e, "liveness check failed; skipping");
+                    continue;
+                }
+            };
             if alive {
                 continue;
             }
@@ -172,13 +192,26 @@ impl SwarmCoordinator {
                 worker_id = %worker_id,
                 "worker liveness expired — orphaning job instantly"
             );
-            let _ = DistributedLease::force_release(&self.redis, job_id).await;
-            self.bus
+            // Append the orphan events FIRST; only force-release the lease once the job has actually
+            // been re-queued, so a failed projection never leaves a job lease-less AND un-orphaned
+            // (any worker could otherwise grab it while the re-queue never ran).
+            if let Err(e) = self
+                .bus
                 .on_worker_terminated(tenant_id, &worker_id, "liveness_expired")
-                .await?;
-            self.bus
+                .await
+            {
+                tracing::warn!(target: "job_bus_swarm", %job_id, error = %e, "worker_terminated append failed; retrying next tick");
+                continue;
+            }
+            if let Err(e) = self
+                .bus
                 .on_job_orphaned(job_id, tenant_id, &worker_id, "swarm_liveness_expired")
-                .await?;
+                .await
+            {
+                tracing::warn!(target: "job_bus_swarm", %job_id, error = %e, "job_orphaned projection failed; retrying next tick");
+                continue;
+            }
+            let _ = DistributedLease::force_release(&self.redis, job_id).await;
             self.publish_worker_down(&worker_id).await;
         }
         Ok(())

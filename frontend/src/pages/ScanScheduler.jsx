@@ -401,6 +401,7 @@ export default function ScanScheduler() {
                 setCreateModal({
                   template: 'custom',
                   name: 'Custom Schedule',
+                  frequency: 'custom',
                 })
               }
               className="p-3 bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg hover:bg-[var(--row-hover-bg)] transition-colors text-left"

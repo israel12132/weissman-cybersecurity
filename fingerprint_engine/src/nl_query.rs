@@ -366,14 +366,17 @@ pub async fn execute_plan(
     let start = Instant::now();
     let compiled = compile_plan(&plan, tenant_id)?;
 
-    // Set the per-statement RLS GUC so policies see our tenant.
-    let mut conn = ro_pool
-        .acquire()
+    // Set the per-statement RLS GUC so policies see our tenant. set_config(..., true) is
+    // transaction-local, so the SELECT MUST run inside the SAME transaction: on a bare pooled
+    // connection every statement autocommits, which would discard the GUC before the query and
+    // collapse RLS to the database default tenant (0) — returning zero rows for every real tenant.
+    let mut tx = ro_pool
+        .begin()
         .await
-        .map_err(|e| format!("acquire: {e}"))?;
+        .map_err(|e| format!("begin: {e}"))?;
     sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, true)")
         .bind(tenant_id.to_string())
-        .execute(&mut *conn)
+        .execute(&mut *tx)
         .await
         .map_err(|e| format!("set tenant guc: {e}"))?;
 
@@ -382,9 +385,11 @@ pub async fn execute_plan(
         q = bind_json(q, p);
     }
     let rows = q
-        .fetch_all(&mut *conn)
+        .fetch_all(&mut *tx)
         .await
         .map_err(|e| format!("execute: {e}"))?;
+    // Read-only plan — commit simply releases the connection (no writes were made).
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     let elapsed_ms = start.elapsed().as_millis() as i64;
 
     let json_rows: Vec<Value> = rows.iter().map(row_to_json).collect();

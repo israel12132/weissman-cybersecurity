@@ -101,6 +101,13 @@ for (const [crate, floor] of Object.entries(floors)) {
     regressions.push(`${crate}: ${cur.toFixed(1)}% < floor ${floor}%`)
   }
 }
+// Fail closed: every workspace member must carry a coverage floor, else a new crate could ship
+// entirely unmeasured (the check loop above only iterates crates already present in floors).
+for (const p of meta.packages) {
+  if (!(p.name in floors)) {
+    regressions.push(`${p.name}: workspace member has no coverage floor — add it to coverage-floors.json`)
+  }
+}
 
 console.log('per-crate coverage ratchet:')
 for (const crate of Object.keys(floors).sort()) {

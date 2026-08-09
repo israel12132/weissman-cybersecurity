@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: worker
-          image: your-registry/weissman-backend:latest
+          image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend:latest
           imagePullPolicy: IfNotPresent
           command: ["/usr/local/bin/weissman-worker"]
           securityContext:

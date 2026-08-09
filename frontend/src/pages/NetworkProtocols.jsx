@@ -7,6 +7,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch';
 import EvidenceNotice from '../components/ui/EvidenceNotice';
 import Button from '../components/ui/Button'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 /**
  * NetworkProtocols — live protocol-exposure posture served by the SOC
@@ -82,18 +83,8 @@ export default function NetworkProtocols() {
 
   const exportCsv = useCallback(() => {
     const header = ['protocol', 'status', 'findings'];
-    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const lines = [
-      header.join(','),
-      ...filteredProtocols.map((p) => [p.name, p.status, p.findings].map(esc).join(',')),
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `network-protocols-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows = filteredProtocols.map((p) => [p.name, p.status, p.findings]);
+    downloadCsv(rows, header, 'network-protocols');
   }, [filteredProtocols]);
 
   return (

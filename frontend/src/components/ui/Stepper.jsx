@@ -99,6 +99,7 @@ const Stepper = forwardRef(function Stepper(
                   type="button"
                   onClick={() => onStepClick(step, i)}
                   aria-current={status === 'current' ? 'step' : undefined}
+                  aria-label={typeof step.label === 'string' ? step.label : undefined}
                   className="rounded-full focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
                 >
                   {Marker}

@@ -69,13 +69,10 @@ export function nodesReachableToTarget(seeds, targetId, adj, allNodes = []) {
     return all.length ? new Set(all) : new Set(adj.keys())
   }
 
-  const targetDist = dist.get(target)
-  relevant.add(target)
-  for (const [id, d] of dist) {
-    if (d <= targetDist) relevant.add(id)
-  }
-
-  // Backtrack from target along decreasing distance
+  // Backtrack from the target along strictly-decreasing BFS distance. This
+  // yields the union of all shortest-layer paths from the seeds to the target
+  // (a blanket `d <= targetDist` add would instead pull in the entire BFS ball
+  // of that radius — nearly the whole graph — defeating the focus dimming).
   const stack = [target]
   const visited = new Set([target])
   while (stack.length) {

@@ -30,9 +30,11 @@ fn job_kind_timeout(kind: &str) -> Duration {
         "tenant_full_scan" | "onboarding_tenant_scan" => Duration::from_secs(60 * 60),
         "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => Duration::from_secs(30 * 60),
         "command_center_engine" => Duration::from_secs(15 * 60),
-        // Fans out to every top-tier engine sequentially (each with its own 180s ceiling),
-        // so the whole probe needs a budget on the order of the summed per-engine timeouts.
-        "top_tier_health_probe" => Duration::from_secs(60 * 60),
+        // Fans out to ~22 top-tier engines sequentially (each with its own 180s ceiling), so the
+        // worst case is ~22×180 = 3960s. The previous 3600s budget was BELOW that, so when several
+        // engines hang — exactly what a health probe exists to detect — the probe was killed with a
+        // generic timeout instead of returning its per-engine pass/fail table. 75min leaves slack.
+        "top_tier_health_probe" => Duration::from_secs(75 * 60),
         "scan_all_engines" | "scan_discovered_domains" => Duration::from_secs(45 * 60),
         "pipeline_scan" | "threat_intel_run" | "council_debate" => Duration::from_secs(20 * 60),
         "noop" | "ping" => Duration::from_secs(30),
@@ -177,6 +179,11 @@ async fn process_one(
 
     let lease_stop = Arc::new(AtomicBool::new(false));
     let lease_stop_bg = lease_stop.clone();
+    // Wake the lease loop the instant the job finishes instead of only on the next interval tick —
+    // otherwise the join below blocks up to LEASE_EXTEND_INTERVAL_SECS (15s) while still holding the
+    // concurrency permit and leaving the finished job looking `running`.
+    let lease_notify = Arc::new(tokio::sync::Notify::new());
+    let lease_notify_bg = lease_notify.clone();
     let lease_bus = bus.clone();
     let lease_job_id = job.id;
     let lease_tid = job.tenant_id;
@@ -185,7 +192,10 @@ async fn process_one(
     let lease_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
         while !lease_stop_bg.load(Ordering::SeqCst) {
-            interval.tick().await;
+            tokio::select! {
+                _ = interval.tick() => {}
+                _ = lease_notify_bg.notified() => break,
+            }
             if lease_stop_bg.load(Ordering::SeqCst) {
                 break;
             }
@@ -251,6 +261,7 @@ async fn process_one(
         };
 
     lease_stop.store(true, Ordering::SeqCst);
+    lease_notify.notify_one();
     let _ = lease_task.await;
 
     let mut lease_out = lease.lock().await.take();
@@ -272,18 +283,12 @@ async fn process_one(
         Err(msg) => {
             let exhausted = job.attempt_count >= job.max_attempts;
             if bus_on && exhausted {
-                // Prefer a dedicated forensic-seal key so the tamper-evidence key is isolated
-                // from job-signing and auth. Falls back to the orchestrator key, then JWT.
-                let signing_key = std::env::var("WEISSMAN_FORENSIC_SEAL_SECRET")
-                    .ok()
-                    .filter(|s| !s.trim().is_empty())
-                    .or_else(|| {
-                        std::env::var("WEISSMAN_JOB_ORCHESTRATOR_SECRET")
-                            .ok()
-                            .filter(|s| !s.trim().is_empty())
-                    })
-                    .or_else(|| std::env::var("WEISSMAN_JWT_SECRET").ok());
-                let key = signing_key.as_deref().map(|s| s.as_bytes());
+                // Resolve the forensic-seal key through the SAME shared, trimmed helper the bus uses
+                // to verify it (WEISSMAN_FORENSIC_SEAL_SECRET → orchestrator → JWT). Resolving it
+                // inline here — untrimmed, and with a different precedence than the bus — produced a
+                // "bundle seal mismatch" that stranded the job in an infinite re-execution loop.
+                let signing_key = weissman_job_bus::forensic_seal_key_from_env();
+                let key = signing_key.as_deref();
                 match ForensicBundle::build(
                     pool,
                     job.id,

@@ -79,7 +79,13 @@ export default function SemanticLogicEngine() {
         setStateMachine(sm)
         setReasoning(log?.log ?? '')
         const { nodes: n, edges: e } = layoutStateMachine(sm.nodes || [], sm.edges || [])
-        setNodes(n)
+        // Preserve any position the operator dragged an existing node to; only new
+        // nodes get the freshly-computed ring layout. Otherwise the 15s poll resets
+        // the whole graph and makes it un-manipulable.
+        setNodes((prev) => {
+          const byId = new Map(prev.map((p) => [p.id, p]))
+          return n.map((x) => (byId.has(x.id) ? { ...x, position: byId.get(x.id).position } : x))
+        })
         setEdges(e)
       })
       .catch(e => setError(e?.message || t(`${NS}.load_failed`)))

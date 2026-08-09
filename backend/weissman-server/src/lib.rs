@@ -117,10 +117,18 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let router = middleware::cors::apply(router);
     let router = middleware::security_headers::apply(router);
     let router = middleware::rate_limiter::apply_global_rate_limit(router);
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8000);
+    // Fail fast on a malformed PORT rather than silently binding 8000 (which the container/k8s
+    // healthchecks hardcode) — matches how DATABASE_URL is validated above. A blank/unset PORT
+    // still defaults to 8000.
+    let port: u16 = match std::env::var("PORT") {
+        Ok(p) if !p.trim().is_empty() => p
+            .trim()
+            .parse()
+            .map_err(|_| -> Box<dyn std::error::Error + Send + Sync> {
+                format!("PORT is not a valid port number: {p:?}").into()
+            })?,
+        _ => 8000,
+    };
     fingerprint_engine::http::run_http_tcp_listener(router, port).await;
     Ok(())
 }

@@ -73,8 +73,9 @@ export default function JobsDashboard() {
 
   const loadJobs = useCallback(async () => {
     try {
+      // Always load every status so the count tiles stay accurate; the active
+      // status filter is applied client-side (below) for the list.
       const qs = new URLSearchParams({ limit: '100' })
-      if (statusFilter !== 'all') qs.set('status', statusFilter)
 
       let data
       try {
@@ -101,7 +102,7 @@ export default function JobsDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [isCeo, statusFilter, t])
+  }, [isCeo, t])
 
   useEffect(() => {
     if (authLoading) return
@@ -114,8 +115,9 @@ export default function JobsDashboard() {
 
   const filteredJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return jobs
     return jobs.filter((j) => {
+      if (statusFilter !== 'all' && normalizeJobStatus(j.status) !== statusFilter) return false
+      if (!q) return true
       const hay = [
         j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
         j.client_id != null ? String(j.client_id) : '',
@@ -123,7 +125,7 @@ export default function JobsDashboard() {
       ].filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })
-  }, [jobs, search])
+  }, [jobs, search, statusFilter])
 
   const statusCounts = useMemo(() => {
     const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }

@@ -74,7 +74,7 @@ node scripts/weissman-ui-audit.mjs
 
 **Pass criteria:** All Command Center pages pass evidence, refresh, export, and search rules.
 
-Expected: **95/95 pages**, **112/112 routes** compliant.
+Expected: **111/111 pages** compliant, **130 routes** (target ≥112).
 
 ### 4. Rust build and tests
 
@@ -246,7 +246,7 @@ Automated:
   [ ] full_audit_gate.sh — GLOBAL PASS
   [ ] verify_engine_wiring.mjs — 563 engine IDs, 0 gaps
   [ ] engine_reality_audit.mjs — 0 no_path
-  [ ] weissman-ui-audit.mjs — 95 pages, 112 routes
+  [ ] weissman-ui-audit.mjs — 111 pages, 130 routes
   [ ] generate_audit_evidence_pack.sh — JSON + PDF
   [ ] cargo test — pass
   [ ] frontend test:coverage — pass

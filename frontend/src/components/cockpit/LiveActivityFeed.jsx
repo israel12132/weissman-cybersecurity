@@ -43,24 +43,30 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
   const { activity, connected, clearActivity } = useTelemetry()
   const [filter, setFilter] = useState('all')
   const [paused, setPaused] = useState(false)
+  const [frozen, setFrozen] = useState(null)
   const [now, setNow] = useState(Date.now())
-  const pausedSnapshot = React.useRef([])
 
   React.useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  React.useEffect(() => {
+  // Capture the snapshot once, on the pause transition, so the frozen list does not
+  // keep updating as new telemetry arrives while paused.
+  const togglePause = () => {
     if (paused) {
-      pausedSnapshot.current = activity
+      setPaused(false)
+      setFrozen(null)
+    } else {
+      setFrozen(activity)
+      setPaused(true)
     }
-  }, [paused, activity])
+  }
 
   const visible = useMemo(() => {
-    const source = paused ? pausedSnapshot.current : activity
+    const source = paused && frozen ? frozen : activity
     return source.filter((e) => matchFilter(filter, e.kind)).slice(0, 80)
-  }, [activity, filter, paused])
+  }, [activity, frozen, filter, paused])
 
   return (
     <section
@@ -86,7 +92,7 @@ export default function LiveActivityFeed({ maxHeight = 360, className = '' }) {
         <div className="flex items-center gap-1 shrink-0">
           <Button variant="unstyled"
             type="button"
-            onClick={() => setPaused((p) => !p)}
+            onClick={togglePause}
             className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
               paused
                 ? 'border-amber-500/40 text-amber-200 bg-amber-500/10'

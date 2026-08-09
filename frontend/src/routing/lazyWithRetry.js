@@ -10,8 +10,10 @@
  * error boundary — a real, user-facing outage for a fault that a single retry (or a reload onto the
  * fresh bundle) would clear. This wrapper:
  *   1. retries the dynamic import a few times with a short linear backoff (handles transient blips);
- *   2. if every attempt still fails, triggers ONE cache-busted full reload so the browser re-fetches
- *      a fresh `index.html` + matching chunk hashes (the correct recovery for a stale deploy);
+ *   2. if every attempt still fails, triggers ONE full-page reload so the browser re-fetches
+ *      `index.html` + matching chunk hashes (the usual recovery for a stale deploy — note this is
+ *      a plain `location.reload()`, so an intermediary/SW holding the previous `index.html` may
+ *      still serve it; the guard in step 3 keeps that from looping);
  *   3. guards that reload so it can fire at most once per short window — a genuinely, permanently
  *      unavailable chunk falls through to the error boundary instead of looping the page.
  */

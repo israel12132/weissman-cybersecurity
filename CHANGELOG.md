@@ -72,12 +72,15 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   a reintroduction of `lopdf` now fails the build.
   - Also dropped the stale `RUSTSEC-2026-0049` ignore — that advisory is no longer
     detected on the current dependency lock (confirmed with `cargo audit`).
-  - The `RUSTSEC-2026-0098/0099/0104` ignores are **kept** — earlier config comments
-    mislabeled them as `time 0.2.x`, but they are `rustls-webpki 0.101.7` advisories
-    reached via the AWS SDK's legacy `rustls 0.21` hyper-0.14 connector, unrelated to
-    genpdf. Our AWS clients use the modern `rustls-aws-lc` path (`rustls 0.23.40` /
-    `rustls-webpki 0.103.13`), so the `0.21` subtree is inert; kept suppressed and
-    tracked for an aws-smithy bump that drops the legacy connector from defaults.
+  - The `RUSTSEC-2026-0098/0099/0104` ignores are **removed**. Those `rustls-webpki
+    0.101.7` advisories rode in on the AWS SDK's legacy `rustls 0.21` hyper-0.14
+    connector, pulled by each `aws-sdk-*` crate's default `rustls` feature. Those crates
+    are now declared `default-features = false` + the modern `rustls-aws-lc` connector
+    (`rustls 0.23.40` / `rustls-webpki 0.103.13`), so the `rustls 0.21` subtree left the
+    lock entirely; the advisories no longer resolve and a reintroduction now **fails** the
+    `cargo audit` / `deny.toml` gate. The only advisory still ignored is
+    `RUSTSEC-2023-0071` (rsa Marvin timing, via `openidconnect` for RS256 JWT
+    verification — no fixed `rsa` release exists).
 - **Executive/board PDFs now render natively** via the existing hand-written
   `%PDF-1.4` writer in `fingerprint_engine/src/pdf_report.rs` (base-14 Helvetica,
   no font embedding, no third-party PDF crate). `executive_pdf::render_executive_board_pdf`

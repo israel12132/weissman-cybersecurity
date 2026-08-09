@@ -6,7 +6,7 @@
  * server-side from asset values × CVSS/EPSS/KEV). `?recompute=1` forces a fresh
  * snapshot. Route: /financial-risk
  */
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DollarSign, RefreshCw } from 'lucide-react'
@@ -61,6 +61,11 @@ function contributorsCsv(rows) {
 export default function FinancialRisk() {
   const { t } = useTranslation()
   const { toast } = useToast()
+  // Read toast through a ref so `load` need not depend on it. The provider
+  // rebuilds `toast` on every push/auto-dismiss, and keeping it in load's dep
+  // array would refire the load effect (blanking the panel) on any app toast.
+  const toastRef = useRef(toast)
+  useEffect(() => { toastRef.current = toast }, [toast])
   const { clients, selectedClientId, setSelectedClientId } = useClient()
 
   const [snapshot, setSnapshot] = useState(null)
@@ -81,7 +86,7 @@ export default function FinancialRisk() {
         if (data?.ok === false) throw new Error(data.detail || 'load failed')
         setSnapshot(data.snapshot || null)
         setHasSnapshot(Boolean(data.snapshot))
-        if (recompute && data.snapshot) toast.success(t(`${NS}.recompute_done`))
+        if (recompute && data.snapshot) toastRef.current.success(t(`${NS}.recompute_done`))
       } catch (e) {
         setError(e.message || t(`${NS}.load_failed`))
       } finally {
@@ -89,7 +94,7 @@ export default function FinancialRisk() {
         setRecomputing(false)
       }
     },
-    [selectedClientId, t, toast],
+    [selectedClientId, t],
   )
 
   useEffect(() => {

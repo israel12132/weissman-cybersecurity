@@ -38,6 +38,9 @@ export default function KevEpssBadge({ kev, epss, compact = false, className = '
 
   const epssColor =
     tier === 'high' ? 'var(--epss-high)' : tier === 'medium' ? '#94a3b8' : 'var(--text-muted)'
+  const epssBg =
+    tier === 'high' ? 'var(--epss-high-bg)' : tier === 'medium' ? 'var(--epss-mid-bg)' : 'var(--epss-low-bg)'
+  const epssBorder = tier === 'high' ? 'var(--epss-high-border)' : 'rgba(255,255,255,0.1)'
 
   const gap = compact ? 'gap-1' : 'gap-1.5'
   const pad = compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'
@@ -50,7 +53,7 @@ export default function KevEpssBadge({ kev, epss, compact = false, className = '
           style={{
             color: 'var(--kev)',
             backgroundColor: 'var(--kev-bg)',
-            borderColor: 'rgba(245, 158, 11, 0.35)',
+            borderColor: 'var(--kev-border)',
           }}
           title="CISA Known Exploited Vulnerability"
         >
@@ -63,8 +66,8 @@ export default function KevEpssBadge({ kev, epss, compact = false, className = '
           className={`inline-flex items-center gap-1 rounded border font-mono font-semibold ${pad}`}
           style={{
             color: epssColor,
-            backgroundColor: 'var(--epss-bg)',
-            borderColor: tier === 'high' ? 'rgba(167, 139, 250, 0.35)' : 'rgba(255,255,255,0.1)',
+            backgroundColor: epssBg,
+            borderColor: epssBorder,
           }}
           title="Exploit Prediction Scoring System probability"
         >

@@ -42,7 +42,11 @@ async fn api_metrics_dashboard(
             .into_response();
     };
 
-    let sev_rows: Vec<(String, i64)> = sqlx::query_as::<_, (String, i64)>(
+    // `postgres_ok: true` below is a hard-coded literal reflecting only the `SELECT 1` probe. A
+    // failure of THIS aggregate (RLS/GUC, statement timeout on the growing vulnerabilities table)
+    // must not collapse to "0 critical, 0 high" behind a green health flag — fail to the degraded
+    // shape instead.
+    let sev_rows: Vec<(String, i64)> = match sqlx::query_as::<_, (String, i64)>(
         "SELECT COALESCE(lower(severity),'info') AS s, COUNT(*)::bigint
            FROM vulnerabilities
           WHERE COALESCE(status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
@@ -50,7 +54,22 @@ async fn api_metrics_dashboard(
     )
     .fetch_all(&mut *tx)
     .await
-    .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "metrics", tenant_id = auth.tenant_id, error = %e, "severity aggregate failed");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "postgres_ok": false,
+                    "active_scans": 0,
+                    "findings_by_severity": empty_sev,
+                    "jobs": { "completed_24h": 0, "failed_24h": 0 },
+                })),
+            )
+                .into_response();
+        }
+    };
 
     let sev_get = |rows: &[(String, i64)], k: &str| -> i64 {
         rows.iter()
@@ -831,8 +850,20 @@ async fn api_findings(
     .bind(severity_filter.as_ref().map(|v| v.as_slice()))
     .bind(client_filter)
     .fetch_all(&mut *tx)
-    .await
-    .unwrap_or_default();
+    .await;
+    // A read failure (statement timeout, RLS/GUC problem, missing column after a partial
+    // migration) must NOT be indistinguishable from a genuinely clean "0 findings" scan.
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "findings", tenant_id = auth.tenant_id, error = %e, "findings query failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "findings query failed"})),
+            )
+                .into_response();
+        }
+    };
 
     let total: i64 = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*)::bigint FROM vulnerabilities \
@@ -1079,7 +1110,13 @@ async fn api_engines_ui_manifest_by_route(
 
 /// Ephemeral HMAC verify material for authenticated forensic UI (WASM provenance layer).
 async fn api_forensic_provenance_key(Extension(auth): Extension<AuthContext>) -> Response {
-    let _ = auth;
+    // This value falls back to WEISSMAN_JWT_SECRET (the HS256 signing key that is also the
+    // audit-chain HMAC key). Handing it to a low-privilege session is a full auth bypass, so
+    // this GET is NOT covered by mutation_rbac_middleware — gate it explicitly. (The deeper fix,
+    // deriving a distinct non-invertible verifier, lives in engine_capabilities.rs.)
+    if let Err(r) = crate::rbac::require_admin(&auth) {
+        return r;
+    }
     match crate::engine_capabilities::provenance_signing_secret() {
         Some(key) => (
             StatusCode::OK,

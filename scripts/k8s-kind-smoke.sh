@@ -12,8 +12,10 @@ APPLY=0
 
 pass=0
 fail=0
+warn=0
 ok() { echo "PASS: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL: $1"; fail=$((fail + 1)); }
+note() { echo "WARN: $1"; warn=$((warn + 1)); }
 
 section() { echo ""; echo "== $1 =="; }
 
@@ -54,7 +56,9 @@ if command -v kubectl >/dev/null 2>&1; then
     bad "kubectl dry-run client"
   fi
 else
-  echo "SKIP: kubectl not installed"
+  # Not a silent skip: without kubectl the manifest SCHEMA is never validated, so
+  # a broken manifest would otherwise sail through as "all checks passed".
+  note "kubectl not installed — manifest schema NOT validated (only file existence + key presence checked)"
 fi
 
 section "Required secret keys in template"
@@ -79,6 +83,10 @@ if [[ "$APPLY" -eq 1 ]]; then
 fi
 
 echo ""
-echo "K8s smoke: $pass passed, $fail failed"
+echo "K8s smoke: $pass passed, $fail failed, $warn warnings"
 [[ "$fail" -eq 0 ]] || exit 1
-echo "All K8s manifest checks passed."
+if [[ "$warn" -gt 0 ]]; then
+  echo "K8s manifest checks passed WITH WARNINGS — some validators were unavailable (see WARN lines above); schema NOT fully validated."
+else
+  echo "All K8s manifest checks passed."
+fi

@@ -61,14 +61,14 @@ fn base_domain_effective() -> String {
 
 fn parse_interaction_token_label(label: &str) -> Option<Uuid> {
     let s = label.trim();
-    if let Some(r) = s.strip_prefix("trap-") {
-        if let Ok(u) = Uuid::parse_str(r) {
-            return Some(u);
-        }
-    }
-    if let Some(r) = s.strip_prefix("aws-mon-") {
-        if let Ok(u) = Uuid::parse_str(r) {
-            return Some(u);
+    // Every prefix the platform mints must be accepted here or the callback is silently dropped.
+    // `oast-` is produced by fingerprint_engine::fuzz_oob (per-job scan bindings); without it those
+    // `oast-<uuid>.<domain>` callbacks 404 and never record.
+    for prefix in ["trap-", "aws-mon-", "oast-"] {
+        if let Some(r) = s.strip_prefix(prefix) {
+            if let Ok(u) = Uuid::parse_str(r) {
+                return Some(u);
+            }
         }
     }
     Uuid::parse_str(s).ok()
@@ -393,11 +393,21 @@ async fn api_hits_json(
             "dns_qtype": r.try_get::<Option<String>, _>("dns_qtype").ok().flatten(),
         }));
     }
+    // `rows` is capped at LIMIT 200, so `rows.len()` under-reports for high-volume traps and
+    // disagrees with /api/oast/status and council_hitl (both COUNT(*)). Report the true total.
+    let total_hits: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM oast_interaction_hits WHERE interaction_token = $1",
+    )
+    .bind(token)
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or(rows.len() as i64);
     let marker = env::var("WEISSMAN_OAST_HIT_SUBSTRING").unwrap_or_else(|_| "oob_hit".to_string());
     axum::Json(json!({
         "token": token_str,
-        "hit_count": rows.len(),
-        "oob_hit": !rows.is_empty(),
+        "hit_count": total_hits,
+        "hits_returned": rows.len(),
+        "oob_hit": total_hits > 0,
         "marker": marker,
         "hits": hits,
     }))
@@ -503,13 +513,12 @@ async fn dns_server_loop(socket: Arc<UdpSocket>, pool: PgPool, base_domain: Stri
             .await
             {
                 warn!(target: "oast", "dns insert: {}", e);
-            } else {
-                let qcopy = qname.clone();
-                let ip = src.ip();
-                tokio::spawn(async move {
-                    panic_shield::maybe_react_to_trap_hit(Some(ip), &qcopy, None).await;
-                });
             }
+            // The DNS source address is an UNAUTHENTICATED, trivially-spoofable UDP datagram IP, so
+            // it must never drive an enforcement action. The panic shield (which blocks a whole /24
+            // at Cloudflare) is deliberately NOT invoked here: a single spoofed datagram for
+            // `trap-<uuid>.<domain>` could otherwise blackhole an arbitrary victim range. Enforcement
+            // stays restricted to TCP-observed HTTP hits (http_catch_all / http_path_token).
         }
         if let Some(resp) = build_dns_response(&buf[..n], qend) {
             let _ = socket.send_to(&resp, src).await;

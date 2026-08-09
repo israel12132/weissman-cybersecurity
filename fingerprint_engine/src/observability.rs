@@ -200,15 +200,34 @@ pub fn register_llm_tenant_metering(app_pool: Arc<sqlx::PgPool>) {
 
 pub fn init_prometheus_recorder() {
     let _ = PROMETHEUS.get_or_init(|| {
-        let b = match PrometheusBuilder::new().set_buckets_for_metric(
-            Matcher::Full("http_request_duration_seconds".to_string()),
-            &[
-                0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
-            ],
-        ) {
-            Ok(b) => b,
-            Err(_) => PrometheusBuilder::new(),
-        };
+        // Without an explicit bucket override, metrics-exporter-prometheus renders a *summary*
+        // (quantiles + _sum/_count), never `_bucket` series — so `histogram_quantile(... _bucket)`
+        // dashboard/alert queries silently resolve to nothing. Register real histogram buckets
+        // for every latency metric the dashboards query by bucket.
+        let latency_buckets: &[(&str, &[f64])] = &[
+            (
+                "http_request_duration_seconds",
+                &[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+            ),
+            (
+                "weissman_scan_duration_seconds",
+                &[1.0, 5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0],
+            ),
+            (
+                "weissman_heal_duration_seconds",
+                &[1.0, 5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0],
+            ),
+            (
+                "weissman_llm_inference_seconds",
+                &[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
+            ),
+        ];
+        let mut b = PrometheusBuilder::new();
+        for (metric, buckets) in latency_buckets {
+            b = b
+                .set_buckets_for_metric(Matcher::Full((*metric).to_string()), buckets)
+                .unwrap_or_else(|_| PrometheusBuilder::new());
+        }
         match b.install_recorder() {
             Ok(h) => Some(h),
             Err(e) => {
@@ -643,6 +662,15 @@ fn emit_critical_edge_region_alert(
     }
 }
 
+/// Constant-time equality for the static metrics bearer token, avoiding the byte-position
+/// timing oracle that `str`/`String` `==` (memcmp) leaks.
+fn metrics_token_matches(provided: &str, expected: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    let a = provided.as_bytes();
+    let b = expected.as_bytes();
+    a.len() == b.len() && a.ct_eq(b).into()
+}
+
 pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
     let token = std::env::var("WEISSMAN_METRICS_TOKEN")
         .unwrap_or_default()
@@ -657,7 +685,7 @@ pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
     {
         let rest = auth.trim();
         if let Some(b) = rest.strip_prefix("Bearer ") {
-            if b.trim() == token {
+            if metrics_token_matches(b.trim(), &token) {
                 return true;
             }
         }
@@ -666,7 +694,7 @@ pub fn metrics_auth_ok(headers: &HeaderMap) -> bool {
         for part in cookie_h.split(';') {
             let part = part.trim();
             if let Some(v) = part.strip_prefix("weissman_metrics_token=") {
-                if v.trim() == token {
+                if metrics_token_matches(v.trim(), &token) {
                     return true;
                 }
             }

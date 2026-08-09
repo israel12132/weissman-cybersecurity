@@ -145,11 +145,15 @@ function loadLazyImports(chunksSrc) {
   traverse(ast, {
     CallExpression(path) {
       const node = path.node
-      if (
-        node.callee.type === 'MemberExpression' &&
-        node.callee.object.name === 'React' &&
-        node.callee.property.name === 'lazy'
-      ) {
+      const callee = node.callee
+      const isReactLazy =
+        callee.type === 'MemberExpression' &&
+        callee.object?.name === 'React' &&
+        callee.property?.name === 'lazy'
+      const isLazyIdent =
+        callee.type === 'Identifier' &&
+        (callee.name === 'React$lazy' || callee.name === 'lazyWithRetry' || callee.name === 'lazy')
+      if (isReactLazy || isLazyIdent) {
         const body = node.arguments[0]?.body
         const importSpec =
           body?.type === 'ImportExpression' && body.source?.type === 'StringLiteral'

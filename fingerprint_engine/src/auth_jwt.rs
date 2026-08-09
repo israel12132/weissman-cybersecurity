@@ -393,7 +393,29 @@ pub fn verify_mfa_pending_token(token: &str) -> Option<AuthContext> {
     if c.typ.as_deref() != Some("mfa_pending") {
         return None;
     }
-    auth_context_from_claims(c)
+    // A pending token is not a session, so it does not go through
+    // `auth_context_from_claims` (which deliberately rejects `mfa_pending`).
+    // Build the pending context inline after validating tenant + subject.
+    if c.tid <= 0 || c.sub <= 0 {
+        return None;
+    }
+    let role = c
+        .role
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("viewer")
+        .to_string();
+    Some(AuthContext {
+        user_id: c.sub,
+        tenant_id: c.tid,
+        role,
+        is_superadmin: c.is_superadmin.unwrap_or(false),
+        agent_id: None,
+        jti: c.jti,
+        bind_ip: c.bind_ip,
+        bind_tls_fp: c.bind_tls_fp,
+    })
 }
 
 /// Verify access JWT; rejects explicit refresh-type claims and expired tokens.
@@ -582,6 +604,45 @@ mod agent_token_tests {
             ctx.agent_id.as_deref(),
             Some("550e8400-e29b-41d4-a716-446655440000")
         );
+    }
+
+    #[test]
+    fn mfa_pending_token_roundtrips_to_context() {
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let token = create_mfa_pending_token(7, 3, "admin", false).expect("mint pending");
+        let ctx = verify_mfa_pending_token(&token).expect("pending ctx");
+        assert_eq!(ctx.user_id, 7);
+        assert_eq!(ctx.tenant_id, 3);
+        assert_eq!(ctx.role, "admin");
+        assert!(ctx.agent_id.is_none());
+    }
+
+    #[test]
+    fn verify_mfa_pending_rejects_access_token() {
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let now = chrono::Utc::now();
+        let claims = JwtClaims {
+            sub: 1,
+            tid: 10,
+            exp: (now + chrono::Duration::hours(1)).timestamp(),
+            iat: now.timestamp(),
+            typ: Some("access".to_string()),
+            role: Some("admin".to_string()),
+            is_superadmin: Some(false),
+            agent_id: None,
+            jti: Some("j".to_string()),
+            bind_ip: None,
+            bind_tls_fp: None,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret),
+        )
+        .expect("mint");
+        assert!(verify_mfa_pending_token(&token).is_none());
     }
 
     #[test]

@@ -18,7 +18,7 @@ opt-in env flag. Billing integration (Paddle) is wired and gated by
 |-------|--------------|
 | **API server** (`weissman-server`) | Axum on `:8000`, 200+ routes, JWT auth + TOTP MFA, RBAC `viewer→analyst→operator→admin→ceo + superadmin`, per-tenant rate-limit, OpenAPI 3.1 + Swagger UI at `/api/docs/` |
 | **Worker** (`weissman-worker`) | Async job consumer with `SKIP LOCKED`, heartbeats, per-kind timeouts. Hot-query backed by the partial index `ix_async_jobs_pending(created_at, kind) WHERE status='pending'` |
-| **Endpoint agent** (`weissman-agent`) | 5.3 MB single binary (Linux / macOS / Windows). 15 on-host detections + **UEBA baseline sampler** — 7-day learning window, z-score > 3 fires `medium`, > 6 fires `high` |
+| **Endpoint agent** (`weissman-agent`) | ~5 MB single binary, stripped release build (Linux / macOS / Windows); exact per-platform sizes are emitted into the SHA256 manifest by `scripts/package_agent_binaries.sh`. 15 on-host detections + **UEBA baseline sampler** — 7-day learning window, z-score > 3 fires `medium`, > 6 fires `high` |
 | **Command center** (React/Vite) | Cockpit with live KPI strip + SSE telemetry, findings drawer with EPSS/KEV badges, **PlaybookBuilder** (visual SOAR editor), **AskWeissman** (NL→SQL chat), audit log viewer, agent management |
 | **Engines** | **563 production engine IDs** — CI-verified breakdown (`scripts/engine_reality_audit.mjs`): **303 real live probes** (295 distinct implementations), **212 aliases** that resolve to a real probe, **48 agent-required** host-level techniques; web / cloud / OT-ICS / AI-LLM / supply-chain / network / mobile / OSINT / fuzzers / endpoint agent. Every one wired to a real HTTP / TCP / DNS / TLS / agent probe and verified end-to-end in CI by `scripts/verify_engine_wiring.mjs` (0 gaps, 0 no_path) — **no fabricated or randomised findings**: every persisted finding derives from a live probe, with agent-required and advisory results clearly labelled `info` / `advisory`. Breadth is proven from source too: **live probes across all 15 attack domains, **226 distinct MITRE ATT&CK techniques performed** (192 primary engine mappings + 34 code-grounded secondary — the extra techniques each engine's own implementation tags on its findings), 0 unmapped, every ID **validated current against ATT&CK v19.1** (Enterprise + Mobile + ICS, 0 stale) — see [`docs/ENGINE_COVERAGE_AND_ACCURACY.md`](docs/ENGINE_COVERAGE_AND_ACCURACY.md) and [`docs/MITRE_ATTACK_COVERAGE.md`](docs/MITRE_ATTACK_COVERAGE.md) |
 | **Threat intel** | Live mirrors of **CISA KEV** (6h refresh) and **FIRST.org EPSS** (12h, on-demand). Every CVE-tagged finding is enriched at persist-time with `epss_score`, `epss_percentile`, `kev_listed`, `kev_known_ransomware`, `kev_due_date` |
@@ -154,7 +154,7 @@ with the raw 3.1 JSON at <code>/api/openapi.json</code>.
                                            ▼
                                   ┌────────────────────────────────┐
                                   │ PostgreSQL 16 + pgvector       │
-                                  │  • 74 migrations               │
+                                  │  • 100 migrations              │
                                   │  • RLS per-tenant on every     │
                                   │    multi-tenant table          │
                                   │  • _sqlx_migrations w/ no-tx   │
@@ -218,7 +218,7 @@ Background workers run inside the API process:
 
 ```bash
 cargo check --workspace      # ~25 s incremental
-cargo test  --workspace      # ~1,200 test fns (see docs/METRICS.md — code-derived, CI-gated)
+cargo test  --workspace      # ~2,400 test fns (see docs/METRICS.md — code-derived, CI-gated)
 cd frontend && npm run build # code-split route chunks (largest initial chunk ~290 KB gzipped)
 ```
 

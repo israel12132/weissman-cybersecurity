@@ -8,6 +8,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper } from '@tanstack/react-table'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { GitBranch, RefreshCw, ChevronRight } from 'lucide-react'
 import PageShell from './PageShell'
 import EmptyState from '../components/ui/EmptyState'
@@ -34,22 +35,10 @@ function riskColor(risk) {
 
 function chokeCsv(rows) {
   const header = ['label', 'node_type', 'coverage', 'coverage_pct', 'max_finding_cvss', 'max_finding_epss', 'kev_present']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((r) =>
-      [r.label, r.node_type, r.coverage, r.coverage_pct, r.max_finding_cvss, r.max_finding_epss, r.kev_present]
-        .map(esc)
-        .join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-attack-paths-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const data = rows.map((r) => [
+    r.label, r.node_type, r.coverage, r.coverage_pct, r.max_finding_cvss, r.max_finding_epss, r.kev_present,
+  ])
+  downloadCsv(data, header, 'weissman-attack-paths')
 }
 
 function PathCard({ path, t }) {

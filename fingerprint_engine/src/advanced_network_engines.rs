@@ -609,10 +609,11 @@ pub async fn run_mpls_vpn_attack_result(t: &str) -> EngineResult {
             if let Some(line) = line {
                 let parts: Vec<&str> = line.split('|').map(str::trim).collect();
                 if parts.len() >= 7 {
+                    // Team Cymru `-v` format: AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name
                     let asn = parts[0];
-                    let prefix = parts[1];
-                    let cc = parts[2];
-                    let owner = parts[5];
+                    let prefix = parts[2];
+                    let cc = parts[3];
+                    let owner = parts[6];
                     findings.push(net_finding(
                         "mpls_vpn_attack",
                         &format!("Origin ASN {} ({}) for {}", asn, owner, ip),
@@ -729,10 +730,23 @@ pub async fn run_tor_exit_attack_result(t: &str) -> EngineResult {
     let mut findings: Vec<Value> = Vec::new();
     let url = "https://check.torproject.org/exit-addresses";
     if let Some(p) = crate::engine_probes::http_get(&client, url).await {
+        // Parse `ExitAddress <ip> <date>` lines into an exact IP set — substring
+        // matching on the raw body yields false positives (e.g. 5.9.16.3 ⊂ 45.9.16.30).
+        let exit_ips: std::collections::HashSet<std::net::IpAddr> = p
+            .body
+            .lines()
+            .filter_map(|l| l.strip_prefix("ExitAddress "))
+            .filter_map(|rest| rest.split_whitespace().next())
+            .filter_map(|tok| tok.parse::<std::net::IpAddr>().ok())
+            .collect();
         let host = extract_host(t);
         let ips = crate::engine_probes::dns_a(&host).await;
         for ip in ips {
-            if p.body.contains(&ip) {
+            let is_exit = ip
+                .parse::<std::net::IpAddr>()
+                .map(|parsed| exit_ips.contains(&parsed))
+                .unwrap_or(false);
+            if is_exit {
                 findings.push(finding(
                     "tor_exit_attack",
                     "Resolved IP is a Tor exit node",

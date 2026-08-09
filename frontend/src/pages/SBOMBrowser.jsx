@@ -73,6 +73,7 @@ export default function SBOMBrowser() {
       link.href = url;
       link.download = `sbom.${format}`;
       link.click();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to export SBOM:', err);
       setError(t('pages.sbomBrowser.export_failed'));

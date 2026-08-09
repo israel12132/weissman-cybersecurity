@@ -244,6 +244,11 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     (Method::POST, "/api/agents/enroll", RouteGate::Always),
+    // Prometheus scrape endpoint — authenticated by the metrics token (WEISSMAN_METRICS_TOKEN),
+    // not a user JWT. The handler (observability::api_prometheus_metrics_endpoint) enforces the
+    // token itself and fails closed (401) when the token is unset or < 32 chars, so deferring the
+    // JWT guard here is what lets Prometheus scrape at all.
+    (Method::GET, "/api/metrics", RouteGate::Always),
     (Method::GET, "/api/openapi.json", RouteGate::NonProdOnly),
     (Method::GET, "/api/docs", RouteGate::NonProdOnly),
     (Method::GET, "/api/docs/", RouteGate::NonProdOnly),
@@ -1564,7 +1569,10 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         crate::intel_kev::spawn_kev_refresh_worker(app_pool.clone());
         crate::intel_epss::bootstrap_epss_backfill(app_pool.clone());
         crate::intel_epss::spawn_epss_backfill_worker(app_pool.clone());
-        crate::intel_findings_backfill::bootstrap_findings_intel_backfill(app_pool.clone());
+        crate::intel_findings_backfill::bootstrap_findings_intel_backfill(
+            app_pool.clone(),
+            auth_pool.clone(),
+        );
         // UEBA — purge old samples once an hour so the table stays bounded.
         crate::ueba_detector::spawn_retention_loop(app_pool.clone());
         crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
@@ -34,6 +34,11 @@ export function ClientProvider({ children }) {
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [integrationsLoading, setIntegrationsLoading] = useState(false)
   const selectedClientIdRef = useRef(null)
+  // Monotonic request sequences: a response from a superseded selection must not
+  // overwrite the current client's data, and — the bug this fixes — must not clear
+  // the loading flag while the current request is still in flight.
+  const configSeqRef = useRef(0)
+  const integrationsSeqRef = useRef(0)
 
   selectedClientIdRef.current = selectedClientId
 
@@ -57,48 +62,56 @@ export function ClientProvider({ children }) {
   }, [])
 
   const refreshConfig = useCallback(async (clientId) => {
+    // Bump on every call — including the null branch — so switching away
+    // invalidates any request already running for the previous selection.
+    const seq = ++configSeqRef.current
     if (clientId == null) {
       setClientConfigState(defaultConfig)
       setConfigError(null)
+      setConfigLoading(false)
       return
     }
     setConfigLoading(true)
     setConfigError(null)
     try {
       const data = await apiFetch(`/api/clients/${clientId}/config`)
-      if (selectedClientIdRef.current === clientId) {
+      if (configSeqRef.current === seq) {
         setClientConfigState(parseConfigFromResponse(data))
       }
     } catch (e) {
       const msg = e?.response ? await formatApiErrorResponse(e.response) : (e?.message || 'Network error')
-      if (selectedClientIdRef.current === clientId) {
+      if (configSeqRef.current === seq) {
         setConfigError(msg)
         setClientConfigState(defaultConfig)
       }
     } finally {
-      setConfigLoading(false)
+      // Guard the loading reset with the same sequence: a stale response must not
+      // settle the spinner while the current client's request is still loading.
+      if (configSeqRef.current === seq) setConfigLoading(false)
     }
   }, [])
 
   const refreshIntegrations = useCallback(async (clientId) => {
+    const seq = ++integrationsSeqRef.current
     if (clientId == null) {
       setClientIntegrations(null)
+      setIntegrationsLoading(false)
       return null
     }
     setIntegrationsLoading(true)
     try {
       const data = normalizeIntegrations(await apiFetch(`/api/clients/${clientId}/integrations`))
-      if (selectedClientIdRef.current === clientId) {
+      if (integrationsSeqRef.current === seq) {
         setClientIntegrations(data)
       }
       return data
     } catch {
-      if (selectedClientIdRef.current === clientId) {
+      if (integrationsSeqRef.current === seq) {
         setClientIntegrations(null)
       }
       return null
     } finally {
-      setIntegrationsLoading(false)
+      if (integrationsSeqRef.current === seq) setIntegrationsLoading(false)
     }
   }, [])
 
@@ -138,30 +151,70 @@ export function ClientProvider({ children }) {
     return false
   }, [])
 
-  const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
+  const selectedClient = useMemo(
+    () => clients.find((c) => String(c.id) === String(selectedClientId)),
+    [clients, selectedClientId],
+  )
 
-  const value = {
-    clients,
-    clientsError,
-    dismissClientsError,
-    refreshClients,
-    selectedClientId,
-    setSelectedClientId,
-    selectedClient,
-    clientConfig,
-    setClientConfig: (patch) => patchConfig(selectedClientId, patch),
-    patchConfig,
-    refreshConfig: () => refreshConfig(selectedClientId),
-    configLoading,
-    configError,
-    dismissConfigError,
-    defaultConfig,
-    poeJobId,
-    setPoeJobId,
-    clientIntegrations,
-    integrationsLoading,
-    refreshIntegrations: () => refreshIntegrations(selectedClientId),
-  }
+  // Bind the selection-scoped helpers once per selection instead of allocating a
+  // fresh closure on every render — ClientProvider sits under ProtectedOutlet and
+  // re-renders on every navigation, and useClient has 41 consumers.
+  const setClientConfig = useCallback(
+    (patch) => patchConfig(selectedClientId, patch),
+    [patchConfig, selectedClientId],
+  )
+  const refreshSelectedConfig = useCallback(
+    () => refreshConfig(selectedClientId),
+    [refreshConfig, selectedClientId],
+  )
+  const refreshSelectedIntegrations = useCallback(
+    () => refreshIntegrations(selectedClientId),
+    [refreshIntegrations, selectedClientId],
+  )
+
+  const value = useMemo(
+    () => ({
+      clients,
+      clientsError,
+      dismissClientsError,
+      refreshClients,
+      selectedClientId,
+      setSelectedClientId,
+      selectedClient,
+      clientConfig,
+      setClientConfig,
+      patchConfig,
+      refreshConfig: refreshSelectedConfig,
+      configLoading,
+      configError,
+      dismissConfigError,
+      defaultConfig,
+      poeJobId,
+      setPoeJobId,
+      clientIntegrations,
+      integrationsLoading,
+      refreshIntegrations: refreshSelectedIntegrations,
+    }),
+    [
+      clients,
+      clientsError,
+      dismissClientsError,
+      refreshClients,
+      selectedClientId,
+      selectedClient,
+      clientConfig,
+      setClientConfig,
+      patchConfig,
+      refreshSelectedConfig,
+      configLoading,
+      configError,
+      dismissConfigError,
+      poeJobId,
+      clientIntegrations,
+      integrationsLoading,
+      refreshSelectedIntegrations,
+    ],
+  )
 
   return (
     <ClientContext.Provider value={value}>

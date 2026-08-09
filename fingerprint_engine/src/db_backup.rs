@@ -1,7 +1,6 @@
 //! Production PostgreSQL logical backups via `pg_dump`, optional gzip, retention pruning, and background scheduling.
 
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -94,11 +93,11 @@ pub fn backup_postgres_to_dir(backups_dir: &std::path::Path) -> Result<PathBuf, 
 fn gzip_sql_file(sql_path: &Path) -> Result<PathBuf, String> {
     let gz_path = sql_path.with_extension("sql.gz");
     let mut raw = fs::File::open(sql_path).map_err(|e| e.to_string())?;
-    let mut buf = Vec::new();
-    raw.read_to_end(&mut buf).map_err(|e| e.to_string())?;
     let out = fs::File::create(&gz_path).map_err(|e| e.to_string())?;
     let mut enc = flate2::write::GzEncoder::new(out, flate2::Compression::default());
-    enc.write_all(&buf).map_err(|e| e.to_string())?;
+    // Stream the dump through the encoder rather than materialising the whole (multi-GB)
+    // logical backup in the process heap, which could OOM-kill the live API process.
+    std::io::copy(&mut raw, &mut enc).map_err(|e| e.to_string())?;
     enc.finish().map_err(|e| e.to_string())?;
     fs::remove_file(sql_path).map_err(|e| e.to_string())?;
     Ok(gz_path)

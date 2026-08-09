@@ -3,7 +3,9 @@
  *
  * Precedence:
  *   1. `import.meta.env.VITE_API_BASE_URL` — set at build time (e.g. https://api.weissman.io).
- *   2. `window.__WEISSMAN_API_BASE__` — set at runtime by index.html for self-hosted deploys.
+ *   2. `window.__WEISSMAN_API_BASE__` — read at runtime if a self-hosted deploy injects it
+ *      (e.g. a container entrypoint that rewrites the served HTML). Not set by default —
+ *      the repo ships no such injection, so leave it unset unless you add one.
  *   3. Empty string when running on the Vite dev server (port 5173 / 4173) so requests go through
  *      the dev proxy in vite.config.js.
  *   4. `window.location.origin` for production / same-origin deploys.
@@ -50,6 +52,8 @@ let inMemoryAccessToken = null
  * mirrored it there. The token must never live in `localStorage` — it persists
  * across tabs/sessions and is a prime XSS-exfiltration target.
  */
+let legacyTokenPurged = false
+
 function purgeLegacyLocalStorageToken() {
   if (typeof localStorage === 'undefined') return
   try {
@@ -85,15 +89,19 @@ function parseRetryAfter(retryAfterHeader) {
 }
 
 // Persisting the bearer to localStorage re-exposes it to any XSS (it survives tab close,
-// unlike the HttpOnly cookie which JS can't read). Allow that mirror only in dev/test
-// builds (Playwright context resets); production relies on the HttpOnly cookie + refresh.
-const ALLOW_PERSISTENT_TOKEN =
-  typeof import.meta !== 'undefined' && import.meta.env ? !import.meta.env.PROD : false
+// unlike the HttpOnly cookie which JS can't read). The token is therefore NEVER mirrored to
+// localStorage in any build — sessionStorage (tab-scoped) is the only fallback, and production
+// relies on the HttpOnly refresh cookie. (Enforced by apiBase.tokenStorage.test.js.)
 
 export function getStoredAccessToken() {
-  // Always clean up a token left in localStorage by an older build.
-  purgeLegacyLocalStorageToken()
   if (inMemoryAccessToken) return inMemoryAccessToken
+  // Clean up a token left in localStorage by an older build — once per session is
+  // enough (nothing writes it in prod), and only on the cold path so the common
+  // in-memory hit above touches no synchronous storage API per request.
+  if (!legacyTokenPurged) {
+    purgeLegacyLocalStorageToken()
+    legacyTokenPurged = true
+  }
   // sessionStorage fallback: tab-scoped, cleared on tab close. Lets the token
   // survive same-tab reloads before the refresh cookie kicks in, without the
   // cross-session persistence (and XSS blast radius) of localStorage.
@@ -102,16 +110,6 @@ export function getStoredAccessToken() {
   if (t && String(t).trim()) {
     inMemoryAccessToken = String(t).trim()
     return inMemoryAccessToken
-  }
-  // Dev/test only: survives Playwright context resets when the HttpOnly cookie isn't visible to JS.
-  if (ALLOW_PERSISTENT_TOKEN && typeof localStorage !== 'undefined') {
-    const legacy = localStorage.getItem(ACCESS_TOKEN_KEY)
-    if (legacy && String(legacy).trim()) {
-      const v = String(legacy).trim()
-      inMemoryAccessToken = v
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
-      return v
-    }
   }
   return null
 }
@@ -122,11 +120,8 @@ export function setStoredAccessToken(token) {
     const v = String(token).trim()
     inMemoryAccessToken = v
     if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(ACCESS_TOKEN_KEY, v)
-    if (typeof localStorage !== 'undefined') {
-      // Production: proactively clear any stale mirror so a token can't linger after XSS.
-      if (ALLOW_PERSISTENT_TOKEN) localStorage.setItem(ACCESS_TOKEN_KEY, v)
-      else localStorage.removeItem(ACCESS_TOKEN_KEY)
-    }
+    // Never mirror to localStorage; proactively clear any stale copy so a token can't linger.
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(ACCESS_TOKEN_KEY)
   } else {
     inMemoryAccessToken = null
     if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACCESS_TOKEN_KEY)

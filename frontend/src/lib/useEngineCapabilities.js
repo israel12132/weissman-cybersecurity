@@ -24,14 +24,18 @@ async function fetchCapabilities(force = false) {
     fetchPromise = apiFetch('/api/engines/capabilities')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        cachedPayload = data || { engines: [], summary: {}, total: 0, legend: {} }
-        return cachedPayload
+        if (data && typeof data === 'object') {
+          cachedPayload = data
+          return cachedPayload
+        }
+        // A non-OK/empty response must NOT be cached as data: doing so pinned an
+        // empty manifest for the whole session (and tripped the forensic badge's
+        // false "capabilities manifest empty — cannot verify" tamper alarm).
+        // Return a transient empty payload for this call only and leave the cache
+        // untouched so the next mount retries.
+        return cachedPayload || { engines: [], summary: {}, total: 0, legend: {} }
       })
-      .catch(() => {
-        const empty = { engines: [], summary: {}, total: 0, legend: {} }
-        if (!cachedPayload) cachedPayload = empty
-        return cachedPayload
-      })
+      .catch(() => cachedPayload || { engines: [], summary: {}, total: 0, legend: {} })
       .finally(() => {
         fetchPromise = null
       })

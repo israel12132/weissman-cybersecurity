@@ -37,18 +37,32 @@ async fn api_sovereign_defense_rotate(
 ) -> Response {
     let step = body.rotation_step_secs.unwrap_or(3).clamp(1, 60);
     if let (Some(min), Some(max)) = (body.port_pool_min, body.port_pool_max) {
-        let _ = sqlx::query(
-            r#"UPDATE liquid_matrix_routing_tokens
-                  SET rotation_step_secs = $3, port_pool_min = $4, port_pool_max = $5, updated_at = now()
-                WHERE tenant_id = $1 AND client_id = $2"#,
-        )
-        .bind(auth.tenant_id)
-        .bind(client_id)
-        .bind(step)
-        .bind(min)
-        .bind(max)
-        .execute(state.app_pool.as_ref())
-        .await;
+        // `liquid_matrix_routing_tokens` is tenant-scoped; on a bare pool RLS silently matches no
+        // rows and the operator's port pool is dropped while the endpoint reports success.
+        if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
+            match sqlx::query(
+                r#"UPDATE liquid_matrix_routing_tokens
+                      SET rotation_step_secs = $3, port_pool_min = $4, port_pool_max = $5, updated_at = now()
+                    WHERE tenant_id = $1 AND client_id = $2"#,
+            )
+            .bind(auth.tenant_id)
+            .bind(client_id)
+            .bind(step)
+            .bind(min)
+            .bind(max)
+            .execute(&mut *tx)
+            .await
+            {
+                Ok(r) if r.rows_affected() == 0 => {
+                    tracing::warn!(target: "sovereign_defense", tenant_id = auth.tenant_id, client_id, "liquid-matrix port pool update matched no existing token");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!(target: "sovereign_defense", tenant_id = auth.tenant_id, error = %e, "liquid-matrix port pool update failed");
+                }
+            }
+            let _ = tx.commit().await;
+        }
     }
     match crate::sovereign_defense_store::rotate_liquid_matrix(
         &state.app_pool,

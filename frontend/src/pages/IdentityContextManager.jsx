@@ -315,20 +315,6 @@ export default function IdentityContextManager() {
                             </>
                           )}
                         </div>
-
-                        {/* Roles */}
-                        {identity.roles && identity.roles.length > 0 && (
-                          <div className="flex gap-2 mt-2">
-                            {identity.roles.map((role) => (
-                              <span
-                                key={role}
-                                className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded"
-                              >
-                                {role}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -456,35 +442,6 @@ function IdentityDetailModal({ identity, onClose }) {
                 <div className="text-sm text-white">{identity.anomaly_count || 0}</div>
               </motion.div>
             </div>
-
-            {/* Recent Activity */}
-            {identity.recent_activity && identity.recent_activity.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <h4 className="text-sm font-semibold text-white mb-3">{t('pages.identityContextManager.recent_activity')}</h4>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {identity.recent_activity.map((activity, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.35 + i * 0.05 }}
-                      className="text-xs text-[var(--text-tertiary)] p-3 bg-[var(--row-hover-bg)] rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--row-hover-bg)] transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span>{activity.description}</span>
-                        <span className="text-[var(--text-muted)] text-[10px]">
-                          {new Date(activity.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
           </div>
 
           <motion.div

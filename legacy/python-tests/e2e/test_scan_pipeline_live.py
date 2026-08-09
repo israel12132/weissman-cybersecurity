@@ -7,6 +7,7 @@ Skip when WEISSMAN_E2E_BASE is unset. Run via:
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import time
@@ -171,6 +172,10 @@ def test_scope_rejection(client: httpx.Client, auth_headers: dict[str, str]) -> 
 def test_job_payload_secrets_redacted(client: httpx.Client, auth_headers: dict[str, str]) -> None:
     clients = client.get("/api/clients", headers=auth_headers).json()
     client_id = clients[0]["id"]
+    # Distinctive plaintext sentinel: if the server echoes the secret back
+    # anywhere in the job payload it will appear verbatim. A pre-redacted mask
+    # (e.g. "••••") would make this test pass even with no redaction at all.
+    sentinel = "ghp_SENTINEL_DO_NOT_ECHO_0123456789"
     scan = client.post(
         "/api/command-center/scan",
         headers=auth_headers,
@@ -178,15 +183,13 @@ def test_job_payload_secrets_redacted(client: httpx.Client, auth_headers: dict[s
             "engine": "microsecond_timing",
             "client_id": int(client_id),
             "target": "https://example.com",
-            "github_token": "••••••••",
+            "github_token": sentinel,
         },
     )
     assert scan.status_code == 202
     job_id = scan.json()["job_id"]
     payload = client.get(f"/api/jobs/{job_id}", headers=auth_headers).json().get("payload", {})
-    raw = payload.get("github_token")
-    if raw is not None:
-        assert "••••" in str(raw) or raw == "", "github_token must not be echoed raw to client"
+    assert sentinel not in json.dumps(payload), "github_token must not be echoed raw to client"
 
 
 def test_findings_api_after_scan(client: httpx.Client, auth_headers: dict[str, str]) -> None:

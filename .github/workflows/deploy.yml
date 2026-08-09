@@ -28,6 +28,17 @@ jobs:
   deploy:
     name: Verify signature and roll out
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Gate the cluster credential behind a GitHub Environment so KUBECONFIG_B64 can
+    # live in the environment's secret scope (with required reviewers / ref
+    # restrictions configured in repo settings) rather than at repository scope.
+    # If the environment has no protection rules yet this is a no-op, but it makes
+    # the intended review/ref gate the single place to enforce.
+    environment: production
+    # Never let two rollouts interleave kubectl apply against the same namespace.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,8 +57,15 @@ jobs:
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
+          # Anchor (^…$) and escape the dots so the identity is the literal workflow
+          # URI, not a substring match (an unescaped `.` matches any char, and without
+          # anchors `/.github/` would match `/Xgithub/`). The publish job that signs
+          # only runs on `refs/tags/v*`, so bind to that ref prefix. Independently
+          # assert the workflow-repository extension so a matching SAN from a fork or
+          # unrelated workflow cannot satisfy the check.
           cosign verify \
-            --certificate-identity-regexp "https://github.com/israel12132/weissman-cybersecurity/.github/workflows/ci.yml@.*" \
+            --certificate-identity-regexp '^https://github\.com/israel12132/weissman-cybersecurity/\.github/workflows/ci\.yml@refs/tags/v.*$' \
+            --certificate-github-workflow-repository israel12132/weissman-cybersecurity \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${IMAGE}@${IMAGE_DIGEST}"
 
@@ -59,8 +77,10 @@ jobs:
           DIGEST_REF="${IMAGE}@${IMAGE_DIGEST}"
           # Replace any `image: <IMAGE>:tag` or existing digest with the verified digest.
           # NUL-delimited so filenames with spaces/newlines are handled safely.
+          # NOTE: use `#` as the sed delimiter — the regex alternation below contains `|`,
+          # which collides with `|` if it is also used as the s/// delimiter (invalid script).
           while IFS= read -r -d '' f; do
-            sed -i -E "s|image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+)|image: ${DIGEST_REF}|g" "$f"
+            sed -i -E "s#image: ${IMAGE}(:[^[:space:]]+|@sha256:[^[:space:]]+)#image: ${DIGEST_REF}#g" "$f"
             echo "pinned $f -> ${DIGEST_REF}"
           done < <(grep -rlZ "${IMAGE}" deploy/k8s || true)
 
@@ -91,3 +111,4 @@ jobs:
           export KUBECONFIG=/tmp/kubeconfig
           kubectl apply -f deploy/k8s/backend-deployment.yaml -f deploy/k8s/worker-deployment.yaml
           kubectl rollout status deployment/weissman-backend -n weissman --timeout=180s
+          kubectl rollout status deployment/weissman-worker -n weissman --timeout=180s

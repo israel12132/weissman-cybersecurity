@@ -3,12 +3,20 @@
 **Ordered by the coverage mandate: no floor lowering, no coverage padding — measure
 the truth and explain the gap.**
 
+> **Snapshot (2026-07-16, not since re-measured).** The `--lib` coverage percentages
+> and absolute line counts below are a point-in-time *local* `cargo llvm-cov --lib`
+> estimate. The tree has since grown — `fingerprint_engine/src` is now **270,411 lines
+> across 445 files** (`find fingerprint_engine/src -name '*.rs' | xargs cat | wc -l`),
+> and `backend/weissman-server` is **717 lines**, not the 3,761 in §1 — so the absolute
+> figures are stale; the structural conclusion (an I/O-bound engine crate under-counted
+> by `--lib`) is not. Re-measure percentages in CI before quoting them.
+
 | Item | Value |
 |---|---|
 | Measurement | `cargo llvm-cov --workspace --lib` (unit tests) |
-| **Measured line coverage** | **19.32%** (42,868 of 221,884 lines covered; 179,016 uncovered) |
-| Region coverage | 20.15% · Function coverage: 25.37% |
-| CI floor (`--fail-under-lines`) | **40%** — kept intact; **not** lowered |
+| **Measured line coverage (2026-07-16 snapshot)** | **~19.3%** (`--lib` only; re-measure in CI for a current figure) |
+| Region coverage | ~20% · Function coverage: ~25% (same snapshot) |
+| CI gate | **Per-crate line-coverage ratchet** (`scripts/coverage_ratchet.mjs` + `scripts/coverage-floors.json`), rising-only. Current floors: `fingerprint_engine` 19%, `weissman-fleet-shaping` 19%, `weissman-db` 15%, `weissman-job-bus` 10%, `weissman-core`/`weissman-ui-provenance`/`weissman-ast-cap` 40%, `weissman-server`/`weissman-engines`/`fuzz_core` 0%. The old uniform `cargo llvm-cov --fail-under-lines 40` **workspace** floor was **retired** — it never told us which crate regressed. |
 
 > Integration/E2E coverage is **not** in this number. `--lib` measures only unit
 > tests compiled into each library. The DB-backed and live-stack tests that actually

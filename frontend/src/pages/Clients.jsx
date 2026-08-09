@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import PageShell from './PageShell'
@@ -35,6 +35,10 @@ export default function Clients() {
   const [scanToast, setScanToast] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [risk, setRisk] = useState({})
+  // Latest risk map, read inside the fetch effect without making it a dependency
+  // (which would refire the whole batch on every incremental setRisk).
+  const riskRef = useRef(risk)
+  useEffect(() => { riskRef.current = risk }, [risk])
 
   useEffect(() => {
     loadClients()
@@ -44,21 +48,29 @@ export default function Clients() {
   useEffect(() => {
     let cancelled = false
     if (clients.length === 0) return undefined
-    Promise.all(
-      clients.map(async (c) => {
+    // Only fetch clients whose risk we haven't loaded yet (skips a full refetch
+    // on every refresh/delete), and cap concurrency so a large tenant doesn't
+    // fire one burst that trips the API rate limiter / circuit breaker.
+    const pending = clients.filter((c) => riskRef.current[c.id] === undefined)
+    if (pending.length === 0) return undefined
+    const CONCURRENCY = 5
+    let idx = 0
+    async function worker() {
+      while (!cancelled && idx < pending.length) {
+        const c = pending[idx]
+        idx += 1
+        let snap = null
         try {
           const d = await apiFetch(`/api/financial-risk/${c.id}`)
-          return [c.id, d?.snapshot || null]
+          snap = d?.snapshot || null
         } catch (_) {
-          return [c.id, null]
+          snap = null
         }
-      }),
-    ).then((pairs) => {
-      if (cancelled) return
-      const map = {}
-      pairs.forEach(([id, snap]) => { map[id] = snap })
-      setRisk(map)
-    })
+        if (cancelled) return
+        setRisk((m) => ({ ...m, [c.id]: snap }))
+      }
+    }
+    Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => worker()))
     return () => { cancelled = true }
   }, [clients])
 

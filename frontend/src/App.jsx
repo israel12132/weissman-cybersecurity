@@ -123,7 +123,7 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="soc-center battlespace-center">
+        <main id="main-content" tabIndex={-1} className="soc-center battlespace-center">
           <BattlespaceTopology connectionStatus={connectionStatus} />
         </main>
 

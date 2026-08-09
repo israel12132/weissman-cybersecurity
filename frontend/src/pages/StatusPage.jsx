@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '../utils/apiFetch'
 import { apiUrl } from '../lib/apiBase'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -251,20 +252,8 @@ function deriveServices(state, t) {
 function exportStatusCsv(state, t) {
   const services = deriveServices({ ...state, loading: false }, t)
   const header = ['id', 'level', 'detail', 'checked_at']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...services.map((svc) =>
-      [svc.id, svc.level, svc.detail, svc.checkedAt].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-status-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = services.map((svc) => [svc.id, svc.level, svc.detail, svc.checkedAt])
+  downloadCsv(rows, header, 'weissman-status')
 }
 
 function extractFailedHealthProbes(audit) {
@@ -315,29 +304,35 @@ export default function StatusPage() {
   const prevLevels = useRef({})
 
   const recordIncidents = useCallback((services, ts) => {
-    setIncidents((prev) => {
-      const next = [...prev]
-      for (const svc of services) {
-        const prevLevel = prevLevels.current[svc.id]
-        const cur = svc.level
-        if (prevLevel && prevLevel !== cur) {
-          if (cur === 'outage' || cur === 'degraded') {
-            next.unshift({
-              id: `${svc.id}-${ts}`,
-              serviceId: svc.id,
-              level: cur,
-              startedAt: ts,
-              resolvedAt: null,
-              detail: svc.detail,
-            })
-          } else if (cur === 'operational') {
-            const open = next.find((i) => i.serviceId === svc.id && !i.resolvedAt)
-            if (open) open.resolvedAt = ts
-          }
+    // Compute transitions and advance prevLevels OUTSIDE the state updater — the updater
+    // must stay pure (StrictMode double-invokes it), so no ref writes / in-place mutation there.
+    const additions = []
+    const resolvedIds = new Set()
+    for (const svc of services) {
+      const prevLevel = prevLevels.current[svc.id]
+      const cur = svc.level
+      if (prevLevel && prevLevel !== cur) {
+        if (cur === 'outage' || cur === 'degraded') {
+          additions.unshift({
+            id: `${svc.id}-${ts}`,
+            serviceId: svc.id,
+            level: cur,
+            startedAt: ts,
+            resolvedAt: null,
+            detail: svc.detail,
+          })
+        } else if (cur === 'operational') {
+          resolvedIds.add(svc.id)
         }
-        prevLevels.current[svc.id] = cur
       }
-      return next.slice(0, 20)
+      prevLevels.current[svc.id] = cur
+    }
+    if (additions.length === 0 && resolvedIds.size === 0) return
+    setIncidents((prev) => {
+      const resolved = prev.map((i) => (
+        resolvedIds.has(i.serviceId) && !i.resolvedAt ? { ...i, resolvedAt: ts } : i
+      ))
+      return [...additions, ...resolved].slice(0, 20)
     })
   }, [])
 

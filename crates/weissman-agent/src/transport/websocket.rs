@@ -291,7 +291,9 @@ fn build_ws_url(server_url: &str, path: &str, token: &str) -> anyhow::Result<Url
     } else {
         format!("/{}", path)
     };
-    let full = format!("{}{}?access_token={}", ws_base, p, urlencoding(token));
+    // The server's token extractor (fingerprint_engine http serve) reads the query key `token`,
+    // not `access_token`; any other key yields 401 on every /ws/agent handshake.
+    let full = format!("{}{}?token={}", ws_base, p, urlencoding(token));
     Ok(Url::parse(&full)?)
 }
 

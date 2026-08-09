@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
@@ -22,9 +22,10 @@ function groupParams(schema) {
 }
 
 export function EngineParamField({ def, value, onChange, disabled }) {
+  const fieldId = useId()
   const base = 'bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50'
   const label = (
-    <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
+    <label htmlFor={fieldId} className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
       {def.label}
       {def.type === 'password' && (
         <span className="ml-1 text-amber-400/80 normal-case tracking-normal" title="Stored securely; masked values are not overwritten">
@@ -37,7 +38,7 @@ export function EngineParamField({ def, value, onChange, disabled }) {
     return (
       <div>
         {label}
-        <select value={value} onChange={(e) => onChange(def.key, e.target.value)} disabled={disabled} className={`${base} w-full`}>
+        <select id={fieldId} value={value} onChange={(e) => onChange(def.key, e.target.value)} disabled={disabled} className={`${base} w-full`}>
           {(def.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
@@ -47,7 +48,7 @@ export function EngineParamField({ def, value, onChange, disabled }) {
     return (
       <div>
         {label}
-        <textarea value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} disabled={disabled} rows={3} className={`${base} w-full resize-y`} />
+        <textarea id={fieldId} value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} disabled={disabled} rows={3} className={`${base} w-full resize-y`} />
       </div>
     )
   }
@@ -55,7 +56,7 @@ export function EngineParamField({ def, value, onChange, disabled }) {
     return (
       <div>
         {label}
-        <input type="password" autoComplete="off" value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} disabled={disabled} className={`${base} w-full`} />
+        <input id={fieldId} type="password" autoComplete="off" value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} disabled={disabled} className={`${base} w-full`} />
       </div>
     )
   }
@@ -63,14 +64,14 @@ export function EngineParamField({ def, value, onChange, disabled }) {
     return (
       <div>
         {label}
-        <input type="number" value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} min={def.min} max={def.max} disabled={disabled} className={`${base} w-full`} />
+        <input id={fieldId} type="number" value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} min={def.min} max={def.max} disabled={disabled} className={`${base} w-full`} />
       </div>
     )
   }
   return (
     <div>
       {label}
-      <input type="text" value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} disabled={disabled} className={`${base} w-full`} />
+      <input id={fieldId} type="text" value={value} onChange={(e) => onChange(def.key, e.target.value)} placeholder={def.placeholder} disabled={disabled} className={`${base} w-full`} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react'
 import { cn } from '../../lib/cn'
 
 const SIDE_STYLES = {
@@ -56,12 +56,17 @@ export default function Tooltip({
   useEffect(() => clearTimer, [])
 
   const hasContent = content != null && content !== ''
+  // aria-describedby must land on the element that actually receives focus (the
+  // caller's trigger), not this wrapper — otherwise AT never announces the bubble.
+  const describedBy = hasContent && open ? tooltipId : undefined
+  const trigger = isValidElement(children)
+    ? cloneElement(children, { 'aria-describedby': describedBy })
+    : children
 
   return (
     <span className={cn('relative inline-flex', className)} {...props}>
       <span
         className="inline-flex"
-        aria-describedby={hasContent ? tooltipId : undefined}
         onMouseEnter={() => show(false)}
         onMouseLeave={hide}
         onFocus={() => show(true)}
@@ -70,7 +75,7 @@ export default function Tooltip({
           if (e.key === 'Escape') hide()
         }}
       >
-        {children}
+        {trigger}
       </span>
       {open && hasContent && (
         <span

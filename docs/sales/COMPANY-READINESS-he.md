@@ -9,7 +9,7 @@
 
 | תחום | מה |
 |------|-----|
-| **מוצר** | 545+ production engines, wiring 0 gaps, UI 94/94 |
+| **מוצר** | 563 production engines, wiring 0 gaps, UI 111/111 |
 | **אבטחה** | strict billing, secrets guards, RLS, MFA, audit |
 | **משפטי web** | terms/privacy **EN + HE**, DPA, subprocessors, security-policy |
 | **מכירות** | ספר מוצר 681 עמודים + `viewer/index.html` |

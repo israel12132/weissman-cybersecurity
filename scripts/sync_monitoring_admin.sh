@@ -92,6 +92,9 @@ gen_prometheus_web_config() {
     echo "Removed stray directory at ${WEB_CONFIG}"
   fi
 
+  # bcrypt_htpasswd_line() feeds the password over stdin (-i), never as an argv element:
+  # an argv password is visible to every local user via `ps aux` and is recorded in the
+  # Docker daemon's container config (`docker inspect`) and `docker events`.
   local line hash
   line="$(bcrypt_htpasswd_line)"
   hash="${line#*:}"
@@ -131,7 +134,11 @@ sync_grafana_password() {
     echo "Grafana container not running — skip CLI reset"
     return 0
   fi
-  docker exec "$cid" grafana-cli admin reset-admin-password "$PASSWORD" >/dev/null
+  # Pass the password via the environment (docker reads GF_PASS from its own env
+  # when `-e GF_PASS` is given with no value), so it never appears on the argv
+  # that `ps aux` / `docker inspect` expose.
+  GF_PASS="$PASSWORD" docker exec -e GF_PASS "$cid" \
+    sh -c 'grafana-cli admin reset-admin-password "$GF_PASS"' >/dev/null
   # GF_SECURITY_ADMIN_USER (docker-compose.prod.yml) names the admin login on a FRESH
   # Grafana volume; on an existing volume the original login is kept and only the
   # password is reset here. Report what Grafana actually has so the banner cannot lie.

@@ -160,9 +160,14 @@ async fn api_alert_rules_create(
     let _ = tx.commit().await;
     match id_res {
         Ok(id) => (StatusCode::CREATED, Json(json!({"ok": true, "id": id}))).into_response(),
-        Err(e) => (
+        Err(sqlx::Error::Database(db)) if db.is_unique_violation() => (
             StatusCode::CONFLICT,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+            Json(json!({"ok": false, "detail": "a rule with this name already exists"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }
@@ -208,9 +213,14 @@ async fn api_alert_rules_put(
             (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response()
         }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"ok": false}))).into_response(),
-        Err(e) => (
+        Err(sqlx::Error::Database(db)) if db.is_unique_violation() => (
             StatusCode::CONFLICT,
-            Json(json!({"ok": false, "detail": e.to_string()})),
+            Json(json!({"ok": false, "detail": "a rule with this name already exists"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
         )
             .into_response(),
     }

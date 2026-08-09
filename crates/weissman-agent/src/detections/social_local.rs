@@ -58,7 +58,8 @@ pub async fn run_pretexting(engine: &str) -> anyhow::Result<Vec<Value>> {
         "mutt",
         "geary",
     ]);
-    let rules_hint = false;
+    #[allow(unused_mut)] // mutated only inside the Windows cfg block below
+    let mut rules_hint = false;
 
     #[cfg(target_os = "windows")]
     {

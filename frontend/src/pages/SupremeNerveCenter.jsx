@@ -21,7 +21,9 @@ import { apiFetch } from '../utils/apiFetch'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 
-const POLL_MS = 2000
+// 10s cadence: each poll is a ~500-row DB query plus an O(engines × live_runs) scan
+// and a several-hundred-KB snapshot, so sub-10s polling is pure waste.
+const POLL_MS = 10000
 const SECTIONS = ['overview', 'engines', 'modules', 'jobs', 'controls']
 
 function lifecycleTone(lc) {

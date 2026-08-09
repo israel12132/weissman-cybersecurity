@@ -36,8 +36,9 @@ describe('Tooltip', () => {
     const btn = screen.getByRole('button', { name: 'Trigger' })
     fireEvent.focus(btn)
     const tip = screen.getByRole('tooltip')
-    // The handlers/aria live on the span wrapping the trigger child.
-    expect(btn.parentElement).toHaveAttribute('aria-describedby', tip.id)
+    // aria-describedby lives on the trigger element itself (the focused control),
+    // not the wrapper span — this is the a11y-correct target for AT announcement.
+    expect(btn).toHaveAttribute('aria-describedby', tip.id)
   })
 
   it('hides the tooltip on blur', () => {

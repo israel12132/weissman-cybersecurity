@@ -10,7 +10,7 @@ const data = [
   { id: '2', name: 'bravo' },
 ]
 
-const rowButtons = (container) => container.querySelectorAll('tr[role="button"]')
+const rowButtons = (container) => container.querySelectorAll('tr[tabindex="0"]')
 
 afterEach(() => cleanup())
 

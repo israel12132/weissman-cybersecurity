@@ -18,7 +18,6 @@ use serde::Deserialize;
 use serde_json::json;
 use std::io::Read;
 use std::net::SocketAddr;
-use std::process::Command;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 
@@ -90,22 +89,31 @@ fn extract_email_from_saml_xml(xml: &str) -> Option<String> {
     None
 }
 
-fn verify_xmlsec(
+async fn verify_xmlsec(
     xmlsec_bin: &str,
     xml_path: &std::path::Path,
     pem_path: &std::path::Path,
 ) -> Result<(), String> {
-    let out = Command::new(xmlsec_bin)
-        .args([
-            "--verify",
-            "--pubkey-pem",
-            pem_path.to_str().ok_or("pem path")?,
-            "--enabled-reference-uris",
-            "empty",
-            xml_path.to_str().ok_or("xml path")?,
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let pem = pem_path.to_str().ok_or("pem path")?.to_string();
+    let xml = xml_path.to_str().ok_or("xml path")?.to_string();
+    // The ACS route is unauthenticated: run xmlsec1 off the runtime with `kill_on_drop` and a
+    // hard timeout so an attacker-supplied assertion that makes it hang cannot pin a tokio
+    // worker thread (a handful of such requests would stall the whole API otherwise).
+    let mut cmd = tokio::process::Command::new(xmlsec_bin);
+    cmd.args([
+        "--verify",
+        "--pubkey-pem",
+        &pem,
+        "--enabled-reference-uris",
+        "empty",
+        &xml,
+    ])
+    .kill_on_drop(true);
+    let out = match tokio::time::timeout(std::time::Duration::from_secs(5), cmd.output()).await {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => return Err(e.to_string()),
+        Err(_) => return Err("xmlsec verification timed out".to_string()),
+    };
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).to_string());
     }
@@ -391,30 +399,36 @@ pub async fn saml_acs(
                 Json(json!({"ok": false, "detail": format!("temp: {}", e)})),
             )
         })?;
-        std::fs::write(xml_file.path(), xml.as_bytes()).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("{}", e)})),
-            )
-        })?;
+        tokio::fs::write(xml_file.path(), xml.as_bytes())
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "detail": format!("{}", e)})),
+                )
+            })?;
         let pem_file = NamedTempFile::new().map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"ok": false, "detail": format!("temp: {}", e)})),
             )
         })?;
-        std::fs::write(pem_file.path(), cert_pem.as_bytes()).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"ok": false, "detail": format!("{}", e)})),
-            )
-        })?;
-        verify_xmlsec(&xmlsec_bin, xml_file.path(), pem_file.path()).map_err(|e| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"ok": false, "detail": format!("SAML xmlsec verify failed: {}", e)})),
-            )
-        })?;
+        tokio::fs::write(pem_file.path(), cert_pem.as_bytes())
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "detail": format!("{}", e)})),
+                )
+            })?;
+        verify_xmlsec(&xmlsec_bin, xml_file.path(), pem_file.path())
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({"ok": false, "detail": format!("SAML xmlsec verify failed: {}", e)})),
+                )
+            })?;
     }
     let email = extract_email_from_saml_xml(&xml).ok_or_else(|| {
         (

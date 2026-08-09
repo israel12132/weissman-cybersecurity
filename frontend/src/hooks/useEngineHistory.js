@@ -15,10 +15,17 @@ export function useEngineHistory(engineId) {
     setLoading(true)
     try {
       const d = await apiFetch(`/api/engines/history/${encodeURIComponent(engineId)}?limit=1`)
-      const runs = Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
+      // Backend (collect_engine_history_json) returns
+      // { engine_id, canonical_engine, jobs:[...], findings:[...], ... } — the runs live under
+      // `jobs`, and findings are a separate top-level array (not nested per job).
+      const runs = Array.isArray(d?.jobs) ? d.jobs : Array.isArray(d) ? d : Array.isArray(d?.runs) ? d.runs : []
       const last = runs[0]
       if (!last) return null
-      const findings = Array.isArray(last.findings) ? last.findings : []
+      const findings = Array.isArray(d?.findings)
+        ? d.findings
+        : Array.isArray(last.findings)
+          ? last.findings
+          : []
       const ts = last.completed_at || last.updated_at || last.created_at || null
       setLastUpdated(ts)
       setLastJobId(last.job_id ?? last.id ?? null)

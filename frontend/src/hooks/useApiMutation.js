@@ -85,7 +85,15 @@ export function useApiMutation(opts = {}) {
     },
     onError: (err, vars, ctx) => {
       if (ctx && ctx.__optimisticKey !== undefined) {
-        queryClient.setQueryData(ctx.__optimisticKey, ctx.__previous)
+        // When the key had no cached data, the snapshot is `undefined`, and
+        // setQueryData(key, undefined) is a no-op in query-core (it refuses to
+        // store undefined) — the fabricated optimistic value would survive the
+        // error. Remove the entry instead so the rollback actually reverts it.
+        if (ctx.__previous === undefined) {
+          queryClient.removeQueries({ queryKey: ctx.__optimisticKey, exact: true })
+        } else {
+          queryClient.setQueryData(ctx.__optimisticKey, ctx.__previous)
+        }
       }
       onError?.(err, vars, ctx)
     },

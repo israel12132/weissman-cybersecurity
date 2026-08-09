@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Download } from 'lucide-react'
 import { apiFetch } from '../utils/apiFetch'
@@ -80,29 +81,17 @@ function StageBadge({ stage }) {
 
 function exportDomainsCsv(domains) {
   const header = ['domain', 'stage', 'live', 'https', 'confidence', 'http_status', 'ip_addresses', 'title']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...domains.map((d) =>
-      [
-        d.domain,
-        d.stage,
-        d.live,
-        d.https_available,
-        d.confidence,
-        d.http_status,
-        Array.isArray(d.ip_addresses) ? d.ip_addresses.join(';') : '',
-        d.title,
-      ].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-domains-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = domains.map((d) => [
+    d.domain,
+    d.stage,
+    d.live,
+    d.https_available,
+    d.confidence,
+    d.http_status,
+    Array.isArray(d.ip_addresses) ? d.ip_addresses.join(';') : '',
+    d.title,
+  ])
+  downloadCsv(rows, header, 'weissman-domains')
 }
 
 // ─── Domain Card ─────────────────────────────────────────────────────────────

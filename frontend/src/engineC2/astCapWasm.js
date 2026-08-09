@@ -33,9 +33,13 @@ export async function capAstMutations(lines, maxNodes, maxBytes) {
   }
   let bytes = 0
   const out = []
+  // Measure the byte budget in UTF-8 bytes (not UTF-16 code units) so the JS
+  // fallback caps at the same point the Rust/WASM path does for multi-byte input.
+  const enc = new TextEncoder()
   for (const line of list.slice(0, maxNodes)) {
-    if (bytes + line.length > maxBytes) break
-    bytes += line.length
+    const lineBytes = enc.encode(line).length
+    if (bytes + lineBytes > maxBytes) break
+    bytes += lineBytes
     out.push(line)
   }
   return out

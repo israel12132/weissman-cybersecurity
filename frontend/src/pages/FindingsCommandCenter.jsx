@@ -1,7 +1,7 @@
 /**
  * Phase 3 – Findings Command Center
  *
- * TanStack Table aggregating results from all 119 engines.
+ * TanStack Table aggregating results from all registered engines.
  * Columns: Severity, Engine Name, Title, MITRE ATT&CK, Score (CVSS), Status, Time/Date.
  * Filters: Severity, Engine group/name, Status, global text search.
  * Row click: drawer showing raw JSON + technical details + status update.
@@ -412,6 +412,7 @@ export default function FindingsCommandCenter() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const [rawFindings, setRawFindings] = useState([])
+  const [serverTotal, setServerTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [region, setRegion] = useState('')
@@ -468,6 +469,9 @@ export default function FindingsCommandCenter() {
       .then((d) => {
         const list = Array.isArray(d) ? d : Array.isArray(d?.findings) ? d.findings : []
         setRawFindings(list)
+        // Preserve the server's authoritative count so a truncated (limit=2000)
+        // response can be flagged rather than silently understating the total.
+        setServerTotal(typeof d?.total === 'number' ? d.total : list.length)
         setLastUpdated(new Date())
       })
       .catch((e) => setError(e?.message || t('findings.load_error')))
@@ -716,6 +720,12 @@ export default function FindingsCommandCenter() {
 
       <main id="main-content" tabIndex={-1} className="max-w-screen-2xl mx-auto px-4 py-6 space-y-5 outline-none">
         <EvidenceNotice>{t('findings.evidence_notice')}</EvidenceNotice>
+
+        {serverTotal > rawFindings.length && (
+          <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200">
+            {t('findings.shown_of_total', { shown: rawFindings.length, total: serverTotal })}
+          </div>
+        )}
 
         <PremiumPageHeader
           title={t('findings.command_center_title')}

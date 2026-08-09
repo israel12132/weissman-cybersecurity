@@ -235,16 +235,15 @@ pub async fn active_suppressions_for_engine(
     pool: &PgPool,
     tenant_id: i64,
     engine: &str,
-) -> std::collections::HashSet<String> {
-    let mut out: std::collections::HashSet<String> = std::collections::HashSet::new();
+) -> Vec<SuppressionRule> {
     if engine.is_empty() {
-        return out;
+        return Vec::new();
     }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return out;
+        return Vec::new();
     };
-    let rows: Vec<(String,)> = sqlx::query_as(
-        r#"SELECT signature_hash FROM finding_suppressions
+    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+        r#"SELECT signature_hash, target_glob FROM finding_suppressions
             WHERE tenant_id = $1
               AND engine = $2
               AND (expires_at IS NULL OR expires_at > now())"#,
@@ -255,10 +254,66 @@ pub async fn active_suppressions_for_engine(
     .await
     .unwrap_or_default();
     let _ = tx.commit().await;
-    for (sig,) in rows {
-        out.insert(sig);
+    rows.into_iter()
+        .map(|(signature_hash, target_glob)| SuppressionRule {
+            signature_hash,
+            target_glob,
+        })
+        .collect()
+}
+
+/// One active `finding_suppressions` row. `target_glob == None` (or empty) suppresses the
+/// signature on ANY target; otherwise the glob must match the finding's target.
+#[derive(Debug, Clone)]
+pub struct SuppressionRule {
+    pub signature_hash: String,
+    pub target_glob: Option<String>,
+}
+
+/// True when some active rule suppresses `(signature_hash, target_url)`. Respecting `target_glob`
+/// is essential: an FP vote on one host must not suppress the same signature on every host.
+#[must_use]
+pub fn is_suppressed_by(
+    rules: &[SuppressionRule],
+    signature_hash: &str,
+    target_url: &str,
+) -> bool {
+    rules.iter().any(|r| {
+        r.signature_hash == signature_hash
+            && match r.target_glob.as_deref().map(str::trim) {
+                None | Some("") => true,
+                Some(glob) => glob_matches(glob, target_url),
+            }
+    })
+}
+
+/// Case-insensitive `*`/`?` glob match (standard two-pointer wildcard algorithm). A pattern with
+/// no wildcards degenerates to exact equality, matching the common exact-target suppression.
+fn glob_matches(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let t: Vec<char> = text.to_lowercase().chars().collect();
+    let (mut pi, mut ti) = (0usize, 0usize);
+    let (mut star, mut star_ti): (Option<usize>, usize) = (None, 0);
+    while ti < t.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == t[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star = Some(pi);
+            star_ti = ti;
+            pi += 1;
+        } else if let Some(sp) = star {
+            pi = sp + 1;
+            star_ti += 1;
+            ti = star_ti;
+        } else {
+            return false;
+        }
     }
-    out
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
 }
 
 /// Increment `hit_count` / `last_hit_at` for the suppression rules that matched findings this run,
@@ -296,7 +351,35 @@ pub async fn bump_suppression_hits(
 
 #[cfg(test)]
 mod tests {
-    use super::multiplier_from_counts;
+    use super::{is_suppressed_by, multiplier_from_counts, SuppressionRule};
+
+    fn rule(sig: &str, glob: Option<&str>) -> SuppressionRule {
+        SuppressionRule {
+            signature_hash: sig.to_string(),
+            target_glob: glob.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn suppression_respects_target_glob_scope() {
+        let sig = "abc";
+        // NULL glob → suppress on any target.
+        let any = [rule(sig, None)];
+        assert!(is_suppressed_by(&any, sig, "https://prod.example.com"));
+
+        // Host-scoped glob → only the matching host is suppressed.
+        let scoped = [rule(sig, Some("https://staging.example.com"))];
+        assert!(is_suppressed_by(&scoped, sig, "https://staging.example.com"));
+        assert!(!is_suppressed_by(&scoped, sig, "https://prod.example.com"));
+
+        // Wildcard glob.
+        let wild = [rule(sig, Some("https://*.staging.example.com"))];
+        assert!(is_suppressed_by(&wild, sig, "https://api.staging.example.com"));
+        assert!(!is_suppressed_by(&wild, sig, "https://api.prod.example.com"));
+
+        // Different signature never suppressed regardless of glob.
+        assert!(!is_suppressed_by(&any, "other", "https://prod.example.com"));
+    }
 
     #[test]
     fn multiplier_from_counts_matches_formula() {

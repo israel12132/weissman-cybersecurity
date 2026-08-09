@@ -339,17 +339,17 @@ export default function OtIcsSecurity() {
       .catch(() => setClients([]));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initial history + inventory load once on mount
 
-  const deviceTypes = ['SCADA', 'PLC', 'HMI', 'RTU'].map((type) => ({
-    type,
-    count: devices.filter((d) => d.type === type.toLowerCase()).length,
-    icon: DEVICE_TYPE_ICONS[type],
-    color: DEVICE_TYPE_COLORS[type],
-    labelKey: DEVICE_TYPE_KEYS[type],
-  }));
-
   const filteredDevices = selectedClientId
     ? devices.filter((d) => !d.client_id || String(d.client_id) === String(selectedClientId))
     : devices;
+
+  const deviceTypes = useMemo(() => ['SCADA', 'PLC', 'HMI', 'RTU'].map((type) => ({
+    type,
+    count: filteredDevices.filter((d) => d.type === type.toLowerCase()).length,
+    icon: DEVICE_TYPE_ICONS[type],
+    color: DEVICE_TYPE_COLORS[type],
+    labelKey: DEVICE_TYPE_KEYS[type],
+  })), [filteredDevices]);
 
   const filteredFindings = selectedClientId
     ? findings.filter((f) => !f.client_id || String(f.client_id) === String(selectedClientId))

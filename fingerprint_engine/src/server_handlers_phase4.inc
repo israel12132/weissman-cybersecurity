@@ -845,7 +845,26 @@ async fn enqueue_heal_from_slack(
         let _ = tx.rollback().await;
         return Err("failed to persist heal spec".into());
     }
-    let _ = tx.commit().await;
+    // Auto-heal is classified destructive (the REST path requires operator + dual-approval and
+    // writes an audit row). The Slack approval path reaches the same repo-mutating pipeline, so it
+    // must leave a tamper-evident trail too — inside the spec-INSERT tx, fail-closed.
+    let details = format!("client_id={client_id} finding_id={finding_id} repo={repo} spec_id={spec_id}");
+    if let Err(e) = audit_log::insert_audit(
+        &mut tx,
+        tenant_id,
+        None,
+        "slack:auto-heal-approval",
+        "destructive_auto_heal_initiated_slack",
+        &details,
+        "slack",
+    )
+    .await
+    {
+        tracing::error!(target: "audit", tenant_id, error = %e, "slack auto-heal audit append failed");
+        let _ = tx.rollback().await;
+        return Err("failed to record heal approval".into());
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
     db::job_queue::enqueue_with_max_attempts(
         state.app_pool.as_ref(),
         tenant_id,

@@ -119,6 +119,10 @@ pub struct ClusterAttrs<'a> {
     pub cvss: Option<f64>,
     pub epss_score: Option<f32>,
     pub kev_listed: bool,
+    /// True only when the underlying `vulnerabilities` row was freshly INSERTed (not a
+    /// re-detection). Controls whether `member_count` is incremented, so the corroboration
+    /// count reflects distinct members rather than how many times the cluster was rescanned.
+    pub is_new_member: bool,
 }
 
 /// Upsert a cluster row for a single finding. Returns the cluster `id` so the
@@ -138,6 +142,9 @@ pub async fn upsert_cluster_for_finding(
     // with `array_distinct(... || ARRAY[...])` so engines/sources/cves grow but
     // never duplicate.
     let sev_w_new = sev_weight(attrs.severity);
+    // Only a genuinely new member grows member_count; a re-detection (upsert UPDATE branch on
+    // `vulnerabilities`) must add 0, else the corroboration count inflates once per rescan.
+    let member_inc: i32 = if attrs.is_new_member { 1 } else { 0 };
     let cvss_new = attrs.cvss.unwrap_or(0.0);
     let epss_new: f32 = attrs.epss_score.unwrap_or(0.0);
     let cve_arr: Vec<String> = attrs
@@ -159,7 +166,7 @@ pub async fn upsert_cluster_for_finding(
             'OPEN', now(), now(), now()
         )
         ON CONFLICT (tenant_id, client_id, cluster_key) DO UPDATE SET
-            member_count   = weissman_finding_clusters.member_count + 1,
+            member_count   = weissman_finding_clusters.member_count + $16::int,
             engines        = (
                 SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.engines || ARRAY[$8::text]))
             ),
@@ -206,6 +213,7 @@ pub async fn upsert_cluster_for_finding(
     .bind(epss_new)
     .bind(attrs.kev_listed)
     .bind(sev_w_new)
+    .bind(member_inc)
     .fetch_one(&mut **tx)
     .await
     .map_err(|e| format!("cluster upsert: {e}"))?;

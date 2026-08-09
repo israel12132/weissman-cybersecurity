@@ -520,7 +520,7 @@ function FindingCard({ finding, L }) {
 
 function Toggle({ on, onClick, label }) {
   return (
-    <Button variant="unstyled" type="button" onClick={onClick}
+    <Button variant="unstyled" type="button" onClick={onClick} role="switch" aria-checked={on}
       className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition-all w-full text-left"
       style={{ borderColor: on ? `${ACCENT}50` : '#ffffff14', backgroundColor: on ? `${ACCENT}14` : 'transparent', color: on ? '#fcd34d' : '#ffffff55' }}>
       <span className="w-7 h-4 rounded-full relative transition-all shrink-0" style={{ backgroundColor: on ? ACCENT : '#ffffff20' }}>

@@ -101,6 +101,13 @@ impl TelemetryAggregator {
         let Some(redis) = self.redis.clone() else {
             return;
         };
+        // Idempotent: a second call must not spawn a duplicate loop. Dropping the previous
+        // JoinHandle only detaches the task (it keeps ticking forever, doubling the flush rate and
+        // error-counter increments); take the guard first and bail if a loop already runs.
+        let mut guard = self.flusher.lock().await;
+        if guard.as_ref().is_some_and(|h| !h.is_finished()) {
+            return;
+        }
         let agg = Arc::clone(self);
         let period = Duration::from_millis(self.cfg.telemetry_flush_ms.max(50));
         let handle = tokio::spawn(async move {
@@ -113,7 +120,6 @@ impl TelemetryAggregator {
                 }
             }
         });
-        let mut guard = self.flusher.lock().await;
         *guard = Some(handle);
     }
 

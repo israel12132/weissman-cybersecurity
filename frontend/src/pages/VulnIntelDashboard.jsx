@@ -14,7 +14,7 @@ import { useSavedViews } from '../hooks/useSavedViews'
 import SeverityBadge, { SEVERITY_META, getSeverityMeta } from '../components/ui/SeverityBadge'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import Button from '../components/ui/Button'
 
 const STATUS_COLORS = {
@@ -202,31 +202,19 @@ export default function VulnIntelDashboard() {
 
   const exportCsv = useCallback(() => {
     const header = ['severity', 'cve', 'title', 'source', 'status', 'discovered_at', 'id']
-    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = [
-      header.join(','),
-      ...filtered.map((f) => [
-        f.severity || '',
-        f.cve || f.cve_id || '',
-        f.title || f.summary || '',
-        f.source || f.engine || '',
-        (f.status || 'OPEN').toUpperCase(),
-        f.discovered_at || '',
-        f.id || f.raw_id || f.finding_id || '',
-      ].map(esc).join(',')),
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `vuln-intel-findings-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    const rows = filtered.map((f) => [
+      f.severity || '',
+      f.cve || f.cve_id || '',
+      f.title || f.summary || '',
+      f.source || f.engine || '',
+      (f.status || 'OPEN').toUpperCase(),
+      f.discovered_at || '',
+      f.id || f.raw_id || f.finding_id || '',
+    ])
+    downloadCsv(rows, header, 'vuln-intel-findings')
   }, [filtered])
 
   const selectedRowId = selected?.raw_id ?? selected?.id
-
-  useFindingsWorkbench(filtered, { csvPrefix: 'vuln-intel-findings' })
 
   return (
     <PageShell

@@ -13,6 +13,7 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, Download,
 import EmptyState from './EmptyState'
 import { SkeletonTable } from './Skeleton'
 import Button from './Button'
+import { escapeCsvCell } from '../../lib/exportFindingsCsv'
 
 const MAX_VISIBLE_PAGES = 7
 const DEFAULT_PAGE_SIZES = [25, 50, 100]
@@ -49,10 +50,9 @@ function tableToCsv(table) {
   const header = cols.map((c) =>
     typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id,
   )
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
-    header.map(esc).join(','),
-    ...table.getFilteredRowModel().rows.map((r) => cols.map((c) => esc(r.getValue(c.id))).join(',')),
+    header.map(escapeCsvCell).join(','),
+    ...table.getFilteredRowModel().rows.map((r) => cols.map((c) => escapeCsvCell(r.getValue(c.id))).join(',')),
   ]
   return lines.join('\n')
 }
@@ -154,6 +154,10 @@ export default function DataTable({
   selectionResetSignal,
 }) {
   const defaultPageSize = pageSizes?.[0] ?? 25
+  // Normalise once so a non-array `data` (undefined / null from an unresolved or
+  // malformed fetch) still routes through the empty state instead of rendering a
+  // silent headers-only grid.
+  const rowsData = Array.isArray(data) ? data : []
   // Remember the user's rows-per-page across sessions (only affects uncontrolled
   // pagination; a page passing its own `pagination` prop is untouched).
   const [internalPagination, setInternalPagination] = useState(() => {
@@ -181,6 +185,12 @@ export default function DataTable({
   }, [])
   const effectivePagination = pagination ?? internalPagination
   const effectiveOnPaginationChange = onPaginationChange ?? persistingSetPagination
+
+  // Uncontrolled sorting fallback (mirrors the pagination fallback above) so
+  // clicking a header actually sorts when no external sorting state is supplied.
+  const [internalSorting, setInternalSorting] = useState([])
+  const effectiveSorting = sorting ?? internalSorting
+  const effectiveOnSortingChange = onSortingChange ?? setInternalSorting
 
   // Uncontrolled global filter (only when searchable and not externally driven).
   const [internalGlobalFilter, setInternalGlobalFilter] = useState('')
@@ -280,10 +290,10 @@ export default function DataTable({
   }, [columns, expandable, collapseLabel, expandLabel, enableSelection, selectLabel, selectAllLabel])
 
   const table = useReactTable({
-    data: data ?? [],
+    data: rowsData,
     columns: tableColumns,
     state: {
-      sorting,
+      sorting: effectiveSorting,
       pagination: effectivePagination,
       columnFilters,
       globalFilter: effectiveGlobalFilter,
@@ -291,7 +301,7 @@ export default function DataTable({
       expanded,
       rowSelection,
     },
-    onSortingChange,
+    onSortingChange: effectiveOnSortingChange,
     onPaginationChange: effectiveOnPaginationChange,
     onGlobalFilterChange: globalFilterControlled ? undefined : setInternalGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
@@ -342,8 +352,10 @@ export default function DataTable({
     const a = document.createElement('a')
     a.href = url
     a.download = `${exportFilename}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const { rows } = table.getRowModel()
@@ -407,8 +419,8 @@ export default function DataTable({
     return <EmptyState {...emptyState} />
   }, [emptyState])
 
-  const showEmpty = !loading && data?.length === 0
-  const showFilteredEmpty = !loading && data?.length > 0 && rows.length === 0
+  const showEmpty = !loading && rowsData.length === 0
+  const showFilteredEmpty = !loading && rowsData.length > 0 && rows.length === 0
 
   if (showEmpty) {
     return <div className={className}>{emptyNode}</div>
@@ -601,13 +613,13 @@ export default function DataTable({
                 : undefined
 
               // Make clickable rows keyboard-operable (WCAG 2.1 / Section 508):
-              // focusable, activated by Enter/Space, announced as a button.
+              // focusable and activated by Enter/Space. Keep the native row/cell
+              // semantics — a `role="button"` here would strip every <td>'s cell
+              // role from the accessibility tree, so the <tr> stays a `row`.
               const interactiveProps = onRowClick
                 ? {
                     onClick: () => onRowClick(row),
-                    role: 'button',
                     tabIndex: 0,
-                    'aria-selected': isSelected || undefined,
                     onKeyDown: (e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()

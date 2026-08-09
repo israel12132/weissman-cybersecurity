@@ -75,8 +75,13 @@ rate on the primary endpoint is an early warning; any `exhausted` increment is a
 
 ## Adoption & follow-ups
 
-- **Opt-in today:** call `llm_router::routed_chat_completion_text(...)` instead of
-  `openai_chat::chat_completion_text(...)`. Migrating hot call sites (reporter, nl_query,
-  generative fuzz, engines) to the router is a mechanical follow-up.
+- **Opt-in today:** call `llm_router::routed_chat_completion_text(...)` (plain text) or
+  `llm_router::routed_chat_completion_text_json_object(...)` (JSON-mode) instead of the direct
+  `openai_chat::chat_completion_text(...)`. Both carry the full failover chain.
+- **Already migrated:** the natural-language query planner (`nl_query.rs` uses the routed
+  JSON-object variant) and generative fuzzing (`generative_fuzz_llm.rs` uses the routed text
+  variant). Still direct and unmigrated: the reporter (`reporter.rs`) and the ~40 engine call
+  sites that call `openai_chat::chat_completion_text` — a mechanical follow-up.
 - **Planned:** per-endpoint API keys (today all endpoints share `WEISSMAN_LLM_API_KEY`);
-  weighted / cost-aware routing; routed variants for the JSON-object and embedding paths.
+  weighted / cost-aware routing; a routed variant for the embedding path
+  (`openai_chat::create_embedding` has no router wrapper yet).

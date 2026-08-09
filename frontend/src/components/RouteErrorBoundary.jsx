@@ -24,6 +24,18 @@ export default class RouteErrorBoundary extends React.Component {
     }
   }
 
+  handleRetry = () => {
+    // A failed dynamic import (stale chunk after a redeploy) is cached permanently by
+    // React.lazy, so re-rendering the same lazy child just re-throws. Only a full reload
+    // can recover it; in-render errors can retry in place.
+    const msg = this.state.error?.message || ''
+    if (/Loading chunk|dynamically imported module|Failed to fetch|error loading dynamically/i.test(msg)) {
+      window.location.reload()
+    } else {
+      this.setState({ error: null })
+    }
+  }
+
   render() {
     if (this.state.error) {
       const msg = this.state.error?.message || i18n.t(`${NS}.unexpected`)
@@ -34,7 +46,7 @@ export default class RouteErrorBoundary extends React.Component {
           <div className="flex gap-4">
             <Button variant="unstyled"
               type="button"
-              onClick={() => this.setState({ error: null })}
+              onClick={this.handleRetry}
               className="px-4 py-2 rounded-lg border border-white/20 text-sm hover:bg-white/10"
             >
               {i18n.t(`${NS}.tryAgain`)}

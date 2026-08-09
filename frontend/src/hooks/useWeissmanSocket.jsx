@@ -28,12 +28,13 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { getApiBase } from '../lib/apiBase';
 
 // ---------------------------------------------------------------------------
 // Constants — kept in sync with backend event shapes
 // ---------------------------------------------------------------------------
 const DEBOUNCE_SAME_EVENT_MS = 5000;
-const RECONNECT_BASE_MS = 2000;   // initial reconnect delay
+const RECONNECT_BASE_MS = 1000;   // initial reconnect delay (doubles per attempt → 30s cap)
 const RECONNECT_MAX_MS = 30000;   // maximum reconnect delay
 const MAX_EVENTS = 500;           // cap the live buffer so a long shift on a
                                   // busy feed can't grow the array unbounded
@@ -50,14 +51,16 @@ const ARC_EVENT_KINDS = new Set([
   'emergency_alert'
 ]);
 
-// Build the WebSocket URL from the current page origin so it works behind
-// Cloudflare Tunnel and local dev equally. On reconnect we pass the last event
-// sequence we saw so the server can replay everything we missed while offline.
+// Build the WebSocket URL from the configured API origin (getApiBase) so it tracks
+// the same host as every HTTP call — including a build that sets VITE_API_BASE_URL,
+// where deriving from window.location would dial the static-asset origin instead of
+// the API. Falls back to the page origin for same-origin prod and the dev proxy.
+// On reconnect we pass the last event sequence we saw so the server can replay
+// everything we missed while offline.
 function buildWsUrl(lastEventId) {
   if (typeof window === 'undefined') return '';
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.host;
-  const base = `${proto}//${host}/ws/command-center`;
+  const origin = getApiBase() || window.location.origin;
+  const base = `${origin.replace(/^http/, 'ws')}/ws/command-center`;
   return lastEventId > 0 ? `${base}?last_event_id=${lastEventId}` : base;
 }
 
@@ -184,7 +187,9 @@ export function useWeissmanSocket() {
     const url = buildWsUrl(lastEventIdRef.current);
     if (!url) return;
 
-    setConnectionStatus('offline');
+    // We are actively opening a socket — surface the amber CONNECTING state that
+    // ConnectionBadge renders, not OFFLINE (which is reserved for a dropped feed).
+    setConnectionStatus('connecting');
 
     let ws;
     try {
@@ -240,9 +245,11 @@ export function useWeissmanSocket() {
     if (unmounted.current) return;
     if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     reconnectTimer.current = setTimeout(() => {
-      // Exponential back-off capped at RECONNECT_MAX_MS
+      // Exponential back-off (double each attempt) capped at RECONNECT_MAX_MS, to
+      // match the documented 1s → 30s contract. Additive growth took ~29 attempts
+      // to reach the cap, hammering an already-unhealthy backend.
       reconnectDelay.current = Math.min(
-        reconnectDelay.current + 1000,
+        reconnectDelay.current * 2,
         RECONNECT_MAX_MS
       );
       connect();

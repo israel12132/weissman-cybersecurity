@@ -1,14 +1,17 @@
 # Alertmanager configuration for Weissman Cybersecurity
 # https://prometheus.io/docs/alerting/latest/configuration/
 #
-# Delivery secrets are read from files under /etc/alertmanager/secrets (mounted from
-# ./monitoring/alertmanager-secrets). This config is VALID and Alertmanager starts even
-# when those files are empty/absent, so the default stack boots with alerting inert;
-# populate the files to turn each channel on. (The previous ${SLACK_WEBHOOK_URL}-style
-# placeholders were never substituted by any step and crash-looped the container.)
-#   slack_webhook_url        -> #security-alerts / #security-warnings Slack Incoming Webhook
+# Delivery secrets (Slack webhook, PagerDuty routing key, watchdog heartbeat URL) are read
+# from files under /etc/alertmanager/secrets/ via Alertmanager's native *_file options — the
+# minimal prom/alertmanager image ships no envsubst, so the previous ${SLACK_WEBHOOK_URL}-style
+# placeholders were never substituted and crash-looped the container. This config is VALID and
+# Alertmanager starts even when those files are empty/absent, so the default stack boots with
+# alerting inert; populate the files to turn each channel on. Committed placeholders in
+# monitoring/secrets/ let the stack start; operators overwrite them with real values (see
+# monitoring/secrets/README.md).
+#   slack_api_url            -> #security-alerts / #security-warnings Slack Incoming Webhook
 #   pagerduty_routing_key    -> PagerDuty Events API v2 routing key
-#   watchdog_heartbeat_url   -> external dead-man's-switch ping URL
+#   watchdog_url             -> external dead-man's-switch ping URL
 
 global:
   resolve_timeout: 5m
@@ -42,30 +45,33 @@ receivers:
 
   - name: 'critical-alerts'
     slack_configs:
-      - api_url_file: '/etc/alertmanager/secrets/slack_webhook_url'
+      - api_url_file: /etc/alertmanager/secrets/slack_api_url
         channel: '#security-alerts'
         title: '[CRITICAL] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
         send_resolved: true
-    # PagerDuty paging for critical alerts. Leave the routing-key file empty to run
-    # Slack-only.
+    # PagerDuty paging for critical alerts. The routing key is read from
+    # /etc/alertmanager/secrets/pagerduty_routing_key (see monitoring/secrets/README.md);
+    # the committed placeholder is inert, so critical alerts go Slack-only until an
+    # operator writes a real routing key into that file (leave it empty to stay Slack-only).
     pagerduty_configs:
-      - routing_key_file: '/etc/alertmanager/secrets/pagerduty_routing_key'
+      - routing_key_file: /etc/alertmanager/secrets/pagerduty_routing_key
         description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         severity: 'critical'
         send_resolved: true
 
   - name: 'watchdog-heartbeat'
-    # Point WATCHDOG_HEARTBEAT_URL at an external dead-man's-switch endpoint
-    # (healthchecks.io, Dead Man's Snitch, or a PagerDuty heartbeat integration).
-    # The endpoint must alarm when it STOPS receiving this ping.
+    # The heartbeat URL is read from /etc/alertmanager/secrets/watchdog_url
+    # (see monitoring/secrets/README.md). Point it at an external dead-man's-switch
+    # endpoint (healthchecks.io, Dead Man's Snitch, or a PagerDuty heartbeat
+    # integration); the endpoint must alarm when it STOPS receiving this ping.
     webhook_configs:
-      - url_file: '/etc/alertmanager/secrets/watchdog_heartbeat_url'
+      - url_file: /etc/alertmanager/secrets/watchdog_url
         send_resolved: false
 
   - name: 'warning-alerts'
     slack_configs:
-      - api_url_file: '/etc/alertmanager/secrets/slack_webhook_url'
+      - api_url_file: /etc/alertmanager/secrets/slack_api_url
         channel: '#security-warnings'
         title: '[WARNING] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'

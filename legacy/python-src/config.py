@@ -30,8 +30,11 @@ def get_sql_echo() -> bool:
 def get_secret_key() -> str:
     """SECRET_KEY from env. In production, warn if default/empty."""
     key = (os.getenv("SECRET_KEY") or os.getenv("WEISSMAN_SECRET_KEY") or "").strip()
-    if is_production() and (not key or key in ("change-me-in-production", "change-me", "secret")):
-        logger.warning("SECRET_KEY is default or empty in production. Set SECRET_KEY in .env.")
+    if is_production():
+        if not key or key in ("change-me-in-production", "change-me", "secret"):
+            # Fail closed: never hand a caller the published placeholder in production.
+            raise RuntimeError("SECRET_KEY must be set to a non-default value in production")
+        return key
     return key or "change-me-in-production"
 
 

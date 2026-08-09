@@ -30,6 +30,18 @@ async fn api_logout(
             {
                 tracing::warn!(target: "auth", error = %e, "access jti revocation failed on logout");
             }
+            // The refresh cookie is scoped Path=/api/auth and is never attached to /api/logout, so
+            // the branch below cannot fire for a browser and the opaque refresh token would survive
+            // logout for its full TTL. Revoke it via the access_jti linkage kept at issuance.
+            if let Err(e) = sqlx::query(
+                "UPDATE user_refresh_tokens SET revoked_at = now() WHERE access_jti = $1 AND revoked_at IS NULL",
+            )
+            .bind(&jti)
+            .execute(state.auth_pool.as_ref())
+            .await
+            {
+                tracing::warn!(target: "auth", error = %e, "refresh revoke-by-access-jti failed on logout");
+            }
         }
     }
     if let Some(refresh_raw) = extract_refresh_cookie(&headers) {

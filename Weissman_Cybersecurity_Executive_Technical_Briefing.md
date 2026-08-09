@@ -12,7 +12,7 @@
 | **Delivery** | Multi-tenant SaaS + self-hostable; optional cross-platform endpoint agent |
 | **Current release** | CalVer `2026.06.2` ("Liminal Boundary Engine") |
 | **Core language** | Rust (memory-safe; `unsafe` denied crate-wide) |
-| **Footprint** | ~193,000 lines of first-party code across Rust, React, SQL, and Python |
+| **Footprint** | ~480,000 lines of first-party code across Rust, React, SQL, and Python |
 | **License** | Proprietary |
 
 ---
@@ -114,7 +114,7 @@ flowchart TB
     end
 
     subgraph data["PostgreSQL 16 + pgvector"]
-      DB[("~88 tables · row-level security\n74+ migrations · read-only NL role")]
+      DB[("~88 tables · row-level security\n100 migrations · read-only NL role")]
     end
 
     subgraph workers["Async execution"]
@@ -361,7 +361,7 @@ Seven action types are implemented: `set_status`, `slack_notify`, `webhook`, `ht
 
 ## 15. Data Layer: PostgreSQL, Multi-Tenancy & Migrations
 
-- **PostgreSQL 16 + pgvector** (the vector extension powers the AI memory and pentest reinforcement). ~88 application tables across a tenant-scoped public schema, a global `intel` schema, and the EPSS/KEV mirrors; defined by **74+ SQL migrations** (~4,000 lines).
+- **PostgreSQL 16 + pgvector** (the vector extension powers the AI memory and pentest reinforcement). ~88 application tables across a tenant-scoped public schema, a global `intel` schema, and the EPSS/KEV mirrors; defined by **100 SQL migrations** (~5,100 lines).
 - **Multi-tenant isolation via Row-Level Security.** Every tenant table has `ENABLE` + `FORCE ROW LEVEL SECURITY` policies keyed on a transaction-local `app.current_tenant_id` GUC. The application role is subject to RLS; a separate auth role with `BYPASSRLS` is narrowly scoped to login lookups and is itself audited (with auto-revocation on suspicious cross-tenant access).
 - **Three database roles:** `weissman_app` (RLS-enforced), `weissman_auth` (login only), and `weissman_ro` (the read-only role for the natural-language query interface, restricted to a tightly-scoped table whitelist with its own statement timeout and memory limits).
 - **A custom two-phase migration runner** (`no_tx_migrations.rs`) that detects a `-- weissman:no-transaction` header and runs `CREATE INDEX CONCURRENTLY`-style migrations **outside any transaction**, recording them in `_sqlx_migrations` with SQLx-compatible SHA-384 checksums so the standard runner safely skips them. Deferred dependencies are re-applied after their tables exist. (This is a genuinely hard problem solved cleanly.)
@@ -487,21 +487,21 @@ Because the platform performs *offensive* actions, safety is engineered as a fir
 
 | Metric | Value |
 |---|---|
-| Total first-party code | **~193,000 lines** |
-| Rust source (`.rs`) | **~99,700 lines** |
-| Rust route-handler includes (`.inc`) | **~17,800 lines** |
-| Rust modules in the core engine crate | **239 files** |
-| Frontend (React/JSX) | **~54,500 lines**, **69 pages** |
-| SQL migrations | **75 files**, ~4,076 lines, **88 `CREATE TABLE`s** |
+| Total first-party code | **~480,000 lines** |
+| Rust source (`.rs`) | **~293,300 lines**, **567 files** |
+| Rust route-handler includes (`.inc`) | **~22,576 lines** |
+| Rust modules in the core engine crate | **445 files** |
+| Frontend (React/JSX) | **~142,800 lines**, **137 pages** |
+| SQL migrations | **100 files**, ~5,097 lines, **107 `CREATE TABLE`s** |
 | Legacy Python | **~17,000 lines** |
-| Workspace crates | **9** Rust crates |
+| Workspace crates | **13** Rust crates |
 | Engine catalog | **563 engine IDs** → **303 real_probe** (295 distinct impls) + **212 alias** + **48 agent_required**, 0 no_path |
 | API surface | **~130 endpoints**, ~271 handlers, **6 WebSocket channels** |
 | Database | **~88 tables**, full row-level security, 3 scoped DB roles |
 | Async job kinds | **~27** |
 | Agent detections | **~20 capabilities** across 13 modules + UEBA baseline |
 | Threat-intel feeds | **4** (KEV, EPSS, NVD, OSV/GitHub) |
-| Compliance frameworks | **3** (SOC 2, ISO 27001, GDPR) |
+| Compliance frameworks | **6 with live per-control mappings** (SOC 2, NIS2, GDPR, IEC 62443, PCI, CSA CCM); `compliance_frameworks` catalog lists **8** (adds ISO 27001, CIS) |
 | Memory safety | `unsafe` **denied** crate-wide (1 documented exception) |
 
 ---

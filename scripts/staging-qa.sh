@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Staging QA — manual 18 automated checks (code + optional live smoke).
+# Staging QA — offline code audits + optional live smoke (6 static audits +
+# cargo check + 1 unit-test file + up to 5 live HTTP probes). The summary below
+# prints the actual pass/fail totals for the checks that ran.
 # Usage:
 #   ./scripts/staging-qa.sh
 #   ./scripts/staging-qa.sh --live http://localhost

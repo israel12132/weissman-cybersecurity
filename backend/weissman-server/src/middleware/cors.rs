@@ -3,7 +3,7 @@
 //! Set `WEISSMAN_CORS_ORIGINS` to a comma-separated list (e.g. `https://app.example.com,https://weissmancyber.com`).
 //! When unset, falls back to the origin of `WEISSMAN_PUBLIC_BASE_URL`, then `https://weissmancyber.com`.
 
-use axum::http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use axum::http::header::{ACCEPT, AUTHORIZATION, CONTENT_DISPOSITION, CONTENT_TYPE};
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::Router;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -53,6 +53,18 @@ pub fn apply(router: Router) -> Router {
             CONTENT_TYPE,
             ACCEPT,
             HeaderName::from_static("x-weissman-destructive-confirm"),
+            // Sent by auto-heal and heal-revert (RemediationDetail.jsx). Without it the CORS
+            // preflight for those POSTs is rejected cross-origin and the request never lands.
+            HeaderName::from_static("x-weissman-dual-approve"),
+        ])
+        // Expose non-safelisted response headers so cross-origin JS can read them: Retry-After
+        // (rate-limit backoff), Content-Disposition (CSV/PDF download filenames), and the audit
+        // NDJSON chain marker. Without this the SPA falls back to a 60s retry default and generic
+        // download names in split-origin deployments.
+        .expose_headers([
+            HeaderName::from_static("retry-after"),
+            CONTENT_DISPOSITION,
+            HeaderName::from_static("x-audit-chain-intact"),
         ]);
     router.layer(cors)
 }

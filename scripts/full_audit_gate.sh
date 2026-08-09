@@ -42,25 +42,24 @@ gate_g1_build() {
     note "G1 skipped (FULL_AUDIT_SKIP_BUILD=1)"
     return 0
   fi
-  cargo build --workspace
-  (cd frontend && npm run build)
+  cargo build --workspace && (cd frontend && npm run build)
 }
 
 gate_g2_tests() {
-  cargo test --workspace --all-targets
-  (cd frontend && npm run test:coverage)
+  cargo test --workspace --all-targets && (cd frontend && npm run test:coverage)
 }
 
 gate_g3_lint() {
-  cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious
-  cargo fmt --all --check
+  cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious \
+    && cargo fmt --all --check
 }
 
 gate_g4_wiring() {
-  node scripts/verify_engine_wiring.mjs >/dev/null
-  node scripts/generate_engine_catalog_snapshot.mjs >/dev/null
-  node scripts/live_only_audit.mjs >/dev/null
-  node scripts/engine_quality_audit.mjs >/dev/null
+  node scripts/verify_engine_wiring.mjs >/dev/null \
+    && node scripts/generate_engine_catalog_snapshot.mjs >/dev/null \
+    && node scripts/live_only_audit.mjs >/dev/null \
+    && node scripts/engine_quality_audit.mjs >/dev/null \
+    || return 1
   local gaps
   gaps="$(node scripts/verify_engine_wiring.mjs | node -e "
     let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
@@ -76,13 +75,14 @@ gate_g4_wiring() {
 }
 
 gate_g5_reality() {
-  node scripts/engine_reality_audit.mjs >/dev/null
   # Breadth + FP-accuracy proof: every attack domain has a live probe, every engine maps to
   # MITRE, and the FP/TP suppression mechanism is present in source. Also refreshes and
-  # gate-checks docs/ENGINE_COVERAGE_AND_ACCURACY.md.
-  node scripts/engine_coverage_accuracy_report.mjs --check >/dev/null
-  # ATT&CK currency: every technique ID resolves to a live technique in the current release.
-  node scripts/mitre_attack_coverage.mjs --check >/dev/null
+  # gate-checks docs/ENGINE_COVERAGE_AND_ACCURACY.md. ATT&CK currency: every technique ID
+  # resolves to a live technique in the current release. Any sub-check failing fails the gate.
+  node scripts/engine_reality_audit.mjs >/dev/null \
+    && node scripts/engine_coverage_accuracy_report.mjs --check >/dev/null \
+    && node scripts/mitre_attack_coverage.mjs --check >/dev/null \
+    || return 1
   local no_path
   no_path="$(node scripts/engine_reality_audit.mjs | node -e "
     let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
@@ -100,10 +100,12 @@ gate_g6_migrations() {
 }
 
 gate_g7_live_e2e() {
-  node scripts/weissman-ui-audit.mjs
-  ./scripts/staging-qa.sh
-  ./scripts/generate_audit_evidence_pack.sh
-  ./scripts/go_live_check.sh
+  # Offline subset — every one of these must pass or the gate fails.
+  node scripts/weissman-ui-audit.mjs \
+    && ./scripts/staging-qa.sh \
+    && ./scripts/generate_audit_evidence_pack.sh \
+    && ./scripts/go_live_check.sh \
+    || return 1
 
   if curl -sf "${LIVE_BASE}/api/health" >/dev/null 2>&1; then
     echo "Live stack detected at ${LIVE_BASE}"

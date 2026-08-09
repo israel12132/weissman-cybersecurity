@@ -43,15 +43,21 @@ UI_STATUS="$(run_audit ui node scripts/weissman-ui-audit.mjs)"
 SCAN_WIRING_STATUS="$(run_audit scan-wiring node scripts/verify_engine_scan_wiring.mjs)"
 
 log "SBOM collection"
+# Track SBOM provenance so a lockfile stub is never disguised as the real
+# trivy-generated CycloneDX document. The stub keeps its own filename.
 SBOM_PATH="$ROOT/sbom-cyclonedx.json"
-if [[ ! -f "$SBOM_PATH" ]]; then
-  if command -v trivy >/dev/null 2>&1; then
-    trivy fs --format cyclonedx --output "$SBOM_PATH" "$ROOT" || true
+SBOM_SOURCE="none"
+if [[ -f "$SBOM_PATH" ]]; then
+  SBOM_SOURCE="prebuilt"
+elif command -v trivy >/dev/null 2>&1; then
+  if trivy fs --format cyclonedx --output "$SBOM_PATH" "$ROOT"; then
+    SBOM_SOURCE="trivy"
   fi
 fi
 if [[ ! -f "$SBOM_PATH" ]] && [[ -f "$ROOT/frontend/package-lock.json" ]]; then
-  log "Fallback npm SBOM stub from lockfile hash"
+  log "Fallback npm SBOM stub from lockfile hash (NOT a real SBOM)"
   SBOM_PATH="$OUT_DIR/sbom-stub.json"
+  SBOM_SOURCE="lockfile-stub"
   node -e "
     const fs=require('fs');
     const lock=fs.readFileSync('frontend/package-lock.json','utf8');
@@ -65,11 +71,19 @@ fi
 
 SBOM_SHA=""
 COMPONENT_COUNT=0
+SBOM_OUT_NAME=""
 if [[ -f "$SBOM_PATH" ]]; then
   SBOM_SHA="$(sha256_file "$SBOM_PATH")"
-  cp "$SBOM_PATH" "$OUT_DIR/sbom-cyclonedx.json"
+  if [[ "$SBOM_SOURCE" == "lockfile-stub" ]]; then
+    # Keep the stub under its own name — never copy it to sbom-cyclonedx.json,
+    # which reads as a genuine SBOM to an auditor.
+    SBOM_OUT_NAME="sbom-stub.json"
+  else
+    SBOM_OUT_NAME="sbom-cyclonedx.json"
+    cp "$SBOM_PATH" "$OUT_DIR/$SBOM_OUT_NAME"
+  fi
   COMPONENT_COUNT="$(node -e "
-    const j=JSON.parse(require('fs').readFileSync('$OUT_DIR/sbom-cyclonedx.json','utf8'));
+    const j=JSON.parse(require('fs').readFileSync('$OUT_DIR/$SBOM_OUT_NAME','utf8'));
     console.log((j.components||[]).length);
   ")"
 fi
@@ -84,7 +98,10 @@ PKG_LOCK_SHA=""
 
 log "Compliance mapping (NIST CSF / SOC2)"
 COMPLIANCE_JSON="$OUT_DIR/compliance-api.json"
-COMPLIANCE_SOURCE="static"
+# Default is 'unavailable' (backend not reachable / no live pack) — never a
+# fabricated static catalog. A 409 from the unified gate becomes 'blocked'.
+COMPLIANCE_SOURCE="unavailable"
+COMPLIANCE_FAIL=0
 BASE="${WEISSMAN_E2E_BASE:-http://127.0.0.1:8000}"
 EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
 PASSWORD="${WEISSMAN_ADMIN_PASSWORD:-}"
@@ -108,9 +125,16 @@ if [[ -n "$PASSWORD" ]] && curl -sf "${BASE}/api/health" >/dev/null 2>&1; then
       });
     ")"
     if [[ -n "$CLIENT_ID" ]]; then
-      if curl -sf -H "Authorization: Bearer $TOKEN" "${BASE}/api/compliance/evidence-pack/${CLIENT_ID}" -o "$COMPLIANCE_JSON"; then
-        COMPLIANCE_SOURCE="live-api"
-      fi
+      # Capture the status code — `curl -f` collapses a 409 gate BLOCK into the
+      # same exit as "no backend". 200 → live-api; 409 → the unified compliance
+      # gate is screaming (inconsistent_control_mappings) and the pack must FAIL;
+      # anything else → unavailable.
+      HTTP_CODE="$(curl -sS -H "Authorization: Bearer $TOKEN" "${BASE}/api/compliance/evidence-pack/${CLIENT_ID}" -o "$COMPLIANCE_JSON" -w '%{http_code}' 2>/dev/null || echo 000)"
+      case "$HTTP_CODE" in
+        200) COMPLIANCE_SOURCE="live-api" ;;
+        409) COMPLIANCE_SOURCE="blocked"; COMPLIANCE_FAIL=1 ;;
+        *)   COMPLIANCE_SOURCE="unavailable" ;;
+      esac
     fi
   fi
 fi
@@ -120,18 +144,14 @@ node - <<NODE
 const fs = require('fs');
 const path = require('path');
 
-const complianceStatic = {
-  frameworks: [
-    { id: 'NIST-CSF', controls_mapped: 108, posture_percent: null, mapping_doc: 'SECURITY_AND_COMPLIANCE.md' },
-    { id: 'SOC2', controls_mapped: 64, posture_percent: null, mapping_doc: 'SIG_CAIQ_PREP_QA.md' },
-    { id: 'ISO27001', controls_mapped: 93, posture_percent: null, mapping_doc: 'SECURITY_AND_COMPLIANCE.md' },
-  ],
-  notes: 'Static catalog cross-reference; live API pack merged when backend available.',
-};
-
+// No fabricated static catalog: the previous complianceStatic block asserted
+// controls_mapped counts (108/64/93) that exist nowhere in the code or DB and
+// would be printed verbatim into a customer-facing PDF. Compliance is now taken
+// ONLY from a live 200 response; otherwise it is null with an explicit source.
+const complianceSource = '$COMPLIANCE_SOURCE';
 let liveCompliance = null;
 const apiPath = '$COMPLIANCE_JSON';
-if (fs.existsSync(apiPath) && fs.statSync(apiPath).size > 10) {
+if (complianceSource === 'live-api' && fs.existsSync(apiPath) && fs.statSync(apiPath).size > 10) {
   try { liveCompliance = JSON.parse(fs.readFileSync(apiPath, 'utf8')); } catch {}
 }
 
@@ -155,12 +175,13 @@ const manifest = {
     sbom_sha256: '$SBOM_SHA',
   },
   sbom: {
-    path: 'sbom-cyclonedx.json',
+    path: '$SBOM_OUT_NAME',
     sha256: '$SBOM_SHA',
     component_count: Number('$COMPONENT_COUNT') || 0,
+    source: '$SBOM_SOURCE',
   },
-  compliance: liveCompliance || complianceStatic,
-  compliance_source: '$COMPLIANCE_SOURCE',
+  compliance: liveCompliance,
+  compliance_source: complianceSource,
   notes: 'Verify SHA256 hashes against CI artifacts and git commit.',
 };
 
@@ -177,6 +198,16 @@ done
 [[ -f "$OUT_DIR/evidence-pack.json" ]] || FAIL=1
 [[ -f "$OUT_DIR/evidence-pack.pdf" ]] || FAIL=1
 [[ -n "$SBOM_SHA" ]] || FAIL=1
+# A 409 from the unified compliance gate is a real BLOCK, not a missing backend —
+# never emit an "OK" pack over it.
+[[ "$COMPLIANCE_FAIL" -eq 0 ]] || { echo "Compliance gate returned 409 (blocked) — pack is not audit-ready" >&2; FAIL=1; }
+# For a pack intended for external delivery (WEISSMAN_EVIDENCE_STRICT=1), refuse a
+# lockfile-stub SBOM and an unavailable/blocked compliance source. Offline dev
+# runs (strict unset) still succeed so the local gates keep working.
+if [[ "${WEISSMAN_EVIDENCE_STRICT:-0}" == "1" ]]; then
+  [[ "$SBOM_SOURCE" != "lockfile-stub" ]] || { echo "SBOM is a lockfile stub — not acceptable for external delivery" >&2; FAIL=1; }
+  [[ "$COMPLIANCE_SOURCE" == "live-api" ]] || { echo "Compliance source is '$COMPLIANCE_SOURCE' — external delivery requires live-api" >&2; FAIL=1; }
+fi
 
 if [[ "$FAIL" -ne 0 ]]; then
   echo "Evidence pack generation FAILED — see $OUT_DIR" >&2

@@ -23,29 +23,20 @@ import {
   parseHttpApiRoutes,
   groupApiRoutes,
 } from './extract_route_intel.mjs'
+import { loadEngineReality } from './lib/engine_reality.mjs'
 
 const root = process.cwd()
 const heNav = JSON.parse(readFileSync(join(root, 'frontend/src/i18n/locales/he.json'), 'utf8')).nav
 const mainJsx = readFileSync(join(root, 'frontend/src/main.jsx'), 'utf8')
 const appNavSrc = readFileSync(join(root, 'frontend/src/lib/appNav.js'), 'utf8')
 const routeEngineSrc = readFileSync(join(root, 'frontend/src/lib/routeEngineId.js'), 'utf8')
-const enginesSrc = readFileSync(join(root, 'frontend/src/lib/enginesRegistry.js'), 'utf8')
 const routeIntel = buildRouteIntelMap()
 
-const AGENT_REQUIRED = new Set([
-  'process_hollowing', 'dll_hijacking_engine', 'process_inventory', 'av_bypass_engine',
-  'log_tampering_engine', 'anti_debug_evasion', 'rootkit_simulation', 'memory_forensics_evasion',
-  'usb_enumeration', 'dns_tunneling_c2', 'icmp_covert', 'bootkit_uefi', 'persistence_mechanism',
-  'polymorphic_engine', 'ransomware_emulation', 'acoustic_exfil', 'em_exfil_engine', 'optical_exfil',
-  'keyboard_acoustic', 'screen_capture_exfil', 'clipboard_hijack', 'insider_exfil',
-  'storage_covert_channel', 'arp_spoofing_engine', 'vlan_hopping_attack', 'dhcp_attack_engine',
-  'wifi_attack_engine', 'bluetooth_attack_engine', 'lte_5g_attack', 'wpa3_attack_engine',
-  'packet_injection_engine', 'network_tap_advanced', 'multicast_attack', 'nat_traversal_attack',
-  'sim_swap_engine', 'bluetooth_mobile_attack', 'nfc_relay_attack', 'deepfake_voice_engine',
-  'pretexting_engine', 'insider_threat_engine', 'physical_social_eng', 'lorawan_attack',
-  'lora_attack', 'voltage_glitch_attack', 'tpm_firmware_attack', 'cold_boot_attack',
-  'infostealer_emulation',
-])
+// Catalog + agent-required set from source-of-truth modules — NOT a hard-coded
+// list (which had drifted 3 ids from the Rust AGENT_REQUIRED_ENGINES) and NOT a
+// single-quote-only regex (which dropped engines whose description used double
+// quotes and mis-attributed the neighbour's description).
+const { registry: ENGINE_REGISTRY, agentRequired: AGENT_REQUIRED } = await loadEngineReality(root)
 
 function pad(n) {
   return String(n).padStart(3, '0')
@@ -223,20 +214,17 @@ function buildRoutePage(route, engineMap) {
 }
 
 function parseEngines() {
-  const re =
-    /id:\s*'([^']+)'[\s\S]*?label:\s*'([^']+)'[\s\S]*?group:\s*'([^']+)'[\s\S]*?mitre:\s*'([^']*)'[\s\S]*?description:\s*'([^']*)'[\s\S]*?requiresTarget:\s*(true|false)/g
-  const engines = []
-  let m
-  while ((m = re.exec(enginesSrc))) {
-    engines.push({
-      id: m[1],
-      label: m[2],
-      group: m[3],
-      mitre: m[4],
-      description: m[5],
-      requiresTarget: m[6] === 'true',
-      agent: AGENT_REQUIRED.has(m[1]),
-    })
+  const engines = ENGINE_REGISTRY.map((e) => ({
+    id: e.id,
+    label: e.label,
+    group: e.group,
+    mitre: e.mitre,
+    description: e.description ?? '',
+    requiresTarget: Boolean(e.requiresTarget),
+    agent: AGENT_REQUIRED.has(e.id),
+  }))
+  if (engines.length !== ENGINE_REGISTRY.length) {
+    throw new Error(`engine count mismatch: ${engines.length} vs registry ${ENGINE_REGISTRY.length}`)
   }
   return engines
 }

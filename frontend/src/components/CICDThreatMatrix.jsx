@@ -2,12 +2,13 @@
  * Module 8: Phantom Pipeline / CI/CD Threat Matrix.
  * Horizontal pipeline (Commit -> Build -> Test -> Deploy), red stages, modal with Attacker's Playbook.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../utils/apiFetch'
 import StandaloneLabShell from './ui/StandaloneLabShell'
 import Button from './ui/Button'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 const STAGE_KEYS = ['commit', 'build', 'test', 'deploy']
 
@@ -21,6 +22,17 @@ export default function CICDThreatMatrix() {
   const [runRepoUrl, setRunRepoUrl] = useState('')
   const [running, setRunning] = useState(false)
   const [client, setClient] = useState(null)
+
+  // Dialog a11y for the Attacker's Playbook modal: focus trap + Escape-to-close.
+  const modalRef = useRef(null)
+  const modalTitleId = useId()
+  useFocusTrap(modalRef, !!modalFinding)
+  useEffect(() => {
+    if (!modalFinding) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setModalFinding(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [modalFinding])
 
   const STAGES = STAGE_KEYS.map((key) => ({
     key,
@@ -131,13 +143,17 @@ export default function CICDThreatMatrix() {
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
             onClick={() => setModalFinding(null)}
           >
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- stopPropagation guard on modal content; contains interactive children */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- stopPropagation guard on the dialog panel; Escape + close button provide the keyboard path */}
             <div
+              ref={modalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={modalTitleId}
               className="rounded-xl bg-[var(--bg-1)] border-2 border-[var(--border-strong)] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-[var(--border-default)] flex items-center justify-between">
-                <h3 className="text-lg font-bold text-red-400">{t(`${NS}.playbook_title`)}</h3>
+                <h3 id={modalTitleId} className="text-lg font-bold text-red-400">{t(`${NS}.playbook_title`)}</h3>
                 <Button variant="unstyled"
                   type="button"
                   onClick={() => setModalFinding(null)}

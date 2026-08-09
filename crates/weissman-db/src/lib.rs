@@ -14,7 +14,7 @@ pub mod llm_usage;
 pub mod no_tx_migrations;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use sqlx::{Executor, Postgres, Transaction};
+use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -196,6 +196,10 @@ pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
             "DATABASE_URL is set but empty".into(),
         ));
     }
+    // Guard against a DSN with no `user@` (libpq would silently fall back to the OS user, e.g.
+    // `root` under systemd) — the same check `connect_intel_from_env` applies.
+    env_bootstrap::validate_database_url(t)
+        .map_err(|msg| sqlx::Error::Configuration(format!("DATABASE_URL: {}", msg).into()))?;
     connect_app(t).await
 }
 
@@ -232,6 +236,11 @@ pub async fn connect_auth_from_env() -> Result<PgPool, sqlx::Error> {
             "resolved auth database URL is empty".into(),
         ));
     }
+    // Same OS-user fallback guard as the app/intel pools (peer-auth DSNs with `user@/db?host=…`
+    // still pass — they carry a non-empty userinfo before `@`).
+    env_bootstrap::validate_database_url(t).map_err(|msg| {
+        sqlx::Error::Configuration(format!("auth database URL: {}", msg).into())
+    })?;
     connect_auth(t).await
 }
 
@@ -320,18 +329,6 @@ pub async fn set_tenant_tx(
     .bind(advisory_lock::lock_timeout_setting())
     .execute(&mut **tx)
     .await?;
-    Ok(())
-}
-
-/// Set GUC on a bare connection (use only when the connection is dedicated, e.g. right after acquire, before release).
-pub async fn set_tenant_conn<'e, E>(e: E, tenant_id: i64) -> Result<(), sqlx::Error>
-where
-    E: Executor<'e, Database = sqlx::Postgres>,
-{
-    sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
-        .bind(tenant_id.to_string())
-        .execute(e)
-        .await?;
     Ok(())
 }
 

@@ -148,6 +148,7 @@ export default function BusinessEngineProfile() {
       const status = String(d.status || '').toLowerCase()
       if (status === 'completed' || status === 'failed' || status === 'dead') {
         setRunState((prev) => ({ ...prev, running: false }))
+        clearInterval(iv)
       }
     }, 2000)
     return () => { cancelled = true; clearInterval(iv) }
@@ -237,14 +238,18 @@ export default function BusinessEngineProfile() {
       return
     }
     setRunState({ running: true, msg: t('pages.businessEngineProfile.queueing') })
-    const { ok, data: d, status } = await postScan(effectivePayload)
-    if (!ok) {
-      setRunState({ running: false, msg: t('pages.businessEngineProfile.queue_failed', { status }) })
-      return
+    try {
+      const { ok, data: d, status } = await postScan(effectivePayload)
+      if (!ok) {
+        setRunState({ running: false, msg: t('pages.businessEngineProfile.queue_failed', { status }) })
+        return
+      }
+      setActiveJobId(d.job_id || '')
+      setLiveJob(null)
+      setRunState({ running: true, msg: t('pages.businessEngineProfile.queued_job', { jobId: d.job_id || 'unknown' }) })
+    } catch (e) {
+      setRunState({ running: false, msg: t('pages.businessEngineProfile.queue_failed', { status: e?.status ?? '' }) })
     }
-    setActiveJobId(d.job_id || '')
-    setLiveJob(null)
-    setRunState({ running: true, msg: t('pages.businessEngineProfile.queued_job', { jobId: d.job_id || 'unknown' }) })
   }
 
   async function exportJson() {

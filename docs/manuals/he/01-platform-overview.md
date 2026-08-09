@@ -8,7 +8,7 @@ Weissman Cybersecurity היא **פלטפורמת offensive-security והגנה �
 - **Worker אסינכרוני** (`weissman-worker`) — pipelines של סריקות
 - **Command Center ב-React** — SPA ב-`/command-center/`
 - **Agent לנקודת קצה** (`weissman-agent`) — detections + UEBA
-- **545+ מנועי production** — כל אחד מחובר ל-probe אמיתי
+- **563 מנועי production** — כל אחד מחובר ל-probe אמיתי
 
 **עקרון מרכזי:** Findings מגיעים **רק מ-probes חיים**. מנועים שדורשים Agent מציגים empty state כנה עד ש-Agent מחובר — **ללא תוצאות מזויפות**.
 

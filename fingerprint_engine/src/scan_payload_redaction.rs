@@ -22,6 +22,7 @@ const EXPLICIT_SECRET_KEYS: &[&str] = &[
     "bearer_token",
     "access_token",
     "refresh_token",
+    "ebpf_ssh_key_pem",
 ];
 
 #[must_use]
@@ -37,6 +38,9 @@ pub fn is_sensitive_payload_key(key: &str) -> bool {
         || k.ends_with("_secret")
         || k.ends_with("_api_key")
         || k.ends_with("_password")
+        || k.ends_with("_pem")
+        || k.ends_with("_key_pem")
+        || k.ends_with("_private_key")
         || k.contains("password")
         || k.contains("private_key")
 }

@@ -50,7 +50,7 @@ node scripts/engine_reality_audit.mjs
 node scripts/weissman-ui-audit.mjs
 ```
 
-**Pass:** **95/95** דפים, **112/112** נתיבים.
+**Pass:** **111/111** דפים, **130** נתיבים (יעד ≥112).
 
 ### 4. Rust + Frontend
 
@@ -96,7 +96,7 @@ cd frontend && npm run test:coverage
 
 ```
   [ ] full_audit_gate.sh — GLOBAL PASS
-  [ ] 563 engine IDs, 112 routes, 0 gaps
+  [ ] 563 engine IDs, 130 routes, 0 gaps
   [ ] evidence-pack JSON + PDF
   [ ] login + scan + findings + PDF
 ```

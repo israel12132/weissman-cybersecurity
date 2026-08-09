@@ -39,7 +39,7 @@ groups:
       # Scan duration P99 high (uses the scan-specific histogram if emitted)
       - alert: SlowScans
         expr: |
-          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{path=~".*/scan.*"}[10m])) by (le))
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{path=~".*scan.*"}[10m])) by (le))
           > 300
         for: 10m
         labels:
@@ -146,3 +146,82 @@ groups:
         annotations:
           summary: "High stale agent ratio"
           description: "More than 50% of registered agents are stale (>90s since last_seen)"
+
+  # Platform-health rules for metrics that were emitted but had no rule consuming
+  # them: DB backup freshness/failure, async-task & engine panics, the panic
+  # circuit breaker, RBAC context anomalies and deception (honeypot) hits.
+  - name: platform_health_alerts
+    interval: 30s
+    rules:
+      # Backup has not succeeded in >25h (nightly cadence + slack). Guarded on
+      # `> 0` so it stays silent until the first successful backup publishes the
+      # timestamp, rather than firing at boot against an unset/zero gauge.
+      - alert: BackupStale
+        expr: weissman_backup_last_success_unix_timestamp > 0 and (time() - weissman_backup_last_success_unix_timestamp) > 90000
+        for: 10m
+        labels:
+          severity: critical
+          category: backup
+        annotations:
+          summary: "Database backup is stale (>25h)"
+          description: "No successful backup for {{ $value | humanizeDuration }}; the DR/PITR guarantee is at risk"
+
+      - alert: BackupFailing
+        expr: increase(weissman_backup_failure_total[6h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: backup
+        annotations:
+          summary: "Database backup failures"
+          description: "{{ $value }} backup failure(s) in the last 6h — check the backup job logs"
+
+      - alert: AsyncTaskPanics
+        expr: rate(weissman_async_task_panic_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: reliability
+        annotations:
+          summary: "Async task panics"
+          description: "Background tasks are panicking (rate {{ $value }}/s over 15m)"
+
+      - alert: EnginePanics
+        expr: rate(weissman_engine_panic_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "Scan engine panics"
+          description: "Scan engines are panicking (rate {{ $value }}/s over 15m)"
+
+      - alert: PanicCircuitOpen
+        expr: rate(weissman_panic_circuit_open_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: reliability
+        annotations:
+          summary: "Panic circuit breaker tripped"
+          description: "The panic circuit opened — a subsystem is shedding load after repeated panics"
+
+      - alert: RbacMissingAuthContext
+        expr: rate(weissman_rbac_missing_authcontext_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "RBAC AuthContext missing"
+          description: "Requests reached RBAC checks without an AuthContext (rate {{ $value }}/s) — possible auth wiring regression"
+
+      - alert: DeceptionHit
+        expr: increase(weissman_deception_hit_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Deception/honeypot triggered"
+          description: "{{ $value }} deception hit(s) in 5m — a decoy asset was touched; investigate immediately"

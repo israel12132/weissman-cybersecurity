@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Search, ShieldCheck } from 'lucide-react'
-import { cn } from '../lib/cn'
 
 import Button from '../components/ui/Button'
 import AiCommandConsole from '../components/ui/AiCommandConsole'

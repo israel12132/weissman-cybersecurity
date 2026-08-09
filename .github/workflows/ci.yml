@@ -40,6 +40,7 @@ jobs:
   migration-sync:
     name: Migration trees in sync
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +62,7 @@ jobs:
   python-audit:
     name: Python — pip-audit & lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +95,7 @@ jobs:
   rust-audit:
     name: Rust — audit, lint, test
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     # Cut debug info for this job's Rust build. THE dominant cost in the all-targets link is
     # debug info: the workspace links ~2300 test harnesses, and the fingerprint_engine lib-test
     # binary alone is ~2.7 GB with full `debug = 2`. Four `rust-lld` processes each mmap'ing a
@@ -133,8 +136,15 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          # Append run_id so the primary key is unique per run: actions/cache
+          # skips the post-job save on an EXACT primary-key hit, which otherwise
+          # freezes target/ forever once a Cargo.lock-keyed entry exists (no
+          # recompiled artifacts are ever re-saved). A unique key always saves,
+          # and restore-keys still restores the most recent same-lockfile entry.
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-
 
       - name: Free runner disk (workspace links several large debug binaries)
         # `cargo build --workspace` links weissman-server, weissman-worker AND the
@@ -230,8 +240,11 @@ jobs:
   security-scan:
     name: Security — secrets & dependency scan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Secret scan (gitleaks, working tree)
         run: |
@@ -239,6 +252,7 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
             | tar -xz gitleaks
           ./gitleaks detect --no-git --redact --no-banner --exit-code 1 --source .
+          ./gitleaks detect --redact --no-banner --exit-code 1 --source .
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -292,19 +306,27 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Frontend npm audit (high+critical CVEs)
+      - name: Frontend npm audit (production deps, high+critical CVEs) — blocking
         working-directory: frontend
         # Production dependencies only — the shipped bundle is what matters for
         # supply-chain risk. Build/dev tooling (vite, esbuild, test frameworks)
-        # never reaches production; the one remaining dev-only high is esbuild's
-        # dev-server SSRF via vite, which does not affect `vite build` output.
-        # Production transitive CVEs (d3 ReDoS via react-simple-maps) are pinned
-        # to patched releases through package.json `overrides`.
+        # never reaches production; the current dev-only high is the vite
+        # `server.fs.deny` bypass (GHSA-fx2h-pf6j-xcff), which affects the dev
+        # server, not `vite build` output. Production transitive CVEs (d3 ReDoS
+        # via react-simple-maps) are pinned to patched releases via `overrides`.
         run: npm audit --omit=dev --audit-level=high
+      - name: Frontend npm audit (ALL deps incl. dev) — informational
+        working-directory: frontend
+        # Non-blocking visibility into dev-tooling advisories (e.g. the vite
+        # GHSA-fx2h-pf6j-xcff high above) that --omit=dev drops from the blocking
+        # gate. Surfaces them in the log without failing the build.
+        continue-on-error: true
+        run: npm audit --audit-level=moderate
 
   frontend-build:
     name: Frontend — lint, test, build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -419,8 +441,15 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          # Append run_id so the primary key is unique per run: actions/cache
+          # skips the post-job save on an EXACT primary-key hit, which otherwise
+          # freezes target/ forever once a Cargo.lock-keyed entry exists (no
+          # recompiled artifacts are ever re-saved). A unique key always saves,
+          # and restore-keys still restores the most recent same-lockfile entry.
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-
 
       - name: Install frontend dependencies
         # Must precede the Weissman UI compliance audit below: that script parses the
@@ -775,7 +804,9 @@ jobs:
         continue-on-error: true
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: http://172.17.0.1:18000/api/health
+          # Target the served root (SPA + API base), not the JSON /api/health leaf:
+          # the baseline spider needs a real link graph to crawl or it scans nothing.
+          target: http://172.17.0.1:18000/
           cmd_options: '-I -a'
           fail_action: false
           allow_issue_writing: false
@@ -787,6 +818,10 @@ jobs:
           # real row-level security (the role + migrations were created by the
           # weissman-server boot above).
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/weissman
+          # Fail (not skip) if TEST_DATABASE_URL is ever dropped/renamed, so this
+          # sole behavioural cross-tenant RLS check can never masquerade as green
+          # by hard-skipping — matches the pre-boot gate above.
+          WEISSMAN_REQUIRE_DB_TESTS: "1"
         run: cargo test -p weissman-db --test rls_cross_tenant -- --nocapture
 
       - name: Smoke one engine per group
@@ -1018,6 +1053,7 @@ jobs:
   semgrep:
     name: Semgrep SAST (critical blocking)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -1071,6 +1107,7 @@ jobs:
   rust-coverage:
     name: Rust — coverage (llvm-cov)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       # SHA-pinned (supply-chain immutability); explicit toolchain since the ref is a commit.
@@ -1087,7 +1124,7 @@ jobs:
         # quarantine for the legacy crates. Coverage may only go up, never down. Collect once,
         # then emit both lcov (artifact) and json (ratchet input) from the cached profdata.
         run: |
-          cargo llvm-cov --workspace --lib --no-report
+          cargo llvm-cov --workspace --all-targets --no-report
           cargo llvm-cov report --lcov --output-path lcov.info
           cargo llvm-cov report --json --output-path cov.json
           node scripts/coverage_ratchet.mjs cov.json
@@ -1101,9 +1138,10 @@ jobs:
 
   publish:
     name: Publish signed image (tags only)
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     # Only build+publish after the quality gates pass, and only for release tags.
-    needs: [rust-audit, security-scan, frontend-build, engine-wiring-and-smoke, semgrep]
+    needs: [migration-sync, python-audit, rust-audit, rust-coverage, security-scan, frontend-build, engine-wiring-and-smoke, semgrep]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read

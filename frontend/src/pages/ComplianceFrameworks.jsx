@@ -116,11 +116,17 @@ export default function ComplianceFrameworks() {
       setExporting(true);
       const r = await apiFetch(`/api/compliance/frameworks/${frameworkId}/report`, { raw: true });
       const blob = await r.blob();
+      // Honor the server's Content-Disposition filename so markers like
+      // "…-compliance-report-VOID.pdf" are preserved rather than hardcoded away.
+      const disposition = r.headers.get('content-disposition') || '';
+      const match = disposition.match(/filename="?([^";\s]+)"?/);
+      const filename = match?.[1] || `${frameworkId}-compliance-report.pdf`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${frameworkId}-compliance-report.pdf`;
+      link.download = filename;
       link.click();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to generate report:', err);
       setError(t('pages.complianceFrameworks.export_failed'));

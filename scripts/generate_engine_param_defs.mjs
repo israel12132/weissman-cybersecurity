@@ -157,6 +157,23 @@ const body = `/**
  */
 export const GENERATED_PARAM_DEFS = ${JSON.stringify(generated, null, 2)}
 `
+
+// --check: verify the committed file matches what we'd generate, without writing.
+// Lets the wiring gate FAIL on drift instead of silently rewriting a tracked
+// source file inside the runner (leaving the shipped bundle built from a stale copy).
+if (process.argv.includes('--check')) {
+  const existing = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : ''
+  if (existing !== body) {
+    console.error(
+      `✖ ${path.relative(root, outPath)} is out of date vs the engine registry.\n` +
+        '  Run: node scripts/generate_engine_param_defs.mjs  (and commit the result).',
+    )
+    process.exit(1)
+  }
+  console.log(`✓ ${path.relative(root, outPath)} is up to date (${Object.keys(generated).length} profiles)`)
+  process.exit(0)
+}
+
 fs.writeFileSync(outPath, body)
 console.log(`Generated ${Object.keys(generated).length} engine param profiles → ${outPath}`)
 console.log(`Explicit hand-tuned: ${Object.keys(EXPLICIT_PARAM_DEFS).length}`)

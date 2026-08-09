@@ -111,113 +111,136 @@ async fn resolve_cve_for_row(client: &reqwest::Client, raw_data: &Value) -> Opti
 }
 
 /// One pass: populate missing CVE ids, refresh EPSS cache, materialize scores + KEV flags.
-pub async fn run_findings_intel_backfill(pool: &PgPool) -> Result<(usize, usize), String> {
+///
+/// `vulnerabilities` is a FORCE-RLS table, so every read/write must run inside a tenant-scoped
+/// transaction or it silently affects zero rows. Tenants are enumerated on the BYPASSRLS auth
+/// pool, then each pass runs against `pool` inside `begin_tenant_tx`.
+pub async fn run_findings_intel_backfill(
+    pool: &PgPool,
+    auth_pool: &PgPool,
+) -> Result<(usize, usize), String> {
     let client = http_client();
 
-    let rows = sqlx::query(
-        r#"SELECT id, raw_data
-             FROM vulnerabilities
-            WHERE (epss_score IS NULL AND NOT kev_listed)
-               OR trim(COALESCE(raw_data->>'cve', '')) = ''
-            ORDER BY id
-            LIMIT $1"#,
-    )
-    .bind(BATCH_LIMIT)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let tenants: Vec<i64> =
+        sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
+            .fetch_all(auth_pool)
+            .await
+            .unwrap_or_default();
 
     let mut cve_updates = 0usize;
-    for r in rows {
-        let id: i64 = r.try_get("id").unwrap_or(0);
-        let raw_data: Value = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
-        let Some(cve) = resolve_cve_for_row(&client, &raw_data).await else {
-            continue;
-        };
-        let mut patched = raw_data.clone();
-        if let Value::Object(obj) = &mut patched {
-            obj.insert("cve".into(), Value::String(cve.clone()));
-        }
-        let res = sqlx::query(
-            r#"UPDATE vulnerabilities
-                  SET raw_data = $2::jsonb,
-                      intel_enriched_at = COALESCE(intel_enriched_at, now())
-                WHERE id = $1"#,
+    let mut intel_updates = 0usize;
+
+    for tenant_id in tenants {
+        let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let rows = sqlx::query(
+            r#"SELECT id, raw_data
+                 FROM vulnerabilities
+                WHERE (epss_score IS NULL AND NOT kev_listed)
+                   OR trim(COALESCE(raw_data->>'cve', '')) = ''
+                ORDER BY id
+                LIMIT $1"#,
         )
-        .bind(id)
-        .bind(&patched)
-        .execute(pool)
-        .await;
-        if res.is_ok() {
-            cve_updates += 1;
+        .bind(BATCH_LIMIT)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        for r in rows {
+            let id: i64 = r.try_get("id").unwrap_or(0);
+            let raw_data: Value = r.try_get::<Value, _>("raw_data").unwrap_or(Value::Null);
+            let Some(cve) = resolve_cve_for_row(&client, &raw_data).await else {
+                continue;
+            };
+            let mut patched = raw_data.clone();
+            if let Value::Object(obj) = &mut patched {
+                obj.insert("cve".into(), Value::String(cve.clone()));
+            }
+            let res = sqlx::query(
+                r#"UPDATE vulnerabilities
+                      SET raw_data = $2::jsonb,
+                          intel_enriched_at = COALESCE(intel_enriched_at, now())
+                    WHERE id = $1"#,
+            )
+            .bind(id)
+            .bind(&patched)
+            .execute(&mut *tx)
+            .await;
+            if res.is_ok() {
+                cve_updates += 1;
+            }
         }
+
+        // Refresh EPSS mirror for all distinct non-empty CVEs in this tenant's findings.
+        let cve_rows: Vec<(String,)> = sqlx::query_as(
+            r#"SELECT DISTINCT upper(trim(raw_data->>'cve')) AS cve
+                 FROM vulnerabilities
+                WHERE trim(COALESCE(raw_data->>'cve', '')) <> ''"#,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap_or_default();
+        let cves: Vec<String> = cve_rows.into_iter().map(|(c,)| c).collect();
+        if !cves.is_empty() {
+            // epss_intel/kev_intel have RLS DISABLED, so the mirror refresh stays on the bare pool.
+            crate::intel_epss::fetch_epss_for_cves(pool, &cves).await;
+        }
+
+        let epss_res = sqlx::query(
+            r#"UPDATE vulnerabilities v
+                  SET epss_score       = e.score,
+                      epss_percentile  = e.percentile,
+                      intel_enriched_at = now()
+                 FROM epss_intel e
+                WHERE e.cve = upper(trim(v.raw_data->>'cve'))
+                  AND trim(COALESCE(v.raw_data->>'cve', '')) <> ''
+                  AND (v.epss_score IS DISTINCT FROM e.score
+                    OR v.epss_percentile IS DISTINCT FROM e.percentile)"#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let kev_res = sqlx::query(
+            r#"UPDATE vulnerabilities v
+                  SET kev_listed           = true,
+                      kev_known_ransomware = k.known_ransomware_use,
+                      kev_due_date         = k.due_date,
+                      intel_enriched_at    = now()
+                 FROM kev_intel k
+                WHERE k.cve = upper(trim(v.raw_data->>'cve'))
+                  AND trim(COALESCE(v.raw_data->>'cve', '')) <> ''
+                  AND NOT v.kev_listed"#,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        // Re-rank effective_risk for findings just discovered to be KEV-listed. Without this a
+        // finding LEARNED to be known-exploited would stay frozen at its CVSS-only priority forever.
+        // The KEV floor is idempotent (GREATEST) and the WHERE only touches rows still below it, so
+        // this can't double-count and won't churn already-ranked rows.
+        let _ = sqlx::query(
+            r#"UPDATE vulnerabilities v
+                  SET effective_risk = CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END
+                WHERE v.kev_listed
+                  AND COALESCE(v.effective_risk, 0.0)
+                      < CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END"#,
+        )
+        .execute(&mut *tx)
+        .await;
+
+        intel_updates += epss_res.rows_affected() as usize + kev_res.rows_affected() as usize;
+
+        tx.commit().await.map_err(|e| e.to_string())?;
     }
 
-    // Refresh EPSS mirror for all distinct non-empty CVEs in findings.
-    let cve_rows: Vec<(String,)> = sqlx::query_as(
-        r#"SELECT DISTINCT upper(trim(raw_data->>'cve')) AS cve
-             FROM vulnerabilities
-            WHERE trim(COALESCE(raw_data->>'cve', '')) <> ''"#,
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
-    let cves: Vec<String> = cve_rows.into_iter().map(|(c,)| c).collect();
-    if !cves.is_empty() {
-        crate::intel_epss::fetch_epss_for_cves(pool, &cves).await;
-    }
-
-    let epss_res = sqlx::query(
-        r#"UPDATE vulnerabilities v
-              SET epss_score       = e.score,
-                  epss_percentile  = e.percentile,
-                  intel_enriched_at = now()
-             FROM epss_intel e
-            WHERE e.cve = upper(trim(v.raw_data->>'cve'))
-              AND trim(COALESCE(v.raw_data->>'cve', '')) <> ''
-              AND (v.epss_score IS DISTINCT FROM e.score
-                OR v.epss_percentile IS DISTINCT FROM e.percentile)"#,
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let kev_res = sqlx::query(
-        r#"UPDATE vulnerabilities v
-              SET kev_listed           = true,
-                  kev_known_ransomware = k.known_ransomware_use,
-                  kev_due_date         = k.due_date,
-                  intel_enriched_at    = now()
-             FROM kev_intel k
-            WHERE k.cve = upper(trim(v.raw_data->>'cve'))
-              AND trim(COALESCE(v.raw_data->>'cve', '')) <> ''
-              AND NOT v.kev_listed"#,
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Re-rank effective_risk for findings just discovered to be KEV-listed. Without this a
-    // finding LEARNED to be known-exploited would stay frozen at its CVSS-only priority forever.
-    // The KEV floor is idempotent (GREATEST) and the WHERE only touches rows still below it, so
-    // this can't double-count and won't churn already-ranked rows.
-    let _ = sqlx::query(
-        r#"UPDATE vulnerabilities v
-              SET effective_risk = CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END
-            WHERE v.kev_listed
-              AND COALESCE(v.effective_risk, 0.0)
-                  < CASE WHEN v.kev_known_ransomware THEN 9.5 ELSE 8.5 END"#,
-    )
-    .execute(pool)
-    .await;
-
-    Ok((
-        cve_updates,
-        epss_res.rows_affected() as usize + kev_res.rows_affected() as usize,
-    ))
+    Ok((cve_updates, intel_updates))
 }
 
-pub fn bootstrap_findings_intel_backfill(pool: Arc<PgPool>) {
+pub fn bootstrap_findings_intel_backfill(pool: Arc<PgPool>, auth_pool: Arc<PgPool>) {
     if !matches!(
         std::env::var("WEISSMAN_INTEL_EPSS_ENABLED").as_deref(),
         Ok("1") | Ok("true") | Ok("yes") | Err(_)
@@ -226,7 +249,7 @@ pub fn bootstrap_findings_intel_backfill(pool: Arc<PgPool>) {
     }
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(12)).await;
-        match run_findings_intel_backfill(pool.as_ref()).await {
+        match run_findings_intel_backfill(pool.as_ref(), auth_pool.as_ref()).await {
             Ok((cve_n, intel_n)) => {
                 tracing::info!(
                     target: "intel_backfill",

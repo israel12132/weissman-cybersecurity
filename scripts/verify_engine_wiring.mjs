@@ -5,9 +5,13 @@ import { spawnSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 
-const gen = spawnSync('node', ['scripts/generate_engine_param_defs.mjs'], { cwd: root, encoding: 'utf8' })
+// --check (not a silent regenerate): a verification gate must not mutate a
+// tracked source file. This fails on drift instead of rewriting the committed
+// engineParamDefs.generated.js in place (which would let a stale committed copy
+// ship while CI stays green).
+const gen = spawnSync('node', ['scripts/generate_engine_param_defs.mjs', '--check'], { cwd: root, encoding: 'utf8' })
 if (gen.status !== 0) {
-  console.error(gen.stderr || gen.stdout || 'generate_engine_param_defs.mjs failed')
+  console.error(gen.stderr || gen.stdout || 'generate_engine_param_defs.mjs --check failed (param defs out of date)')
   process.exit(gen.status ?? 1)
 }
 const frontendModule = await import(pathToFileURL(path.join(root, 'frontend/src/lib/enginesRegistry.js')).href)

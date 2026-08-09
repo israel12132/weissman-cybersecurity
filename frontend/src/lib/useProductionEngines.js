@@ -42,6 +42,8 @@ export function useProductionEngines({ prefetch = false } = {}) {
     let cancelled = false
     loadEnginesRegistry().then((mod) => {
       if (!cancelled) setRegistry(mod)
+    }).catch(() => {
+      if (!cancelled) setRegistry(null)
     })
     return () => {
       cancelled = true

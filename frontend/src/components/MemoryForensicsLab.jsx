@@ -2,7 +2,7 @@
  * Module 9: Exploit Synthesis & Memory Forensics Lab.
  * Entropy Gauge (Richter scale), Deception Badge, Hex Heatmap (Memory X-Ray).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { List } from 'react-window'
@@ -108,6 +108,10 @@ export default function MemoryForensicsLab() {
   const [jobStatus, setJobStatus] = useState(null)
   const [client, setClient] = useState(null)
   const [hoveredSlot, setHoveredSlot] = useState(null) // 'Buffer' | 'Padding' | 'RBP' | 'RIP' | 'Shellcode' for hex hover
+  const esRef = useRef(null)
+
+  // Close the self-healing PoE SSE stream on unmount so it does not reconnect forever.
+  useEffect(() => () => { esRef.current?.close() }, [])
 
   const fetchFindings = useCallback(() => {
     if (!clientId) return
@@ -164,7 +168,9 @@ export default function MemoryForensicsLab() {
         setJobStatus({ status: 'running', message: data?.message || 'Queued.' })
         // Zero-latency SSE (Bearer via query when cookies are blocked)
         const path = `/api/poe-scan/stream/${encodeURIComponent(id)}`
+        esRef.current?.close()
         const es = openSseStream(path)
+        esRef.current = es
         es.onmessage = (e) => {
           try {
             const s = JSON.parse(e.data)

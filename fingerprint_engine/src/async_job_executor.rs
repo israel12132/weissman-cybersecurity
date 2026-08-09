@@ -1,5 +1,6 @@
-//! Executes rows from `weissman_async_jobs` (worker + optional in-process dispatch).
-//! Broadcast channels default to no-op sinks when absent (worker binary).
+//! Executes rows from `weissman_async_jobs`. The worker binary (`weissman-worker`) is the sole
+//! consumer of `execute_job`; the API server does not drain the queue, so with no worker pod
+//! running, jobs accumulate as `pending`. Broadcast channels default to no-op sinks when absent.
 
 use crate::db;
 use serde_json::{json, Value};

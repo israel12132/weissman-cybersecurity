@@ -284,6 +284,15 @@ class MonitoredSourceModel(Base):
 def init_db():
     """Create tables (sync). For PostgreSQL use Alembic in production."""
     import sqlalchemy.exc
+    # These SQLAlchemy models shadow table names owned by the Rust sqlx migrations.
+    # Refuse to create_all/ALTER against a production DATABASE_URL (mirrors the guard
+    # alembic/env.py already enforces).
+    from src.config import is_production
+    if is_production() and not os.getenv("WEISSMAN_ALLOW_LEGACY_ALEMBIC"):
+        raise RuntimeError(
+            "init_db() is disabled in production; the Rust migrations own the schema. "
+            "Set WEISSMAN_ALLOW_LEGACY_ALEMBIC=1 to override."
+        )
     engine = get_engine()
     try:
         Base.metadata.create_all(engine)

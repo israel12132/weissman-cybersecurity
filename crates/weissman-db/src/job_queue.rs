@@ -17,6 +17,27 @@ pub struct AsyncJob {
     pub trace_id: Option<String>,
 }
 
+/// Open a transaction with the **worker/queue** RLS posture: `app.current_tenant_id = ''`
+/// selects the unrestricted branch of the `weissman_async_jobs` policy
+/// (`NULLIF('','') IS NULL`).
+///
+/// `weissman_app` is `NOBYPASSRLS` and migration `20260602180000` set a database-level
+/// default `app.current_tenant_id = '0'`, so an unscoped connection's policy collapses to
+/// `tenant_id = 0` and hides/rejects every real tenant's row. Setting the GUC transaction-locally
+/// (`SET LOCAL` semantics via `set_config(..., true)`) restores the intended "trusted queue
+/// plumbing is unrestricted" branch without leaking scope to the next borrower of the pooled
+/// connection. Tenant-scoped operations (`enqueue`, `get_job_for_tenant`) use
+/// [`crate::begin_tenant_tx`] with a concrete id instead.
+async fn begin_worker_tx(
+    pool: &PgPool,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT set_config('app.current_tenant_id', '', true)")
+        .execute(&mut *tx)
+        .await?;
+    Ok(tx)
+}
+
 /// Enqueue work; returns the primary key for correlation (HTTP 202, polling, etc.).
 pub async fn enqueue(
     pool: &PgPool,
@@ -25,6 +46,7 @@ pub async fn enqueue(
     payload: Value,
     trace_id: Option<&str>,
 ) -> Result<Uuid, sqlx::Error> {
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let id: Uuid = sqlx::query_scalar(
         r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id)
            VALUES ($1, $2, $3, 'pending', $4)
@@ -34,8 +56,9 @@ pub async fn enqueue(
     .bind(kind)
     .bind(Json(payload))
     .bind(trace_id)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -56,6 +79,7 @@ pub async fn enqueue_held(
     hold_secs: i64,
 ) -> Result<Uuid, sqlx::Error> {
     let hold = hold_secs.clamp(1, 300);
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let id: Uuid = sqlx::query_scalar(
         r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id, run_after)
            VALUES ($1, $2, $3, 'pending', $4, now() + ($5::bigint * interval '1 second'))
@@ -66,8 +90,9 @@ pub async fn enqueue_held(
     .bind(Json(payload))
     .bind(trace_id)
     .bind(hold)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -77,6 +102,7 @@ pub async fn enqueue_held(
 /// envelope. Guarded on the row still being held (`run_after IS NOT NULL`) so a
 /// late finalize cannot resurrect a job that was already failed.
 pub async fn release_hold(pool: &PgPool, job_id: Uuid, payload: Value) -> Result<u64, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
               SET payload = $2, run_after = NULL, updated_at = now()
@@ -84,8 +110,9 @@ pub async fn release_hold(pool: &PgPool, job_id: Uuid, payload: Value) -> Result
     )
     .bind(job_id)
     .bind(Json(payload))
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(r.rows_affected())
 }
 
@@ -98,6 +125,7 @@ pub async fn enqueue_with_max_attempts(
     trace_id: Option<&str>,
     max_attempts: i32,
 ) -> Result<Uuid, sqlx::Error> {
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let id: Uuid = sqlx::query_scalar(
         r#"INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status, trace_id, max_attempts)
            VALUES ($1, $2, $3, 'pending', $4, $5)
@@ -108,8 +136,9 @@ pub async fn enqueue_with_max_attempts(
     .bind(Json(payload))
     .bind(trace_id)
     .bind(max_attempts.max(1))
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(id)
 }
 
@@ -161,6 +190,7 @@ pub async fn reserve_next_with_role(
     lock_secs: i64,
     role: WorkerPoolRole,
 ) -> Result<Option<AsyncJob>, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
     let row = sqlx::query(
         r#"
         WITH c AS (
@@ -209,8 +239,9 @@ pub async fn reserve_next_with_role(
     .bind(worker_id)
     .bind(lock_secs)
     .bind(role.sql_mode())
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     let Some(row) = row else {
         return Ok(None);
@@ -252,6 +283,7 @@ pub async fn claim_next_with_role(
     lock_secs: i64,
     role: WorkerPoolRole,
 ) -> Result<Option<AsyncJob>, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
     let row = sqlx::query(
         r#"
         WITH c AS (
@@ -301,8 +333,9 @@ pub async fn claim_next_with_role(
     .bind(worker_id)
     .bind(lock_secs)
     .bind(role.sql_mode())
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     let Some(row) = row else {
         return Ok(None);
@@ -332,6 +365,7 @@ pub async fn heartbeat(pool: &PgPool, job_id: Uuid, lock_secs: i64) -> Result<()
     // Extend `locked_until` alongside `heartbeat_at`: the reclaim sweep fails any running
     // job whose `locked_until < now()`, so a long job (> lock window) that is still beating
     // must keep pushing the lock forward or it gets falsely marked failed mid-flight.
+    let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         "UPDATE weissman_async_jobs
             SET heartbeat_at = now(),
@@ -341,18 +375,21 @@ pub async fn heartbeat(pool: &PgPool, job_id: Uuid, lock_secs: i64) -> Result<()
     )
     .bind(job_id)
     .bind(lock_secs)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 
 pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         "UPDATE weissman_async_jobs SET status = 'completed', locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1",
     )
     .bind(job_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -362,14 +399,16 @@ pub async fn complete_job_with_result(
     job_id: Uuid,
     result: &Value,
 ) -> Result<(), sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $2,
            locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(Json(result))
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -401,14 +440,16 @@ pub async fn get_job_for_tenant(
     tenant_id: i64,
     job_id: Uuid,
 ) -> Result<Option<JobStatusView>, sqlx::Error> {
+    let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let row = sqlx::query(
         r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, trace_id
            FROM weissman_async_jobs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(job_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
+    tx.commit().await?;
     let Some(row) = row else {
         return Ok(None);
     };
@@ -451,6 +492,7 @@ pub async fn fail_job(
     base_backoff_secs: i64,
 ) -> Result<(), sqlx::Error> {
     let msg: String = err.chars().take(4000).collect();
+    let mut tx = crate::begin_tenant_tx(pool, job.tenant_id).await?;
     if job.attempt_count >= job.max_attempts {
         sqlx::query(
             r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
@@ -458,8 +500,9 @@ pub async fn fail_job(
         )
         .bind(job.id)
         .bind(&msg)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         tracing::error!(
             target: "weissman_worker",
             job_id = %job.id,
@@ -478,8 +521,9 @@ pub async fn fail_job(
     .bind(job.id)
     .bind(&msg)
     .bind(delay)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     tracing::warn!(
         target: "weissman_worker",
         job_id = %job.id,
@@ -492,6 +536,7 @@ pub async fn fail_job(
 
 /// Mark `running` rows with expired locks or stale heartbeats as retryable pending (worker crash / hung job).
 pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
            SET status = 'pending',
@@ -506,22 +551,25 @@ pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Err
                OR locked_until < now()
              )"#,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(r.rows_affected())
 }
 
 /// Immediately move a job to dead-letter — no retry (HMAC mismatch, expired envelope, etc.).
 pub async fn dead_letter_job(pool: &PgPool, job_id: Uuid, err: &str) -> Result<(), sqlx::Error> {
     let msg: String = err.chars().take(4000).collect();
+    let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
            worker_id = NULL, updated_at = now() WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(&msg)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     tracing::error!(
         target: "weissman_worker",
         job_id = %job_id,
@@ -542,13 +590,15 @@ pub async fn annotate_last_error(
     err: &str,
 ) -> Result<(), sqlx::Error> {
     let msg: String = err.chars().take(4000).collect();
+    let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET last_error = $2, updated_at = now() WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(&msg)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -567,6 +617,7 @@ pub async fn release_reserved_job(
     // sustained saturation a lapsed reservation can be re-reserved (or claimed) by
     // another worker; without `worker_id = $4` this release would clobber that
     // worker's freshly-`running` job back to `pending`, discarding its result.
+    let mut tx = begin_worker_tx(pool).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
@@ -576,8 +627,9 @@ pub async fn release_reserved_job(
     .bind(&msg)
     .bind(backoff)
     .bind(worker_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(r.rows_affected())
 }
 
@@ -592,6 +644,7 @@ pub async fn force_requeue_running(
     let msg: String = note.chars().take(4000).collect();
     // Ownership predicate: only requeue a row THIS worker still owns, so a transient
     // cleanup on one worker cannot reset a job another worker is actively running.
+    let mut tx = begin_worker_tx(pool).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
            last_error = $2, run_after = now(), updated_at = now()
@@ -600,8 +653,9 @@ pub async fn force_requeue_running(
     .bind(job_id)
     .bind(&msg)
     .bind(worker_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(r.rows_affected())
 }
 

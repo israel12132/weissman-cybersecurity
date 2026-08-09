@@ -242,7 +242,7 @@ export default function Billing() {
             cta={
               upgradeSlug
                 ? {
-                    label: subscription ? t('pages.billing.upgrade_to', { plan: upgradeSlug }) : t('pages.billing.start_checkout'),
+                    label: t('pages.billing.start_checkout'),
                     onClick: handleUpgrade,
                   }
                 : undefined

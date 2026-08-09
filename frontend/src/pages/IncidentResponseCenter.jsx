@@ -452,11 +452,21 @@ export default function IncidentResponseCenter() {
   const metrics = useMemo(() => {
     const active = incidents.filter((i) => i.status === 'active').length
     const crit = incidents.filter((i) => i.severity === 'critical').length
-    const resolved = incidents.filter((i) => i.status === 'resolved').length
-    const totalMs = incidents.reduce((sum, i) => sum + (new Date(i.updated) - new Date(i.created)), 0)
-    const avgH = incidents.length
-      ? (totalMs / incidents.length / 3_600_000).toFixed(1)
-      : '0.0'
+    const resolvedIncidents = incidents.filter((i) => i.status === 'resolved')
+    // Resolved within the trailing 7 days — matches the "(7d)" tile label.
+    const weekAgo = Date.now() - 7 * 86_400_000
+    const resolved = resolvedIncidents.filter(
+      (i) => new Date(i.updated).getTime() >= weekAgo,
+    ).length
+    // Mean time to resolve: average (updated - created) over resolved incidents
+    // only, so an open incident's age never inflates the MTTR.
+    const totalMs = resolvedIncidents.reduce(
+      (sum, i) => sum + (new Date(i.updated) - new Date(i.created)),
+      0,
+    )
+    const avgH = resolvedIncidents.length
+      ? (totalMs / resolvedIncidents.length / 3_600_000).toFixed(1)
+      : null
     // Open incidents already past their SLA target — the number an IR lead
     // watches. Recomputed on the SLA clock tick.
     const slaBreaching = incidents.filter(
@@ -529,7 +539,7 @@ export default function IncidentResponseCenter() {
           color={metrics.slaBreaching > 0 ? '#ef4444' : '#4ade80'}
           icon="⏳"
         />
-        <MetricCard label={t(`${NS}.avg_mttr`)} value={`${metrics.avgH}h`} sub={t(`${NS}.mttr_sub`)} color="#22d3ee" icon="⏱️" />
+        <MetricCard label={t(`${NS}.avg_mttr`)} value={metrics.avgH == null ? '—' : `${metrics.avgH}h`} sub={t(`${NS}.mttr_sub`)} color="#22d3ee" icon="⏱️" />
         <MetricCard label={t(`${NS}.resolved_7d`)} value={metrics.resolved} sub={t(`${NS}.resolved_sub`)} color="#4ade80" icon="✅" />
       </div>
 

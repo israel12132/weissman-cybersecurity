@@ -56,9 +56,15 @@ async fn try_ssrf_metadata(target: &str) -> Vec<Value> {
                 urlencoding::encode(meta)
             );
             if let Some(p) = http_get(&client, &url).await {
-                if p.body.contains("ami-id")
-                    || p.body.contains("computeMetadata")
-                    || p.body.contains("instanceId")
+                // Require structural markers that only appear in a genuine IMDS *response*, never
+                // in the reflected request. The injected value literally contains
+                // `computeMetadata`/`instance`, so those tokens surviving a reflected 404/echo
+                // produced a critical false positive on any app that mirrors a query parameter.
+                if p.body.contains("instance-identity")
+                    || p.body.contains("iam/security-credentials")
+                    || p.body.contains("numericProjectId")
+                    || p.body.contains("\"serviceAccounts\"")
+                    || p.body.contains("\"azEnvironment\"")
                 {
                     findings.push(cloud_finding(
                         "cloud_metadata_ssrf",
@@ -276,15 +282,35 @@ pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
         return EngineResult::error("target required");
     }
     let host = extract_host(target);
+    // Azure DevOps org names are single labels and cannot contain '.', so the full hostname
+    // can never address a real org. Derive the org from the first DNS label.
+    let org = host.split('.').next().unwrap_or(&host);
     let client = http_client().await;
     let mut findings: Vec<Value> = Vec::new();
     let candidates = [
-        format!("https://dev.azure.com/{}/_apis/projects", host),
-        format!("https://{}.visualstudio.com/_apis/projects", host),
+        format!("https://dev.azure.com/{}/_apis/projects", org),
+        format!("https://{}.visualstudio.com/_apis/projects", org),
     ];
     for url in candidates.iter() {
         if let Some(p) = http_get(&client, url).await {
-            if p.status == 200 && p.body.contains("value") && p.body.contains("name") {
+            if p.status != 200 {
+                continue;
+            }
+            // Validate structurally: a real project list is {"count":N,"value":[{"id":..,"name":..}]}.
+            // `body.contains("value") && body.contains("name")` matches any HTML sign-in page
+            // (form name=/value= attributes) or JSON error envelope with HTTP 200.
+            let is_project_list = serde_json::from_str::<Value>(&p.body)
+                .ok()
+                .map(|v| {
+                    v.get("count").and_then(Value::as_i64).is_some_and(|c| c > 0)
+                        && v.get("value").and_then(Value::as_array).is_some_and(|a| {
+                            !a.is_empty()
+                                && a.iter()
+                                    .all(|proj| proj.get("id").is_some() && proj.get("name").is_some())
+                        })
+                })
+                .unwrap_or(false);
+            if is_project_list {
                 findings.push(cloud_finding(
                     "azure_devops_attack",
                     "Public Azure DevOps projects",

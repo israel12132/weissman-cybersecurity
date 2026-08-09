@@ -52,7 +52,9 @@ pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
         let exists = meta.is_ok();
         extras.insert("security_evtx".into(), Value::Bool(exists));
         if let Ok(m) = meta {
-            extras.insert("size_bytes".into(), json!(m.len()));
+            // Fully-qualified so no `use serde_json::json` import (which would be unused on
+            // non-Windows targets) is needed just for this cfg-gated block.
+            extras.insert("size_bytes".into(), serde_json::json!(m.len()));
         }
         findings.push(finding(
             engine,
