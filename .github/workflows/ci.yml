@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Check fingerprint_engine ↔ weissman-db migrations
         run: bash scripts/check-migration-sync.sh
@@ -54,7 +54,7 @@ jobs:
     # swallowed CLI flag and a never-generated production secret both shipped. These
     # checks are static + stubbed: no Docker daemon, no containers, no network.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Launcher flag / secret / bind-mount contract
         run: bash scripts/test_launcher_contract.sh
@@ -64,10 +64,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
@@ -114,7 +114,7 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust toolchain
         # SHA-pinned for supply-chain immutability (a tag can be moved upstream; a SHA
@@ -130,7 +130,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
@@ -242,7 +242,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -255,7 +255,7 @@ jobs:
           ./gitleaks detect --redact --no-banner --exit-code 1 --source .
 
       - name: Dependency & IaC vuln scan (Trivy filesystem, CRITICAL+HIGH)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -271,7 +271,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: IaC misconfig scan (Trivy config, deploy manifests)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: deploy
@@ -285,7 +285,7 @@ jobs:
           trivyignores: .trivyignore
 
       - name: Generate SBOM (CycloneDX via Trivy)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -293,14 +293,14 @@ jobs:
           output: sbom-cyclonedx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sbom-cyclonedx
           path: sbom-cyclonedx.json
           if-no-files-found: error
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           cache: npm
@@ -328,10 +328,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           cache: npm
@@ -418,10 +418,10 @@ jobs:
           --health-timeout 3s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           cache: npm
@@ -435,7 +435,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
@@ -656,7 +656,7 @@ jobs:
         # actual runtime image (base OS packages baked into weissman-backend:stable).
         # ignore-unfixed keeps it actionable — only CRITICAL/HIGH with an available fix
         # fail the build (then bump the base image; Dependabot 'docker' helps here).
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: weissman-backend:stable
@@ -802,7 +802,7 @@ jobs:
         # this keeps the informational DAST truly non-blocking. TODO: bump action-baseline to a
         # release using upload-artifact@v4 to make the step green rather than tolerated-red.
         continue-on-error: true
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@66042c8e7e24680119199a017e5b0e8603bf4dae # v0.12.0
         with:
           # Target the served root (SPA + API base), not the JSON /api/health leaf:
           # the baseline spider needs a real link graph to crawl or it scans nothing.
@@ -856,7 +856,7 @@ jobs:
         run: node scripts/verify_scan_pipeline_e2e.mjs
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('frontend/package-lock.json') }}
@@ -906,7 +906,7 @@ jobs:
         # `always()` (not failure()) so the HTML report and traces survive a cancelled run too —
         # the previous cancellation left literally nothing to read.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-live-report
           path: |
@@ -959,7 +959,7 @@ jobs:
           ./scripts/generate_audit_evidence_pack.sh
 
       - name: Upload audit evidence pack
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: audit-evidence-pack
           path: evidence-pack/ci/
@@ -970,7 +970,7 @@ jobs:
       # steps finally went green and it ran for the first time. Provide the same clean,
       # pip-installable interpreter the Python job uses, then its two imports.
       - name: Set up Python for the live pytest contract
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install live pytest contract deps (pytest + httpx)
@@ -1055,10 +1055,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -1066,12 +1066,9 @@ jobs:
         run: pip install semgrep
 
       - name: Run Semgrep (security-audit, secrets, owasp-top-ten — blocking)
-        # Application-code SAST is fully blocking. The four excluded rules below are
+        # Application-code SAST is fully blocking. The three excluded rules below are
         # reviewed, accepted infrastructure-posture findings (not app-code bugs); each
         # is documented here and stays visible in Semgrep's non-blocking output:
-        #   github-actions-mutable-action-tag  — workflows pin major tags (@v4) and
-        #     Dependabot (github-actions ecosystem) keeps them current. Full 40-char
-        #     SHA pinning is tracked as future supply-chain hardening.
         #   nginx request-host-used            — `$host` is used only in server_name-
         #     gated blocks / standard reverse-proxy Host forwarding to our own trusted
         #     upstream; there is no host-based trust decision to poison.
@@ -1089,7 +1086,6 @@ jobs:
             --config p/owasp-top-ten \
             --metrics off \
             --error \
-            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
             --exclude-rule generic.nginx.security.request-host-used.request-host-used \
             --exclude-rule generic.nginx.security.header-redefinition.header-redefinition \
             --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
@@ -1109,7 +1105,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # SHA-pinned (supply-chain immutability); explicit toolchain since the ref is a commit.
       - uses: dtolnay/rust-toolchain@ab40b01f54fe82bdf65693ea090a1e4942c136e7 # 1.91.1
         with:
@@ -1130,7 +1126,7 @@ jobs:
           node scripts/coverage_ratchet.mjs cov.json
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rust-lcov
           path: lcov.info
@@ -1151,10 +1147,10 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository }}/weissman-backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1162,7 +1158,7 @@ jobs:
 
       - name: Build and push backend image
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: deploy/backend.Dockerfile
@@ -1174,7 +1170,7 @@ jobs:
           provenance: mode=max # BuildKit SLSA provenance attestation
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
       - name: Sign the published image (keyless / OIDC)
         env:
@@ -1182,14 +1178,14 @@ jobs:
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Attest SLSA build provenance (GitHub, pushed to registry)
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
       - name: Generate image SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
@@ -1197,7 +1193,7 @@ jobs:
           output: sbom-backend.cdx.json
 
       - name: Attest SBOM (pushed to registry)
-        uses: actions/attest-sbom@v1
+        uses: actions/attest-sbom@5026d3663739160db546203eeaffa6aa1c51a4d6 # v1
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}

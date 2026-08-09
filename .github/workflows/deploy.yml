@@ -40,14 +40,14 @@ jobs:
       group: deploy-production
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # Read-only checkout: this job never pushes back, so don't leave the
           # GitHub token in .git/config for later steps (least privilege).
           persist-credentials: false
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
       - name: Verify image signature (fail closed)
         # `inputs.image_digest` is passed via env (never interpolated into the
@@ -93,7 +93,7 @@ jobs:
           # GitHub artifact names forbid ':', so map `sha256:<hex>` -> `sha256-<hex>`.
           # Value comes via the environment (IMAGE_DIGEST) to keep shell-injection safe.
           echo "ARTIFACT_NAME=rendered-k8s-${IMAGE_DIGEST//:/-}" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: _render/

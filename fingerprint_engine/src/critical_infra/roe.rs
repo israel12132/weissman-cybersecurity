@@ -218,11 +218,16 @@ pub async fn log_violation(
     }
 }
 
+// The helpers below are used only by `preflight_live`, which is gated on the
+// `high_risk_engines` feature; gate them identically so a default build (feature
+// off) doesn't compile — and warn about — code it can never reach.
+#[cfg(feature = "high_risk_engines")]
 struct EngagementRow {
     roe_mode: String,
     scope_snapshot: Value,
 }
 
+#[cfg(feature = "high_risk_engines")]
 async fn load_client_configs(pool: Option<&PgPool>, tenant_id: i64, client_id: i64) -> Value {
     let Some(pool) = pool else {
         return Value::Object(serde_json::Map::new());
@@ -250,6 +255,7 @@ async fn load_client_configs(pool: Option<&PgPool>, tenant_id: i64, client_id: i
     serde_json::from_str(&raw).unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
 }
 
+#[cfg(feature = "high_risk_engines")]
 async fn load_active_engagement(
     pool: Option<&PgPool>,
     tenant_id: i64,
@@ -282,6 +288,7 @@ async fn load_active_engagement(
     })
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn industrial_ot_enabled(config: &Value) -> bool {
     config
         .get("industrial_ot_enabled")
@@ -289,6 +296,7 @@ fn industrial_ot_enabled(config: &Value) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn roe_weaponized(config: &Value) -> bool {
     config
         .get("roe_mode")
@@ -296,6 +304,7 @@ fn roe_weaponized(config: &Value) -> bool {
         .is_some_and(|m| m.eq_ignore_ascii_case("weaponized_god_mode"))
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn build_target_whitelist(
     client_configs: &Value,
     engagement: Option<&EngagementRow>,
@@ -316,6 +325,7 @@ fn build_target_whitelist(
     dedupe_strings(out)
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn scope_targets(scope: &Value) -> Vec<String> {
     let mut out = Vec::new();
     collect_string_list(scope, "allowed_targets", &mut out);
@@ -332,6 +342,7 @@ fn scope_targets(scope: &Value) -> Vec<String> {
     out
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn collect_string_list(obj: &Value, key: &str, out: &mut Vec<String>) {
     let Some(arr) = obj.get(key).and_then(Value::as_array) else {
         return;
@@ -343,6 +354,7 @@ fn collect_string_list(obj: &Value, key: &str, out: &mut Vec<String>) {
     }
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn push_trimmed(s: &str, out: &mut Vec<String>) {
     let t = s.trim();
     if !t.is_empty() {
@@ -350,18 +362,21 @@ fn push_trimmed(s: &str, out: &mut Vec<String>) {
     }
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn dedupe_strings(mut v: Vec<String>) -> Vec<String> {
     v.sort();
     v.dedup();
     v
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn merge_whitelists(a: &[String], b: &[String]) -> Vec<String> {
     let mut out = a.to_vec();
     out.extend_from_slice(b);
     dedupe_strings(out)
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn verify_signed_contract(
     contract: &Value,
     target: &str,
@@ -419,6 +434,8 @@ fn verify_signed_contract(
     Ok(())
 }
 
+// Also exercised by unit tests under default features, so keep it available for `test`.
+#[cfg(any(feature = "high_risk_engines", test))]
 fn contract_canonical_payload(contract: &Value, targets: &[String]) -> String {
     let v = contract.get("v").and_then(Value::as_i64).unwrap_or(1);
     let expires = contract
@@ -456,6 +473,7 @@ fn signing_secret() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn verify_hmac(canonical: &str, sig_hex: &str) -> bool {
     let Some(secret) = signing_secret() else {
         return false;
@@ -531,6 +549,7 @@ fn cidr_contains_host(cidr: &str, host: &str) -> bool {
     net.contains(ip)
 }
 
+#[cfg(feature = "high_risk_engines")]
 fn dev_override_allowed(job_params: &Value) -> bool {
     // Hard compile-time guard: the RoE scope bypass can NEVER exist in a release
     // build, regardless of environment variables. Production images are built in

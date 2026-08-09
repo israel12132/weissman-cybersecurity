@@ -1501,6 +1501,18 @@ struct Ms17Trans2Result {
     patched: bool,
 }
 
+/// Pure MS17-010 (EternalBlue) verdict from the Trans2 oracle NTSTATUS.
+///
+/// `0xC0000205` (`STATUS_INSUFF_SERVER_RESOURCES`) is the *vulnerable* signature per the
+/// Nmap/Nessus MS17-010 oracle; patched hosts return `STATUS_ACCESS_DENIED` or another status.
+/// So the host is considered **patched only when the status is NOT `INSUFF_SERVER_RESOURCES`**.
+///
+/// Extracted from `ms17_010_trans2_probe` so the status→patched polarity is unit-testable
+/// without network IO. Behavior must stay identical to the inline mapping.
+fn ms17_patched_from_status(status: u32) -> bool {
+    status != STATUS_INSUFF_SERVER_RESOURCES
+}
+
 async fn ms17_010_trans2_probe(host: &str, port: u16, timeout_ms: u64) -> Option<Ms17Trans2Result> {
     let mut stream = connect(host, port, timeout_ms).await?;
     stream.write_all(&build_smb1_negotiate()).await.ok()?;
@@ -1515,10 +1527,7 @@ async fn ms17_010_trans2_probe(host: &str, port: u16, timeout_ms: u64) -> Option
     let resp = read_nbss(&mut stream, timeout_ms).await?;
     let status = parse_smb1_status(&resp)?;
     Some(Ms17Trans2Result {
-        // 0xC0000205 (STATUS_INSUFF_SERVER_RESOURCES) is the *vulnerable* signature per the
-        // Nmap/Nessus MS17-010 oracle; patched hosts return STATUS_ACCESS_DENIED. So the host
-        // is patched only when the status is NOT INSUFF_SERVER_RESOURCES.
-        patched: status != STATUS_INSUFF_SERVER_RESOURCES,
+        patched: ms17_patched_from_status(status),
         status,
     })
 }
@@ -3163,6 +3172,29 @@ mod tests {
         let neg2 = parse_smb2_negotiate(&resp2).expect("parse");
         assert!(signing_enabled(&neg2));
         assert!(!signing_required(&neg2));
+    }
+
+    #[test]
+    fn ms17_patched_polarity_regression() {
+        // Regression lock for the MS17-010 / EternalBlue verdict polarity.
+        // 0xC0000205 (STATUS_INSUFF_SERVER_RESOURCES) is the *vulnerable* oracle signature —
+        // the host must NOT be reported as patched.
+        assert!(
+            !ms17_patched_from_status(STATUS_INSUFF_SERVER_RESOURCES),
+            "0xC0000205 STATUS_INSUFF_SERVER_RESOURCES must map to patched==false (vulnerable)"
+        );
+        assert!(
+            !ms17_patched_from_status(0xC000_0205),
+            "raw 0xC0000205 must map to patched==false (vulnerable)"
+        );
+        // A patched-signature status (STATUS_ACCESS_DENIED) must report patched==true.
+        assert!(
+            ms17_patched_from_status(STATUS_ACCESS_DENIED),
+            "0xC0000022 STATUS_ACCESS_DENIED must map to patched==true"
+        );
+        // Any other/unexpected status is also treated as patched (not the vulnerable oracle).
+        assert!(ms17_patched_from_status(0x0000_0000)); // STATUS_SUCCESS
+        assert!(ms17_patched_from_status(0xC000_0102)); // STATUS_NOT_SUPPORTED
     }
 
     #[test]
