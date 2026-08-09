@@ -12,6 +12,9 @@ COPY fingerprint_engine ./fingerprint_engine
 COPY backend ./backend
 COPY crates ./crates
 COPY shared ./shared
+ENV CARGO_NET_RETRY=10 \
+    CARGO_HTTP_MULTIPLEXING=false \
+    CARGO_NET_GIT_FETCH_WITH_CLI=true
 RUN cargo build -p weissman-oast-server --release --locked
 
 FROM debian:bookworm-slim AS runtime

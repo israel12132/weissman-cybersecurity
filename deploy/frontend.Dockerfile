@@ -21,6 +21,10 @@ COPY shared ./shared
 COPY scripts ./scripts
 COPY frontend/package.json frontend/package-lock.json* ./frontend/
 RUN mkdir -p frontend/src/wasm
+# Cargo network resilience (flaky networks: crates.io HTTP/2 SSL_ERROR_SYSCALL fetch fails).
+ENV CARGO_NET_RETRY=10 \
+    CARGO_HTTP_MULTIPLEXING=false \
+    CARGO_NET_GIT_FETCH_WITH_CLI=true
     # Pin the CLI to the wasm-bindgen crate version in Cargo.lock (0.2.122). An unpinned
     # `cargo install` picks the latest, which mismatches the compiled .wasm's schema and
     # fails the build ("schema version mismatch") — a classic non-reproducible-build trap.
@@ -35,6 +39,11 @@ FROM node:22-bookworm-slim AS vite-build
 RUN npm install -g npm@11.12.1
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./frontend/
+# npm network resilience for flaky registries (more retries, longer backoff).
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-factor 3 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000
 RUN cd frontend && npm ci --ignore-scripts
 COPY frontend ./frontend
 COPY scripts ./scripts

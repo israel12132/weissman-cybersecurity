@@ -42,7 +42,12 @@ COPY shared ./shared
 # keeps the workspace release profile (fat) intact for anyone who builds with the
 # memory headroom; the shipped image just builds reliably here.
 ENV CARGO_PROFILE_RELEASE_LTO=thin \
-    CARGO_BUILD_JOBS=2
+    CARGO_BUILD_JOBS=2 \
+    CARGO_NET_RETRY=10 \
+    CARGO_HTTP_MULTIPLEXING=false \
+    CARGO_NET_GIT_FETCH_WITH_CLI=true
+# CARGO_HTTP_MULTIPLEXING=false avoids the crates.io HTTP/2 "SSL_ERROR_SYSCALL / Failed
+# sending data to the peer" fetch failures on flaky networks; retries + git-CLI add resilience.
 RUN cargo build -p weissman-server -p weissman-worker -p weissman-agent \
     --release --locked
 
