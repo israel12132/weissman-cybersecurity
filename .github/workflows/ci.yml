@@ -293,7 +293,7 @@ jobs:
           output: sbom-cyclonedx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-cyclonedx
           path: sbom-cyclonedx.json
@@ -906,7 +906,7 @@ jobs:
         # `always()` (not failure()) so the HTML report and traces survive a cancelled run too —
         # the previous cancellation left literally nothing to read.
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-live-report
           path: |
@@ -959,7 +959,7 @@ jobs:
           ./scripts/generate_audit_evidence_pack.sh
 
       - name: Upload audit evidence pack
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: audit-evidence-pack
           path: evidence-pack/ci/
@@ -1126,7 +1126,7 @@ jobs:
           node scripts/coverage_ratchet.mjs cov.json
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rust-lcov
           path: lcov.info
