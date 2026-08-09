@@ -2,7 +2,6 @@
 
 use crate::error::JobBusError;
 use chrono::{DateTime, Utc};
-use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -120,7 +119,7 @@ pub async fn append_event(
         // which under `cargo test` (pools with no lock_timeout) turned a stuck producer into a
         // wedged test binary. On timeout this returns Err, the transaction aborts and the event
         // is not appended: the chain is never forked by an unserialized append.
-        weissman_db::advisory_lock::advisory_xact_lock_text(&mut *tx, &job_id.to_string()).await?;
+        weissman_db::advisory_lock::advisory_xact_lock_text(&mut tx, &job_id.to_string()).await?;
     }
 
     let prev_hash: Option<String> = if job_id.is_nil() {

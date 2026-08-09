@@ -52,7 +52,7 @@ impl TargetPainSignal {
         if let Some(status) = self.http_status {
             match status {
                 429 => d += 35.0,
-                503 | 502 | 504 => d += 28.0,
+                502..=504 => d += 28.0,
                 403 if self.ttfb_ms.is_some_and(|t| t < 80) => d += 18.0,
                 s if (500..=599).contains(&s) => d += 12.0,
                 _ => {}

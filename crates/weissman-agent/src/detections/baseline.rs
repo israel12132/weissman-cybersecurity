@@ -117,7 +117,7 @@ fn collect_metrics() -> Value {
 
     // ── Uptime + load + memory (Linux /proc/uptime, /proc/loadavg, /proc/meminfo)
     if let Some(uptime) = read_uptime_seconds() {
-        m.insert("uptime_seconds".into(), Value::from(uptime as u64));
+        m.insert("uptime_seconds".into(), Value::from(uptime));
     }
     if let Some(load) = read_loadavg_1m() {
         m.insert("load_1m".into(), json!(load));

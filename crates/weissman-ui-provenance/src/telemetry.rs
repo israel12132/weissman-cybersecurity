@@ -62,8 +62,8 @@ pub fn verify_telemetry_event(
         .get("provenance_sig")
         .and_then(Value::as_str)
         .unwrap_or("");
-    if !sig.is_empty() {
-        if !verify_event_hmac(&event_hash, sig, secret) {
+    if !sig.is_empty()
+        && !verify_event_hmac(&event_hash, sig, secret) {
             return TelemetryVerifyResult {
                 status: VerifyStatus::Tampered,
                 event_hash,
@@ -71,7 +71,6 @@ pub fn verify_telemetry_event(
                 detail: "telemetry provenance_sig HMAC invalid — forensic tamper".into(),
             };
         }
-    }
 
     let collapse = if belief_probs.is_empty() {
         None

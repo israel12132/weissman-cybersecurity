@@ -161,7 +161,7 @@ pub async fn run_storage_covert(engine: &str) -> anyhow::Result<Vec<Value>> {
 
     #[cfg(target_os = "linux")]
     {
-        if let Some(home) = std::env::var("HOME").ok() {
+        if let Ok(home) = std::env::var("HOME") {
             if let Some(out) = run_cmd_lossy("getfattr", &["-d", "-m", "-", &home]).await {
                 if out.lines().count() > 3 {
                     let mut extras = Map::new();

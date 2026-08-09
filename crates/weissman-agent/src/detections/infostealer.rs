@@ -185,7 +185,7 @@ fn push_chromium_family(
                 category: "browser",
                 label: format!("{browser} {label_suffix}"),
                 path: p,
-                severity: *sev,
+                severity: sev,
                 mitre: "T1555.003",
                 detail: (*label_suffix).to_string(),
                 ..Default::default()

@@ -20,7 +20,7 @@ use std::path::Path;
 
 fn main() {
     let rt = fingerprint_engine::hpc_runtime::build_scan_runtime().unwrap_or_else(|e| {
-        eprintln!("[Weissman] FATAL: tokio runtime: {}", e);
+        eprintln!("[Weissman] FATAL: tokio runtime: {e}");
         std::process::exit(1);
     });
     rt.block_on(async {
@@ -272,13 +272,12 @@ fn main() {
         return;
     }
 
-    if args.first().map(|s| s.as_str()) == Some("fuzz") {
+    if args.first().map(std::string::String::as_str) == Some("fuzz") {
         let _ = tracing_subscriber::fmt::try_init();
         let url = args.get(1).map_or("", String::as_str);
         let payload = args
             .get(2)
-            .map(|s| s.as_str())
-            .unwrap_or(r#"{"email":"test@test.com"}"#);
+            .map_or(r#"{"email":"test@test.com"}"#, std::string::String::as_str);
         if url.is_empty() {
             eprintln!("fuzz requires target URL");
             std::process::exit(1);
@@ -287,7 +286,7 @@ fn main() {
         return;
     }
 
-    if args.first().map(|s| s.as_str()) == Some("ips") {
+    if args.first().map(std::string::String::as_str) == Some("ips") {
         let rest: Vec<String> = args.into_iter().skip(1).collect();
         let deep = rest.iter().any(|s| s == "--deep")
             || std::env::var("WEISSMAN_DEEP_SCAN")
@@ -313,7 +312,7 @@ fn main() {
         return;
     }
 
-    if args.first().map(|s| s.as_str()) == Some("subdomains") {
+    if args.first().map(std::string::String::as_str) == Some("subdomains") {
         let domain = args.get(1).map_or("", String::as_str).to_string();
         let mut wordlist: Vec<String> = fingerprint_engine::DEFAULT_SUBDOMAINS
             .iter()
@@ -321,7 +320,7 @@ fn main() {
             .collect();
         let mut i = 2;
         while i < args.len() {
-            if args.get(i).map(|s| s.as_str()) == Some("--wordlist") && i + 1 < args.len() {
+            if args.get(i).map(std::string::String::as_str) == Some("--wordlist") && i + 1 < args.len() {
                 if let Ok(contents) = std::fs::read_to_string(Path::new(&args[i + 1])) {
                     wordlist = contents
                         .lines()
@@ -350,7 +349,7 @@ fn main() {
         return;
     }
 
-    if args.first().map(|s| s.as_str()) == Some("safe-probe") {
+    if args.first().map(std::string::String::as_str) == Some("safe-probe") {
         let url = args.get(1).map_or("", String::as_str);
         let tech_hint = args.get(2).map_or("", String::as_str);
         if url.is_empty() {

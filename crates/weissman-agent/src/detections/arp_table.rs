@@ -180,7 +180,7 @@ pub async fn run_dns_anomaly(engine: &str) -> anyhow::Result<Vec<Value>> {
                 extras,
             )]);
         }
-        return Ok(vec![]);
+        Ok(vec![])
     }
     #[cfg(not(target_os = "linux"))]
     {

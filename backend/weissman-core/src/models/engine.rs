@@ -1485,7 +1485,7 @@ pub fn dispatch_engine_id(id: &str) -> &str {
     if is_engine_alias(s) {
         return s;
     }
-    if PRODUCTION_ENGINE_IDS.iter().any(|&k| k == s) {
+    if PRODUCTION_ENGINE_IDS.contains(&s) {
         return s;
     }
     resolve_engine_id(s)
@@ -1494,11 +1494,11 @@ pub fn dispatch_engine_id(id: &str) -> &str {
 #[must_use]
 pub fn is_production_engine_id(id: &str) -> bool {
     let s = id.trim();
-    if PRODUCTION_ENGINE_IDS.iter().any(|&k| k == s) {
+    if PRODUCTION_ENGINE_IDS.contains(&s) {
         return true;
     }
     let canonical = resolve_engine_id(s);
-    PRODUCTION_ENGINE_IDS.iter().any(|&k| k == canonical)
+    PRODUCTION_ENGINE_IDS.contains(&canonical)
 }
 
 #[must_use]

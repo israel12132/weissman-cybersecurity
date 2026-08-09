@@ -172,7 +172,7 @@ impl FleetCoordinator {
             if signal.http_status == Some(429) {
                 self.telemetry.incr(tenant_id, TelemetryMetric::Http429, 1);
             }
-            if matches!(signal.http_status, Some(503 | 502 | 504)) {
+            if matches!(signal.http_status, Some(502..=504)) {
                 self.telemetry.incr(tenant_id, TelemetryMetric::Http503, 1);
             }
             if signal.tcp_reset {

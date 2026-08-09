@@ -46,14 +46,13 @@ fn proc_status_memory() -> Option<(u64, u64, u32)> {
     let mut threads = 1u32;
     for line in status.lines() {
         if let Some(v) = line.strip_prefix("VmRSS:") {
-            rss = v.trim().split_whitespace().next()?.parse().ok()?;
+            rss = v.split_whitespace().next()?.parse().ok()?;
         }
         if let Some(v) = line.strip_prefix("VmSize:") {
-            vm = v.trim().split_whitespace().next()?.parse().ok()?;
+            vm = v.split_whitespace().next()?.parse().ok()?;
         }
         if let Some(v) = line.strip_prefix("Threads:") {
             threads = v
-                .trim()
                 .split_whitespace()
                 .next()
                 .and_then(|s| s.parse().ok())

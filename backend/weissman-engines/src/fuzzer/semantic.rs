@@ -286,7 +286,7 @@ async fn vllm_generate_payloads(
     let before = raw.len();
     let payloads: Vec<Value> = raw
         .into_iter()
-        .filter(|p| semantic_payload_wire_ok(p))
+        .filter(semantic_payload_wire_ok)
         .collect();
     if before > payloads.len() {
         reasoning_log.push_str(&format!(

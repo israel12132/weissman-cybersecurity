@@ -55,7 +55,7 @@ async fn collect_usb() -> Vec<String> {
                 }
             }
         }
-        return out;
+        out
     }
     #[cfg(target_os = "macos")]
     {
