@@ -6,6 +6,8 @@
 #
 # Stage 1 — Rust WASM (ast-cap, ui-provenance)
 FROM rust:1.91-bookworm AS wasm-build
+# Resilient apt (By-Hash avoids "Hash Sum mismatch" on mid-sync mirrors; + retries/no-cache).
+RUN printf 'Acquire::Retries "5";\nAcquire::By-Hash "yes";\nAcquire::http::No-Cache "true";\n' > /etc/apt/apt.conf.d/99resilient
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*

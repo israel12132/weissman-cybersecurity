@@ -10,6 +10,9 @@
 #
 # Native deps: openssl-sys, aws-lc-sys (rustls), hwlocality→hwloc+libudev, libsqlite3-sys (sqlx), ring.
 FROM rust:1.91-bookworm AS build
+# Resilient apt: By-Hash fetches indices by content hash (avoids the mirror mid-sync
+# "Hash Sum mismatch"), Retries handles transient CDN blips, No-Cache defeats stale proxies.
+RUN printf 'Acquire::Retries "5";\nAcquire::By-Hash "yes";\nAcquire::http::No-Cache "true";\n' > /etc/apt/apt.conf.d/99resilient
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -48,6 +51,7 @@ FROM debian:bookworm-slim AS runtime
 # the runtime image's own dpkg architecture. Either way this resolves to the ONE
 # architecture this image was actually compiled for.
 ARG TARGETARCH
+RUN printf 'Acquire::Retries "5";\nAcquire::By-Hash "yes";\nAcquire::http::No-Cache "true";\n' > /etc/apt/apt.conf.d/99resilient
 # git + patch are runtime deps of the auto-heal verification sandbox: it shells out
 # to `git clone`/`git diff` (to capture the applied fix) and `patch` (to apply the diff).
 RUN apt-get update && apt-get install -y --no-install-recommends \
