@@ -1,14 +1,10 @@
 apiVersion: 1
 datasources:
   - name: Prometheus
-    # Pinned uid so dashboards can bind by uid. platform-overview.json references
-    # datasource uid "DS_PROMETHEUS"; without this the provisioned datasource gets a random
-    # uid and every panel renders "datasource not found". The other dashboards omit an
-    # explicit datasource and fall back to isDefault below.
-    uid: DS_PROMETHEUS
     type: prometheus
-    # Stable uid so dashboards and the Tempo tracesToMetrics link can reference it
-    # explicitly (a panel that names a missing uid does NOT fall back to default).
+    # Stable uid so dashboards (platform-overview.json) and the Tempo tracesToMetrics link
+    # can reference it explicitly — a panel that names a missing uid does NOT fall back to
+    # default. Keep this in sync with those references.
     uid: prometheus
     access: proxy
     url: http://prometheus:9090
