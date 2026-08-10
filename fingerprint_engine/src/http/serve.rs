@@ -1525,13 +1525,41 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     if is_leader {
         let pool_audit = app_pool.clone();
         tokio::spawn(async move {
-            match crate::audit_log::backfill_missing_hashes(pool_audit.as_ref()).await {
-                Ok(n) if n > 0 => {
-                    tracing::info!(target: "security_audit", updated = n, "audit log hash chain backfill complete");
+            // Report the tamper-evidence boundary; never try to move it. `audit_logs` is
+            // append-only by design (audit_logs_block_update/_delete triggers, and weissman_app
+            // holds only INSERT+SELECT), so the former `backfill_missing_hashes` failed at every
+            // boot with `permission denied for table audit_logs` — and had it succeeded it would
+            // have back-dated digests over rows that were never actually protected, turning
+            // "predates the chain" into a false "chain-verified". See `unchained_legacy_summary`.
+            match crate::audit_log::unchained_legacy_summary(pool_audit.as_ref()).await {
+                Ok(rows) if rows.is_empty() => {}
+                Ok(rows) => {
+                    for (tenant_id, unchained, last_id) in rows {
+                        match crate::audit_log::unchained_rows_are_a_legacy_prefix(
+                            pool_audit.as_ref(),
+                            tenant_id,
+                        )
+                        .await
+                        {
+                            Ok(true) => tracing::info!(
+                                target: "security_audit", tenant_id, unchained, last_id,
+                                "audit rows predating the hash chain (legacy prefix, not covered by tamper-evidence)"
+                            ),
+                            // A NULL hash *after* the chain started is exactly what nulling a
+                            // digest to force the verifier to re-anchor would look like.
+                            Ok(false) => tracing::error!(
+                                target: "security_audit", tenant_id, unchained, last_id,
+                                "audit rows with a NULL hash AFTER the chain started — possible truncation or tampering"
+                            ),
+                            Err(e) => tracing::warn!(
+                                target: "security_audit", tenant_id, error = %e,
+                                "could not classify unchained audit rows"
+                            ),
+                        }
+                    }
                 }
-                Ok(_) => {}
                 Err(e) => {
-                    tracing::warn!(target: "security_audit", error = %e, "audit log hash chain backfill failed");
+                    tracing::warn!(target: "security_audit", error = %e, "audit chain boundary check failed");
                 }
             }
         });

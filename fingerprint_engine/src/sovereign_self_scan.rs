@@ -29,12 +29,15 @@ pub fn spawn_sovereign_self_scan_loop(app_pool: Arc<PgPool>, telemetry: Arc<Send
 }
 
 async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> Result<(), String> {
-    let tenant_id: i64 =
-        sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id LIMIT 1")
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "no active tenant".to_string())?;
+    // `tenants` is FORCE RLS: reading it straight off this pool returns only the connection's own
+    // tenant, and nothing once the tenant GUC is unset (the correct default) — which would turn
+    // this into a permanent "no active tenant" error rather than a scan.
+    let tenant_id: i64 = weissman_db::active_tenant_ids(pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "no active tenant".to_string())?;
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await

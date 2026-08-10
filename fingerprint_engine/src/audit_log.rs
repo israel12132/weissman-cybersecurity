@@ -213,87 +213,88 @@ pub async fn record_login_failure_audit(
     }
 }
 
-/// Backfill `event_hash` / `prev_hash` for legacy rows missing chain linkage (idempotent).
-pub async fn backfill_missing_hashes(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let tenants: Vec<i64> = sqlx::query_scalar(
-        "SELECT DISTINCT tenant_id FROM audit_logs WHERE event_hash IS NULL ORDER BY tenant_id",
-    )
-    .fetch_all(pool)
-    .await?;
-    let mut updated = 0u64;
-    for tenant_id in tenants {
-        updated += backfill_tenant_hashes(pool, tenant_id).await?;
-    }
-    Ok(updated)
-}
-
-async fn backfill_tenant_hashes(pool: &PgPool, tenant_id: i64) -> Result<u64, sqlx::Error> {
-    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
-        return Ok(0);
-    };
-    // Same per-tenant chain lock as `insert_audit`, and bounded for the same reason: a backfill
-    // racing a live writer must fail fast and be retried, not pin a connection indefinitely.
-    weissman_db::advisory_lock::advisory_xact_lock(&mut *tx, tenant_id).await?;
-
-    let rows = sqlx::query(
-        r#"SELECT id, created_at, actor_user_id,
-                  COALESCE(user_label, '') AS user_label,
-                  COALESCE(action_type, '') AS action_type,
-                  COALESCE(details, '') AS details,
-                  COALESCE(ip_address, '') AS ip_address
-             FROM audit_logs
-            WHERE tenant_id = $1 AND event_hash IS NULL
-            ORDER BY id ASC"#,
-    )
-    .bind(tenant_id)
-    .fetch_all(&mut *tx)
-    .await?;
-
-    let mut prev_hash: String = sqlx::query_scalar(
-        r#"SELECT COALESCE(event_hash, '') FROM audit_logs
-           WHERE tenant_id = $1 AND event_hash IS NOT NULL
-           ORDER BY id DESC LIMIT 1"#,
-    )
-    .bind(tenant_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .unwrap_or_default();
-
-    let mut count = 0u64;
-    for r in rows {
-        let id: i64 = r.try_get("id").unwrap_or(0);
-        let created_at: DateTime<Utc> = r.try_get("created_at").unwrap_or_else(|_| Utc::now());
-        let actor_user_id: Option<i64> = r.try_get("actor_user_id").ok();
-        let user_label: String = r.try_get("user_label").unwrap_or_default();
-        let action_type: String = r.try_get("action_type").unwrap_or_default();
-        let details: String = r.try_get("details").unwrap_or_default();
-        let ip_address: String = r.try_get("ip_address").unwrap_or_default();
-        let canonical = canonical_audit_payload(
-            &prev_hash,
-            tenant_id,
-            actor_user_id,
-            &user_label,
-            &action_type,
-            &details,
-            &ip_address,
-            created_at,
-        );
-        let event_hash = sha256_hex(&canonical);
-        sqlx::query(
-            "UPDATE audit_logs SET prev_hash = $1, event_hash = $2 WHERE id = $3 AND tenant_id = $4",
+/// Per-tenant summary of legacy audit rows written **before** the hash chain existed.
+///
+/// Returns `(tenant_id, unchained_rows, last_unchained_id)` for every tenant that still has rows
+/// with a NULL `event_hash`.
+///
+/// # Why this replaced a backfill
+///
+/// This module used to expose `backfill_missing_hashes`, which walked those rows and `UPDATE`d a
+/// freshly-computed `event_hash` into each one. That was wrong twice over:
+///
+///  1. **It could never run.** `audit_logs` is deliberately append-only — the `audit_logs_block_update`
+///     and `audit_logs_block_delete` triggers reject every mutation, and `weissman_app` is granted
+///     only INSERT and SELECT. The call failed at boot with `permission denied for table audit_logs`
+///     on every single start, logging a warning forever and repairing nothing.
+///  2. **It should never run.** Retro-hashing a row proves nothing: the digest would be computed
+///     from whatever the row contains *now*, long after the window in which it could have been
+///     altered. Writing it would convert "this row predates tamper-evidence" — a true and auditable
+///     statement — into "this row is chain-verified", which is false. Fabricating evidence is a
+///     worse outcome than admitting a boundary, especially in the audit log of a security product.
+///
+/// The honest primitive is therefore to *report* the boundary, not erase it. [`verify_chain_from`]
+/// already encodes the matching rule: a NULL `event_hash` is tolerated only in a contiguous prefix
+/// before the first hashed row, and is treated as tampering once the chain has started.
+pub async fn unchained_legacy_summary(pool: &PgPool) -> Result<Vec<(i64, i64, i64)>, sqlx::Error> {
+    // `audit_logs` is tenant-scoped RLS, so a single unscoped sweep would silently return nothing.
+    // Enumerate tenants explicitly, then read each one inside its own scoped transaction.
+    let mut out = Vec::new();
+    for tenant_id in weissman_db::active_tenant_ids(pool).await? {
+        let mut tx = weissman_db::begin_tenant_tx(pool, tenant_id).await?;
+        let row: Option<(i64, i64)> = sqlx::query_as(
+            r#"SELECT count(*)::bigint AS unchained, COALESCE(max(id), 0)::bigint AS last_id
+                 FROM audit_logs
+                WHERE tenant_id = $1 AND event_hash IS NULL"#,
         )
-        .bind(&prev_hash)
-        .bind(&event_hash)
-        .bind(id)
         .bind(tenant_id)
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
-        prev_hash = event_hash;
-        count += 1;
+        let _ = tx.rollback().await;
+        if let Some((unchained, last_id)) = row {
+            if unchained > 0 {
+                out.push((tenant_id, unchained, last_id));
+            }
+        }
     }
-    tx.commit().await?;
-    Ok(count)
+    Ok(out)
 }
+
+/// True when a tenant's NULL-hash rows form a contiguous prefix (legacy, benign) rather than
+/// appearing after the chain started (truncation or tampering).
+///
+/// A NULL hash *after* the first hashed row is the signal an attacker would produce by nulling a
+/// digest to make the verifier re-anchor, so it is reported separately and loudly.
+pub async fn unchained_rows_are_a_legacy_prefix(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<bool, sqlx::Error> {
+    // Scoped transaction: `audit_logs` is tenant-scoped RLS, so an unscoped read returns nothing
+    // and would report every tenant as clean.
+    let mut tx = weissman_db::begin_tenant_tx(pool, tenant_id).await?;
+    let first_hashed: Option<i64> = sqlx::query_scalar(
+        "SELECT min(id) FROM audit_logs WHERE tenant_id = $1 AND event_hash IS NOT NULL",
+    )
+    .bind(tenant_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let Some(first_hashed) = first_hashed else {
+        // Nothing hashed yet: every row is legacy, which is a prefix by definition.
+        let _ = tx.rollback().await;
+        return Ok(true);
+    };
+    let stragglers: i64 = sqlx::query_scalar(
+        "SELECT count(*)::bigint FROM audit_logs \
+         WHERE tenant_id = $1 AND event_hash IS NULL AND id > $2",
+    )
+    .bind(tenant_id)
+    .bind(first_hashed)
+    .fetch_one(&mut *tx)
+    .await?;
+    let _ = tx.rollback().await;
+    Ok(stragglers == 0)
+}
+
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AuditExportEntry {

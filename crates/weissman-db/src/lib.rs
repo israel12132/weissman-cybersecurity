@@ -341,6 +341,24 @@ pub async fn begin_tenant_tx(
     Ok(tx)
 }
 
+/// Ids of all active tenants, for background workers that must sweep every tenant.
+///
+/// **Do not** open-code `SELECT id FROM tenants WHERE active = true` for this. `tenants` is FORCE
+/// ROW LEVEL SECURITY with `USING (id = <current tenant>)`, so that query on an RLS-subject pool
+/// silently returns only the connection's current tenant — and nothing at all once the tenant GUC
+/// is unset, which is the correct default state. A worker written that way does not fail; it
+/// iterates an empty list and reports success, which is how three sweeps (`self_improve`,
+/// `sovereign_self_scan`, `predictive_analyzer`) came to run against exactly one tenant.
+///
+/// Backed by the `public.active_tenant_ids()` SECURITY DEFINER function (migration
+/// `20260811000200`), which returns ids only — never tenant names or slugs — so a worker that
+/// needs to enumerate does not have to be handed a BYPASSRLS connection.
+pub async fn active_tenant_ids(pool: &PgPool) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT * FROM public.active_tenant_ids()")
+        .fetch_all(pool)
+        .await
+}
+
 /// Like [`begin_tenant_tx`], but takes an owned [`Arc`] so the returned future is [`Send`] when used
 /// from long-lived tasks (e.g. panic-shielded orchestrator cycles) without capturing `&PgPool`.
 pub async fn begin_tenant_tx_arc(

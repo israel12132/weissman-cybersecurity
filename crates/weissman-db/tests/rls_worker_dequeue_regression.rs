@@ -56,6 +56,10 @@ use weissman_db::job_queue::{self, WorkerPoolRole};
 /// Two distinct, non-zero tenant ids, well outside any seeded range.
 const TENANT_A: i64 = 918_274_001;
 const TENANT_B: i64 = 918_274_002;
+/// A second, disjoint pair for the enumeration test. `cargo test` runs these in parallel, so two
+/// tests sharing tenant ids would delete each other's fixtures mid-run.
+const TENANT_C: i64 = 918_274_003;
+const TENANT_D: i64 = 918_274_004;
 /// Job kind used only by this test, so the cross-tenant assertions cannot latch onto real jobs.
 const PROBE_KIND: &str = "__rls_worker_dequeue_regression__";
 
@@ -116,13 +120,14 @@ async fn seed_tenant_jobs(pool: &sqlx::PgPool, tenant_id: i64, count: i32) {
     }
 }
 
-async fn cleanup(pool: &sqlx::PgPool) {
-    let _ = sqlx::query("DELETE FROM weissman_async_jobs WHERE kind = $1")
+async fn cleanup(pool: &sqlx::PgPool, tenants: &[i64]) {
+    let _ = sqlx::query("DELETE FROM weissman_async_jobs WHERE kind = $1 AND tenant_id = ANY($2)")
         .bind(PROBE_KIND)
+        .bind(tenants)
         .execute(pool)
         .await;
     let _ = sqlx::query("DELETE FROM tenants WHERE id = ANY($1)")
-        .bind(vec![TENANT_A, TENANT_B])
+        .bind(tenants)
         .execute(pool)
         .await;
 }
@@ -193,7 +198,7 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
     }
     let pool = connect(&url).await;
 
-    cleanup(&pool).await;
+    cleanup(&pool, &[TENANT_A, TENANT_B]).await;
     seed_tenant_jobs(&pool, TENANT_A, 2).await;
     seed_tenant_jobs(&pool, TENANT_B, 2).await;
 
@@ -225,7 +230,7 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
     let claimed = match claimed {
         Ok(job) => job,
         Err(e) => {
-            cleanup(&pool).await;
+            cleanup(&pool, &[TENANT_A, TENANT_B]).await;
             panic!(
                 "claim_next_with_role failed under the worker's empty-scope posture: {e}. \
                  This is the four-day production outage: every worker poll errored while \
@@ -260,18 +265,68 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
             }
             Ok(_) => break,
             Err(e) => {
-                cleanup(&pool).await;
+                cleanup(&pool, &[TENANT_A, TENANT_B]).await;
                 panic!("subsequent claim failed: {e}");
             }
         }
     }
 
-    cleanup(&pool).await;
+    cleanup(&pool, &[TENANT_A, TENANT_B]).await;
 
     assert!(
         seen_tenants.contains(&TENANT_A) && seen_tenants.contains(&TENANT_B),
         "the worker must dequeue across tenants (that is the whole point of the empty scope); \
          only saw {seen_tenants:?}"
+    );
+}
+
+/// **Cross-tenant enumeration.** `active_tenant_ids` must see every active tenant from an
+/// RLS-subject connection, where the naive `SELECT id FROM tenants WHERE active = true` sees none.
+#[tokio::test]
+async fn active_tenant_ids_enumerates_across_tenants_on_an_rls_pool() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    let pool = connect(&url).await;
+    cleanup(&pool, &[TENANT_C, TENANT_D]).await;
+    seed_tenant_jobs(&pool, TENANT_C, 0).await;
+    seed_tenant_jobs(&pool, TENANT_D, 0).await;
+
+    let app_pool = PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .after_connect(|conn, _| {
+            Box::pin(async move {
+                sqlx::query("SET ROLE weissman_app").execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect(&url)
+        .await
+        .expect("connect app pool as weissman_app");
+
+    // The shape that looks right and silently returns nothing.
+    let naive: Vec<i64> = sqlx::query_scalar("SELECT id FROM tenants WHERE active = true")
+        .fetch_all(&app_pool)
+        .await
+        .expect("naive enumeration query");
+
+    let helper = weissman_db::active_tenant_ids(&app_pool)
+        .await
+        .expect("active_tenant_ids");
+
+    cleanup(&pool, &[TENANT_C, TENANT_D]).await;
+
+    assert!(
+        helper.contains(&TENANT_C) && helper.contains(&TENANT_D),
+        "active_tenant_ids must return every active tenant from an RLS-subject pool; got {helper:?}"
+    );
+    assert!(
+        !naive.contains(&TENANT_C) || !naive.contains(&TENANT_D),
+        "reading `tenants` directly off an RLS pool returned every tenant ({naive:?}) — either RLS \
+         is not enforced on this database or the pool is BYPASSRLS, and this test is not proving \
+         what it claims"
     );
 }
 
