@@ -47,6 +47,42 @@ jobs:
       - name: Check fingerprint_engine ↔ weissman-db migrations
         run: bash scripts/check-migration-sync.sh
 
+  alert-rules:
+    name: Prometheus alert rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Nothing in CI validated the alert rules, which is how `WorkerDown` sat commented out next
+    # to a claim that a "stalled-jobs signal below" covered it — while no such rule existed. A
+    # four-day pipeline outage then passed unnoticed. promtool checks the rules parse, and the
+    # unit tests replay that outage's real metric values to prove the rules actually fire.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install promtool
+        run: |
+          set -euo pipefail
+          VERSION=3.1.0
+          curl -sSfL "https://github.com/prometheus/prometheus/releases/download/v${VERSION}/prometheus-${VERSION}.linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin "prometheus-${VERSION}.linux-amd64/promtool"
+          promtool --version
+
+      - name: Check rule syntax
+        # `*.test.yml` are promtool unit-test files, not rule files — checking them as rules fails.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          rules=()
+          for f in monitoring/alerts/*.yml; do
+            case "$f" in *.test.yml) continue ;; esac
+            rules+=("$f")
+          done
+          test ${#rules[@]} -gt 0 || { echo "no rule files found — the glob is broken"; exit 1; }
+          promtool check rules "${rules[@]}"
+
+      - name: Unit-test alert rules
+        working-directory: monitoring/alerts
+        run: promtool test rules ./*.test.yml
+
   launcher-contract:
     name: Production launcher contract
     runs-on: ubuntu-latest

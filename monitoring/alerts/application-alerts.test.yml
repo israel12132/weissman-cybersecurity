@@ -1,0 +1,113 @@
+# promtool unit tests for the job-pipeline alerts.
+#
+# Run: promtool test rules monitoring/alerts/application-alerts.test.yml
+#
+# These exist because the rules they cover were added *after* a four-day silent outage, and a
+# rule that cannot fire is worse than no rule — it reads as coverage. The first case replays the
+# real numbers observed on 2026-08-10 (oldest pending job 393495s ≈ 4.55d, last completion
+# 391371s ≈ 4.53d, 2111 pending) and asserts the alerts fire. The last case asserts a healthy
+# pipeline stays silent, so these cannot become the noise everyone mutes.
+
+rule_files:
+  - application-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ── The outage these rules were written for ──────────────────────────────────
+  - interval: 1m
+    name: "2026-08-06 outage: worker cannot claim, backlog grows, nothing completes"
+    input_series:
+      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+        values: '393495+60x30'
+      - series: 'weissman_async_jobs_last_completion_age_seconds'
+        values: '391371+60x30'
+      - series: 'weissman_async_jobs_pending'
+        values: '2111+1x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: JobQueueStalled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              category: availability
+            exp_annotations:
+              # 393495 + 60*15 = 394395s, humanized. Asserting the rendered text keeps the
+              # operator-facing message honest, not just the label set.
+              summary: "Job queue is stalled — oldest pending job is 4d 13h 33m 15s old"
+              description: >-
+                No worker has claimed the head of weissman_async_jobs for over an hour. Scans are
+                not running. Check the worker logs for `claim/reserve failed`, and check that the
+                RLS policies still use public.app_current_tenant_id() rather than casting the raw
+                app.current_tenant_id GUC (see migration 20260811000000).
+      - eval_time: 15m
+        alertname: NoScanCompletions
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              category: availability
+            exp_annotations:
+              summary: "No job has completed in 4d 12h 57m 51s while work is queued"
+              description: >-
+                Jobs are queued but none is completing. The product's core claim — continuous
+                scanning — is not being met right now.
+
+  # ── The rules must not fire before their `for:` window elapses ───────────────
+  - interval: 1m
+    name: "a brief spike does not page"
+    input_series:
+      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+        values: '4000x5 0x20'
+      - series: 'weissman_async_jobs_last_completion_age_seconds'
+        values: '30x25'
+      - series: 'weissman_async_jobs_pending'
+        values: '5x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: JobQueueStalled
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: NoScanCompletions
+        exp_alerts: []
+
+  # ── A pipeline that has never completed anything must not page on the sentinel ─
+  - interval: 1m
+    name: "the -1 no-completion-yet sentinel does not page"
+    input_series:
+      # -1 means "no job has ever completed", not "completed 1 second in the future".
+      - series: 'weissman_async_jobs_last_completion_age_seconds'
+        values: '-1x30'
+      - series: 'weissman_async_jobs_pending'
+        values: '3x30'
+      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+        values: '20x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: NoScanCompletions
+        exp_alerts: []
+
+  # ── Healthy steady state: queue turns over, completions are recent ───────────
+  - interval: 1m
+    name: "a healthy pipeline stays silent"
+    input_series:
+      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+        values: '12 40 8 25 15 33 9 18 22 11 30 14 27 19 10 35 13 21 16 28 12 24 17 31 20 9 26 14 23 18 12'
+      - series: 'weissman_async_jobs_last_completion_age_seconds'
+        values: '5 12 3 9 6 14 4 11 7 15 8 2 13 6 10 5 12 4 9 7 14 3 11 8 6 13 5 10 4 12 7'
+      - series: 'weissman_async_jobs_pending'
+        values: '4 7 2 9 5 3 8 6 4 7 5 2 9 6 3 8 4 7 5 9 3 6 8 4 7 2 5 9 6 3 8'
+      - series: 'weissman_async_jobs_by_status{status="dead"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: JobQueueStalled
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: NoScanCompletions
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: JobQueueBacklogGrowing
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: JobDeadLetterGrowing
+        exp_alerts: []
