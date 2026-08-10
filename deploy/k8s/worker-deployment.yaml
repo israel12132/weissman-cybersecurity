@@ -66,14 +66,36 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: job_orchestrator_secret
+          # Liveness stays a pure process check: a wedged *process* is worth restarting, but the
+          # failure these probes were split for — every claim erroring against the database — is
+          # not fixed by a restart, and putting it on liveness would crash-loop the whole fleet
+          # against an outage it cannot resolve.
+          #
+          # The previous single probe was also miswritten: `A || B && C` parses as `(A || B) && C`
+          # in sh, so a successful `pgrep` still required the /proc/1/comm grep to pass.
           livenessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - "pgrep -x weissman-worker || test -d /proc/1 && grep -q weissman-worker /proc/1/comm"
+                - "pgrep -x weissman-worker >/dev/null 2>&1 || grep -q weissman-worker /proc/1/comm"
             initialDelaySeconds: 30
             periodSeconds: 30
+          # Readiness is the real signal: the worker writes /tmp/weissman-worker-alive after every
+          # dequeue round-trip that reached the database (an empty queue counts — that is a
+          # healthy steady state; a failed claim does not). A pod that is up but cannot claim goes
+          # NotReady, so a bad rollout is visibly blocked rather than silently running — which is
+          # what happened for four days from 2026-08-06, when the worker reported healthy while
+          # failing every claim.
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'test -n "$(find /tmp/weissman-worker-alive -mmin -2 2>/dev/null)"'
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
           volumeMounts:
             - name: tmp
               mountPath: /tmp

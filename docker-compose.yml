@@ -145,8 +145,21 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # Check the process is alive by verifying /proc/1/comm matches the binary name.
-      test: ["CMD-SHELL", "cat /proc/1/comm | grep -q weissman-worker"]
+      # Liveness = "the dequeue path works", not "the process exists".
+      #
+      # This used to be `cat /proc/1/comm | grep -q weissman-worker`, which only asked whether the
+      # binary was running. Between 2026-08-06 and 2026-08-10 the worker was running and failing
+      # every single claim with `invalid input syntax for type bigint: ""`; that check reported
+      # healthy for the entire four days.
+      #
+      # The worker now writes /tmp/weissman-worker-alive after each dequeue round-trip that
+      # reached the database (an empty queue counts — that is a healthy steady state; a failed
+      # claim does not). This asserts the file was modified within the last 2 minutes, which is
+      # ~160 idle poll cycles of headroom at POLL_IDLE_MS=750, or 60 error-backoff cycles.
+      # `$$` escapes compose's own interpolation so the shell sees a single `$`.
+      test:
+        - CMD-SHELL
+        - test -n "$$(find /tmp/weissman-worker-alive -mmin -2 2>/dev/null)"
       interval: 30s
       timeout: 10s
       retries: 3

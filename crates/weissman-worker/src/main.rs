@@ -17,6 +17,37 @@ const LOCK_SECS: i64 = 300;
 const LEASE_EXTEND_INTERVAL_SECS: u64 = 15;
 const BASE_BACKOFF_SECS: i64 = 5;
 
+/// Path the worker touches after every dequeue round-trip that reached the database.
+///
+/// Overridable so the same binary works outside a container, where `/tmp` may be shared or
+/// read-only.
+fn liveness_beat_path() -> std::path::PathBuf {
+    std::env::var_os("WEISSMAN_WORKER_LIVENESS_FILE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp/weissman-worker-alive"))
+}
+
+/// Record that the dequeue path is functioning.
+///
+/// Deliberately called only on `Ok` — including `Ok(None)`, an empty queue, which is a healthy
+/// steady state. A failing claim leaves the file to go stale, which is the whole point: the
+/// previous container healthcheck (`cat /proc/1/comm | grep -q weissman-worker`) could not tell a
+/// working worker from one that was up and failing every single claim, and reported healthy
+/// throughout the four-day 2026-08-06 outage.
+///
+/// Best-effort: a failure to write must never take down the worker, so this only logs. A
+/// persistently unwritable path shows up as a failing healthcheck, which is the correct signal.
+fn touch_liveness_beat() {
+    let path = liveness_beat_path();
+    if let Err(e) = std::fs::write(&path, b"ok") {
+        warn!(
+            target: "weissman_worker",
+            path = %path.display(), error = %e,
+            "could not write liveness beat file"
+        );
+    }
+}
+
 fn worker_id() -> String {
     let host = hostname::get()
         .ok()
@@ -588,6 +619,15 @@ async fn async_main() {
             job_queue::claim_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
         };
 
+        // Liveness beat, written only when the dequeue round-trip actually worked — an empty
+        // queue counts, a failed claim does not. The container healthcheck reads this file's
+        // mtime, so "the process exists" and "the process can do its job" stop being the same
+        // reading. They were not: the previous healthcheck was `cat /proc/1/comm | grep -q
+        // weissman-worker`, which reported healthy for four days while every claim failed.
+        if claim_result.is_ok() {
+            touch_liveness_beat();
+        }
+
         match claim_result {
             Ok(Some(job)) => {
                 let is_heavy = job_is_heavy(job.kind.as_str());
@@ -661,6 +701,50 @@ async fn async_main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The container healthcheck and the k8s readiness probe both key off this file's mtime, so
+    /// the beat must actually land at the configured path. A silent write failure here would
+    /// restore exactly the blind spot the beat was added to close.
+    #[test]
+    fn liveness_beat_is_written_to_the_configured_path() {
+        let dir = std::env::temp_dir().join(format!("weissman-beat-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("alive");
+        // SAFETY: single-threaded test; no other thread reads the environment concurrently.
+        unsafe { std::env::set_var("WEISSMAN_WORKER_LIVENESS_FILE", &path) };
+
+        assert_eq!(liveness_beat_path(), path, "env override must win");
+        assert!(!path.exists(), "precondition: beat file does not exist yet");
+
+        touch_liveness_beat();
+        assert!(
+            path.exists(),
+            "touch_liveness_beat must create the file the healthcheck stats"
+        );
+
+        // Writing again must refresh it rather than fail on an existing file — the worker calls
+        // this on every poll for the lifetime of the process.
+        touch_liveness_beat();
+        assert!(path.exists(), "repeated beats must keep the file present");
+
+        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An unwritable path must degrade to a stale beat (and therefore a failing healthcheck),
+    /// never take the worker process down.
+    #[test]
+    fn liveness_beat_failure_does_not_panic() {
+        // SAFETY: single-threaded test.
+        unsafe {
+            std::env::set_var(
+                "WEISSMAN_WORKER_LIVENESS_FILE",
+                "/nonexistent-dir-weissman/alive",
+            )
+        };
+        touch_liveness_beat(); // must not panic
+        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
+    }
 
     // Every job kind whose executor arm dispatches the deep monolithic engine future
     // (`engine_dispatch::run_engine` / `dispatch_engine_match`) MUST be classified heavy so
