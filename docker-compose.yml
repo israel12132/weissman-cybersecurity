@@ -24,6 +24,22 @@ x-logging: &default-logging
 
 services:
   postgres:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    # cap_drop ALL alone makes this image exit at startup — its entrypoint chowns the data
+    # directory and gosu's to the postgres user, which needs these five. Verified by
+    # running the image both ways.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     logging: *default-logging
     # 200 to match deploy/k8s/postgres-ha.yaml:26. The image default is 100 (97 usable after
     # superuser_reserved_connections=3), but the two application processes are configured to open
@@ -75,6 +91,20 @@ services:
           memory: 512M
 
   redis:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    # Same as postgres: setpriv drops to the redis user at entrypoint and needs these.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     logging: *default-logging
     image: redis:7-alpine
     # No host port mapping: Redis is reachable only on the internal compose network
@@ -97,6 +127,13 @@ services:
           memory: 64M
 
   backend:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     build:
       context: .
@@ -160,6 +197,13 @@ services:
 
   # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
   worker:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     # Must exceed WEISSMAN_WORKER_DRAIN_SECS (25s). Docker's default is 10s, which
     # would SIGKILL the worker mid-drain and make the drain pointless — in-flight
@@ -215,6 +259,13 @@ services:
           memory: 512M
 
   gateway:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     build:
       context: .
@@ -258,6 +309,13 @@ services:
   #   docker compose --profile monitoring up -d
   # Prometheus scrapes /metrics from the backend service (port 9090 internal).
   prometheus:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: prom/prometheus:latest
     profiles: [monitoring]
@@ -316,6 +374,13 @@ services:
           memory: 512M
 
   grafana:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: grafana/grafana:latest
     profiles: [monitoring]
@@ -349,6 +414,13 @@ services:
           memory: 256M
 
   alertmanager:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: prom/alertmanager:latest
     profiles: [monitoring]
@@ -382,6 +454,13 @@ services:
 
   # --- Exporters (host / redis / postgres metrics + synthetic HTTP probes) ---
   node-exporter:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: prom/node-exporter:v1.8.2
     profiles: [monitoring]
@@ -395,6 +474,13 @@ services:
     restart: unless-stopped
 
   redis-exporter:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: oliver006/redis_exporter:v1.66.0
     profiles: [monitoring]
@@ -407,6 +493,13 @@ services:
     restart: unless-stopped
 
   postgres-exporter:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
     profiles: [monitoring]
@@ -419,6 +512,13 @@ services:
     restart: unless-stopped
 
   blackbox-exporter:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: prom/blackbox-exporter:v0.25.0
     profiles: [monitoring]
@@ -431,6 +531,13 @@ services:
   # --- Distributed tracing backend (Grafana Tempo, OTLP receiver). To export spans, set
   #     WEISSMAN_OTLP_ENDPOINT=http://tempo:4318/v1/traces on backend + worker. ---
   tempo:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     logging: *default-logging
     image: grafana/tempo:2.6.1
     profiles: [tracing]
