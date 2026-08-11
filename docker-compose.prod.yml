@@ -187,7 +187,10 @@ services:
     image: grafana/grafana:11.4.0
     environment:
       GF_SECURITY_ADMIN_USER: ${WEISSMAN_ADMIN_EMAIL:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${WEISSMAN_ADMIN_PASSWORD:?set WEISSMAN_ADMIN_PASSWORD}}
+      # No WEISSMAN_ADMIN_PASSWORD fallback: silently reusing the platform super-admin
+      # password for Grafana makes any Grafana compromise a platform compromise.
+      # start_weissman_live.sh generates this independently.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD (openssl rand -base64 32) — must NOT equal WEISSMAN_ADMIN_PASSWORD}
 
   # The prod overlay puts Redis behind a password (requirepass), so the exporter must
   # authenticate or every redis_* metric is dead (auth error on each scrape).

@@ -295,9 +295,14 @@ ensure_env() {
     generated_admin=1
   fi
 
-  # Monitoring UIs (Grafana :3000, Prometheus :9090) reuse admin credentials unless overridden.
+  # Monitoring UIs get their OWN generated credential — never a copy of the platform admin
+  # password. Grafana is a large third-party app with its own CVE stream and its own exposed
+  # login. Copying WEISSMAN_ADMIN_PASSWORD into it (which this did — both values hashed to the
+  # same SHA-256 on the live .env) means any Grafana credential disclosure hands over the
+  # Weissman platform super-admin account, and vice versa. The blast radius of compromising the
+  # dashboard tool should not be the security platform it monitors.
   if [[ -z "$(env_get GRAFANA_ADMIN_PASSWORD)" ]]; then
-    env_set GRAFANA_ADMIN_PASSWORD "$(env_get WEISSMAN_ADMIN_PASSWORD)"
+    env_set GRAFANA_ADMIN_PASSWORD "$(gen_password)"
   fi
 
   if [[ -n "$PUBLIC_URL" ]]; then

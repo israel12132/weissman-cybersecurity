@@ -207,12 +207,26 @@ services:
       context: .
       dockerfile: deploy/frontend.Dockerfile
     ports:
-      - "80:8080"
+      # Bound to loopback by DEFAULT because this listener is plain HTTP. There is no TLS
+      # anywhere in the stack — no 443 listener, no redirect, no terminator container — so
+      # publishing on 0.0.0.0 put the Command Center login, the admin password and the issued
+      # JWT on the wire in cleartext for anyone on the host's LAN or any on-path device. For a
+      # security product that is not an acceptable default.
+      #
+      # To expose it, put a TLS terminator in front and point it at 127.0.0.1:80, or set
+      # WEISSMAN_GATEWAY_BIND=0.0.0.0 to consciously accept cleartext on the network.
+      - "${WEISSMAN_GATEWAY_BIND:-127.0.0.1}:${WEISSMAN_GATEWAY_PORT:-80}:8080"
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/command-center/"]
+      # Exercise the proxy path, not just the filesystem. The previous check fetched
+      # /command-center/ — a static file nginx serves from its own image — so it passed
+      # whenever nginx was alive, which is the one thing that was never in doubt. It stayed
+      # green with the backend unreachable, and "gateway healthy" told an operator nothing
+      # about whether the site actually worked. /api/health proxies to weissman_backend, so
+      # this now fails when the upstream is down.
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -290,7 +304,9 @@ services:
     profiles: [monitoring]
     environment:
       GF_SECURITY_ADMIN_USER: ${WEISSMAN_ADMIN_EMAIL:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${WEISSMAN_ADMIN_PASSWORD:-weissman-grafana-dev}}
+      # Dev default is a distinct literal, never WEISSMAN_ADMIN_PASSWORD — see
+      # docker-compose.prod.yml for why the two must not be the same credential.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-weissman-grafana-dev}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: http://localhost:3000
     # Loopback only, matching the advertised URL. Grafana has its own login, but keeping
