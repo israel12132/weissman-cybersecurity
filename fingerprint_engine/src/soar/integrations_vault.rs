@@ -88,39 +88,61 @@ pub fn key_present() -> bool {
     vault_key().is_some()
 }
 
-/// Decrypt keyring: current key first, then rotated-out previous keys so a key
-/// rotation never orphans already-encrypted secrets. Previous keys are read from
-/// `WEISSMAN_VAULT_KEY_PREVIOUS` (comma-separated hex),
-/// `WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS` (comma-separated passphrases), and
-/// the existing `WEISSMAN_JWT_SECRET_PREVIOUS` rotation keyring.
+/// Build the decrypt keyring from explicit inputs.
+///
+/// Split out from [`decrypt_keyring`] so the migration guarantee is testable: the real function
+/// caches in a `OnceLock`, so a test that flips environment variables cannot observe the effect.
+fn build_decrypt_keyring(
+    current: Option<[u8; 32]>,
+    jwt_secret: &str,
+    prev_vault_hex_csv: &str,
+    prev_integrations_csv: &str,
+    prev_jwt_csv: &str,
+) -> Vec<[u8; 32]> {
+    let mut v: Vec<[u8; 32]> = Vec::new();
+    if let Some(k) = current {
+        v.push(k);
+    }
+    v.extend(prev_vault_hex_csv.split(',').filter_map(hex32));
+    for e in prev_integrations_csv.split(',') {
+        if e.trim().len() >= 32 {
+            v.push(derive_key(b"weissman-integrations-vault-v1|", e.trim()));
+        }
+    }
+    // Legacy rows: everything written before a dedicated key existed was encrypted with the key
+    // derived from the CURRENT JWT secret. Without this entry, the moment an operator sets
+    // WEISSMAN_INTEGRATIONS_VAULT_KEY — exactly what the hardened startup guard now tells them to
+    // do — every previously stored MFA seed and SOAR credential becomes undecryptable, because
+    // the JWT-derived key only reached this keyring via *_PREVIOUS. Including it makes enabling a
+    // dedicated key a safe migration: new writes use the dedicated key, old rows still open. It
+    // grants no access the fallback did not already have — this is the key those rows are
+    // encrypted with today.
+    if jwt_secret.trim().len() >= 16 {
+        let legacy = derive_key(b"weissman-integrations-vault-fallback|", jwt_secret.trim());
+        if !v.contains(&legacy) {
+            v.push(legacy);
+        }
+    }
+    for e in prev_jwt_csv.split(',') {
+        if e.trim().len() >= 16 {
+            v.push(derive_key(b"weissman-integrations-vault-fallback|", e.trim()));
+        }
+    }
+    v
+}
+
+/// Decrypt keyring: current key first, then rotated-out previous keys so a key rotation never
+/// orphans already-encrypted secrets.
 fn decrypt_keyring() -> &'static [[u8; 32]] {
     static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        let mut v: Vec<[u8; 32]> = Vec::new();
-        if let Some(k) = vault_key() {
-            v.push(k);
-        }
-        if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
-            v.extend(csv.split(',').filter_map(hex32));
-        }
-        if let Ok(csv) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS") {
-            for e in csv.split(',') {
-                if e.trim().len() >= 32 {
-                    v.push(derive_key(b"weissman-integrations-vault-v1|", e.trim()));
-                }
-            }
-        }
-        if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
-            for e in csv.split(',') {
-                if e.trim().len() >= 16 {
-                    v.push(derive_key(
-                        b"weissman-integrations-vault-fallback|",
-                        e.trim(),
-                    ));
-                }
-            }
-        }
-        v
+        build_decrypt_keyring(
+            vault_key(),
+            &std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default(),
+            &std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS").unwrap_or_default(),
+            &std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS").unwrap_or_default(),
+            &std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS").unwrap_or_default(),
+        )
     })
     .as_slice()
 }
@@ -349,4 +371,53 @@ mod tests {
             "the previous key must still recover the secret"
         );
     }
+
+    /// Turning on a dedicated vault key must not orphan secrets already written under the
+    /// JWT-derived fallback.
+    ///
+    /// This is the trap in the obvious reading of the hardening: `security_startup` now refuses to
+    /// boot production without `WEISSMAN_INTEGRATIONS_VAULT_KEY`, so an operator sets one — and
+    /// every existing MFA seed and SOAR credential was encrypted with a key derived from
+    /// `WEISSMAN_JWT_SECRET`. Before this keyring entry, the JWT-derived key was only reachable via
+    /// `WEISSMAN_JWT_SECRET_PREVIOUS`, so those rows silently stopped decrypting.
+    #[test]
+    fn enabling_a_dedicated_key_still_decrypts_legacy_jwt_encrypted_secrets() {
+        const JWT: &str = "a-production-length-jwt-secret-value-at-least-48-chars-long";
+        const DEDICATED: &str = "a-dedicated-integrations-vault-key-32+";
+
+        // A secret written yesterday, under the fallback.
+        let legacy_key = derive_key(b"weissman-integrations-vault-fallback|", JWT);
+        let legacy_blob = encrypt_with_key(&legacy_key, "slack-bot-token-xoxb").expect("encrypt");
+
+        // Today: a dedicated key is configured, so it becomes the encryption key.
+        let dedicated_key = derive_key(b"weissman-integrations-vault-v1|", DEDICATED);
+        assert_ne!(dedicated_key, legacy_key, "test premise: the keys differ");
+
+        let keyring = build_decrypt_keyring(Some(dedicated_key), JWT, "", "", "");
+
+        let recovered = keyring
+            .iter()
+            .find_map(|k| decrypt_with_key(k, &legacy_blob));
+        assert_eq!(
+            recovered.as_deref(),
+            Some("slack-bot-token-xoxb"),
+            "a secret encrypted under the JWT-derived fallback must still decrypt after a \
+             dedicated key is introduced — otherwise hardening the startup guard destroys every \
+             stored MFA seed and SOAR credential"
+        );
+
+        // And the dedicated key is still first, so new writes use it.
+        assert_eq!(keyring.first(), Some(&dedicated_key));
+
+        // Without the legacy entry the same lookup fails — proves the test is load-bearing.
+        let without_legacy: Vec<[u8; 32]> = vec![dedicated_key];
+        assert!(
+            without_legacy
+                .iter()
+                .find_map(|k| decrypt_with_key(k, &legacy_blob))
+                .is_none(),
+            "control: the dedicated key alone must NOT open a legacy blob"
+        );
+    }
+
 }

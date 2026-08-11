@@ -151,17 +151,31 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         );
     }
 
-    // Secrets-at-rest vaults: fail closed rather than silently storing MFA seeds,
-    // SOAR provider credentials, or CEO-vault secrets in plaintext.
-    if !crate::soar::integrations_vault::key_present() {
+    // Secrets-at-rest vaults: fail closed rather than silently storing MFA seeds, SOAR provider
+    // credentials and CEO-vault secrets under the token-signing key.
+    //
+    // These guards used to call `key_present()`, which is true whenever ANY key material exists —
+    // including the fallback derived from WEISSMAN_JWT_SECRET. Since this function already
+    // rejects a JWT secret shorter than 48 chars, that fallback always succeeds in production, so
+    // both guards were unconditionally true. They read as a hard requirement and were dead code:
+    // every stored secret in this deployment is encrypted with the JWT secret.
+    //
+    // That is not a storage key. It is the token-signing key, and it is deliberately distributed
+    // to every replica including the worker container — so anyone who reads it from any one
+    // process can both mint arbitrary auth tokens and decrypt every stored secret. Checking
+    // `dedicated_key_configured()` makes these guards mean what their messages claim.
+    //
+    // Safe to enable: both decrypt keyrings now also carry the JWT-derived legacy key, so rows
+    // written before the dedicated key existed keep opening while new writes use the new key.
+    if !crate::soar::integrations_vault::dedicated_key_configured() {
         return Err(
-            "no secrets-at-rest key in production: set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars) or WEISSMAN_VAULT_KEY (64 hex); refusing to store MFA/SOAR secrets unencrypted"
+            "no dedicated secrets-at-rest key in production: set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars) or WEISSMAN_VAULT_KEY (64 hex). Deriving from WEISSMAN_JWT_SECRET means the token-signing key also decrypts every stored MFA/SOAR secret"
                 .into(),
         );
     }
-    if !crate::ceo::vault::key_present() {
+    if !crate::ceo::vault::dedicated_key_configured() {
         return Err(
-            "CEO genesis vault has no key in production: set WEISSMAN_VAULT_KEY (64 hex); refusing to store vault secrets unencrypted"
+            "CEO genesis vault has no dedicated key in production: set WEISSMAN_VAULT_KEY (64 hex); deriving from WEISSMAN_JWT_SECRET means the token-signing key also decrypts every vault secret"
                 .into(),
         );
     }

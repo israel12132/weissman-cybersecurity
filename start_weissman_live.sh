@@ -273,6 +273,11 @@ ensure_env() {
     # Bearer for the OAST correlation API, shared by the listener and the engines. Generated
     # up front so enabling OAST later only needs WEISSMAN_OAST_DOMAIN; unused while OAST off.
     WEISSMAN_OAST_API_KEY
+    # Dedicated secrets-at-rest key for MFA seeds and SOAR provider credentials. Without it the
+    # vault derives its key from WEISSMAN_JWT_SECRET — the token-signing key, which is shipped to
+    # every replica — so one leaked value both mints auth tokens and decrypts every stored
+    # secret. security_startup.rs now refuses to boot production without this.
+    WEISSMAN_INTEGRATIONS_VAULT_KEY
   )
   for key in "${keys[@]}"; do
     local cur
@@ -282,6 +287,15 @@ ensure_env() {
       log "Generated $key"
     fi
   done
+
+  # CEO genesis vault. Must be exactly 64 hex chars (32 bytes) — ceo::vault::hex32 rejects
+  # anything else, so it cannot use gen_secret's base64. Same rationale as
+  # WEISSMAN_INTEGRATIONS_VAULT_KEY above: without it the vault key is derived from the
+  # token-signing secret.
+  if [[ -z "$(env_get WEISSMAN_VAULT_KEY)" ]]; then
+    env_set WEISSMAN_VAULT_KEY "$(openssl rand -hex 32)"
+    log "Generated WEISSMAN_VAULT_KEY"
+  fi
 
   if [[ -z "$(env_get WEISSMAN_ADMIN_EMAIL)" ]]; then
     env_set WEISSMAN_ADMIN_EMAIL "$ADMIN_EMAIL"
