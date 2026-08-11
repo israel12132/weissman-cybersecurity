@@ -44,6 +44,15 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-weissman}
+      # Page checksums, so silent corruption is detected instead of returned as data.
+      # The live cluster was initialised without them ("Data page checksums are
+      # disabled.") and has since survived 8 unclean crashes, 11 automatic recoveries,
+      # a checkpointer SIGABRT and a full-disk PANIC — every one of which can tear a
+      # page. With checksums off Postgres reads a torn page back without complaint.
+      #
+      # NOTE: initdb args apply only to a FRESH data directory. An existing cluster
+      # needs a dump/restore to gain checksums; until then run pg_amcheck periodically.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - weissman_pg:/var/lib/postgresql/data
     # No host port mapping: Postgres is reachable only on the internal compose network
@@ -354,8 +363,14 @@ services:
       # ${SLACK_WEBHOOK_URL} placeholders with no envsubst step, so it crash-looped on boot.
       # Committed placeholders in monitoring/secrets/ let the stack start (see its README).
       - ./monitoring/secrets:/etc/alertmanager/secrets:ro
+      - ./monitoring/alertmanager-web.generated.yml:/etc/alertmanager/web.yml:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
+      # Without this the API is wide open to every container on the compose network:
+      # GET /api/v2/alerts and POST /api/v2/silences both returned 200 unauthenticated,
+      # so any container — including the backend, which runs attack-engine code and ships
+      # an SSRF engine — could silence the entire alerting pipeline untraceably.
+      - '--web.config.file=/etc/alertmanager/web.yml'
     expose:
       - "9093"
     restart: unless-stopped

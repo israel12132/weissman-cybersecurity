@@ -11,7 +11,12 @@ global:
 # Alerting configuration
 alerting:
   alertmanagers:
-    - static_configs:
+    # Alertmanager now requires basic auth (--web.config.file), so Prometheus must present it or
+    # every alert notification would silently 401 on push.
+    - basic_auth:
+        username: weissman-monitoring
+        password_file: /etc/prometheus/scrape-password
+      static_configs:
         - targets: ['alertmanager:9093']
 
 # Load alert rules
@@ -87,5 +92,8 @@ scrape_configs:
   # anywhere: alerts fired, went nowhere, and nothing noticed. The AlertDeliveryFailing and
   # AlertingPipelineUnverified rules in application-alerts.yml consume this job.
   - job_name: 'alertmanager'
+    basic_auth:
+      username: weissman-monitoring
+      password_file: /etc/prometheus/scrape-password
     static_configs:
       - targets: ['alertmanager:9093']

@@ -51,6 +51,12 @@ services:
       - max_connections=200
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD for production}
+      # Page checksums, so silent corruption is detected rather than returned as data. The
+      # live cluster was initialised without them and has since survived 8 unclean crashes,
+      # 11 automatic recoveries, a checkpointer SIGABRT and a full-disk PANIC — each of
+      # which can tear a page that Postgres would then read back without complaint.
+      # Applies only to a FRESH data directory; an existing cluster needs a dump/restore.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
 
   redis:
     logging: *default-logging

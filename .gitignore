@@ -88,3 +88,4 @@ monitoring/secrets/*
 !monitoring/secrets/.gitkeep
 # Plaintext Prometheus self-scrape credential (scripts/sync_monitoring_admin.sh).
 monitoring/prometheus-scrape-password.generated
+monitoring/alertmanager-web.generated.yml

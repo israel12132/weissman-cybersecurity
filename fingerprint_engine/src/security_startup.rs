@@ -62,6 +62,33 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         );
     }
 
+    // Every machine secret above has an enforced floor here — JWT >= 48, metrics >= 32,
+    // destructive-confirm >= 32, job-orchestrator >= 32 — but the one credential a HUMAN types,
+    // and the one that grants super-admin, had none. The only floor was
+    // `require_len WEISSMAN_ADMIN_PASSWORD 12` in start_weissman_live.sh, which anyone bringing
+    // the stack up with plain `docker compose up` bypasses entirely.
+    //
+    // 12 matches the launcher's existing documented contract rather than inventing a stricter one,
+    // so this closes the bypass without moving the goalposts on an existing deployment.
+    const MIN_ADMIN_PASSWORD_LEN: usize = 12;
+    match std::env::var("WEISSMAN_ADMIN_PASSWORD") {
+        Ok(p) if p.trim().chars().count() >= MIN_ADMIN_PASSWORD_LEN => {}
+        Ok(p) if p.trim().is_empty() => {
+            return Err("WEISSMAN_ADMIN_PASSWORD must be set in production".into());
+        }
+        Ok(p) => {
+            return Err(format!(
+                "WEISSMAN_ADMIN_PASSWORD is {} characters; production requires at least {} \
+                 (start_weissman_live.sh generates a 24-character one)",
+                p.trim().chars().count(),
+                MIN_ADMIN_PASSWORD_LEN
+            ));
+        }
+        Err(_) => {
+            return Err("WEISSMAN_ADMIN_PASSWORD must be set in production".into());
+        }
+    }
+
     if env_truthy("WEISSMAN_SAML_INSECURE_SKIP_VERIFY") {
         return Err(
             "WEISSMAN_SAML_INSECURE_SKIP_VERIFY is set in production; configure WEISSMAN_XMLSEC1_BINARY instead"
