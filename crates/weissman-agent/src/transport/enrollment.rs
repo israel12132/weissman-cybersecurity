@@ -54,3 +54,49 @@ pub async fn enroll(
     }
     Ok(enrollment)
 }
+
+/// Exchange a persisted renewal secret for a fresh session JWT.
+///
+/// This is what makes an agent survive. Enrollment tokens are single-use and the session JWT
+/// expires (default 4h), so without a renewal path an agent had exactly one session in its entire
+/// lifetime — and any restart re-enrolled with an already-consumed token, got 401 and exited.
+pub async fn renew_session(
+    server_url: &str,
+    agent_id: &str,
+    agent_secret: &str,
+    agent_version: &str,
+) -> anyhow::Result<String> {
+    #[derive(Serialize)]
+    struct Body<'a> {
+        agent_id: &'a str,
+        agent_secret: &'a str,
+    }
+    #[derive(serde::Deserialize)]
+    struct Resp {
+        session_jwt: String,
+    }
+    let url = format!("{}/api/agents/session", server_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent(format!("weissman-agent/{}", agent_version))
+        .build()?;
+    let resp = client
+        .post(&url)
+        .json(&Body {
+            agent_id,
+            agent_secret,
+        })
+        .send()
+        .await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        anyhow::bail!("session renewal failed (HTTP {}): {}", status, text);
+    }
+    let parsed: Resp = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("invalid session response: {} (body={})", e, text))?;
+    if parsed.session_jwt.trim().is_empty() {
+        anyhow::bail!("session response missing session_jwt");
+    }
+    Ok(parsed.session_jwt)
+}

@@ -244,6 +244,10 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     (Method::POST, "/api/agents/enroll", RouteGate::Always),
+    // Session renewal: unauthenticated for the same reason as /enroll — the agent presents
+    // its own long-lived secret, which IS the credential. Without a public renewal path an
+    // agent goes permanently dark when its 4h session JWT expires.
+    (Method::POST, "/api/agents/session", RouteGate::Always),
     // Prometheus scrape endpoint — authenticated by the metrics token (WEISSMAN_METRICS_TOKEN),
     // not a user JWT. The handler (observability::api_prometheus_metrics_endpoint) enforces the
     // token itself and fails closed (401) when the token is unset or < 32 chars, so deferring the
@@ -1893,6 +1897,7 @@ mod public_route_guard_tests {
             (Method::GET, "/api/auth/verify"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::POST, "/api/agents/enroll"),
+            (Method::POST, "/api/agents/session"),
         ];
         for (m, p) in expected {
             assert!(is_public_route(m, p), "expected {m} {p} to be public");

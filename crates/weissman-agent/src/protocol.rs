@@ -79,6 +79,12 @@ pub struct Enrollment {
     pub tenant_id: i64,
     pub client_id: i64,
     pub session_jwt: String,
+    /// Long-lived renewal credential issued once at enrollment. Persisted to the agent state file
+    /// and exchanged at `POST /api/agents/session` for a fresh `session_jwt`, so the agent
+    /// survives a restart and a JWT expiry without a second (single-use) enrollment token.
+    /// Defaulted so an older server that does not send it still deserializes.
+    #[serde(default)]
+    pub agent_secret: String,
     pub ws_path: String, // e.g. "/ws/agent"
     pub server_message: Option<String>,
 }

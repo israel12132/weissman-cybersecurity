@@ -106,6 +106,13 @@ pub struct EnrollResponse {
     pub tenant_id: i64,
     pub client_id: i64,
     pub session_jwt: String,
+    /// Long-lived renewal credential, returned exactly once at enrollment; only its SHA-256 is
+    /// stored. The agent persists it and exchanges it at `POST /api/agents/session` for a fresh
+    /// short-lived `session_jwt`. Without it an agent had one session for its entire lifetime:
+    /// enrollment tokens are single-use, so it could never enroll again, and the JWT expires
+    /// after `WEISSMAN_AGENT_JWT_TTL_MINS` (default 240) — after which the agent was dark forever.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub agent_secret: String,
     pub ws_path: String,
     pub server_message: Option<String>,
 }
@@ -716,6 +723,58 @@ pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>
     });
 }
 
+/// SHA-256 hex of an agent renewal secret. The plaintext is never stored.
+#[must_use]
+pub fn hash_agent_secret(secret: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(secret.as_bytes());
+    format!("{:x}", h.finalize())
+}
+
+/// Mint a fresh session JWT for an already-enrolled agent that presents its renewal secret.
+///
+/// Enrollment tokens are single-use, and the session JWT expires (default 4h), so without this an
+/// agent had exactly one session in its entire lifetime and went dark permanently afterwards.
+/// Returns `None` when the agent is unknown, revoked, or the secret does not match.
+pub async fn renew_agent_session(
+    pool: &PgPool,
+    agent_uuid: Uuid,
+    secret: &str,
+) -> Result<Option<(i64, i64)>, sqlx::Error> {
+    // Unscoped read: the caller has not authenticated yet, so we do not know the tenant. The
+    // lookup is by uuid (unique) and is gated on the secret hash below.
+    let row: Option<(i64, i64, Option<String>, Option<chrono::DateTime<chrono::Utc>>)> =
+        sqlx::query_as(
+            "SELECT tenant_id, client_id, session_secret_hash, revoked_at \
+             FROM endpoint_agents WHERE agent_uuid = $1",
+        )
+        .bind(agent_uuid)
+        .fetch_optional(pool)
+        .await?;
+    let Some((tenant_id, client_id, stored, revoked_at)) = row else {
+        return Ok(None);
+    };
+    if revoked_at.is_some() {
+        return Ok(None);
+    }
+    let Some(stored) = stored.filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    // Constant-time: this is a bearer credential, so the comparison is attacker-timed. The helper
+    // takes the expected value as raw bytes and the presented one as hex.
+    let Ok(stored_bytes) = hex::decode(stored.trim()) else {
+        return Ok(None);
+    };
+    let presented_hex = hash_agent_secret(secret);
+    if !crate::security_hardening::constant_time_hmac_hex_eq(&stored_bytes, &presented_hex) {
+        return Ok(None);
+    }
+    Ok(Some((tenant_id, client_id)))
+}
+
+/// Register a newly enrolled agent. Returns its uuid and the plaintext renewal secret, which the
+/// caller must return to the agent exactly once — only its hash is persisted.
 pub async fn register_agent(
     pool: &PgPool,
     tenant_id: i64,
@@ -726,13 +785,15 @@ pub async fn register_agent(
     arch: &str,
     agent_version: &str,
     capabilities: &[String],
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<(Uuid, String), sqlx::Error> {
     let agent_uuid = Uuid::new_v4();
+    let secret = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let secret_hash = hash_agent_secret(&secret);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agents
-            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled')"#,
+            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status, session_secret_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled', $10)"#,
     )
     .bind(agent_uuid)
     .bind(tenant_id)
@@ -743,10 +804,11 @@ pub async fn register_agent(
     .bind(arch)
     .bind(agent_version)
     .bind(serde_json::to_value(capabilities).unwrap_or(serde_json::Value::Array(vec![])))
+    .bind(&secret_hash)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    Ok(agent_uuid)
+    Ok((agent_uuid, secret))
 }
 
 /// Update last-seen for an agent. We don't know the tenant from the agent_uuid alone, but the

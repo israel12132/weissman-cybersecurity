@@ -71,7 +71,9 @@ fn unauth_post_kind(method: &axum::http::Method, path: &str) -> Option<UnauthPos
     if is_account_lockout_post(method, path) {
         return Some(UnauthPostKind::Login);
     }
-    if path == "/api/agents/enroll" {
+    // Both agent credential endpoints share the Enroll bucket: /session takes a bearer secret
+    // and is unauthenticated, so it is brute-forceable exactly like /enroll.
+    if path == "/api/agents/enroll" || path == "/api/agents/session" {
         return Some(UnauthPostKind::Enroll);
     }
     None

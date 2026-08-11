@@ -235,6 +235,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             post(api_agents_create_token),
         )
         .route("/api/agents/enroll", post(api_agents_enroll))
+        // Renewal: an agent exchanges its long-lived secret for a fresh short-lived JWT.
+        // Unauthenticated like /enroll — the secret is the credential — and rate-limited
+        // alongside it in http/login_rate_limit.rs.
+        .route("/api/agents/session", post(api_agents_session))
         .route("/api/agents/status", get(api_agents_status))
         .route("/api/agents/dispatch", post(api_agents_dispatch_task))
         .route("/install/agent.sh", get(install_agent_sh))

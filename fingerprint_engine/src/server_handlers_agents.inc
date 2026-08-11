@@ -283,7 +283,7 @@ async fn api_agents_enroll(
     } else {
         body.capabilities.clone()
     };
-    let agent_uuid = match crate::endpoint_agents::register_agent(
+    let (agent_uuid, agent_secret) = match crate::endpoint_agents::register_agent(
         state.app_pool.as_ref(),
         consumed.tenant_id,
         consumed.client_id,
@@ -325,10 +325,90 @@ async fn api_agents_enroll(
         tenant_id: consumed.tenant_id,
         client_id: consumed.client_id,
         session_jwt,
+        // Returned exactly once — only its hash is stored. The agent persists it so it can renew
+        // its short-lived session JWT without a second (single-use) enrollment token.
+        agent_secret,
         ws_path: "/ws/agent".into(),
         server_message: Some(format!("welcome host={}", body.hostname)),
     };
     (StatusCode::OK, Json(serde_json::to_value(&resp).unwrap_or(json!({})))).into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct AgentSessionBody {
+    agent_id: String,
+    agent_secret: String,
+}
+
+/// `POST /api/agents/session` — exchange an agent's long-lived renewal secret for a fresh
+/// short-lived session JWT.
+///
+/// Unauthenticated by design: the secret IS the credential, exactly like `/api/agents/enroll`.
+/// It exists because enrollment tokens are single-use and the session JWT expires (default 4h),
+/// so before this an agent had one session for its whole lifetime and then went dark permanently
+/// with no way back short of a human issuing a new token and re-running the installer.
+///
+/// Deliberately uniform failure: unknown agent, revoked agent and wrong secret all return the
+/// same 401 with the same body, so this cannot be used to enumerate which agent ids exist.
+async fn api_agents_session(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<AgentSessionBody>,
+) -> Response {
+    let unauthorized = || {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"ok": false, "detail": "invalid agent credentials"})),
+        )
+            .into_response()
+    };
+    let Ok(agent_uuid) = body.agent_id.trim().parse::<uuid::Uuid>() else {
+        return unauthorized();
+    };
+    if body.agent_secret.trim().is_empty() {
+        return unauthorized();
+    }
+    let renewed = crate::endpoint_agents::renew_agent_session(
+        state.app_pool.as_ref(),
+        agent_uuid,
+        body.agent_secret.trim(),
+    )
+    .await;
+    let (tenant_id, client_id) = match renewed {
+        Ok(Some(v)) => v,
+        Ok(None) => return unauthorized(),
+        Err(e) => {
+            tracing::error!(target: "agents", error = %e, "agent session renewal lookup failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+            )
+                .into_response();
+        }
+    };
+    let session_jwt =
+        match crate::auth_jwt::create_agent_session_token(&agent_uuid.to_string(), tenant_id) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!(target: "agents", error = %e, "agent jwt build failed");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "detail": "agent jwt failed"})),
+                )
+                    .into_response();
+            }
+        };
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "agent_id": agent_uuid.to_string(),
+            "tenant_id": tenant_id,
+            "client_id": client_id,
+            "session_jwt": session_jwt,
+            "ws_path": "/ws/agent",
+        })),
+    )
+        .into_response()
 }
 
 async fn api_agents_status(
