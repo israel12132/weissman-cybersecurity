@@ -93,7 +93,7 @@ jobs:
           # GitHub artifact names forbid ':', so map `sha256:<hex>` -> `sha256-<hex>`.
           # Value comes via the environment (IMAGE_DIGEST) to keep shell-injection safe.
           echo "ARTIFACT_NAME=rendered-k8s-${IMAGE_DIGEST//:/-}" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: _render/
