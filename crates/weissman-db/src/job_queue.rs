@@ -548,9 +548,17 @@ pub async fn get_job_for_tenant(
 }
 
 /// Schedule retry with exponential backoff, or mark `dead` when attempts exhausted.
+/// Record a failure (or dead-letter, once attempts are spent), fenced on the caller still owning
+/// the row.
+///
+/// Every terminal write here is guarded on `worker_id` AND `status = 'running'`, for the same
+/// reason as `complete_job_with_result_owned`: after an orphan the row is handed to another
+/// worker, so an unguarded `WHERE id = $1` let a superseded worker's late failure overwrite the
+/// live re-run — killing a job that was progressing perfectly well on another host.
 pub async fn fail_job(
     pool: &PgPool,
     job: &AsyncJob,
+    worker_id: &str,
     err: &str,
     base_backoff_secs: i64,
 ) -> Result<(), sqlx::Error> {
@@ -559,10 +567,12 @@ pub async fn fail_job(
     if job.attempt_count >= job.max_attempts {
         sqlx::query(
             r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
-               worker_id = NULL, updated_at = now() WHERE id = $1"#,
+               worker_id = NULL, updated_at = now()
+               WHERE id = $1 AND status = 'running' AND worker_id = $3"#,
         )
         .bind(job.id)
         .bind(&msg)
+        .bind(worker_id)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -579,11 +589,13 @@ pub async fn fail_job(
     let delay = delay.min(3600);
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', last_error = $2, locked_until = NULL,
-           worker_id = NULL, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now() WHERE id = $1"#,
+           worker_id = NULL, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
+           WHERE id = $1 AND status = 'running' AND worker_id = $4"#,
     )
     .bind(job.id)
     .bind(&msg)
     .bind(delay)
+    .bind(worker_id)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -654,8 +666,12 @@ pub async fn dead_letter_job(pool: &PgPool, job_id: Uuid, err: &str) -> Result<(
     let msg: String = err.chars().take(4000).collect();
     let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
+        // Status guard only: unlike fail_job this is also called for a claim that was REJECTED,
+        // where the caller never owned the row. The guard still stops a late dead-letter from
+        // overwriting a job that has since completed or been re-run to success.
         r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
-           worker_id = NULL, updated_at = now() WHERE id = $1"#,
+           worker_id = NULL, updated_at = now()
+           WHERE id = $1 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)
     .bind(&msg)

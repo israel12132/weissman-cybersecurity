@@ -273,10 +273,7 @@ async fn process_one(
                     );
                 }
                 if job.attempt_count >= job.max_attempts {
-                    let _ = job_queue::fail_job(
-                        pool,
-                        &job,
-                        &format!("claim rejected: {e}"),
+                    let _ = job_queue::fail_job(pool, &job, &wid, &format!("claim rejected: {e}"),
                         BASE_BACKOFF_SECS,
                     )
                     .await;
@@ -435,7 +432,7 @@ async fn process_one(
                     ),
                     Err(e) => {
                         error!(target: "weissman_worker", job_id = %job.id, error = %e, "complete failed");
-                        let _ = job_queue::fail_job(pool, &job, &e.to_string(), BASE_BACKOFF_SECS).await;
+                        let _ = job_queue::fail_job(pool, &job, &wid, &e.to_string(), BASE_BACKOFF_SECS).await;
                     }
                 }
             }
@@ -493,7 +490,7 @@ async fn process_one(
                 {
                     error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced fail");
                 }
-            } else if let Err(e) = job_queue::fail_job(pool, &job, &msg, BASE_BACKOFF_SECS).await {
+            } else if let Err(e) = job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
                 let _ =
                     job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
