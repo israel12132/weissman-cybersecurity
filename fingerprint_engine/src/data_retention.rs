@@ -32,6 +32,49 @@ async fn run_intel_dynamic_retention(pool: &PgPool, days: i64) -> Result<u64, sq
     Ok(r.rows_affected())
 }
 
+/// Retire `pending` rows that the claim path can provably NEVER pick up.
+///
+/// The retention sweep below only deletes rows that already reached a terminal status, so an
+/// unrunnable `pending` row is immortal: never claimed, never deleted, forever inflating queue
+/// depth. After the 2026-08-06 outage the live queue held 2,973 such rows — all of them repeats
+/// of the same `orchestrator_tick` scan — which distorted every queue metric and, until the
+/// coalescing predicate was corrected, deadlocked the scheduler outright.
+///
+/// Two terminal conditions, both mirroring `crates/weissman-db/src/job_queue.rs`:
+///
+///  * **No zero-trust envelope.** `attach_signed_envelope` runs only at enqueue time; nothing
+///    re-signs an existing row, so a row that missed its envelope can never gain one.
+///  * **At the attempt ceiling.** The claim predicate skips these, and no path decrements
+///    `attempt_count`.
+///
+/// A row that is merely *not due yet* (`run_after` in the future) is deliberately NOT retired —
+/// it becomes claimable on its own. `grace_secs` guards the same hazard from the other side:
+/// `enqueue_held` inserts a row WITHOUT an envelope and attaches it moments later, so retiring
+/// envelope-less rows on sight would destroy jobs mid-enqueue. The default grace is far longer
+/// than the 300s ceiling `enqueue_held` clamps its hold to.
+async fn retire_unrunnable_pending_jobs(pool: &PgPool, grace_secs: i64) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET status = 'dead',
+                  last_error = COALESCE(NULLIF(last_error, ''), '')
+                      || CASE WHEN payload ? '_weissman_job_bus'
+                              THEN '[retired: attempts exhausted; the claim path skips it]'
+                              ELSE '[retired: enqueued without a zero-trust envelope; nothing re-signs an existing row, so it could never be claimed]'
+                         END,
+                  updated_at = now()
+            WHERE status = 'pending'
+              AND created_at < now() - ($1::bigint * interval '1 second')
+              AND (
+                    attempt_count >= max_attempts
+                    OR NOT (payload ? '_weissman_job_bus')
+                  )"#,
+    )
+    .bind(grace_secs)
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 async fn run_async_job_retention(pool: &PgPool, days: i64) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
         r#"DELETE FROM weissman_async_jobs
@@ -48,6 +91,26 @@ async fn retention_pass(app_pool: &PgPool, intel_pool: &PgPool) {
     let ephemeral_days = env_u64("WEISSMAN_INTEL_EPHEMERAL_RETENTION_DAYS", 7) as i64;
     let dynamic_days = env_u64("WEISSMAN_INTEL_DYNAMIC_RETENTION_DAYS", 90) as i64;
     let job_days = env_u64("WEISSMAN_ASYNC_JOB_RETENTION_DAYS", 30) as i64;
+    // Generous by default: `enqueue_held` clamps its envelope-attach hold to 300s, so anything
+    // under an hour risks retiring a job that is still being enqueued.
+    let unrunnable_grace = env_u64("WEISSMAN_ASYNC_JOB_UNRUNNABLE_GRACE_SECS", 3600) as i64;
+
+    // Retire before deleting: this moves provably-unrunnable rows to a terminal status so the
+    // sweep below can age them out normally, instead of leaving them pending forever.
+    match retire_unrunnable_pending_jobs(app_pool, unrunnable_grace).await {
+        Ok(n) if n > 0 => tracing::warn!(
+            target: "data_retention",
+            retired = n,
+            "retired pending jobs the claim path can never pick up (no zero-trust envelope, or at \
+             their attempt ceiling)"
+        ),
+        Ok(_) => {}
+        Err(e) => tracing::warn!(
+            target: "data_retention",
+            error = %e,
+            "retiring unrunnable pending jobs failed"
+        ),
+    }
 
     match run_intel_ephemeral_retention(intel_pool, ephemeral_days).await {
         Ok(n) if n > 0 => tracing::info!(
