@@ -64,8 +64,17 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # Prometheus self-monitoring
+  # Prometheus self-monitoring.
+  #
+  # --web.config.file gates every endpoint including /metrics, so without basic_auth here
+  # Prometheus cannot scrape itself: `up{job="prometheus"}` was 0 for 23,699/23,699 samples —
+  # 100% down across the entire 30-day retention window, and no rule covered it. That means no
+  # rule-evaluation failure counts, no notification-queue depth, no TSDB health and no
+  # config-reload status, for the whole life of the deployment.
   - job_name: 'prometheus'
+    basic_auth:
+      username: weissman-monitoring
+      password_file: /etc/prometheus/scrape-password
     static_configs:
       - targets: ['localhost:9090']
 

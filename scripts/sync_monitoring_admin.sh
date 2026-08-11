@@ -19,13 +19,30 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
-PASSWORD="${WEISSMAN_ADMIN_PASSWORD:-}"
+# Monitoring gets its OWN credential, not the platform super-admin one.
+#
+# This used to bcrypt WEISSMAN_ADMIN_PASSWORD into the Prometheus basic-auth file, so the
+# password guarding the observability stack was byte-identical to the Weissman platform
+# super-admin password. Prometheus and Grafana are third-party services with their own CVE
+# streams and their own exposed logins; a disclosure in either handed over the platform.
+# MONITORING_BASIC_AUTH_PASSWORD is generated once and persisted to .env.
+EMAIL="${MONITORING_BASIC_AUTH_USER:-weissman-monitoring}"
+PASSWORD="${MONITORING_BASIC_AUTH_PASSWORD:-}"
 WEB_CONFIG="${ROOT}/monitoring/prometheus-web.generated.yml"
+# Prometheus scrapes its own /metrics, and --web.config.file gates *every* endpoint including
+# that one — so the self-scrape needs the plaintext to authenticate to itself. It lives in a
+# 0600 file rather than in prometheus.yml so the secret is not in a committed config.
+PASSWORD_FILE="${ROOT}/monitoring/prometheus-scrape-password.generated"
 
 if [[ -z "$PASSWORD" ]]; then
-  echo "WEISSMAN_ADMIN_PASSWORD is required" >&2
-  exit 1
+  if [[ -f "${ROOT}/.env" ]] && grep -q '^MONITORING_BASIC_AUTH_PASSWORD=' "${ROOT}/.env"; then
+    echo "MONITORING_BASIC_AUTH_PASSWORD is present in .env but empty — set it or remove the line" >&2
+    exit 1
+  fi
+  PASSWORD="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
+  printf '\nMONITORING_BASIC_AUTH_USER=%s\nMONITORING_BASIC_AUTH_PASSWORD=%s\n' \
+    "$EMAIL" "$PASSWORD" >> "${ROOT}/.env"
+  echo "Generated MONITORING_BASIC_AUTH_PASSWORD and appended it to .env"
 fi
 
 # Compose derives the project name from COMPOSE_PROJECT_NAME, else from the directory
@@ -116,6 +133,15 @@ EOF
   # It holds a bcrypt hash, never the plaintext password.
   chmod 644 "$WEB_CONFIG"
   echo "Wrote ${WEB_CONFIG}"
+
+  # Plaintext copy for Prometheus's own self-scrape (basic_auth password_file in
+  # monitoring/prometheus.yml). 0644 for the same reason as above — the container runs as an
+  # unprivileged uid that does not match the host owner — but this one holds the plaintext, so
+  # it is gitignored and must never be committed.
+  umask 022
+  printf '%s' "$PASSWORD" > "$PASSWORD_FILE"
+  chmod 644 "$PASSWORD_FILE"
+  echo "Wrote ${PASSWORD_FILE}"
 
   # If Prometheus is already running it started without (or with a stale) web config;
   # it only re-reads --web.config.file that was present at launch, so restart it.

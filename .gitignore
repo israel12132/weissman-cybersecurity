@@ -79,6 +79,12 @@ dump.rdb
 fingerprint_engine/Cargo.lock
 
 # Alertmanager delivery secrets (populate locally; never commit)
-monitoring/alertmanager-secrets/*
-!monitoring/alertmanager-secrets/README.md
-!monitoring/alertmanager-secrets/.gitkeep
+# The real directory is monitoring/secrets/ — this rule previously named
+# monitoring/alertmanager-secrets/, which does not exist, so the Alertmanager credential files
+# were never actually ignored. The committed values there are documented inert placeholders, but
+# the rule must cover the path an operator will write real secrets into.
+monitoring/secrets/*
+!monitoring/secrets/README.md
+!monitoring/secrets/.gitkeep
+# Plaintext Prometheus self-scrape credential (scripts/sync_monitoring_admin.sh).
+monitoring/prometheus-scrape-password.generated
