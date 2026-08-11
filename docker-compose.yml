@@ -406,3 +406,14 @@ volumes:
   weissman_grafana:
   weissman_alertmanager:
   weissman_tempo:
+
+# Pin the bridge subnet. deploy/nginx-gateway.conf trusts exactly 172.19.0.1/32 as its
+# X-Forwarded-For proxy (the address a same-host reverse proxy arrives from); if Docker were
+# free to auto-assign a different subnet on network re-create, that entry would silently stop
+# matching and real_ip resolution would break — or, worse, start matching something else.
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.0/16
