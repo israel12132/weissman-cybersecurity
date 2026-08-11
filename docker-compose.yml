@@ -556,6 +556,12 @@ services:
     restart: unless-stopped
 
   blackbox-exporter:
+    # Runs its daemon as root by default (verified: PID 1 `blackbox_export` uid=0),
+    # unlike every other exporter here, which already drops to nobody. This deployment
+    # only issues HTTP probes, so it needs no CAP_NET_RAW and nothing above nobody.
+    # (postgres and redis were also reported as root, but their daemons already drop
+    # privileges — `docker exec id -u` shows the image user, not PID 1.)
+    user: "65534:65534"
     # The four exporters ran with no memory limit, no CPU limit and no
     # healthcheck: a leaking or wedged exporter could consume the host and
     # would still report as running, while its metrics silently went stale.
