@@ -93,7 +93,14 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if path.is_dir() {
-            if matches!(name.as_ref(), "target" | ".git" | "node_modules" | "vendor") {
+                        // `.claude` holds git worktrees — full copies of this repo. Walking into them makes
+            // every guarded file appear once per worktree under a path that no ALLOWED entry can
+            // match, so these tests failed for anyone running the suite from the main checkout
+            // with a worktree present (they passed inside a worktree, which has no nested copy).
+            if matches!(
+                name.as_ref(),
+                "target" | ".git" | ".claude" | "node_modules" | "vendor"
+            ) {
                 continue;
             }
             collect_rs(&path, out);
