@@ -121,13 +121,39 @@ impl DistributedLease {
         })
     }
 
-    /// Force-release a stale lease (swarm coordinator only).
-    pub async fn force_release(
+    /// Force-release the lease of a worker the coordinator has declared dead.
+    ///
+    /// Compare-and-delete against the worker the coordinator actually observed, NOT a bare `DEL`.
+    /// The unconditional delete raced the liveness check it followed: a worker whose 2s Redis
+    /// liveness key lapsed during a runtime stall or a Redis blip (its refresh result is
+    /// discarded, so it never learns) would have its still-valid lease destroyed while it was
+    /// mid-scan. The next worker then acquired the freed key and ran the same red-team scan
+    /// against the same customer target, concurrently.
+    ///
+    /// Deleting only when the value still names the dead worker means a lease re-acquired in the
+    /// meantime — by that worker recovering, or by another worker legitimately taking over — is
+    /// left alone. Returns whether a lease was actually removed.
+    pub async fn force_release_owned(
         redis: &redis::aio::ConnectionManager,
         job_id: Uuid,
-    ) -> Result<(), JobBusError> {
+        worker_id: &str,
+    ) -> Result<bool, JobBusError> {
         let mut conn = redis.clone();
-        let _: () = conn.del(lease_key(job_id)).await?;
-        Ok(())
+        // The claim token is not known to the coordinator, so match on the `worker_id:` prefix.
+        let script = r#"
+            local v = redis.call('GET', KEYS[1])
+            if v and string.sub(v, 1, string.len(ARGV[1])) == ARGV[1] then
+                return redis.call('DEL', KEYS[1])
+            else
+                return 0
+            end
+        "#;
+        let removed: i64 = redis::Script::new(script)
+            .key(lease_key(job_id))
+            .arg(format!("{worker_id}:"))
+            .invoke_async(&mut conn)
+            .await
+            .map_err(|e| JobBusError::Redis(e.to_string()))?;
+        Ok(removed > 0)
     }
 }

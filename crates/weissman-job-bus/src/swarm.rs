@@ -125,11 +125,27 @@ impl WorkerSwarm {
 pub struct SwarmCoordinator {
     bus: Arc<JobBus>,
     redis: redis::aio::ConnectionManager,
+    /// Consecutive ticks each worker has been observed missing.
+    ///
+    /// The liveness key has a 2s TTL refreshed every 400ms, so a single >2s runtime stall — a GC
+    /// pause, a slow syscall, a brief Redis blip — makes a perfectly healthy worker look dead for
+    /// one tick. Acting on one observation meant every job that worker held (26 in a single 77ms
+    /// tick, live) was orphaned and re-dispatched while it was still running them. Requiring
+    /// several consecutive misses costs at most a couple of seconds of extra recovery latency and
+    /// removes the entire class of blip-triggered double execution.
+    missed: tokio::sync::Mutex<std::collections::HashMap<String, u32>>,
 }
 
 impl SwarmCoordinator {
+    /// Consecutive missed liveness observations before a worker is declared dead.
+    const MISSES_BEFORE_ORPHAN: u32 = 3;
+
     pub fn new(bus: Arc<JobBus>, redis: redis::aio::ConnectionManager) -> Self {
-        Self { bus, redis }
+        Self {
+            bus,
+            redis,
+            missed: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+        }
     }
 
     pub fn spawn(self: Arc<Self>) {
@@ -214,6 +230,7 @@ impl SwarmCoordinator {
         .await?;
         tx.commit().await?;
 
+        let mut seen_workers: std::collections::HashSet<String> = std::collections::HashSet::new();
         for row in rows {
             // Handle each row independently: a failure on one job must not skip the rest of the pass
             // (head-of-line blocking would keep the same failing row wedging the tail every tick).
@@ -222,6 +239,7 @@ impl SwarmCoordinator {
                     (Ok(a), Ok(b), Ok(c)) => (a, b, c),
                     _ => continue,
                 };
+            seen_workers.insert(worker_id.clone());
             if worker_id.is_empty() {
                 continue;
             }
@@ -237,13 +255,30 @@ impl SwarmCoordinator {
                 }
             };
             if alive {
+                self.missed.lock().await.remove(&worker_id);
+                continue;
+            }
+            // Require several consecutive misses. One missed observation is not evidence of
+            // death — see the `missed` field.
+            let misses = {
+                let mut m = self.missed.lock().await;
+                let e = m.entry(worker_id.clone()).or_insert(0);
+                *e = e.saturating_add(1);
+                *e
+            };
+            if misses < Self::MISSES_BEFORE_ORPHAN {
+                tracing::debug!(
+                    target: "job_bus_swarm", worker_id = %worker_id, misses,
+                    "worker liveness missing; waiting for confirmation before orphaning"
+                );
                 continue;
             }
             tracing::warn!(
                 target: "job_bus_swarm",
                 %job_id,
                 worker_id = %worker_id,
-                "worker liveness expired — orphaning job instantly"
+                misses,
+                "worker liveness expired across consecutive ticks — orphaning job"
             );
             // Append the orphan events FIRST; only force-release the lease once the job has actually
             // been re-queued, so a failed projection never leaves a job lease-less AND un-orphaned
@@ -264,9 +299,20 @@ impl SwarmCoordinator {
                 tracing::warn!(target: "job_bus_swarm", %job_id, error = %e, "job_orphaned projection failed; retrying next tick");
                 continue;
             }
-            let _ = DistributedLease::force_release(&self.redis, job_id).await;
+            // Compare-and-delete against the worker we declared dead: never destroy a lease
+            // that has since been re-acquired.
+            let _ = DistributedLease::force_release_owned(&self.redis, job_id, &worker_id).await;
             self.publish_worker_down(&worker_id).await;
         }
+
+        // Drop miss counters for workers that hold no `running` rows any more. Without this the
+        // map keeps an entry for every worker id ever seen — including the dead ones whose jobs
+        // this tick just orphaned, which by definition never appear again — and grows for the
+        // life of the process.
+        self.missed
+            .lock()
+            .await
+            .retain(|w, _| seen_workers.contains(w));
         Ok(())
     }
 

@@ -7,6 +7,20 @@ use serde_json::Value;
 use sqlx::PgPool;
 
 /// Project a single event onto the read model (idempotent where possible).
+/// `worker_id` from an event payload, when it carries one.
+///
+/// Returned as `Option` and compared with `($n IS NULL OR worker_id = $n)` so an event that
+/// genuinely has no worker attribution still projects, rather than silently matching zero rows.
+fn event_worker_id(event: &JobEventRecord) -> Option<String> {
+    event
+        .payload
+        .get("worker_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
 pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), JobBusError> {
     if event.job_id.is_nil() {
         return Ok(());
@@ -66,17 +80,22 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
         }
         JobEventKind::JobCompleted => {
             let result = event.payload.get("result").cloned().unwrap_or(Value::Null);
-            // Status guard: only a job still `running` may transition to `completed`.
-            // Without it, a late completion from a superseded/orphaned worker could resurrect
-            // or overwrite a job another worker already re-ran (or that already failed/died).
+            // Ownership fence, not just a status guard. The status-only predicate could not do
+            // what its comment claimed: after the coordinator orphans a job, another worker sets
+            // it back to `running`, so a late event from the SUPERSEDED worker still matched
+            // `status = 'running'` and overwrote the live re-run. Comparing worker_id makes the
+            // guard actually mean "this worker still owns the row".
+            let worker_id = event_worker_id(event);
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'completed', result_json = $2,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
-                   WHERE id = $1 AND status = 'running'"#,
+                   WHERE id = $1 AND status = 'running'
+                     AND ($3::text IS NULL OR worker_id = $3)"#,
             )
             .bind(event.job_id)
             .bind(sqlx::types::Json(result))
+            .bind(worker_id)
             .execute(&mut *tx)
             .await?;
         }
@@ -86,16 +105,18 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                 .get("error")
                 .and_then(Value::as_str)
                 .unwrap_or("unknown");
-            // Status guard (mirrors JobCompleted): only a `running` job may be failed, so a late
-            // failure from a superseded worker cannot overwrite a job another worker already re-ran.
+            // Ownership fence, mirroring JobCompleted.
+            let worker_id = event_worker_id(event);
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'failed', last_error = $2,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
-                   WHERE id = $1 AND status = 'running'"#,
+                   WHERE id = $1 AND status = 'running'
+                     AND ($3::text IS NULL OR worker_id = $3)"#,
             )
             .bind(event.job_id)
             .bind(err)
+            .bind(worker_id)
             .execute(&mut *tx)
             .await?;
         }
@@ -130,15 +151,30 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
                 .get("reason")
                 .and_then(Value::as_str)
                 .unwrap_or("worker lost");
+            // Two changes. Dead-letter instead of re-queueing once the attempt budget is spent:
+            // a poison-pill job that ABORTS its worker (stack overflow, OOM, SIGKILL) never
+            // reaches the failure handler, so this projection is the only thing that sees it —
+            // and re-queueing unconditionally meant it was handed straight back to the next
+            // worker, which died the same way, forever, taking every co-resident job with it
+            // each cycle.
+            //
+            // And fence on the worker that was actually declared dead, so a coordinator tick
+            // racing a live worker cannot yank a job the worker still owns and is completing.
+            let worker_id = event_worker_id(event);
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
-                   SET status = 'pending', last_error = $2,
+                   SET status = CASE WHEN attempt_count >= max_attempts THEN 'dead' ELSE 'pending' END,
+                       last_error = $2,
                        locked_until = NULL, worker_id = NULL,
-                       run_after = now() + interval '2 seconds', updated_at = now()
-                   WHERE id = $1 AND status = 'running'"#,
+                       run_after = CASE WHEN attempt_count >= max_attempts
+                                        THEN NULL ELSE now() + interval '2 seconds' END,
+                       updated_at = now()
+                   WHERE id = $1 AND status = 'running'
+                     AND ($3::text IS NULL OR worker_id = $3)"#,
             )
             .bind(event.job_id)
             .bind(format!("orphaned: {reason}"))
+            .bind(worker_id)
             .execute(&mut *tx)
             .await?;
         }
