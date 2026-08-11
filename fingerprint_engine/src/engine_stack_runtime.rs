@@ -65,6 +65,51 @@ where
         .expect("large-stack engine thread dropped without sending result")
 }
 
+/// Like [`run_on_large_stack`], but abandons the future when `cancel` fires. Returns `None` if it
+/// was cancelled before producing a value.
+///
+/// `tokio::task::AbortHandle::abort()` cannot stop this work. `run_on_large_stack` hands the
+/// future to a raw OS thread and only awaits a oneshot, so aborting the *tokio task* that awaits
+/// it merely drops the receiver: the thread keeps running the engine to completion, holding its
+/// DB connections and outbound sockets. On a heavy-job timeout the worker did exactly that — it
+/// gave up waiting, requeued the job, and a second worker started the same scan while the first
+/// copy was still executing, invisible and unstoppable, until the process exited.
+///
+/// A future cannot be interrupted mid-poll, so this cancels at the next `.await` — which for
+/// scan engines means the next network or database boundary, i.e. almost immediately in practice.
+/// Dropping the future there runs its destructors, releasing connections properly instead of
+/// abandoning them.
+pub async fn run_on_large_stack_cancellable<F, Fut, T>(
+    future_fn: F,
+    cancel: oneshot::Receiver<()>,
+) -> Option<T>
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    let handle = tokio::runtime::Handle::current();
+    let (tx, rx) = oneshot::channel();
+    let stack_size = large_stack_bytes();
+    std::thread::Builder::new()
+        .name("weissman-engine".into())
+        .stack_size(stack_size)
+        .spawn(move || {
+            let out = handle.block_on(async move {
+                tokio::select! {
+                    v = future_fn() => Some(v),
+                    // A dropped sender (the caller went away) also means "stop".
+                    _ = cancel => None,
+                }
+            });
+            let _ = tx.send(out);
+        })
+        .expect("spawn large-stack engine thread");
+
+    rx.await
+        .expect("large-stack engine thread dropped without sending result")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,4 +156,54 @@ mod tests {
              call returned; it must complete on the parent runtime (pool-affinity fix)"
         );
     }
+
+    /// The whole point of the cancellable variant: the engine must actually STOP.
+    ///
+    /// `abort()` on the awaiting task cannot do this — the work lives on a raw OS thread — so a
+    /// timed-out heavy job kept running while a second worker started the same scan.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancellable_stops_the_engine_thread_at_its_next_await() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let ran_past_cancel = Arc::new(AtomicBool::new(false));
+        let flag = ran_past_cancel.clone();
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+
+        let task = tokio::spawn(async move {
+            run_on_large_stack_cancellable(
+                move || async move {
+                    // Await point: where cancellation can land.
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    flag.store(true, Ordering::SeqCst);
+                    7u32
+                },
+                cancel_rx,
+            )
+            .await
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        cancel_tx.send(()).expect("send cancel");
+
+        let out = tokio::time::timeout(std::time::Duration::from_secs(5), task)
+            .await
+            .expect("cancellation must return promptly, not after the 30s sleep")
+            .expect("join");
+
+        assert_eq!(out, None, "a cancelled run must not yield a value");
+        assert!(
+            !ran_past_cancel.load(Ordering::SeqCst),
+            "the future continued past its await after cancellation — the engine was not stopped"
+        );
+    }
+
+    /// Cancellation must not truncate work that already finished.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancellable_returns_the_value_when_not_cancelled() {
+        let (_cancel_tx, cancel_rx) = oneshot::channel();
+        let out = run_on_large_stack_cancellable(|| async { 42u32 }, cancel_rx).await;
+        assert_eq!(out, Some(42));
+    }
+
 }

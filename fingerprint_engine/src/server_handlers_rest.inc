@@ -106,8 +106,20 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         }
     }
     let rss_kb = resident_set_kb();
+    // `ok` used to be the literal `true` — it stayed green with postgres_ok:false, and it
+    // reported ok:true for the whole four-day pipeline outage. A top-level verdict that is a
+    // constant is worse than no verdict: it is the field every dashboard, uptime monitor and
+    // human reads first.
+    //
+    // It now reflects the dependency this process cannot work without. Deliberately NOT gated on
+    // pipeline liveness: this endpoint is also the container's liveness probe, and restarting the
+    // backend does not fix a stalled queue — flapping it would crash-loop the API against an
+    // outage it cannot resolve. Queue health is a paging concern and belongs to the
+    // JobQueueStalled / NoScanCompletions alert rules, which read the metrics this process
+    // exports. The HTTP status stays 200 for the same reason; `ok` is the honest field.
+    let ok = postgres_ok;
     (StatusCode::OK, Json(json!({
-        "ok": true,
+        "ok": ok,
         "uptime_secs": uptime_secs,
         "postgres_ok": postgres_ok,
         // Kept for back-compat with older clients that only check `scanning_active`.

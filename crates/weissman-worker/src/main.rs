@@ -310,6 +310,14 @@ async fn process_one(
     let exec_job = job.clone();
     let job_kind_for_timeout = exec_job.kind.clone();
     let exec_heavy = job_is_heavy(job_kind_for_timeout.as_str());
+    // Cancellation channel for the heavy path. A heavy job runs on a raw OS thread via
+    // run_on_large_stack, and `abort()` on the awaiting tokio task does NOT stop that thread —
+    // it just drops the receiver. On timeout the worker gave up waiting and requeued the job
+    // while the original engine kept running, holding its DB connections and sockets, so a second
+    // worker started the same scan against a copy that was still executing and could not be
+    // stopped. Signalling the thread lets the future be dropped at its next await, which also
+    // runs its destructors and releases those connections.
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
     let exec_handle = tokio::spawn(async move {
         let fut = async move {
             match exec_job.kind.as_str() {
@@ -318,7 +326,14 @@ async fn process_one(
             }
         };
         if exec_heavy {
-            fingerprint_engine::engine_stack_runtime::run_on_large_stack(|| fut).await
+            match fingerprint_engine::engine_stack_runtime::run_on_large_stack_cancellable(
+                || fut, cancel_rx,
+            )
+            .await
+            {
+                Some(v) => v,
+                None => Err("job cancelled after timeout".to_string()),
+            }
         } else {
             fut.await
         }
@@ -337,6 +352,9 @@ async fn process_one(
                 format!("job task join error: {join_err}")
             }),
             Err(_) => {
+                // Signal first: for a heavy job this is the only thing that actually stops the
+                // engine. `abort()` alone leaves it running on its own OS thread.
+                let _ = cancel_tx.send(());
                 exec_abort.abort();
                 Err(format!(
                     "job timed out after {}s ({})",
