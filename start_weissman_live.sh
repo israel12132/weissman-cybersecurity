@@ -557,7 +557,26 @@ EOF
   # over anything but HTTPS silently fails to keep a session — and sends the password in
   # cleartext. Warn loudly when the configured origin is not https.
   case "$base" in
-    https://*) : ;;
+    https://*)
+      # Checking only the configured string is self-defeating: this launcher DEFAULTS
+      # WEISSMAN_PUBLIC_BASE_URL to https://localhost, so the scheme test below always passed and
+      # the warning could never fire — while the gateway served plain HTTP the whole time. That is
+      # exactly the state the live deployment was found in (COOKIE_SECURE=1, base URL https://,
+      # no 443 listener anywhere), where a browser silently discards the Secure session cookie and
+      # login never persists.
+      #
+      # So probe it. If the configured HTTPS origin does not actually answer, say so.
+      if ! curl -skf --max-time 4 -o /dev/null "${base%/}/api/health" 2>/dev/null; then
+        cat <<EOF
+
+  !! WARNING: WEISSMAN_PUBLIC_BASE_URL is $base but nothing answers HTTPS there.
+     Session cookies are Secure-only in production, so a browser will DISCARD the session
+     cookie over plain http:// and login will never persist — the app looks broken, not
+     misconfigured. Either terminate TLS in front of the gateway, or re-run with
+     --url http://your-host and set WEISSMAN_COOKIE_SECURE=0 to accept cleartext knowingly.
+EOF
+      fi
+      ;;
     *)
       cat <<EOF
 
