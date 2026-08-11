@@ -18,13 +18,17 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use sysinfo::{Pid, ProcessRefreshKind, System};
+use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
 
 pub async fn run(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings: Vec<Value> = Vec::new();
 
     let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    // `ProcessRefreshKind::new()` is "collect NOTHING optional" (sysinfo 0.30: every field
+    // defaults to false), and the Linux backend gates the /proc/<pid>/exe read on it. So
+    // `proc.exe()` returned None for every process and the loop below skipped all of them —
+    // this detection could never produce a finding, on any host, ever.
+    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::Always));
 
     // First pass: hash on-disk images. Group by absolute path to detect mismatched siblings.
     let mut hashes: HashMap<PathBuf, String> = HashMap::new();

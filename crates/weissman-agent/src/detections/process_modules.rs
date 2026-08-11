@@ -15,11 +15,14 @@ use super::finding;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::Path;
-use sysinfo::{ProcessRefreshKind, System};
+use sysinfo::{ProcessRefreshKind, System, UpdateKind};
 
 pub async fn run_inventory(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    // Needs exe AND memory: `ProcessRefreshKind::new()` disables both, which made this
+    // inventory report `exe: ""` and `memory_bytes: 0` for every process — data that looks
+    // real and is entirely fabricated.
+    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::Always).with_memory());
     let total = sys.processes().len();
     let unique_paths: HashSet<_> = sys
         .processes()
@@ -61,7 +64,11 @@ pub async fn run_inventory(engine: &str) -> anyhow::Result<Vec<Value>> {
 pub async fn run_dll_hijacking(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings: Vec<Value> = Vec::new();
     let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    // `ProcessRefreshKind::new()` is "collect NOTHING optional" (sysinfo 0.30: every field
+    // defaults to false), and the Linux backend gates the /proc/<pid>/exe read on it. So
+    // `proc.exe()` returned None for every process and the loop below skipped all of them —
+    // this detection could never produce a finding, on any host, ever.
+    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::Always));
 
     for proc in sys.processes().values() {
         let exe = match proc.exe() {
@@ -127,4 +134,34 @@ fn running_from_writable_directory(path: &Path) -> bool {
     ]
     .iter()
     .any(|needle| p.contains(needle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The refresh kind must actually collect what the detections read. `ProcessRefreshKind::new()`
+    /// collects nothing optional, so `proc.exe()` was None for every process and six engines
+    /// skipped every process and reported every host clean.
+    #[test]
+    fn refresh_kind_actually_populates_exe_and_memory() {
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(
+            ProcessRefreshKind::new()
+                .with_exe(UpdateKind::Always)
+                .with_memory(),
+        );
+        let procs: Vec<_> = sys.processes().values().collect();
+        assert!(!procs.is_empty(), "no processes enumerated at all");
+        assert!(
+            procs.iter().filter(|p| p.exe().is_some_and(|e| !e.as_os_str().is_empty())).count() > 0,
+            "not one of {} processes reported an exe path — every exe-based detection is dead",
+            procs.len()
+        );
+        assert!(
+            procs.iter().filter(|p| p.memory() > 0).count() > 0,
+            "not one of {} processes reported non-zero memory",
+            procs.len()
+        );
+    }
 }
