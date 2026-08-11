@@ -37,22 +37,6 @@ x-logging: &default-logging
 
 services:
   postgres:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    # cap_drop ALL alone makes this image exit at startup — its entrypoint chowns the data
-    # directory and gosu's to the postgres user, which needs these five. Verified by
-    # running the image both ways.
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
     logging: *default-logging
     # 200 to match deploy/k8s/postgres-ha.yaml:26. The image default is 100 (97 usable after
     # superuser_reserved_connections=3), but the two application processes are configured to open
@@ -75,20 +59,6 @@ services:
       POSTGRES_INITDB_ARGS: "--data-checksums"
 
   redis:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    # Same as postgres: setpriv drops to the redis user at entrypoint and needs these.
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
     logging: *default-logging
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set a strong REDIS_PASSWORD for production}
@@ -101,13 +71,6 @@ services:
       retries: 20
 
   backend:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     # Pull in the operator's full .env so OPTIONAL settings the app reads directly
     # (WEISSMAN_SMTP_*, WEISSMAN_LLM_API_KEY, NVD_API_KEY, WEISSMAN_INTEGRATIONS_VAULT_KEY,
@@ -154,13 +117,6 @@ services:
       WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
 
   worker:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     # Must exceed WEISSMAN_WORKER_DRAIN_SECS (25s). Docker's default is 10s, which
     # would SIGKILL the worker mid-drain and make the drain pointless — in-flight
@@ -189,13 +145,6 @@ services:
   # is set, because it requires a DNS zone you delegate to this host. Records callbacks into
   # the app DB (oast_interaction_hits); the engines poll it at WEISSMAN_OAST_LISTENER_URL.
   oast:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     build:
       context: .
@@ -240,24 +189,10 @@ services:
 
   # Pin monitoring images (base uses floating :latest) for reproducible production.
   prometheus:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     image: prom/prometheus:v3.1.0
 
   grafana:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     image: grafana/grafana:11.4.0
     environment:
@@ -270,25 +205,11 @@ services:
   # The prod overlay puts Redis behind a password (requirepass), so the exporter must
   # authenticate or every redis_* metric is dead (auth error on each scrape).
   redis-exporter:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     environment:
       REDIS_ADDR: redis://redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
 
   alertmanager:
-    # Least privilege. The stack previously ran every container with the full default
-    # capability set and no no-new-privileges, so a compromised engine had setuid
-    # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     logging: *default-logging
     image: prom/alertmanager:v0.28.0
