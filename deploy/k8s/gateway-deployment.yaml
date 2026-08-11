@@ -32,5 +32,22 @@ spec:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
+          # Without probes both replicas report Ready the moment the container starts, so a
+          # gateway that cannot serve — as when the manifests targeted port 80 while nginx
+          # listened on 8080 — still reports a successful rollout while 100% of traffic 502s.
+          readinessProbe:
+            httpGet:
+              path: /command-center/
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /command-center/
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
           ports:
             - containerPort: 8080

@@ -270,6 +270,9 @@ services:
     build:
       context: .
       dockerfile: deploy/frontend.Dockerfile
+    # Without a tag, compose names the built image after the project directory, so it cannot be
+    # pulled, promoted between environments, or Trivy-scanned the way weissman-backend:stable is.
+    image: weissman-gateway:stable
     ports:
       # Bound to loopback by DEFAULT because this listener is plain HTTP. There is no TLS
       # anywhere in the stack — no 443 listener, no redirect, no terminator container — so
@@ -454,6 +457,20 @@ services:
 
   # --- Exporters (host / redis / postgres metrics + synthetic HTTP probes) ---
   node-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9100/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
@@ -474,6 +491,19 @@ services:
     restart: unless-stopped
 
   redis-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    # No healthcheck: oliver006/redis_exporter is a scratch image with no shell and no wget, so
+    # any CMD-SHELL probe would fail permanently and report the container unhealthy forever —
+    # worse than having none. Verified by running the image. Its liveness is covered by
+    # ExporterDown (up{job="redis"} == 0) in monitoring/alerts/infra-alerts.yml, which is the
+    # signal that actually matters: whether Prometheus can scrape it.
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
@@ -493,6 +523,20 @@ services:
     restart: unless-stopped
 
   postgres-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9187/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
@@ -512,6 +556,20 @@ services:
     restart: unless-stopped
 
   blackbox-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9115/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
