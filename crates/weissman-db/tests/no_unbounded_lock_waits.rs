@@ -106,7 +106,7 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) {
         let name = name.to_string_lossy();
         if path.is_dir() {
             // Build output and vendored/third-party trees are not ours to police.
-                        // `.claude` holds git worktrees — full copies of this repo. Walking into them makes
+            // `.claude` holds git worktrees — full copies of this repo. Walking into them makes
             // every guarded file appear once per worktree under a path that no ALLOWED entry can
             // match, so these tests failed for anyone running the suite from the main checkout
             // with a worktree present (they passed inside a worktree, which has no nested copy).

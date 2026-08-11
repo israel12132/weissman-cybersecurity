@@ -260,8 +260,7 @@ mod tests {
     #[test]
     fn percent_decode_reassembles_multibyte_utf8() {
         // `%C3%A9` is UTF-8 for `é`; it must decode to the single char, not Latin-1 mojibake `Ã©`.
-        let (_, p) =
-            parse_pg_user_password("postgres://u:p%C3%A9ss@h/db").unwrap();
+        let (_, p) = parse_pg_user_password("postgres://u:p%C3%A9ss@h/db").unwrap();
         assert_eq!(p, "péss");
     }
 }

@@ -70,17 +70,23 @@ pub fn load_process_environment() {
 /// Production detection mirroring weissman_core::tls_policy::is_production_environment.
 /// Duplicated (not imported) because weissman-db does not depend on weissman-core.
 fn is_production_env() -> bool {
-    ["WEISSMAN_ENV", "RUST_ENV", "NODE_ENV", "APP_ENV", "RAILS_ENV"]
-        .iter()
-        .any(|var| {
-            std::env::var(var)
-                .ok()
-                .map(|v| {
-                    let t = v.trim();
-                    t.eq_ignore_ascii_case("production") || t.eq_ignore_ascii_case("prod")
-                })
-                .unwrap_or(false)
-        })
+    [
+        "WEISSMAN_ENV",
+        "RUST_ENV",
+        "NODE_ENV",
+        "APP_ENV",
+        "RAILS_ENV",
+    ]
+    .iter()
+    .any(|var| {
+        std::env::var(var)
+            .ok()
+            .map(|v| {
+                let t = v.trim();
+                t.eq_ignore_ascii_case("production") || t.eq_ignore_ascii_case("prod")
+            })
+            .unwrap_or(false)
+    })
 }
 
 /// True if the URL has a non-empty userinfo segment before `@`.

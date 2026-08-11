@@ -861,14 +861,18 @@ pub async fn renew_agent_session(
 ) -> Result<Option<(i64, i64)>, sqlx::Error> {
     // Unscoped read: the caller has not authenticated yet, so we do not know the tenant. The
     // lookup is by uuid (unique) and is gated on the secret hash below.
-    let row: Option<(i64, i64, Option<String>, Option<chrono::DateTime<chrono::Utc>>)> =
-        sqlx::query_as(
-            "SELECT tenant_id, client_id, session_secret_hash, revoked_at \
+    let row: Option<(
+        i64,
+        i64,
+        Option<String>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    )> = sqlx::query_as(
+        "SELECT tenant_id, client_id, session_secret_hash, revoked_at \
              FROM endpoint_agents WHERE agent_uuid = $1",
-        )
-        .bind(agent_uuid)
-        .fetch_optional(pool)
-        .await?;
+    )
+    .bind(agent_uuid)
+    .fetch_optional(pool)
+    .await?;
     let Some((tenant_id, client_id, stored, revoked_at)) = row else {
         return Ok(None);
     };
@@ -1072,8 +1076,7 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
             // on the app pool, so an unscoped DISTINCT returns only the connection's own tenant —
             // and nothing once the tenant GUC is correctly unset. Enumerate tenants explicitly,
             // then let the per-tenant query below do the online filtering.
-            let Ok(tenants) = weissman_db::active_tenant_ids(pool.as_ref()).await
-            else {
+            let Ok(tenants) = weissman_db::active_tenant_ids(pool.as_ref()).await else {
                 continue;
             };
             for tenant_id in tenants {

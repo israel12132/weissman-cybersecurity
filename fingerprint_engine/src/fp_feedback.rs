@@ -273,11 +273,7 @@ pub struct SuppressionRule {
 /// True when some active rule suppresses `(signature_hash, target_url)`. Respecting `target_glob`
 /// is essential: an FP vote on one host must not suppress the same signature on every host.
 #[must_use]
-pub fn is_suppressed_by(
-    rules: &[SuppressionRule],
-    signature_hash: &str,
-    target_url: &str,
-) -> bool {
+pub fn is_suppressed_by(rules: &[SuppressionRule], signature_hash: &str, target_url: &str) -> bool {
     rules.iter().any(|r| {
         r.signature_hash == signature_hash
             && match r.target_glob.as_deref().map(str::trim) {
@@ -369,13 +365,25 @@ mod tests {
 
         // Host-scoped glob → only the matching host is suppressed.
         let scoped = [rule(sig, Some("https://staging.example.com"))];
-        assert!(is_suppressed_by(&scoped, sig, "https://staging.example.com"));
+        assert!(is_suppressed_by(
+            &scoped,
+            sig,
+            "https://staging.example.com"
+        ));
         assert!(!is_suppressed_by(&scoped, sig, "https://prod.example.com"));
 
         // Wildcard glob.
         let wild = [rule(sig, Some("https://*.staging.example.com"))];
-        assert!(is_suppressed_by(&wild, sig, "https://api.staging.example.com"));
-        assert!(!is_suppressed_by(&wild, sig, "https://api.prod.example.com"));
+        assert!(is_suppressed_by(
+            &wild,
+            sig,
+            "https://api.staging.example.com"
+        ));
+        assert!(!is_suppressed_by(
+            &wild,
+            sig,
+            "https://api.prod.example.com"
+        ));
 
         // Different signature never suppressed regardless of glob.
         assert!(!is_suppressed_by(&any, "other", "https://prod.example.com"));

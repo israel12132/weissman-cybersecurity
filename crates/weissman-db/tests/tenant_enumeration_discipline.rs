@@ -37,9 +37,9 @@ fn is_tenant_enumeration(collapsed: &str) -> bool {
     // the first version of this guard — `SELECT DISTINCT tenant_id` out of ANY tenant-scoped
     // table. endpoint_agents.rs discovered tenants that way and would have gone silently idle the
     // moment the tenant GUC default was removed.
-    let enumerates_tenants_table =
-        collapsed.contains(needle_from) && collapsed.contains(needle_active)
-            && collapsed.contains("select id");
+    let enumerates_tenants_table = collapsed.contains(needle_from)
+        && collapsed.contains(needle_active)
+        && collapsed.contains("select id");
     let distinct_tenant_id = collapsed.contains("select distinct tenant_id");
     enumerates_tenants_table || distinct_tenant_id
 }
@@ -93,7 +93,7 @@ fn collect_rs(dir: &Path, out: &mut Vec<PathBuf>) {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if path.is_dir() {
-                        // `.claude` holds git worktrees — full copies of this repo. Walking into them makes
+            // `.claude` holds git worktrees — full copies of this repo. Walking into them makes
             // every guarded file appear once per worktree under a path that no ALLOWED entry can
             // match, so these tests failed for anyone running the suite from the main checkout
             // with a worktree present (they passed inside a worktree, which has no nested copy).
@@ -161,7 +161,11 @@ fn tenants_are_enumerated_only_through_the_cross_tenant_helper() {
                 .copied()
                 .collect::<Vec<_>>()
                 .join(" ");
-            let collapsed = window.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+            let collapsed = window
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase();
             if is_tenant_enumeration(&collapsed) {
                 offenders.push(format!("{rel}:{}: {}", i + 1, line.trim()));
                 break; // one report per file is enough to make the point

@@ -273,7 +273,11 @@ async fn process_one(
                     );
                 }
                 if job.attempt_count >= job.max_attempts {
-                    let _ = job_queue::fail_job(pool, &job, &wid, &format!("claim rejected: {e}"),
+                    let _ = job_queue::fail_job(
+                        pool,
+                        &job,
+                        &wid,
+                        &format!("claim rejected: {e}"),
                         BASE_BACKOFF_SECS,
                     )
                     .await;
@@ -367,7 +371,8 @@ async fn process_one(
         };
         if exec_heavy {
             match fingerprint_engine::engine_stack_runtime::run_on_large_stack_cancellable(
-                || fut, cancel_rx,
+                || fut,
+                cancel_rx,
             )
             .await
             {
@@ -432,7 +437,14 @@ async fn process_one(
                     ),
                     Err(e) => {
                         error!(target: "weissman_worker", job_id = %job.id, error = %e, "complete failed");
-                        let _ = job_queue::fail_job(pool, &job, &wid, &e.to_string(), BASE_BACKOFF_SECS).await;
+                        let _ = job_queue::fail_job(
+                            pool,
+                            &job,
+                            &wid,
+                            &e.to_string(),
+                            BASE_BACKOFF_SECS,
+                        )
+                        .await;
                     }
                 }
             }
@@ -468,12 +480,24 @@ async fn process_one(
                     Ok(bundle) => {
                         if let Err(e) = bus.on_forensic_dlq(bundle, lease_out.take()).await {
                             error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic DLQ failed");
-                            terminalize_exhausted(pool, job.id, &msg, &format!("forensic DLQ failed: {e}")).await;
+                            terminalize_exhausted(
+                                pool,
+                                job.id,
+                                &msg,
+                                &format!("forensic DLQ failed: {e}"),
+                            )
+                            .await;
                         }
                     }
                     Err(e) => {
                         error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic bundle build failed");
-                        terminalize_exhausted(pool, job.id, &msg, &format!("forensic bundle build failed: {e}")).await;
+                        terminalize_exhausted(
+                            pool,
+                            job.id,
+                            &msg,
+                            &format!("forensic bundle build failed: {e}"),
+                        )
+                        .await;
                     }
                 }
             } else if bus_on {
@@ -490,7 +514,9 @@ async fn process_one(
                 {
                     error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced fail");
                 }
-            } else if let Err(e) = job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await {
+            } else if let Err(e) =
+                job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await
+            {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
                 let _ =
                     job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
@@ -875,8 +901,8 @@ async fn async_main() {
     );
     let drain_started = std::time::Instant::now();
     loop {
-        let in_flight = (light_n - light_sem.available_permits())
-            + (heavy_n - heavy_sem.available_permits());
+        let in_flight =
+            (light_n - light_sem.available_permits()) + (heavy_n - heavy_sem.available_permits());
         if in_flight == 0 {
             break;
         }
@@ -1071,10 +1097,18 @@ mod tests {
     #[test]
     fn heavy_kinds_list_matches_the_table() {
         for k in HEAVY_KINDS {
-            assert!(job_class(k).heavy, "{k} is in HEAVY_KINDS but not heavy in job_class");
+            assert!(
+                job_class(k).heavy,
+                "{k} is in HEAVY_KINDS but not heavy in job_class"
+            );
         }
         // Spot-check the other direction with kinds that must stay light.
-        for k in ["noop", "ping", "council_debate", "definitely_not_a_real_kind"] {
+        for k in [
+            "noop",
+            "ping",
+            "council_debate",
+            "definitely_not_a_real_kind",
+        ] {
             assert!(!job_class(k).heavy, "{k} must not be heavy");
         }
     }
@@ -1084,10 +1118,10 @@ mod tests {
     #[test]
     fn genesis_eternal_fuzz_outlasts_the_council_war_room() {
         assert!(
-            job_class("genesis_eternal_fuzz").timeout_secs > job_class("council_debate").timeout_secs,
+            job_class("genesis_eternal_fuzz").timeout_secs
+                > job_class("council_debate").timeout_secs,
             "genesis_eternal_fuzz must be budgeted above council_debate; it runs that war room \
              plus a full DFS fuzz cycle"
         );
     }
-
 }

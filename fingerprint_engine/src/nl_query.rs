@@ -370,10 +370,7 @@ pub async fn execute_plan(
     // transaction-local, so the SELECT MUST run inside the SAME transaction: on a bare pooled
     // connection every statement autocommits, which would discard the GUC before the query and
     // collapse RLS to the database default tenant (0) — returning zero rows for every real tenant.
-    let mut tx = ro_pool
-        .begin()
-        .await
-        .map_err(|e| format!("begin: {e}"))?;
+    let mut tx = ro_pool.begin().await.map_err(|e| format!("begin: {e}"))?;
     sqlx::query("SELECT set_config('app.current_tenant_id', $1::text, true)")
         .bind(tenant_id.to_string())
         .execute(&mut *tx)

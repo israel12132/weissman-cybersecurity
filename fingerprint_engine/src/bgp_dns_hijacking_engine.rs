@@ -3128,10 +3128,8 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
             // shared by all resolvers, with every resolver having answered) is the hijack
             // signature; a partial overlap is downgraded to a low "load-balanced" note.
             let all_answered = !ip_sets.iter().any(|(_, s)| s.is_empty());
-            let global_intersection: BTreeSet<String> = ip_sets
-                .iter()
-                .skip(1)
-                .fold(first.clone(), |acc, (_, s)| {
+            let global_intersection: BTreeSet<String> =
+                ip_sets.iter().skip(1).fold(first.clone(), |acc, (_, s)| {
                     acc.intersection(s).cloned().collect()
                 });
             let disjoint = all_answered && global_intersection.is_empty();

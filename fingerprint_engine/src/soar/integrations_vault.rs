@@ -125,7 +125,10 @@ fn build_decrypt_keyring(
     }
     for e in prev_jwt_csv.split(',') {
         if e.trim().len() >= 16 {
-            v.push(derive_key(b"weissman-integrations-vault-fallback|", e.trim()));
+            v.push(derive_key(
+                b"weissman-integrations-vault-fallback|",
+                e.trim(),
+            ));
         }
     }
     v
@@ -419,5 +422,4 @@ mod tests {
             "control: the dedicated key alone must NOT open a legacy blob"
         );
     }
-
 }

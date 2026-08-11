@@ -295,7 +295,6 @@ pub async fn unchained_rows_are_a_legacy_prefix(
     Ok(stragglers == 0)
 }
 
-
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AuditExportEntry {
     pub id: i64,

@@ -289,8 +289,7 @@ impl JobBus {
         // guaranteed a "bundle seal mismatch" whenever WEISSMAN_FORENSIC_SEAL_SECRET was set (the
         // documented config), which left the exhausted job stuck `running` and looping forever.
         let forensic_key = crate::signing::forensic_seal_key_from_env();
-        let dlq_id =
-            enqueue_forensic_dlq(&self.pool, &bundle, forensic_key.as_deref()).await?;
+        let dlq_id = enqueue_forensic_dlq(&self.pool, &bundle, forensic_key.as_deref()).await?;
         let record = append_event(
             &self.pool,
             bundle.job_id,

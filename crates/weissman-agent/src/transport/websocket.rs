@@ -31,9 +31,10 @@ pub async fn run_session(
     // Anyone who can read those logs could connect as this agent for the remainder of the token's
     // life and inject findings or close tasks for the tenant. The server already documents the
     // header as the preferred form ("prefer `Authorization: Bearer <session_jwt>`").
-    let mut request = tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
-        ws_url.as_str(),
-    )?;
+    let mut request =
+        tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+            ws_url.as_str(),
+        )?;
     request.headers_mut().insert(
         "Authorization",
         tokio_tungstenite::tungstenite::http::HeaderValue::from_str(&format!(

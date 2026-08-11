@@ -275,7 +275,9 @@ pub async fn api_admin_users_create(
     {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"ok": false, "detail": "Cannot create a user of equal or higher privilege"})),
+            Json(
+                json!({"ok": false, "detail": "Cannot create a user of equal or higher privilege"}),
+            ),
         )
             .into_response();
     }

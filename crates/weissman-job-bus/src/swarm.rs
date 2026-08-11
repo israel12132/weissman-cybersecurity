@@ -248,11 +248,14 @@ impl SwarmCoordinator {
         for row in rows {
             // Handle each row independently: a failure on one job must not skip the rest of the pass
             // (head-of-line blocking would keep the same failing row wedging the tail every tick).
-            let (job_id, tenant_id, worker_id): (Uuid, i64, String) =
-                match (row.try_get("id"), row.try_get("tenant_id"), row.try_get("worker_id")) {
-                    (Ok(a), Ok(b), Ok(c)) => (a, b, c),
-                    _ => continue,
-                };
+            let (job_id, tenant_id, worker_id): (Uuid, i64, String) = match (
+                row.try_get("id"),
+                row.try_get("tenant_id"),
+                row.try_get("worker_id"),
+            ) {
+                (Ok(a), Ok(b), Ok(c)) => (a, b, c),
+                _ => continue,
+            };
             seen_workers.insert(worker_id.clone());
             if worker_id.is_empty() {
                 continue;

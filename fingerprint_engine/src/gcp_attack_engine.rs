@@ -1522,9 +1522,9 @@ async fn scan_firewalls(
         for rule in allowed {
             let proto = rule.get("IPProtocol").and_then(Value::as_str).unwrap_or("");
             let ports_all = rule.get("ports").is_none(); // absence = all ports
-            // Ports are only meaningful for tcp/udp. GCP omits the `ports` key for
-            // icmp/esp/ah/sctp/etc., so a missing key does NOT mean "all TCP ports" there —
-            // treating it that way fabricated 16 port findings for a benign `allow icmp` rule.
+                                                         // Ports are only meaningful for tcp/udp. GCP omits the `ports` key for
+                                                         // icmp/esp/ah/sctp/etc., so a missing key does NOT mean "all TCP ports" there —
+                                                         // treating it that way fabricated 16 port findings for a benign `allow icmp` rule.
             let proto_l = proto.to_ascii_lowercase();
             let port_bearing = matches!(proto_l.as_str(), "tcp" | "udp" | "6" | "17");
             let ports: Vec<u32> = rule

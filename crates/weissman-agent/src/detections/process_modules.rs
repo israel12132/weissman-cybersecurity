@@ -22,7 +22,11 @@ pub async fn run_inventory(engine: &str) -> anyhow::Result<Vec<Value>> {
     // Needs exe AND memory: `ProcessRefreshKind::new()` disables both, which made this
     // inventory report `exe: ""` and `memory_bytes: 0` for every process — data that looks
     // real and is entirely fabricated.
-    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::Always).with_memory());
+    sys.refresh_processes_specifics(
+        ProcessRefreshKind::new()
+            .with_exe(UpdateKind::Always)
+            .with_memory(),
+    );
     let total = sys.processes().len();
     let unique_paths: HashSet<_> = sys
         .processes()
@@ -154,7 +158,11 @@ mod tests {
         let procs: Vec<_> = sys.processes().values().collect();
         assert!(!procs.is_empty(), "no processes enumerated at all");
         assert!(
-            procs.iter().filter(|p| p.exe().is_some_and(|e| !e.as_os_str().is_empty())).count() > 0,
+            procs
+                .iter()
+                .filter(|p| p.exe().is_some_and(|e| !e.as_os_str().is_empty()))
+                .count()
+                > 0,
             "not one of {} processes reported an exe path — every exe-based detection is dead",
             procs.len()
         );
