@@ -40,8 +40,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so repeating
+    # it here produced a duplicate and made the entire prod overlay fail to
+    # render: 'security_opt array items[0,1] must be unique'.
     # cap_drop ALL alone makes this image exit at startup — its entrypoint chowns the data
     # directory and gosu's to the postgres user, which needs these five. Verified by
     # running the image both ways.
@@ -78,8 +81,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so repeating
+    # it here produced a duplicate and made the entire prod overlay fail to
+    # render: 'security_opt array items[0,1] must be unique'.
     # Same as postgres: setpriv drops to the redis user at entrypoint and needs these.
     cap_drop:
       - ALL
@@ -104,8 +110,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so repeating
+    # it here produced a duplicate and made the entire prod overlay fail to
+    # render: 'security_opt array items[0,1] must be unique'.
     cap_drop:
       - ALL
     logging: *default-logging
@@ -157,8 +166,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which now sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so declaring
+    # it again here produced a duplicate entry and made the whole prod overlay
+    # fail to render: 'security_opt array items[0,1] must be unique'.
     cap_drop:
       - ALL
     logging: *default-logging
@@ -243,8 +255,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so repeating
+    # it here produced a duplicate and made the entire prod overlay fail to
+    # render: 'security_opt array items[0,1] must be unique'.
     cap_drop:
       - ALL
     logging: *default-logging
@@ -254,8 +269,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so repeating
+    # it here produced a duplicate and made the entire prod overlay fail to
+    # render: 'security_opt array items[0,1] must be unique'.
     cap_drop:
       - ALL
     logging: *default-logging
@@ -273,8 +291,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which now sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so declaring
+    # it again here produced a duplicate entry and made the whole prod overlay
+    # fail to render: 'security_opt array items[0,1] must be unique'.
     cap_drop:
       - ALL
     logging: *default-logging
@@ -286,8 +307,11 @@ services:
     # Least privilege. The stack previously ran every container with the full default
     # capability set and no no-new-privileges, so a compromised engine had setuid
     # escalation and CAP_NET_RAW available to it by default.
-    security_opt:
-      - no-new-privileges:true
+    # security_opt is inherited from docker-compose.yml, which sets
+    # no-new-privileges on every service. Compose MERGES list values across
+    # overlay files by concatenation rather than replacing them, so repeating
+    # it here produced a duplicate and made the entire prod overlay fail to
+    # render: 'security_opt array items[0,1] must be unique'.
     cap_drop:
       - ALL
     logging: *default-logging

@@ -143,7 +143,15 @@ done
 head_ "5. Bind-mount contract — a missing host path becomes a DIRECTORY, not a file"
 # Docker materialises an absent bind source as an empty directory. For a mount that should
 # be a config FILE, the container then gets a directory and refuses to start.
-GENERATED_AT_PREFLIGHT=(monitoring/prometheus-web.generated.yml)
+# Every file gen_prometheus_web_config() writes, which preflight_monitoring runs before
+# compose_up. All three are gitignored, so Docker would silently create a DIRECTORY in place of
+# any that is bind-mounted but missing — and then Prometheus/Alertmanager are handed a directory
+# as their config file and refuse to start.
+GENERATED_AT_PREFLIGHT=(
+  monitoring/prometheus-web.generated.yml
+  monitoring/prometheus-scrape-password.generated
+  monitoring/alertmanager-web.generated.yml
+)
 mapfile -t mounts < <(
   grep -oE '^\s+- \./[^:]+:[^:]+' docker-compose.yml | sed -E 's/^\s+- \.\/([^:]+):.*/\1/' | sort -u
 )
@@ -262,7 +270,11 @@ else
   ok "alertmanager.yml has no un-substituted placeholders"
 fi
 # redis-exporter must authenticate under the prod overlay (Redis has requirepass).
-if grep -A4 '^  redis-exporter:' docker-compose.prod.yml | grep -q 'REDIS_PASSWORD'; then
+# Scans the whole service block rather than a fixed -A4 window: the old form silently began
+# failing the moment an explanatory comment was added above the environment key, which is a check
+# that reports on line positions instead of on configuration.
+if sed -n '/^  redis-exporter:/,/^  [a-z0-9][a-z0-9._-]*:$/p' docker-compose.prod.yml \
+     | grep -q 'REDIS_PASSWORD'; then
   ok "redis-exporter authenticates to Redis in the prod overlay"
 else
   bad "redis-exporter has no REDIS_PASSWORD override — redis metrics will be dead under requirepass"
