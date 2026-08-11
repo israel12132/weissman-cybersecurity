@@ -198,6 +198,13 @@ pub async fn reserve_next_with_role(
             WHERE status = 'pending'
               AND (run_after IS NULL OR run_after <= now())
               AND (locked_until IS NULL OR locked_until <= now())
+              -- max_attempts was enforced ONLY in fail_job, so any path that returned a row to
+              -- 'pending' without going through it (a worker that OOMs or stack-overflows before
+              -- reporting; force_requeue_running when fail_job itself failed) produced a job that
+              -- could never be retired. Observed live: 53,620,122 attempts against max_attempts=5,
+              -- one row starving the whole queue. The cap belongs on the claim, where every path
+              -- has to pass through it.
+              AND attempt_count < max_attempts
               -- Structural gate for the zero-trust path. `enqueue_held` only makes a job
               -- non-claimable for `hold_secs`; it is a timer, not a gate, so when the
               -- envelope attach failed the row became claimable anyway 30s later and was
@@ -300,6 +307,13 @@ pub async fn claim_next_with_role(
             WHERE status = 'pending'
               AND (run_after IS NULL OR run_after <= now())
               AND (locked_until IS NULL OR locked_until <= now())
+              -- max_attempts was enforced ONLY in fail_job, so any path that returned a row to
+              -- 'pending' without going through it (a worker that OOMs or stack-overflows before
+              -- reporting; force_requeue_running when fail_job itself failed) produced a job that
+              -- could never be retired. Observed live: 53,620,122 attempts against max_attempts=5,
+              -- one row starving the whole queue. The cap belongs on the claim, where every path
+              -- has to pass through it.
+              AND attempt_count < max_attempts
               -- No envelope predicate here on purpose: `claim_next` is the NON-bus path
               -- (weissman-worker calls it only when the job bus is disabled), so these rows
               -- never carry `_weissman_job_bus`. The zero-trust gate lives in
@@ -548,17 +562,46 @@ pub async fn fail_job(
 }
 
 /// Mark `running` rows with expired locks or stale heartbeats as retryable pending (worker crash / hung job).
+///
+/// Rows that have already exhausted `max_attempts` are dead-lettered instead of requeued. This is
+/// the only path that can retire a job whose worker died before it could report an outcome, and
+/// without it such a job is immortal: nothing else re-checks the cap once the row is back in
+/// `pending`. One `tenant_full_scan` in this deployment reached **53,620,122** attempts against
+/// `max_attempts = 5`.
 pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
+    // Retire the exhausted ones first, so the requeue below cannot pick them up.
+    sqlx::query(
+        r#"UPDATE weissman_async_jobs
+              SET status = 'dead',
+                  last_error = COALESCE(NULLIF(last_error, ''), 'worker died before reporting an outcome')
+                               || ' [dead-lettered by stale-lock reclaim: attempts exhausted]',
+                  locked_until = NULL,
+                  worker_id = NULL,
+                  updated_at = now()
+            WHERE status = 'running'
+              AND attempt_count >= max_attempts
+              AND (heartbeat_at < now() - interval '30 minutes' OR locked_until < now())"#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
            SET status = 'pending',
-               last_error = 'stale lock reclaimed',
+               -- Append rather than overwrite: the previous value is the only record of WHY the
+               -- job was running when its worker vanished, and clobbering it with a fixed string
+               -- destroyed the diagnostic on exactly the rows that most needed one.
+               last_error = CASE
+                   WHEN COALESCE(last_error, '') = '' THEN 'stale lock reclaimed'
+                   ELSE last_error || ' [stale lock reclaimed]'
+               END,
                locked_until = NULL,
                worker_id = NULL,
                run_after = now() + interval '2 seconds',
                updated_at = now()
            WHERE status = 'running'
+             AND attempt_count < max_attempts
              AND (
                heartbeat_at < now() - interval '30 minutes'
                OR locked_until < now()
@@ -660,7 +703,11 @@ pub async fn force_requeue_running(
     let mut tx = begin_worker_tx(pool).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', locked_until = NULL, worker_id = NULL,
-           last_error = $2, run_after = now(), updated_at = now()
+           -- Backoff, not now(): this path runs precisely when fail_job itself just failed, so
+           -- run_after = now() put the row straight back at the head of the queue with no delay
+           -- and the poll loop re-claimed it on the next iteration (POLL_IDLE_MS only applies to
+           -- an empty queue). That is the spin that reached 53M attempts.
+           last_error = $2, run_after = now() + interval '5 seconds', updated_at = now()
            WHERE id = $1 AND worker_id = $3 AND status IN ('pending', 'running')"#,
     )
     .bind(job_id)

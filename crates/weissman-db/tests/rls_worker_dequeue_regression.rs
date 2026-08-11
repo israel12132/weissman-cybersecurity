@@ -50,6 +50,8 @@
 //! locally. `TEST_DATABASE_URL` must be a superuser (or a role granted `weissman_app`) so the
 //! tests can `SET LOCAL ROLE weissman_app` and exercise real RLS.
 
+mod common;
+
 use sqlx::postgres::PgPoolOptions;
 use weissman_db::job_queue::{self, WorkerPoolRole};
 
@@ -62,6 +64,9 @@ const TENANT_C: i64 = 918_274_003;
 const TENANT_D: i64 = 918_274_004;
 /// Job kind used only by this test, so the cross-tenant assertions cannot latch onto real jobs.
 const PROBE_KIND: &str = "__rls_worker_dequeue_regression__";
+/// A distinct kind for the zero-trust gate test. Cleanup is tenant-scoped, but *claiming* is not:
+/// two tests running in parallel against the same kind will dequeue each other's fixtures.
+const GATE_KIND: &str = "__rls_zero_trust_gate_probe__";
 
 fn require_db_tests() -> bool {
     std::env::var("WEISSMAN_REQUIRE_DB_TESTS")
@@ -197,6 +202,8 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
         return;
     }
     let pool = connect(&url).await;
+    // Claiming is global — hold the serializer so a concurrent claim test cannot take our jobs.
+    let _claims = common::lock_claims(&pool).await;
 
     cleanup(&pool, &[TENANT_A, TENANT_B]).await;
     seed_tenant_jobs(&pool, TENANT_A, 2).await;
@@ -349,7 +356,12 @@ async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
         return;
     }
     let pool = connect(&url).await;
+    let _claims = common::lock_claims(&pool).await;
     const TENANT_E: i64 = 918_274_005;
+    let _ = sqlx::query("DELETE FROM weissman_async_jobs WHERE kind = $1")
+        .bind(GATE_KIND)
+        .execute(&pool)
+        .await;
     cleanup(&pool, &[TENANT_E]).await;
     seed_tenant_jobs(&pool, TENANT_E, 0).await;
 
@@ -363,7 +375,7 @@ async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
              VALUES ($1, $2, $3, 'pending')",
         )
         .bind(TENANT_E)
-        .bind(PROBE_KIND)
+        .bind(GATE_KIND)
         .bind(sqlx::types::Json(payload))
         .execute(&pool)
         .await
@@ -393,7 +405,7 @@ async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
         )
         .await
         {
-            Ok(Some(j)) if j.kind == PROBE_KIND => claimed.push(j),
+            Ok(Some(j)) if j.kind == GATE_KIND => claimed.push(j),
             Ok(_) => break,
             Err(e) => {
                 cleanup(&pool, &[TENANT_E]).await;
@@ -402,6 +414,10 @@ async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
         }
     }
 
+    let _ = sqlx::query("DELETE FROM weissman_async_jobs WHERE kind = $1")
+        .bind(GATE_KIND)
+        .execute(&pool)
+        .await;
     cleanup(&pool, &[TENANT_E]).await;
 
     assert_eq!(
