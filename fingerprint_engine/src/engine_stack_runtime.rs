@@ -10,14 +10,47 @@ use std::future::Future;
 use std::sync::OnceLock;
 use tokio::sync::oneshot;
 
+/// Stack size for the dedicated engine thread.
+///
+/// Must exceed the runtime worker-thread stack, or moving work here makes the overflow it exists
+/// to prevent MORE likely rather than less. Under the shipped defaults it did exactly that: the
+/// worker builds its runtime with `WEISSMAN_WORKER_THREAD_STACK_MB` (default 64 MiB) while this
+/// defaulted to 32 MiB, so every heavy job was moved from a 64 MiB stack onto a 32 MiB one — the
+/// "large stack" protection inverted.
+///
+/// The floor is therefore computed against the runtime stack rather than being a bare constant,
+/// so raising one cannot silently invert the other again.
 fn large_stack_bytes() -> usize {
     static BYTES: OnceLock<usize> = OnceLock::new();
     *BYTES.get_or_init(|| {
-        std::env::var("WEISSMAN_ENGINE_STACK_BYTES")
+        // Same env var and default the worker uses to size its runtime threads.
+        let runtime_stack = std::env::var("WEISSMAN_WORKER_THREAD_STACK_MB")
             .ok()
-            .and_then(|s| s.parse().ok())
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|&n| n >= 2)
+            .unwrap_or(64)
+            * 1024
+            * 1024;
+        // Double the runtime stack: the whole point is headroom for recursion that a runtime
+        // thread cannot survive.
+        let floor = runtime_stack.saturating_mul(2);
+
+        match std::env::var("WEISSMAN_ENGINE_STACK_BYTES")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
             .filter(|&n| n >= 2 * 1024 * 1024)
-            .unwrap_or(32 * 1024 * 1024)
+        {
+            Some(explicit) if explicit < runtime_stack => {
+                eprintln!(
+                    "[Weissman][engine_stack] WEISSMAN_ENGINE_STACK_BYTES={explicit} is smaller \
+                     than the runtime thread stack ({runtime_stack}); raising to {floor} — a \
+                     'large stack' below the stack it replaces makes overflow more likely, not less"
+                );
+                floor
+            }
+            Some(explicit) => explicit,
+            None => floor,
+        }
     })
 }
 
@@ -204,6 +237,20 @@ mod tests {
         let (_cancel_tx, cancel_rx) = oneshot::channel();
         let out = run_on_large_stack_cancellable(|| async { 42u32 }, cancel_rx).await;
         assert_eq!(out, Some(42));
+    }
+
+
+    /// The engine stack must never be smaller than the runtime stack it replaces.
+    #[test]
+    fn engine_stack_is_never_smaller_than_the_runtime_stack() {
+        // Defaults: runtime 64 MiB, engine floor 2x that.
+        let runtime_default = 64 * 1024 * 1024usize;
+        let got = large_stack_bytes();
+        assert!(
+            got >= runtime_default,
+            "engine stack {got} < runtime thread stack {runtime_default} — moving a heavy job \
+             here would SHRINK its stack, which is the inverse of this module's purpose"
+        );
     }
 
 }

@@ -90,55 +90,98 @@ fn worker_id() -> String {
     format!("{}:{}", host, std::process::id())
 }
 
-fn job_kind_timeout(kind: &str) -> Duration {
-    match kind {
-        "tenant_full_scan" | "onboarding_tenant_scan" => Duration::from_secs(60 * 60),
-        "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => Duration::from_secs(30 * 60),
-        "command_center_engine" => Duration::from_secs(15 * 60),
+/// One table: a job kind's execution class and its time budget, together.
+///
+/// These used to be two independent `match` blocks — `job_kind_timeout` enumerated 12 kinds while
+/// `job_is_heavy` listed 22 — so a kind could be classified heavy and still fall through to the
+/// 5-minute default budget. Ten did: timing_scan, llm_fuzz_run, cloud_scan_run, payload_sync,
+/// threat_ingest_run, deception_cloud_deploy, poe_synthesis_run, sovereign_learning_feedback,
+/// genesis_eternal_fuzz and genesis_knowledge_match. The inconsistency is self-evident in the
+/// executor: `council_debate` gets 1200s standalone, while `genesis_eternal_fuzz` — which runs a
+/// full DFS fuzz cycle AND that same council war room — got 300s. Every attempt timed out at the
+/// same point, was requeued with backoff, timed out again, and was eventually dead-lettered: a
+/// permanently unrunnable job kind that burned one of only two heavy slots for 5 minutes per
+/// doomed attempt.
+///
+/// A single table makes that drift impossible to express, and the test below asserts that every
+/// heavy kind carries an explicit budget.
+struct JobClass {
+    /// Must run on the large engine stack (deep monolithic engine dispatch).
+    heavy: bool,
+    /// Wall-clock ceiling for the whole job, not per engine.
+    timeout_secs: u64,
+}
+
+fn job_class(kind: &str) -> JobClass {
+    let (heavy, timeout_secs) = match kind {
+        // ── Full-estate scans ────────────────────────────────────────────────
+        "tenant_full_scan" | "onboarding_tenant_scan" => (true, 60 * 60),
         // Fans out to ~22 top-tier engines sequentially (each with its own 180s ceiling), so the
-        // worst case is ~22×180 = 3960s. The previous 3600s budget was BELOW that, so when several
-        // engines hang — exactly what a health probe exists to detect — the probe was killed with a
-        // generic timeout instead of returning its per-engine pass/fail table. 75min leaves slack.
-        "top_tier_health_probe" => Duration::from_secs(75 * 60),
-        "scan_all_engines" | "scan_discovered_domains" => Duration::from_secs(45 * 60),
-        "pipeline_scan" | "threat_intel_run" | "council_debate" => Duration::from_secs(20 * 60),
-        "noop" | "ping" => Duration::from_secs(30),
-        _ => Duration::from_secs(5 * 60),
+        // worst case is ~22x180 = 3960s. The previous 3600s budget was BELOW that, so when several
+        // engines hang — exactly what a health probe exists to detect — the probe was killed with
+        // a generic timeout instead of returning its per-engine pass/fail table.
+        "top_tier_health_probe" => (true, 75 * 60),
+        "scan_all_engines" | "scan_discovered_domains" => (true, 45 * 60),
+        // ── Long-running engine work ─────────────────────────────────────────
+        "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => (true, 30 * 60),
+        "pipeline_scan" | "threat_intel_run" => (true, 20 * 60),
+        "command_center_engine" => (true, 15 * 60),
+        // Was silently on the 300s default despite running a full DFS fuzz cycle followed by the
+        // multi-agent council war room, which alone is budgeted 1200s.
+        "genesis_eternal_fuzz" => (true, 40 * 60),
+        "genesis_knowledge_match" | "poe_synthesis_run" | "sovereign_learning_feedback" => {
+            (true, 20 * 60)
+        }
+        // Issues up to `baseline_sample_size` (500) timing samples plus payload probes.
+        "timing_scan" | "llm_fuzz_run" => (true, 20 * 60),
+        "cloud_scan_run" => (true, 30 * 60),
+        "threat_ingest_run" | "payload_sync" | "deception_cloud_deploy" => (true, 15 * 60),
+        // ── Light / control-plane ────────────────────────────────────────────
+        // Not heavy (no deep engine dispatch) but genuinely slow, so it keeps its own budget.
+        "council_debate" => (false, 20 * 60),
+        "noop" | "ping" => (false, 30),
+        _ => (false, 5 * 60),
+    };
+    JobClass {
+        heavy,
+        timeout_secs,
     }
 }
 
-fn job_is_heavy(kind: &str) -> bool {
-    matches!(
-        kind,
-        "tenant_full_scan"
-            | "onboarding_tenant_scan"
-            | "auto_heal"
-            | "pipeline_scan"
-            | "threat_intel_run"
-            | "deep_fuzz"
-            | "ai_redteam"
-            | "timing_scan"
-            | "llm_fuzz_run"
-            | "cloud_scan_run"
-            | "payload_sync"
-            | "threat_ingest_run"
-            | "deception_cloud_deploy"
-            | "poe_synthesis_run"
-            | "feedback_fuzz"
-            | "sovereign_learning_feedback"
-            | "genesis_eternal_fuzz"
-            | "genesis_knowledge_match"
-            | "command_center_engine"
-            // Fans out to every top-tier engine via `engine_dispatch::run_engine` (the deep
-            // monolithic engine future). Like `command_center_engine`/`scan_all_engines`, it
-            // MUST run on the 32 MiB large stack — dispatching it inline on the ~2 MiB Tokio
-            // worker stack overflows and aborts the whole worker process (fatal runtime error:
-            // stack overflow), which then makes the swarm coordinator orphan its in-flight jobs.
-            | "top_tier_health_probe"
-            | "scan_all_engines"
-            | "scan_discovered_domains"
-    )
+fn job_kind_timeout(kind: &str) -> Duration {
+    Duration::from_secs(job_class(kind).timeout_secs)
 }
+
+fn job_is_heavy(kind: &str) -> bool {
+    job_class(kind).heavy
+}
+
+/// Every kind the table classifies heavy. Used by the guard test below.
+#[cfg(test)]
+const HEAVY_KINDS: &[&str] = &[
+    "tenant_full_scan",
+    "onboarding_tenant_scan",
+    "top_tier_health_probe",
+    "scan_all_engines",
+    "scan_discovered_domains",
+    "auto_heal",
+    "deep_fuzz",
+    "feedback_fuzz",
+    "ai_redteam",
+    "pipeline_scan",
+    "threat_intel_run",
+    "command_center_engine",
+    "genesis_eternal_fuzz",
+    "genesis_knowledge_match",
+    "poe_synthesis_run",
+    "sovereign_learning_feedback",
+    "timing_scan",
+    "llm_fuzz_run",
+    "cloud_scan_run",
+    "threat_ingest_run",
+    "payload_sync",
+    "deception_cloud_deploy",
+];
 
 fn worker_concurrency_cap(key: &str, default: usize) -> usize {
     std::env::var(key)
@@ -623,8 +666,33 @@ async fn async_main() {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
     let swarm_shutdown = swarm.clone();
+    // SIGTERM as well as SIGINT. `docker stop`, a compose restart and a k8s rollout all send
+    // SIGTERM; only SIGINT was handled, so every one of those killed in-flight scans outright
+    // after the 10s grace period rather than letting them finish. The HTTP server in this same
+    // repo already handles both, so this was a gap, not a platform limit.
     tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
+        let sigint = async {
+            let _ = tokio::signal::ctrl_c().await;
+        };
+        #[cfg(unix)]
+        let sigterm = async {
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(mut s) => {
+                    s.recv().await;
+                }
+                Err(e) => {
+                    warn!(target: "weissman_worker", error = %e, "cannot install SIGTERM handler");
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+        #[cfg(not(unix))]
+        let sigterm = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = sigint => info!(target: "weissman_worker", "SIGINT received; draining"),
+            _ = sigterm => info!(target: "weissman_worker", "SIGTERM received; draining"),
+        }
         stop_clone.store(true, Ordering::SeqCst);
         if let Some(s) = swarm_shutdown {
             s.stop();
@@ -788,7 +856,37 @@ async fn async_main() {
             }
         }
     }
-    info!(target: "weissman_worker", "shutdown");
+    // Drain. `process_one` runs in detached tasks, so simply returning here drops the runtime and
+    // aborts every in-flight scan mid-write — leaving rows `running` for the stale-lock sweep to
+    // reclaim minutes later, and losing whatever the engine had already found.
+    //
+    // The permit count is the live in-flight count: each running job holds one, so waiting for
+    // both semaphores to return to full capacity is exactly "everything finished".
+    let drain_deadline = std::time::Duration::from_secs(
+        std::env::var("WEISSMAN_WORKER_DRAIN_SECS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(25),
+    );
+    let drain_started = std::time::Instant::now();
+    loop {
+        let in_flight = (light_n - light_sem.available_permits())
+            + (heavy_n - heavy_sem.available_permits());
+        if in_flight == 0 {
+            break;
+        }
+        if drain_started.elapsed() >= drain_deadline {
+            warn!(
+                target: "weissman_worker", in_flight,
+                "drain deadline reached; {in_flight} job(s) still running will be reclaimed by the \
+                 stale-lock sweep"
+            );
+            break;
+        }
+        info!(target: "weissman_worker", in_flight, "draining in-flight jobs before shutdown");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    info!(target: "weissman_worker", drained_in = ?drain_started.elapsed(), "shutdown");
 }
 
 #[cfg(test)]
@@ -944,4 +1042,47 @@ mod tests {
         let (_host, pid) = id.rsplit_once(':').expect("worker id contains a colon");
         assert_eq!(pid.parse::<u32>().unwrap(), std::process::id());
     }
+
+    /// A heavy kind must never fall through to the default budget.
+    ///
+    /// This is the invariant the two separate match blocks could not express: ten heavy kinds sat
+    /// on the 300s default and timed out on every attempt until they were dead-lettered.
+    #[test]
+    fn every_heavy_kind_has_an_explicit_timeout() {
+        const DEFAULT_SECS: u64 = 5 * 60;
+        let offenders: Vec<&str> = HEAVY_KINDS
+            .iter()
+            .copied()
+            .filter(|k| job_class(k).timeout_secs == DEFAULT_SECS)
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "these heavy kinds fall through to the {DEFAULT_SECS}s default budget and will time \
+             out, retry and dead-letter on every attempt: {offenders:?}"
+        );
+    }
+
+    /// The HEAVY_KINDS list and the table must not drift apart.
+    #[test]
+    fn heavy_kinds_list_matches_the_table() {
+        for k in HEAVY_KINDS {
+            assert!(job_class(k).heavy, "{k} is in HEAVY_KINDS but not heavy in job_class");
+        }
+        // Spot-check the other direction with kinds that must stay light.
+        for k in ["noop", "ping", "council_debate", "definitely_not_a_real_kind"] {
+            assert!(!job_class(k).heavy, "{k} must not be heavy");
+        }
+    }
+
+    /// genesis_eternal_fuzz runs a full fuzz cycle AND the council war room, which alone is
+    /// budgeted 1200s — its ceiling must exceed that, or it can never finish.
+    #[test]
+    fn genesis_eternal_fuzz_outlasts_the_council_war_room() {
+        assert!(
+            job_class("genesis_eternal_fuzz").timeout_secs > job_class("council_debate").timeout_secs,
+            "genesis_eternal_fuzz must be budgeted above council_debate; it runs that war room \
+             plus a full DFS fuzz cycle"
+        );
+    }
+
 }

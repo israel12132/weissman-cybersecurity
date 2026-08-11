@@ -1371,6 +1371,7 @@ mod tests {
             tenant_id: 1,
             client_id: 2,
             session_jwt: "jwt".to_string(),
+            agent_secret: "renewal-secret".to_string(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
         };
@@ -1382,6 +1383,9 @@ mod tests {
         let back: EnrollResponse = serde_json::from_value(v).unwrap();
         assert_eq!(back.client_id, 2);
         assert_eq!(back.session_jwt, "jwt");
+        // The renewal secret must survive the round trip — the agent persists it, and losing it
+        // silently would put the agent back to going dark when its JWT expires.
+        assert_eq!(back.agent_secret, "renewal-secret");
         assert!(back.server_message.is_none());
     }
 }

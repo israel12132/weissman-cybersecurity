@@ -112,6 +112,10 @@ services:
 
   worker:
     logging: *default-logging
+    # Must exceed WEISSMAN_WORKER_DRAIN_SECS (25s). Docker's default is 10s, which
+    # would SIGKILL the worker mid-drain and make the drain pointless — in-flight
+    # scans would still be killed mid-write, just after a longer pause.
+    stop_grace_period: 40s
     # Same as backend: the worker runs the scan engines and needs the operator's optional
     # settings (LLM keys, OAST config, vault keys, ...). Explicit entries below still win.
     env_file:

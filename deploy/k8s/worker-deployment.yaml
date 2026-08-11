@@ -20,6 +20,9 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      # Must exceed WEISSMAN_WORKER_DRAIN_SECS (25s); the k8s default is 30s, which leaves
+      # no margin for the drain loop's 500ms poll plus the final in-flight job.
+      terminationGracePeriodSeconds: 45
       containers:
         - name: worker
           image: ghcr.io/israel12132/weissman-cybersecurity/weissman-backend:latest
