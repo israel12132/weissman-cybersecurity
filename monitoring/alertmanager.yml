@@ -78,8 +78,15 @@ receivers:
         send_resolved: true
 
 inhibit_rules:
-  - source_match:
-      severity: 'critical'
-    target_match:
-      severity: 'warning'
-    equal: ['alertname', 'category']
+    # `equal` used to include 'alertname', which made this rule unmatchable: every one of the
+    # 31 loaded alert names is defined exactly once with a single fixed severity, so no alertname
+    # can ever produce both a critical and a warning instance. The rule looked like configured
+    # noise suppression and did nothing.
+    #
+    # Correlating on `category` alone is what was intended: during a broad availability incident,
+    # suppress the warning-level noise while the critical alert for the same category is firing.
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['category']
