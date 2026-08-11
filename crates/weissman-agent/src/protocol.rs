@@ -9,6 +9,14 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentToServer {
+    /// Internal signal to the writer task: emit a WebSocket `Ping` control frame.
+    ///
+    /// Never serialised to the wire as JSON — the writer intercepts it and sends a protocol-level
+    /// Ping instead, whose Pong is what resets the agent's read-idle deadline. This protocol is
+    /// agent-talks-first and the server sends no keepalive, so without it a healthy connection
+    /// was torn down every 90s and rebuilt, forever.
+    #[serde(skip)]
+    KeepAlivePing,
     /// First message after WS connect. Carries identity + version.
     Hello {
         agent_id: String,

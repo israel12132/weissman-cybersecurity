@@ -72,9 +72,76 @@ fn public_base_url() -> String {
         .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
 }
 
+/// Why `base` cannot work as an SSO redirect target, or `None` if it can.
+///
+/// Every OIDC and SAML redirect URI is built from `WEISSMAN_PUBLIC_BASE_URL`, and the identity
+/// provider — not this server — is the one that has to reach it. The deployed value is
+/// `https://localhost`, which no external IdP can resolve to this host and which does not match
+/// the gateway's actual scheme (plain HTTP). SSO therefore cannot complete, and the failure
+/// surfaces at the IdP as an opaque redirect-mismatch rather than anywhere in these logs.
+///
+/// Separated from the check itself so it can be unit-tested without touching the environment.
+fn sso_base_url_problem(base: &str) -> Option<&'static str> {
+    let b = base.trim();
+    if b.is_empty() {
+        return Some("WEISSMAN_PUBLIC_BASE_URL is unset");
+    }
+    let host = b
+        .split("://")
+        .nth(1)
+        .unwrap_or(b)
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .split(':')
+        .next()
+        .unwrap_or("");
+    if matches!(host, "localhost" | "127.0.0.1" | "0.0.0.0" | "::1" | "") {
+        return Some(
+            "WEISSMAN_PUBLIC_BASE_URL points at localhost — an identity provider cannot redirect              a browser back to this host, so OIDC/SAML login can never complete",
+        );
+    }
+    if !b.starts_with("https://") {
+        return Some(
+            "WEISSMAN_PUBLIC_BASE_URL is not https — most identity providers reject non-TLS              redirect URIs",
+        );
+    }
+    None
+}
+
+/// Log once at startup when SSO is configured but its redirect URIs cannot possibly work.
+///
+/// Warns rather than refuses: SSO is optional, and a deployment that never uses it should not be
+/// blocked from booting by a setting it does not rely on.
+pub fn warn_if_sso_base_url_unusable() {
+    if let Some(reason) = sso_base_url_problem(&public_base_url()) {
+        tracing::warn!(
+            target: "oidc",
+            base_url = %public_base_url(),
+            "%{reason}",
+            reason = reason
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn localhost_and_plain_http_base_urls_are_rejected_for_sso() {
+        // The deployed value. An IdP redirecting a user's browser to `https://localhost` sends
+        // them to their OWN machine, not this server.
+        assert!(sso_base_url_problem("https://localhost").is_some());
+        assert!(sso_base_url_problem("https://localhost:8443").is_some());
+        assert!(sso_base_url_problem("http://127.0.0.1:8000").is_some());
+        assert!(sso_base_url_problem("").is_some());
+        // Reachable but not TLS — most IdPs refuse a non-https redirect URI.
+        assert!(sso_base_url_problem("http://weissman.example.com").is_some());
+        // The shape that actually works.
+        assert!(sso_base_url_problem("https://app.weissman.example.com").is_none());
+        assert!(sso_base_url_problem("https://app.weissman.example.com/").is_none());
+    }
 
     #[test]
     fn oidc_state_full_serde_round_trip() {

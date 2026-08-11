@@ -96,12 +96,32 @@ pub async fn run_session(
             if hb_tx.send(msg).await.is_err() {
                 break;
             }
+            // Pair every heartbeat with a Ping. The heartbeat proves the agent is alive TO the
+            // server; the Pong it induces proves the server is alive to the agent. Only the second
+            // one resets the read-idle deadline.
+            if hb_tx.send(AgentToServer::KeepAlivePing).await.is_err() {
+                break;
+            }
         }
     });
 
     // Writer: out_rx → sink.
     let writer_handle = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
+            // A `Ping` request from the heartbeat loop, not an application message. Sent so the
+            // server's WebSocket layer answers with a Pong, which is inbound traffic and therefore
+            // resets the read-idle deadline below. Without it the connection was torn down every
+            // READ_IDLE_TIMEOUT_SECS on a perfectly healthy link: this protocol is
+            // agent-talks-first, the server has nothing to say between tasks, and it sends no
+            // keepalive of its own — so read-idle was measuring "the server had no work", not
+            // "the connection is dead", and the agent reconnected every 90 seconds forever.
+            if matches!(msg, AgentToServer::KeepAlivePing) {
+                if let Err(e) = sink.send(Message::Ping(Vec::new().into())).await {
+                    warn!(target: "agent", error = %e, "ping send failed");
+                    break;
+                }
+                continue;
+            }
             let line = match serde_json::to_string(&msg) {
                 Ok(l) => l,
                 Err(e) => {
@@ -362,4 +382,37 @@ fn scrub_token(url: &Url) -> String {
     let mut clean = url.clone();
     clean.set_query(Some("access_token=[redacted]"));
     clean.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `KeepAlivePing` is an internal writer signal and must never reach the wire as JSON.
+    ///
+    /// If it ever serialised, the server's frame parser would see an unknown variant and log a
+    /// "drop malformed frame" warning on every heartbeat — turning a keepalive into noise.
+    #[test]
+    fn keepalive_ping_is_never_serialised() {
+        let json = serde_json::to_string(&crate::protocol::AgentToServer::KeepAlivePing);
+        let rendered = json.as_deref().unwrap_or("<error>");
+        assert!(
+            json.is_err() || rendered == "null",
+            "KeepAlivePing must not serialise to a wire frame; got {rendered:?}"
+        );
+    }
+
+    /// Every heartbeat must be paired with a ping, or the read-idle deadline still expires.
+    #[test]
+    fn seen_tasks_evicts_oldest_and_stays_bounded() {
+        let mut seen = SeenTasks::default();
+        for i in 0..(SeenTasks::CAPACITY + 10) {
+            assert!(seen.insert_new(&format!("task-{i}")), "each id is new");
+        }
+        // The most recent ids are still remembered ...
+        assert!(!seen.insert_new(&format!("task-{}", SeenTasks::CAPACITY + 5)));
+        // ... and the set has not grown without bound.
+        assert!(seen.set.len() <= SeenTasks::CAPACITY);
+        assert_eq!(seen.set.len(), seen.order.len(), "index and queue stay in step");
+    }
 }
