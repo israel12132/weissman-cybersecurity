@@ -507,6 +507,11 @@ async fn async_main() {
         }
     };
 
+    // app 48 + auth 12 + intel 12 + control 8. Paired with the backend's own 72, this was 152
+    // against a server max_connections of 100 — see warn_if_pool_budget_exceeds_server.
+    weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
+        .await;
+
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);
     let light_sem = Arc::new(tokio::sync::Semaphore::new(light_n));
