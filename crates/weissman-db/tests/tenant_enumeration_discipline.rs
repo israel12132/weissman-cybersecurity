@@ -32,9 +32,16 @@ use std::path::{Path, PathBuf};
 fn is_tenant_enumeration(collapsed: &str) -> bool {
     let needle_from = concat!("from ", "tenants");
     let needle_active = "active";
-    collapsed.contains(needle_from)
-        && collapsed.contains(needle_active)
-        && (collapsed.contains("select id") || collapsed.contains("select distinct tenant_id"))
+    // Two shapes, both of which return "whatever this connection is scoped to" rather than the
+    // fleet: selecting ids out of `tenants` filtered on active, and — the one that slipped past
+    // the first version of this guard — `SELECT DISTINCT tenant_id` out of ANY tenant-scoped
+    // table. endpoint_agents.rs discovered tenants that way and would have gone silently idle the
+    // moment the tenant GUC default was removed.
+    let enumerates_tenants_table =
+        collapsed.contains(needle_from) && collapsed.contains(needle_active)
+            && collapsed.contains("select id");
+    let distinct_tenant_id = collapsed.contains("select distinct tenant_id");
+    enumerates_tenants_table || distinct_tenant_id
 }
 
 /// Files allowed to read `tenants` in the enumerating shape, each with the reason it is safe.

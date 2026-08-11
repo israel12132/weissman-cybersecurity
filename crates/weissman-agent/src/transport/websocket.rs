@@ -53,6 +53,10 @@ pub async fn run_session(
     // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
     let completed_tasks = Arc::new(AtomicU64::new(0));
+    // Per-session, so a reconnect deliberately re-accepts tasks the server still considers
+    // pending — that is the replay path working as intended. Within one session it stops the
+    // 5s re-push from running the same detection concurrently with itself.
+    let seen_tasks = Arc::new(tokio::sync::Mutex::new(SeenTasks::default()));
     let max_parallel = Arc::new(AtomicU32::new(4));
     let started_at = Instant::now();
 
@@ -122,6 +126,7 @@ pub async fn run_session(
                         &running_tasks,
                         &completed_tasks,
                         &max_parallel,
+                        &seen_tasks,
                         enrollment.agent_id.clone(),
                     )
                     .await;
@@ -150,12 +155,47 @@ pub async fn run_session(
     read_result
 }
 
+/// Task ids this session has already accepted, so a re-pushed task is not run twice.
+///
+/// The server re-sends every still-`pending` task to every online agent on a 5-second tick, and
+/// only marks a task done when the agent reports back — so a 30s detection was delivered ~6 times
+/// and ran ~6 times CONCURRENTLY on the same host, each run persisting duplicate findings and,
+/// for `chronos`, independently issuing an autonomous SIGSTOP against a live process.
+///
+/// Bounded so a long-lived session cannot grow it without limit: oldest ids are evicted first.
+/// Eviction can only ever allow a re-run of a task last seen thousands of tasks ago, which is
+/// indistinguishable from a legitimate re-dispatch.
+#[derive(Default)]
+pub(crate) struct SeenTasks {
+    order: std::collections::VecDeque<String>,
+    set: std::collections::HashSet<String>,
+}
+
+impl SeenTasks {
+    const CAPACITY: usize = 4096;
+
+    /// Record `id`; returns true if it is new to this session.
+    pub(crate) fn insert_new(&mut self, id: &str) -> bool {
+        if !self.set.insert(id.to_string()) {
+            return false;
+        }
+        self.order.push_back(id.to_string());
+        if self.order.len() > Self::CAPACITY {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+        true
+    }
+}
+
 async fn handle_text(
     text: &str,
     out_tx: &mpsc::Sender<AgentToServer>,
     running: &Arc<AtomicU32>,
     completed: &Arc<AtomicU64>,
     max_parallel: &Arc<AtomicU32>,
+    seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
@@ -181,6 +221,13 @@ async fn handle_text(
             target,
             params,
         } => {
+            if !seen.lock().await.insert_new(&task_id) {
+                debug!(
+                    target: "agent", %task_id,
+                    "duplicate task push ignored (already accepted this session)"
+                );
+                return;
+            }
             let out_tx = out_tx.clone();
             let running_c = Arc::clone(running);
             let completed_c = Arc::clone(completed);

@@ -678,6 +678,52 @@ pub async fn all_agent_uuids_for_tenant(
 }
 
 /// Push pending tasks to all online agents (API process — worker only queues).
+/// Move a task out of `pending` once it has actually been delivered to an agent.
+pub async fn mark_task_dispatched(
+    pool: &PgPool,
+    tenant_id: i64,
+    task_uuid: &Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"UPDATE endpoint_agent_tasks
+              SET status = 'running', started_at = COALESCE(started_at, now())
+            WHERE task_uuid = $1 AND tenant_id = $2 AND status = 'pending'"#,
+    )
+    .bind(task_uuid)
+    .bind(tenant_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Return `running` tasks to `pending` when the agent never reported an outcome.
+///
+/// Without this, marking a task dispatched would strand it forever if the delivery was lost to a
+/// dropped socket or the agent died mid-run — trading a duplicate-execution bug for a
+/// silently-dropped-task bug. Deliberately generous (10 minutes): the longest detection caps at
+/// 90s, so anything older than this is not merely slow.
+pub async fn reclaim_stale_dispatched_tasks(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let r = sqlx::query(
+        r#"UPDATE endpoint_agent_tasks
+              SET status = 'pending', started_at = NULL
+            WHERE tenant_id = $1
+              AND status = 'running'
+              AND started_at < now() - interval '10 minutes'
+              AND expires_at > now()"#,
+    )
+    .bind(tenant_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected())
+}
+
 pub async fn push_pending_tasks_to_online(
     pool: &PgPool,
     registry: &Arc<AgentRegistry>,
@@ -693,8 +739,32 @@ pub async fn push_pending_tasks_to_online(
         }
         if let Ok(pending) = pending_tasks_for_client(pool, tenant_id, client_id).await {
             for task in pending {
+                // Capture the id before the frame is moved into send().
+                let task_uuid = match &task {
+                    ServerToAgent::Task { task_id, .. } => task_id.parse::<Uuid>().ok(),
+                    _ => None,
+                };
                 if registry.send(&uuid, task).await.is_ok() {
                     pushed += 1;
+                    // Flip to `running` so this tick's delivery is the LAST one. The schema
+                    // defined this state and nothing ever set it, so a task stayed `pending`
+                    // until the agent reported back — and this pusher re-sent it every 5
+                    // seconds, to every online agent of the client. A 30s detection was
+                    // therefore delivered ~6 times and ran ~6 times concurrently on the same
+                    // host, each run persisting duplicate findings and, for chronos,
+                    // independently SIGSTOPping a live process.
+                    //
+                    // reclaim_stale_dispatched_tasks below returns a task to `pending` if the
+                    // agent never reports, so a delivery lost to a dropped socket is still
+                    // retried — just not six times a minute.
+                    if let Some(tu) = task_uuid {
+                        if let Err(e) = mark_task_dispatched(pool, tenant_id, &tu).await {
+                            tracing::warn!(
+                                target: "agents", task_uuid = %tu, error = %e,
+                                "could not mark task dispatched; it may be re-pushed"
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -708,15 +778,31 @@ pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
-            let Ok(rows) = sqlx::query_scalar::<_, i64>(
-                "SELECT DISTINCT tenant_id FROM endpoint_agent_tasks WHERE status = 'pending' AND expires_at > now() LIMIT 200",
-            )
-            .fetch_all(pool.as_ref())
-            .await
-            else {
-                continue;
+            // Enumerate tenants through the cross-tenant helper, NOT by scanning
+            // endpoint_agent_tasks. That table is tenant-scoped RLS, and this runs on the app
+            // pool, so an unscoped `SELECT DISTINCT tenant_id` returns whatever the connection
+            // happens to be scoped to — and nothing at all once the tenant GUC is correctly
+            // unset. The old query silently found tenants only because of a role-level GUC
+            // default; with that removed it would have returned zero rows and this pusher would
+            // have quietly stopped delivering every agent task, with no error anywhere.
+            let tenants = match weissman_db::active_tenant_ids(pool.as_ref()).await {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "agents", error = %e,
+                        "tenant enumeration failed; skipping this task-push tick"
+                    );
+                    continue;
+                }
             };
-            for tid in rows {
+            for tid in tenants {
+                // Hand back any task an agent was sent but never reported on, before pushing.
+                if let Err(e) = reclaim_stale_dispatched_tasks(pool.as_ref(), tid).await {
+                    tracing::warn!(
+                        target: "agents", tenant_id = tid, error = %e,
+                        "stale dispatched-task reclaim failed"
+                    );
+                }
                 let _ = push_pending_tasks_to_online(pool.as_ref(), &registry, tid).await;
             }
         }
@@ -951,14 +1037,11 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
-            let Ok(tenants) = sqlx::query_scalar::<_, i64>(
-                r#"SELECT DISTINCT tenant_id FROM endpoint_agents
-                    WHERE status = 'online'
-                      AND last_seen_at > now() - interval '3 minutes'
-                    LIMIT 200"#,
-            )
-            .fetch_all(pool.as_ref())
-            .await
+            // Same trap as the task pusher: `endpoint_agents` is tenant-scoped RLS and this runs
+            // on the app pool, so an unscoped DISTINCT returns only the connection's own tenant —
+            // and nothing once the tenant GUC is correctly unset. Enumerate tenants explicitly,
+            // then let the per-tenant query below do the online filtering.
+            let Ok(tenants) = weissman_db::active_tenant_ids(pool.as_ref()).await
             else {
                 continue;
             };
