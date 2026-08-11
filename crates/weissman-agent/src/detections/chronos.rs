@@ -19,14 +19,33 @@ const WEB_PARENTS: &[&str] = &[
 ];
 const SHELL_CHILDREN: &[&str] = &["sh", "bash", "dash", "zsh", "cmd", "powershell", "pwsh"];
 
+/// Exact basename match, case-insensitive.
+///
+/// These were substring (`contains`) and suffix (`ends_with`) matches, which is far too loose for
+/// a check whose response is to freeze the process:
+///
+///   "node_exporter".contains("node")  -> true   (this deployment runs node_exporter)
+///   "ssh".ends_with("sh")             -> true
+///
+/// so a monitoring agent exec'ing `ssh` was classified as "shell spawned by a web server" and
+/// SIGSTOPped. Nothing ever sends SIGCONT, so the backup or deploy job it belonged to hangs
+/// forever. An exact basename comparison still catches the real pattern (nginx spawning bash)
+/// without inventing it out of unrelated names.
+fn name_matches(name: &str, list: &[&str]) -> bool {
+    let n = name.trim().to_ascii_lowercase();
+    // Compare the basename: sysinfo may report a path on some platforms.
+    let base = n.rsplit(['/', '\\']).next().unwrap_or(&n);
+    // Tolerate a Windows .exe suffix, which is part of the name rather than a different program.
+    let base = base.strip_suffix(".exe").unwrap_or(base);
+    list.iter().any(|p| base == *p)
+}
+
 fn is_web_parent(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
-    WEB_PARENTS.iter().any(|p| n.contains(p))
+    name_matches(name, WEB_PARENTS)
 }
 
 fn is_shell_child(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
-    SHELL_CHILDREN.iter().any(|p| n == *p || n.ends_with(p))
+    name_matches(name, SHELL_CHILDREN)
 }
 
 fn capture_snapshot() -> HashMap<u32, ProcessSnap> {
@@ -74,9 +93,37 @@ fn detect_shell_spawn(
     None
 }
 
-async fn attempt_sigstop(pid: u32) -> String {
+/// Confirm the pid still refers to the process we decided to freeze.
+///
+/// The decision is made from a snapshot taken up to `sample_interval_ms` earlier. Linux recycles
+/// pids, so without this the SIGSTOP could land on a completely unrelated process that happened
+/// to inherit the number — freezing something nobody chose, with no record of what it was.
+#[cfg(target_os = "linux")]
+fn pid_still_named(pid: u32, expected_name: &str) -> bool {
+    let Ok(comm) = std::fs::read_to_string(format!("/proc/{pid}/comm")) else {
+        return false;
+    };
+    let actual = comm.trim().to_ascii_lowercase();
+    let expected = expected_name.trim().to_ascii_lowercase();
+    // /proc/<pid>/comm is truncated to 15 chars, so compare on that prefix.
+    let n = actual.len().min(expected.len()).min(15);
+    n > 0 && actual[..n] == expected[..n]
+}
+
+#[cfg(not(target_os = "linux"))]
+fn pid_still_named(_pid: u32, _expected_name: &str) -> bool {
+    // No cheap identity re-check available; the caller treats this as "do not signal".
+    false
+}
+
+async fn attempt_sigstop(pid: u32, expected_name: &str) -> String {
     #[cfg(unix)]
     {
+        if !pid_still_named(pid, expected_name) {
+            return format!(
+                "SIGSTOP skipped pid {pid}: no longer running as '{expected_name}' (pid reused or exited)"
+            );
+        }
         let out = tokio::process::Command::new("kill")
             .args(["-STOP", &pid.to_string()])
             .output()
@@ -107,10 +154,14 @@ pub async fn run(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> {
         .and_then(Value::as_u64)
         .unwrap_or(5000)
         .max(sample_ms);
+    // Opt-IN, not opt-out. This autonomously freezes a process on a customer's endpoint with
+    // no human in the loop and nothing that ever sends SIGCONT; defaulting that to on meant one
+    // false positive hung a production job indefinitely. Detection still runs and still reports;
+    // only the response is gated.
     let auto_freeze = params
         .get("auto_freeze")
         .and_then(Value::as_bool)
-        .unwrap_or(true);
+        .unwrap_or(false);
     let max_samples = ((window_ms / sample_ms) as usize).clamp(10, 2000);
 
     let mut ring: Vec<HashMap<u32, ProcessSnap>> = Vec::with_capacity(max_samples);
@@ -123,7 +174,7 @@ pub async fn run(engine: &str, params: &Value) -> anyhow::Result<Vec<Value>> {
         let curr = capture_snapshot();
         if let Some(anomaly) = detect_shell_spawn(&prev, &curr) {
             let action = if auto_freeze {
-                attempt_sigstop(anomaly.pid).await
+                attempt_sigstop(anomaly.pid, &anomaly.name).await
             } else {
                 "freeze_disabled".to_string()
             };
@@ -222,4 +273,44 @@ mod tests {
         assert!(a.is_some());
         assert_eq!(a.unwrap().name, "sh");
     }
+
+    /// The exact cases that made CHRONOS freeze innocent processes.
+    #[test]
+    fn matching_is_exact_basename_not_substring() {
+        // The two real-world false positives from the audit. This deployment runs node_exporter.
+        assert!(!is_web_parent("node_exporter"), "substring match on 'node' froze node_exporter's children");
+        assert!(!is_shell_child("ssh"), "'ssh'.ends_with(\"sh\") classified ssh as a shell");
+        assert!(!is_web_parent("nodemon"));
+        assert!(!is_shell_child("flush"));
+        assert!(!is_shell_child("ash-utils"));
+
+        // The genuine pattern must still be caught, or the fix is just a mute button.
+        assert!(is_web_parent("nginx"));
+        assert!(is_web_parent("NGINX"));
+        assert!(is_web_parent("node"));
+        assert!(is_web_parent("php-fpm"));
+        assert!(is_shell_child("bash"));
+        assert!(is_shell_child("sh"));
+        assert!(is_shell_child("powershell.exe"), "a .exe suffix is part of the name");
+        assert!(is_web_parent("/usr/sbin/nginx"), "a full path must match on its basename");
+    }
+
+    /// A stale pid must not be signalled.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn pid_identity_is_revalidated_before_signalling() {
+        let me = std::process::id();
+        let my_name = std::fs::read_to_string(format!("/proc/{me}/comm"))
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        assert!(pid_still_named(me, &my_name), "our own pid must validate");
+        assert!(
+            !pid_still_named(me, "definitely-not-this-process"),
+            "a mismatched name must not validate — this is what stops a recycled pid being frozen"
+        );
+        // A pid that cannot exist.
+        assert!(!pid_still_named(u32::MAX, "anything"));
+    }
+
 }
