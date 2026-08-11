@@ -21,11 +21,11 @@ tests:
   - interval: 1m
     name: "2026-08-06 outage: worker cannot claim, backlog grows, nothing completes"
     input_series:
-      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+      - series: 'weissman_async_jobs_oldest_claimable_age_seconds'
         values: '393495+60x30'
       - series: 'weissman_async_jobs_last_completion_age_seconds'
         values: '391371+60x30'
-      - series: 'weissman_async_jobs_pending'
+      - series: 'weissman_async_jobs_claimable'
         values: '2111+1x30'
     alert_rule_test:
       - eval_time: 15m
@@ -59,11 +59,11 @@ tests:
   - interval: 1m
     name: "a brief spike does not page"
     input_series:
-      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+      - series: 'weissman_async_jobs_oldest_claimable_age_seconds'
         values: '4000x5 0x20'
       - series: 'weissman_async_jobs_last_completion_age_seconds'
         values: '30x25'
-      - series: 'weissman_async_jobs_pending'
+      - series: 'weissman_async_jobs_claimable'
         values: '5x25'
     alert_rule_test:
       - eval_time: 20m
@@ -80,9 +80,9 @@ tests:
       # -1 means "no job has ever completed", not "completed 1 second in the future".
       - series: 'weissman_async_jobs_last_completion_age_seconds'
         values: '-1x30'
-      - series: 'weissman_async_jobs_pending'
+      - series: 'weissman_async_jobs_claimable'
         values: '3x30'
-      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+      - series: 'weissman_async_jobs_oldest_claimable_age_seconds'
         values: '20x30'
     alert_rule_test:
       - eval_time: 25m
@@ -93,11 +93,11 @@ tests:
   - interval: 1m
     name: "a healthy pipeline stays silent"
     input_series:
-      - series: 'weissman_async_jobs_oldest_pending_age_seconds'
+      - series: 'weissman_async_jobs_oldest_claimable_age_seconds'
         values: '12 40 8 25 15 33 9 18 22 11 30 14 27 19 10 35 13 21 16 28 12 24 17 31 20 9 26 14 23 18 12'
       - series: 'weissman_async_jobs_last_completion_age_seconds'
         values: '5 12 3 9 6 14 4 11 7 15 8 2 13 6 10 5 12 4 9 7 14 3 11 8 6 13 5 10 4 12 7'
-      - series: 'weissman_async_jobs_pending'
+      - series: 'weissman_async_jobs_claimable'
         values: '4 7 2 9 5 3 8 6 4 7 5 2 9 6 3 8 4 7 5 9 3 6 8 4 7 2 5 9 6 3 8'
       - series: 'weissman_async_jobs_by_status{status="dead"}'
         values: '0+0x30'
@@ -114,3 +114,39 @@ tests:
       - eval_time: 30m
         alertname: JobDeadLetterGrowing
         exp_alerts: []
+
+  # ── The regression that shipped: an always-on alert ──────────────────────────
+  - interval: 1m
+    name: "an unrunnable backlog does not page a healthy pipeline"
+    input_series:
+      # Real post-deploy shape: 2,973 pending rows, none of them claimable, pipeline healthy.
+      # 80 minutes of samples: JobBacklogUnrunnable has `for: 1h`, so a shorter series cannot
+      # reach the pending->firing transition and the test would pass vacuously.
+      - series: 'weissman_async_jobs_oldest_claimable_age_seconds'
+        values: '0x80'
+      - series: 'weissman_async_jobs_claimable'
+        values: '0x80'
+      - series: 'weissman_async_jobs_unrunnable'
+        values: '2973x80'
+      - series: 'weissman_async_jobs_last_completion_age_seconds'
+        values: '1256+60x80'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: JobQueueStalled
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: NoScanCompletions
+        exp_alerts: []
+      # It IS reported, at warning level, because it is real dead weight.
+      - eval_time: 70m
+        alertname: JobBacklogUnrunnable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              category: reliability
+            exp_annotations:
+              summary: "2973 queued jobs can never be claimed"
+              description: >-
+                These rows are pending but fail the claim predicate — no zero-trust envelope, or at
+                their attempt ceiling. They will never run and never drain. Retire them explicitly
+                (status='dead' with a reason) rather than leaving them to distort queue depth.

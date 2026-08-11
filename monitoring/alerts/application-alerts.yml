@@ -104,9 +104,17 @@ groups:
       # keeps the oldest pending job waiting an hour, or leaves an hour with no completion at all.
 
       - alert: JobQueueStalled
-        # The oldest pending job has been waiting an hour. Under any healthy throughput the head
+        # The oldest CLAIMABLE job has been waiting an hour. Under any healthy throughput the head
         # of the queue turns over continuously, so this only holds when nothing is draining it.
-        expr: weissman_async_jobs_oldest_pending_age_seconds > 3600
+        #
+        # "Claimable", not "pending": after the 2026-08-06 outage the queue kept 2,973 rows the
+        # claim path can provably never pick up (no zero-trust envelope, or at their attempt
+        # ceiling). Measured over all pending rows this read 5.2 days on a pipeline that was
+        # running scans normally — so the rule fired continuously and no operator action could
+        # ever clear it. An always-on alert is an unread alert, which is the exact failure this
+        # rule exists to prevent. The backlog is still visible via
+        # weissman_async_jobs_unrunnable; it just does not page, because nothing can drain it.
+        expr: weissman_async_jobs_oldest_claimable_age_seconds > 3600
         for: 10m
         labels:
           severity: critical
@@ -124,7 +132,9 @@ groups:
         # JobQueueStalled: it also catches jobs that are claimed and then always fail or hang,
         # which leaves the oldest-pending age low while still delivering nothing.
         # `> 3600` also excludes the -1 sentinel that means "no job has ever completed".
-        expr: weissman_async_jobs_last_completion_age_seconds > 3600 and weissman_async_jobs_pending > 0
+        # Gated on CLAIMABLE work for the same reason as JobQueueStalled: `pending > 0` is
+        # permanently true thanks to the unrunnable backlog, so this would page on any quiet hour.
+        expr: weissman_async_jobs_last_completion_age_seconds > 3600 and weissman_async_jobs_claimable > 0
         for: 10m
         labels:
           severity: critical
@@ -138,7 +148,7 @@ groups:
       - alert: JobQueueBacklogGrowing
         # Sustained monotonic growth: arrivals are outpacing completions even if some work is
         # getting through. Warning, not critical — this is a capacity signal, not an outage.
-        expr: deriv(weissman_async_jobs_pending[30m]) > 0 and weissman_async_jobs_pending > 100
+        expr: deriv(weissman_async_jobs_claimable[30m]) > 0 and weissman_async_jobs_claimable > 100
         for: 30m
         labels:
           severity: warning
@@ -190,6 +200,23 @@ groups:
           description: >-
             Prometheus cannot scrape Alertmanager, so notification-failure counters are not being
             collected and there is no evidence any alert can reach a human.
+
+      - alert: JobBacklogUnrunnable
+        # Pending rows the claim path can never pick up. Not an outage — nothing is failing right
+        # now — but it is dead weight that hides real depth on dashboards and, before the
+        # coalescing predicate was corrected, deadlocked the scheduler outright. Warning-level and
+        # generous, because clearing it is a deliberate operator action, not an incident response.
+        expr: weissman_async_jobs_unrunnable > 100
+        for: 1h
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "{{ $value }} queued jobs can never be claimed"
+          description: >-
+            These rows are pending but fail the claim predicate — no zero-trust envelope, or at
+            their attempt ceiling. They will never run and never drain. Retire them explicitly
+            (status='dead' with a reason) rather than leaving them to distort queue depth.
 
       - alert: JobDeadLetterGrowing
         # Jobs exhausting their retries. A steady trickle is normal; a sustained rate is not.

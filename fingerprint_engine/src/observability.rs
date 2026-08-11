@@ -399,23 +399,63 @@ pub fn spawn_pool_metrics_loop(
             // looked at it, because a large backlog reads the same as heavy load. The two
             // unambiguous signals are ages — how long the oldest pending job has waited, and how
             // long since anything last completed. Both were four days.
-            if let Ok((pending, running, failed, dead, oldest_pending_age, last_completion_age)) =
-                sqlx::query_as::<_, (i64, i64, i64, i64, Option<f64>, Option<f64>)>(
-                    r#"SELECT
-                           count(*) FILTER (WHERE status = 'pending')::bigint,
-                           count(*) FILTER (WHERE status = 'running')::bigint,
-                           count(*) FILTER (WHERE status = 'failed')::bigint,
-                           count(*) FILTER (WHERE status = 'dead')::bigint,
-                           EXTRACT(EPOCH FROM (now() - min(created_at)
-                               FILTER (WHERE status = 'pending')))::float8,
-                           EXTRACT(EPOCH FROM (now() - max(updated_at)
-                               FILTER (WHERE status = 'completed')))::float8
-                       FROM weissman_async_jobs"#,
-                )
-                .fetch_one(app_pool.as_ref())
-                .await
+            //
+            // The age must be measured over CLAIMABLE work, not every `pending` row. After the
+            // outage the queue kept 2,973 rows that the claim path can provably never pick up:
+            // 2,285 carry no zero-trust envelope (reserve_next's envelope gate skips them) and the
+            // rest sit at their attempt ceiling (the claim's attempt cap skips them). Measured
+            // over all pending rows, `oldest_pending_age` reads 448,085s — 5.2 days — on a
+            // pipeline that is running scans normally, so JobQueueStalled fires forever and can
+            // never be cleared by anything an operator does. An alert that is always on is an
+            // alert nobody reads, which is precisely the failure this rule exists to prevent.
+            //
+            // The `claimable` predicate below mirrors the claim predicate in
+            // crates/weissman-db/src/job_queue.rs. Same lesson as the coalescing deadlock: a
+            // predicate must describe what the other half of the system actually does, not what
+            // this half intended. The unrunnable remainder is not hidden — it gets its own gauge
+            // so it stays visible without paging.
+            if let Ok((
+                pending,
+                claimable,
+                unrunnable,
+                running,
+                failed,
+                dead,
+                oldest_pending_age,
+                last_completion_age,
+            )) = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, Option<f64>, Option<f64>)>(
+                r#"WITH j AS (
+                       SELECT *,
+                              (status = 'pending'
+                               AND attempt_count < max_attempts
+                               AND payload ? '_weissman_job_bus'
+                               AND (run_after IS NULL OR run_after <= now())) AS is_claimable
+                         FROM weissman_async_jobs
+                   )
+                   SELECT
+                       count(*) FILTER (WHERE status = 'pending')::bigint,
+                       count(*) FILTER (WHERE is_claimable)::bigint,
+                       count(*) FILTER (WHERE status = 'pending' AND NOT is_claimable)::bigint,
+                       count(*) FILTER (WHERE status = 'running')::bigint,
+                       count(*) FILTER (WHERE status = 'failed')::bigint,
+                       count(*) FILTER (WHERE status = 'dead')::bigint,
+                       EXTRACT(EPOCH FROM (now() - min(created_at)
+                           FILTER (WHERE is_claimable)))::float8,
+                       EXTRACT(EPOCH FROM (now() - max(updated_at)
+                           FILTER (WHERE status = 'completed')))::float8
+                   FROM j"#,
+            )
+            .fetch_one(app_pool.as_ref())
+            .await
             {
                 metrics::gauge!("weissman_async_jobs_pending").set(pending as f64);
+                // What the worker can actually pick up. This is the number the alert rules key
+                // off; `weissman_async_jobs_pending` stays as the raw depth for dashboards.
+                metrics::gauge!("weissman_async_jobs_claimable").set(claimable as f64);
+                // Pending but provably un-runnable — no envelope, or out of attempts. Visible so
+                // the backlog is not silently forgotten, but it must never page: no operator
+                // action can drain it.
+                metrics::gauge!("weissman_async_jobs_unrunnable").set(unrunnable as f64);
                 metrics::gauge!("weissman_async_jobs_by_status", "status" => "pending")
                     .set(pending as f64);
                 metrics::gauge!("weissman_async_jobs_by_status", "status" => "running")
@@ -426,7 +466,7 @@ pub fn spawn_pool_metrics_loop(
                     .set(dead as f64);
                 // 0 when nothing is queued: that is the healthy reading, and an absent series
                 // would make a `> threshold` rule silently vacuous rather than quiet-and-correct.
-                metrics::gauge!("weissman_async_jobs_oldest_pending_age_seconds")
+                metrics::gauge!("weissman_async_jobs_oldest_claimable_age_seconds")
                     .set(oldest_pending_age.unwrap_or(0.0));
                 // -1 before the very first completion, so an alert can distinguish "never ran"
                 // from "just completed" (0) and decide for itself whether that should page.
