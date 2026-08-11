@@ -434,6 +434,21 @@ pub fn spawn_pool_metrics_loop(
                     .set(last_completion_age.unwrap_or(-1.0));
             }
 
+            // Zero-trust claim rejections, derived from last_error because the worker has no
+            // /metrics endpoint of its own to count them. This is the signal that was absent
+            // while a single job-bus signing-key mismatch destroyed 3,266 tenant scans: the
+            // rejections were written to last_error on every row and nothing ever read them.
+            if let Ok(rejected) = sqlx::query_scalar::<_, i64>(
+                "SELECT count(*)::bigint FROM weissman_async_jobs \
+                 WHERE last_error LIKE '%zero-trust claim rejected%' \
+                    OR last_error LIKE '%envelope attach failed%'",
+            )
+            .fetch_one(app_pool.as_ref())
+            .await
+            {
+                metrics::gauge!("weissman_async_jobs_zero_trust_rejected").set(rejected as f64);
+            }
+
             if let Ok(registered) =
                 sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM endpoint_agents")
                     .fetch_one(app_pool.as_ref())

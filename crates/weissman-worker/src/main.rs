@@ -164,17 +164,38 @@ async fn process_one(
                     "zero-trust claim rejected"
                 );
                 let err_s = e.to_string();
-                let permanent = err_s.contains("envelope expired")
+                // These three used to be classified `permanent` and dead-lettered on the FIRST
+                // occurrence. They are not properties of the job — they are properties of the
+                // infrastructure around it:
+                //
+                //   missing signed envelope -> the enqueue-side attach failed (a bug or outage)
+                //   envelope expired        -> the job sat in the queue too long (an outage)
+                //   signature mismatch      -> the signing key differs or was rotated
+                //
+                // None means "this job can never succeed", and all three are fixed by operator
+                // action, not by discarding customer work. Treating them as permanent destroyed
+                // 3,319 tenant scans in this deployment — 3,266 of them to a single key
+                // mismatch, irreversibly, with no retry and nothing alerting.
+                //
+                // They now fall through to the normal retry ladder: bounded by max_attempts,
+                // backed off, and terminal only after the job has genuinely been given its
+                // retries. A poison payload still dies — it just has to earn it.
+                // The worker exposes no /metrics endpoint and has no scrape job, so a counter
+                // here would be unscrapeable. Visibility comes from the backend instead, which
+                // derives weissman_async_jobs_zero_trust_rejected from `last_error` on each
+                // metrics tick — see fingerprint_engine/src/observability.rs.
+                if err_s.contains("envelope expired")
                     || err_s.contains("signature mismatch")
-                    || err_s.contains("missing signed envelope");
-                if permanent {
-                    let _ = job_queue::dead_letter_job(
-                        pool,
-                        job.id,
-                        &format!("zero-trust claim rejected (permanent): {e}"),
-                    )
-                    .await;
-                } else if job.attempt_count >= job.max_attempts {
+                    || err_s.contains("missing signed envelope")
+                {
+                    error!(
+                        target: "weissman_worker",
+                        job_id = %job.id, attempt = job.attempt_count, max = job.max_attempts,
+                        "zero-trust infrastructure rejection — retrying rather than dead-lettering; \
+                         check the job-bus signing key and the enqueue-side envelope attach"
+                    );
+                }
+                if job.attempt_count >= job.max_attempts {
                     let _ = job_queue::fail_job(
                         pool,
                         &job,

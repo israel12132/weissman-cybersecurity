@@ -198,6 +198,15 @@ pub async fn reserve_next_with_role(
             WHERE status = 'pending'
               AND (run_after IS NULL OR run_after <= now())
               AND (locked_until IS NULL OR locked_until <= now())
+              -- Structural gate for the zero-trust path. `enqueue_held` only makes a job
+              -- non-claimable for `hold_secs`; it is a timer, not a gate, so when the
+              -- envelope attach failed the row became claimable anyway 30s later and was
+              -- dead-lettered as "missing signed envelope". Requiring the envelope here
+              -- makes an envelope-less row unclaimable outright, so a failed attach can
+              -- never be converted into destroyed work by the passage of time.
+              -- (`reserve_next` is the bus path; `claim_next` is the non-bus path and has
+              -- no envelope to require.)
+              AND payload ? '_weissman_job_bus'
               AND (
                 $3::int = 0
                 OR (
@@ -291,6 +300,10 @@ pub async fn claim_next_with_role(
             WHERE status = 'pending'
               AND (run_after IS NULL OR run_after <= now())
               AND (locked_until IS NULL OR locked_until <= now())
+              -- No envelope predicate here on purpose: `claim_next` is the NON-bus path
+              -- (weissman-worker calls it only when the job bus is disabled), so these rows
+              -- never carry `_weissman_job_bus`. The zero-trust gate lives in
+              -- `reserve_next_with_role`, which is the bus path.
               AND (
                 $3::int = 0
                 OR (

@@ -330,6 +330,94 @@ async fn active_tenant_ids_enumerates_across_tenants_on_an_rls_pool() {
     );
 }
 
+/// **The zero-trust claim gate.** `reserve_next` (the job-bus path) must refuse a job that has no
+/// signed envelope, and must still serve one that has.
+///
+/// `enqueue_held` only holds a row for `hold_secs` — a timer, not a gate. When the envelope attach
+/// failed, the row became claimable anyway 30 seconds later and the worker dead-lettered it as
+/// "missing signed envelope". That converted a recoverable enqueue-side failure into destroyed
+/// customer work: 3,319 tenant scans in this deployment. The predicate this test pins makes an
+/// envelope-less row structurally unclaimable, so the passage of time can no longer destroy it.
+///
+/// This also exercises the raw `?` jsonb key-exists operator through sqlx, which is worth pinning:
+/// `?` is a placeholder character in several drivers, and a mis-bound query here would silently
+/// match nothing and stall the whole bus queue.
+#[tokio::test]
+async fn reserve_next_refuses_a_job_with_no_signed_envelope() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    let pool = connect(&url).await;
+    const TENANT_E: i64 = 918_274_005;
+    cleanup(&pool, &[TENANT_E]).await;
+    seed_tenant_jobs(&pool, TENANT_E, 0).await;
+
+    // One envelope-less job (what a failed attach leaves behind) and one properly signed.
+    for payload in [
+        serde_json::json!({ "trigger": "test" }),
+        serde_json::json!({ "trigger": "test", "_weissman_job_bus": { "envelope": { "v": 1 } } }),
+    ] {
+        sqlx::query(
+            "INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status) \
+             VALUES ($1, $2, $3, 'pending')",
+        )
+        .bind(TENANT_E)
+        .bind(PROBE_KIND)
+        .bind(sqlx::types::Json(payload))
+        .execute(&pool)
+        .await
+        .expect("seed job");
+    }
+
+    let worker_pool = PgPoolOptions::new()
+        .max_connections(2)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .after_connect(|conn, _| {
+            Box::pin(async move {
+                sqlx::query("SET ROLE weissman_app").execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect(&url)
+        .await
+        .expect("connect worker pool as weissman_app");
+
+    let mut claimed = Vec::new();
+    for _ in 0..4 {
+        match job_queue::reserve_next_with_role(
+            &worker_pool,
+            "zero-trust-gate-test",
+            300,
+            WorkerPoolRole::Mixed,
+        )
+        .await
+        {
+            Ok(Some(j)) if j.kind == PROBE_KIND => claimed.push(j),
+            Ok(_) => break,
+            Err(e) => {
+                cleanup(&pool, &[TENANT_E]).await;
+                panic!("reserve_next_with_role failed: {e}");
+            }
+        }
+    }
+
+    cleanup(&pool, &[TENANT_E]).await;
+
+    assert_eq!(
+        claimed.len(),
+        1,
+        "reserve_next must serve exactly the enveloped job and refuse the envelope-less one; \
+         claimed {} (0 = the `?` jsonb operator is not reaching Postgres and the bus queue is \
+         stalled; 2 = the zero-trust gate is missing and a failed attach will be dead-lettered)",
+        claimed.len()
+    );
+    assert!(
+        claimed[0].payload.get("_weissman_job_bus").is_some(),
+        "the claimed job must be the one carrying the signed envelope"
+    );
+}
+
 /// **The drift that inverts fail-closed into fail-open.**
 ///
 /// `20260809120000_reset_tenant_guc_default` runs `ALTER DATABASE ... RESET`, which clears only
