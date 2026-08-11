@@ -274,6 +274,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/auth/saml/begin", get(crate::saml_auth::saml_begin))
         .route("/api/auth/saml/acs", post(crate::saml_auth::saml_acs))
         .route("/api/health", get(api_health))
+        // Public status page promised by SLA_AND_STATUS.md §4 and linked from the site
+        // footer and Terms of Service. Unauthenticated: nobody can read a status page
+        // during an incident if it needs a login.
+        .route("/status", get(public_status))
         .route("/api/ready", get(api_ready))
         .route("/api/quota", get(api_quota))
         .route("/api/audit-logs", get(api_audit_logs))

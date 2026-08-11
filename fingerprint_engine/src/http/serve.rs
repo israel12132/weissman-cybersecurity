@@ -243,6 +243,8 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
+    // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
+    (Method::GET, "/status", RouteGate::Always),
     (Method::POST, "/api/agents/enroll", RouteGate::Always),
     // Session renewal: unauthenticated for the same reason as /enroll — the agent presents
     // its own long-lived secret, which IS the credential. Without a public renewal path an
@@ -1896,6 +1898,7 @@ mod public_route_guard_tests {
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
+            (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
             (Method::POST, "/api/agents/session"),
         ];

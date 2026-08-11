@@ -50,6 +50,13 @@ pub struct WorkerSwarm {
     redis: redis::aio::ConnectionManager,
     worker_id: String,
     stop: Arc<AtomicBool>,
+    /// In-flight job count published in the heartbeat.
+    ///
+    /// This was hardcoded to `0` in the payload, so the only non-identity field the "gossip"
+    /// stream carried was a constant — it advertised fleet load telemetry and shipped a fixed
+    /// lie. The worker now keeps it current, so a consumer of the stream has something true to
+    /// read whenever one is written.
+    jobs_active: Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl WorkerSwarm {
@@ -58,7 +65,13 @@ impl WorkerSwarm {
             redis,
             worker_id,
             stop: Arc::new(AtomicBool::new(false)),
+            jobs_active: Arc::new(std::sync::atomic::AtomicU32::new(0)),
         }
+    }
+
+    /// Publish the current in-flight job count in subsequent heartbeats.
+    pub fn set_jobs_active(&self, n: u32) {
+        self.jobs_active.store(n, Ordering::Relaxed);
     }
 
     /// Refresh liveness key every 400ms (2s TTL) — death detected within ~2s, not 30min.
@@ -66,6 +79,7 @@ impl WorkerSwarm {
         let worker_id = self.worker_id.clone();
         let redis = self.redis.clone();
         let stop = self.stop.clone();
+        let jobs_active = self.jobs_active.clone();
         tokio::spawn(async move {
             let key = format!("{}{}", SWARM_REGISTRY_PREFIX, worker_id);
             let mut interval = tokio::time::interval(Duration::from_millis(LIVENESS_REFRESH_MS));
@@ -76,7 +90,7 @@ impl WorkerSwarm {
                 let payload = serde_json::to_string(&SwarmMessage::Heartbeat {
                     worker_id: worker_id.clone(),
                     pid,
-                    jobs_active: 0,
+                    jobs_active: jobs_active.load(Ordering::Relaxed),
                 })
                 .unwrap_or_default();
                 let _: Result<(), _> = conn.set_ex(&key, &payload, LIVENESS_TTL_SECS).await;

@@ -20,12 +20,28 @@ pub async fn run_session(
     enrollment: &Enrollment,
     heartbeat_secs: u64,
 ) -> anyhow::Result<()> {
-    let ws_url = build_ws_url(server_url, &enrollment.ws_path, &enrollment.session_jwt)?;
+    let ws_url = build_ws_url(server_url, &enrollment.ws_path)?;
     info!(target: "agent", "connecting to {}", scrub_token(&ws_url));
 
     // tokio-tungstenite 0.24 dropped the `url` integration (url::Url no longer
     // implements IntoClientRequest); pass the URL as &str.
-    let (ws_stream, _resp) = tokio_tungstenite::connect_async(ws_url.as_str()).await?;
+    // Bearer in a HEADER, not the query string. `?token=<jwt>` put a live credential into every
+    // reverse-proxy access log, Referer chain and log bundle — deploy/nginx-gateway.conf proxies
+    // /ws/ with default access logging, so the token was written to disk on every handshake.
+    // Anyone who can read those logs could connect as this agent for the remainder of the token's
+    // life and inject findings or close tasks for the tenant. The server already documents the
+    // header as the preferred form ("prefer `Authorization: Bearer <session_jwt>`").
+    let mut request = tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+        ws_url.as_str(),
+    )?;
+    request.headers_mut().insert(
+        "Authorization",
+        tokio_tungstenite::tungstenite::http::HeaderValue::from_str(&format!(
+            "Bearer {}",
+            enrollment.session_jwt
+        ))?,
+    );
+    let (ws_stream, _resp) = tokio_tungstenite::connect_async(request).await?;
     let (mut sink, mut stream) = ws_stream.split();
 
     // Outbound channel: detections + heartbeat → WebSocket sink.
@@ -323,7 +339,7 @@ async fn run_task(
     completed.fetch_add(1, Ordering::SeqCst);
 }
 
-fn build_ws_url(server_url: &str, path: &str, token: &str) -> anyhow::Result<Url> {
+fn build_ws_url(server_url: &str, path: &str) -> anyhow::Result<Url> {
     let base = server_url.trim_end_matches('/');
     // Promote http→ws / https→wss.
     let ws_base = if let Some(r) = base.strip_prefix("https://") {
@@ -338,24 +354,10 @@ fn build_ws_url(server_url: &str, path: &str, token: &str) -> anyhow::Result<Url
     } else {
         format!("/{}", path)
     };
-    // The server's token extractor (fingerprint_engine http serve) reads the query key `token`,
-    // not `access_token`; any other key yields 401 on every /ws/agent handshake.
-    let full = format!("{}{}?token={}", ws_base, p, urlencoding(token));
+    // No credential in the URL — it travels in the Authorization header (see run_session).
+    let full = format!("{}{}", ws_base, p);
     Ok(Url::parse(&full)?)
 }
-
-fn urlencoding(s: &str) -> String {
-    // Minimal percent-encode for the token. Tokens are URL-safe base64 already, but `=` is
-    // not safe inside a query string in some HTTP parsers, so escape it.
-    s.chars()
-        .map(|c| match c {
-            '=' => "%3D".to_string(),
-            '&' | '#' | '?' | ' ' => format!("%{:02X}", c as u32),
-            _ => c.to_string(),
-        })
-        .collect()
-}
-
 fn scrub_token(url: &Url) -> String {
     let mut clean = url.clone();
     clean.set_query(Some("access_token=[redacted]"));

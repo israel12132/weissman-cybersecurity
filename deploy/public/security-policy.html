@@ -26,7 +26,12 @@
       <li>Steps to reproduce (URLs, payloads, expected vs. observed).</li>
       <li>Your name or handle for credit (optional — we honour anonymous reports too).</li>
     </ul>
-    <p>PGP: fingerprint <code>0A1B 2C3D 4E5F 6789 ABCD EF01 2345 6789 ABCD EF01</code> — public key at <a href="/.well-known/pgp-key.txt">/.well-known/pgp-key.txt</a>.</p>
+    <!-- The published fingerprint was the placeholder 0A1B 2C3D... and /.well-known/pgp-key.txt
+     404s, so a reporter who tried to encrypt a vulnerability report could not — and might
+     not send it at all. Offering no PGP is honest; offering a fake key is not. Restore this
+     block with a real fingerprint and a real key file when one exists. -->
+    <p>Encrypted reports: email <a href="mailto:security@weissman.io">security@weissman.io</a>
+       and ask for our current PGP key before sending sensitive details.</p>
 
     <h2>Our promise</h2>
     <ul>

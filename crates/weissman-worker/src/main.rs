@@ -777,6 +777,14 @@ async fn async_main() {
             job_queue::claim_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
         };
 
+        // Keep the swarm heartbeat's advertised load true. It published a hardcoded 0, so the
+        // only non-identity field in the gossip stream was a constant.
+        if let Some(ref s) = swarm {
+            let in_flight = (light_n - light_sem.available_permits())
+                + (heavy_n - heavy_sem.available_permits());
+            s.set_jobs_active(in_flight as u32);
+        }
+
         // Liveness beat, written only when the dequeue round-trip actually worked — an empty
         // queue counts, a failed claim does not. The container healthcheck reads this file's
         // mtime, so "the process exists" and "the process can do its job" stop being the same

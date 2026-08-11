@@ -818,6 +818,37 @@ pub fn hash_agent_secret(secret: &str) -> String {
     format!("{:x}", h.finalize())
 }
 
+/// True when this agent has been revoked (or no longer exists).
+///
+/// Agent tokens are minted with `jti: None` and `http/serve.rs` only runs its jti-revocation and
+/// RBAC revalidation branch for `is_user_access_context`, so nothing on the request path ever
+/// consulted revocation for `typ: agent`. Revoking an agent in the UI therefore did nothing until
+/// its token expired on its own — up to WEISSMAN_AGENT_JWT_TTL_MINS (default 4 hours) during which
+/// a stolen or repudiated agent could keep injecting findings and closing tasks for the tenant.
+///
+/// Checked at WebSocket upgrade, which is the only long-lived agent entry point, and again on
+/// session renewal.
+pub async fn agent_is_revoked(pool: &PgPool, agent_uuid: Uuid) -> bool {
+    match sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
+        "SELECT revoked_at FROM endpoint_agents WHERE agent_uuid = $1",
+    )
+    .bind(agent_uuid)
+    .fetch_optional(pool)
+    .await
+    {
+        Ok(Some(revoked)) => revoked.is_some(),
+        // Unknown agent: treat as revoked. An id with no row cannot be a legitimate session.
+        Ok(None) => true,
+        // Fail OPEN on a database error, deliberately: a transient DB blip must not disconnect
+        // the entire agent fleet. The renewal path (which re-reads the row every few hours)
+        // still fails closed, so a revoked agent cannot persist indefinitely.
+        Err(e) => {
+            tracing::warn!(target: "agents", %agent_uuid, error = %e, "revocation check failed; allowing");
+            false
+        }
+    }
+}
+
 /// Mint a fresh session JWT for an already-enrolled agent that presents its renewal secret.
 ///
 /// Enrollment tokens are single-use, and the session JWT expires (default 4h), so without this an

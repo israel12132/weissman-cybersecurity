@@ -574,6 +574,22 @@ async fn ws_agent(
     if let Err(r) = crate::rbac::require_agent(&auth) {
         return r;
     }
+    // Revocation. Agent tokens carry no jti and the request path's revocation branch only runs
+    // for user contexts, so a revoked agent's token stayed valid for the remainder of its 4-hour
+    // TTL — during which it could still inject findings and close tasks. This is the only
+    // long-lived agent entry point, so it is the right place to check.
+    if let Some(ref aid) = auth.agent_id {
+        if let Ok(uuid) = aid.trim().parse::<uuid::Uuid>() {
+            if crate::endpoint_agents::agent_is_revoked(state.app_pool.as_ref(), uuid).await {
+                tracing::warn!(target: "agents", agent_id = %aid, "rejected websocket from a revoked agent");
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({"ok": false, "detail": "agent revoked"})),
+                )
+                    .into_response();
+            }
+        }
+    }
     let expected_agent_id = auth.agent_id.clone();
     let app_pool = state.app_pool.clone();
     let registry = state.endpoint_agents.clone();
