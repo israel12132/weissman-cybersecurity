@@ -149,6 +149,48 @@ groups:
             weissman_async_jobs_pending has risen steadily for 30 minutes. Either throughput has
             dropped or the orchestrator is enqueuing faster than the fleet can drain.
 
+      # ── The alerting pipeline monitoring itself ──────────────────────────────
+      #
+      # Every rule above is worthless if notifications cannot leave the building, and in this
+      # deployment they could not: all three receivers point at RFC-2606 `.invalid` placeholder
+      # hosts, including the Watchdog dead-man's-switch webhook — so the alarm whose entire job is
+      # to detect a broken alert pipeline was itself broken. Alertmanager was also never scraped,
+      # so the failure counters it had been incrementing all along were never collected.
+      #
+      # Placeholders are a legitimate default for an unconfigured stack (see
+      # monitoring/secrets/README.md). What is not legitimate is that being silent.
+
+      - alert: AlertDeliveryFailing
+        # Alertmanager is trying to notify and the send is failing — misconfigured receiver,
+        # unresolvable host, revoked webhook. Every alert raised during this window is lost.
+        expr: rate(alertmanager_notifications_failed_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Alertmanager cannot deliver notifications ({{ $labels.integration }})"
+          description: >-
+            Notifications to the {{ $labels.integration }} receiver are failing. Alerts are being
+            raised and silently dropped. If the receiver still points at a *.invalid placeholder,
+            configure the real endpoint per monitoring/secrets/README.md.
+
+      - alert: AlertingPipelineUnverified
+        # Absence-of-heartbeat, one layer up. The Watchdog rule fires continuously by design and
+        # its delivery is the end-to-end proof that the pipeline works. If Alertmanager is not
+        # even scrapeable we cannot prove delivery works, so treat that as broken rather than
+        # assuming it is fine — the failure mode being fixed here is exactly "assumed fine".
+        expr: up{job="alertmanager"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Alertmanager is not scrapeable — delivery health is unknown"
+          description: >-
+            Prometheus cannot scrape Alertmanager, so notification-failure counters are not being
+            collected and there is no evidence any alert can reach a human.
+
       - alert: JobDeadLetterGrowing
         # Jobs exhausting their retries. A steady trickle is normal; a sustained rate is not.
         expr: increase(weissman_async_jobs_by_status{status="dead"}[1h]) > 50

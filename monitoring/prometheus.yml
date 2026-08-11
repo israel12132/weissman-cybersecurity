@@ -68,3 +68,15 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+
+  # Alertmanager self-monitoring.
+  #
+  # Alertmanager was configured as an alerting *destination* but was never a scrape *target*, so
+  # `alertmanager_notifications_failed_total` — which had been recording every undelivered
+  # notification all along — was never collected. Combined with receivers pointing at RFC-2606
+  # `.invalid` placeholder hosts, the delivery pipeline could be entirely dead with no signal
+  # anywhere: alerts fired, went nowhere, and nothing noticed. The AlertDeliveryFailing and
+  # AlertingPipelineUnverified rules in application-alerts.yml consume this job.
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']

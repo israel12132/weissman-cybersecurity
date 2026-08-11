@@ -67,20 +67,14 @@ jobs:
           promtool --version
 
       - name: Check rule syntax
-        # `*.test.yml` are promtool unit-test files, not rule files — checking them as rules fails.
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          rules=()
-          for f in monitoring/alerts/*.yml; do
-            case "$f" in *.test.yml) continue ;; esac
-            rules+=("$f")
-          done
-          test ${#rules[@]} -gt 0 || { echo "no rule files found — the glob is broken"; exit 1; }
-          promtool check rules "${rules[@]}"
+        # Exactly the glob Prometheus itself uses (`/etc/prometheus/alerts/*.yml`, non-recursive),
+        # so this fails on anything Prometheus would choke on. Unit-test files deliberately live
+        # in the tests/ subdirectory, outside that glob: a promtool test file is not a rule file,
+        # and leaving one beside the rules makes Prometheus reject the whole directory.
+        run: promtool check rules monitoring/alerts/*.yml
 
       - name: Unit-test alert rules
-        working-directory: monitoring/alerts
+        working-directory: monitoring/alerts/tests
         run: promtool test rules ./*.test.yml
 
   launcher-contract:

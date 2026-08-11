@@ -8,8 +8,11 @@
 # 391371s ≈ 4.53d, 2111 pending) and asserts the alerts fire. The last case asserts a healthy
 # pipeline stays silent, so these cannot become the noise everyone mutes.
 
+# Lives in a subdirectory on purpose: Prometheus loads rules with the non-recursive glob
+# `/etc/prometheus/alerts/*.yml` (monitoring/prometheus.yml), and a promtool *test* file is not a
+# rule file — leaving it alongside the rules makes Prometheus reject the whole rule directory.
 rule_files:
-  - application-alerts.yml
+  - ../application-alerts.yml
 
 evaluation_interval: 1m
 
