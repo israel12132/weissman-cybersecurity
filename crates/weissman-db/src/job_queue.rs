@@ -421,6 +421,42 @@ pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error
 }
 
 /// Mark completed and store JSON result for `GET /api/jobs/:id`.
+/// Record a successful outcome, fenced on the caller still owning the row.
+///
+/// Returns `Ok(false)` when the row was NOT updated, meaning this worker lost the race: its lease
+/// lapsed, the reclaim sweep returned the job to `pending`, and another worker has since claimed
+/// it. That is not an error — it is the correct outcome — but the caller must not treat it as a
+/// completion.
+///
+/// This used to be `WHERE id = $1` with no ownership or status guard, unlike its siblings
+/// `force_requeue_running` and `release_reserved_job`, which both carry one. A worker whose
+/// heartbeats had been failing (the keep-alive path only warns and continues) would finish its
+/// 40-minute scan and write `status='completed'` straight over the top of the re-run another
+/// worker was in the middle of — orphaning that scan mid-flight and attributing its findings to a
+/// job the read model already considers finished.
+pub async fn complete_job_with_result_owned(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    result: &Value,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $3,
+           locked_until = NULL, worker_id = NULL, updated_at = now()
+           WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
+    )
+    .bind(job_id)
+    .bind(worker_id)
+    .bind(Json(result))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
+/// Unfenced completion. Prefer [`complete_job_with_result_owned`]; this remains for callers that
+/// genuinely have no worker identity to fence on.
 pub async fn complete_job_with_result(
     pool: &PgPool,
     job_id: Uuid,

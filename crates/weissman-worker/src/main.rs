@@ -27,6 +27,40 @@ fn liveness_beat_path() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp/weissman-worker-alive"))
 }
 
+/// Force an exhausted job out of `running` when the forensic path could not do it.
+///
+/// The `bus_on && exhausted` arm is the ONLY route that terminalizes an exhausted job in
+/// zero-trust mode, and both of its error branches used to change no state — they logged and
+/// returned. The row stayed `running` with a frozen `locked_until`, so the stale-lock reclaim
+/// flipped it back to `pending` minutes later, the worker re-claimed it, re-ran the poison
+/// payload, exhausted again, and failed to build the bundle again. Forever, holding a heavy
+/// semaphore slot the whole time.
+///
+/// `ForensicBundle::build` does DB work, so it fails exactly when the database is degraded —
+/// which is precisely when a job is most likely to be exhausting its attempts. Losing forensics
+/// is acceptable; losing the terminal transition is not, because that is what makes the loop
+/// unbounded. The forensic failure is recorded alongside the original cause so the gap is visible.
+async fn terminalize_exhausted(
+    pool: &PgPool,
+    job_id: sqlx::types::Uuid,
+    cause: &str,
+    forensic_err: &str,
+) {
+    let note = format!("{cause} [forensics unavailable: {forensic_err}]");
+    if let Err(e) = job_queue::dead_letter_job(pool, job_id, &note).await {
+        error!(
+            target: "weissman_worker", %job_id, error = %e,
+            "could not dead-letter an exhausted job after forensic failure — it will be reclaimed \
+             and re-executed until this write succeeds"
+        );
+    } else {
+        warn!(
+            target: "weissman_worker", %job_id,
+            "dead-lettered an exhausted job without a forensic bundle"
+        );
+    }
+}
+
 /// Record that the dequeue path is functioning.
 ///
 /// Deliberately called only on `Ok` — including `Ok(None)`, an empty queue, which is a healthy
@@ -327,9 +361,22 @@ async fn process_one(
                 {
                     error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced complete failed");
                 }
-            } else if let Err(e) = job_queue::complete_job_with_result(pool, job.id, &v).await {
-                error!(target: "weissman_worker", job_id = %job.id, error = %e, "complete failed");
-                let _ = job_queue::fail_job(pool, &job, &e.to_string(), BASE_BACKOFF_SECS).await;
+            } else {
+                match job_queue::complete_job_with_result_owned(pool, job.id, &wid, &v).await {
+                    Ok(true) => {}
+                    // Lost the race: our lease lapsed, the row was reclaimed, and another worker
+                    // owns it now. Writing our result anyway would orphan that worker's in-flight
+                    // run and attribute our findings to a job the read model already closed.
+                    Ok(false) => warn!(
+                        target: "weissman_worker", job_id = %job.id,
+                        "completion discarded — this worker no longer owns the job (lease lost \
+                         and the row was reclaimed); the current owner will report the outcome"
+                    ),
+                    Err(e) => {
+                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "complete failed");
+                        let _ = job_queue::fail_job(pool, &job, &e.to_string(), BASE_BACKOFF_SECS).await;
+                    }
+                }
             }
         }
         Err(msg) => {
@@ -363,10 +410,12 @@ async fn process_one(
                     Ok(bundle) => {
                         if let Err(e) = bus.on_forensic_dlq(bundle, lease_out.take()).await {
                             error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic DLQ failed");
+                            terminalize_exhausted(pool, job.id, &msg, &format!("forensic DLQ failed: {e}")).await;
                         }
                     }
                     Err(e) => {
                         error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic bundle build failed");
+                        terminalize_exhausted(pool, job.id, &msg, &format!("forensic bundle build failed: {e}")).await;
                     }
                 }
             } else if bus_on {

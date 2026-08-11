@@ -272,3 +272,54 @@ async fn force_requeue_applies_a_backoff() {
          worker re-claims the same row immediately and spins on it, starving the queue"
     );
 }
+
+/// A worker that lost its lease must not be able to write a terminal result over the row another
+/// worker now owns.
+#[tokio::test]
+async fn completion_is_fenced_on_worker_ownership() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    const TENANT_FENCE: i64 = 918_275_004;
+    let admin = admin_pool(&url).await;
+    reset(&admin, TENANT_FENCE).await;
+
+    // The row is `running` and owned by worker B — worker A's lease lapsed and it was reclaimed.
+    let id = insert_job(&admin, TENANT_FENCE, "running", 1, 5, false, Some("worker-B")).await;
+
+    let wp = worker_pool(&url).await;
+    let stale_write = job_queue::complete_job_with_result_owned(
+        &wp,
+        id,
+        "worker-A",
+        &serde_json::json!({"findings": "from the orphaned run"}),
+    )
+    .await
+    .expect("fenced write must not error");
+
+    let after_stale = status_of(&admin, id).await;
+
+    let owner_write = job_queue::complete_job_with_result_owned(
+        &wp,
+        id,
+        "worker-B",
+        &serde_json::json!({"findings": "from the real run"}),
+    )
+    .await
+    .expect("owner write");
+    let after_owner = status_of(&admin, id).await;
+    cleanup(&admin, TENANT_FENCE).await;
+
+    assert!(
+        !stale_write,
+        "a worker that no longer owns the row must not complete it — reporting success here is \
+         how a lapsed worker orphans the live re-run and closes the job under it"
+    );
+    assert_eq!(
+        after_stale, "running",
+        "the row must still belong to its current owner after a stale completion attempt"
+    );
+    assert!(owner_write, "the actual owner must still be able to complete");
+    assert_eq!(after_owner, "completed");
+}

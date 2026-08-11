@@ -134,11 +134,64 @@ impl SwarmCoordinator {
 
     pub fn spawn(self: Arc<Self>) {
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(800));
+            // A total, permanent outage of this subsystem used to be reported as a WARN — the
+            // same WARN, every 800 ms, forever. It ran for 27,001 consecutive failures in six
+            // hours without one tick ever succeeding, and nothing escalated: no ERROR, no metric,
+            // no health degradation. Sub-second orphan detection (the crate's headline guarantee)
+            // was dead from boot and the only trace was ~108,000 identical log lines a day.
+            //
+            // Two changes. Escalate on a run of failures, so "briefly flaky" and "has never
+            // worked" are not the same log line. And back off, so a permanently broken
+            // coordinator degrades to a trickle instead of drowning the log pipeline — which is
+            // itself what filled the disk on 2026-07-03.
+            const BASE_INTERVAL: Duration = Duration::from_millis(800);
+            const MAX_INTERVAL: Duration = Duration::from_secs(30);
+            const ESCALATE_AFTER: u32 = 5;
+
+            let mut consecutive_failures: u32 = 0;
+            let mut delay = BASE_INTERVAL;
             loop {
-                interval.tick().await;
-                if let Err(e) = self.tick().await {
-                    tracing::warn!(target: "job_bus_swarm", error = %e, "coordinator tick failed");
+                tokio::time::sleep(delay).await;
+                match self.tick().await {
+                    Ok(()) => {
+                        if consecutive_failures >= ESCALATE_AFTER {
+                            tracing::info!(
+                                target: "job_bus_swarm",
+                                after_failures = consecutive_failures,
+                                "coordinator recovered"
+                            );
+                        }
+                        consecutive_failures = 0;
+                        delay = BASE_INTERVAL;
+                    }
+                    Err(e) => {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        if consecutive_failures == ESCALATE_AFTER {
+                            tracing::error!(
+                                target: "job_bus_swarm",
+                                error = %e,
+                                consecutive_failures,
+                                "swarm coordinator is DOWN — orphan detection is not running; \
+                                 jobs from a crashed worker will only be recovered by the 300-420s \
+                                 stale-lock fallback, not sub-second"
+                            );
+                        } else if consecutive_failures < ESCALATE_AFTER {
+                            tracing::warn!(
+                                target: "job_bus_swarm", error = %e, consecutive_failures,
+                                "coordinator tick failed"
+                            );
+                        } else if consecutive_failures % 300 == 0 {
+                            // Still broken: one line every ~300 ticks so the condition stays
+                            // visible without reproducing the 108k-lines/day firehose.
+                            tracing::error!(
+                                target: "job_bus_swarm", error = %e, consecutive_failures,
+                                "swarm coordinator still down"
+                            );
+                        }
+                        // Exponential backoff, capped. Ticks are cheap but a hard-failing one is
+                        // pure cost.
+                        delay = (delay * 2).min(MAX_INTERVAL);
+                    }
                 }
             }
         });
