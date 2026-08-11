@@ -106,6 +106,13 @@ pub struct EnrollResponse {
     pub tenant_id: i64,
     pub client_id: i64,
     pub session_jwt: String,
+    /// Long-lived renewal credential, returned exactly once at enrollment; only its SHA-256 is
+    /// stored. The agent persists it and exchanges it at `POST /api/agents/session` for a fresh
+    /// short-lived `session_jwt`. Without it an agent had one session for its entire lifetime:
+    /// enrollment tokens are single-use, so it could never enroll again, and the JWT expires
+    /// after `WEISSMAN_AGENT_JWT_TTL_MINS` (default 240) — after which the agent was dark forever.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub agent_secret: String,
     pub ws_path: String,
     pub server_message: Option<String>,
 }
@@ -671,6 +678,52 @@ pub async fn all_agent_uuids_for_tenant(
 }
 
 /// Push pending tasks to all online agents (API process — worker only queues).
+/// Move a task out of `pending` once it has actually been delivered to an agent.
+pub async fn mark_task_dispatched(
+    pool: &PgPool,
+    tenant_id: i64,
+    task_uuid: &Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    sqlx::query(
+        r#"UPDATE endpoint_agent_tasks
+              SET status = 'running', started_at = COALESCE(started_at, now())
+            WHERE task_uuid = $1 AND tenant_id = $2 AND status = 'pending'"#,
+    )
+    .bind(task_uuid)
+    .bind(tenant_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Return `running` tasks to `pending` when the agent never reported an outcome.
+///
+/// Without this, marking a task dispatched would strand it forever if the delivery was lost to a
+/// dropped socket or the agent died mid-run — trading a duplicate-execution bug for a
+/// silently-dropped-task bug. Deliberately generous (10 minutes): the longest detection caps at
+/// 90s, so anything older than this is not merely slow.
+pub async fn reclaim_stale_dispatched_tasks(
+    pool: &PgPool,
+    tenant_id: i64,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
+    let r = sqlx::query(
+        r#"UPDATE endpoint_agent_tasks
+              SET status = 'pending', started_at = NULL
+            WHERE tenant_id = $1
+              AND status = 'running'
+              AND started_at < now() - interval '10 minutes'
+              AND expires_at > now()"#,
+    )
+    .bind(tenant_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected())
+}
+
 pub async fn push_pending_tasks_to_online(
     pool: &PgPool,
     registry: &Arc<AgentRegistry>,
@@ -686,8 +739,32 @@ pub async fn push_pending_tasks_to_online(
         }
         if let Ok(pending) = pending_tasks_for_client(pool, tenant_id, client_id).await {
             for task in pending {
+                // Capture the id before the frame is moved into send().
+                let task_uuid = match &task {
+                    ServerToAgent::Task { task_id, .. } => task_id.parse::<Uuid>().ok(),
+                    _ => None,
+                };
                 if registry.send(&uuid, task).await.is_ok() {
                     pushed += 1;
+                    // Flip to `running` so this tick's delivery is the LAST one. The schema
+                    // defined this state and nothing ever set it, so a task stayed `pending`
+                    // until the agent reported back — and this pusher re-sent it every 5
+                    // seconds, to every online agent of the client. A 30s detection was
+                    // therefore delivered ~6 times and ran ~6 times concurrently on the same
+                    // host, each run persisting duplicate findings and, for chronos,
+                    // independently SIGSTOPping a live process.
+                    //
+                    // reclaim_stale_dispatched_tasks below returns a task to `pending` if the
+                    // agent never reports, so a delivery lost to a dropped socket is still
+                    // retried — just not six times a minute.
+                    if let Some(tu) = task_uuid {
+                        if let Err(e) = mark_task_dispatched(pool, tenant_id, &tu).await {
+                            tracing::warn!(
+                                target: "agents", task_uuid = %tu, error = %e,
+                                "could not mark task dispatched; it may be re-pushed"
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -701,21 +778,120 @@ pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
-            let Ok(rows) = sqlx::query_scalar::<_, i64>(
-                "SELECT DISTINCT tenant_id FROM endpoint_agent_tasks WHERE status = 'pending' AND expires_at > now() LIMIT 200",
-            )
-            .fetch_all(pool.as_ref())
-            .await
-            else {
-                continue;
+            // Enumerate tenants through the cross-tenant helper, NOT by scanning
+            // endpoint_agent_tasks. That table is tenant-scoped RLS, and this runs on the app
+            // pool, so an unscoped `SELECT DISTINCT tenant_id` returns whatever the connection
+            // happens to be scoped to — and nothing at all once the tenant GUC is correctly
+            // unset. The old query silently found tenants only because of a role-level GUC
+            // default; with that removed it would have returned zero rows and this pusher would
+            // have quietly stopped delivering every agent task, with no error anywhere.
+            let tenants = match weissman_db::active_tenant_ids(pool.as_ref()).await {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "agents", error = %e,
+                        "tenant enumeration failed; skipping this task-push tick"
+                    );
+                    continue;
+                }
             };
-            for tid in rows {
+            for tid in tenants {
+                // Hand back any task an agent was sent but never reported on, before pushing.
+                if let Err(e) = reclaim_stale_dispatched_tasks(pool.as_ref(), tid).await {
+                    tracing::warn!(
+                        target: "agents", tenant_id = tid, error = %e,
+                        "stale dispatched-task reclaim failed"
+                    );
+                }
                 let _ = push_pending_tasks_to_online(pool.as_ref(), &registry, tid).await;
             }
         }
     });
 }
 
+/// SHA-256 hex of an agent renewal secret. The plaintext is never stored.
+#[must_use]
+pub fn hash_agent_secret(secret: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(secret.as_bytes());
+    format!("{:x}", h.finalize())
+}
+
+/// True when this agent has been revoked (or no longer exists).
+///
+/// Agent tokens are minted with `jti: None` and `http/serve.rs` only runs its jti-revocation and
+/// RBAC revalidation branch for `is_user_access_context`, so nothing on the request path ever
+/// consulted revocation for `typ: agent`. Revoking an agent in the UI therefore did nothing until
+/// its token expired on its own — up to WEISSMAN_AGENT_JWT_TTL_MINS (default 4 hours) during which
+/// a stolen or repudiated agent could keep injecting findings and closing tasks for the tenant.
+///
+/// Checked at WebSocket upgrade, which is the only long-lived agent entry point, and again on
+/// session renewal.
+pub async fn agent_is_revoked(pool: &PgPool, agent_uuid: Uuid) -> bool {
+    match sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
+        "SELECT revoked_at FROM endpoint_agents WHERE agent_uuid = $1",
+    )
+    .bind(agent_uuid)
+    .fetch_optional(pool)
+    .await
+    {
+        Ok(Some(revoked)) => revoked.is_some(),
+        // Unknown agent: treat as revoked. An id with no row cannot be a legitimate session.
+        Ok(None) => true,
+        // Fail OPEN on a database error, deliberately: a transient DB blip must not disconnect
+        // the entire agent fleet. The renewal path (which re-reads the row every few hours)
+        // still fails closed, so a revoked agent cannot persist indefinitely.
+        Err(e) => {
+            tracing::warn!(target: "agents", %agent_uuid, error = %e, "revocation check failed; allowing");
+            false
+        }
+    }
+}
+
+/// Mint a fresh session JWT for an already-enrolled agent that presents its renewal secret.
+///
+/// Enrollment tokens are single-use, and the session JWT expires (default 4h), so without this an
+/// agent had exactly one session in its entire lifetime and went dark permanently afterwards.
+/// Returns `None` when the agent is unknown, revoked, or the secret does not match.
+pub async fn renew_agent_session(
+    pool: &PgPool,
+    agent_uuid: Uuid,
+    secret: &str,
+) -> Result<Option<(i64, i64)>, sqlx::Error> {
+    // Unscoped read: the caller has not authenticated yet, so we do not know the tenant. The
+    // lookup is by uuid (unique) and is gated on the secret hash below.
+    let row: Option<(i64, i64, Option<String>, Option<chrono::DateTime<chrono::Utc>>)> =
+        sqlx::query_as(
+            "SELECT tenant_id, client_id, session_secret_hash, revoked_at \
+             FROM endpoint_agents WHERE agent_uuid = $1",
+        )
+        .bind(agent_uuid)
+        .fetch_optional(pool)
+        .await?;
+    let Some((tenant_id, client_id, stored, revoked_at)) = row else {
+        return Ok(None);
+    };
+    if revoked_at.is_some() {
+        return Ok(None);
+    }
+    let Some(stored) = stored.filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    // Constant-time: this is a bearer credential, so the comparison is attacker-timed. The helper
+    // takes the expected value as raw bytes and the presented one as hex.
+    let Ok(stored_bytes) = hex::decode(stored.trim()) else {
+        return Ok(None);
+    };
+    let presented_hex = hash_agent_secret(secret);
+    if !crate::security_hardening::constant_time_hmac_hex_eq(&stored_bytes, &presented_hex) {
+        return Ok(None);
+    }
+    Ok(Some((tenant_id, client_id)))
+}
+
+/// Register a newly enrolled agent. Returns its uuid and the plaintext renewal secret, which the
+/// caller must return to the agent exactly once — only its hash is persisted.
 pub async fn register_agent(
     pool: &PgPool,
     tenant_id: i64,
@@ -726,13 +902,15 @@ pub async fn register_agent(
     arch: &str,
     agent_version: &str,
     capabilities: &[String],
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<(Uuid, String), sqlx::Error> {
     let agent_uuid = Uuid::new_v4();
+    let secret = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let secret_hash = hash_agent_secret(&secret);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agents
-            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled')"#,
+            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status, session_secret_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled', $10)"#,
     )
     .bind(agent_uuid)
     .bind(tenant_id)
@@ -743,10 +921,11 @@ pub async fn register_agent(
     .bind(arch)
     .bind(agent_version)
     .bind(serde_json::to_value(capabilities).unwrap_or(serde_json::Value::Array(vec![])))
+    .bind(&secret_hash)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
-    Ok(agent_uuid)
+    Ok((agent_uuid, secret))
 }
 
 /// Update last-seen for an agent. We don't know the tenant from the agent_uuid alone, but the
@@ -889,14 +1068,11 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
-            let Ok(tenants) = sqlx::query_scalar::<_, i64>(
-                r#"SELECT DISTINCT tenant_id FROM endpoint_agents
-                    WHERE status = 'online'
-                      AND last_seen_at > now() - interval '3 minutes'
-                    LIMIT 200"#,
-            )
-            .fetch_all(pool.as_ref())
-            .await
+            // Same trap as the task pusher: `endpoint_agents` is tenant-scoped RLS and this runs
+            // on the app pool, so an unscoped DISTINCT returns only the connection's own tenant —
+            // and nothing once the tenant GUC is correctly unset. Enumerate tenants explicitly,
+            // then let the per-tenant query below do the online filtering.
+            let Ok(tenants) = weissman_db::active_tenant_ids(pool.as_ref()).await
             else {
                 continue;
             };
@@ -1226,6 +1402,7 @@ mod tests {
             tenant_id: 1,
             client_id: 2,
             session_jwt: "jwt".to_string(),
+            agent_secret: "renewal-secret".to_string(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
         };
@@ -1237,6 +1414,9 @@ mod tests {
         let back: EnrollResponse = serde_json::from_value(v).unwrap();
         assert_eq!(back.client_id, 2);
         assert_eq!(back.session_jwt, "jwt");
+        // The renewal secret must survive the round trip — the agent persists it, and losing it
+        // silently would put the agent back to going dark when its JWT expires.
+        assert_eq!(back.agent_secret, "renewal-secret");
         assert!(back.server_message.is_none());
     }
 }

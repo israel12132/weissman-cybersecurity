@@ -47,6 +47,55 @@ jobs:
       - name: Check fingerprint_engine ↔ weissman-db migrations
         run: bash scripts/check-migration-sync.sh
 
+  alert-rules:
+    name: Prometheus alert rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Nothing in CI validated the alert rules, which is how `WorkerDown` sat commented out next
+    # to a claim that a "stalled-jobs signal below" covered it — while no such rule existed. A
+    # four-day pipeline outage then passed unnoticed. promtool checks the rules parse, and the
+    # unit tests replay that outage's real metric values to prove the rules actually fire.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install promtool
+        run: |
+          set -euo pipefail
+          VERSION=3.1.0
+          curl -sSfL "https://github.com/prometheus/prometheus/releases/download/v${VERSION}/prometheus-${VERSION}.linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin "prometheus-${VERSION}.linux-amd64/promtool"
+          promtool --version
+
+      - name: Check rule syntax
+        # Exactly the glob Prometheus itself uses (`/etc/prometheus/alerts/*.yml`, non-recursive),
+        # so this fails on anything Prometheus would choke on. Unit-test files deliberately live
+        # in the tests/ subdirectory, outside that glob: a promtool test file is not a rule file,
+        # and leaving one beside the rules makes Prometheus reject the whole directory.
+        run: promtool check rules monitoring/alerts/*.yml
+
+      - name: Unit-test alert rules
+        working-directory: monitoring/alerts/tests
+        run: promtool test rules ./*.test.yml
+
+      - name: No real Alertmanager secret may be committed
+        # monitoring/secrets/* is gitignored, but these three files are already TRACKED as
+        # documented inert placeholders — and .gitignore does not apply to tracked files. So an
+        # operator following the README ("overwrite these at deploy time") would silently make a
+        # real Slack webhook or PagerDuty routing key committable. go_live_check.sh asserts the
+        # opposite direction (placeholders must be gone before go-live); this asserts that what
+        # is in git is still a placeholder.
+        run: |
+          set -euo pipefail
+          bad=0
+          for f in monitoring/secrets/slack_api_url monitoring/secrets/pagerduty_routing_key monitoring/secrets/watchdog_url; do
+            test -f "$f" || continue
+            if ! grep -qE '\.invalid([/:]|$)|^DISABLED$' "$f"; then
+              echo "::error file=$f::$f no longer looks like a placeholder — a real secret may be committed. Keep real values out of git (see monitoring/secrets/README.md)."
+              bad=1
+            fi
+          done
+          exit $bad
+
   launcher-contract:
     name: Production launcher contract
     runs-on: ubuntu-latest

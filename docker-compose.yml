@@ -9,8 +9,49 @@
 #
 # DB roles (from sqlx migrations): postgres superuser runs migrations; app uses weissman_app (RLS); auth uses weissman_auth (BYPASSRLS).
 
+# Bounded container logs. Docker's json-file driver defaults to *unbounded* growth and
+# /etc/docker/daemon.json does not exist on the deployment host, so nothing capped it. Postgres
+# alone wrote 101 MB in 9.5h (155,589 ERROR + 155,588 STATEMENT entries, each dumping the full
+# failing SQL) and on 2026-07-03 filled the disk outright:
+#   PANIC: could not write to file "pg_logical/replorigin_checkpoint.tmp": No space left on device
+# followed by 183 x FATAL and the checkpointer aborting — a whole-stack outage caused purely by
+# log growth. 50m x 3 caps each container at 150 MB.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   postgres:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    # cap_drop ALL alone makes this image exit at startup — its entrypoint chowns the data
+    # directory and gosu's to the postgres user, which needs these five. Verified by
+    # running the image both ways.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    logging: *default-logging
+    # 200 to match deploy/k8s/postgres-ha.yaml:26. The image default is 100 (97 usable after
+    # superuser_reserved_connections=3), but the two application processes are configured to open
+    # up to 152: backend 72 (app 48 + auth 12 + intel 12) and worker 80 (app 48 + auth 12 +
+    # intel 12 + control 8). Under the concurrent load the pools exist to survive, Postgres starts
+    # refusing with SQLSTATE 53300 and the worker's control-plane pool — built specifically so
+    # job-state writes can never be starved — is the one that cannot connect, so finished jobs
+    # never record their terminal state. Compose was the outlier here; k8s already had 200.
+    command:
+      - postgres
+      - -c
+      - max_connections=200
     # pgvector/pgvector:pg16 = official Postgres 16 with pgvector pre-installed.
     # Drop-in replacement for postgres:16; same data files, same env vars.
     # Required for: supreme_council_memory.embedding (vector(1536)) RAG retrieval.
@@ -19,6 +60,15 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-weissman}
+      # Page checksums, so silent corruption is detected instead of returned as data.
+      # The live cluster was initialised without them ("Data page checksums are
+      # disabled.") and has since survived 8 unclean crashes, 11 automatic recoveries,
+      # a checkpointer SIGABRT and a full-disk PANIC — every one of which can tear a
+      # page. With checksums off Postgres reads a torn page back without complaint.
+      #
+      # NOTE: initdb args apply only to a FRESH data directory. An existing cluster
+      # needs a dump/restore to gain checksums; until then run pg_amcheck periodically.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - weissman_pg:/var/lib/postgresql/data
     # No host port mapping: Postgres is reachable only on the internal compose network
@@ -41,6 +91,21 @@ services:
           memory: 512M
 
   redis:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    # Same as postgres: setpriv drops to the redis user at entrypoint and needs these.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    logging: *default-logging
     image: redis:7-alpine
     # No host port mapping: Redis is reachable only on the internal compose network
     # (backend/worker connect via redis://redis:6379). Debug locally with
@@ -62,6 +127,14 @@ services:
           memory: 64M
 
   backend:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
@@ -124,6 +197,18 @@ services:
 
   # Async jobs (scan pipelines, engines off the HTTP request thread). Same image as backend.
   worker:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
+    # Must exceed WEISSMAN_WORKER_DRAIN_SECS (25s). Docker's default is 10s, which
+    # would SIGKILL the worker mid-drain and make the drain pointless — in-flight
+    # scans would still be killed mid-write, just after a longer pause.
+    stop_grace_period: 40s
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
@@ -145,8 +230,21 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # Check the process is alive by verifying /proc/1/comm matches the binary name.
-      test: ["CMD-SHELL", "cat /proc/1/comm | grep -q weissman-worker"]
+      # Liveness = "the dequeue path works", not "the process exists".
+      #
+      # This used to be `cat /proc/1/comm | grep -q weissman-worker`, which only asked whether the
+      # binary was running. Between 2026-08-06 and 2026-08-10 the worker was running and failing
+      # every single claim with `invalid input syntax for type bigint: ""`; that check reported
+      # healthy for the entire four days.
+      #
+      # The worker now writes /tmp/weissman-worker-alive after each dequeue round-trip that
+      # reached the database (an empty queue counts — that is a healthy steady state; a failed
+      # claim does not). This asserts the file was modified within the last 2 minutes, which is
+      # ~160 idle poll cycles of headroom at POLL_IDLE_MS=750, or 60 error-backoff cycles.
+      # `$$` escapes compose's own interpolation so the shell sees a single `$`.
+      test:
+        - CMD-SHELL
+        - test -n "$$(find /tmp/weissman-worker-alive -mmin -2 2>/dev/null)"
       interval: 30s
       timeout: 10s
       retries: 3
@@ -161,16 +259,41 @@ services:
           memory: 512M
 
   gateway:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     build:
       context: .
       dockerfile: deploy/frontend.Dockerfile
+    # Without a tag, compose names the built image after the project directory, so it cannot be
+    # pulled, promoted between environments, or Trivy-scanned the way weissman-backend:stable is.
+    image: weissman-gateway:stable
     ports:
-      - "80:8080"
+      # Bound to loopback by DEFAULT because this listener is plain HTTP. There is no TLS
+      # anywhere in the stack — no 443 listener, no redirect, no terminator container — so
+      # publishing on 0.0.0.0 put the Command Center login, the admin password and the issued
+      # JWT on the wire in cleartext for anyone on the host's LAN or any on-path device. For a
+      # security product that is not an acceptable default.
+      #
+      # To expose it, put a TLS terminator in front and point it at 127.0.0.1:80, or set
+      # WEISSMAN_GATEWAY_BIND=0.0.0.0 to consciously accept cleartext on the network.
+      - "${WEISSMAN_GATEWAY_BIND:-127.0.0.1}:${WEISSMAN_GATEWAY_PORT:-80}:8080"
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/command-center/"]
+      # Exercise the proxy path, not just the filesystem. The previous check fetched
+      # /command-center/ — a static file nginx serves from its own image — so it passed
+      # whenever nginx was alive, which is the one thing that was never in doubt. It stayed
+      # green with the backend unreachable, and "gateway healthy" told an operator nothing
+      # about whether the site actually worked. /api/health proxies to weissman_backend, so
+      # this now fails when the upstream is down.
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -189,6 +312,14 @@ services:
   #   docker compose --profile monitoring up -d
   # Prometheus scrapes /metrics from the backend service (port 9090 internal).
   prometheus:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: prom/prometheus:latest
     profiles: [monitoring]
     environment:
@@ -199,6 +330,10 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alerts:/etc/prometheus/alerts:ro
       - ./monitoring/prometheus-web.generated.yml:/etc/prometheus/web.yml:ro
+      # Plaintext credential for Prometheus's own self-scrape: --web.config.file gates
+      # /metrics too, so without this the self-scrape 401s (it did, for 30 days straight).
+      # Generated by scripts/sync_monitoring_admin.sh; gitignored.
+      - ./monitoring/prometheus-scrape-password.generated:/etc/prometheus/scrape-password:ro
       - weissman_prometheus:/prometheus
     entrypoint:
       - /bin/sh
@@ -242,11 +377,25 @@ services:
           memory: 512M
 
   grafana:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: grafana/grafana:latest
     profiles: [monitoring]
     environment:
       GF_SECURITY_ADMIN_USER: ${WEISSMAN_ADMIN_EMAIL:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${WEISSMAN_ADMIN_PASSWORD:-weissman-grafana-dev}}
+      # Dev default is a distinct literal, never WEISSMAN_ADMIN_PASSWORD — see
+      # docker-compose.prod.yml for why the two must not be the same credential.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-weissman-grafana-dev}
+      # Consumed by monitoring/grafana/provisioning/datasources/prometheus.yml. Without
+      # them the datasource is provisioned with no credentials and every panel 401s.
+      MONITORING_BASIC_AUTH_USER: ${MONITORING_BASIC_AUTH_USER:-weissman-monitoring}
+      MONITORING_BASIC_AUTH_PASSWORD: ${MONITORING_BASIC_AUTH_PASSWORD:-}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: http://localhost:3000
     # Loopback only, matching the advertised URL. Grafana has its own login, but keeping
@@ -268,6 +417,14 @@ services:
           memory: 256M
 
   alertmanager:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: prom/alertmanager:latest
     profiles: [monitoring]
     volumes:
@@ -281,8 +438,14 @@ services:
       # ${SLACK_WEBHOOK_URL} placeholders with no envsubst step, so it crash-looped on boot.
       # Committed placeholders in monitoring/secrets/ let the stack start (see its README).
       - ./monitoring/secrets:/etc/alertmanager/secrets:ro
+      - ./monitoring/alertmanager-web.generated.yml:/etc/alertmanager/web.yml:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
+      # Without this the API is wide open to every container on the compose network:
+      # GET /api/v2/alerts and POST /api/v2/silences both returned 200 unauthenticated,
+      # so any container — including the backend, which runs attack-engine code and ships
+      # an SSRF engine — could silence the entire alerting pipeline untraceably.
+      - '--web.config.file=/etc/alertmanager/web.yml'
     expose:
       - "9093"
     restart: unless-stopped
@@ -294,6 +457,28 @@ services:
 
   # --- Exporters (host / redis / postgres metrics + synthetic HTTP probes) ---
   node-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9100/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: prom/node-exporter:v1.8.2
     profiles: [monitoring]
     pid: host
@@ -306,6 +491,27 @@ services:
     restart: unless-stopped
 
   redis-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    # No healthcheck: oliver006/redis_exporter is a scratch image with no shell and no wget, so
+    # any CMD-SHELL probe would fail permanently and report the container unhealthy forever —
+    # worse than having none. Verified by running the image. Its liveness is covered by
+    # ExporterDown (up{job="redis"} == 0) in monitoring/alerts/infra-alerts.yml, which is the
+    # signal that actually matters: whether Prometheus can scrape it.
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: oliver006/redis_exporter:v1.66.0
     profiles: [monitoring]
     environment:
@@ -317,6 +523,28 @@ services:
     restart: unless-stopped
 
   postgres-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9187/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
     profiles: [monitoring]
     environment:
@@ -328,6 +556,28 @@ services:
     restart: unless-stopped
 
   blackbox-exporter:
+    # The four exporters ran with no memory limit, no CPU limit and no
+    # healthcheck: a leaking or wedged exporter could consume the host and
+    # would still report as running, while its metrics silently went stale.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9115/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: prom/blackbox-exporter:v0.25.0
     profiles: [monitoring]
     volumes:
@@ -339,6 +589,14 @@ services:
   # --- Distributed tracing backend (Grafana Tempo, OTLP receiver). To export spans, set
   #     WEISSMAN_OTLP_ENDPOINT=http://tempo:4318/v1/traces on backend + worker. ---
   tempo:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: grafana/tempo:2.6.1
     profiles: [tracing]
     command: ["-config.file=/etc/tempo/tempo.yml"]
@@ -356,3 +614,14 @@ volumes:
   weissman_grafana:
   weissman_alertmanager:
   weissman_tempo:
+
+# Pin the bridge subnet. deploy/nginx-gateway.conf trusts exactly 172.19.0.1/32 as its
+# X-Forwarded-For proxy (the address a same-host reverse proxy arrives from); if Docker were
+# free to auto-assign a different subnet on network re-create, that entry would silently stop
+# matching and real_ip resolution would break — or, worse, start matching something else.
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.0/16

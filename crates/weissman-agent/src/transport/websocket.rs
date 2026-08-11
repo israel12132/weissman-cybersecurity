@@ -20,12 +20,28 @@ pub async fn run_session(
     enrollment: &Enrollment,
     heartbeat_secs: u64,
 ) -> anyhow::Result<()> {
-    let ws_url = build_ws_url(server_url, &enrollment.ws_path, &enrollment.session_jwt)?;
+    let ws_url = build_ws_url(server_url, &enrollment.ws_path)?;
     info!(target: "agent", "connecting to {}", scrub_token(&ws_url));
 
     // tokio-tungstenite 0.24 dropped the `url` integration (url::Url no longer
     // implements IntoClientRequest); pass the URL as &str.
-    let (ws_stream, _resp) = tokio_tungstenite::connect_async(ws_url.as_str()).await?;
+    // Bearer in a HEADER, not the query string. `?token=<jwt>` put a live credential into every
+    // reverse-proxy access log, Referer chain and log bundle — deploy/nginx-gateway.conf proxies
+    // /ws/ with default access logging, so the token was written to disk on every handshake.
+    // Anyone who can read those logs could connect as this agent for the remainder of the token's
+    // life and inject findings or close tasks for the tenant. The server already documents the
+    // header as the preferred form ("prefer `Authorization: Bearer <session_jwt>`").
+    let mut request = tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+        ws_url.as_str(),
+    )?;
+    request.headers_mut().insert(
+        "Authorization",
+        tokio_tungstenite::tungstenite::http::HeaderValue::from_str(&format!(
+            "Bearer {}",
+            enrollment.session_jwt
+        ))?,
+    );
+    let (ws_stream, _resp) = tokio_tungstenite::connect_async(request).await?;
     let (mut sink, mut stream) = ws_stream.split();
 
     // Outbound channel: detections + heartbeat → WebSocket sink.
@@ -53,6 +69,10 @@ pub async fn run_session(
     // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
     let completed_tasks = Arc::new(AtomicU64::new(0));
+    // Per-session, so a reconnect deliberately re-accepts tasks the server still considers
+    // pending — that is the replay path working as intended. Within one session it stops the
+    // 5s re-push from running the same detection concurrently with itself.
+    let seen_tasks = Arc::new(tokio::sync::Mutex::new(SeenTasks::default()));
     let max_parallel = Arc::new(AtomicU32::new(4));
     let started_at = Instant::now();
 
@@ -122,6 +142,7 @@ pub async fn run_session(
                         &running_tasks,
                         &completed_tasks,
                         &max_parallel,
+                        &seen_tasks,
                         enrollment.agent_id.clone(),
                     )
                     .await;
@@ -150,12 +171,47 @@ pub async fn run_session(
     read_result
 }
 
+/// Task ids this session has already accepted, so a re-pushed task is not run twice.
+///
+/// The server re-sends every still-`pending` task to every online agent on a 5-second tick, and
+/// only marks a task done when the agent reports back — so a 30s detection was delivered ~6 times
+/// and ran ~6 times CONCURRENTLY on the same host, each run persisting duplicate findings and,
+/// for `chronos`, independently issuing an autonomous SIGSTOP against a live process.
+///
+/// Bounded so a long-lived session cannot grow it without limit: oldest ids are evicted first.
+/// Eviction can only ever allow a re-run of a task last seen thousands of tasks ago, which is
+/// indistinguishable from a legitimate re-dispatch.
+#[derive(Default)]
+pub(crate) struct SeenTasks {
+    order: std::collections::VecDeque<String>,
+    set: std::collections::HashSet<String>,
+}
+
+impl SeenTasks {
+    const CAPACITY: usize = 4096;
+
+    /// Record `id`; returns true if it is new to this session.
+    pub(crate) fn insert_new(&mut self, id: &str) -> bool {
+        if !self.set.insert(id.to_string()) {
+            return false;
+        }
+        self.order.push_back(id.to_string());
+        if self.order.len() > Self::CAPACITY {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+        true
+    }
+}
+
 async fn handle_text(
     text: &str,
     out_tx: &mpsc::Sender<AgentToServer>,
     running: &Arc<AtomicU32>,
     completed: &Arc<AtomicU64>,
     max_parallel: &Arc<AtomicU32>,
+    seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
@@ -181,6 +237,13 @@ async fn handle_text(
             target,
             params,
         } => {
+            if !seen.lock().await.insert_new(&task_id) {
+                debug!(
+                    target: "agent", %task_id,
+                    "duplicate task push ignored (already accepted this session)"
+                );
+                return;
+            }
             let out_tx = out_tx.clone();
             let running_c = Arc::clone(running);
             let completed_c = Arc::clone(completed);
@@ -276,7 +339,7 @@ async fn run_task(
     completed.fetch_add(1, Ordering::SeqCst);
 }
 
-fn build_ws_url(server_url: &str, path: &str, token: &str) -> anyhow::Result<Url> {
+fn build_ws_url(server_url: &str, path: &str) -> anyhow::Result<Url> {
     let base = server_url.trim_end_matches('/');
     // Promote http→ws / https→wss.
     let ws_base = if let Some(r) = base.strip_prefix("https://") {
@@ -291,24 +354,10 @@ fn build_ws_url(server_url: &str, path: &str, token: &str) -> anyhow::Result<Url
     } else {
         format!("/{}", path)
     };
-    // The server's token extractor (fingerprint_engine http serve) reads the query key `token`,
-    // not `access_token`; any other key yields 401 on every /ws/agent handshake.
-    let full = format!("{}{}?token={}", ws_base, p, urlencoding(token));
+    // No credential in the URL — it travels in the Authorization header (see run_session).
+    let full = format!("{}{}", ws_base, p);
     Ok(Url::parse(&full)?)
 }
-
-fn urlencoding(s: &str) -> String {
-    // Minimal percent-encode for the token. Tokens are URL-safe base64 already, but `=` is
-    // not safe inside a query string in some HTTP parsers, so escape it.
-    s.chars()
-        .map(|c| match c {
-            '=' => "%3D".to_string(),
-            '&' | '#' | '?' | ' ' => format!("%{:02X}", c as u32),
-            _ => c.to_string(),
-        })
-        .collect()
-}
-
 fn scrub_token(url: &Url) -> String {
     let mut clean = url.clone();
     clean.set_query(Some("access_token=[redacted]"));

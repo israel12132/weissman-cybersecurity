@@ -11,7 +11,12 @@ global:
 # Alerting configuration
 alerting:
   alertmanagers:
-    - static_configs:
+    # Alertmanager now requires basic auth (--web.config.file), so Prometheus must present it or
+    # every alert notification would silently 401 on push.
+    - basic_auth:
+        username: weissman-monitoring
+        password_file: /etc/prometheus/scrape-password
+      static_configs:
         - targets: ['alertmanager:9093']
 
 # Load alert rules
@@ -64,7 +69,31 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # Prometheus self-monitoring
+  # Prometheus self-monitoring.
+  #
+  # --web.config.file gates every endpoint including /metrics, so without basic_auth here
+  # Prometheus cannot scrape itself: `up{job="prometheus"}` was 0 for 23,699/23,699 samples —
+  # 100% down across the entire 30-day retention window, and no rule covered it. That means no
+  # rule-evaluation failure counts, no notification-queue depth, no TSDB health and no
+  # config-reload status, for the whole life of the deployment.
   - job_name: 'prometheus'
+    basic_auth:
+      username: weissman-monitoring
+      password_file: /etc/prometheus/scrape-password
     static_configs:
       - targets: ['localhost:9090']
+
+  # Alertmanager self-monitoring.
+  #
+  # Alertmanager was configured as an alerting *destination* but was never a scrape *target*, so
+  # `alertmanager_notifications_failed_total` — which had been recording every undelivered
+  # notification all along — was never collected. Combined with receivers pointing at RFC-2606
+  # `.invalid` placeholder hosts, the delivery pipeline could be entirely dead with no signal
+  # anywhere: alerts fired, went nowhere, and nothing noticed. The AlertDeliveryFailing and
+  # AlertingPipelineUnverified rules in application-alerts.yml consume this job.
+  - job_name: 'alertmanager'
+    basic_auth:
+      username: weissman-monitoring
+      password_file: /etc/prometheus/scrape-password
+    static_configs:
+      - targets: ['alertmanager:9093']

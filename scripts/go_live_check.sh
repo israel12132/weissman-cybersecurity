@@ -22,6 +22,30 @@ note() { echo "WARN: $1"; warn=$((warn + 1)); }
 
 section() { echo ""; echo "== $1 =="; }
 
+section "Alert delivery"
+# A go-live gate that never checks whether an alert can reach a human is not a go-live gate.
+# This stack shipped with all three Alertmanager receivers — including the Watchdog
+# dead-man's-switch, whose entire job is to detect a broken alert pipeline — pointing at RFC-2606
+# `.invalid` placeholder hosts. Alerts fired, went nowhere, and nothing noticed for four days.
+# Placeholders are the correct default for an unconfigured stack (monitoring/secrets/README.md);
+# they are not acceptable at go-live, so these fail rather than warn.
+for secret in slack_api_url pagerduty_routing_key watchdog_url; do
+  f="monitoring/secrets/${secret}"
+  if [[ ! -s "$f" ]]; then
+    bad "alert secret ${secret} is missing or empty"
+  elif grep -qE '\.invalid([/:]|$)|^DISABLED$' "$f"; then
+    bad "alert secret ${secret} is still an inert placeholder — no alert can reach a human"
+  else
+    ok "alert secret ${secret} configured"
+  fi
+done
+grep -q "job_name: 'alertmanager'" monitoring/prometheus.yml \
+  && ok "alertmanager is a scrape target (delivery failures are observable)" \
+  || bad "alertmanager is not scraped — notification failures cannot be detected"
+grep -q "alert: AlertDeliveryFailing" monitoring/alerts/application-alerts.yml \
+  && ok "AlertDeliveryFailing rule present" \
+  || bad "no rule watches alertmanager_notifications_failed_total"
+
 section "Delivery prep"
 ./scripts/prepare_company_delivery.sh >/dev/null && ok "prepare_company_delivery" || bad "prepare_company_delivery"
 

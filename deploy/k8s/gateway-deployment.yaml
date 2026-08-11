@@ -17,17 +17,37 @@ spec:
         - name: nginx
           image: your-registry/weissman-gateway:latest
           imagePullPolicy: IfNotPresent
-          # Least-privilege: no setuid/setgid escalation; drop every Linux
-          # capability and re-add only NET_BIND_SERVICE so nginx can still bind
-          # port 80. seccomp RuntimeDefault filters the syscall surface.
+          # Least-privilege: no setuid/setgid escalation, every Linux capability dropped.
+          # NET_BIND_SERVICE used to be re-added "so nginx can still bind port 80", but the
+          # image is nginxinc/nginx-unprivileged running as UID 101 and listening on 8080
+          # (deploy/frontend.Dockerfile:60,65,66; deploy/nginx-gateway.conf listen 8080), so
+          # nothing ever bound a privileged port and the capability was pure extra surface.
+          # The manifests said 80 on both the containerPort and the Service targetPort, so
+          # kube-proxy forwarded to podIP:80 where nothing listened — every request 502s, and
+          # with no readinessProbe both replicas still report Ready.
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop:
                 - ALL
-              add:
-                - NET_BIND_SERVICE
             seccompProfile:
               type: RuntimeDefault
+          # Without probes both replicas report Ready the moment the container starts, so a
+          # gateway that cannot serve — as when the manifests targeted port 80 while nginx
+          # listened on 8080 — still reports a successful rollout while 100% of traffic 502s.
+          readinessProbe:
+            httpGet:
+              path: /command-center/
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /command-center/
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
           ports:
-            - containerPort: 80
+            - containerPort: 8080

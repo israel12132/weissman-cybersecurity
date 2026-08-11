@@ -62,7 +62,18 @@ fi
 mv "${BIN_PATH}.tmp" "${BIN_PATH}"
 chmod 0755 "${BIN_PATH}"
 
-# Verify it can enroll before installing the service.
+# Enroll ONCE, here, and persist the identity for the service to reuse.
+#
+# This step used to be a throwaway "verify it can enroll" check: it consumed the strictly
+# single-use enrollment token and then wrote the SAME token into agent.env as the service
+# credential. With Restart=always, systemd would start the agent, the agent would re-enroll with
+# the now-consumed token, get HTTP 401 and exit — every 5 seconds, forever, while the installer
+# printed "installed and started" and "online". No agent has ever successfully enrolled.
+#
+# The agent now writes ${INSTALL_DIR}/agent.state (0600) containing its agent id and long-lived
+# renewal secret, and prefers that over the token on every subsequent start. The token is a
+# bootstrap, used exactly once, which is what "single-use" was always supposed to mean.
+export WEISSMAN_AGENT_STATE_FILE="${INSTALL_DIR}/agent.state"
 ENROLL_OUT=$("${BIN_PATH}" \
     --server-url "${WEISSMAN_SERVER}" \
     --enrollment-token "${WEISSMAN_TOKEN}" \
@@ -71,11 +82,22 @@ if [ -z "${ENROLL_OUT}" ]; then
     echo "[weissman-agent] enrollment failed (check token + WEISSMAN_SERVER)" >&2
     exit 3
 fi
+if [ ! -s "${WEISSMAN_AGENT_STATE_FILE}" ]; then
+    echo "[weissman-agent] enrolled but no state file was written to ${WEISSMAN_AGENT_STATE_FILE};" >&2
+    echo "[weissman-agent] the service would re-enroll with a consumed token and crash-loop. Aborting." >&2
+    exit 4
+fi
+chmod 600 "${WEISSMAN_AGENT_STATE_FILE}" 2>/dev/null || true
 
 ENV_FILE="${INSTALL_DIR}/agent.env"
 umask 077
+# The token is retained only as a fallback for the case where agent.state is lost; the agent
+# prefers the state file and will not touch the token while that exists. WEISSMAN_AGENT_STATE_FILE
+# must be present here or the service would look for state next to the binary and, not finding it,
+# fall back to the consumed token.
 cat > "${ENV_FILE}" <<EOF
 WEISSMAN_SERVER_URL=${WEISSMAN_SERVER}
+WEISSMAN_AGENT_STATE_FILE=${INSTALL_DIR}/agent.state
 WEISSMAN_ENROLLMENT_TOKEN=${WEISSMAN_TOKEN}
 RUST_LOG=info
 EOF
@@ -97,6 +119,11 @@ Restart=always
 RestartSec=5s
 NoNewPrivileges=true
 ProtectSystem=strict
+# ProtectSystem=strict mounts the entire filesystem read-only, so without this the agent cannot
+# write agent.state. The installer pre-writes it, but if it is ever lost the agent must be able to
+# re-enroll and persist — otherwise it would consume a fresh token on every single start and
+# crash-loop again, which is the failure this whole change removes.
+ReadWritePaths=${INSTALL_DIR}
 ProtectHome=true
 PrivateTmp=true
 

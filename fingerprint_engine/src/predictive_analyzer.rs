@@ -112,12 +112,15 @@ async fn run_security_events_llm_cycle(
     pool: &PgPool,
     telemetry: &Sender<String>,
 ) -> Result<(), String> {
-    let tid: i64 =
-        sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id LIMIT 1")
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .unwrap_or(1);
+    // `tenants` is FORCE RLS: reading it straight off this pool returns only the connection's own
+    // tenant, and nothing once the tenant GUC is unset (the correct default). The old
+    // `.unwrap_or(1)` then silently pinned every cycle to tenant 1 regardless of the deployment.
+    let tid: i64 = weissman_db::active_tenant_ids(pool)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "no active tenant".to_string())?;
     let mut tx = crate::db::begin_tenant_tx(pool, tid)
         .await
         .map_err(|e| e.to_string())?;

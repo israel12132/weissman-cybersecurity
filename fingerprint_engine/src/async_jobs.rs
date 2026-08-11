@@ -55,7 +55,44 @@ pub async fn enqueue(
                 // Atomic: attach envelope AND release the hold (run_after=NULL)
                 // so the worker only ever sees this job claimable WITH its
                 // envelope present.
-                let _ = weissman_db::job_queue::release_hold(pool, id, enriched).await;
+                //
+                // This result used to be discarded with `let _ =`, and that was the whole
+                // 2026-08 data-loss incident. release_hold runs through begin_worker_tx, which
+                // sets the tenant GUC to '' and therefore tripped the eager-`''::bigint` RLS
+                // cast — so it failed 100% of the time while enqueue() still returned Ok(id)
+                // and logged "enqueued". Every job entered the queue envelope-less and was
+                // dead-lettered on claim. A failure here must be as loud and as terminal for
+                // this attempt as the sibling Ok(None) / Err arms below.
+                let released = weissman_db::job_queue::release_hold(pool, id, enriched).await;
+                let attach_error = match released {
+                    Ok(1) => None,
+                    // 0 rows: the row is no longer `pending` with a hold — already failed,
+                    // claimed, or finalized elsewhere. Not retryable from here, but never silent.
+                    Ok(n) => Some(format!(
+                        "envelope attach matched {n} rows (expected 1); job no longer held"
+                    )),
+                    Err(e) => Some(format!("envelope attach failed: {e}")),
+                };
+                if let Some(reason) = attach_error {
+                    tracing::error!(
+                        target: "async_jobs",
+                        job_id = %id, tenant_id, kind, reason = %reason,
+                        "zero-trust envelope could not be attached — failing the job rather than \
+                         letting the hold lapse into an envelope-less claim"
+                    );
+                    // Fail it here rather than leave a held row to become claimable when
+                    // run_after expires: an envelope-less claim is an irreversible dead-letter,
+                    // whereas `failed` is visible, counted, and recoverable.
+                    let _ = sqlx::query(
+                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2, \
+                         run_after = NULL, updated_at = now() WHERE id = $1",
+                    )
+                    .bind(id)
+                    .bind(&reason)
+                    .execute(pool)
+                    .await;
+                    return Err(sqlx::Error::Protocol(reason));
+                }
             }
             Ok(None) => {
                 if weissman_core::tls_policy::is_production_environment() {

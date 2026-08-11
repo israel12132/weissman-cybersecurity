@@ -6,7 +6,7 @@ groups:
     interval: 30s
     rules:
       - alert: ExporterDown
-        expr: up{job=~"node|postgres|redis|blackbox-http"} == 0
+        expr: up{job=~"node|postgres|redis|blackbox-http|prometheus|alertmanager"} == 0
         for: 5m
         labels:
           severity: warning

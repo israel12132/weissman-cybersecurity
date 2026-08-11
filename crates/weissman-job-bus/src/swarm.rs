@@ -50,6 +50,13 @@ pub struct WorkerSwarm {
     redis: redis::aio::ConnectionManager,
     worker_id: String,
     stop: Arc<AtomicBool>,
+    /// In-flight job count published in the heartbeat.
+    ///
+    /// This was hardcoded to `0` in the payload, so the only non-identity field the "gossip"
+    /// stream carried was a constant — it advertised fleet load telemetry and shipped a fixed
+    /// lie. The worker now keeps it current, so a consumer of the stream has something true to
+    /// read whenever one is written.
+    jobs_active: Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl WorkerSwarm {
@@ -58,7 +65,13 @@ impl WorkerSwarm {
             redis,
             worker_id,
             stop: Arc::new(AtomicBool::new(false)),
+            jobs_active: Arc::new(std::sync::atomic::AtomicU32::new(0)),
         }
+    }
+
+    /// Publish the current in-flight job count in subsequent heartbeats.
+    pub fn set_jobs_active(&self, n: u32) {
+        self.jobs_active.store(n, Ordering::Relaxed);
     }
 
     /// Refresh liveness key every 400ms (2s TTL) — death detected within ~2s, not 30min.
@@ -66,6 +79,7 @@ impl WorkerSwarm {
         let worker_id = self.worker_id.clone();
         let redis = self.redis.clone();
         let stop = self.stop.clone();
+        let jobs_active = self.jobs_active.clone();
         tokio::spawn(async move {
             let key = format!("{}{}", SWARM_REGISTRY_PREFIX, worker_id);
             let mut interval = tokio::time::interval(Duration::from_millis(LIVENESS_REFRESH_MS));
@@ -76,7 +90,7 @@ impl WorkerSwarm {
                 let payload = serde_json::to_string(&SwarmMessage::Heartbeat {
                     worker_id: worker_id.clone(),
                     pid,
-                    jobs_active: 0,
+                    jobs_active: jobs_active.load(Ordering::Relaxed),
                 })
                 .unwrap_or_default();
                 let _: Result<(), _> = conn.set_ex(&key, &payload, LIVENESS_TTL_SECS).await;
@@ -125,20 +139,89 @@ impl WorkerSwarm {
 pub struct SwarmCoordinator {
     bus: Arc<JobBus>,
     redis: redis::aio::ConnectionManager,
+    /// Consecutive ticks each worker has been observed missing.
+    ///
+    /// The liveness key has a 2s TTL refreshed every 400ms, so a single >2s runtime stall — a GC
+    /// pause, a slow syscall, a brief Redis blip — makes a perfectly healthy worker look dead for
+    /// one tick. Acting on one observation meant every job that worker held (26 in a single 77ms
+    /// tick, live) was orphaned and re-dispatched while it was still running them. Requiring
+    /// several consecutive misses costs at most a couple of seconds of extra recovery latency and
+    /// removes the entire class of blip-triggered double execution.
+    missed: tokio::sync::Mutex<std::collections::HashMap<String, u32>>,
 }
 
 impl SwarmCoordinator {
+    /// Consecutive missed liveness observations before a worker is declared dead.
+    const MISSES_BEFORE_ORPHAN: u32 = 3;
+
     pub fn new(bus: Arc<JobBus>, redis: redis::aio::ConnectionManager) -> Self {
-        Self { bus, redis }
+        Self {
+            bus,
+            redis,
+            missed: tokio::sync::Mutex::new(std::collections::HashMap::new()),
+        }
     }
 
     pub fn spawn(self: Arc<Self>) {
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(800));
+            // A total, permanent outage of this subsystem used to be reported as a WARN — the
+            // same WARN, every 800 ms, forever. It ran for 27,001 consecutive failures in six
+            // hours without one tick ever succeeding, and nothing escalated: no ERROR, no metric,
+            // no health degradation. Sub-second orphan detection (the crate's headline guarantee)
+            // was dead from boot and the only trace was ~108,000 identical log lines a day.
+            //
+            // Two changes. Escalate on a run of failures, so "briefly flaky" and "has never
+            // worked" are not the same log line. And back off, so a permanently broken
+            // coordinator degrades to a trickle instead of drowning the log pipeline — which is
+            // itself what filled the disk on 2026-07-03.
+            const BASE_INTERVAL: Duration = Duration::from_millis(800);
+            const MAX_INTERVAL: Duration = Duration::from_secs(30);
+            const ESCALATE_AFTER: u32 = 5;
+
+            let mut consecutive_failures: u32 = 0;
+            let mut delay = BASE_INTERVAL;
             loop {
-                interval.tick().await;
-                if let Err(e) = self.tick().await {
-                    tracing::warn!(target: "job_bus_swarm", error = %e, "coordinator tick failed");
+                tokio::time::sleep(delay).await;
+                match self.tick().await {
+                    Ok(()) => {
+                        if consecutive_failures >= ESCALATE_AFTER {
+                            tracing::info!(
+                                target: "job_bus_swarm",
+                                after_failures = consecutive_failures,
+                                "coordinator recovered"
+                            );
+                        }
+                        consecutive_failures = 0;
+                        delay = BASE_INTERVAL;
+                    }
+                    Err(e) => {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        if consecutive_failures == ESCALATE_AFTER {
+                            tracing::error!(
+                                target: "job_bus_swarm",
+                                error = %e,
+                                consecutive_failures,
+                                "swarm coordinator is DOWN — orphan detection is not running; \
+                                 jobs from a crashed worker will only be recovered by the 300-420s \
+                                 stale-lock fallback, not sub-second"
+                            );
+                        } else if consecutive_failures < ESCALATE_AFTER {
+                            tracing::warn!(
+                                target: "job_bus_swarm", error = %e, consecutive_failures,
+                                "coordinator tick failed"
+                            );
+                        } else if consecutive_failures % 300 == 0 {
+                            // Still broken: one line every ~300 ticks so the condition stays
+                            // visible without reproducing the 108k-lines/day firehose.
+                            tracing::error!(
+                                target: "job_bus_swarm", error = %e, consecutive_failures,
+                                "swarm coordinator still down"
+                            );
+                        }
+                        // Exponential backoff, capped. Ticks are cheap but a hard-failing one is
+                        // pure cost.
+                        delay = (delay * 2).min(MAX_INTERVAL);
+                    }
                 }
             }
         });
@@ -161,6 +244,7 @@ impl SwarmCoordinator {
         .await?;
         tx.commit().await?;
 
+        let mut seen_workers: std::collections::HashSet<String> = std::collections::HashSet::new();
         for row in rows {
             // Handle each row independently: a failure on one job must not skip the rest of the pass
             // (head-of-line blocking would keep the same failing row wedging the tail every tick).
@@ -169,6 +253,7 @@ impl SwarmCoordinator {
                     (Ok(a), Ok(b), Ok(c)) => (a, b, c),
                     _ => continue,
                 };
+            seen_workers.insert(worker_id.clone());
             if worker_id.is_empty() {
                 continue;
             }
@@ -184,13 +269,30 @@ impl SwarmCoordinator {
                 }
             };
             if alive {
+                self.missed.lock().await.remove(&worker_id);
+                continue;
+            }
+            // Require several consecutive misses. One missed observation is not evidence of
+            // death — see the `missed` field.
+            let misses = {
+                let mut m = self.missed.lock().await;
+                let e = m.entry(worker_id.clone()).or_insert(0);
+                *e = e.saturating_add(1);
+                *e
+            };
+            if misses < Self::MISSES_BEFORE_ORPHAN {
+                tracing::debug!(
+                    target: "job_bus_swarm", worker_id = %worker_id, misses,
+                    "worker liveness missing; waiting for confirmation before orphaning"
+                );
                 continue;
             }
             tracing::warn!(
                 target: "job_bus_swarm",
                 %job_id,
                 worker_id = %worker_id,
-                "worker liveness expired — orphaning job instantly"
+                misses,
+                "worker liveness expired across consecutive ticks — orphaning job"
             );
             // Append the orphan events FIRST; only force-release the lease once the job has actually
             // been re-queued, so a failed projection never leaves a job lease-less AND un-orphaned
@@ -211,9 +313,20 @@ impl SwarmCoordinator {
                 tracing::warn!(target: "job_bus_swarm", %job_id, error = %e, "job_orphaned projection failed; retrying next tick");
                 continue;
             }
-            let _ = DistributedLease::force_release(&self.redis, job_id).await;
+            // Compare-and-delete against the worker we declared dead: never destroy a lease
+            // that has since been re-acquired.
+            let _ = DistributedLease::force_release_owned(&self.redis, job_id, &worker_id).await;
             self.publish_worker_down(&worker_id).await;
         }
+
+        // Drop miss counters for workers that hold no `running` rows any more. Without this the
+        // map keeps an entry for every worker id ever seen — including the dead ones whose jobs
+        // this tick just orphaned, which by definition never appear again — and grows for the
+        // life of the process.
+        self.missed
+            .lock()
+            .await
+            .retain(|w, _| seen_workers.contains(w));
         Ok(())
     }
 

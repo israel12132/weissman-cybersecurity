@@ -394,13 +394,59 @@ pub fn spawn_pool_metrics_loop(
             metrics::gauge!("weissman_db_pool_idle", "pool" => "intel")
                 .set(intel_pool.num_idle() as f64);
 
-            if let Ok(n) = sqlx::query_scalar::<_, i64>(
-                "SELECT count(*)::bigint FROM weissman_async_jobs WHERE status = 'pending'",
+            // Job-pipeline liveness. A depth gauge alone cannot tell "busy" from "wedged": during
+            // the 2026-08-06 outage `weissman_async_jobs_pending` climbed to 2111 and nothing
+            // looked at it, because a large backlog reads the same as heavy load. The two
+            // unambiguous signals are ages — how long the oldest pending job has waited, and how
+            // long since anything last completed. Both were four days.
+            if let Ok((pending, running, failed, dead, oldest_pending_age, last_completion_age)) =
+                sqlx::query_as::<_, (i64, i64, i64, i64, Option<f64>, Option<f64>)>(
+                    r#"SELECT
+                           count(*) FILTER (WHERE status = 'pending')::bigint,
+                           count(*) FILTER (WHERE status = 'running')::bigint,
+                           count(*) FILTER (WHERE status = 'failed')::bigint,
+                           count(*) FILTER (WHERE status = 'dead')::bigint,
+                           EXTRACT(EPOCH FROM (now() - min(created_at)
+                               FILTER (WHERE status = 'pending')))::float8,
+                           EXTRACT(EPOCH FROM (now() - max(updated_at)
+                               FILTER (WHERE status = 'completed')))::float8
+                       FROM weissman_async_jobs"#,
+                )
+                .fetch_one(app_pool.as_ref())
+                .await
+            {
+                metrics::gauge!("weissman_async_jobs_pending").set(pending as f64);
+                metrics::gauge!("weissman_async_jobs_by_status", "status" => "pending")
+                    .set(pending as f64);
+                metrics::gauge!("weissman_async_jobs_by_status", "status" => "running")
+                    .set(running as f64);
+                metrics::gauge!("weissman_async_jobs_by_status", "status" => "failed")
+                    .set(failed as f64);
+                metrics::gauge!("weissman_async_jobs_by_status", "status" => "dead")
+                    .set(dead as f64);
+                // 0 when nothing is queued: that is the healthy reading, and an absent series
+                // would make a `> threshold` rule silently vacuous rather than quiet-and-correct.
+                metrics::gauge!("weissman_async_jobs_oldest_pending_age_seconds")
+                    .set(oldest_pending_age.unwrap_or(0.0));
+                // -1 before the very first completion, so an alert can distinguish "never ran"
+                // from "just completed" (0) and decide for itself whether that should page.
+                metrics::gauge!("weissman_async_jobs_last_completion_age_seconds")
+                    .set(last_completion_age.unwrap_or(-1.0));
+            }
+
+            // Zero-trust claim rejections, derived from last_error because the worker has no
+            // /metrics endpoint of its own to count them. This is the signal that was absent
+            // while a single job-bus signing-key mismatch destroyed 3,266 tenant scans: the
+            // rejections were written to last_error on every row and nothing ever read them.
+            if let Ok(rejected) = sqlx::query_scalar::<_, i64>(
+                "SELECT count(*)::bigint FROM weissman_async_jobs \
+                 WHERE last_error LIKE '%zero-trust claim rejected%' \
+                    OR last_error LIKE '%envelope attach failed%'",
             )
             .fetch_one(app_pool.as_ref())
             .await
             {
-                metrics::gauge!("weissman_async_jobs_pending").set(n as f64);
+                metrics::gauge!("weissman_async_jobs_zero_trust_rejected").set(rejected as f64);
             }
 
             if let Ok(registered) =

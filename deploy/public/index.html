@@ -22,9 +22,12 @@
   <link rel="canonical" href="/" />
   <meta name="robots" content="index,follow" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <!-- Self-hosted. These were loaded from fonts.googleapis.com, which discloses every visitor's
+       IP and User-Agent to Google on page load, while privacy.html states "No third-party
+       analytics" and the subprocessor list never mentions Google. The Command Center already
+       self-hosts these exact files, so the third-party request bought nothing. Rajdhani is gone
+       with them: it was requested but only ever appeared as an unused fallback in one SVG. -->
+  <link rel="stylesheet" href="/fonts/fonts.css" />
 
   <style>
     *,*::before,*::after{box-sizing:border-box}
@@ -108,7 +111,7 @@
           </defs>
           <path d="M32 6 L56 14 V32 C56 46 32 58 32 58 C32 58 8 46 8 32 V14 Z" fill="url(#wg)" stroke="#0e7490" stroke-width="1.5"/>
           <path d="M18 28 L26 40 L34 22 L42 40 L50 24" stroke="#020617" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <text x="78" y="36" font-family="'Orbitron','Rajdhani',sans-serif" font-weight="700" font-size="22" letter-spacing="2.5" fill="url(#wt)">WEISSMAN</text>
+          <text x="78" y="36" font-family="'Orbitron',sans-serif" font-weight="700" font-size="22" letter-spacing="2.5" fill="url(#wt)">WEISSMAN</text>
           <text x="78" y="52" font-family="'JetBrains Mono',monospace" font-size="10" letter-spacing="3" fill="#22d3ee" opacity="0.85">CYBERSECURITY</text>
         </svg>
       </a>
@@ -116,7 +119,6 @@
         <a href="#engines">Engines</a>
         <a href="#how">How it works</a>
         <a href="/pricing.html">Pricing</a>
-        <a href="/api/docs/" target="_blank" rel="noopener">API</a>
         <a href="/status">Status</a>
         <a href="/command-center/login" class="cta-ghost">Sign in</a>
         <a href="/command-center/login" class="cta">Start free trial</a>
@@ -198,7 +200,6 @@
           <a href="#how">How it works</a>
           <a href="/pricing.html">Pricing</a>
           <a href="/command-center/login">Sign in</a>
-          <a href="/api/docs/" target="_blank" rel="noopener">API docs</a>
         </div>
         <div>
           <h4>Company</h4>

@@ -40,6 +40,10 @@ pub async fn connect_pools() -> Result<Pools, sqlx::Error> {
         ));
     }
     let auth = fingerprint_engine::db::connect_auth(auth_url.trim()).await?;
+    // app 48 + auth 12 + intel 12 (intel is opened in lib.rs). See
+    // warn_if_pool_budget_exceeds_server for why this warns at boot rather than only failing
+    // under the load the pools exist to survive.
+    weissman_db::warn_if_pool_budget_exceeds_server(&app, "backend", 48 + 12 + 12).await;
     Ok(Pools {
         app: Arc::new(app),
         auth: Arc::new(auth),

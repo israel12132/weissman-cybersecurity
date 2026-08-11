@@ -243,7 +243,13 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
+    // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
+    (Method::GET, "/status", RouteGate::Always),
     (Method::POST, "/api/agents/enroll", RouteGate::Always),
+    // Session renewal: unauthenticated for the same reason as /enroll — the agent presents
+    // its own long-lived secret, which IS the credential. Without a public renewal path an
+    // agent goes permanently dark when its 4h session JWT expires.
+    (Method::POST, "/api/agents/session", RouteGate::Always),
     // Prometheus scrape endpoint — authenticated by the metrics token (WEISSMAN_METRICS_TOKEN),
     // not a user JWT. The handler (observability::api_prometheus_metrics_endpoint) enforces the
     // token itself and fails closed (401) when the token is unset or < 32 chars, so deferring the
@@ -1525,13 +1531,41 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     if is_leader {
         let pool_audit = app_pool.clone();
         tokio::spawn(async move {
-            match crate::audit_log::backfill_missing_hashes(pool_audit.as_ref()).await {
-                Ok(n) if n > 0 => {
-                    tracing::info!(target: "security_audit", updated = n, "audit log hash chain backfill complete");
+            // Report the tamper-evidence boundary; never try to move it. `audit_logs` is
+            // append-only by design (audit_logs_block_update/_delete triggers, and weissman_app
+            // holds only INSERT+SELECT), so the former `backfill_missing_hashes` failed at every
+            // boot with `permission denied for table audit_logs` — and had it succeeded it would
+            // have back-dated digests over rows that were never actually protected, turning
+            // "predates the chain" into a false "chain-verified". See `unchained_legacy_summary`.
+            match crate::audit_log::unchained_legacy_summary(pool_audit.as_ref()).await {
+                Ok(rows) if rows.is_empty() => {}
+                Ok(rows) => {
+                    for (tenant_id, unchained, last_id) in rows {
+                        match crate::audit_log::unchained_rows_are_a_legacy_prefix(
+                            pool_audit.as_ref(),
+                            tenant_id,
+                        )
+                        .await
+                        {
+                            Ok(true) => tracing::info!(
+                                target: "security_audit", tenant_id, unchained, last_id,
+                                "audit rows predating the hash chain (legacy prefix, not covered by tamper-evidence)"
+                            ),
+                            // A NULL hash *after* the chain started is exactly what nulling a
+                            // digest to force the verifier to re-anchor would look like.
+                            Ok(false) => tracing::error!(
+                                target: "security_audit", tenant_id, unchained, last_id,
+                                "audit rows with a NULL hash AFTER the chain started — possible truncation or tampering"
+                            ),
+                            Err(e) => tracing::warn!(
+                                target: "security_audit", tenant_id, error = %e,
+                                "could not classify unchained audit rows"
+                            ),
+                        }
+                    }
                 }
-                Ok(_) => {}
                 Err(e) => {
-                    tracing::warn!(target: "security_audit", error = %e, "audit log hash chain backfill failed");
+                    tracing::warn!(target: "security_audit", error = %e, "audit chain boundary check failed");
                 }
             }
         });
@@ -1864,7 +1898,9 @@ mod public_route_guard_tests {
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
+            (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
+            (Method::POST, "/api/agents/session"),
         ];
         for (m, p) in expected {
             assert!(is_public_route(m, p), "expected {m} {p} to be public");

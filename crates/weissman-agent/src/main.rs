@@ -61,20 +61,64 @@ async fn main() -> anyhow::Result<()> {
         .or_else(|| hostname::get().ok().and_then(|h| h.into_string().ok()))
         .unwrap_or_else(|| format!("unknown-host-{}", std::process::id()));
 
-    let enrollment = transport::enrollment::enroll(
-        &cli.server_url,
-        &cli.enrollment_token,
-        cli.client_id,
-        &hostname,
-        whoami::devicename(),
-        std::env::consts::OS,
-        std::env::consts::ARCH,
-        env!("CARGO_PKG_VERSION"),
-    )
-    .await?;
+    // Identity is persisted, so an enrollment token is consumed at most once in this agent's
+    // lifetime. Previously `enroll()` ran unconditionally on every start against a strictly
+    // single-use token: the second start — systemd restart, reboot, crash, or the installer's own
+    // `Restart=always` — got HTTP 401 and the process exited. Nothing ever stayed up.
+    let state_path = transport::state::state_path();
+    let mut enrollment = match transport::state::load(&state_path) {
+        Some(saved) => {
+            info!(
+                target: "agent", agent_id = %saved.agent_id, state = %state_path.display(),
+                "resuming persisted identity"
+            );
+            let jwt = transport::enrollment::renew_session(
+                &cli.server_url,
+                &saved.agent_id,
+                &saved.agent_secret,
+                env!("CARGO_PKG_VERSION"),
+            )
+            .await?;
+            saved.into_enrollment(jwt)
+        }
+        None => {
+            let fresh = transport::enrollment::enroll(
+                &cli.server_url,
+                &cli.enrollment_token,
+                cli.client_id,
+                &hostname,
+                whoami::devicename(),
+                std::env::consts::OS,
+                std::env::consts::ARCH,
+                env!("CARGO_PKG_VERSION"),
+            )
+            .await?;
+            info!(target: "agent", agent_id = %fresh.agent_id, tenant_id = fresh.tenant_id, client_id = fresh.client_id, "enrollment ok");
+            // Persist BEFORE doing anything else: the token is now spent, so if we crash before
+            // writing this the agent can never come back.
+            if fresh.agent_secret.trim().is_empty() {
+                warn!(
+                    target: "agent",
+                    "server returned no agent_secret — this agent cannot renew its session and \
+                     will go dark when the JWT expires; upgrade the server"
+                );
+            } else if let Err(e) =
+                transport::state::save(&state_path, &transport::state::AgentState::from_enrollment(&fresh))
+            {
+                error!(
+                    target: "agent", path = %state_path.display(), error = %e,
+                    "could not persist agent identity — a restart will fail, because the \
+                     enrollment token has already been consumed"
+                );
+            }
+            fresh
+        }
+    };
 
-    info!(target: "agent", agent_id = %enrollment.agent_id, tenant_id = enrollment.tenant_id, client_id = enrollment.client_id, "enrollment ok");
     if cli.enroll_only {
+        // The installer runs this to validate the token. It used to throw the result away and
+        // hand the SAME (now consumed) token to the service, so every install crash-looped while
+        // reporting success. The enrollment is persisted above, so the service starts from state.
         println!("{}", serde_json::to_string_pretty(&enrollment)?);
         return Ok(());
     }
@@ -94,6 +138,28 @@ async fn main() -> anyhow::Result<()> {
         }
         tokio::time::sleep(Duration::from_millis(backoff)).await;
         backoff = (backoff.saturating_mul(2)).min(60_000);
+
+        // Re-mint the session JWT before every reconnect. It is short-lived
+        // (WEISSMAN_AGENT_JWT_TTL_MINS, default 240) and there was previously no way to renew it,
+        // so an agent that stayed up simply went dark four hours after enrolling and never came
+        // back. Renewal failure is not fatal: keep the existing token and retry on the next loop,
+        // because a transient server outage must not end the agent's life.
+        if !enrollment.agent_secret.trim().is_empty() {
+            match transport::enrollment::renew_session(
+                &cli.server_url,
+                &enrollment.agent_id,
+                &enrollment.agent_secret,
+                env!("CARGO_PKG_VERSION"),
+            )
+            .await
+            {
+                Ok(jwt) => enrollment.session_jwt = jwt,
+                Err(e) => warn!(
+                    target: "agent", error = %e,
+                    "session renewal failed; reusing the current token for this attempt"
+                ),
+            }
+        }
     }
 }
 

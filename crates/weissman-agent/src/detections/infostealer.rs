@@ -150,19 +150,41 @@ fn app_data() -> Option<PathBuf> {
     std::env::var("APPDATA").ok().map(PathBuf::from)
 }
 
+/// Probe a candidate credential store: how big is it, and can this agent read it?
+///
+/// The read is bounded. This used to call `tokio::fs::read(path)` — slurping the ENTIRE file into
+/// memory purely to compare its length against `max_bytes`, a number it already had from
+/// `metadata()`. Since `custom_paths` comes straight through the dispatch API, an operator (or
+/// anyone who compromises the server) could point every agent in the fleet at a multi-gigabyte
+/// file and OOM-kill the whole fleet, repeatedly. Opening and reading one byte answers the actual
+/// question — "can we open this?" — at fixed cost.
 async fn probe_path(path: &Path, max_bytes: u64) -> (u64, bool) {
+    use tokio::io::AsyncReadExt;
+
     let meta = match tokio::fs::metadata(path).await {
         Ok(m) => m,
         Err(_) => return (0, false),
     };
     let size = meta.len();
-    let readable = if meta.is_file() {
-        tokio::fs::read(path)
-            .await
-            .map(|b| b.len() as u64 <= max_bytes.max(1))
-            .unwrap_or(false)
-    } else {
-        meta.is_dir()
+    if meta.is_dir() {
+        return (size, true);
+    }
+    if !meta.is_file() {
+        return (size, false);
+    }
+    // Same semantics as before — a file bigger than the sample budget counts as not readable —
+    // but decided from the size we already have instead of by reading the file.
+    if size > max_bytes.max(1) {
+        return (size, false);
+    }
+    let readable = match tokio::fs::File::open(path).await {
+        // A zero-length file is still readable; read_exact would report UnexpectedEof.
+        Ok(_) if size == 0 => true,
+        Ok(mut f) => {
+            let mut probe = [0u8; 1];
+            f.read_exact(&mut probe).await.is_ok()
+        }
+        Err(_) => false,
     };
     (size, readable)
 }
@@ -460,7 +482,23 @@ fn collect_candidate_paths(cfg: &Config) -> Vec<StoreHit> {
         }
     }
 
-    for custom in &cfg.custom_paths {
+    // `custom_paths` arrives unvalidated from POST /api/agents/dispatch, so this list is
+    // attacker-influenced the moment the server is. Each entry has the agent stat a path and
+    // report its size and existence, which makes an unbounded list a fleet-wide
+    // file-existence-and-size oracle for anything the agent can see — reachable with no host
+    // access at all. Capping the count does not make it an allow-list, but it bounds both the
+    // oracle and the per-task work; combined with the bounded read in `probe_path`, a hostile
+    // params blob can no longer turn the fleet into a scanner or OOM it.
+    const MAX_CUSTOM_PATHS: usize = 32;
+    if cfg.custom_paths.len() > MAX_CUSTOM_PATHS {
+        tracing::warn!(
+            target: "agent",
+            supplied = cfg.custom_paths.len(),
+            cap = MAX_CUSTOM_PATHS,
+            "infostealer custom_paths truncated"
+        );
+    }
+    for custom in cfg.custom_paths.iter().take(MAX_CUSTOM_PATHS) {
         hits.push(StoreHit {
             category: "custom",
             label: format!("Custom path: {}", custom),
@@ -694,4 +732,48 @@ mod tests {
         assert!(cfg.check_browsers);
         assert!(!cfg.stealer_families.is_empty());
     }
+
+    /// `probe_path` must not read the file to decide readability.
+    ///
+    /// The old implementation called `tokio::fs::read` on an operator-supplied path, so a large
+    /// file OOM-killed the agent. This asserts the two properties that matter: an oversized file
+    /// is reported not-readable (unchanged semantics) and the call stays cheap regardless of size.
+    #[tokio::test]
+    async fn probe_path_does_not_slurp_large_files() {
+        let dir = std::env::temp_dir().join(format!("weissman-infostealer-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+
+        // 8 MiB — small enough for CI, far above the 4096-byte default sample budget.
+        let big = dir.join("big.bin");
+        std::fs::write(&big, vec![0u8; 8 * 1024 * 1024]).expect("write big");
+        let started = std::time::Instant::now();
+        let (size, readable) = probe_path(&big, 4096).await;
+        let elapsed = started.elapsed();
+        assert_eq!(size, 8 * 1024 * 1024, "size still comes from metadata");
+        assert!(!readable, "a file larger than the sample budget is not 'readable'");
+        assert!(
+            elapsed < std::time::Duration::from_millis(500),
+            "probe took {elapsed:?} — it is still reading the whole file"
+        );
+
+        // A small file within budget is readable, and an empty one is too.
+        let small = dir.join("small.bin");
+        std::fs::write(&small, b"cookies").expect("write small");
+        let (ssize, sreadable) = probe_path(&small, 4096).await;
+        assert_eq!(ssize, 7);
+        assert!(sreadable, "a file within budget must read as readable");
+
+        let empty = dir.join("empty.bin");
+        std::fs::write(&empty, b"").expect("write empty");
+        let (esize, ereadable) = probe_path(&empty, 4096).await;
+        assert_eq!(esize, 0);
+        assert!(ereadable, "an empty file is readable, not a read_exact EOF failure");
+
+        // A path that does not exist reports nothing.
+        let (msize, mreadable) = probe_path(&dir.join("nope"), 4096).await;
+        assert_eq!((msize, mreadable), (0, false));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
 }

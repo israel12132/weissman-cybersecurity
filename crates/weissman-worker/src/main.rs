@@ -17,6 +17,71 @@ const LOCK_SECS: i64 = 300;
 const LEASE_EXTEND_INTERVAL_SECS: u64 = 15;
 const BASE_BACKOFF_SECS: i64 = 5;
 
+/// Path the worker touches after every dequeue round-trip that reached the database.
+///
+/// Overridable so the same binary works outside a container, where `/tmp` may be shared or
+/// read-only.
+fn liveness_beat_path() -> std::path::PathBuf {
+    std::env::var_os("WEISSMAN_WORKER_LIVENESS_FILE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp/weissman-worker-alive"))
+}
+
+/// Force an exhausted job out of `running` when the forensic path could not do it.
+///
+/// The `bus_on && exhausted` arm is the ONLY route that terminalizes an exhausted job in
+/// zero-trust mode, and both of its error branches used to change no state — they logged and
+/// returned. The row stayed `running` with a frozen `locked_until`, so the stale-lock reclaim
+/// flipped it back to `pending` minutes later, the worker re-claimed it, re-ran the poison
+/// payload, exhausted again, and failed to build the bundle again. Forever, holding a heavy
+/// semaphore slot the whole time.
+///
+/// `ForensicBundle::build` does DB work, so it fails exactly when the database is degraded —
+/// which is precisely when a job is most likely to be exhausting its attempts. Losing forensics
+/// is acceptable; losing the terminal transition is not, because that is what makes the loop
+/// unbounded. The forensic failure is recorded alongside the original cause so the gap is visible.
+async fn terminalize_exhausted(
+    pool: &PgPool,
+    job_id: sqlx::types::Uuid,
+    cause: &str,
+    forensic_err: &str,
+) {
+    let note = format!("{cause} [forensics unavailable: {forensic_err}]");
+    if let Err(e) = job_queue::dead_letter_job(pool, job_id, &note).await {
+        error!(
+            target: "weissman_worker", %job_id, error = %e,
+            "could not dead-letter an exhausted job after forensic failure — it will be reclaimed \
+             and re-executed until this write succeeds"
+        );
+    } else {
+        warn!(
+            target: "weissman_worker", %job_id,
+            "dead-lettered an exhausted job without a forensic bundle"
+        );
+    }
+}
+
+/// Record that the dequeue path is functioning.
+///
+/// Deliberately called only on `Ok` — including `Ok(None)`, an empty queue, which is a healthy
+/// steady state. A failing claim leaves the file to go stale, which is the whole point: the
+/// previous container healthcheck (`cat /proc/1/comm | grep -q weissman-worker`) could not tell a
+/// working worker from one that was up and failing every single claim, and reported healthy
+/// throughout the four-day 2026-08-06 outage.
+///
+/// Best-effort: a failure to write must never take down the worker, so this only logs. A
+/// persistently unwritable path shows up as a failing healthcheck, which is the correct signal.
+fn touch_liveness_beat() {
+    let path = liveness_beat_path();
+    if let Err(e) = std::fs::write(&path, b"ok") {
+        warn!(
+            target: "weissman_worker",
+            path = %path.display(), error = %e,
+            "could not write liveness beat file"
+        );
+    }
+}
+
 fn worker_id() -> String {
     let host = hostname::get()
         .ok()
@@ -25,55 +90,98 @@ fn worker_id() -> String {
     format!("{}:{}", host, std::process::id())
 }
 
-fn job_kind_timeout(kind: &str) -> Duration {
-    match kind {
-        "tenant_full_scan" | "onboarding_tenant_scan" => Duration::from_secs(60 * 60),
-        "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => Duration::from_secs(30 * 60),
-        "command_center_engine" => Duration::from_secs(15 * 60),
+/// One table: a job kind's execution class and its time budget, together.
+///
+/// These used to be two independent `match` blocks — `job_kind_timeout` enumerated 12 kinds while
+/// `job_is_heavy` listed 22 — so a kind could be classified heavy and still fall through to the
+/// 5-minute default budget. Ten did: timing_scan, llm_fuzz_run, cloud_scan_run, payload_sync,
+/// threat_ingest_run, deception_cloud_deploy, poe_synthesis_run, sovereign_learning_feedback,
+/// genesis_eternal_fuzz and genesis_knowledge_match. The inconsistency is self-evident in the
+/// executor: `council_debate` gets 1200s standalone, while `genesis_eternal_fuzz` — which runs a
+/// full DFS fuzz cycle AND that same council war room — got 300s. Every attempt timed out at the
+/// same point, was requeued with backoff, timed out again, and was eventually dead-lettered: a
+/// permanently unrunnable job kind that burned one of only two heavy slots for 5 minutes per
+/// doomed attempt.
+///
+/// A single table makes that drift impossible to express, and the test below asserts that every
+/// heavy kind carries an explicit budget.
+struct JobClass {
+    /// Must run on the large engine stack (deep monolithic engine dispatch).
+    heavy: bool,
+    /// Wall-clock ceiling for the whole job, not per engine.
+    timeout_secs: u64,
+}
+
+fn job_class(kind: &str) -> JobClass {
+    let (heavy, timeout_secs) = match kind {
+        // ── Full-estate scans ────────────────────────────────────────────────
+        "tenant_full_scan" | "onboarding_tenant_scan" => (true, 60 * 60),
         // Fans out to ~22 top-tier engines sequentially (each with its own 180s ceiling), so the
-        // worst case is ~22×180 = 3960s. The previous 3600s budget was BELOW that, so when several
-        // engines hang — exactly what a health probe exists to detect — the probe was killed with a
-        // generic timeout instead of returning its per-engine pass/fail table. 75min leaves slack.
-        "top_tier_health_probe" => Duration::from_secs(75 * 60),
-        "scan_all_engines" | "scan_discovered_domains" => Duration::from_secs(45 * 60),
-        "pipeline_scan" | "threat_intel_run" | "council_debate" => Duration::from_secs(20 * 60),
-        "noop" | "ping" => Duration::from_secs(30),
-        _ => Duration::from_secs(5 * 60),
+        // worst case is ~22x180 = 3960s. The previous 3600s budget was BELOW that, so when several
+        // engines hang — exactly what a health probe exists to detect — the probe was killed with
+        // a generic timeout instead of returning its per-engine pass/fail table.
+        "top_tier_health_probe" => (true, 75 * 60),
+        "scan_all_engines" | "scan_discovered_domains" => (true, 45 * 60),
+        // ── Long-running engine work ─────────────────────────────────────────
+        "auto_heal" | "deep_fuzz" | "feedback_fuzz" | "ai_redteam" => (true, 30 * 60),
+        "pipeline_scan" | "threat_intel_run" => (true, 20 * 60),
+        "command_center_engine" => (true, 15 * 60),
+        // Was silently on the 300s default despite running a full DFS fuzz cycle followed by the
+        // multi-agent council war room, which alone is budgeted 1200s.
+        "genesis_eternal_fuzz" => (true, 40 * 60),
+        "genesis_knowledge_match" | "poe_synthesis_run" | "sovereign_learning_feedback" => {
+            (true, 20 * 60)
+        }
+        // Issues up to `baseline_sample_size` (500) timing samples plus payload probes.
+        "timing_scan" | "llm_fuzz_run" => (true, 20 * 60),
+        "cloud_scan_run" => (true, 30 * 60),
+        "threat_ingest_run" | "payload_sync" | "deception_cloud_deploy" => (true, 15 * 60),
+        // ── Light / control-plane ────────────────────────────────────────────
+        // Not heavy (no deep engine dispatch) but genuinely slow, so it keeps its own budget.
+        "council_debate" => (false, 20 * 60),
+        "noop" | "ping" => (false, 30),
+        _ => (false, 5 * 60),
+    };
+    JobClass {
+        heavy,
+        timeout_secs,
     }
 }
 
-fn job_is_heavy(kind: &str) -> bool {
-    matches!(
-        kind,
-        "tenant_full_scan"
-            | "onboarding_tenant_scan"
-            | "auto_heal"
-            | "pipeline_scan"
-            | "threat_intel_run"
-            | "deep_fuzz"
-            | "ai_redteam"
-            | "timing_scan"
-            | "llm_fuzz_run"
-            | "cloud_scan_run"
-            | "payload_sync"
-            | "threat_ingest_run"
-            | "deception_cloud_deploy"
-            | "poe_synthesis_run"
-            | "feedback_fuzz"
-            | "sovereign_learning_feedback"
-            | "genesis_eternal_fuzz"
-            | "genesis_knowledge_match"
-            | "command_center_engine"
-            // Fans out to every top-tier engine via `engine_dispatch::run_engine` (the deep
-            // monolithic engine future). Like `command_center_engine`/`scan_all_engines`, it
-            // MUST run on the 32 MiB large stack — dispatching it inline on the ~2 MiB Tokio
-            // worker stack overflows and aborts the whole worker process (fatal runtime error:
-            // stack overflow), which then makes the swarm coordinator orphan its in-flight jobs.
-            | "top_tier_health_probe"
-            | "scan_all_engines"
-            | "scan_discovered_domains"
-    )
+fn job_kind_timeout(kind: &str) -> Duration {
+    Duration::from_secs(job_class(kind).timeout_secs)
 }
+
+fn job_is_heavy(kind: &str) -> bool {
+    job_class(kind).heavy
+}
+
+/// Every kind the table classifies heavy. Used by the guard test below.
+#[cfg(test)]
+const HEAVY_KINDS: &[&str] = &[
+    "tenant_full_scan",
+    "onboarding_tenant_scan",
+    "top_tier_health_probe",
+    "scan_all_engines",
+    "scan_discovered_domains",
+    "auto_heal",
+    "deep_fuzz",
+    "feedback_fuzz",
+    "ai_redteam",
+    "pipeline_scan",
+    "threat_intel_run",
+    "command_center_engine",
+    "genesis_eternal_fuzz",
+    "genesis_knowledge_match",
+    "poe_synthesis_run",
+    "sovereign_learning_feedback",
+    "timing_scan",
+    "llm_fuzz_run",
+    "cloud_scan_run",
+    "threat_ingest_run",
+    "payload_sync",
+    "deception_cloud_deploy",
+];
 
 fn worker_concurrency_cap(key: &str, default: usize) -> usize {
     std::env::var(key)
@@ -133,21 +241,39 @@ async fn process_one(
                     "zero-trust claim rejected"
                 );
                 let err_s = e.to_string();
-                let permanent = err_s.contains("envelope expired")
+                // These three used to be classified `permanent` and dead-lettered on the FIRST
+                // occurrence. They are not properties of the job — they are properties of the
+                // infrastructure around it:
+                //
+                //   missing signed envelope -> the enqueue-side attach failed (a bug or outage)
+                //   envelope expired        -> the job sat in the queue too long (an outage)
+                //   signature mismatch      -> the signing key differs or was rotated
+                //
+                // None means "this job can never succeed", and all three are fixed by operator
+                // action, not by discarding customer work. Treating them as permanent destroyed
+                // 3,319 tenant scans in this deployment — 3,266 of them to a single key
+                // mismatch, irreversibly, with no retry and nothing alerting.
+                //
+                // They now fall through to the normal retry ladder: bounded by max_attempts,
+                // backed off, and terminal only after the job has genuinely been given its
+                // retries. A poison payload still dies — it just has to earn it.
+                // The worker exposes no /metrics endpoint and has no scrape job, so a counter
+                // here would be unscrapeable. Visibility comes from the backend instead, which
+                // derives weissman_async_jobs_zero_trust_rejected from `last_error` on each
+                // metrics tick — see fingerprint_engine/src/observability.rs.
+                if err_s.contains("envelope expired")
                     || err_s.contains("signature mismatch")
-                    || err_s.contains("missing signed envelope");
-                if permanent {
-                    let _ = job_queue::dead_letter_job(
-                        pool,
-                        job.id,
-                        &format!("zero-trust claim rejected (permanent): {e}"),
-                    )
-                    .await;
-                } else if job.attempt_count >= job.max_attempts {
-                    let _ = job_queue::fail_job(
-                        pool,
-                        &job,
-                        &format!("claim rejected: {e}"),
+                    || err_s.contains("missing signed envelope")
+                {
+                    error!(
+                        target: "weissman_worker",
+                        job_id = %job.id, attempt = job.attempt_count, max = job.max_attempts,
+                        "zero-trust infrastructure rejection — retrying rather than dead-lettering; \
+                         check the job-bus signing key and the enqueue-side envelope attach"
+                    );
+                }
+                if job.attempt_count >= job.max_attempts {
+                    let _ = job_queue::fail_job(pool, &job, &wid, &format!("claim rejected: {e}"),
                         BASE_BACKOFF_SECS,
                     )
                     .await;
@@ -224,6 +350,14 @@ async fn process_one(
     let exec_job = job.clone();
     let job_kind_for_timeout = exec_job.kind.clone();
     let exec_heavy = job_is_heavy(job_kind_for_timeout.as_str());
+    // Cancellation channel for the heavy path. A heavy job runs on a raw OS thread via
+    // run_on_large_stack, and `abort()` on the awaiting tokio task does NOT stop that thread —
+    // it just drops the receiver. On timeout the worker gave up waiting and requeued the job
+    // while the original engine kept running, holding its DB connections and sockets, so a second
+    // worker started the same scan against a copy that was still executing and could not be
+    // stopped. Signalling the thread lets the future be dropped at its next await, which also
+    // runs its destructors and releases those connections.
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
     let exec_handle = tokio::spawn(async move {
         let fut = async move {
             match exec_job.kind.as_str() {
@@ -232,7 +366,14 @@ async fn process_one(
             }
         };
         if exec_heavy {
-            fingerprint_engine::engine_stack_runtime::run_on_large_stack(|| fut).await
+            match fingerprint_engine::engine_stack_runtime::run_on_large_stack_cancellable(
+                || fut, cancel_rx,
+            )
+            .await
+            {
+                Some(v) => v,
+                None => Err("job cancelled after timeout".to_string()),
+            }
         } else {
             fut.await
         }
@@ -251,6 +392,9 @@ async fn process_one(
                 format!("job task join error: {join_err}")
             }),
             Err(_) => {
+                // Signal first: for a heavy job this is the only thing that actually stops the
+                // engine. `abort()` alone leaves it running on its own OS thread.
+                let _ = cancel_tx.send(());
                 exec_abort.abort();
                 Err(format!(
                     "job timed out after {}s ({})",
@@ -275,9 +419,22 @@ async fn process_one(
                 {
                     error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced complete failed");
                 }
-            } else if let Err(e) = job_queue::complete_job_with_result(pool, job.id, &v).await {
-                error!(target: "weissman_worker", job_id = %job.id, error = %e, "complete failed");
-                let _ = job_queue::fail_job(pool, &job, &e.to_string(), BASE_BACKOFF_SECS).await;
+            } else {
+                match job_queue::complete_job_with_result_owned(pool, job.id, &wid, &v).await {
+                    Ok(true) => {}
+                    // Lost the race: our lease lapsed, the row was reclaimed, and another worker
+                    // owns it now. Writing our result anyway would orphan that worker's in-flight
+                    // run and attribute our findings to a job the read model already closed.
+                    Ok(false) => warn!(
+                        target: "weissman_worker", job_id = %job.id,
+                        "completion discarded — this worker no longer owns the job (lease lost \
+                         and the row was reclaimed); the current owner will report the outcome"
+                    ),
+                    Err(e) => {
+                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "complete failed");
+                        let _ = job_queue::fail_job(pool, &job, &wid, &e.to_string(), BASE_BACKOFF_SECS).await;
+                    }
+                }
             }
         }
         Err(msg) => {
@@ -311,10 +468,12 @@ async fn process_one(
                     Ok(bundle) => {
                         if let Err(e) = bus.on_forensic_dlq(bundle, lease_out.take()).await {
                             error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic DLQ failed");
+                            terminalize_exhausted(pool, job.id, &msg, &format!("forensic DLQ failed: {e}")).await;
                         }
                     }
                     Err(e) => {
                         error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic bundle build failed");
+                        terminalize_exhausted(pool, job.id, &msg, &format!("forensic bundle build failed: {e}")).await;
                     }
                 }
             } else if bus_on {
@@ -331,7 +490,7 @@ async fn process_one(
                 {
                     error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced fail");
                 }
-            } else if let Err(e) = job_queue::fail_job(pool, &job, &msg, BASE_BACKOFF_SECS).await {
+            } else if let Err(e) = job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await {
                 error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
                 let _ =
                     job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
@@ -455,6 +614,11 @@ async fn async_main() {
         }
     };
 
+    // app 48 + auth 12 + intel 12 + control 8. Paired with the backend's own 72, this was 152
+    // against a server max_connections of 100 — see warn_if_pool_budget_exceeds_server.
+    weissman_db::warn_if_pool_budget_exceeds_server(ctrl_pool.as_ref(), "worker", 48 + 12 + 12 + 8)
+        .await;
+
     let light_n = worker_concurrency_cap("WEISSMAN_WORKER_LIGHT_CONCURRENCY", 8);
     let heavy_n = worker_concurrency_cap("WEISSMAN_WORKER_HEAVY_CONCURRENCY", 2);
     let light_sem = Arc::new(tokio::sync::Semaphore::new(light_n));
@@ -499,8 +663,33 @@ async fn async_main() {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
     let swarm_shutdown = swarm.clone();
+    // SIGTERM as well as SIGINT. `docker stop`, a compose restart and a k8s rollout all send
+    // SIGTERM; only SIGINT was handled, so every one of those killed in-flight scans outright
+    // after the 10s grace period rather than letting them finish. The HTTP server in this same
+    // repo already handles both, so this was a gap, not a platform limit.
     tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
+        let sigint = async {
+            let _ = tokio::signal::ctrl_c().await;
+        };
+        #[cfg(unix)]
+        let sigterm = async {
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(mut s) => {
+                    s.recv().await;
+                }
+                Err(e) => {
+                    warn!(target: "weissman_worker", error = %e, "cannot install SIGTERM handler");
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+        #[cfg(not(unix))]
+        let sigterm = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = sigint => info!(target: "weissman_worker", "SIGINT received; draining"),
+            _ = sigterm => info!(target: "weissman_worker", "SIGTERM received; draining"),
+        }
         stop_clone.store(true, Ordering::SeqCst);
         if let Some(s) = swarm_shutdown {
             s.stop();
@@ -588,6 +777,23 @@ async fn async_main() {
             job_queue::claim_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
         };
 
+        // Keep the swarm heartbeat's advertised load true. It published a hardcoded 0, so the
+        // only non-identity field in the gossip stream was a constant.
+        if let Some(ref s) = swarm {
+            let in_flight = (light_n - light_sem.available_permits())
+                + (heavy_n - heavy_sem.available_permits());
+            s.set_jobs_active(in_flight as u32);
+        }
+
+        // Liveness beat, written only when the dequeue round-trip actually worked — an empty
+        // queue counts, a failed claim does not. The container healthcheck reads this file's
+        // mtime, so "the process exists" and "the process can do its job" stop being the same
+        // reading. They were not: the previous healthcheck was `cat /proc/1/comm | grep -q
+        // weissman-worker`, which reported healthy for four days while every claim failed.
+        if claim_result.is_ok() {
+            touch_liveness_beat();
+        }
+
         match claim_result {
             Ok(Some(job)) => {
                 let is_heavy = job_is_heavy(job.kind.as_str());
@@ -655,12 +861,86 @@ async fn async_main() {
             }
         }
     }
-    info!(target: "weissman_worker", "shutdown");
+    // Drain. `process_one` runs in detached tasks, so simply returning here drops the runtime and
+    // aborts every in-flight scan mid-write — leaving rows `running` for the stale-lock sweep to
+    // reclaim minutes later, and losing whatever the engine had already found.
+    //
+    // The permit count is the live in-flight count: each running job holds one, so waiting for
+    // both semaphores to return to full capacity is exactly "everything finished".
+    let drain_deadline = std::time::Duration::from_secs(
+        std::env::var("WEISSMAN_WORKER_DRAIN_SECS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(25),
+    );
+    let drain_started = std::time::Instant::now();
+    loop {
+        let in_flight = (light_n - light_sem.available_permits())
+            + (heavy_n - heavy_sem.available_permits());
+        if in_flight == 0 {
+            break;
+        }
+        if drain_started.elapsed() >= drain_deadline {
+            warn!(
+                target: "weissman_worker", in_flight,
+                "drain deadline reached; {in_flight} job(s) still running will be reclaimed by the \
+                 stale-lock sweep"
+            );
+            break;
+        }
+        info!(target: "weissman_worker", in_flight, "draining in-flight jobs before shutdown");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    info!(target: "weissman_worker", drained_in = ?drain_started.elapsed(), "shutdown");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The container healthcheck and the k8s readiness probe both key off this file's mtime, so
+    /// the beat must actually land at the configured path. A silent write failure here would
+    /// restore exactly the blind spot the beat was added to close.
+    #[test]
+    fn liveness_beat_is_written_to_the_configured_path() {
+        let dir = std::env::temp_dir().join(format!("weissman-beat-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("alive");
+        // SAFETY: single-threaded test; no other thread reads the environment concurrently.
+        unsafe { std::env::set_var("WEISSMAN_WORKER_LIVENESS_FILE", &path) };
+
+        assert_eq!(liveness_beat_path(), path, "env override must win");
+        assert!(!path.exists(), "precondition: beat file does not exist yet");
+
+        touch_liveness_beat();
+        assert!(
+            path.exists(),
+            "touch_liveness_beat must create the file the healthcheck stats"
+        );
+
+        // Writing again must refresh it rather than fail on an existing file — the worker calls
+        // this on every poll for the lifetime of the process.
+        touch_liveness_beat();
+        assert!(path.exists(), "repeated beats must keep the file present");
+
+        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An unwritable path must degrade to a stale beat (and therefore a failing healthcheck),
+    /// never take the worker process down.
+    #[test]
+    fn liveness_beat_failure_does_not_panic() {
+        // SAFETY: single-threaded test.
+        unsafe {
+            std::env::set_var(
+                "WEISSMAN_WORKER_LIVENESS_FILE",
+                "/nonexistent-dir-weissman/alive",
+            )
+        };
+        touch_liveness_beat(); // must not panic
+        unsafe { std::env::remove_var("WEISSMAN_WORKER_LIVENESS_FILE") };
+    }
 
     // Every job kind whose executor arm dispatches the deep monolithic engine future
     // (`engine_dispatch::run_engine` / `dispatch_engine_match`) MUST be classified heavy so
@@ -767,4 +1047,47 @@ mod tests {
         let (_host, pid) = id.rsplit_once(':').expect("worker id contains a colon");
         assert_eq!(pid.parse::<u32>().unwrap(), std::process::id());
     }
+
+    /// A heavy kind must never fall through to the default budget.
+    ///
+    /// This is the invariant the two separate match blocks could not express: ten heavy kinds sat
+    /// on the 300s default and timed out on every attempt until they were dead-lettered.
+    #[test]
+    fn every_heavy_kind_has_an_explicit_timeout() {
+        const DEFAULT_SECS: u64 = 5 * 60;
+        let offenders: Vec<&str> = HEAVY_KINDS
+            .iter()
+            .copied()
+            .filter(|k| job_class(k).timeout_secs == DEFAULT_SECS)
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "these heavy kinds fall through to the {DEFAULT_SECS}s default budget and will time \
+             out, retry and dead-letter on every attempt: {offenders:?}"
+        );
+    }
+
+    /// The HEAVY_KINDS list and the table must not drift apart.
+    #[test]
+    fn heavy_kinds_list_matches_the_table() {
+        for k in HEAVY_KINDS {
+            assert!(job_class(k).heavy, "{k} is in HEAVY_KINDS but not heavy in job_class");
+        }
+        // Spot-check the other direction with kinds that must stay light.
+        for k in ["noop", "ping", "council_debate", "definitely_not_a_real_kind"] {
+            assert!(!job_class(k).heavy, "{k} must not be heavy");
+        }
+    }
+
+    /// genesis_eternal_fuzz runs a full fuzz cycle AND the council war room, which alone is
+    /// budgeted 1200s — its ceiling must exceed that, or it can never finish.
+    #[test]
+    fn genesis_eternal_fuzz_outlasts_the_council_war_room() {
+        assert!(
+            job_class("genesis_eternal_fuzz").timeout_secs > job_class("council_debate").timeout_secs,
+            "genesis_eternal_fuzz must be budgeted above council_debate; it runs that war room \
+             plus a full DFS fuzz cycle"
+        );
+    }
+
 }

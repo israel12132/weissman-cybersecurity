@@ -639,12 +639,19 @@ pub fn spawn_self_improve_loop(app_pool: Arc<PgPool>, telemetry: Arc<Sender<Stri
         tick.tick().await; // consume the immediate first tick
         loop {
             tick.tick().await;
-            // Run for every active tenant that has the toggle on.
-            let tenants: Vec<i64> =
-                sqlx::query_scalar("SELECT id FROM tenants WHERE active = true ORDER BY id")
-                    .fetch_all(app_pool.as_ref())
-                    .await
-                    .unwrap_or_default();
+            // Run for every active tenant that has the toggle on. `tenants` is FORCE RLS, so
+            // querying it directly on the app pool yields only this connection's tenant — and
+            // nothing once the tenant GUC is correctly unset. That failure is silent: the loop
+            // would simply iterate an empty list forever. Enumerate through the explicit
+            // cross-tenant helper instead, and surface an enumeration error rather than
+            // swallowing it into an empty sweep.
+            let tenants: Vec<i64> = match weissman_db::active_tenant_ids(app_pool.as_ref()).await {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(target: "self_improve", error = %e, "tenant enumeration failed; skipping cycle");
+                    continue;
+                }
+            };
             for tenant_id in tenants {
                 if !is_enabled(app_pool.as_ref(), tenant_id).await {
                     continue;

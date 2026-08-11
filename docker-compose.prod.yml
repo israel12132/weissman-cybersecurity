@@ -22,12 +22,74 @@
 #   WEISSMAN_JOB_ORCHESTRATOR_SECRET (>=32)
 #   WEISSMAN_PUBLIC_BASE_URL (https)   POSTGRES_PASSWORD  DB_APP_PASSWORD
 #   DB_AUTH_PASSWORD  REDIS_PASSWORD   (monitoring uses WEISSMAN_ADMIN_* — optional GRAFANA_ADMIN_PASSWORD override)
+# Bounded container logs. Docker's json-file driver defaults to *unbounded* growth and
+# /etc/docker/daemon.json does not exist on the deployment host, so nothing capped it. Postgres
+# alone wrote 101 MB in 9.5h (155,589 ERROR + 155,588 STATEMENT entries, each dumping the full
+# failing SQL) and on 2026-07-03 filled the disk outright:
+#   PANIC: could not write to file "pg_logical/replorigin_checkpoint.tmp": No space left on device
+# followed by 183 x FATAL and the checkpointer aborting — a whole-stack outage caused purely by
+# log growth. 50m x 3 caps each container at 150 MB.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   postgres:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    # cap_drop ALL alone makes this image exit at startup — its entrypoint chowns the data
+    # directory and gosu's to the postgres user, which needs these five. Verified by
+    # running the image both ways.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    logging: *default-logging
+    # 200 to match deploy/k8s/postgres-ha.yaml:26. The image default is 100 (97 usable after
+    # superuser_reserved_connections=3), but the two application processes are configured to open
+    # up to 152: backend 72 (app 48 + auth 12 + intel 12) and worker 80 (app 48 + auth 12 +
+    # intel 12 + control 8). Under the concurrent load the pools exist to survive, Postgres starts
+    # refusing with SQLSTATE 53300 and the worker's control-plane pool — built specifically so
+    # job-state writes can never be starved — is the one that cannot connect, so finished jobs
+    # never record their terminal state. Compose was the outlier here; k8s already had 200.
+    command:
+      - postgres
+      - -c
+      - max_connections=200
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD for production}
+      # Page checksums, so silent corruption is detected rather than returned as data. The
+      # live cluster was initialised without them and has since survived 8 unclean crashes,
+      # 11 automatic recoveries, a checkpointer SIGABRT and a full-disk PANIC — each of
+      # which can tear a page that Postgres would then read back without complaint.
+      # Applies only to a FRESH data directory; an existing cluster needs a dump/restore.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
 
   redis:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    # Same as postgres: setpriv drops to the redis user at entrypoint and needs these.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    logging: *default-logging
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set a strong REDIS_PASSWORD for production}
     command:
@@ -39,6 +101,14 @@ services:
       retries: 20
 
   backend:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     # Pull in the operator's full .env so OPTIONAL settings the app reads directly
     # (WEISSMAN_SMTP_*, WEISSMAN_LLM_API_KEY, NVD_API_KEY, WEISSMAN_INTEGRATIONS_VAULT_KEY,
     # PADDLE_*, ...) actually reach the process. Without this, only the ~19 keys listed
@@ -84,6 +154,18 @@ services:
       WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
 
   worker:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
+    # Must exceed WEISSMAN_WORKER_DRAIN_SECS (25s). Docker's default is 10s, which
+    # would SIGKILL the worker mid-drain and make the drain pointless — in-flight
+    # scans would still be killed mid-write, just after a longer pause.
+    stop_grace_period: 40s
     # Same as backend: the worker runs the scan engines and needs the operator's optional
     # settings (LLM keys, OAST config, vault keys, ...). Explicit entries below still win.
     env_file:
@@ -107,6 +189,14 @@ services:
   # is set, because it requires a DNS zone you delegate to this host. Records callbacks into
   # the app DB (oast_interaction_hits); the engines poll it at WEISSMAN_OAST_LISTENER_URL.
   oast:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     build:
       context: .
       dockerfile: deploy/oast.Dockerfile
@@ -150,20 +240,55 @@ services:
 
   # Pin monitoring images (base uses floating :latest) for reproducible production.
   prometheus:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: prom/prometheus:v3.1.0
 
   grafana:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: grafana/grafana:11.4.0
     environment:
       GF_SECURITY_ADMIN_USER: ${WEISSMAN_ADMIN_EMAIL:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-${WEISSMAN_ADMIN_PASSWORD:?set WEISSMAN_ADMIN_PASSWORD}}
+      # No WEISSMAN_ADMIN_PASSWORD fallback: silently reusing the platform super-admin
+      # password for Grafana makes any Grafana compromise a platform compromise.
+      # start_weissman_live.sh generates this independently.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD (openssl rand -base64 32) — must NOT equal WEISSMAN_ADMIN_PASSWORD}
 
   # The prod overlay puts Redis behind a password (requirepass), so the exporter must
   # authenticate or every redis_* metric is dead (auth error on each scrape).
   redis-exporter:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     environment:
       REDIS_ADDR: redis://redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
 
   alertmanager:
+    # Least privilege. The stack previously ran every container with the full default
+    # capability set and no no-new-privileges, so a compromised engine had setuid
+    # escalation and CAP_NET_RAW available to it by default.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     image: prom/alertmanager:v0.28.0

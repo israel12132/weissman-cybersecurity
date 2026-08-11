@@ -78,7 +78,7 @@ groups:
       # real gap. To restore genuine worker alerting, give the worker a metrics listener,
       # add a matching scrape job, then re-enable an `up{job="weissman-worker"} == 0` rule.
       # Until then the worker's liveness is covered by its Docker healthcheck
-      # (docker-compose.yml: cat /proc/1/comm) and by the stalled-jobs signal below.
+      # (docker-compose.yml: cat /proc/1/comm) and by the stalled-jobs signals below.
       #
       # - alert: WorkerDown
       #   expr: up{job="weissman-worker"} == 0
@@ -89,6 +89,118 @@ groups:
       #   annotations:
       #     summary: "Weissman worker is down"
       #     description: "Worker {{ $labels.instance }} has been unreachable for 5 minutes; scan jobs may be stalled"
+
+      # ── Job pipeline liveness ────────────────────────────────────────────────
+      #
+      # These rules exist because the sentence above ("covered by ... the stalled-jobs signal
+      # below") was not true: no rule read weissman_async_jobs_pending, and the Docker
+      # healthcheck only greps /proc/1/comm, so it reports healthy for a worker that is running
+      # and failing every single claim. Between 2026-08-06 and 2026-08-10 the pipeline executed
+      # zero jobs while the backlog grew to 2111, both containers stayed "healthy", /api/health
+      # returned ok:true, and nothing fired for four days.
+      #
+      # Queue DEPTH is deliberately not the trigger: a deep queue is indistinguishable from a
+      # busy one. The unambiguous signals are AGES — nothing that healthy throughput produces
+      # keeps the oldest pending job waiting an hour, or leaves an hour with no completion at all.
+
+      - alert: JobQueueStalled
+        # The oldest pending job has been waiting an hour. Under any healthy throughput the head
+        # of the queue turns over continuously, so this only holds when nothing is draining it.
+        expr: weissman_async_jobs_oldest_pending_age_seconds > 3600
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Job queue is stalled — oldest pending job is {{ $value | humanizeDuration }} old"
+          description: >-
+            No worker has claimed the head of weissman_async_jobs for over an hour.
+            Scans are not running. Check the worker logs for `claim/reserve failed`, and check
+            that the RLS policies still use public.app_current_tenant_id() rather than casting
+            the raw app.current_tenant_id GUC (see migration 20260811000000).
+
+      - alert: NoScanCompletions
+        # Nothing has reached `completed` in an hour while work is queued. Distinct from
+        # JobQueueStalled: it also catches jobs that are claimed and then always fail or hang,
+        # which leaves the oldest-pending age low while still delivering nothing.
+        # `> 3600` also excludes the -1 sentinel that means "no job has ever completed".
+        expr: weissman_async_jobs_last_completion_age_seconds > 3600 and weissman_async_jobs_pending > 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "No job has completed in {{ $value | humanizeDuration }} while work is queued"
+          description: >-
+            Jobs are queued but none is completing. The product's core claim — continuous
+            scanning — is not being met right now.
+
+      - alert: JobQueueBacklogGrowing
+        # Sustained monotonic growth: arrivals are outpacing completions even if some work is
+        # getting through. Warning, not critical — this is a capacity signal, not an outage.
+        expr: deriv(weissman_async_jobs_pending[30m]) > 0 and weissman_async_jobs_pending > 100
+        for: 30m
+        labels:
+          severity: warning
+          category: capacity
+        annotations:
+          summary: "Job backlog is growing ({{ $value }} pending and rising)"
+          description: >-
+            weissman_async_jobs_pending has risen steadily for 30 minutes. Either throughput has
+            dropped or the orchestrator is enqueuing faster than the fleet can drain.
+
+      # ── The alerting pipeline monitoring itself ──────────────────────────────
+      #
+      # Every rule above is worthless if notifications cannot leave the building, and in this
+      # deployment they could not: all three receivers point at RFC-2606 `.invalid` placeholder
+      # hosts, including the Watchdog dead-man's-switch webhook — so the alarm whose entire job is
+      # to detect a broken alert pipeline was itself broken. Alertmanager was also never scraped,
+      # so the failure counters it had been incrementing all along were never collected.
+      #
+      # Placeholders are a legitimate default for an unconfigured stack (see
+      # monitoring/secrets/README.md). What is not legitimate is that being silent.
+
+      - alert: AlertDeliveryFailing
+        # Alertmanager is trying to notify and the send is failing — misconfigured receiver,
+        # unresolvable host, revoked webhook. Every alert raised during this window is lost.
+        expr: rate(alertmanager_notifications_failed_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Alertmanager cannot deliver notifications ({{ $labels.integration }})"
+          description: >-
+            Notifications to the {{ $labels.integration }} receiver are failing. Alerts are being
+            raised and silently dropped. If the receiver still points at a *.invalid placeholder,
+            configure the real endpoint per monitoring/secrets/README.md.
+
+      - alert: AlertingPipelineUnverified
+        # Absence-of-heartbeat, one layer up. The Watchdog rule fires continuously by design and
+        # its delivery is the end-to-end proof that the pipeline works. If Alertmanager is not
+        # even scrapeable we cannot prove delivery works, so treat that as broken rather than
+        # assuming it is fine — the failure mode being fixed here is exactly "assumed fine".
+        expr: up{job="alertmanager"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Alertmanager is not scrapeable — delivery health is unknown"
+          description: >-
+            Prometheus cannot scrape Alertmanager, so notification-failure counters are not being
+            collected and there is no evidence any alert can reach a human.
+
+      - alert: JobDeadLetterGrowing
+        # Jobs exhausting their retries. A steady trickle is normal; a sustained rate is not.
+        expr: increase(weissman_async_jobs_by_status{status="dead"}[1h]) > 50
+        for: 15m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "{{ $value }} jobs dead-lettered in the last hour"
+          description: "Jobs are exhausting their retries. Inspect last_error on recent `dead` rows."
 
       # Prometheus self-monitoring
       - alert: PrometheusConfigReloadFailed

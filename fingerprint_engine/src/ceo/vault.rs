@@ -61,11 +61,27 @@ fn vault_key() -> Option<[u8; 32]> {
     })
 }
 
-/// True when a key is available to encrypt CEO-vault secrets at rest. The
-/// production startup guard requires this so secrets are never stored plaintext.
+/// True when a key is available to encrypt CEO-vault secrets at rest — including the JWT-derived
+/// dev fallback, so this is NOT a useful production guard on its own. Use
+/// [`dedicated_key_configured`] for that.
 #[must_use]
 pub fn key_present() -> bool {
     vault_key().is_some()
+}
+
+/// True only when a dedicated `WEISSMAN_VAULT_KEY` (64 hex) was supplied.
+///
+/// The production startup guard used to call `key_present()`, whose message promised it would
+/// refuse to "store vault secrets unencrypted" — but `vault_key()` falls back to a key derived
+/// from `WEISSMAN_JWT_SECRET`, and `security_startup` separately rejects any JWT secret shorter
+/// than 48 chars, so the fallback's `len() < 16` branch is unreachable in production and the
+/// guard was unconditionally true. It never once fired.
+#[must_use]
+pub fn dedicated_key_configured() -> bool {
+    std::env::var("WEISSMAN_VAULT_KEY")
+        .ok()
+        .and_then(|v| hex32(v.trim()))
+        .is_some()
 }
 
 /// Decrypt keyring: current key, then rotated-out previous keys
@@ -80,6 +96,18 @@ fn decrypt_keyring() -> &'static [[u8; 32]] {
         }
         if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
             v.extend(csv.split(',').filter_map(hex32));
+        }
+        // Legacy rows encrypted with the CURRENT JWT secret, before a dedicated WEISSMAN_VAULT_KEY
+        // existed. Without this, setting that key — what the hardened startup guard now demands —
+        // orphans every existing CEO-vault secret, because the JWT-derived key only reached this
+        // keyring via *_PREVIOUS. See the matching note in soar/integrations_vault.rs.
+        if let Ok(js) = std::env::var("WEISSMAN_JWT_SECRET") {
+            if js.trim().len() >= 16 {
+                let legacy = derive_key(b"weissman-vault-key-v1|", js.trim());
+                if !v.contains(&legacy) {
+                    v.push(legacy);
+                }
+            }
         }
         if let Ok(csv) = std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS") {
             for e in csv.split(',') {

@@ -273,6 +273,11 @@ ensure_env() {
     # Bearer for the OAST correlation API, shared by the listener and the engines. Generated
     # up front so enabling OAST later only needs WEISSMAN_OAST_DOMAIN; unused while OAST off.
     WEISSMAN_OAST_API_KEY
+    # Dedicated secrets-at-rest key for MFA seeds and SOAR provider credentials. Without it the
+    # vault derives its key from WEISSMAN_JWT_SECRET — the token-signing key, which is shipped to
+    # every replica — so one leaked value both mints auth tokens and decrypts every stored
+    # secret. security_startup.rs now refuses to boot production without this.
+    WEISSMAN_INTEGRATIONS_VAULT_KEY
   )
   for key in "${keys[@]}"; do
     local cur
@@ -282,6 +287,15 @@ ensure_env() {
       log "Generated $key"
     fi
   done
+
+  # CEO genesis vault. Must be exactly 64 hex chars (32 bytes) — ceo::vault::hex32 rejects
+  # anything else, so it cannot use gen_secret's base64. Same rationale as
+  # WEISSMAN_INTEGRATIONS_VAULT_KEY above: without it the vault key is derived from the
+  # token-signing secret.
+  if [[ -z "$(env_get WEISSMAN_VAULT_KEY)" ]]; then
+    env_set WEISSMAN_VAULT_KEY "$(openssl rand -hex 32)"
+    log "Generated WEISSMAN_VAULT_KEY"
+  fi
 
   if [[ -z "$(env_get WEISSMAN_ADMIN_EMAIL)" ]]; then
     env_set WEISSMAN_ADMIN_EMAIL "$ADMIN_EMAIL"
@@ -295,9 +309,14 @@ ensure_env() {
     generated_admin=1
   fi
 
-  # Monitoring UIs (Grafana :3000, Prometheus :9090) reuse admin credentials unless overridden.
+  # Monitoring UIs get their OWN generated credential — never a copy of the platform admin
+  # password. Grafana is a large third-party app with its own CVE stream and its own exposed
+  # login. Copying WEISSMAN_ADMIN_PASSWORD into it (which this did — both values hashed to the
+  # same SHA-256 on the live .env) means any Grafana credential disclosure hands over the
+  # Weissman platform super-admin account, and vice versa. The blast radius of compromising the
+  # dashboard tool should not be the security platform it monitors.
   if [[ -z "$(env_get GRAFANA_ADMIN_PASSWORD)" ]]; then
-    env_set GRAFANA_ADMIN_PASSWORD "$(env_get WEISSMAN_ADMIN_PASSWORD)"
+    env_set GRAFANA_ADMIN_PASSWORD "$(gen_password)"
   fi
 
   if [[ -n "$PUBLIC_URL" ]]; then
@@ -538,7 +557,26 @@ EOF
   # over anything but HTTPS silently fails to keep a session — and sends the password in
   # cleartext. Warn loudly when the configured origin is not https.
   case "$base" in
-    https://*) : ;;
+    https://*)
+      # Checking only the configured string is self-defeating: this launcher DEFAULTS
+      # WEISSMAN_PUBLIC_BASE_URL to https://localhost, so the scheme test below always passed and
+      # the warning could never fire — while the gateway served plain HTTP the whole time. That is
+      # exactly the state the live deployment was found in (COOKIE_SECURE=1, base URL https://,
+      # no 443 listener anywhere), where a browser silently discards the Secure session cookie and
+      # login never persists.
+      #
+      # So probe it. If the configured HTTPS origin does not actually answer, say so.
+      if ! curl -skf --max-time 4 -o /dev/null "${base%/}/api/health" 2>/dev/null; then
+        cat <<EOF
+
+  !! WARNING: WEISSMAN_PUBLIC_BASE_URL is $base but nothing answers HTTPS there.
+     Session cookies are Secure-only in production, so a browser will DISCARD the session
+     cookie over plain http:// and login will never persist — the app looks broken, not
+     misconfigured. Either terminate TLS in front of the gateway, or re-run with
+     --url http://your-host and set WEISSMAN_COOKIE_SECURE=0 to accept cleartext knowingly.
+EOF
+      fi
+      ;;
     *)
       cat <<EOF
 

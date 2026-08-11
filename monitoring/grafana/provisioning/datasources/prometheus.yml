@@ -10,3 +10,18 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+
+    # Prometheus runs with --web.config.file, which gates EVERY endpoint behind basic auth.
+    # Without these fields Grafana proxied every panel query unauthenticated and got 401, so
+    # all 15 panels across the 3 provisioned dashboards rendered "No data" — including
+    # agent-fleet-health.json's "Pending Async Jobs", the one view that would have shown the
+    # queue climbing 688 -> 2126 during the four-day outage. An empty dashboard is
+    # indistinguishable from a healthy one, which is how the outage stayed invisible.
+    #
+    # Grafana expands $VAR in provisioning files from the container environment; both are
+    # passed through in docker-compose.yml. `editable: false` datasources are re-applied from
+    # file on every boot, so an existing row is corrected on restart.
+    basicAuth: true
+    basicAuthUser: ${MONITORING_BASIC_AUTH_USER}
+    secureJsonData:
+      basicAuthPassword: ${MONITORING_BASIC_AUTH_PASSWORD}

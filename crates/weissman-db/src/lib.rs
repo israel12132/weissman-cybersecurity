@@ -118,6 +118,53 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
     Ok(())
 }
 
+/// Warn loudly when this process's configured pool ceilings cannot all fit in the server's
+/// connection budget.
+///
+/// The deployment was found configured to open up to 152 connections (backend 72 + worker 80)
+/// against a server `max_connections` of 100, with no pooler in front. Nothing detected that,
+/// because it only manifests under the concurrent load the pools exist to survive: past ~97
+/// in-use slots every further connect fails with SQLSTATE 53300, and the first casualty is
+/// whichever pool happens to be opening a connection at that moment — including the worker's
+/// control-plane pool, which exists precisely so job-state writes can never be starved.
+///
+/// This warns rather than refuses to start. A process that declines to boot because the *other*
+/// process might also be busy would turn a capacity smell into an outage, and the safe reading
+/// ("how many connections is the rest of the fleet actually holding?") is not knowable from here.
+/// The point is to make the condition visible at boot instead of at 3am under load.
+pub async fn warn_if_pool_budget_exceeds_server(pool: &PgPool, process_label: &str, configured: u32) {
+    let Ok(max_conn) = sqlx::query_scalar::<_, String>("SHOW max_connections")
+        .fetch_one(pool)
+        .await
+    else {
+        return;
+    };
+    let reserved = sqlx::query_scalar::<_, String>("SHOW superuser_reserved_connections")
+        .fetch_one(pool)
+        .await
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(3);
+    let Ok(max_conn) = max_conn.parse::<u32>() else {
+        return;
+    };
+    let usable = max_conn.saturating_sub(reserved);
+    // A single process claiming more than half the budget cannot coexist with its sibling.
+    if configured * 2 > usable {
+        tracing::warn!(
+            target: "db_pool_budget",
+            process = process_label,
+            configured_max_connections = configured,
+            server_max_connections = max_conn,
+            usable_after_reserved = usable,
+            "connection pool ceiling is too large for this Postgres: two processes at this size \
+             over-subscribe the server and will hit SQLSTATE 53300 under load. Raise \
+             max_connections (compose and deploy/k8s/postgres-ha.yaml both set 200) or lower \
+             WEISSMAN_{{APP,AUTH,INTEL,CONTROL}}_POOL_MAX."
+        );
+    }
+}
+
 /// App pool: `WEISSMAN_APP_POOL_MAX` (default 48), `WEISSMAN_APP_POOL_MIN` (default 2).
 /// Avoid holding a tenant transaction across `.await` to unrelated work — release connections quickly.
 pub async fn connect_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
@@ -339,6 +386,24 @@ pub async fn begin_tenant_tx(
     let mut tx = pool.begin().await?;
     set_tenant_tx(&mut tx, tenant_id).await?;
     Ok(tx)
+}
+
+/// Ids of all active tenants, for background workers that must sweep every tenant.
+///
+/// **Do not** open-code `SELECT id FROM tenants WHERE active = true` for this. `tenants` is FORCE
+/// ROW LEVEL SECURITY with `USING (id = <current tenant>)`, so that query on an RLS-subject pool
+/// silently returns only the connection's current tenant — and nothing at all once the tenant GUC
+/// is unset, which is the correct default state. A worker written that way does not fail; it
+/// iterates an empty list and reports success, which is how three sweeps (`self_improve`,
+/// `sovereign_self_scan`, `predictive_analyzer`) came to run against exactly one tenant.
+///
+/// Backed by the `public.active_tenant_ids()` SECURITY DEFINER function (migration
+/// `20260811000200`), which returns ids only — never tenant names or slugs — so a worker that
+/// needs to enumerate does not have to be handed a BYPASSRLS connection.
+pub async fn active_tenant_ids(pool: &PgPool) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT * FROM public.active_tenant_ids()")
+        .fetch_all(pool)
+        .await
 }
 
 /// Like [`begin_tenant_tx`], but takes an owned [`Arc`] so the returned future is [`Send`] when used

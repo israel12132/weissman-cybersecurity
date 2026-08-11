@@ -1,0 +1,7 @@
+# Grafana scans every provisioning subdirectory at boot and logs an ERROR for each one that is
+# absent:
+#   "can't read alerting provisioning files from directory" ... no such file or directory
+#   "Failed to read plugin provisioning files from directory" ... no such file or directory
+# Two errors on every single start, in a stack whose alerting was genuinely broken — noise that
+# trains operators to ignore Grafana's error log. Empty is a valid, silent configuration; missing
+# is not.

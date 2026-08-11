@@ -71,6 +71,55 @@ async fn api_quota(
     }
 }
 
+/// `GET /status` — the public service-status endpoint promised in SLA_AND_STATUS.md §4.
+///
+/// It was documented as a contractual channel ("Maintenance windows are announced ... on /status"
+/// in terms.html) and linked from the site footer, but no handler and no static page existed —
+/// nginx's catch-all returned HTTP 200 with the marketing homepage, byte for byte. A customer
+/// checking status during an outage saw a marketing page and no error, and monitoring saw 200 OK.
+///
+/// Unauthenticated by design: a status page nobody can read during an incident is not a status
+/// page. It exposes only the three signals §4 commits to — Redis health, last completed run, and
+/// scan freshness — as booleans and ages, never counts that would leak tenant activity volume.
+async fn public_status(State(state): State<Arc<AppState>>) -> Response {
+    let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
+    let redis_ok = crate::http::rate_limit_redis::is_enabled();
+
+    // Age of the most recent completed scan, across all tenants. `weissman_async_jobs` takes the
+    // unrestricted branch of its policy when the tenant GUC is unset, so this is a fleet-wide
+    // read without needing a tenant scope.
+    let last_run_age_secs: Option<f64> = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM (now() - max(updated_at)))::float8 \
+           FROM weissman_async_jobs WHERE status = 'completed'",
+    )
+    .fetch_one(state.app_pool.as_ref())
+    .await
+    .ok()
+    .flatten();
+
+    // "Operational" means the pipeline is actually producing, not merely that the process is up —
+    // the distinction this whole audit was about. A completed scan within 24h is the freshness
+    // bar; beyond that the service is degraded regardless of how healthy the containers look.
+    let fresh = last_run_age_secs.map(|a| a < 86_400.0).unwrap_or(false);
+    let operational = postgres_ok && redis_ok && fresh;
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": if operational { "operational" } else { "degraded" },
+            "checks": {
+                "database": if postgres_ok { "ok" } else { "down" },
+                "redis": if redis_ok { "ok" } else { "down" },
+                "scan_pipeline": if fresh { "ok" } else { "stale" },
+            },
+            "last_completed_scan_age_seconds": last_run_age_secs.map(|a| a.round()),
+            "scan_freshness_threshold_seconds": 86_400,
+            "notice": "Maintenance windows and incident updates are published here (SLA_AND_STATUS.md §4).",
+        })),
+    )
+        .into_response()
+}
+
 async fn api_health(State(state): State<Arc<AppState>>) -> Response {
     let uptime_secs = state.started_at.elapsed().as_secs();
     let postgres_ok = db_ping_ok(state.app_pool.as_ref()).await;
@@ -106,8 +155,20 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         }
     }
     let rss_kb = resident_set_kb();
+    // `ok` used to be the literal `true` — it stayed green with postgres_ok:false, and it
+    // reported ok:true for the whole four-day pipeline outage. A top-level verdict that is a
+    // constant is worse than no verdict: it is the field every dashboard, uptime monitor and
+    // human reads first.
+    //
+    // It now reflects the dependency this process cannot work without. Deliberately NOT gated on
+    // pipeline liveness: this endpoint is also the container's liveness probe, and restarting the
+    // backend does not fix a stalled queue — flapping it would crash-loop the API against an
+    // outage it cannot resolve. Queue health is a paging concern and belongs to the
+    // JobQueueStalled / NoScanCompletions alert rules, which read the metrics this process
+    // exports. The HTTP status stays 200 for the same reason; `ok` is the honest field.
+    let ok = postgres_ok;
     (StatusCode::OK, Json(json!({
-        "ok": true,
+        "ok": ok,
         "uptime_secs": uptime_secs,
         "postgres_ok": postgres_ok,
         // Kept for back-compat with older clients that only check `scanning_active`.
