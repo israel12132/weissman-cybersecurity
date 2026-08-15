@@ -2,7 +2,6 @@
 
 use crate::error::JobBusError;
 use rand::Rng;
-use redis::AsyncCommands;
 use uuid::Uuid;
 
 const LEASE_PREFIX: &str = "weissman:job:lease:";

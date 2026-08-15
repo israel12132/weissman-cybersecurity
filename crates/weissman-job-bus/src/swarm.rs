@@ -1,4 +1,14 @@
-//! Self-healing worker swarm — sub-second liveness, gossip, instant orphan triage.
+//! Self-healing worker swarm — sub-second liveness and instant orphan triage.
+//!
+//! Liveness is the TTL'd `weissman:swarm:worker:*` keys: each worker refreshes its own every
+//! 400ms with a 2s TTL, and the coordinator treats a vanished key as a dead worker. That is the
+//! mechanism; nothing else participates in it.
+//!
+//! `weissman:swarm:gossip` is an append-only forensic trail of discrete EVENTS (job claimed,
+//! worker down), bounded by MAXLEN. Nothing in this repo consumes it — it exists to be read by a
+//! human with XRANGE while reconstructing an incident. It is deliberately not a heartbeat feed:
+//! mirroring the 400ms liveness tick into it produced ~2.5 writes/sec/worker that no reader ever
+//! saw and that pushed the genuinely interesting events out of the retained window.
 
 use crate::error::JobBusError;
 use crate::JobBus;
@@ -93,20 +103,19 @@ impl WorkerSwarm {
                     jobs_active: jobs_active.load(Ordering::Relaxed),
                 })
                 .unwrap_or_default();
+                // The TTL'd key IS the liveness mechanism: the coordinator scans these keys, and
+                // a worker that stops refreshing disappears within LIVENESS_TTL_SECS. That is
+                // what makes orphan detection sub-second.
                 let _: Result<(), _> = conn.set_ex(&key, &payload, LIVENESS_TTL_SECS).await;
-                let mut xadd = redis::cmd("XADD");
-                xadd.arg(SWARM_GOSSIP_STREAM)
-                    .arg("MAXLEN")
-                    .arg("~")
-                    .arg(SWARM_GOSSIP_MAXLEN)
-                    .arg("*")
-                    .arg("kind")
-                    .arg("heartbeat")
-                    .arg("worker_id")
-                    .arg(&worker_id)
-                    .arg("pid")
-                    .arg(pid.to_string());
-                let _: Result<(), _> = xadd.query_async(&mut conn).await;
+
+                // Deliberately NOT mirrored into the gossip stream. This loop runs every 400ms
+                // per worker, and nothing in the tree — or anywhere else — ever reads the stream:
+                // there is no XREAD, no XRANGE and no consumer group. It was ~2.5 writes/sec/worker
+                // of pure amplification, and the live stream sat pegged at its 10,000-entry MAXLEN
+                // holding heartbeats no one had ever consumed. The stream keeps the low-volume
+                // EVENTS below (job claimed, worker down), which are genuinely useful to XRANGE
+                // when reconstructing what a fleet did during an incident; a per-tick heartbeat
+                // adds nothing to that and drowns it.
             }
             let mut conn = redis.clone();
             let _: Result<(), _> = conn.del(&key).await;
