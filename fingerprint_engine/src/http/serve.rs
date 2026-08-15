@@ -466,6 +466,29 @@ async fn redirect_to_command_center() -> Redirect {
     Redirect::to("/command-center/")
 }
 
+/// What `/` should say when this process cannot serve the Command Center itself.
+///
+/// In the deployed topology the SPA is served by the nginx gateway, and the backend image ships
+/// no `frontend/dist` — so redirecting `/` to `/command-center/` sent the caller to a path this
+/// process then 404s. Verified against the live backend:
+///
+/// ```text
+/// /                 -> 303  Location: /command-center/
+/// /command-center/  -> 404
+/// ```
+///
+/// A browser coming through the gateway never reaches this route (the gateway serves `/` itself),
+/// so the redirect only ever misled something talking to the backend directly — a probe, an
+/// operator with a port-forward, an internal tool. Answering honestly costs nothing and stops the
+/// backend from advertising a UI it does not have.
+async fn command_center_served_elsewhere() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        r#"{"ok":true,"service":"weissman-server","ui":"served by the gateway at /command-center/, not by this process (no frontend/dist in this image)","api":"/api/health"}"#,
+    )
+}
+
 /// Serves the React SPA index.html for any /command-center/* path so client-side routing works.
 async fn command_center_spa_index(Extension(html): Extension<String>) -> Html<String> {
     Html(html)
@@ -1756,9 +1779,11 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             .route("/", get(redirect_to_command_center))
             .route("/dashboard", get(redirect_to_command_center))
     } else if weissman_core::tls_policy::is_production_environment() {
+        // No static dir: this process CANNOT serve /command-center/, so redirecting there
+        // produced 303 -> 404. Say where the UI actually lives instead.
         Router::new()
-            .route("/", get(redirect_to_command_center))
-            .route("/dashboard", get(redirect_to_command_center))
+            .route("/", get(command_center_served_elsewhere))
+            .route("/dashboard", get(command_center_served_elsewhere))
     } else {
         Router::new()
             .route("/", get(dashboard_page))
