@@ -175,6 +175,52 @@ impl WorkerPoolRole {
     }
 }
 
+
+/// [`reserve_next`] with a set of job kinds the caller cannot currently run.
+///
+/// The worker uses this when its heavy-job semaphore is saturated. Its main loop deliberately
+/// BLOCKS while waiting for a permit (so exactly one job sits in that window and a single pinned
+/// heartbeat suffices), which means claiming a heavy job it cannot start stalls the entire queue —
+/// idle light capacity waits behind it. Filtering at the claim keeps the blocking invariant and
+/// still drains light work.
+///
+/// `exclude` is passed as a bind parameter rather than baked into the SQL so the list stays a
+/// single Rust constant (`HEAVY_KINDS`, asserted against `job_class`) instead of a second copy in
+/// a query string that could silently drift from it.
+pub async fn reserve_next_excluding(
+    pool: &PgPool,
+    worker_id: &str,
+    lock_secs: i64,
+    exclude: &[&str],
+) -> Result<Option<AsyncJob>, sqlx::Error> {
+    reserve_next_excluding_with_role(
+        pool,
+        worker_id,
+        lock_secs,
+        WorkerPoolRole::from_env(),
+        exclude,
+    )
+    .await
+}
+
+/// [`claim_next`] with a set of job kinds the caller cannot currently run. See
+/// [`reserve_next_excluding`].
+pub async fn claim_next_excluding(
+    pool: &PgPool,
+    worker_id: &str,
+    lock_secs: i64,
+    exclude: &[&str],
+) -> Result<Option<AsyncJob>, sqlx::Error> {
+    claim_next_excluding_with_role(
+        pool,
+        worker_id,
+        lock_secs,
+        WorkerPoolRole::from_env(),
+        exclude,
+    )
+    .await
+}
+
 /// Zero-trust reserve: lock row but leave `pending` until cryptographic claim projects `running`.
 pub async fn reserve_next(
     pool: &PgPool,
@@ -189,6 +235,17 @@ pub async fn reserve_next_with_role(
     worker_id: &str,
     lock_secs: i64,
     role: WorkerPoolRole,
+) -> Result<Option<AsyncJob>, sqlx::Error> {
+    reserve_next_excluding_with_role(pool, worker_id, lock_secs, role, &[]).await
+}
+
+/// As above, but skipping `exclude` kinds. See [`reserve_next_excluding`].
+pub async fn reserve_next_excluding_with_role(
+    pool: &PgPool,
+    worker_id: &str,
+    lock_secs: i64,
+    role: WorkerPoolRole,
+    exclude: &[&str],
 ) -> Result<Option<AsyncJob>, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
     let row = sqlx::query(
@@ -205,6 +262,9 @@ pub async fn reserve_next_with_role(
               -- one row starving the whole queue. The cap belongs on the claim, where every path
               -- has to pass through it.
               AND attempt_count < max_attempts
+              -- Kinds the caller cannot currently run (worker: heavy pool saturated). An empty
+              -- array makes `kind <> ALL` trivially true, so the default path is unaffected.
+              AND kind <> ALL($4::text[])
               -- Structural gate for the zero-trust path. `enqueue_held` only makes a job
               -- non-claimable for `hold_secs`; it is a timer, not a gate, so when the
               -- envelope attach failed the row became claimable anyway 30s later and was
@@ -255,6 +315,7 @@ pub async fn reserve_next_with_role(
     .bind(worker_id)
     .bind(lock_secs)
     .bind(role.sql_mode())
+    .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -299,6 +360,17 @@ pub async fn claim_next_with_role(
     lock_secs: i64,
     role: WorkerPoolRole,
 ) -> Result<Option<AsyncJob>, sqlx::Error> {
+    claim_next_excluding_with_role(pool, worker_id, lock_secs, role, &[]).await
+}
+
+/// As above, but skipping `exclude` kinds. See [`reserve_next_excluding`].
+pub async fn claim_next_excluding_with_role(
+    pool: &PgPool,
+    worker_id: &str,
+    lock_secs: i64,
+    role: WorkerPoolRole,
+    exclude: &[&str],
+) -> Result<Option<AsyncJob>, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
     let row = sqlx::query(
         r#"
@@ -314,6 +386,9 @@ pub async fn claim_next_with_role(
               -- one row starving the whole queue. The cap belongs on the claim, where every path
               -- has to pass through it.
               AND attempt_count < max_attempts
+              -- Kinds the caller cannot currently run (worker: heavy pool saturated). An empty
+              -- array makes `kind <> ALL` trivially true, so the default path is unaffected.
+              AND kind <> ALL($4::text[])
               -- No envelope predicate here on purpose: `claim_next` is the NON-bus path
               -- (weissman-worker calls it only when the job bus is disabled), so these rows
               -- never carry `_weissman_job_bus`. The zero-trust gate lives in
@@ -360,6 +435,7 @@ pub async fn claim_next_with_role(
     .bind(worker_id)
     .bind(lock_secs)
     .bind(role.sql_mode())
+    .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
     tx.commit().await?;

@@ -323,3 +323,71 @@ async fn completion_is_fenced_on_worker_ownership() {
     assert!(owner_write, "the actual owner must still be able to complete");
     assert_eq!(after_owner, "completed");
 }
+
+/// A saturated heavy pool must not stall light work.
+///
+/// The worker's main loop deliberately BLOCKS while waiting for a job's class permit — that keeps
+/// exactly one job in the wait window so a single pinned heartbeat suffices. The cost is that
+/// claiming a heavy job it cannot start stalls the ENTIRE queue: idle light capacity sat behind a
+/// heavy job waiting for a slot. Filtering at the claim preserves the blocking invariant and still
+/// drains light work.
+#[tokio::test]
+async fn excluding_kinds_lets_light_work_through_a_saturated_heavy_pool() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    const TENANT_EXCL: i64 = 918_275_005;
+    const HEAVY: &str = "__retry_probe_heavy__";
+    const LIGHT: &str = "__retry_probe_light__";
+
+    let admin = admin_pool(&url).await;
+    let _claims = common::lock_claims(&admin).await;
+    let _ = sqlx::query("DELETE FROM weissman_async_jobs WHERE kind = ANY($1)")
+        .bind(vec![HEAVY, LIGHT])
+        .execute(&admin)
+        .await;
+    let _ = sqlx::query(
+        "INSERT INTO tenants (id, slug, name) VALUES ($1, 'excl-probe', 'Excl probe') \
+         ON CONFLICT (id) DO NOTHING",
+    )
+    .bind(TENANT_EXCL)
+    .execute(&admin)
+    .await;
+
+    // Heavy first, so it is the head of the queue by created_at — the exact shape that stalled it.
+    for kind in [HEAVY, LIGHT] {
+        sqlx::query(
+            "INSERT INTO weissman_async_jobs (tenant_id, kind, payload, status) \
+             VALUES ($1, $2, '{\"_weissman_job_bus\": {\"envelope\": {}}}'::jsonb, 'pending')",
+        )
+        .bind(TENANT_EXCL)
+        .bind(kind)
+        .execute(&admin)
+        .await
+        .expect("seed");
+    }
+
+    let wp = worker_pool(&url).await;
+    let claimed = job_queue::reserve_next_excluding(&wp, "excl-test", 300, &[HEAVY])
+        .await
+        .expect("reserve with exclusion");
+
+    let kind = claimed.as_ref().map(|j| j.kind.clone());
+    let _ = sqlx::query("DELETE FROM weissman_async_jobs WHERE kind = ANY($1)")
+        .bind(vec![HEAVY, LIGHT])
+        .execute(&admin)
+        .await;
+    let _ = sqlx::query("DELETE FROM tenants WHERE id = $1")
+        .bind(TENANT_EXCL)
+        .execute(&admin)
+        .await;
+
+    assert_eq!(
+        kind.as_deref(),
+        Some(LIGHT),
+        "with the heavy kind excluded the claim must skip past it to the light job; got {kind:?} \
+         (None means the exclusion filtered everything — the array bind is wrong; the heavy kind \
+          means the filter is not applied and a full heavy pool still stalls the queue)"
+    );
+}

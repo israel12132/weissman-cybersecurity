@@ -156,8 +156,12 @@ fn job_is_heavy(kind: &str) -> bool {
     job_class(kind).heavy
 }
 
-/// Every kind the table classifies heavy. Used by the guard test below.
-#[cfg(test)]
+/// Every kind the table classifies heavy.
+///
+/// Also used at runtime to keep the queue moving when the heavy pool is saturated: the loop asks
+/// the database to skip these kinds so light work can still be claimed. The guard test below
+/// asserts this list and `job_class` cannot drift apart, which is what keeps the SQL filter and
+/// the Rust classification the same thing rather than two lists that agree by luck.
 const HEAVY_KINDS: &[&str] = &[
     "tenant_full_scan",
     "onboarding_tenant_scan",
@@ -771,10 +775,26 @@ async fn async_main() {
     }
 
     while !stop.load(Ordering::SeqCst) {
-        let claim_result = if bus.is_enabled() {
-            job_queue::reserve_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
+        // When the heavy pool is saturated, ask the database to skip heavy kinds rather than
+        // claiming one and then blocking on its permit. The loop deliberately blocks while
+        // waiting for a permit (see below — it keeps exactly one job in that window so a single
+        // pinned heartbeat suffices), which means a claimed heavy job stalls the ENTIRE queue:
+        // idle light capacity sat unused behind a heavy job that could not start. Filtering at
+        // the claim keeps that invariant intact and still drains light work.
+        //
+        // The exclusion list is HEAVY_KINDS, the same list `job_class` is asserted against, so
+        // the SQL filter and the Rust classification cannot disagree.
+        let heavy_full = heavy_sem.available_permits() == 0;
+        let light_free = light_sem.available_permits() > 0;
+        let exclude: &[&str] = if heavy_full && light_free {
+            HEAVY_KINDS
         } else {
-            job_queue::claim_next(ctrl_pool.as_ref(), &wid, LOCK_SECS).await
+            &[]
+        };
+        let claim_result = if bus.is_enabled() {
+            job_queue::reserve_next_excluding(ctrl_pool.as_ref(), &wid, LOCK_SECS, exclude).await
+        } else {
+            job_queue::claim_next_excluding(ctrl_pool.as_ref(), &wid, LOCK_SECS, exclude).await
         };
 
         // Keep the swarm heartbeat's advertised load true. It published a hardcoded 0, so the
