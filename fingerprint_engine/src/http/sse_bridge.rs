@@ -41,6 +41,7 @@ where
                         "type": "resync",
                         "kind": "stream_lagged",
                         "dropped": dropped,
+                        "ts": chrono::Utc::now().timestamp_millis(),
                     })
                     .to_string();
                     if tx.send(notice).await.is_err() {
