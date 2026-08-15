@@ -96,6 +96,21 @@ jobs:
           done
           exit $bad
 
+  gateway-contract:
+    name: Gateway security contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Nothing in CI exercised the gateway: the ZAP baseline and every UI E2E target the backend
+    # directly on :18000, so the entire edge layer shipped untested — and that is where the
+    # X-Forwarded-For trust boundary, the SPA redirect, the unknown-path response and the security
+    # headers live. Runs the real nginx config against a stub upstream, so it needs no database,
+    # no frontend build and no compose stack.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Gateway security contract
+        run: bash scripts/test_gateway_contract.sh
+
   launcher-contract:
     name: Production launcher contract
     runs-on: ubuntu-latest
