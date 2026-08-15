@@ -31,7 +31,12 @@ function evaluateCycles(out) {
 let out = ''
 try {
   out = execSync(
-    'npx --yes madge --circular src/main.jsx src/TacticalApp.jsx src/providers/ProtectedProviders.jsx src/engineC2/EngineManifestContext.jsx',
+    // `npx --yes madge` fetched an UNPINNED package from the network on every run. In a
+    // container build that makes the image depend on a live registry and on whatever version
+    // madge publishes that day — an unreviewed dependency pulled into the build of a security
+    // product. madge is now an exact-pinned devDependency, so `npm ci` provides it and this
+    // resolves to node_modules/.bin offline and deterministically.
+    'npx --no-install madge --circular src/main.jsx src/TacticalApp.jsx src/providers/ProtectedProviders.jsx src/engineC2/EngineManifestContext.jsx',
     { cwd: frontend, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
   )
 } catch (e) {

@@ -52,7 +52,18 @@ COPY fingerprint_engine ./fingerprint_engine
 COPY shared ./shared
 COPY --from=wasm-build /build/frontend/src/wasm ./frontend/src/wasm
 WORKDIR /build/frontend
-RUN node ../scripts/generate_engine_param_defs.mjs && npx vite build
+# Run the SAME gates `npm run build` runs, not just vite. The image previously invoked
+# `npx vite build` directly, skipping verify-import-cycles and verify-provider-wiring — so a
+# production image could be built from a tree those checks would have rejected, and only CI
+# (which does run `npm run build`) would ever notice. An image build that is weaker than the
+# CI build is a gap you find in production.
+#
+# Both are offline: verify-provider-wiring is pure node, and verify-import-cycles now resolves
+# madge from node_modules (exact-pinned devDependency) instead of fetching it with `npx --yes`.
+RUN node ../scripts/generate_engine_param_defs.mjs \
+ && node ../scripts/verify-import-cycles.mjs \
+ && node ../scripts/verify-provider-wiring.mjs \
+ && npx vite build
 
 # Stage 3 — Nginx gateway (non-root, :8080 inside → :80 on host)
 FROM nginxinc/nginx-unprivileged:1.29-alpine

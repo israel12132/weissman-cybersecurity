@@ -269,6 +269,23 @@ if grep -vE '^\s*#' monitoring/alertmanager.yml | grep -qE '\$\{[A-Z_]+\}'; then
 else
   ok "alertmanager.yml has no un-substituted placeholders"
 fi
+# The two security.txt copies must not drift. frontend/public/security.txt says in a comment that
+# it MUST stay byte-compatible with the gateway-served copy — a rule stated only in prose is
+# exactly the kind that silently rots. They previously disagreed: the SPA copy pointed Policy at
+# /responsible-disclosure, which does not exist, so a researcher following it got a 404 instead of
+# the disclosure policy. Compares directives only, ignoring comments and blank lines.
+_sectxt_directives() { grep -vE '^\s*(#|$)' "$1" | sed 's/[[:space:]]*$//' | sort; }
+if [[ -f deploy/public/.well-known/security.txt && -f frontend/public/security.txt ]]; then
+  if diff -q <(_sectxt_directives deploy/public/.well-known/security.txt) \
+              <(_sectxt_directives frontend/public/security.txt) >/dev/null; then
+    ok "security.txt copies agree (gateway vs SPA)"
+  else
+    bad "security.txt copies disagree — a researcher following the wrong one gets stale contacts"
+  fi
+else
+  bad "a security.txt copy is missing (RFC 9116 disclosure metadata)"
+fi
+
 # redis-exporter must authenticate under the prod overlay (Redis has requirepass).
 # Scans the whole service block rather than a fixed -A4 window: the old form silently began
 # failing the moment an explanatory comment was added above the environment key, which is a check
