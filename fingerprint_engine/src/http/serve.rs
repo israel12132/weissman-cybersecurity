@@ -1967,7 +1967,10 @@ mod cc_stream_tests {
         let stamped = r#"{"_tid":0,"type":"resync","kind":"stream_lagged","dropped":5}"#;
         let normalized = normalize_cc_event(stamped).expect("kinded event passes through");
         let v: Value = serde_json::from_str(&normalized).unwrap();
-        assert!(v.get("_tid").is_none(), "internal _tid must not reach client");
+        assert!(
+            v.get("_tid").is_none(),
+            "internal _tid must not reach client"
+        );
         assert_eq!(v["kind"], "stream_lagged");
         assert_eq!(v["dropped"], 5);
     }

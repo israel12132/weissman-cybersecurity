@@ -357,7 +357,10 @@ mod tests {
         assert_eq!(v["kind"], "stream_lagged");
         assert_eq!(v["dropped"], 7);
         // Same contract as the WS handler's per-client lag notice, incl. the timestamp.
-        assert!(v["ts"].as_i64().unwrap_or(0) > 0, "timestamp must be present");
+        assert!(
+            v["ts"].as_i64().unwrap_or(0) > 0,
+            "timestamp must be present"
+        );
     }
 
     #[test]
