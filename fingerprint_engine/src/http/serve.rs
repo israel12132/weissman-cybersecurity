@@ -771,7 +771,16 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
 fn normalize_cc_event(raw: &str) -> Option<String> {
     let v: Value = serde_json::from_str(raw).ok()?;
     if v.get("kind").is_some() {
-        return Some(raw.to_string());
+        // Already client-shaped (ticker refreshes, resync markers): pass through as-is, but
+        // strip the internal `_tid` tenant stamp — it is a server-side scoping field and must
+        // never reach the client. (The other branches rebuild the frame, so they never carry it.)
+        return Some(match v {
+            Value::Object(mut m) => {
+                m.remove("_tid");
+                Value::Object(m).to_string()
+            }
+            other => other.to_string(),
+        });
     }
     let ts = chrono::Utc::now().timestamp_millis();
     if let Some(event) = v.get("event").and_then(Value::as_str) {
@@ -1948,5 +1957,18 @@ mod cc_stream_tests {
         let v: Value = serde_json::from_str(&normalized).unwrap();
         assert_eq!(v["kind"], "stream_lagged");
         assert_eq!(v["dropped"], 3);
+    }
+
+    /// A kind-shaped frame that still carries the internal `_tid` tenant stamp (e.g. the
+    /// recorder's system-tenant resync marker) must have `_tid` stripped on the way out —
+    /// the scoping field is server-internal and must never reach the client.
+    #[test]
+    fn normalize_strips_internal_tid_from_kinded_frames() {
+        let stamped = r#"{"_tid":0,"type":"resync","kind":"stream_lagged","dropped":5}"#;
+        let normalized = normalize_cc_event(stamped).expect("kinded event passes through");
+        let v: Value = serde_json::from_str(&normalized).unwrap();
+        assert!(v.get("_tid").is_none(), "internal _tid must not reach client");
+        assert_eq!(v["kind"], "stream_lagged");
+        assert_eq!(v["dropped"], 5);
     }
 }

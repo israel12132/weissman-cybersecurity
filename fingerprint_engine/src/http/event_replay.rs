@@ -162,6 +162,28 @@ pub fn parse_last_event_id(query: Option<&str>) -> Option<u64> {
     })
 }
 
+/// Build the resync marker emitted to live clients when the single sequencer itself falls
+/// behind the raw telemetry broadcast.
+///
+/// This lag is distinct from a slow *client*: events dropped here are never assigned a seq,
+/// so they leave **no gap** in the live seq stream and a reconnecting client cannot detect
+/// the loss via `last_event_id`. The marker is stamped [`crate::http::tenant_stream::SYSTEM_TENANT`]
+/// so every connected Command Center socket (any tenant — we don't know whose events were
+/// dropped) receives it, and its shape matches the WS handler's per-client lag notice so the
+/// client's existing resync handler fires and refetches authoritative state.
+#[must_use]
+fn recorder_lag_notice(dropped: u64) -> String {
+    crate::http::tenant_stream::stamp(
+        crate::http::tenant_stream::SYSTEM_TENANT,
+        &serde_json::json!({
+            "type": "resync",
+            "kind": "stream_lagged",
+            "dropped": dropped,
+        })
+        .to_string(),
+    )
+}
+
 /// Spawn the single sequencer/recorder: it drains the raw telemetry broadcast, records each
 /// event (assigning a seq), and re-emits it enriched with `_seq` on `out` for live WS clients.
 /// Recording is the one place seq is assigned, keeping live and replay in the same seq space.
@@ -189,9 +211,18 @@ pub fn spawn_recorder(
                     // for a future reconnect, so a send error here is not fatal.
                     let _ = out.send(enriched);
                 }
-                // A burst outran this single reader: those events are unrecorded, so a later
-                // reconnect will see a seq gap and full-resync. Keep draining.
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                // A burst outran this single sequencer: `dropped` events were overwritten
+                // before we could assign them a seq. Because they never entered the seq space,
+                // the live stream stays contiguous and NO reconnect can detect the loss — so we
+                // must not drop it silently. Count it and push a system-tenant resync marker so
+                // every connected client refetches authoritative state instead of trusting a
+                // now-incomplete feed. Then keep draining.
+                Err(broadcast::error::RecvError::Lagged(dropped)) => {
+                    metrics::counter!("weissman_cc_recorder_lagged_events_total")
+                        .increment(dropped);
+                    let _ = out.send(recorder_lag_notice(dropped));
+                    continue;
+                }
                 // Producer side gone (shutdown) — stop.
                 Err(broadcast::error::RecvError::Closed) => break,
             }
@@ -308,6 +339,31 @@ mod tests {
             slice.events.iter().map(|(s, _)| *s).collect::<Vec<_>>(),
             vec![4, 5]
         );
+    }
+
+    #[test]
+    fn recorder_lag_notice_reaches_every_tenant_as_a_resync_signal() {
+        let notice = recorder_lag_notice(7);
+        // System-tenant stamped: the recorder can't know whose events were dropped, so
+        // every connected client (any tenant) must receive it and resync.
+        assert!(crate::http::tenant_stream::visible_to(&notice, 1).is_some());
+        assert!(crate::http::tenant_stream::visible_to(&notice, 42).is_some());
+        assert!(crate::http::tenant_stream::visible_to(&notice, 9999).is_some());
+        // Shape matches the WS handler's per-client lag notice, so the client's existing
+        // resync handler (type === 'resync' || kind === 'stream_lagged') fires.
+        let v: Value = serde_json::from_str(&notice).unwrap();
+        assert_eq!(v["type"], "resync");
+        assert_eq!(v["kind"], "stream_lagged");
+        assert_eq!(v["dropped"], 7);
+    }
+
+    #[test]
+    fn recorder_lag_notice_is_never_recorded_into_the_seq_space() {
+        // The marker is a live-only control frame: it must NOT be stamped with a seq, so it
+        // is never stored in the replay buffer nor deduped away by a client's last_delivered.
+        let notice = recorder_lag_notice(3);
+        let v: Value = serde_json::from_str(&notice).unwrap();
+        assert!(v.get("_seq").is_none(), "resync marker must carry no _seq");
     }
 
     #[test]

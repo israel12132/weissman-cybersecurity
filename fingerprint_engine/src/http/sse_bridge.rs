@@ -1,4 +1,8 @@
 //! Bounded broadcast → per-client SSE bridge. Drops relay task when client disconnects.
+//!
+//! When a slow client falls behind the broadcast ring, the skipped events are surfaced as an
+//! explicit `resync` event (the same shape `/ws/command-center` uses) rather than dropped
+//! silently, so the client can refetch authoritative state instead of trusting a gapped feed.
 
 use axum::response::sse::Event;
 use futures::stream::Stream;
@@ -29,7 +33,20 @@ where
                         break;
                     }
                 }
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                // Never drop silently: the ring overwrote `dropped` events this slow client
+                // never saw. Emit a resync marker (same shape the WS command-center path uses)
+                // so the client refetches authoritative state instead of trusting a gapped feed.
+                Err(broadcast::error::RecvError::Lagged(dropped)) => {
+                    let notice = serde_json::json!({
+                        "type": "resync",
+                        "kind": "stream_lagged",
+                        "dropped": dropped,
+                    })
+                    .to_string();
+                    if tx.send(notice).await.is_err() {
+                        break;
+                    }
+                }
                 Err(broadcast::error::RecvError::Closed) => break,
             }
         }
