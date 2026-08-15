@@ -296,12 +296,63 @@ pub fn spawn_kev_refresh_worker(pool: Arc<PgPool>) {
     tokio::spawn(async move {
         // First refresh happens 15s after boot so the rest of the stack is warm.
         tokio::time::sleep(Duration::from_secs(15)).await;
+
+        // A failed refresh used to produce one WARN and then sleep the FULL 6h interval before
+        // trying again. So a transient network blip cost six hours of catalog staleness, and a
+        // sustained outage (egress blocked, CISA down, DNS broken) meant the mirror quietly aged
+        // forever while `kev_listed` kept answering "no" for every CVE — a security product
+        // under-reporting known-exploited status with nothing but a WARN every six hours to say
+        // so. Retry sooner, escalate when it is not transient, and publish staleness so it can be
+        // alerted on.
+        const RETRY_BASE_SECS: u64 = 60;
+        const RETRY_MAX_SECS: u64 = 30 * 60;
+        const ESCALATE_AFTER: u32 = 3;
+
+        let mut consecutive_failures: u32 = 0;
+        let mut last_success: Option<std::time::Instant> = None;
         loop {
-            match refresh_kev_catalog(&pool).await {
-                Ok(n) => tracing::info!(target: "intel_kev", rows = n, "KEV catalog refreshed"),
-                Err(e) => tracing::warn!(target: "intel_kev", error = %e, "KEV refresh failed"),
+            let wait = match refresh_kev_catalog(&pool).await {
+                Ok(n) => {
+                    if consecutive_failures >= ESCALATE_AFTER {
+                        tracing::info!(
+                            target: "intel_kev", rows = n, after_failures = consecutive_failures,
+                            "KEV catalog recovered"
+                        );
+                    } else {
+                        tracing::info!(target: "intel_kev", rows = n, "KEV catalog refreshed");
+                    }
+                    consecutive_failures = 0;
+                    last_success = Some(std::time::Instant::now());
+                    metrics::gauge!("weissman_intel_kev_rows").set(n as f64);
+                    metrics::gauge!("weissman_intel_kev_last_success_age_seconds").set(0.0);
+                    REFRESH_INTERVAL_SECS
+                }
+                Err(e) => {
+                    consecutive_failures = consecutive_failures.saturating_add(1);
+                    if consecutive_failures == ESCALATE_AFTER {
+                        tracing::error!(
+                            target: "intel_kev", error = %e, consecutive_failures,
+                            "KEV catalog is not refreshing — known-exploited enrichment is going \
+                             stale; every CVE will keep reporting kev_listed=false"
+                        );
+                    } else {
+                        tracing::warn!(
+                            target: "intel_kev", error = %e, consecutive_failures,
+                            "KEV refresh failed"
+                        );
+                    }
+                    // Exponential backoff, capped well below the success interval so a recoverable
+                    // failure is retried in minutes rather than hours.
+                    (RETRY_BASE_SECS << consecutive_failures.min(5)).min(RETRY_MAX_SECS)
+                }
+            };
+            // Publish staleness on every tick, not only on success, so the gauge keeps climbing
+            // while the catalog rots instead of freezing at its last good value.
+            if let Some(t) = last_success {
+                metrics::gauge!("weissman_intel_kev_last_success_age_seconds")
+                    .set(t.elapsed().as_secs_f64());
             }
-            tokio::time::sleep(Duration::from_secs(REFRESH_INTERVAL_SECS)).await;
+            tokio::time::sleep(Duration::from_secs(wait)).await;
         }
     });
 }

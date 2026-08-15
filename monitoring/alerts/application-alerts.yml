@@ -218,6 +218,25 @@ groups:
             their attempt ceiling. They will never run and never drain. Retire them explicitly
             (status='dead' with a reason) rather than leaving them to distort queue depth.
 
+      - alert: KevCatalogStale
+        # The CISA known-exploited catalog drives `kev_listed` on every vulnerability. When the
+        # refresh fails there is nothing in the product that looks wrong — findings simply keep
+        # reporting kev_listed=false, which is indistinguishable from "not known-exploited". A
+        # security product silently under-reporting exploitation status is the kind of failure a
+        # customer discovers during an incident, so it gets a real threshold: the refresh interval
+        # is 6h, and 24h means four consecutive cycles have failed.
+        expr: weissman_intel_kev_last_success_age_seconds > 86400
+        for: 30m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "CISA KEV catalog has not refreshed in {{ $value | humanizeDuration }}"
+          description: >-
+            known_exploited_vulnerabilities.json has not been fetched successfully. Every CVE will
+            keep reporting kev_listed=false regardless of its real status. Check egress to
+            www.cisa.gov from the backend container.
+
       - alert: JobDeadLetterGrowing
         # Jobs exhausting their retries. A steady trickle is normal; a sustained rate is not.
         expr: increase(weissman_async_jobs_by_status{status="dead"}[1h]) > 50
