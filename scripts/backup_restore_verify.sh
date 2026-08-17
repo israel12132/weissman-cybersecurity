@@ -20,6 +20,19 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Read .env so the backup location has ONE definition. This script, backup_pitr_setup.sh and
+# go_live_check.sh each defaulted to /var/backups/weissman independently, so an operator who
+# could not write there (no root) pointed one of them elsewhere via the environment and the
+# other two kept reading the empty default — the drill would pass while the gate reported "no
+# restore-verify marker", each of them correct about a different directory.
+if [[ -f "${ROOT}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT}/.env"
+  set +a
+fi
+
 BASE_DIR="${WEISSMAN_PITR_BASE_DIR:-/var/backups/weissman/base}"
 PG_IMAGE="${WEISSMAN_RESTORE_PG_IMAGE:-pgvector/pgvector:pg16}"
 DB_NAME="${WEISSMAN_RESTORE_DB:-weissman}"
@@ -33,7 +46,18 @@ cleanup() {
   if command -v docker >/dev/null 2>&1; then
     docker rm -f "$CT_NAME" >/dev/null 2>&1 || true
   fi
-  [[ -n "$WORK" && -d "$WORK" ]] && rm -rf "$WORK" || true
+  if [[ -n "$WORK" && -d "$WORK" ]]; then
+    # The restored data dir was chown'd to the in-image postgres uid (999) so the official
+    # entrypoint would accept it, which leaves an unprivileged caller unable to delete it:
+    # `rm -rf` failed with EPERM and the directory survived. This script is meant to run
+    # NIGHTLY, so every run leaked another undeletable copy of the whole cluster. Hand it back
+    # from a root container first — same trick used to take it away.
+    if command -v docker >/dev/null 2>&1 && [[ -d "${WORK}/pgdata" ]]; then
+      docker run --rm --entrypoint chown -v "${WORK}:/work" "$PG_IMAGE" \
+        -R "$(id -u):$(id -g)" /work >/dev/null 2>&1 || true
+    fi
+    rm -rf "$WORK" 2>/dev/null || echo "[restore-verify] WARN: could not remove $WORK" >&2
+  fi
 }
 trap cleanup EXIT
 

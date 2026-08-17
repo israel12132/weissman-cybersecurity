@@ -183,7 +183,29 @@ fi
 [[ -x scripts/backup_pitr_setup.sh ]] && ok "PITR setup script" || bad "PITR setup script"
 [[ -x scripts/backup_restore_verify.sh ]] && ok "PITR restore-verify script" || bad "PITR restore-verify script (recoverability unproven)"
 # Existence of a backup is not recoverability — require a recent successful restore drill.
-RV_MARKER="${WEISSMAN_PITR_BASE_DIR:-/var/backups/weissman/base}/.last_restore_verify_ok"
+#
+# Take the backup location from .env when the caller has not exported it, so this gate reads the
+# SAME directory the drill writes. Only this one key is lifted out; sourcing .env wholesale here
+# would clobber this script's own pass/fail/warn counters. An operator without root cannot use the
+# /var/backups default, and while that path was hard-defaulted here the drill passed against its
+# real directory and this gate reported "no marker" against an empty one — both correct, about
+# different directories.
+PITR_BASE="${WEISSMAN_PITR_BASE_DIR:-}"
+if [[ -z "$PITR_BASE" && -f .env ]]; then
+  PITR_BASE="$(sed -n 's/^[[:space:]]*WEISSMAN_PITR_BASE_DIR=//p' .env | tail -1 | tr -d "\"'")"
+fi
+PITR_BASE="${PITR_BASE:-/var/backups/weissman/base}"
+
+# A backup that does not exist cannot be stale, so establish that one exists before judging
+# freshness. Otherwise "no marker yet" reads as a soft not-run-yet when it equally covers the case
+# this stack was actually in: archive_mode=off, no backup directory, and no scheduled job.
+if compgen -G "${PITR_BASE}/base_*" >/dev/null 2>&1; then
+  ok "base backup present (${PITR_BASE})"
+else
+  bad "NO base backup exists in ${PITR_BASE} — the database is unrecoverable (scripts/backup_pitr_setup.sh base)"
+fi
+
+RV_MARKER="${PITR_BASE}/.last_restore_verify_ok"
 if [[ -f "$RV_MARKER" ]]; then
   RV_TS="$(cat "$RV_MARKER" 2>/dev/null || echo 0)"
   RV_AGE=$(( $(date -u +%s) - ${RV_TS:-0} ))
