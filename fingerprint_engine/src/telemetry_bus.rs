@@ -135,7 +135,18 @@ pub fn spawn_bridge(channel: &'static str, tx: broadcast::Sender<String>) {
                             let _: Result<(), _> = conn.publish(&topic, env).await;
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    // Egress fell behind: `dropped` local events were not republished to Redis,
+                    // so peer replicas miss them (local subscribers are unaffected — they read a
+                    // separate receiver). Durable cross-replica replay is a tracked follow-up;
+                    // surface the gap as a metric so it isn't lost silently. Keep draining.
+                    Err(broadcast::error::RecvError::Lagged(dropped)) => {
+                        metrics::counter!(
+                            "weissman_telemetry_bus_egress_lagged_total",
+                            "channel" => channel,
+                        )
+                        .increment(dropped);
+                        continue;
+                    }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
