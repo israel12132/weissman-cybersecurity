@@ -176,18 +176,65 @@ sync_grafana_password() {
     echo "Grafana container not running — skip CLI reset"
     return 0
   fi
+
+  # Grafana's admin login is NOT the monitoring scrape credential. `$PASSWORD` here is
+  # MONITORING_BASIC_AUTH_PASSWORD, which exists so Prometheus can scrape its own metrics
+  # endpoint; compose wires Grafana's admin to GRAFANA_ADMIN_PASSWORD instead
+  # (`GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?}`). Using $PASSWORD here reset the
+  # admin to the wrong secret, so every documented way to log in returned 401.
+  local gf_pass="${GRAFANA_ADMIN_PASSWORD:-}"
+  if [[ -z "$gf_pass" ]]; then
+    echo "GRAFANA_ADMIN_PASSWORD is not set — refusing to guess Grafana's admin password" >&2
+    return 1
+  fi
+
   # Pass the password via the environment (docker reads GF_PASS from its own env
   # when `-e GF_PASS` is given with no value), so it never appears on the argv
   # that `ps aux` / `docker inspect` expose.
-  GF_PASS="$PASSWORD" docker exec -e GF_PASS "$cid" \
-    sh -c 'grafana-cli admin reset-admin-password "$GF_PASS"' >/dev/null
-  # GF_SECURITY_ADMIN_USER (docker-compose.prod.yml) names the admin login on a FRESH
-  # Grafana volume; on an existing volume the original login is kept and only the
-  # password is reset here. Report what Grafana actually has so the banner cannot lie.
-  local login
-  login="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$cid" \
-             | sed -n 's/^GF_SECURITY_ADMIN_USER=//p' | head -1)"
-  echo "Grafana admin password synced (login: ${login:-admin})"
+  local cli_out cli_rc=0
+  cli_out="$(GF_PASS="$gf_pass" docker exec -e GF_PASS "$cid" \
+    sh -c 'grafana-cli admin reset-admin-password "$GF_PASS"' 2>&1)" || cli_rc=$?
+  if (( cli_rc != 0 )); then
+    # This used to be `>/dev/null` with no status check, so a failed reset still printed
+    # "synced". Surface it instead — but scrub the output, grafana-cli echoes the password.
+    echo "grafana-cli reset-admin-password failed (exit ${cli_rc}):" >&2
+    printf '%s\n' "${cli_out//$gf_pass/<redacted>}" >&2
+    return 1
+  fi
+
+  # Do not report a login we merely *configured*. GF_SECURITY_ADMIN_USER names the admin only
+  # when Grafana initialises a FRESH volume; on an existing volume the original login survives
+  # and `reset-admin-password` changes the password of user id 1 whatever it is called. Probe
+  # the running API and report the login that actually authenticates, so the banner cannot lie.
+  local port
+  port="$(docker port "$cid" 3000/tcp 2>/dev/null | head -1 | sed 's/.*://')"
+  if [[ -z "$port" ]]; then
+    echo "Grafana admin password reset, but its API port is not published — login not verified" >&2
+    return 0
+  fi
+
+  local env_user candidate real_login=""
+  env_user="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$cid" \
+                | sed -n 's/^GF_SECURITY_ADMIN_USER=//p' | head -1)"
+  for candidate in "$env_user" admin "${WEISSMAN_ADMIN_EMAIL:-}"; do
+    [[ -n "$candidate" ]] || continue
+    if curl -fsS -m 10 -u "${candidate}:${gf_pass}" \
+         "http://127.0.0.1:${port}/api/user" >/dev/null 2>&1; then
+      real_login="$candidate"
+      break
+    fi
+  done
+
+  if [[ -z "$real_login" ]]; then
+    echo "Grafana admin password was reset but NO login authenticates with it." >&2
+    echo "  Tried: ${env_user:-<unset>}, admin, ${WEISSMAN_ADMIN_EMAIL:-<unset>}" >&2
+    return 1
+  fi
+  echo "Grafana admin password synced (verified login: ${real_login})"
+  if [[ -n "$env_user" && "$real_login" != "$env_user" ]]; then
+    echo "  note: GF_SECURITY_ADMIN_USER is '${env_user}', but this volume's admin is" \
+         "'${real_login}' — the env var only names the admin on a fresh volume."
+  fi
 }
 
 case "${1:-all}" in
