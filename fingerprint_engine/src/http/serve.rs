@@ -792,9 +792,18 @@ async fn dashboard_page(State(state): State<Arc<AppState>>) -> Response {
 
 /// Normalize internal telemetry JSON to Command Center `{ kind, payload, ts }` shape.
 fn normalize_cc_event(raw: &str) -> Option<String> {
-    let v: Value = serde_json::from_str(raw).ok()?;
+    let mut v: Value = serde_json::from_str(raw).ok()?;
+    // Internal fields must never reach the client: `_tid` is the tenant scoping stamp and `_seq`
+    // is the server sequence. Strip both up-front so neither the kind-passthrough below nor a
+    // nested `payload` (the `v.clone()` branch) can leak them. `_seq` is reattached at the top
+    // level by `cc_with_seq` for the client's Last-Event-ID, so removing it here is safe.
+    if let Value::Object(ref mut m) = v {
+        m.remove("_tid");
+        m.remove("_seq");
+    }
     if v.get("kind").is_some() {
-        return Some(raw.to_string());
+        // Already client-shaped (ticker refreshes, resync markers): pass through unchanged.
+        return Some(v.to_string());
     }
     let ts = chrono::Utc::now().timestamp_millis();
     if let Some(event) = v.get("event").and_then(Value::as_str) {
@@ -1977,5 +1986,36 @@ mod cc_stream_tests {
         let v: Value = serde_json::from_str(&normalized).unwrap();
         assert_eq!(v["kind"], "stream_lagged");
         assert_eq!(v["dropped"], 3);
+    }
+
+    /// A kind-shaped frame that still carries the internal `_tid` tenant stamp (e.g. the
+    /// recorder's system-tenant resync marker) must have `_tid` stripped on the way out —
+    /// the scoping field is server-internal and must never reach the client.
+    #[test]
+    fn normalize_strips_internal_tid_from_kinded_frames() {
+        let stamped = r#"{"_tid":0,"type":"resync","kind":"stream_lagged","dropped":5}"#;
+        let normalized = normalize_cc_event(stamped).expect("kinded event passes through");
+        let v: Value = serde_json::from_str(&normalized).unwrap();
+        assert!(
+            v.get("_tid").is_none(),
+            "internal _tid must not reach client"
+        );
+        assert_eq!(v["kind"], "stream_lagged");
+        assert_eq!(v["dropped"], 5);
+    }
+
+    /// A normal telemetry frame whose payload is passed through via `v.clone()` (non-finding
+    /// events) must not smuggle the internal `_tid`/`_seq` into the nested `payload` — the
+    /// up-front strip guards every branch, not just the kind-passthrough.
+    #[test]
+    fn normalize_does_not_leak_tid_or_seq_into_nested_payload() {
+        let stamped = r#"{"_tid":9,"_seq":123,"event":"progress","message":"scanning"}"#;
+        let normalized = normalize_cc_event(stamped).expect("event frame normalizes");
+        let v: Value = serde_json::from_str(&normalized).unwrap();
+        assert!(v.get("_tid").is_none(), "top-level _tid must not leak");
+        assert!(v.get("_seq").is_none(), "top-level _seq must not leak");
+        let payload = &v["payload"];
+        assert!(payload.get("_tid").is_none(), "nested _tid must not leak");
+        assert!(payload.get("_seq").is_none(), "nested _seq must not leak");
     }
 }

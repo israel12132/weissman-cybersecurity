@@ -62,9 +62,13 @@ license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 # Duplicate major versions are common in large trees; surface them without failing the build.
 multiple-versions = "warn"
 # A wildcard version requirement is a real supply-chain smell (pulls anything).
-# Enforced as a hard failure: the current lock has zero `version = "*"` requirements,
-# so this cannot break today's build and blocks any future wildcard from being introduced.
+# Enforced as a hard failure for REGISTRY deps: blocks any future `version = "*"` on a
+# crates.io dependency. Internal workspace crates are wired by `path` with no version (the
+# normal monorepo idiom), which cargo-deny >=0.20 reports as a wildcard — allow those, since
+# a local path dep carries no supply-chain risk. (This keeps the registry-wildcard gate intact
+# while unblocking the 7 first-party path deps that started failing on the cargo-deny bump.)
 wildcards = "deny"
+allow-wildcard-paths = true
 
 [sources]
 # Only crates.io — reject any unknown registry or git source (typosquat / unvetted origin).
