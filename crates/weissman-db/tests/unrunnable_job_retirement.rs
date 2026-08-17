@@ -172,9 +172,18 @@ async fn retires_only_permanently_unrunnable_rows() {
             .expect("read reason");
     cleanup(&p).await;
 
-    assert_eq!(retired, 2, "exactly the two terminal rows should be retired");
-    assert_eq!(s_no_env, "dead", "an envelope-less row past the grace window can never be claimed");
-    assert_eq!(s_exhausted, "dead", "a row at its attempt ceiling can never be claimed");
+    assert_eq!(
+        retired, 2,
+        "exactly the two terminal rows should be retired"
+    );
+    assert_eq!(
+        s_no_env, "dead",
+        "an envelope-less row past the grace window can never be claimed"
+    );
+    assert_eq!(
+        s_exhausted, "dead",
+        "a row at its attempt ceiling can never be claimed"
+    );
 
     // The dangerous direction: these must NOT be touched.
     assert_eq!(
@@ -186,7 +195,10 @@ async fn retires_only_permanently_unrunnable_rows() {
         s_held, "pending",
         "a row whose run_after is in the future is not unrunnable, just not due yet"
     );
-    assert_eq!(s_healthy, "pending", "a normal queued job must be left alone");
+    assert_eq!(
+        s_healthy, "pending",
+        "a normal queued job must be left alone"
+    );
 
     assert!(
         reason.contains("could never be claimed"),

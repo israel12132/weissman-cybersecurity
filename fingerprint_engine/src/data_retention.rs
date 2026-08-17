@@ -52,7 +52,10 @@ async fn run_intel_dynamic_retention(pool: &PgPool, days: i64) -> Result<u64, sq
 /// `enqueue_held` inserts a row WITHOUT an envelope and attaches it moments later, so retiring
 /// envelope-less rows on sight would destroy jobs mid-enqueue. The default grace is far longer
 /// than the 300s ceiling `enqueue_held` clamps its hold to.
-async fn retire_unrunnable_pending_jobs(pool: &PgPool, grace_secs: i64) -> Result<u64, sqlx::Error> {
+async fn retire_unrunnable_pending_jobs(
+    pool: &PgPool,
+    grace_secs: i64,
+) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs
               SET status = 'dead',

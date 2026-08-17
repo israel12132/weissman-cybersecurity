@@ -4,7 +4,7 @@
 <strong style="font-size:1.5em">WEISSMAN CYBERSECURITY</strong><br/>
 <strong style="font-size:1.25em">ספר המוצר — מיפוי מלא של הפלטפורמה</strong><br/>
 <em>לוחות · מנועים · APIs · תשתית · surfaces — אפס פערים</em><br/><br/>
-גרסה: 2026-08-09 · **605 עמודים**
+גרסה: 2026-08-17 · **605 עמודים**
 </p>
 
 > **להצגה למנכ"ל / מכירות:** פתחו `docs/sales/viewer/index.html` בדפדפן — עיצוב CEO, חיפוש, הדפסה ל-PDF.

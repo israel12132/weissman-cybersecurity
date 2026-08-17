@@ -414,6 +414,10 @@ mod tests {
         assert!(!seen.insert_new(&format!("task-{}", SeenTasks::CAPACITY + 5)));
         // ... and the set has not grown without bound.
         assert!(seen.set.len() <= SeenTasks::CAPACITY);
-        assert_eq!(seen.set.len(), seen.order.len(), "index and queue stay in step");
+        assert_eq!(
+            seen.set.len(),
+            seen.order.len(),
+            "index and queue stay in step"
+        );
     }
 }

@@ -206,8 +206,26 @@ async fn stale_reclaim_dead_letters_exhausted_and_requeues_the_rest() {
     reset(&admin, TENANT_RECLAIM).await;
 
     // Both are `running` with a lock that lapsed an hour ago — the worker-died shape.
-    let exhausted = insert_job(&admin, TENANT_RECLAIM, "running", 5, 5, true, Some("dead-worker")).await;
-    let retryable = insert_job(&admin, TENANT_RECLAIM, "running", 1, 5, true, Some("dead-worker")).await;
+    let exhausted = insert_job(
+        &admin,
+        TENANT_RECLAIM,
+        "running",
+        5,
+        5,
+        true,
+        Some("dead-worker"),
+    )
+    .await;
+    let retryable = insert_job(
+        &admin,
+        TENANT_RECLAIM,
+        "running",
+        1,
+        5,
+        true,
+        Some("dead-worker"),
+    )
+    .await;
 
     let wp = worker_pool(&url).await;
     job_queue::reclaim_stale_running_locks(&wp)
@@ -234,7 +252,9 @@ async fn stale_reclaim_dead_letters_exhausted_and_requeues_the_rest() {
         "a job still under its cap must be requeued, not killed"
     );
     assert!(
-        preserved.unwrap_or_default().contains("stale lock reclaimed"),
+        preserved
+            .unwrap_or_default()
+            .contains("stale lock reclaimed"),
         "the reclaim marker must be recorded"
     );
 }
@@ -250,7 +270,16 @@ async fn force_requeue_applies_a_backoff() {
     let admin = admin_pool(&url).await;
     reset(&admin, TENANT_REQUEUE).await;
 
-    let id = insert_job(&admin, TENANT_REQUEUE, "running", 1, 5, false, Some("stuck-worker")).await;
+    let id = insert_job(
+        &admin,
+        TENANT_REQUEUE,
+        "running",
+        1,
+        5,
+        false,
+        Some("stuck-worker"),
+    )
+    .await;
 
     let wp = worker_pool(&url).await;
     job_queue::force_requeue_running(&wp, id, "stuck-worker", "terminal write failed")
@@ -286,7 +315,16 @@ async fn completion_is_fenced_on_worker_ownership() {
     reset(&admin, TENANT_FENCE).await;
 
     // The row is `running` and owned by worker B — worker A's lease lapsed and it was reclaimed.
-    let id = insert_job(&admin, TENANT_FENCE, "running", 1, 5, false, Some("worker-B")).await;
+    let id = insert_job(
+        &admin,
+        TENANT_FENCE,
+        "running",
+        1,
+        5,
+        false,
+        Some("worker-B"),
+    )
+    .await;
 
     let wp = worker_pool(&url).await;
     let stale_write = job_queue::complete_job_with_result_owned(
@@ -320,7 +358,10 @@ async fn completion_is_fenced_on_worker_ownership() {
         after_stale, "running",
         "the row must still belong to its current owner after a stale completion attempt"
     );
-    assert!(owner_write, "the actual owner must still be able to complete");
+    assert!(
+        owner_write,
+        "the actual owner must still be able to complete"
+    );
     assert_eq!(after_owner, "completed");
 }
 

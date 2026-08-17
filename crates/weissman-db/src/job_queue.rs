@@ -175,7 +175,6 @@ impl WorkerPoolRole {
     }
 }
 
-
 /// [`reserve_next`] with a set of job kinds the caller cannot currently run.
 ///
 /// The worker uses this when its heavy-job semaphore is saturated. Its main loop deliberately
