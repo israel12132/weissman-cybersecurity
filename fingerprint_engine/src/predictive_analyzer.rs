@@ -144,11 +144,24 @@ async fn run_security_events_llm_cycle(
     if llm_base.trim().is_empty() {
         return Ok(());
     }
+    // Scope to `tid`. This read used to run on the bare `pool` with no tenant predicate, against a
+    // table that (until 20260817000000_security_events_rls) had no RLS at all — so it returned the
+    // most recent 120 events across EVERY tenant, stamped each line with `tenant:<id>` and the
+    // client IP, and posted them to the LLM endpoint configured by tenant `tid`. One customer's
+    // third-party model provider therefore received other customers' authentication and BYPASSRLS
+    // audit trails, attributed by tenant. The result is stamped to `tid`'s telemetry stream, so
+    // `tid`'s own events are the only ones it was ever meant to describe.
+    //
+    // The tenant label is gone with it: it identified nothing once the rows are all `tid`, and
+    // sending it was the leak.
     let rows: Vec<String> = sqlx::query_scalar(
-        r#"SELECT coalesce(event_type,'') || ' | tenant:' || coalesce(tenant_id::text,'') ||
+        r#"SELECT coalesce(event_type,'') ||
                ' | ip:' || coalesce(host(client_ip)::text,'null') || ' | ' || left(coalesce(details::text,''), 400)
-           FROM security_events ORDER BY id DESC LIMIT 120"#,
+           FROM security_events
+           WHERE tenant_id = $1
+           ORDER BY id DESC LIMIT 120"#,
     )
+    .bind(tid)
     .fetch_all(pool)
     .await
     .map_err(|e| e.to_string())?;

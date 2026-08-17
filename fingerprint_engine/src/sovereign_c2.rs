@@ -218,6 +218,17 @@ async fn maybe_full_cloak(pool: &PgPool) {
         return;
     }
 
+    // Deliberately NOT tenant-scoped, unlike the other readers of this table.
+    //
+    // The control this feeds is Cloudflare's zone-wide security level, and the zone fronts the
+    // whole deployment — there is no per-tenant edge to put under attack mode. A distributed
+    // attack is also exactly the case that would slip under a per-tenant threshold while clearing
+    // the global one. Only a single COUNT crosses the boundary: no rows, no IPs, and no per-tenant
+    // detail is exposed to anyone.
+    //
+    // security_events is FORCE RLS as of 20260817000000_security_events_rls; this runs on a pool
+    // with no tenant GUC, which the policy admits, so the count stays deployment-wide by design.
+    // Scoping it to a tenant would silently disable edge protection for everyone else.
     let count: Result<i64, sqlx::Error> = sqlx::query_scalar(
         r#"
         SELECT COUNT(DISTINCT client_ip)::bigint

@@ -507,13 +507,19 @@ pub async fn run_self_defense_audit(
         .unwrap_or_default();
     let _ = tx.commit().await;
 
+    // Scope to the tenant this audit is FOR. The predicate used to be time-only, on a pool with no
+    // tenant GUC and against a table that had no RLS, so a self-defense audit run for one tenant
+    // was assembled from every tenant's security events — and its conclusions handed to that one
+    // tenant.
     let event_rows = sqlx::query(
         r#"SELECT COALESCE(event_type, '') AS et, COALESCE(details::text, '{}') AS dt
            FROM security_events
-           WHERE created_at >= NOW() - INTERVAL '48 hours'
+           WHERE tenant_id = $1
+             AND created_at >= NOW() - INTERVAL '48 hours'
            ORDER BY id DESC
            LIMIT 80"#,
     )
+    .bind(tenant_id)
     .fetch_all(pool)
     .await
     .unwrap_or_default();
