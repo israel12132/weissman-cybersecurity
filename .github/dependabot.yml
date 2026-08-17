@@ -4,3 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Wait 7 days before proposing an update to a newly published version — a
+    # freshly published (possibly malicious/unstable) release gets time to be
+    # yanked or flagged before it lands in a PR. (Semgrep dependabot-missing-cooldown.)
+    cooldown:
+      default-days: 7
