@@ -143,7 +143,7 @@ done
 head_ "5. Bind-mount contract — a missing host path becomes a DIRECTORY, not a file"
 # Docker materialises an absent bind source as an empty directory. For a mount that should
 # be a config FILE, the container then gets a directory and refuses to start.
-GENERATED_AT_PREFLIGHT=(monitoring/prometheus-web.generated.yml)
+GENERATED_AT_PREFLIGHT=(monitoring/prometheus-web.generated.yml monitoring/prometheus-scrape-password.generated monitoring/alertmanager-web.generated.yml)
 mapfile -t mounts < <(
   grep -oE '^\s+- \./[^:]+:[^:]+' docker-compose.yml | sed -E 's/^\s+- \.\/([^:]+):.*/\1/' | sort -u
 )

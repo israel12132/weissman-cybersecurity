@@ -226,39 +226,20 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
 
     // This is the exact call the worker makes every poll. Before the fix it returned
     // Err(invalid input syntax for type bigint: "").
-    let claimed = job_queue::claim_next_with_role(
-        &worker_pool,
-        "rls-worker-dequeue-regression",
-        300,
-        WorkerPoolRole::Mixed,
-    )
-    .await;
-
-    let claimed = match claimed {
-        Ok(job) => job,
-        Err(e) => {
-            cleanup(&pool, &[TENANT_A, TENANT_B]).await;
-            panic!(
-                "claim_next_with_role failed under the worker's empty-scope posture: {e}. \
-                 This is the four-day production outage: every worker poll errored while \
-                 /api/health still reported scanning_active: true. \
-                 Check migration 20260811000000_rls_tenant_guc_cast_safety is applied."
-            );
-        }
-    };
-
-    let job = claimed.expect("worker must claim a pending job, not see an empty queue");
-    assert_eq!(job.kind, PROBE_KIND, "claimed an unrelated job");
-    assert!(
-        job.tenant_id == TENANT_A || job.tenant_id == TENANT_B,
-        "claimed job must belong to one of the probe tenants, got {}",
-        job.tenant_id
-    );
-
-    // Claim the rest and prove the worker really crosses the tenant boundary — a policy that
-    // silently collapsed to a single tenant would still pass the first assertion.
-    let mut seen_tenants = std::collections::HashSet::from([job.tenant_id]);
-    for _ in 0..3 {
+    //
+    // `claim_next_with_role` claims GLOBALLY: across every tenant AND every kind, in `created_at`
+    // FIFO order (see the query in job_queue.rs — there is no priority column, and `Mixed` accepts
+    // every non-research kind). A shared CI database therefore hands back whatever pending job is
+    // oldest first — e.g. a `command_center_engine` job left pending by the API-smoke step that
+    // runs earlier in the same engine-wiring job. The invariant under test is that the empty-scope
+    // claim (a) never errors, and (b) crosses the tenant boundary for OUR probe jobs — NOT that our
+    // freshly-seeded jobs happen to sort ahead of that pre-existing noise. So we drain the queue
+    // like a real worker, account only our probe jobs, and let unrelated claims fall through.
+    let mut seen_tenants = std::collections::HashSet::new();
+    let mut claimed_probe = false;
+    // 4 probe jobs + generous slack for unrelated pending jobs sitting ahead of them in the queue.
+    // Each claim flips a distinct row to `running`, so the loop monotonically drains toward ours.
+    for _ in 0..64 {
         match job_queue::claim_next_with_role(
             &worker_pool,
             "rls-worker-dequeue-regression",
@@ -267,19 +248,42 @@ async fn worker_dequeues_across_tenants_with_empty_scope() {
         )
         .await
         {
-            Ok(Some(j)) if j.kind == PROBE_KIND => {
-                seen_tenants.insert(j.tenant_id);
+            Ok(Some(job)) if job.kind == PROBE_KIND => {
+                claimed_probe = true;
+                assert!(
+                    job.tenant_id == TENANT_A || job.tenant_id == TENANT_B,
+                    "claimed probe job must belong to one of the probe tenants, got {}",
+                    job.tenant_id
+                );
+                seen_tenants.insert(job.tenant_id);
+                // Once we've proven the empty scope crosses the boundary, stop draining.
+                if seen_tenants.contains(&TENANT_A) && seen_tenants.contains(&TENANT_B) {
+                    break;
+                }
             }
-            Ok(_) => break,
+            // Unrelated job from the shared queue (not ours) — keep draining toward our probes.
+            Ok(Some(_)) => continue,
+            // Empty queue: nothing (more) left to claim.
+            Ok(None) => break,
             Err(e) => {
                 cleanup(&pool, &[TENANT_A, TENANT_B]).await;
-                panic!("subsequent claim failed: {e}");
+                panic!(
+                    "claim_next_with_role failed under the worker's empty-scope posture: {e}. \
+                     This is the four-day production outage: every worker poll errored while \
+                     /api/health still reported scanning_active: true. \
+                     Check migration 20260811000000_rls_tenant_guc_cast_safety is applied."
+                );
             }
         }
     }
 
     cleanup(&pool, &[TENANT_A, TENANT_B]).await;
 
+    assert!(
+        claimed_probe,
+        "the worker claimed no probe job under the empty scope — either the seeded jobs were not \
+         claimable, or the drain bound was exhausted by unrelated work before reaching them"
+    );
     assert!(
         seen_tenants.contains(&TENANT_A) && seen_tenants.contains(&TENANT_B),
         "the worker must dequeue across tenants (that is the whole point of the empty scope); \
