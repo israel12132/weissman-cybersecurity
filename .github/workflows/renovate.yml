@@ -62,7 +62,7 @@ jobs:
 
       - name: Renovate
         if: steps.preflight.outputs.enabled == 'true'
-        uses: renovatebot/github-action@3064367f740a1a91cca218698a63902689cce200 # v46.1.20
+        uses: renovatebot/github-action@316d7cd859606d6039a2182b7d69199e9b036835 # v46.2.1
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
           # Pin the Renovate RUNTIME too. The action commit is pinned above, but the

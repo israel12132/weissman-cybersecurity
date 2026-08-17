@@ -121,12 +121,13 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // healthchecks hardcode) — matches how DATABASE_URL is validated above. A blank/unset PORT
     // still defaults to 8000.
     let port: u16 = match std::env::var("PORT") {
-        Ok(p) if !p.trim().is_empty() => p
-            .trim()
-            .parse()
-            .map_err(|_| -> Box<dyn std::error::Error + Send + Sync> {
-                format!("PORT is not a valid port number: {p:?}").into()
-            })?,
+        Ok(p) if !p.trim().is_empty() => {
+            p.trim()
+                .parse()
+                .map_err(|_| -> Box<dyn std::error::Error + Send + Sync> {
+                    format!("PORT is not a valid port number: {p:?}").into()
+                })?
+        }
         _ => 8000,
     };
     fingerprint_engine::http::run_http_tcp_listener(router, port).await;

@@ -125,10 +125,12 @@ async fn begin_tenant_tx_scopes_rls_and_the_bare_connection_pattern_sees_nothing
     .execute(&pool)
     .await
     .expect("enable RLS");
-    sqlx::query(&format!("ALTER TABLE {PROBE_TABLE} FORCE ROW LEVEL SECURITY"))
-        .execute(&pool)
-        .await
-        .expect("force RLS");
+    sqlx::query(&format!(
+        "ALTER TABLE {PROBE_TABLE} FORCE ROW LEVEL SECURITY"
+    ))
+    .execute(&pool)
+    .await
+    .expect("force RLS");
     sqlx::query(&format!(
         "CREATE POLICY {PROBE_TABLE}_tenant ON {PROBE_TABLE} FOR ALL \
          USING (tenant_id = current_setting('app.current_tenant_id', true)::bigint) \
@@ -154,7 +156,9 @@ async fn begin_tenant_tx_scopes_rls_and_the_bare_connection_pattern_sees_nothing
         sqlx::query("SET LOCAL ROLE weissman_app")
             .execute(&mut *tx)
             .await
-            .expect("SET LOCAL ROLE weissman_app (GRANT weissman_app TO the test role if this fails)");
+            .expect(
+                "SET LOCAL ROLE weissman_app (GRANT weissman_app TO the test role if this fails)",
+            );
         sqlx::query(&format!(
             "INSERT INTO {PROBE_TABLE} (tenant_id, marker) VALUES ($1, $2)"
         ))
@@ -299,7 +303,11 @@ async fn db_default_tenant_guc_is_not_zero() {
          migration 20260809120000_reset_tenant_guc_default."
     );
     assert!(
-        default_guc.as_deref().map(str::trim).unwrap_or("").is_empty(),
+        default_guc
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty(),
         "database default app.current_tenant_id must be UNSET (NULL) so tenant tables fail closed \
          and the job-bus 'GUC unset' escape hatch works; got {default_guc:?}"
     );

@@ -750,7 +750,10 @@ mod tests {
         let (size, readable) = probe_path(&big, 4096).await;
         let elapsed = started.elapsed();
         assert_eq!(size, 8 * 1024 * 1024, "size still comes from metadata");
-        assert!(!readable, "a file larger than the sample budget is not 'readable'");
+        assert!(
+            !readable,
+            "a file larger than the sample budget is not 'readable'"
+        );
         assert!(
             elapsed < std::time::Duration::from_millis(500),
             "probe took {elapsed:?} — it is still reading the whole file"
@@ -767,7 +770,10 @@ mod tests {
         std::fs::write(&empty, b"").expect("write empty");
         let (esize, ereadable) = probe_path(&empty, 4096).await;
         assert_eq!(esize, 0);
-        assert!(ereadable, "an empty file is readable, not a read_exact EOF failure");
+        assert!(
+            ereadable,
+            "an empty file is readable, not a read_exact EOF failure"
+        );
 
         // A path that does not exist reports nothing.
         let (msize, mreadable) = probe_path(&dir.join("nope"), 4096).await;
@@ -775,5 +781,4 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
-
 }

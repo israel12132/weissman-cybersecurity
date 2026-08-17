@@ -102,9 +102,10 @@ async fn main() -> anyhow::Result<()> {
                     "server returned no agent_secret — this agent cannot renew its session and \
                      will go dark when the JWT expires; upgrade the server"
                 );
-            } else if let Err(e) =
-                transport::state::save(&state_path, &transport::state::AgentState::from_enrollment(&fresh))
-            {
+            } else if let Err(e) = transport::state::save(
+                &state_path,
+                &transport::state::AgentState::from_enrollment(&fresh),
+            ) {
                 error!(
                     target: "agent", path = %state_path.display(), error = %e,
                     "could not persist agent identity — a restart will fail, because the \

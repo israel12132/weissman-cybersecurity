@@ -142,7 +142,10 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-            assert_eq!(mode, 0o600, "state holds a bearer credential; must be owner-only");
+            assert_eq!(
+                mode, 0o600,
+                "state holds a bearer credential; must be owner-only"
+            );
         }
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -156,7 +159,10 @@ mod tests {
         assert!(load(&path).is_none(), "missing file yields None");
 
         std::fs::write(&path, b"{not json").unwrap();
-        assert!(load(&path).is_none(), "corrupt file yields None, not a panic");
+        assert!(
+            load(&path).is_none(),
+            "corrupt file yields None, not a panic"
+        );
 
         // Structurally valid but useless — no credential to renew with.
         std::fs::write(&path, br#"{"agent_id":"","tenant_id":1,"client_id":1,"agent_secret":"","ws_path":"/ws/agent"}"#).unwrap();

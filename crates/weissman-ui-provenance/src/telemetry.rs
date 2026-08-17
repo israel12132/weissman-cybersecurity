@@ -62,15 +62,14 @@ pub fn verify_telemetry_event(
         .get("provenance_sig")
         .and_then(Value::as_str)
         .unwrap_or("");
-    if !sig.is_empty()
-        && !verify_event_hmac(&event_hash, sig, secret) {
-            return TelemetryVerifyResult {
-                status: VerifyStatus::Tampered,
-                event_hash,
-                collapse_belief: None,
-                detail: "telemetry provenance_sig HMAC invalid — forensic tamper".into(),
-            };
-        }
+    if !sig.is_empty() && !verify_event_hmac(&event_hash, sig, secret) {
+        return TelemetryVerifyResult {
+            status: VerifyStatus::Tampered,
+            event_hash,
+            collapse_belief: None,
+            detail: "telemetry provenance_sig HMAC invalid — forensic tamper".into(),
+        };
+    }
 
     let collapse = if belief_probs.is_empty() {
         None

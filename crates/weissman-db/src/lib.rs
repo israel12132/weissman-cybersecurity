@@ -132,7 +132,11 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
 /// process might also be busy would turn a capacity smell into an outage, and the safe reading
 /// ("how many connections is the rest of the fleet actually holding?") is not knowable from here.
 /// The point is to make the condition visible at boot instead of at 3am under load.
-pub async fn warn_if_pool_budget_exceeds_server(pool: &PgPool, process_label: &str, configured: u32) {
+pub async fn warn_if_pool_budget_exceeds_server(
+    pool: &PgPool,
+    process_label: &str,
+    configured: u32,
+) {
     let Ok(max_conn) = sqlx::query_scalar::<_, String>("SHOW max_connections")
         .fetch_one(pool)
         .await
@@ -285,9 +289,8 @@ pub async fn connect_auth_from_env() -> Result<PgPool, sqlx::Error> {
     }
     // Same OS-user fallback guard as the app/intel pools (peer-auth DSNs with `user@/db?host=…`
     // still pass — they carry a non-empty userinfo before `@`).
-    env_bootstrap::validate_database_url(t).map_err(|msg| {
-        sqlx::Error::Configuration(format!("auth database URL: {}", msg).into())
-    })?;
+    env_bootstrap::validate_database_url(t)
+        .map_err(|msg| sqlx::Error::Configuration(format!("auth database URL: {}", msg).into()))?;
     connect_auth(t).await
 }
 

@@ -2152,8 +2152,7 @@ fn tcp_h2c_preface_blocking(host: &str, port: u16, timeout_ms: u64) -> bool {
     if buf.starts_with(b"HTTP/1.") {
         return false;
     }
-    let frame_len =
-        (u32::from(buf[0]) << 16) | (u32::from(buf[1]) << 8) | u32::from(buf[2]);
+    let frame_len = (u32::from(buf[0]) << 16) | (u32::from(buf[1]) << 8) | u32::from(buf[2]);
     let frame_type = buf[3];
     let stream_id = u32::from_be_bytes([buf[5], buf[6], buf[7], buf[8]]) & 0x7fff_ffff;
     // SETTINGS = type 0x04, always on stream 0; its payload is a multiple of 6 bytes.

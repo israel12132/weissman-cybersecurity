@@ -391,3 +391,58 @@ async fn excluding_kinds_lets_light_work_through_a_saturated_heavy_pool() {
           means the filter is not applied and a full heavy pool still stalls the queue)"
     );
 }
+
+/// Caught in production during the deploy, not by the earlier tests, because every one of them
+/// set up a `running` row.
+#[tokio::test]
+async fn an_exhausted_reserved_but_unclaimed_job_can_be_dead_lettered() {
+    let url = test_database_url();
+    if url.is_empty() {
+        return;
+    }
+    const TENANT_REJECT: i64 = 918_275_005;
+    let admin = admin_pool(&url).await;
+    reset(&admin, TENANT_REJECT).await;
+
+    // The shape reserve_next leaves behind: owned, locked, still `pending`, attempts spent.
+    let id = insert_job(
+        &admin,
+        TENANT_REJECT,
+        "pending",
+        5,
+        5,
+        false,
+        Some("worker-A"),
+    )
+    .await;
+
+    let job = weissman_db::job_queue::AsyncJob {
+        id,
+        tenant_id: TENANT_REJECT,
+        kind: PROBE_KIND.to_string(),
+        payload: serde_json::json!({}),
+        attempt_count: 5,
+        max_attempts: 5,
+        trace_id: None,
+    };
+    let wp = worker_pool(&url).await;
+    job_queue::fail_job(
+        &wp,
+        &job,
+        "worker-A",
+        "claim rejected: signature mismatch",
+        5,
+    )
+    .await
+    .expect("fail_job");
+
+    let after = status_of(&admin, id).await;
+    cleanup(&admin, TENANT_REJECT).await;
+
+    assert_eq!(
+        after, "dead",
+        "an exhausted job that was reserved but never promoted to `running` must still be \
+         dead-letterable; leaving it `pending` makes it immortal and the worker re-serves it on \
+         every poll while logging that it was dead-lettered"
+    );
+}

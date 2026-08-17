@@ -644,7 +644,13 @@ pub async fn fail_job(
         sqlx::query(
             r#"UPDATE weissman_async_jobs SET status = 'dead', last_error = $2, locked_until = NULL,
                worker_id = NULL, updated_at = now()
-               WHERE id = $1 AND status = 'running' AND worker_id = $3"#,
+               -- 'pending' as well as 'running': in the zero-trust flow `reserve_next` sets
+               -- worker_id and the lock but leaves the row `pending` until the cryptographic
+               -- claim promotes it. A claim that is REJECTED therefore never reaches 'running',
+               -- so a status='running' guard silently matched zero rows and the job could never
+               -- be retired — it sat at attempt_count = max_attempts and was re-served forever.
+               -- Ownership is carried by worker_id, which is set by reserve_next either way.
+               WHERE id = $1 AND status IN ('pending', 'running') AND worker_id = $3"#,
         )
         .bind(job.id)
         .bind(&msg)
@@ -666,7 +672,8 @@ pub async fn fail_job(
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'pending', last_error = $2, locked_until = NULL,
            worker_id = NULL, run_after = now() + ($3::bigint * interval '1 second'), updated_at = now()
-           WHERE id = $1 AND status = 'running' AND worker_id = $4"#,
+           -- See the dead-letter branch above: a reserved-but-unclaimed row is 'pending'.
+           WHERE id = $1 AND status IN ('pending', 'running') AND worker_id = $4"#,
     )
     .bind(job.id)
     .bind(&msg)

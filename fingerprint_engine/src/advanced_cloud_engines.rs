@@ -302,11 +302,14 @@ pub async fn run_azure_devops_attack_result(target: &str) -> EngineResult {
             let is_project_list = serde_json::from_str::<Value>(&p.body)
                 .ok()
                 .map(|v| {
-                    v.get("count").and_then(Value::as_i64).is_some_and(|c| c > 0)
+                    v.get("count")
+                        .and_then(Value::as_i64)
+                        .is_some_and(|c| c > 0)
                         && v.get("value").and_then(Value::as_array).is_some_and(|a| {
                             !a.is_empty()
-                                && a.iter()
-                                    .all(|proj| proj.get("id").is_some() && proj.get("name").is_some())
+                                && a.iter().all(|proj| {
+                                    proj.get("id").is_some() && proj.get("name").is_some()
+                                })
                         })
                 })
                 .unwrap_or(false);

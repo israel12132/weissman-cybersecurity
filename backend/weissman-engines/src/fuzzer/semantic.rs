@@ -284,10 +284,7 @@ async fn vllm_generate_payloads(
 
     let raw = parse_json_payloads_from_response(&text);
     let before = raw.len();
-    let payloads: Vec<Value> = raw
-        .into_iter()
-        .filter(semantic_payload_wire_ok)
-        .collect();
+    let payloads: Vec<Value> = raw.into_iter().filter(semantic_payload_wire_ok).collect();
     if before > payloads.len() {
         reasoning_log.push_str(&format!(
             "[preflight] dropped {} malformed JSON/XML payload(s) before HTTP / follow-up LLM\n",

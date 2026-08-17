@@ -112,12 +112,24 @@ pub async fn dispatch_all_tenant_scans(
 /// True when this tenant already has a `tenant_full_scan` queued or executing.
 async fn has_inflight_full_scan(pool: &PgPool, tenant_id: i64) -> Result<bool, sqlx::Error> {
     let mut tx = weissman_db::begin_tenant_tx(pool, tenant_id).await?;
+    // "In flight" must mean "a job the claim path can actually pick up". Counting any
+    // pending/running row deadlocked the scheduler in production: 2,973 rows left over from the
+    // 2026-08-06 outage were permanently unrunnable — 2,168 with no zero-trust envelope (so
+    // `reserve_next`'s envelope gate skips them) and the rest at attempt_count = max_attempts (so
+    // the claim's attempt cap skips them) — yet each tick saw them, logged `skipped=1 enqueued=0`,
+    // and suppressed every new scan. The pipeline claimed nothing and produced nothing while
+    // reporting healthy.
+    //
+    // These two conditions mirror the claim predicate in job_queue.rs, so a row counts as in
+    // flight exactly when a worker could take it.
     let exists: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(
                SELECT 1 FROM weissman_async_jobs
                 WHERE tenant_id = $1
                   AND kind = 'tenant_full_scan'
                   AND status IN ('pending', 'running')
+                  AND attempt_count < max_attempts
+                  AND (status = 'running' OR payload ? '_weissman_job_bus')
            )"#,
     )
     .bind(tenant_id)

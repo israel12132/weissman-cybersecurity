@@ -239,7 +239,6 @@ mod tests {
         assert_eq!(out, Some(42));
     }
 
-
     /// The engine stack must never be smaller than the runtime stack it replaces.
     #[test]
     fn engine_stack_is_never_smaller_than_the_runtime_stack() {
@@ -252,5 +251,4 @@ mod tests {
              here would SHRINK its stack, which is the inverse of this module's purpose"
         );
     }
-
 }

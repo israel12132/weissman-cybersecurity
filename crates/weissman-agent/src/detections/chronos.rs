@@ -278,8 +278,14 @@ mod tests {
     #[test]
     fn matching_is_exact_basename_not_substring() {
         // The two real-world false positives from the audit. This deployment runs node_exporter.
-        assert!(!is_web_parent("node_exporter"), "substring match on 'node' froze node_exporter's children");
-        assert!(!is_shell_child("ssh"), "'ssh'.ends_with(\"sh\") classified ssh as a shell");
+        assert!(
+            !is_web_parent("node_exporter"),
+            "substring match on 'node' froze node_exporter's children"
+        );
+        assert!(
+            !is_shell_child("ssh"),
+            "'ssh'.ends_with(\"sh\") classified ssh as a shell"
+        );
         assert!(!is_web_parent("nodemon"));
         assert!(!is_shell_child("flush"));
         assert!(!is_shell_child("ash-utils"));
@@ -291,8 +297,14 @@ mod tests {
         assert!(is_web_parent("php-fpm"));
         assert!(is_shell_child("bash"));
         assert!(is_shell_child("sh"));
-        assert!(is_shell_child("powershell.exe"), "a .exe suffix is part of the name");
-        assert!(is_web_parent("/usr/sbin/nginx"), "a full path must match on its basename");
+        assert!(
+            is_shell_child("powershell.exe"),
+            "a .exe suffix is part of the name"
+        );
+        assert!(
+            is_web_parent("/usr/sbin/nginx"),
+            "a full path must match on its basename"
+        );
     }
 
     /// A stale pid must not be signalled.
@@ -312,5 +324,4 @@ mod tests {
         // A pid that cannot exist.
         assert!(!pid_still_named(u32::MAX, "anything"));
     }
-
 }

@@ -196,9 +196,11 @@ pub fn validate_poe_target_url(raw: &str) -> Result<(), &'static str> {
         // the IP-literal SSRF holes without changing this fn's synchronous signature.)
         let literal_ip: Option<IpAddr> = match parsed.host() {
             Some(url::Host::Ipv4(v4)) => Some(IpAddr::V4(v4)),
-            Some(url::Host::Ipv6(v6)) => {
-                Some(v6.to_ipv4_mapped().map(IpAddr::V4).unwrap_or(IpAddr::V6(v6)))
-            }
+            Some(url::Host::Ipv6(v6)) => Some(
+                v6.to_ipv4_mapped()
+                    .map(IpAddr::V4)
+                    .unwrap_or(IpAddr::V6(v6)),
+            ),
             _ => None,
         };
         if let Some(ip) = literal_ip {
