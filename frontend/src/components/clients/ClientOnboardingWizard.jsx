@@ -262,6 +262,32 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
             <Field label={t('pages.clientNew.contact_email')} required>
               <input type="email" className={inputCls} value={form.contact_email} onChange={(e) => patch({ contact_email: e.target.value })} />
             </Field>
+            <Field label={t('pages.clientNew.sector')} hint={t('pages.clientNew.sector_hint')}>
+              <select
+                className={inputCls}
+                value={form.sector}
+                onChange={(e) => patch({ sector: e.target.value })}
+              >
+                <option value="">{t('pages.clientNew.sector_select')}</option>
+                {[
+                  'government',
+                  'energy',
+                  'healthcare',
+                  'finance',
+                  'technology',
+                  'manufacturing',
+                  'retail',
+                  'education',
+                  'defense',
+                  'telecom',
+                  'other',
+                ].map((s) => (
+                  <option key={s} value={s}>
+                    {t(`pages.clientNew.sector_${s}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </>
         )}
 

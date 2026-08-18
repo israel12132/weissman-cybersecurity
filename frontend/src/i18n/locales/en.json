@@ -850,7 +850,8 @@
     "generate_report_desc": "Export PDF/CSV",
     "attack_surface": "Attack Surface",
     "attack_surface_desc": "View ASM graph",
-    "integrations": "Integrations"
+    "integrations": "Integrations",
+    "sector": "Sector"
   },
   "clients": {
     "title": "Clients",
@@ -2174,7 +2175,21 @@
       "create_error": "Error creating client: {{detail}}",
       "error_forbidden": "You don't have permission to create clients. {{detail}}",
       "error_plan_limit": "Plan limit reached: {{detail}}",
-      "search_placeholder": "Filter onboarding steps…"
+      "search_placeholder": "Filter onboarding steps…",
+      "sector": "Industry / Sector",
+      "sector_hint": "Helps tailor compliance frameworks and engine defaults for this client.",
+      "sector_select": "— Select sector (optional) —",
+      "sector_government": "Government / Public Sector",
+      "sector_energy": "Energy & Utilities",
+      "sector_healthcare": "Healthcare",
+      "sector_finance": "Finance & Banking",
+      "sector_technology": "Technology / Hi-Tech",
+      "sector_manufacturing": "Manufacturing & Industry",
+      "sector_retail": "Retail & E-Commerce",
+      "sector_education": "Education & Academia",
+      "sector_defense": "Defense & National Security",
+      "sector_telecom": "Telecom & Communications",
+      "sector_other": "Other"
     },
     "clientIntegrations": {
       "title": "Client Integrations",
