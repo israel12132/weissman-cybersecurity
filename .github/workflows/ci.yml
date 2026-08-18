@@ -705,7 +705,7 @@ jobs:
         # interpolation; the :? runtime hardening in the compose file is left intact.
         env:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
-          WEISSMAN_ADMIN_PASSWORD: changeme
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
         # Override the release profile for THIS CI validation build only: the committed
         # profile.release (lto=fat, codegen-units=1) makes the in-Docker release build of three
         # binaries over the 350k-LOC workspace OOM-kill the runner (exit 143 mid-link). Disable
@@ -747,10 +747,15 @@ jobs:
           WEISSMAN_METRICS_TOKEN: ci-metrics-token-32-bytes-minimum
           WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
+          # Secrets-at-rest vault key (64 hex = 32 bytes). Production refuses to boot without a
+          # dedicated key rather than derive one from WEISSMAN_JWT_SECRET (which would couple the
+          # token-signing key to MFA/SOAR/CEO-vault decryption). One 64-hex key satisfies both
+          # integrations_vault::key_present() and ceo::vault::key_present(). CI-throwaway value.
+          WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
           WEISSMAN_ENV: production
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
-          WEISSMAN_ADMIN_PASSWORD: changeme
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
           # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
@@ -790,6 +795,14 @@ jobs:
           WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
           WEISSMAN_JOB_ORCHESTRATOR_SECRET: ci-job-orchestrator-secret-32-bytes-minimum-v1
           WEISSMAN_ENV: production
+          # Required by the production security policy: the worker refuses to boot in
+          # WEISSMAN_ENV=production without a policy-valid (>=12-char) admin password,
+          # the same rule as the server. The worker has no login surface, so this value
+          # only needs to satisfy the startup policy; it is never used to authenticate.
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
+          # Secrets-at-rest vault key (64 hex): the worker runs the same production startup guard
+          # and refuses to boot without integrations_vault + ceo_vault keys. CI-throwaway value.
+          WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
           # Cap the worker's auth+intel pools, but give the APP pool real headroom: each
           # in-flight scan AND its completion write both need a connection. A prior iteration
           # shrank this to 16 while raising heavy concurrency to 4 — with the connection-hungry
