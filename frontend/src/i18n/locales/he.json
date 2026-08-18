@@ -785,7 +785,8 @@
     "generate_report_desc": "ייצוא PDF/CSV",
     "attack_surface": "משטח התקפה",
     "attack_surface_desc": "צפה בגרף ASM",
-    "integrations": "אינטגרציות"
+    "integrations": "אינטגרציות",
+    "sector": "ענף"
   },
   "clients": {
     "title": "לקוחות",
@@ -2174,7 +2175,21 @@
       "create_error": "שגיאה ביצירת לקוח: {{detail}}",
       "error_forbidden": "אין הרשאה ליצור לקוחות. {{detail}}",
       "error_plan_limit": "הגעת למגבלת התוכנית: {{detail}}",
-      "search_placeholder": "סינון שלבי קליטה…"
+      "search_placeholder": "סינון שלבי קליטה…",
+      "sector": "ענף / מגזר",
+      "sector_hint": "עוזר להתאים מסגרות ציות ופרופילי סריקה ללקוח.",
+      "sector_select": "— בחר ענף (אופציונלי) —",
+      "sector_government": "ממשלה / מגזר ציבורי",
+      "sector_energy": "אנרגיה ותשתיות",
+      "sector_healthcare": "בריאות",
+      "sector_finance": "פיננסים ובנקאות",
+      "sector_technology": "טכנולוגיה / הייטק",
+      "sector_manufacturing": "ייצור ותעשייה",
+      "sector_retail": "קמעונאות ומסחר אלקטרוני",
+      "sector_education": "חינוך ואקדמיה",
+      "sector_defense": "ביטחון ובטחון לאומי",
+      "sector_telecom": "תקשורת וטלקום",
+      "sector_other": "אחר"
     },
     "clientIntegrations": {
       "title": "אינטגרציות לקוח",

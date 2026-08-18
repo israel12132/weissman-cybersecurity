@@ -218,6 +218,41 @@ else
   note "no restore-verify marker yet — run scripts/backup_restore_verify.sh nightly"
 fi
 
+section "Enterprise readiness (SLA, region, compliance)"
+# SLA doc must mention 99.95%
+if grep -q '99.95' SLA_AND_STATUS.md; then
+  ok "SLA doc specifies 99.95% target"
+else
+  bad "SLA doc does not mention 99.95% — update SLA_AND_STATUS.md"
+fi
+# SLA must have 24/7 on-call
+if grep -qi '24/7\|24 hours.*7 days' SLA_AND_STATUS.md; then
+  ok "SLA doc specifies 24/7 on-call"
+else
+  bad "SLA doc missing 24/7 on-call commitment"
+fi
+# Region must be configured
+CONFIGURED_REGION=""
+if [[ -f .env ]]; then
+  CONFIGURED_REGION="$(sed -n 's/^[[:space:]]*WEISSMAN_REGION=//p' .env | tail -1 | tr -d "\"' ")"
+fi
+if [[ -z "$CONFIGURED_REGION" ]]; then
+  CONFIGURED_REGION="$(grep -E '^WEISSMAN_REGION=' PRODUCTION.env.template 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' " || true)"
+fi
+if [[ -n "$CONFIGURED_REGION" ]]; then
+  ok "WEISSMAN_REGION is set: ${CONFIGURED_REGION}"
+else
+  bad "WEISSMAN_REGION is not set — set to IL for Israeli financial customers"
+fi
+# Bank of Israel Directive 361 mapping must exist
+[[ -f docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md ]] \
+  && ok "Bank of Israel Directive 361 mapping present" \
+  || bad "missing docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md"
+# SLA must reference directive 361
+grep -q '361\|Directive' SLA_AND_STATUS.md \
+  && ok "SLA doc references Directive 361" \
+  || bad "SLA doc does not reference Bank of Israel Directive 361"
+
 section "Secrets hygiene (local .env)"
 if [[ -f .env ]]; then
   if grep -qE '^(WEISSMAN_JWT_SECRET|WEISSMAN_ADMIN_PASSWORD)=$' .env 2>/dev/null; then

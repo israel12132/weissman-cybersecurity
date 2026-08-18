@@ -122,6 +122,7 @@ export const ALL_MODULE_IDS = DEFAULT_MODULES
 export function defaultOnboardingForm() {
   return {
     name: '',
+    sector: '',
     contact_email: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
@@ -159,6 +160,7 @@ export function buildClientPayload(form) {
 
   return {
     name: str(form.name).trim(),
+    sector: str(form.sector).trim(),
     contact_email: str(form.contact_email).trim(),
     domains: JSON.stringify(domains),
     ip_ranges: JSON.stringify(ip_ranges),

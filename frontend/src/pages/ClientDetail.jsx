@@ -299,6 +299,12 @@ export default function ClientDetail() {
                 <dd className="mt-1 text-white font-mono text-sm">{client.contact_email}</dd>
               </div>
             )}
+            {client.sector && (
+              <div>
+                <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.sector')}</dt>
+                <dd className="mt-1 text-white text-sm">{t(`pages.clientNew.sector_${client.sector}`, { defaultValue: client.sector })}</dd>
+              </div>
+            )}
             {client.created_at && (
               <div>
                 <dt className="text-[11px] font-mono text-white/40 uppercase tracking-wide">{t('client_detail.created')}</dt>

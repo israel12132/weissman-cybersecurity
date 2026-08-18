@@ -28,18 +28,62 @@ With these placeholders, `amtool check-config` passes and Alertmanager loads the
 config without crash-looping. Alerts are grouped and logged but not delivered
 anywhere real.
 
+## ⚠️ Production / go-live requirement
+
+**Alert delivery is a go-live gate.** `./scripts/go_live_check.sh` will FAIL
+until all three secrets are replaced with real values. You cannot go live with
+placeholders — alerts will fire, go nowhere, and SLA §4 (SEV-1 ≤ 15 min, 24/7)
+cannot be met.
+
 ## Enabling live alerting
 
 **Do NOT commit real secrets to this repository.** To enable live delivery,
-overwrite these files at deploy time without committing them — for example with a
-compose override that bind-mounts a directory of real secrets over this one, or by
-writing the real values into the mounted files on the host after checkout:
+overwrite these files at deploy time without committing them.
 
+### Option A — Write directly on the host (Docker Compose deployments)
+
+```bash
+# On the production host, after cloning:
+printf '%s' 'https://hooks.slack.com/services/T.../B.../...' > monitoring/secrets/slack_api_url
+printf '%s' '<32-char-pagerduty-routing-key>'                > monitoring/secrets/pagerduty_routing_key
+printf '%s' 'https://hc-ping.com/<your-uuid>'               > monitoring/secrets/watchdog_url
+
+# Reload Alertmanager
+docker compose restart alertmanager
+
+# Verify go-live gate passes
+./scripts/go_live_check.sh
 ```
-printf '%s' '<paste-your-slack-incoming-webhook-url>'                                       > slack_api_url
-printf '%s' '<32-char-pagerduty-routing-key>'                                             > pagerduty_routing_key
-printf '%s' 'https://hc-ping.com/<your-uuid>'                                             > watchdog_url
+
+### Option B — Docker Compose override (recommended for CI/CD)
+
+Create `docker-compose.secrets.yml` (never commit):
+```yaml
+services:
+  alertmanager:
+    volumes:
+      - /path/to/real/secrets:/etc/alertmanager/secrets:ro
 ```
+Then: `docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d`
+
+### Option C — Kubernetes Secret
+
+```bash
+kubectl create secret generic alertmanager-secrets \
+  --from-literal=slack_api_url='https://hooks.slack.com/...' \
+  --from-literal=pagerduty_routing_key='<key>' \
+  --from-literal=watchdog_url='https://hc-ping.com/<uuid>' \
+  -n weissman
+```
+Mount the secret at `/etc/alertmanager/secrets/` in the Alertmanager pod.
+
+### How to get each secret
+
+| Secret | Where to get it |
+|--------|-----------------|
+| `slack_api_url` | Slack → Apps → Incoming Webhooks → Add to Workspace |
+| `pagerduty_routing_key` | PagerDuty → Services → Integration Key (Events API v2) |
+| `watchdog_url` | healthchecks.io or Dead Man's Snitch → create a check → copy ping URL |
 
 Each file holds a single secret value with no surrounding quotes. A trailing
 newline is fine. After changing a file, restart the `alertmanager` service so it

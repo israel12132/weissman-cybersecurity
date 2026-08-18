@@ -1,6 +1,6 @@
 # Weissman Cybersecurity — Security & Compliance Overview
 
-Last updated: 2026-08-09 (synced with audit gate — 563 engines, 130 routes, JWT ≥48)
+Last updated: 2026-08-18 (added Directive 361 mapping, IL region, PDPA 2023, SLA 99.95%)
 
 ## 1. Scope
 
@@ -42,12 +42,41 @@ Inspection-day script: **`docs/operations/INSPECTION-DAY-RUNBOOK.md`**.
 
 ## 3. Data residency
 
-- `WEISSMAN_REGION` env var drives the deployment region (default `EU-West`).
+- `WEISSMAN_REGION` env var drives the deployment region.
 - `region_manager.should_process_tenant` enforces the per-tenant region match
   before any cross-region work.
-- Cloud SaaS data is stored in EU-West (Ireland) by default; Enterprise
-  customers may select US-East or AU-East. Self-hosted: data never leaves
-  customer infrastructure.
+- Supported regions and their regulatory scope:
+
+| Region code | Location | Regulatory framework |
+|---|---|---|
+| `IL` | Israel | Bank of Israel Directive 361; Israeli Privacy Protection Law 5741-1981 (as amended 2023) |
+| `EU-West` | Ireland (AWS eu-west-1) | GDPR, EBA Cloud Outsourcing Guidelines |
+| `US-East` | Virginia (AWS us-east-1) | SOC 2 Type II, NIST SP 800-53 |
+| `AU-East` | Sydney (AWS ap-southeast-2) | Australian Privacy Act 1988 |
+
+- **Default for Israeli financial-sector customers: `IL`.**
+- Self-hosted: data never leaves customer infrastructure regardless of region setting.
+
+## 3a. Israeli regulatory compliance
+
+### Bank of Israel Directive 361 (ניהול תקין 361)
+Full control mapping: [`docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md`](docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md).
+
+Summary of key controls:
+- **Cyber risk management:** 563 production engines mapped to MITRE ATT&CK (14/14 tactics)
+- **Tenant isolation:** PostgreSQL RLS on 80+ tables, enforced at DB level
+- **Incident response:** SEV-1 ≤ 15 minutes, 24/7 on-call (see `SLA_AND_STATUS.md`)
+- **DR / BCP:** RTO ≤ 4h, RPO ≤ 1h, PITR backups, restore-verify every 48h
+- **Audit trail:** every write → `audit_logs`; every AI query → `nl_query_audit`
+- **RBAC + MFA:** 5-level RBAC, TOTP MFA enforceable per-tenant
+- **Supplier contract:** DPA + MSA with audit-rights clause
+
+### Israeli Privacy Protection Law 5741-1981 (as amended 2023)
+- Per-tenant data minimization and retention policies enforced at application layer.
+- DPA (`deploy/public/dpa.html`) incorporates obligations under the amended law.
+- Data processed exclusively in Israel (`region = IL`) for Israeli customers.
+- Separate Hebrew DPA (`deploy/public/dpa.html`) covers local requirements.
+- **Sensitive data handling:** financial-sector customer data is classified as sensitive; access is logged and restricted to `operator` role and above.
 
 ## 4. Identity, authentication, authorization
 
@@ -158,12 +187,23 @@ operating entity and its auditor. The Standard Contractual Clauses (Module 2,
 Controller-to-Processor) for EEA / UK / Switzerland data flows are
 incorporated by reference in [`/dpa.html`](deploy/public/dpa.html).
 
+### Israeli regulated entities
+- **Bank of Israel Directive 361:** full control mapping in
+  [`docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md`](docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md).
+- **Israeli Privacy Protection Law 5741-1981 (as amended 2023):** data
+  processed in `IL` region; DPA covers local obligations.
+- **SLA for financial sector:** 99.95% availability, SEV-1 ≤ 15 min,
+  24/7 on-call. See [`SLA_AND_STATUS.md`](SLA_AND_STATUS.md).
+
 ## 12. Evidence references (in this repository)
 
 | Concern | Implementation |
 |---------|----------------|
 | Full audit gate G1–G7 | `scripts/full_audit_gate.sh` |
 | Auditor evidence pack (JSON + PDF) | `scripts/generate_audit_evidence_pack.sh` |
+| Bank of Israel Directive 361 mapping | `docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md` |
+| Enterprise onboarding guide | `docs/ENTERPRISE-ONBOARDING.md` |
+| SLA (99.95%, SEV-1 ≤ 15 min, 24/7) | `SLA_AND_STATUS.md` |
 | Live Playwright E2E | `frontend/tests-e2e/live-journey.spec.ts` |
 | Tenant isolation + RLS | `crates/weissman-db/src/lib.rs` (`begin_tenant_tx`, GUC `app.current_tenant_id`) |
 | Audit trail | `fingerprint_engine/src/audit_log.rs` |
