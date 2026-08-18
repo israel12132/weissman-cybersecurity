@@ -231,3 +231,60 @@ rather than silently re-applying a modified file
 | Full audit gate | `scripts/full_audit_gate.sh` |
 | Evidence pack generator | `scripts/generate_audit_evidence_pack.sh` |
 | Production .env template | `PRODUCTION.env.template` |
+
+---
+
+## Israeli Financial Sector — Additional Q&A (Bank of Israel Directive 361)
+
+### Q-IL-1. Are you subject to or aligned with Bank of Israel Directive 361?
+**Answer:** Yes. Weissman Cybersecurity is designed to be deployed as a
+cybersecurity service for Israeli regulated financial entities subject to
+Directive 361. A full control mapping is maintained in
+`docs/compliance/BANK-OF-ISRAEL-DIRECTIVE-361.md`.
+
+### Q-IL-2. Where is data processed and stored for Israeli customers?
+**Answer:** Exclusively in Israel (`WEISSMAN_REGION=IL`). No customer data
+crosses borders. For self-hosted deployments, data never leaves the customer's
+own infrastructure. The region is enforced at the application layer by
+`region_manager.should_process_tenant` before any tenant operation.
+
+### Q-IL-3. What are the incident response SLA commitments?
+**Answer:**
+- **SEV-1** (platform down, data breach): initial response ≤ **15 minutes**, 24/7.
+- **SEV-2** (scans not running, auth degraded): initial response ≤ **1 hour**, 24/7.
+- **Availability target:** 99.95% monthly (≤ 21.9 minutes downtime/month).
+- Post-incident review within 5 business days.
+- Full SLA: `SLA_AND_STATUS.md`.
+
+### Q-IL-4. What is the RTO/RPO for disaster recovery?
+**Answer:** RTO ≤ **4 hours**, RPO ≤ **1 hour** via PostgreSQL PITR (WAL
+continuous archiving to S3). Restore drills are automated
+(`scripts/backup_restore_verify.sh`) and required every 48 hours in production.
+DR runbook: `docs/operations/DISASTER-RECOVERY.md`.
+
+### Q-IL-5. Do you support audit-rights clauses required by Directive 361 §9?
+**Answer:** Yes. The MSA (`docs/legal/MSA-ORDER-FORM-OUTLINE-he.md`) includes
+an explicit audit-rights clause allowing the customer and Bank of Israel
+supervisors to audit Weissman's controls. Technical evidence is available via
+`scripts/generate_audit_evidence_pack.sh` (JSON + PDF).
+
+### Q-IL-6. How is the platform protected against insider threat?
+**Answer:**
+- **RBAC** with least-privilege by default; `viewer` role is read-only.
+- **Audit trail** on every authenticated write (action, user_id, IP, timestamp).
+- **MFA** enforced per-tenant; mandatory for admin/operator roles.
+- **Data segregation** via PostgreSQL RLS — even a compromised application
+  credential cannot access another tenant's data.
+- **NL query audit** — every AI-assisted query is logged with the compiled SQL.
+
+### Q-IL-7. Is there a sub-processors list? Can we object to new sub-processors?
+**Answer:** Yes. Current list: `deploy/public/subprocessors.html`. The DPA
+(`deploy/public/dpa.html`) includes a 30-day notification clause for new
+sub-processors with the right to object.
+
+### Q-IL-8. How are software supply-chain risks managed?
+**Answer:** Every CI run executes: `cargo-deny` (license + advisory scan),
+`Trivy` (container CVE scan), `Semgrep` (SAST), `CodeQL` (semantic analysis),
+and `OWASP ZAP` DAST. An SBOM is generated and signed with
+`actions/attest-build-provenance` on every release. Renovate auto-updates
+dependencies daily.
