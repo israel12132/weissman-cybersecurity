@@ -153,6 +153,9 @@ services:
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env (openssl rand -base64 48)}"
       # Optional: require X-Weissman-Destructive-Confirm header (exact match) for Auto-Heal, containment execute, deception cloud deploy
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:-}
+      # Dedicated at-rest encryption key for integration secrets (required in production).
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:-}
       # Zero-trust job bus HMAC signing (server signs, worker verifies — they MUST match).
       # Required >=32 chars in production; security_startup.rs fails the boot closed without it.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
@@ -219,6 +222,8 @@ services:
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0
       WEISSMAN_JWT_SECRET: "${WEISSMAN_JWT_SECRET:?Set WEISSMAN_JWT_SECRET in .env}"
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:-}
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
