@@ -21,13 +21,15 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 ### Required Services
 | Service | How to start | Port |
 |---------|-------------|------|
-| PostgreSQL 16 | `docker start weissman-postgres` (or `docker run -d --name weissman-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=weissman -p 5432:5432 postgres:16-alpine`) | 5432 |
+| PostgreSQL 16 + pgvector | `docker start weissman-postgres` (or `docker run -d --name weissman-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=weissman -p 5432:5432 pgvector/pgvector:pg16`) | 5432 |
 | Redis 7 | `docker start weissman-redis` (or `docker run -d --name weissman-redis -p 6379:6379 redis:7-alpine`) | 6379 |
 | Rust backend | `./target/debug/weissman-server` | 8000 |
 | Frontend dev | `cd frontend && npm run dev` | 5173 |
 
 ### Key Gotchas
-- The `crates/weissman-agent` directory is referenced in `Cargo.toml` workspace members but may be missing. If the workspace fails to load, create a minimal placeholder: `mkdir -p crates/weissman-agent/src && echo '' > crates/weissman-agent/src/lib.rs` with a minimal `Cargo.toml`.
+- **Build prerequisite:** `cargo build` needs OpenSSL headers (`openssl-sys`). On a bare image install them first — `sudo apt-get install -y libssl-dev pkg-config` — or the build fails with "Could not find directory of OpenSSL installation".
+- `crates/weissman-agent` is a **fully implemented crate** (endpoint agent, ~27 source files). Do **not** create a placeholder `src/lib.rs` in it: the crate declares only a `[[bin]]` target, so a stray `lib.rs` makes Cargo auto-detect a phantom `weissman_agent` lib that nothing builds against.
+- `pgvector` is required, not optional: `20260608130000_pgvector_rag.sql` and `20260608140100_pentest_memory.sql` create vector columns. A plain `postgres:16-alpine` image fails migrations at boot.
 - The `.env` file at workspace root configures the backend. Key required vars: `DATABASE_URL`, `WEISSMAN_JWT_SECRET`, `REDIS_URL`. See `.env.example` for all options.
 - **Production JWT:** `WEISSMAN_JWT_SECRET` must be **≥48 characters** (`security_startup.rs`). Metrics, destructive-confirm, and job-orchestrator secrets must be **≥32 characters**.
 - Login endpoint is `POST /api/login` (not `/api/auth/login`). Credentials from `.env`: `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD`.
@@ -41,7 +43,7 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 - **Rust lint:** `cargo clippy --workspace --all-targets -- -D clippy::correctness -D clippy::suspicious`
 - **Rust tests:** `cargo test --workspace --all-targets`
 - **Rust format:** `cargo fmt --check`
-- **Python lint:** `ruff check src/ tests/`
+- **Python lint:** `ruff check src/ --select E,F,W --ignore E501` (exactly what CI runs; the bare `ruff check src/ tests/` applies rules CI does not gate on and reports ~300 pre-existing findings)
 - **Python tests:** `python3 -m pytest tests/unit/ -q`
 - **Frontend build:** `cd frontend && npm run build`
 - **Frontend unit tests:** `cd frontend && npm run test`
@@ -65,7 +67,9 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 | `scripts/go_live_check.sh` | Production readiness (K8s, DR, secrets template, OT engines) |
 | `scripts/generate_audit_evidence_pack.sh` | Auditor JSON + PDF (wiring, SBOM, NIST/SOC2 mapping) |
 | `scripts/verify_engine_wiring.mjs` | 563 engine IDs ↔ dispatch — 0 gaps |
-| `scripts/weissman-ui-audit.mjs` | 130 routes (target ≥112), 111/111 pages — live API evidence rules; run for live numbers |
+| `scripts/weissman-ui-audit.mjs` | 130 routes (target ≥112), 111/111 pages. **Static**: it checks page sources for the required UI affordances (`PageShell`, reality badge, refresh, search), not live API responses. Runtime proof comes from the live-stack steps in the `Engine wiring audit & API smoke` job |
+| `scripts/verify_ci_production_boot_env.py` | Every production launch step in the workflows satisfies `security_startup.rs` |
+| `scripts/verify_merge_queue_contract.py` | `.mergify.yml` requires every blocking `ci.yml` job |
 
 See **`docs/operations/INSPECTION-DAY-RUNBOOK.md`** for 30+30 minute demo and CISO deep-dive scripts.  
 Week 8 sign-off: **`docs/operations/INSPECTION-READY-SIGNOFF.md`**.
