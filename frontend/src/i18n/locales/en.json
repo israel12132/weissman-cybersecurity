@@ -5974,7 +5974,7 @@
         "title": "Asset Grid"
       },
       "killChainVisualizer": {
-        "title": "Kill-Chain Coverage",
+        "title": "Kill-Chain",
         "loading": "Loading ATT&CK coverage…",
         "empty": "No ATT&CK tactics reported.",
         "error": "ATT&CK coverage unavailable.",

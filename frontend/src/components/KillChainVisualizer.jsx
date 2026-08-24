@@ -55,9 +55,12 @@ export default function KillChainVisualizer() {
     ? Math.max(...tactics.map((x) => x.technique_count || 0), 1)
     : 1
 
+  // .soc-panel-killchain is a height-constrained flex child (min-height: 0), so the
+  // full 14-tactic chain overflows it. Pin the heading and scroll the list rather
+  // than clipping the late tactics off the bottom with no affordance.
   return (
-    <div className="kill-chain-visualizer">
-      <div className="text-cyber-cyan font-semibold text-xs tracking-widest mb-3 uppercase">
+    <div className="kill-chain-visualizer flex flex-col h-full min-h-0">
+      <div className="shrink-0 text-cyber-cyan font-semibold text-xs tracking-widest mb-3 uppercase">
         {t(`${NS}.title`)}
       </div>
 
@@ -74,7 +77,10 @@ export default function KillChainVisualizer() {
           {t(`${NS}.empty`)}
         </div>
       ) : (
-        <ul className="flex flex-col gap-1.5" aria-label={t(`${NS}.title`)}>
+        <ul
+          className="flex flex-col gap-1.5 flex-1 min-h-0 overflow-y-auto scrollbar-thin pe-1"
+          aria-label={t(`${NS}.title`)}
+        >
           {tactics.map((entry, i) => {
             const count = entry.technique_count || 0
             const engines = (entry.techniques || []).reduce(
