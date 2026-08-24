@@ -242,6 +242,14 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
+    // Workspace picker options for the login form — the field is filled in before any JWT exists.
+    // Returns slug + display name only, and withholds the list entirely on multi-tenant production
+    // instances unless the operator opts in (fingerprint_engine/src/tenant_directory.rs).
+    (
+        Method::GET,
+        "/api/auth/tenant-directory",
+        RouteGate::Always,
+    ),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),
@@ -1939,6 +1947,7 @@ mod public_route_guard_tests {
             (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
             (Method::POST, "/api/agents/session"),
+            (Method::GET, "/api/auth/tenant-directory"),
         ];
         for (m, p) in expected {
             assert!(is_public_route(m, p), "expected {m} {p} to be public");
@@ -1955,6 +1964,10 @@ mod public_route_guard_tests {
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
+        assert!(!is_public_route(
+            &Method::POST,
+            "/api/auth/tenant-directory"
+        ));
     }
 }
 
