@@ -1,5 +1,6 @@
 //! Shared domain models and orchestration helpers (JSON payloads, engines, semantic graph).
 
+pub mod client_sector;
 pub mod config;
 pub mod engine;
 pub mod engine_agent;

@@ -558,7 +558,8 @@ async fn api_clients_list(
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
-            COALESCE(gcp_project_id,'') AS gcp_project_id
+            COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(sector,'') AS sector
            FROM clients ORDER BY id LIMIT $1 OFFSET $2"#,
     )
         .bind(limit)
@@ -581,6 +582,7 @@ async fn api_clients_list(
                 "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
                 "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
                 "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+                "sector": r.try_get::<String,_>("sector").ok(),
             })
         })
         .collect();
@@ -785,7 +787,8 @@ async fn api_clients_get(
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
-            COALESCE(gcp_project_id,'') AS gcp_project_id
+            COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(sector,'') AS sector
            FROM clients WHERE id = $1"#,
     )
     .bind(id)
@@ -816,6 +819,7 @@ async fn api_clients_get(
             "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
             "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
             "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+            "sector": r.try_get::<String,_>("sector").ok(),
         })),
     )
         .into_response()
@@ -856,6 +860,21 @@ async fn api_clients_create(
         .trim();
     let aws_ext = body.aws_external_id.as_deref().unwrap_or("").trim();
     let gcp = body.gcp_project_id.as_deref().unwrap_or("").trim();
+    let sector = match weissman_core::normalize_client_sector(body.sector.as_deref().unwrap_or("")) {
+        Ok(s) => s,
+        Err(bad) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "code": "invalid_sector",
+                    "detail": format!("unknown sector '{}'", bad),
+                    "allowed": weissman_core::CLIENT_SECTORS,
+                })),
+            )
+                .into_response();
+        }
+    };
 
     let mut config: serde_json::Map<String, Value> =
         serde_json::from_str::<Value>(DEFAULT_CLIENT_CONFIGS_JSON)
@@ -888,8 +907,8 @@ async fn api_clients_create(
             tenant_id, name, domains, tech_stack, ip_ranges,
             contact_email, auto_detect_tech_stack,
             aws_cross_account_role_arn, aws_external_id, gcp_project_id,
-            client_configs
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id"#,
+            client_configs, sector
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id"#,
     )
     .bind(auth.tenant_id)
     .bind(name)
@@ -902,6 +921,7 @@ async fn api_clients_create(
     .bind(aws_ext)
     .bind(gcp)
     .bind(&client_configs)
+    .bind(sector)
     .fetch_one(&mut *tx)
     .await
     {
@@ -963,7 +983,8 @@ async fn api_clients_update(
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
-            COALESCE(gcp_project_id,'') AS gcp_project_id
+            COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(sector,'') AS sector
            FROM clients WHERE id = $1"#,
     )
         .bind(id)
@@ -981,6 +1002,7 @@ async fn api_clients_update(
         cur_aws_arn,
         cur_aws_ext,
         cur_gcp,
+        cur_sector,
     ) = match row {
         Some(r) => (
             r.try_get::<String, _>("name").unwrap_or_default(),
@@ -992,6 +1014,7 @@ async fn api_clients_update(
             r.try_get::<String, _>("aws_cross_account_role_arn").unwrap_or_default(),
             r.try_get::<String, _>("aws_external_id").unwrap_or_default(),
             r.try_get::<String, _>("gcp_project_id").unwrap_or_default(),
+            r.try_get::<String, _>("sector").unwrap_or_default(),
         ),
         None => {
             let _ = tx.rollback().await;
@@ -1023,11 +1046,29 @@ async fn api_clients_update(
         .as_deref()
         .unwrap_or(cur_gcp.as_str())
         .trim();
+    let sector = match weissman_core::normalize_client_sector(
+        body.sector.as_deref().unwrap_or(cur_sector.as_str()),
+    ) {
+        Ok(s) => s,
+        Err(bad) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "code": "invalid_sector",
+                    "detail": format!("unknown sector '{}'", bad),
+                    "allowed": weissman_core::CLIENT_SECTORS,
+                })),
+            )
+                .into_response();
+        }
+    };
     if sqlx::query(
         r#"UPDATE clients SET name = $1, domains = $2, tech_stack = $3, ip_ranges = $4,
             contact_email = $5, auto_detect_tech_stack = $6,
             aws_cross_account_role_arn = $7, aws_external_id = $8, gcp_project_id = $9,
-            updated_at = now() WHERE id = $10"#,
+            sector = $10, updated_at = now() WHERE id = $11"#,
     )
         .bind(name)
         .bind(domains)
@@ -1038,6 +1079,7 @@ async fn api_clients_update(
         .bind(aws_arn)
         .bind(aws_ext)
         .bind(gcp)
+        .bind(sector)
         .bind(id)
         .execute(&mut *tx)
         .await

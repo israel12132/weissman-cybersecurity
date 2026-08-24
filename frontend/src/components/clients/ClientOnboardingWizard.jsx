@@ -20,6 +20,7 @@ import {
   useEngineRequirements,
 } from '../../hooks/useEngineRequirements'
 import Button from '../ui/Button'
+import { CLIENT_SECTORS } from '../../lib/clientSectors'
 
 const STEPS = ['legal', 'basic', 'scope', 'modules', 'integrations', 'review']
 const AGENT_PLATFORMS = ['linux', 'windows', 'macos']
@@ -269,19 +270,7 @@ export default function ClientOnboardingWizard({ onSubmit, submitting, error: ex
                 onChange={(e) => patch({ sector: e.target.value })}
               >
                 <option value="">{t('pages.clientNew.sector_select')}</option>
-                {[
-                  'government',
-                  'energy',
-                  'healthcare',
-                  'finance',
-                  'technology',
-                  'manufacturing',
-                  'retail',
-                  'education',
-                  'defense',
-                  'telecom',
-                  'other',
-                ].map((s) => (
+                {CLIENT_SECTORS.map((s) => (
                   <option key={s} value={s}>
                     {t(`pages.clientNew.sector_${s}`)}
                   </option>

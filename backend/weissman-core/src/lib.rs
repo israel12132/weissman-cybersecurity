@@ -13,6 +13,9 @@ pub mod tls_policy;
 pub use errors::{AppError, ErrorBody, ErrorCode};
 pub use models::ids::{ClientId, FindingId, JobId, RunId, TenantId};
 pub use models::{
+    client_sector::{
+        is_valid_client_sector, normalize_client_sector, CLIENT_SECTORS, CLIENT_SECTOR_UNCLASSIFIED,
+    },
     config::ClientConfigSnapshot,
     engine::{default_enabled_engine_ids, is_known_engine_id, EngineId, KNOWN_ENGINE_IDS},
     finding::Severity,
