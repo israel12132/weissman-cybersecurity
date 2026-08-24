@@ -22,6 +22,25 @@ note() { echo "WARN: $1"; warn=$((warn + 1)); }
 
 section() { echo ""; echo "== $1 =="; }
 
+section "Toolchain"
+# Several checks below shell out to node scripts that import frontend sources, and those
+# use import attributes (`with { type: 'json' }`) — Node >= 20.10. On an older Node the
+# run dies with a raw `SyntaxError: Unexpected token 'with'` pointing at a frontend file,
+# which reads as a code defect and invites "fix" it by reverting to the removed `assert`
+# syntax. That would break the supported runtime instead: frontend/package.json requires
+# Node >= 22.22.0 and `assert` is a syntax error there. Say so plainly up front.
+if command -v node >/dev/null 2>&1; then
+  node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  node_minor="$(node -p 'process.versions.node.split(".")[1]' 2>/dev/null || echo 0)"
+  if (( node_major > 20 || (node_major == 20 && node_minor >= 10) )); then
+    ok "node $(node --version) supports import attributes"
+  else
+    bad "node $(node --version) is too old — import attributes need >= 20.10 and frontend/package.json requires >= 22.22.0. Install a newer Node; do NOT downgrade the import syntax to 'assert', which was removed in Node 22"
+  fi
+else
+  bad "node not installed — the delivery-prep and engine audits below cannot run"
+fi
+
 section "Alert delivery"
 # A go-live gate that never checks whether an alert can reach a human is not a go-live gate.
 # This stack shipped with all three Alertmanager receivers — including the Watchdog
