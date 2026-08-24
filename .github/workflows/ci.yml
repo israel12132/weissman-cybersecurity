@@ -77,6 +77,22 @@ jobs:
         working-directory: monitoring/alerts/tests
         run: promtool test rules ./*.test.yml
 
+      - name: Install amtool
+        run: |
+          set -euo pipefail
+          VERSION=0.28.1
+          curl -sSfL "https://github.com/prometheus/alertmanager/releases/download/v${VERSION}/alertmanager-${VERSION}.linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin "alertmanager-${VERSION}.linux-amd64/amtool"
+          amtool --version
+
+      # The rules above are proven to fire, and go_live_check.sh proves the delivery
+      # secrets are real before go-live. alertmanager.yml sits between them and was
+      # validated by nothing. Its top-level route falls through to `default`, which
+      # has no delivery config, so one mislabeled severity yields an alert that fires
+      # correctly and pages nobody.
+      - name: Alert delivery routes reach a real receiver
+        run: ./scripts/verify_alert_delivery_routes.sh
+
       - name: No real Alertmanager secret may be committed
         # monitoring/secrets/* is gitignored, but these three files are already TRACKED as
         # documented inert placeholders — and .gitignore does not apply to tracked files. So an
