@@ -98,12 +98,12 @@ fn sso_base_url_problem(base: &str) -> Option<&'static str> {
         .unwrap_or("");
     if matches!(host, "localhost" | "127.0.0.1" | "0.0.0.0" | "::1" | "") {
         return Some(
-            "WEISSMAN_PUBLIC_BASE_URL points at localhost — an identity provider cannot redirect              a browser back to this host, so OIDC/SAML login can never complete",
+            "WEISSMAN_PUBLIC_BASE_URL points at localhost — an identity provider cannot redirect a browser back to this host, so OIDC/SAML login can never complete",
         );
     }
     if !b.starts_with("https://") {
         return Some(
-            "WEISSMAN_PUBLIC_BASE_URL is not https — most identity providers reject non-TLS              redirect URIs",
+            "WEISSMAN_PUBLIC_BASE_URL is not https — most identity providers reject non-TLS redirect URIs",
         );
     }
     None
@@ -118,8 +118,7 @@ pub fn warn_if_sso_base_url_unusable() {
         tracing::warn!(
             target: "oidc",
             base_url = %public_base_url(),
-            "%{reason}",
-            reason = reason
+            "{reason}"
         );
     }
 }
@@ -141,6 +140,24 @@ mod tests {
         // The shape that actually works.
         assert!(sso_base_url_problem("https://app.weissman.example.com").is_none());
         assert!(sso_base_url_problem("https://app.weissman.example.com/").is_none());
+    }
+
+    /// `warn_if_sso_base_url_unusable` logs the reason verbatim, so each one has to read as
+    /// finished prose. Reflowing these literals once left a run of spaces mid-sentence, which
+    /// reaches an operator's log looking like the warning failed to render.
+    #[test]
+    fn sso_reasons_read_as_clean_operator_prose() {
+        for base in ["", "https://localhost", "http://weissman.example.com"] {
+            let reason = sso_base_url_problem(base).expect("base url should be rejected");
+            assert!(
+                !reason.contains("  "),
+                "reason for {base:?} has a run of spaces: {reason:?}"
+            );
+            assert!(
+                reason.starts_with("WEISSMAN_PUBLIC_BASE_URL"),
+                "reason for {base:?} should name the setting first: {reason:?}"
+            );
+        }
     }
 
     #[test]
