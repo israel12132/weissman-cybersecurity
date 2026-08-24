@@ -803,9 +803,10 @@ jobs:
           # Secrets-at-rest vault key (64 hex): the worker runs the same production startup guard
           # and refuses to boot without integrations_vault + ceo_vault keys. CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
-          # Heavy scans must run at real parallelism. Keep the worker app pool large enough for
-          # four heavy jobs plus their persistence/follow-up DB work instead of masking starvation
-          # by serializing the lane.
+          # Heavy scans must run at real parallelism. This env block is worker-only: the server
+          # step above stays capped at app/auth/intel = 24/6/4, while the worker runs at
+          # app/auth/intel = 48/4/4, so the combined pool budget is 86 plus the worker control
+          # pool (8) = 94 < Postgres max_connections=100.
           WEISSMAN_APP_POOL_MAX: "48"
           WEISSMAN_AUTH_POOL_MAX: "4"
           WEISSMAN_INTEL_POOL_MAX: "4"

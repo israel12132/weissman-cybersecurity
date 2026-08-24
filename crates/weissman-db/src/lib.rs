@@ -527,20 +527,22 @@ pub async fn begin_tenant_tx_arc_retrying(
     for attempt in 1..=attempts {
         match begin_tenant_tx_arc(pool.clone(), tenant_id).await {
             Ok(tx) => return Ok(tx),
-            Err(e) if is_transient_acquire_error(&e) && attempt < attempts => {
-                let backoff = acquire_retry_backoff(attempt);
-                tracing::warn!(
-                    target: "weissman_db",
-                    tenant_id,
-                    op,
-                    attempt,
-                    attempts,
-                    backoff_ms = backoff.as_millis() as u64,
-                    error = %e,
-                    "transient DB acquire failure; backing off before retry"
-                );
+            Err(e) if is_transient_acquire_error(&e) => {
                 last_err = Some(e);
-                tokio::time::sleep(backoff).await;
+                if attempt < attempts {
+                    let backoff = acquire_retry_backoff(attempt);
+                    tracing::warn!(
+                        target: "weissman_db",
+                        tenant_id,
+                        op,
+                        attempt,
+                        attempts,
+                        backoff_ms = backoff.as_millis() as u64,
+                        error = %last_err.as_ref().expect("just set last_err"),
+                        "transient DB acquire failure; backing off before retry"
+                    );
+                    tokio::time::sleep(backoff).await;
+                }
             }
             Err(e) => return Err(e),
         }
@@ -670,6 +672,14 @@ mod url_and_path_helper_tests {
         acquire_retry_backoff, auth_database_url_from_env, database_url_from_env, migrations_dir,
         resolve_auth_database_url, worker_pool_floor, worker_pool_warm_min,
     };
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env lock")
+    }
 
     #[test]
     fn migrations_dir_is_always_a_non_empty_path() {
@@ -697,6 +707,7 @@ mod url_and_path_helper_tests {
 
     #[test]
     fn worker_pool_floor_tracks_concurrency() {
+        let _guard = env_lock();
         std::env::set_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY", "4");
         std::env::set_var("WEISSMAN_WORKER_LIGHT_CONCURRENCY", "8");
         assert_eq!(worker_pool_floor(), Some(48));
@@ -706,6 +717,7 @@ mod url_and_path_helper_tests {
 
     #[test]
     fn worker_pool_warm_min_is_bounded_by_pool_ceiling() {
+        let _guard = env_lock();
         std::env::remove_var("WEISSMAN_APP_POOL_MIN");
         std::env::set_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY", "4");
         assert_eq!(worker_pool_warm_min(6), 6);
@@ -715,6 +727,9 @@ mod url_and_path_helper_tests {
 
     #[test]
     fn acquire_retry_backoff_grows_and_caps() {
+        let _guard = env_lock();
+        std::env::remove_var("WEISSMAN_DB_ACQUIRE_BACKOFF_MS");
+        std::env::remove_var("WEISSMAN_DB_ACQUIRE_BACKOFF_CAP_MS");
         assert_eq!(
             acquire_retry_backoff(1),
             std::time::Duration::from_millis(200)

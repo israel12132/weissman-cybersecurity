@@ -156,8 +156,9 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_ENV: production
           RUST_LOG: info,weissman_server=debug,fingerprint_engine=info,weissman_db=info
-          # Nightly must exercise the real heavy lane rather than a serialized fallback.
-          # With auth+intel at 6+4, app=48 keeps the combined server+worker footprint under 100.
+          # Nightly must exercise the real heavy lane rather than a serialized fallback. This env
+          # block is worker-only: the job-level server cap remains app/auth/intel = 24/6/4, while
+          # the worker runs at 48/6/4, so the combined footprint is 88 < Postgres max_connections=100.
           WEISSMAN_APP_POOL_MAX: "48"
           WEISSMAN_WORKER_HEAVY_CONCURRENCY: "4"
           WEISSMAN_WORKER_LIGHT_CONCURRENCY: "2"
