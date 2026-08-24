@@ -25,6 +25,14 @@ jobs:
       WEISSMAN_METRICS_TOKEN: nightly-e2e-metrics-token-min-32-chars-0123456789
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: nightly-e2e-destructive-confirm-min-32-chars-0123456789
       WEISSMAN_VAULT_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      # security_startup refuses to boot in production without an admin password of
+      # at least 12 characters, and it applies to BOTH weissman-server and
+      # weissman-worker. Setting these only on the E2E client steps left the two
+      # server processes without them, so every nightly run died at "Wait for API
+      # health". Job scope keeps the boot guard, the seeded admin, and the login the
+      # E2E performs on exactly one credential pair.
+      WEISSMAN_ADMIN_EMAIL: nightly@localhost
+      WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
       # Cap DB pools so weissman-server + weissman-worker together stay well under
       # postgres max_connections (default 100). At defaults each process opens
       # ~68 connections (app 48 + auth 12 + intel 8); two processes exceeded 100,
@@ -173,13 +181,19 @@ jobs:
             fi
             sleep 2
           done
+          # A boot refusal (missing/short secret) exits immediately and then this
+          # step burns 180s before failing with no reason attached. Surface the
+          # process logs here so the cause is in the failing step itself.
+          echo "::error::API never became healthy at http://127.0.0.1:18000/api/health"
+          echo '--- weissman-server.log ---'
+          tail -n 50 /tmp/weissman-server.log || true
+          echo '--- weissman-worker.log ---'
+          tail -n 50 /tmp/weissman-worker.log || true
           exit 1
 
       - name: Full findings E2E (all engine groups)
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: nightly@localhost
-          WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_FINDINGS_E2E_FULL: "1"
           WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
@@ -199,8 +213,6 @@ jobs:
         working-directory: frontend
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: nightly@localhost
-          WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
         run: |
@@ -215,8 +227,6 @@ jobs:
       - name: Load/SLO smoke (k6)
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: nightly@localhost
-          WEISSMAN_ADMIN_PASSWORD: nightly-e2e-password
           K6_VUS: "15"
           K6_DURATION: 1m
         run: k6 run scripts/load/k6_slo.js

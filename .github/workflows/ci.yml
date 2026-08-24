@@ -123,6 +123,14 @@ jobs:
       - name: Launcher flag / secret / bind-mount contract
         run: bash scripts/test_launcher_contract.sh
 
+      # Same failure mode as the launcher, one layer up: the nightly E2E booted
+      # weissman-server/worker in production mode without WEISSMAN_ADMIN_PASSWORD,
+      # so both refused to start and the job died in a health check for seven
+      # consecutive nights. This compares every production launch step in the
+      # workflows against the guards in security_startup.rs.
+      - name: CI production boot env contract
+        run: python3 scripts/verify_ci_production_boot_env.py
+
   python-audit:
     name: Python — pip-audit & lint
     runs-on: ubuntu-latest
