@@ -116,11 +116,18 @@ base_backup() {
   mkdir -p "$dest"
   echo "[pitr] pg_basebackup → $dest"
 
+  # Capture stderr OUTSIDE $dest. `2>"${dest}/.err"` is opened by the shell before
+  # pg_basebackup starts, so the target directory was never empty when it looked —
+  # it refused with `directory "..." exists but is not empty` on every single run,
+  # whatever the database was doing. That also masked the pg_hba probe below: the
+  # fallback only engages on a replication-grant refusal, and this error is not
+  # one, so the container path was unreachable too.
+  local errfile="${dest}.err"
   local direct_ok=0
   if [[ -n "${DATABASE_URL:-}" ]] && command -v pg_basebackup >/dev/null 2>&1; then
-    if pg_basebackup -d "$DATABASE_URL" -D "$dest" -Ft -z -P -X stream 2>"${dest}/.err"; then
+    if pg_basebackup -d "$DATABASE_URL" -D "$dest" -Ft -z -P -X stream 2>"$errfile"; then
       direct_ok=1
-      rm -f "${dest}/.err"
+      rm -f "$errfile"
     fi
   fi
 
@@ -136,8 +143,8 @@ base_backup() {
     # Only a refused *replication grant* justifies falling back. A wrong password or an
     # unreachable host must surface, not be silently retried down another route that happens to
     # trust local connections — that would turn a real credential problem into a green backup.
-    if [[ -n "${DATABASE_URL:-}" && -f "${dest}/.err" ]]; then
-      local err; err="$(cat "${dest}/.err" 2>/dev/null || true)"
+    if [[ -n "${DATABASE_URL:-}" && -f "$errfile" ]]; then
+      local err; err="$(cat "$errfile" 2>/dev/null || true)"
       if ! grep -q 'pg_hba.conf entry for replication' <<<"$err"; then
         echo "[pitr] pg_basebackup failed:" >&2
         printf '%s\n' "$err" >&2
@@ -164,7 +171,7 @@ base_backup() {
     fi
     docker cp "${ct}:/tmp/.pitr_bb/." "${dest}/" >/dev/null
     docker exec -u postgres "$ct" rm -rf /tmp/.pitr_bb >/dev/null 2>&1 || true
-    rm -f "${dest}/.err"
+    rm -f "$errfile"
   fi
 
   # Never let `latest` point at a backup that is missing its payload — the restore drill trusts
