@@ -99,7 +99,7 @@ const TARGET_HOST = 'example.com'
 function scopeCoversTargetHost(entry) {
   const raw = String(entry ?? '').trim()
   if (!raw) return false
-  let host = raw
+  let host
   if (raw.includes('://')) {
     try {
       host = new URL(raw).hostname
