@@ -3004,6 +3004,12 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
         return EngineResult::error("could not extract a domain from target");
     }
     let mut cfg = load_config(&ArsenalConfig::from_ctx(ctx));
+    let prior_fp = if cfg.check_baseline_delta {
+        fingerprint_from_job_params(&ArsenalConfig::from_ctx(ctx))
+            .or(load_prior_fingerprint(ctx, &domain).await)
+    } else {
+        None
+    };
     let client = build_client(cfg.timeout_ms).await;
     let doh_base_early = cfg
         .resolvers
@@ -3011,7 +3017,8 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
         .map(|(_, b)| b.clone())
         .unwrap_or_else(|| DEFAULT_RESOLVERS[0].1.to_string());
 
-    // ── 0) Autonomous zone discovery — adapt probes to live surface (not a static script) ─
+    // Finish every DB read before the network phase starts so this heavy engine never keeps a
+    // pooled connection live while waiting on external DNS/BGP/CT/RDAP responses.
     let zone_discovery = run_zone_discovery(
         &client,
         &doh_base_early,
@@ -3024,13 +3031,6 @@ pub async fn run_bgp_dns_hijacking_result_ctx(
     if cfg.autonomous_mode {
         apply_autonomous_plan(&mut cfg, &zone_discovery, &adaptive_plan);
     }
-
-    let prior_fp = if cfg.check_baseline_delta {
-        fingerprint_from_job_params(&ArsenalConfig::from_ctx(ctx))
-            .or(load_prior_fingerprint(ctx, &domain).await)
-    } else {
-        None
-    };
 
     let mut findings: Vec<Value> = Vec::new();
     let mut posture = Posture::default();

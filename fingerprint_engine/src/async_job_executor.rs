@@ -137,6 +137,37 @@ async fn cfg_string_tx(
     .filter(|s| !s.is_empty())
 }
 
+#[derive(Clone, Default)]
+struct TenantRuntimeConfig {
+    github_token: Option<String>,
+    llm_base_url: Option<String>,
+    llm_model: Option<String>,
+    oast_listener_url: Option<String>,
+    oast_domain: Option<String>,
+    oast_api_key: Option<String>,
+}
+
+async fn load_tenant_runtime_config(
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+) -> Result<TenantRuntimeConfig, String> {
+    let mut tx = db::begin_tenant_tx_arc_retrying(pool, tenant_id, "load_tenant_runtime_config")
+        .await
+        .map_err(|e| format!("tenant tx: {e}"))?;
+    let cfg = TenantRuntimeConfig {
+        github_token: cfg_string_tx(&mut tx, tenant_id, "github_token").await,
+        llm_base_url: cfg_string_tx(&mut tx, tenant_id, "llm_base_url").await,
+        llm_model: cfg_string_tx(&mut tx, tenant_id, "llm_model").await,
+        oast_listener_url: cfg_string_tx(&mut tx, tenant_id, "oast_listener_url").await,
+        oast_domain: cfg_string_tx(&mut tx, tenant_id, "oast_domain").await,
+        oast_api_key: cfg_string_tx(&mut tx, tenant_id, "oast_api_key").await,
+    };
+    tx.commit()
+        .await
+        .map_err(|e| format!("tenant config commit: {e}"))?;
+    Ok(cfg)
+}
+
 /// Reject jobs whose payload carries a conflicting tenant_id (async_jobs table has no RLS).
 fn enforce_job_tenant_consistency(job_tenant_id: i64, payload: &Value) -> Result<(), String> {
     if let Some(pt) = payload.get("tenant_id").and_then(|v| {
@@ -267,40 +298,6 @@ fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
     })
 }
 
-/// Acquire a tenant-scoped transaction, retrying a *transient* DB error a few
-/// times before giving up. A single connection blip (pooled connection reset,
-/// a momentary acquire race, a checkpoint stall) must not kill an entire engine
-/// job: the job would exhaust its retries and land in the DLQ as
-/// `execution_failure`, which is how a healthy engine (e.g. `supply_chain`)
-/// intermittently "failed" the nightly findings E2E even though its own logic
-/// never errors. Bounded (3 attempts, short linear backoff) so a genuinely
-/// unavailable DB still surfaces quickly.
-async fn begin_tenant_tx_resilient(
-    pool: Arc<PgPool>,
-    tenant_id: i64,
-) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, String> {
-    let mut last_err = String::new();
-    for attempt in 1..=3u32 {
-        match db::begin_tenant_tx_arc(pool.clone(), tenant_id).await {
-            Ok(tx) => return Ok(tx),
-            Err(e) => {
-                last_err = e.to_string();
-                tracing::warn!(
-                    target: "async_jobs",
-                    tenant_id,
-                    attempt,
-                    error = %last_err,
-                    "begin_tenant_tx transient failure; retrying"
-                );
-                tokio::time::sleep(Duration::from_millis(150 * u64::from(attempt))).await;
-            }
-        }
-    }
-    Err(format!(
-        "begin_tenant_tx failed after 3 attempts: {last_err}"
-    ))
-}
-
 /// Run one job to completion JSON (success) or error string (failure).
 pub async fn execute_job(
     app_pool: Arc<PgPool>,
@@ -402,13 +399,7 @@ async fn execute_job_unscoped(
                 v.as_i64()
                     .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
             });
-            let mut tx = begin_tenant_tx_resilient(app_pool.clone(), tid).await?;
-            let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
-            let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
-            let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
-            let (oast_listener, oast_domain, oast_api_key) =
-                crate::engine_dispatch::load_tenant_oast_configs(app_pool.as_ref(), tid).await;
-            let _ = tx.commit().await;
+            let runtime_cfg = load_tenant_runtime_config(app_pool.clone(), tid).await?;
             let mut job_payload = p.clone();
             if let Err(e) = crate::scan_routing::hydrate_stored_job_payload(
                 app_pool.as_ref(),
@@ -440,9 +431,9 @@ async fn execute_job_unscoped(
                 tenant_id: Some(tid),
                 target_list: vec![target.to_string()],
                 discovered_paths,
-                github_token,
-                llm_base_url: llm_base.unwrap_or_default(),
-                llm_model: llm_model.unwrap_or_default(),
+                github_token: runtime_cfg.github_token,
+                llm_base_url: runtime_cfg.llm_base_url.unwrap_or_default(),
+                llm_model: runtime_cfg.llm_model.unwrap_or_default(),
                 app_pool: Some(app_pool.clone()),
                 agents: Some(crate::endpoint_agents::AgentRegistry::global()),
                 client_id: client_id_opt,
@@ -450,9 +441,9 @@ async fn execute_job_unscoped(
                 job_id: Some(job.id.to_string()),
                 swarm_broadcast: Some(channels.swarm.clone()),
                 intelligence_bus,
-                oast_listener_url: oast_listener,
-                oast_domain,
-                oast_api_key,
+                oast_listener_url: runtime_cfg.oast_listener_url,
+                oast_domain: runtime_cfg.oast_domain,
+                oast_api_key: runtime_cfg.oast_api_key,
                 ..Default::default()
             };
             if !weissman_core::models::engine::is_production_engine_id(engine) {
@@ -627,11 +618,7 @@ async fn execute_job_unscoped(
                 .ok_or_else(|| "payload.target required".to_string())?
                 .to_string();
 
-            let mut tx = begin_tenant_tx_resilient(app_pool.clone(), tid).await?;
-            let github_token = cfg_string_tx(&mut tx, tid, "github_token").await;
-            let llm_base = cfg_string_tx(&mut tx, tid, "llm_base_url").await;
-            let llm_model = cfg_string_tx(&mut tx, tid, "llm_model").await;
-            let _ = tx.commit().await;
+            let runtime_cfg = load_tenant_runtime_config(app_pool.clone(), tid).await?;
 
             let mut entries: Vec<Value> = Vec::new();
             let mut passed = 0usize;
@@ -709,9 +696,9 @@ async fn execute_job_unscoped(
                         let ctx = crate::engine_dispatch::EngineRunContext {
                             tenant_id: Some(tid),
                             target_list: vec![target.clone()],
-                            github_token: github_token.clone(),
-                            llm_base_url: llm_base.clone().unwrap_or_default(),
-                            llm_model: llm_model.clone().unwrap_or_default(),
+                            github_token: runtime_cfg.github_token.clone(),
+                            llm_base_url: runtime_cfg.llm_base_url.clone().unwrap_or_default(),
+                            llm_model: runtime_cfg.llm_model.clone().unwrap_or_default(),
                             intelligence_bus: Some(
                                 crate::ws_intelligence_bus::IntelligenceBus::new_shared(),
                             ),
