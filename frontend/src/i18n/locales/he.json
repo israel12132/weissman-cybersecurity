@@ -5974,12 +5974,12 @@
         "title": "רשת נכסים"
       },
       "killChainVisualizer": {
-        "title": "שרשרת הריג",
-        "phases": {
-          "recon": "סיור",
-          "delivery": "מסירה",
-          "exploitation": "ניצול"
-        }
+        "title": "כיסוי שרשרת תקיפה",
+        "loading": "טוען כיסוי ATT&CK…",
+        "empty": "לא דווחו טקטיקות ATT&CK.",
+        "error": "כיסוי ATT&CK אינו זמין.",
+        "techniqueCount": "{{count}}T",
+        "tacticTitle": "{{tactic}} — {{techniques}} טכניקות, {{engines}} הפניות למנועים"
       },
       "globalThreatTicker": {
         "score": "ציון",

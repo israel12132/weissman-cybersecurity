@@ -5974,12 +5974,12 @@
         "title": "Asset Grid"
       },
       "killChainVisualizer": {
-        "title": "Kill-Chain",
-        "phases": {
-          "recon": "RECON",
-          "delivery": "DELIVERY",
-          "exploitation": "EXPLOIT"
-        }
+        "title": "Kill-Chain Coverage",
+        "loading": "Loading ATT&CK coverage…",
+        "empty": "No ATT&CK tactics reported.",
+        "error": "ATT&CK coverage unavailable.",
+        "techniqueCount": "{{count}}T",
+        "tacticTitle": "{{tactic}} — {{techniques}} techniques, {{engines}} engine references"
       },
       "globalThreatTicker": {
         "score": "SCORE",
