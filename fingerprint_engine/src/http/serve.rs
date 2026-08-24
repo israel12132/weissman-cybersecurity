@@ -261,7 +261,7 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
 ];
 
 /// True when `(method, path)` is an exact match on the unauthenticated allow-list.
-fn is_public_route(method: &Method, path: &str) -> bool {
+pub(crate) fn is_public_route(method: &Method, path: &str) -> bool {
     PUBLIC_ROUTES.iter().any(|(m, p, gate)| {
         m == method
             && *p == path

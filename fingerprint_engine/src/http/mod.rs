@@ -22,6 +22,9 @@ pub mod tenant_scan_limit;
 pub mod tenant_stream;
 
 pub use client_ip::extract_client_ip;
+/// The unauthenticated allow-list `auth_guard` enforces. `rbac` needs it to tell an
+/// expected missing `AuthContext` from a layer-ordering regression.
+pub(crate) use serve::is_public_route;
 pub use serve::{
     build_http_router, new_app_state, run_http_tcp_listener, spawn_http_background_tasks, AppState,
 };
