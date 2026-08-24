@@ -742,11 +742,26 @@ jobs:
         # LTO + parallelize codegen so it fits in the runner's memory; the published image (via
         # the publish job, which passes no build-args) keeps the full fat-LTO profile. The image
         # here only needs to build + be Trivy-scanned; it never runs the live stack.
+        # Build backend FIRST and alone, then the rest. `backend` and `worker` are the
+        # same image — same context, same deploy/backend.Dockerfile, same build-args — and
+        # `docker compose build a b c` drives them concurrently, so the single heaviest
+        # operation in CI (a release build of the ~350k-LOC workspace) ran TWICE at once.
+        # That is what the LTO/codegen overrides above were fighting, and it still lost:
+        # the step died mid-build with the runner gone and no logs retained. Sequencing
+        # halves peak memory and makes `worker` a pure layer-cache hit instead of a
+        # duplicate full compile.
         run: |
-          docker compose build \
-            --build-arg CARGO_PROFILE_RELEASE_LTO=false \
-            --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-            backend worker gateway
+          set -euo pipefail
+          build() {
+            docker compose build \
+              --build-arg CARGO_PROFILE_RELEASE_LTO=false \
+              --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+              "$@"
+          }
+          build backend
+          df -h /
+          build worker gateway
+          df -h /
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the
