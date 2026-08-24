@@ -131,6 +131,12 @@ jobs:
       - name: CI production boot env contract
         run: python3 scripts/verify_ci_production_boot_env.py
 
+      # .mergify.yml says its check names "must match the ci.yml job name: values
+      # exactly" and nothing verified it, so three blocking jobs were absent from
+      # the queue and a PR could merge while they were red.
+      - name: Merge queue covers every blocking job
+        run: python3 scripts/verify_merge_queue_contract.py
+
   python-audit:
     name: Python — pip-audit & lint
     runs-on: ubuntu-latest

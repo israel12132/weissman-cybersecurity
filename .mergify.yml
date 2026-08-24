@@ -27,6 +27,9 @@ queue_rules:
       - check-success=Frontend — lint, test, build
       - check-success=Semgrep SAST (critical blocking)
       - check-success=Engine wiring audit & API smoke
+      - check-success=Prometheus alert rules
+      - check-success=Gateway security contract
+      - check-success=Production launcher contract
       - check-success=Analyze (javascript-typescript)
       - check-success=Analyze (python)
     # Re-assert EVERY hard gate at the final merge step, not a subset. While a PR waits in
@@ -46,6 +49,9 @@ queue_rules:
       - check-success=Frontend — lint, test, build
       - check-success=Semgrep SAST (critical blocking)
       - check-success=Engine wiring audit & API smoke
+      - check-success=Prometheus alert rules
+      - check-success=Gateway security contract
+      - check-success=Production launcher contract
       - check-success=Analyze (javascript-typescript)
       - check-success=Analyze (python)
 
