@@ -17,9 +17,12 @@
 //   * Only gate numbers that are computed live from source below — never a
 //     hand-typed constant.
 //   * Only gate STABLE metrics. Deliberately NOT gated: the Rust test count
-//     (moves on every test added), "Command Center routes" (a UI-audit metric
-//     stated as a `≥` target, e.g. "130 (target ≥112)"), and "111/111 pages"
-//     (a pass/pass indicator, not a sync_doc_metrics figure).
+//     (moves on every test added), and any figure phrased as a `≥` target
+//     (e.g. AGENTS.md's "130 (target ≥112)") — a target is not a measurement.
+//   * Route and page counts ARE gated where a doc states them as flat facts.
+//     The customer-facing docs claimed "112 routes" and "95/95 pages" while the
+//     audit reported 130 and 111/111, and the Hebrew twin of the same sales doc
+//     already had the right figures — nothing compared them.
 //   * Anchor each regex on distinctive surrounding text so it cannot capture the
 //     wrong number (e.g. "48 agent_required" vs the unrelated "JWT 48 chars").
 
@@ -43,6 +46,14 @@ function computeCanonical() {
   const migrations = existsSync(migAbs)
     ? readdirSync(migAbs).filter((f) => f.endsWith('.sql')).length
     : null;
+
+  // UI surface, from the audit itself rather than a hand-typed figure.
+  //   "Weissman UI audit: pages 111/111 (100%)"
+  //   "Route coverage: 130 paths (target 112)"
+  const ui = sh('node scripts/weissman-ui-audit.mjs');
+  const pagesMatch = ui.match(/pages (\d+)\/(\d+)/);
+  const routesMatch = ui.match(/Route coverage: (\d+) paths/);
+
   return {
     total: engines.total ?? null, // production engine IDs
     real_probe: engines.real_probe ?? null,
@@ -50,6 +61,9 @@ function computeCanonical() {
     alias: engines.alias ?? null,
     agent_required: engines.agent_required ?? null,
     migrations, // crates/weissman-db/migrations *.sql count
+    pages_passed: pagesMatch ? parseInt(pagesMatch[1], 10) : null,
+    pages_total: pagesMatch ? parseInt(pagesMatch[2], 10) : null,
+    routes: routesMatch ? parseInt(routesMatch[1], 10) : null,
   };
 }
 
@@ -85,6 +99,20 @@ const REFS = [
   { file: 'SECURITY_AND_COMPLIANCE.md', metric: 'distinct', re: /\((\d+) distinct impls\)/, label: 'distinct impls' },
   { file: 'SECURITY_AND_COMPLIANCE.md', metric: 'alias', re: /(\d+) alias,/, label: 'alias' },
   { file: 'SECURITY_AND_COMPLIANCE.md', metric: 'agent_required', re: /(\d+) agent_required,/, label: 'agent_required' },
+
+  // SIG_CAIQ_PREP_QA.md — answered verbatim to customer security reviewers.
+  { file: 'SIG_CAIQ_PREP_QA.md', metric: 'total', re: /\*\*(\d+)\*\* engine IDs in `PRODUCTION_ENGINE_IDS`/, label: 'engine IDs (Q2b)' },
+  { file: 'SIG_CAIQ_PREP_QA.md', metric: 'routes', re: /Command Center exposes\s*\n?\*\*(\d+) routes\*\*/, label: 'Command Center routes (Q2b)' },
+  { file: 'SIG_CAIQ_PREP_QA.md', metric: 'pages_passed', re: /\*\*(\d+)\/\d+\*\* pages meeting the UI standard/, label: 'pages passing (Q2b)' },
+
+  // Sales delivery readiness — EN and HE must state the same measured figures.
+  // The EN copy drifted to "95/95 pages, 112 routes" while HE was correct.
+  { file: 'docs/manuals/en/00-sales-delivery-readiness.md', metric: 'total', re: /\*\*(\d+) production engine IDs\*\*/, label: 'production engine IDs' },
+  { file: 'docs/manuals/en/00-sales-delivery-readiness.md', metric: 'pages_passed', re: /\*\*(\d+)\/\d+ pages\*\*/, label: 'pages passing' },
+  { file: 'docs/manuals/en/00-sales-delivery-readiness.md', metric: 'routes', re: /\*\*(\d+) routes\*\*/, label: 'routes' },
+  { file: 'docs/manuals/en/00-sales-delivery-readiness.md', metric: 'agent_required', re: /Endpoint agent with (\d+) agent-required/, label: 'agent-required surfaces' },
+  { file: 'docs/manuals/he/00-sales-delivery-readiness.md', metric: 'pages_passed', re: /\*\*(\d+)\/\d+ דפים\*\*/, label: 'pages passing (he)' },
+  { file: 'docs/manuals/he/00-sales-delivery-readiness.md', metric: 'routes', re: /\*\*(\d+) נתיבים\*\*/, label: 'routes (he)' },
 ];
 
 function main() {

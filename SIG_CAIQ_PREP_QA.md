@@ -30,7 +30,8 @@ enforces zero gaps; `engine_reality_audit.mjs` reports **0 no_path**. Breakdown:
 impl), **212 alias** (marketing/vertical IDs that resolve to a real probe via
 `resolve_engine_id`), **48 agent_required** (host-level techniques, labelled
 `info`/advisory when no endpoint agent is enrolled). Command Center exposes
-**112 routes** with live API evidence banners (`weissman-ui-audit.mjs`).
+**130 routes** across **111/111** pages meeting the UI standard
+(`weissman-ui-audit.mjs`).
 
 ## Data security & privacy
 

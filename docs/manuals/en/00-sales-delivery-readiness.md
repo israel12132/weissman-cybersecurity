@@ -9,7 +9,7 @@
 | Area | Status | Notes |
 |------|--------|-------|
 | **Engine wiring** | ✅ Complete | `verify_engine_wiring.mjs` → 0 gaps; **563 production engine IDs** |
-| **UI standard** | ✅ Complete | `weissman-ui-audit.mjs` → **95/95 pages**, **112 routes** |
+| **UI standard** | ✅ Complete | `weissman-ui-audit.mjs` → **111/111 pages**, **130 routes** |
 | **Agent-required UX** | ✅ Complete | Empty state + per-route gates; **48 agent engines** |
 | **Billing / quota** | ✅ Complete | All scan & async enqueue paths gated; strict in production |
 | **Production security guards** | ✅ Complete | `security_startup.rs` — JWT **≥48 chars**, other secrets **≥32** |
@@ -80,9 +80,9 @@
 
 **You CAN claim:**
 - **563** production security engine IDs with live probes (303 real_probe + 212 alias + 48 agent_required — no fake findings)
-- **112** Command Center routes with live API evidence banners
+- **130** Command Center routes across **111/111** pages meeting the UI standard
 - Multi-tenant RLS, JWT (≥48 char production) + MFA, RBAC, audit log
-- Endpoint agent with 45+ agent-required detection surfaces
+- Endpoint agent with 48 agent-required detection surfaces
 - SOAR playbooks, attack-path graph, KEV/EPSS enrichment
 - Paddle billing with monthly scan quotas
 - Docker, systemd, and Kubernetes deployment paths
