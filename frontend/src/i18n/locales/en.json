@@ -5979,7 +5979,7 @@
         "empty": "No ATT&CK tactics reported.",
         "error": "ATT&CK coverage unavailable.",
         "techniqueCount": "{{count}}T",
-        "tacticTitle": "{{tactic}} — {{techniques}} techniques, {{engines}} engine references"
+        "tacticTitle": "{{tactic}} — techniques: {{techniques}}, engine references: {{engines}}"
       },
       "globalThreatTicker": {
         "score": "SCORE",

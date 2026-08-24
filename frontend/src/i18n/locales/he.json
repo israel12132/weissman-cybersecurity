@@ -5979,7 +5979,7 @@
         "empty": "לא דווחו טקטיקות ATT&CK.",
         "error": "כיסוי ATT&CK אינו זמין.",
         "techniqueCount": "{{count}}T",
-        "tacticTitle": "{{tactic}} — {{techniques}} טכניקות, {{engines}} הפניות למנועים"
+        "tacticTitle": "{{tactic}} — טכניקות: {{techniques}}, הפניות למנועים: {{engines}}"
       },
       "globalThreatTicker": {
         "score": "ציון",
