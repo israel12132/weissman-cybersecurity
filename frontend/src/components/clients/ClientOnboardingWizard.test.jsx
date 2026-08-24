@@ -57,8 +57,9 @@ describe('ClientOnboardingWizard — sector dropdown', () => {
     const msaCheckbox = screen.getByRole('checkbox', { hidden: true })
     fireEvent.click(msaCheckbox)
 
-    // emergency_contact_phone input
-    const phoneInput = screen.getByRole('textbox', { hidden: true })
+    // Step 0 renders both emergency_contact_name and emergency_contact_phone,
+    // so select by label rather than by the (ambiguous) textbox role.
+    const phoneInput = screen.getByLabelText(/emergency_phone/)
     fireEvent.change(phoneInput, { target: { value: '+972501234567' } })
 
     // Click Next to advance to step 1 (basic info)
