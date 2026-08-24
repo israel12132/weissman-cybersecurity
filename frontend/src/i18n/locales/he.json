@@ -6223,7 +6223,7 @@
         "openPr": "פתח PR / אשר ומזג"
       },
       "deceptionGrid": {
-        "simulationBadge": "סימולציה",
+        "unmonitoredBadge": "ללא ניטור",
         "liveAwsBadge": "AWS חי",
         "selectClient": "בחר לקוח לניהול נכסי הטעיה.",
         "title": "רשת הטעיה",
