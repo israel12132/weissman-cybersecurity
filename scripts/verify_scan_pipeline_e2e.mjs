@@ -153,10 +153,15 @@ async function main() {
   let clientId = null
   const clients = await req('GET', '/api/clients', auth)
   if (clients.status === 200 && Array.isArray(clients.data)) {
-    const existing = clients.data.find((c) =>
-      parseDomains(c.domains).some((x) => String(x).includes('example.com')),
-    )
-    clientId = existing?.id ?? clients.data[0]?.id ?? null
+    // Only reuse a client that actually carries example.com in its authorized
+    // scope. Falling back to clients.data[0] picked whatever client happened to
+    // exist, and every scope-gated step below then failed 403 — which reads as a
+    // product defect when it is really a fixture mismatch. Empty in CI, but any
+    // staging database has clients in it.
+    clientId =
+      clients.data.find((c) =>
+        parseDomains(c.domains).some((x) => String(x).includes('example.com')),
+      )?.id ?? null
   }
   if (!clientId) {
     const created = await req('POST', '/api/clients', {
