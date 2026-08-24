@@ -803,23 +803,13 @@ jobs:
           # Secrets-at-rest vault key (64 hex): the worker runs the same production startup guard
           # and refuses to boot without integrations_vault + ceo_vault keys. CI-throwaway value.
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
-          # Cap the worker's auth+intel pools, but give the APP pool real headroom: each
-          # in-flight scan AND its completion write both need a connection. A prior iteration
-          # shrank this to 16 while raising heavy concurrency to 4 — with the connection-hungry
-          # superposition-collapse follow-up that every smoke scan spawns, 4 concurrent heavy
-          # jobs drained the 16-connection pool and the FINISHED jobs' completion DB-writes
-          # failed with "database: pool timed out", so they never reached 'completed' and the
-          # smoke polled them to the 180s timeout. app=30 + server(24+6+4) = 72 << max_conn=100.
-          WEISSMAN_APP_POOL_MAX: "30"
+          # Heavy scans must run at real parallelism. Keep the worker app pool large enough for
+          # four heavy jobs plus their persistence/follow-up DB work instead of masking starvation
+          # by serializing the lane.
+          WEISSMAN_APP_POOL_MAX: "48"
           WEISSMAN_AUTH_POOL_MAX: "4"
           WEISSMAN_INTEL_POOL_MAX: "4"
-          # Keep the app pool WARM. Telemetry from a prior run showed worker app-pool occupancy is
-          # ~0 the whole audit (in-use never above 1 of 30 — so this is NOT connection exhaustion),
-          # yet a scan's persist begin_tenant_tx intermittently fails with "pool timed out" while the
-          # pool size had decayed toward 0. That is a cold-start/establishment stall, not saturation:
-          # opening a fresh connection when the next scan arrives is what times out. Holding 8
-          # connections warm means a scan acquires a ready connection instead of opening one on the
-          # hot path. This is warming, not a capacity change — max stays 30 (8 + server 24+6+4 << 100).
+          # Keep the app pool warm so heavy scans do not cold-open connections on the hot path.
           WEISSMAN_APP_POOL_MIN: "8"
           # Fine-grained pool telemetry + active SELECT-1 health-probe (main.rs) to capture the exact
           # stall window and correlate it with the running engine; also keeps a connection hot.
@@ -831,27 +821,8 @@ jobs:
           # and retry past the poll window. 3 keeps that background work bounded well clear of the
           # pool used by live scan execution.
           WEISSMAN_POST_PERSIST_DB_CONCURRENCY: "3"
-          # Serialize heavy scan execution (heavy=1). The smoke submits one command_center scan
-          # per group and waits for it, so at heavy=2 the only reason two scans overlap is timing
-          # jitter between a finishing scan and the next submit — and that overlap is exactly what
-          # exhausts CI's single small Postgres pool and made one high-DB engine
-          # (bgp_dns_hijacking) retry past the poll window while the other 13 passed. With heavy=1
-          # each scan runs alone against the full app pool, so there is no cross-scan contention.
-          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
-          # With heavy=1, a background auto-superposition-collapse follow-up (also a heavy job)
-          # could hold the single permit and head-of-line-block the next smoke scan. It is a
-          # best-effort cross-finding fusion that NONE of the live-scan contracts assert on
-          # (step 41 checks per-finding risk fields written during findings_persist, not the
-          # collapse output), so disable it for CI to keep the single heavy lane free for the
-          # scans under test.
-          #
-          # CI-ONLY — DO NOT REPLICATE TO PRODUCTION. This =0 is a CI-scoped opt-OUT. Superposition
-          # collapse is the client-facing dedup/intelligence engine; auto_superposition_enabled()
-          # (fingerprint_engine/src/superposition_followup.rs) DEFAULTS TO ENABLED when the var is
-          # unset, so production must leave it unset. Setting it to 0/false/no in any production
-          # config (docker-compose*.yml, PRODUCTION.env.template, deploy/k8s, deploy/systemd,
-          # *.Dockerfile, start_*.sh) would silently disable dedup and cause client alert fatigue.
-          WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "0"
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "4"
+          WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "1"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health

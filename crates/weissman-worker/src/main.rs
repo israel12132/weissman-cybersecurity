@@ -593,7 +593,7 @@ async fn async_main() {
         std::process::exit(1);
     }
 
-    let app_pool = match weissman_db::connect_app(database_url.trim()).await {
+    let app_pool = match weissman_db::connect_worker_app(database_url.trim()).await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!("weissman-worker: database connect failed: {}", e);

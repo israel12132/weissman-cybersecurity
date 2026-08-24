@@ -19,7 +19,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # out-of-transaction migration runner can record rows in `_sqlx_migrations`
 # that sqlx::migrate!() will recognise as already-applied.
 sha2 = "0.10"
-tokio = { version = "1", features = ["fs"] }
+tokio = { version = "1", features = ["fs", "time"] }
 thiserror = "1"
 
 [dev-dependencies]

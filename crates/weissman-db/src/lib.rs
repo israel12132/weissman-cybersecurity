@@ -169,23 +169,84 @@ pub async fn warn_if_pool_budget_exceeds_server(
     }
 }
 
-/// App pool: `WEISSMAN_APP_POOL_MAX` (default 48), `WEISSMAN_APP_POOL_MIN` (default 2).
-/// Avoid holding a tenant transaction across `.await` to unrelated work — release connections quickly.
-pub async fn connect_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
-    let max: u32 = std::env::var("WEISSMAN_APP_POOL_MAX")
+fn env_u32(var: &str, default: u32) -> u32 {
+    std::env::var(var)
         .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(48);
-    let min: u32 = std::env::var("WEISSMAN_APP_POOL_MIN")
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(default)
+}
+
+fn env_u64(var: &str, default: u64) -> u64 {
+    std::env::var(var)
         .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(2)
-        .min(max);
-    let stmt_ms = statement_timeout_ms("WEISSMAN_APP_STATEMENT_TIMEOUT_MS", 120_000);
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(default)
+}
+
+fn duration_from_ms_env(var: &str, default_ms: u64, floor_ms: u64) -> Duration {
+    Duration::from_millis(env_u64(var, default_ms).max(floor_ms))
+}
+
+fn worker_pool_floor() -> Option<u32> {
+    let heavy = std::env::var("WEISSMAN_WORKER_HEAVY_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .filter(|&n| n > 0)?;
+    let light = std::env::var("WEISSMAN_WORKER_LIGHT_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(8);
+    // Heavy jobs are the pool-hungry path (engine execution + persistence + follow-up writes). Keep
+    // enough headroom for them plus a few light jobs so raising heavy concurrency never silently
+    // under-provisions the worker app pool.
+    Some(
+        heavy
+            .saturating_mul(10)
+            .saturating_add(light.min(4).saturating_mul(2)),
+    )
+}
+
+fn worker_pool_warm_min(max: u32) -> u32 {
+    let heavy = std::env::var("WEISSMAN_WORKER_HEAVY_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(2);
+    env_u32("WEISSMAN_APP_POOL_MIN", heavy.saturating_mul(2).max(8)).min(max)
+}
+
+fn is_transient_acquire_error(err: &sqlx::Error) -> bool {
+    match err {
+        sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed => true,
+        sqlx::Error::Io(_) => true,
+        sqlx::Error::Database(db) => matches!(db.code().as_deref(), Some("53300" | "57P03")),
+        _ => false,
+    }
+}
+
+fn acquire_retry_attempts() -> u32 {
+    env_u32("WEISSMAN_DB_ACQUIRE_RETRIES", 3).max(1)
+}
+
+fn acquire_retry_backoff(attempt: u32) -> Duration {
+    let base_ms = env_u64("WEISSMAN_DB_ACQUIRE_BACKOFF_MS", 200).max(25);
+    let cap_ms = env_u64("WEISSMAN_DB_ACQUIRE_BACKOFF_CAP_MS", 2_000).max(base_ms);
+    let shift = attempt.saturating_sub(1).min(6);
+    Duration::from_millis(base_ms.saturating_mul(1_u64 << shift).min(cap_ms))
+}
+
+async fn connect_app_with_pool_tuning(
+    database_url: &str,
+    max: u32,
+    min: u32,
+    acquire_timeout: Duration,
+    stmt_ms: u64,
+) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
         .max_connections(max)
         .min_connections(min)
-        .acquire_timeout(Duration::from_secs(30))
+        .acquire_timeout(acquire_timeout)
         .after_connect(move |conn, _| {
             Box::pin(async move {
                 // Server-side statement timeout bulkheads a pathological/blocked query so it
@@ -198,6 +259,38 @@ pub async fn connect_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
         })
         .connect(database_url)
         .await
+}
+
+/// App pool: `WEISSMAN_APP_POOL_MAX` (default 48), `WEISSMAN_APP_POOL_MIN` (default 2).
+/// Avoid holding a tenant transaction across `.await` to unrelated work — release connections quickly.
+pub async fn connect_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    let max = env_u32("WEISSMAN_APP_POOL_MAX", 48);
+    let min = env_u32("WEISSMAN_APP_POOL_MIN", 2).min(max);
+    let stmt_ms = statement_timeout_ms("WEISSMAN_APP_STATEMENT_TIMEOUT_MS", 120_000);
+    connect_app_with_pool_tuning(database_url, max, min, Duration::from_secs(30), stmt_ms).await
+}
+
+/// Worker app pool: auto-raises undersized ceilings when heavy concurrency is increased, keeps a
+/// warm minimum so long-lived scans do not cold-open connections on the hot path, and uses shorter
+/// per-attempt acquire timeouts so retry/backoff can react before a 30s wall-clock stall accrues.
+pub async fn connect_worker_app(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    let requested = env_u32("WEISSMAN_APP_POOL_MAX", 48);
+    let floor = worker_pool_floor().unwrap_or(requested);
+    let max = requested.max(floor);
+    if max > requested {
+        tracing::info!(
+            target: "weissman_db",
+            requested_max = requested,
+            raised_max = max,
+            heavy_concurrency = std::env::var("WEISSMAN_WORKER_HEAVY_CONCURRENCY").ok(),
+            light_concurrency = std::env::var("WEISSMAN_WORKER_LIGHT_CONCURRENCY").ok(),
+            "raising worker app pool ceiling to match configured concurrency"
+        );
+    }
+    let min = worker_pool_warm_min(max);
+    let acquire_timeout = duration_from_ms_env("WEISSMAN_WORKER_DB_ACQUIRE_TIMEOUT_MS", 8_000, 250);
+    let stmt_ms = statement_timeout_ms("WEISSMAN_APP_STATEMENT_TIMEOUT_MS", 120_000);
+    connect_app_with_pool_tuning(database_url, max, min, acquire_timeout, stmt_ms).await
 }
 
 /// Per-connection `statement_timeout` in milliseconds (0 disables). Tunable per pool via env.
@@ -420,6 +513,41 @@ pub async fn begin_tenant_tx_arc(
     Ok(tx)
 }
 
+/// Acquire a tenant transaction with bounded retry/backoff on transient pool-acquisition failures.
+///
+/// Worker-heavy code should prefer this over open-coded `pool.begin()` retries so the backoff
+/// policy stays consistent across engines and queue executors.
+pub async fn begin_tenant_tx_arc_retrying(
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+    op: &str,
+) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    let attempts = acquire_retry_attempts();
+    let mut last_err: Option<sqlx::Error> = None;
+    for attempt in 1..=attempts {
+        match begin_tenant_tx_arc(pool.clone(), tenant_id).await {
+            Ok(tx) => return Ok(tx),
+            Err(e) if is_transient_acquire_error(&e) && attempt < attempts => {
+                let backoff = acquire_retry_backoff(attempt);
+                tracing::warn!(
+                    target: "weissman_db",
+                    tenant_id,
+                    op,
+                    attempt,
+                    attempts,
+                    backoff_ms = backoff.as_millis() as u64,
+                    error = %e,
+                    "transient DB acquire failure; backing off before retry"
+                );
+                last_err = Some(e);
+                tokio::time::sleep(backoff).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| sqlx::Error::Protocol("retry loop exhausted".into())))
+}
+
 /// Bootstrap admin from env into `default` tenant (auth pool; BYPASSRLS).
 /// Password material is never hardcoded unless `WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=1` (dev only).
 pub async fn ensure_admin_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
@@ -539,8 +667,8 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
 #[cfg(test)]
 mod url_and_path_helper_tests {
     use super::{
-        auth_database_url_from_env, database_url_from_env, migrations_dir,
-        resolve_auth_database_url,
+        acquire_retry_backoff, auth_database_url_from_env, database_url_from_env, migrations_dir,
+        resolve_auth_database_url, worker_pool_floor, worker_pool_warm_min,
     };
 
     #[test]
@@ -565,5 +693,39 @@ mod url_and_path_helper_tests {
             Some(u) => assert_eq!(resolved.ok().as_deref(), Some(u.as_str())),
             None => assert_eq!(resolved.is_ok(), database_url_from_env().is_ok()),
         }
+    }
+
+    #[test]
+    fn worker_pool_floor_tracks_concurrency() {
+        std::env::set_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY", "4");
+        std::env::set_var("WEISSMAN_WORKER_LIGHT_CONCURRENCY", "8");
+        assert_eq!(worker_pool_floor(), Some(48));
+        std::env::remove_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY");
+        std::env::remove_var("WEISSMAN_WORKER_LIGHT_CONCURRENCY");
+    }
+
+    #[test]
+    fn worker_pool_warm_min_is_bounded_by_pool_ceiling() {
+        std::env::remove_var("WEISSMAN_APP_POOL_MIN");
+        std::env::set_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY", "4");
+        assert_eq!(worker_pool_warm_min(6), 6);
+        assert_eq!(worker_pool_warm_min(64), 8);
+        std::env::remove_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY");
+    }
+
+    #[test]
+    fn acquire_retry_backoff_grows_and_caps() {
+        assert_eq!(
+            acquire_retry_backoff(1),
+            std::time::Duration::from_millis(200)
+        );
+        assert_eq!(
+            acquire_retry_backoff(2),
+            std::time::Duration::from_millis(400)
+        );
+        assert_eq!(
+            acquire_retry_backoff(20),
+            std::time::Duration::from_millis(2_000)
+        );
     }
 }

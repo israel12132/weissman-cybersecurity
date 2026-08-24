@@ -156,20 +156,12 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379/0
           WEISSMAN_ENV: production
           RUST_LOG: info,weissman_server=debug,fingerprint_engine=info,weissman_db=info
-          # The worker is where engines actually run, and a single command_center
-          # engine fans out many concurrent DB ops (findings persist, telemetry,
-          # intelligence bus) on top of the job lease/heartbeat + claim loop.
-          # This runner's postgres checkpoints are slow (40-80s writes on slow
-          # disk); a checkpoint stalls in-flight queries that pin connections, so
-          # a 24-connection pool exhausted and the CLAIM LOOP ITSELF starved
-          # ("pool timed out while waiting for an open connection") — the pending
-          # engine job was never picked up and timed out. Give the worker a large
-          # pool (40) and serialize heavy engines (heavy=1; the E2E drives scans
-          # one at a time anyway) so the claim/lease tasks always keep headroom.
-          # Budget: server 24+6+4=34 + worker 40+6+4=50 = 84 < postgres max 100.
-          WEISSMAN_APP_POOL_MAX: "40"
-          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "1"
+          # Nightly must exercise the real heavy lane rather than a serialized fallback.
+          # With auth+intel at 6+4, app=48 keeps the combined server+worker footprint under 100.
+          WEISSMAN_APP_POOL_MAX: "48"
+          WEISSMAN_WORKER_HEAVY_CONCURRENCY: "4"
           WEISSMAN_WORKER_LIGHT_CONCURRENCY: "2"
+          WEISSMAN_AUTO_SUPERPOSITION_COLLAPSE: "1"
         run: ./target/debug/weissman-worker > /tmp/weissman-worker.log 2>&1 &
 
       - name: Wait for API health
