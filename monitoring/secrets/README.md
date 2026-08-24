@@ -30,10 +30,30 @@ anywhere real.
 
 ## ⚠️ Production / go-live requirement
 
-**Alert delivery is a go-live gate.** `./scripts/go_live_check.sh` will FAIL
-until all three secrets are replaced with real values. You cannot go live with
-placeholders — alerts will fire, go nowhere, and SLA §4 (SEV-1 ≤ 15 min, 24/7)
-cannot be met.
+**Alert delivery is a go-live gate.** `./scripts/go_live_check.sh` FAILs while
+`slack_api_url` or `watchdog_url` are placeholders. You cannot go live with
+those — alerts would fire, go nowhere, and SLA §4 (SEV-1 ≤ 15 min, 24/7) could
+not be met. `watchdog_url` is not optional either: it is the only thing that
+notices when the alert pipeline itself dies.
+
+**PagerDuty is currently disabled — the stack runs Slack-only.** The
+`pagerduty_configs` block in `alertmanager.yml` is commented out, and
+`go_live_check.sh` reports that as a warning rather than a failure.
+
+Disabling it required removing the receiver, not blanking the key. Measured
+against this config: with the key file holding `DISABLED` Alertmanager attempts
+the notification and PagerDuty rejects it (HTTP 400), and with the file **empty**
+it still attempts and still fails. Either way every critical alert increments
+`alertmanager_notifications_failed_total` and `AlertDeliveryFailing` fires
+permanently.
+
+Understand the trade: without PagerDuty nobody is paged out of hours, so a 03:00
+`BackendDown` sits in Slack until someone looks.
+
+**To turn paging on:** uncomment `pagerduty_configs` in `alertmanager.yml`, write
+a real Events API v2 routing key into `pagerduty_routing_key`, and restart
+Alertmanager. The gate checks the two stay consistent — an active receiver with a
+placeholder key fails, because that combination is worse than having neither.
 
 ## Enabling live alerting
 

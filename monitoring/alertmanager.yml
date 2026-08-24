@@ -50,15 +50,25 @@ receivers:
         title: '[CRITICAL] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
         send_resolved: true
-    # PagerDuty paging for critical alerts. The routing key is read from
-    # /etc/alertmanager/secrets/pagerduty_routing_key (see monitoring/secrets/README.md);
-    # the committed placeholder is inert, so critical alerts go Slack-only until an
-    # operator writes a real routing key into that file (leave it empty to stay Slack-only).
-    pagerduty_configs:
-      - routing_key_file: /etc/alertmanager/secrets/pagerduty_routing_key
-        description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        severity: 'critical'
-        send_resolved: true
+    # PagerDuty paging for critical alerts — CURRENTLY DISABLED (Slack-only).
+    #
+    # An unconfigured key is not inert. Measured against this config: with the key
+    # file holding the `DISABLED` placeholder Alertmanager attempts the notification
+    # and PagerDuty rejects it (HTTP 400); with the file EMPTY it still attempts and
+    # still fails. Either way alertmanager_notifications_failed_total increments on
+    # every critical alert, which fires AlertDeliveryFailing permanently — an alert
+    # about broken alerting, caused by alerting that was never meant to be on.
+    #
+    # So opting out means removing the receiver, not blanking the key. To re-enable:
+    # uncomment the block below and write a real Events API v2 routing key into
+    # /etc/alertmanager/secrets/pagerduty_routing_key (see monitoring/secrets/README.md).
+    # go_live_check.sh checks these two stay consistent.
+    #
+    # pagerduty_configs:
+    #   - routing_key_file: /etc/alertmanager/secrets/pagerduty_routing_key
+    #     description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    #     severity: 'critical'
+    #     send_resolved: true
 
   - name: 'watchdog-heartbeat'
     # The heartbeat URL is read from /etc/alertmanager/secrets/watchdog_url
