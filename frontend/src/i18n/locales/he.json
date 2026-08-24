@@ -5974,12 +5974,12 @@
         "title": "רשת נכסים"
       },
       "killChainVisualizer": {
-        "title": "שרשרת הריג",
-        "phases": {
-          "recon": "סיור",
-          "delivery": "מסירה",
-          "exploitation": "ניצול"
-        }
+        "title": "שרשרת תקיפה",
+        "loading": "טוען כיסוי ATT&CK…",
+        "empty": "לא דווחו טקטיקות ATT&CK.",
+        "error": "כיסוי ATT&CK אינו זמין.",
+        "techniqueCount": "{{count}}T",
+        "tacticTitle": "{{tactic}} — טכניקות: {{techniques}}, הפניות למנועים: {{engines}}"
       },
       "globalThreatTicker": {
         "score": "ציון",
@@ -6223,7 +6223,7 @@
         "openPr": "פתח PR / אשר ומזג"
       },
       "deceptionGrid": {
-        "simulationBadge": "סימולציה",
+        "unmonitoredBadge": "ללא ניטור",
         "liveAwsBadge": "AWS חי",
         "selectClient": "בחר לקוח לניהול נכסי הטעיה.",
         "title": "רשת הטעיה",

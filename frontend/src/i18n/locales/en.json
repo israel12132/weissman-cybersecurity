@@ -5975,11 +5975,11 @@
       },
       "killChainVisualizer": {
         "title": "Kill-Chain",
-        "phases": {
-          "recon": "RECON",
-          "delivery": "DELIVERY",
-          "exploitation": "EXPLOIT"
-        }
+        "loading": "Loading ATT&CK coverage…",
+        "empty": "No ATT&CK tactics reported.",
+        "error": "ATT&CK coverage unavailable.",
+        "techniqueCount": "{{count}}T",
+        "tacticTitle": "{{tactic}} — techniques: {{techniques}}, engine references: {{engines}}"
       },
       "globalThreatTicker": {
         "score": "SCORE",
@@ -6223,7 +6223,7 @@
         "openPr": "Open PR / Approve & merge"
       },
       "deceptionGrid": {
-        "simulationBadge": "Simulation",
+        "unmonitoredBadge": "Not monitored",
         "liveAwsBadge": "Live AWS",
         "selectClient": "Select a client to manage deception assets.",
         "title": "Deception Grid",

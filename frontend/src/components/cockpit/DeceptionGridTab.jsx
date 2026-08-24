@@ -290,11 +290,6 @@ export default function DeceptionGridTab() {
                   <span className="text-xs font-medium text-white/90">
                     #{a.id} {a.asset_type}
                   </span>
-                  {a.simulation_mode && (
-                    <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                      {t(`${NS}.simulationBadge`)}
-                    </span>
-                  )}
                   {a.live_aws_canary && (
                     <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                       {t(`${NS}.liveAwsBadge`)}
@@ -303,6 +298,14 @@ export default function DeceptionGridTab() {
                   {a.oast_monitoring && !a.live_aws_canary && (
                     <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-sky-500/20 text-sky-300 border border-sky-500/40">
                       {t(`${NS}.liveOastBadge`, 'Live OAST')}
+                    </span>
+                  )}
+                  {/* A token with neither an AWS canary key nor an OAST hook is planted but
+                      nothing watches it, so a trigger would never reach us. Say so rather
+                      than rendering it identically to a monitored decoy. */}
+                  {!a.live_aws_canary && !a.oast_monitoring && (
+                    <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-white/10 text-white/60 border border-white/20">
+                      {t(`${NS}.unmonitoredBadge`)}
                     </span>
                   )}
                   {a.status === 'triggered' && <AlertTriangle className="w-4 h-4 text-red-400 ml-auto" />}

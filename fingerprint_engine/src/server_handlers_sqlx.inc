@@ -1283,6 +1283,7 @@ async fn api_clients_readiness(
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
             COALESCE(gcp_project_id,'') AS gcp_project_id,
+            COALESCE(sector,'') AS sector,
             COALESCE(NULLIF(trim(client_configs), ''), $2) AS client_configs
            FROM clients WHERE id = $1"#,
     )
@@ -1326,6 +1327,7 @@ async fn api_clients_readiness(
         "aws_cross_account_role_arn": r.try_get::<String,_>("aws_cross_account_role_arn").ok(),
         "aws_external_id": r.try_get::<String,_>("aws_external_id").ok(),
         "gcp_project_id": r.try_get::<String,_>("gcp_project_id").ok(),
+        "sector": r.try_get::<String,_>("sector").ok(),
         "client_configs": config_val,
         "onboarding": config_val.get("onboarding").cloned().unwrap_or(json!({})),
         "agents_online": agents_online,

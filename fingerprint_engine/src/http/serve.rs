@@ -261,7 +261,7 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
 ];
 
 /// True when `(method, path)` is an exact match on the unauthenticated allow-list.
-fn is_public_route(method: &Method, path: &str) -> bool {
+pub(crate) fn is_public_route(method: &Method, path: &str) -> bool {
     PUBLIC_ROUTES.iter().any(|(m, p, gate)| {
         m == method
             && *p == path
@@ -1150,6 +1150,9 @@ struct ClientBody {
     aws_cross_account_role_arn: Option<String>,
     aws_external_id: Option<String>,
     gcp_project_id: Option<String>,
+    /// Industry classification driving sector-specific compliance frameworks.
+    /// Validated against `weissman_core::CLIENT_SECTORS`; empty = unclassified.
+    sector: Option<String>,
     /// Engagement modules (baseline_asm, cloud_aws, endpoint_agent, …) stored in client_configs.
     engagement_modules: Option<Vec<String>>,
     /// Nested onboarding payload merged into client_configs.onboarding.

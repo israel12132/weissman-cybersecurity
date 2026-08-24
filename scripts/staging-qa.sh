@@ -41,10 +41,14 @@ else
   echo "SKIP: cargo not installed"
 fi
 
-if [[ -d frontend/node_modules ]] || [[ -f frontend/package-lock.json ]]; then
+# `package-lock.json` is committed, so `-f` on it was true on every fresh clone and the
+# guard let the run through with no node_modules — `vitest: not found`, reported as a
+# failed QA check rather than a missing install. Only the test runner actually being
+# present proves the dependencies are installed.
+if [[ -x frontend/node_modules/.bin/vitest ]]; then
   run "frontend routeEngineId tests" bash -c 'cd frontend && npm test -- --run src/lib/routeEngineId.test.js'
 else
-  echo "SKIP: run npm ci in frontend first"
+  echo "SKIP: frontend dependencies not installed — run 'npm ci' in frontend/ to include this check"
 fi
 
 if [[ -n "$LIVE_URL" ]]; then

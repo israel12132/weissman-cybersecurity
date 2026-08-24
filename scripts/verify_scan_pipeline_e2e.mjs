@@ -80,6 +80,38 @@ function parseDomains(raw) {
   return []
 }
 
+/**
+ * The host every scope-gated step below scans. A client is only reusable if its
+ * authorized scope covers exactly this host.
+ */
+const TARGET_HOST = 'example.com'
+
+/**
+ * True when one client scope entry authorizes `TARGET_HOST`. Entries come back as
+ * bare hosts (`example.com`) or full URLs (`https://example.com`), so the host is
+ * extracted before comparing.
+ *
+ * Compares the whole host rather than testing for a substring: `notexample.com` and
+ * `example.com.attacker.test` both contain `example.com` but authorize a different
+ * host, and a client picked on that basis 403s every scope-gated step below — which
+ * reads as a product defect rather than the fixture mismatch it is.
+ */
+function scopeCoversTargetHost(entry) {
+  const raw = String(entry ?? '').trim()
+  if (!raw) return false
+  let host
+  if (raw.includes('://')) {
+    try {
+      host = new URL(raw).hostname
+    } catch {
+      return false
+    }
+  } else {
+    host = raw.split('/')[0].split(':')[0]
+  }
+  return host.replace(/\.$/, '').toLowerCase() === TARGET_HOST
+}
+
 async function pollJob(jobId, auth, { label = 'job_poll', max = POLL_MAX } = {}) {
   const terminal = new Set(['completed', 'done', 'failed', 'error', 'dead', 'cancelled'])
   for (let i = 0; i < max; i += 1) {
@@ -153,10 +185,13 @@ async function main() {
   let clientId = null
   const clients = await req('GET', '/api/clients', auth)
   if (clients.status === 200 && Array.isArray(clients.data)) {
-    const existing = clients.data.find((c) =>
-      parseDomains(c.domains).some((x) => String(x).includes('example.com')),
-    )
-    clientId = existing?.id ?? clients.data[0]?.id ?? null
+    // Only reuse a client that actually carries example.com in its authorized
+    // scope. Falling back to clients.data[0] picked whatever client happened to
+    // exist, and every scope-gated step below then failed 403 — which reads as a
+    // product defect when it is really a fixture mismatch. Empty in CI, but any
+    // staging database has clients in it.
+    clientId =
+      clients.data.find((c) => parseDomains(c.domains).some(scopeCoversTargetHost))?.id ?? null
   }
   if (!clientId) {
     const created = await req('POST', '/api/clients', {

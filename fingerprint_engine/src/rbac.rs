@@ -160,6 +160,16 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
     Some(roles::ANALYST)
 }
 
+/// True when a mutating request legitimately reaches RBAC with no `AuthContext`.
+///
+/// `auth_guard` admits an unauthenticated request in exactly two cases: the login/MFA
+/// posts, and the `PUBLIC_ROUTES` allow-list. Anything else either carries a verified
+/// JWT (and therefore an `AuthContext`) or is rejected before this layer. So a missing
+/// `AuthContext` outside these two sets means `auth_guard` did not run at all.
+fn missing_authcontext_is_expected(method: &Method, path: &str) -> bool {
+    crate::http::is_account_lockout_post(method, path) || crate::http::is_public_route(method, path)
+}
+
 /// Central RBAC middleware. Runs after `auth_guard` (so `AuthContext` is present
 /// for authenticated requests). Reads pass through (gated by auth + tenant RLS);
 /// mutations are checked against [`required_min_role`]. Unauthenticated allowlisted
@@ -170,20 +180,24 @@ pub async fn mutation_rbac_middleware(req: Request, next: Next) -> Response {
         return next.run(req).await;
     }
     let Some(auth) = req.extensions().get::<AuthContext>().cloned() else {
-        // A mutating /api request reached the RBAC layer with no AuthContext. For the
-        // declared public POSTs (signup/webhooks/refresh/…) this is expected; but any
-        // *protected* path here — or a spike above the public-POST baseline — means
-        // `auth_guard` did not run, a layer-ordering regression that would silently open
+        // A mutating /api request reached the RBAC layer with no AuthContext. That means
+        // `auth_guard` did not run — a layer-ordering regression that would silently open
         // every mutation. Emit fail-closed telemetry so it is observable, without changing
-        // behaviour. Login/MFA-verify are excluded as the highest-frequency expected case.
+        // behaviour.
+        //
+        // Only the routes `auth_guard` is *declared* to admit unauthenticated are excluded.
+        // Excluding just login/MFA left every other public POST warning on its happy path,
+        // and `/api/auth/refresh` is the most frequent one in a live system: each renewal
+        // logged a WARN and bumped the counter, so the metric could never reach zero and
+        // the real regression had no signal to stand out from.
         let path = req.uri().path();
-        if !crate::http::is_account_lockout_post(&method, path) {
+        if !missing_authcontext_is_expected(&method, path) {
             metrics::counter!("weissman_rbac_missing_authcontext_total").increment(1);
             tracing::warn!(
                 target: "rbac",
                 method = %method,
                 path = %path,
-                "mutating request reached RBAC with no AuthContext (expected only for public POSTs; investigate if this is a protected route)"
+                "mutating request reached RBAC with no AuthContext — auth_guard did not run for a protected route"
             );
         }
         return next.run(req).await;
@@ -316,5 +330,46 @@ mod tests {
         assert!(!can_assign_ceo_role(&ctx("operator", false)));
         assert!(require_can_assign_ceo(&ctx("ceo", false)).is_ok());
         assert!(require_can_assign_ceo(&ctx("admin", false)).is_err());
+    }
+
+    /// The missing-`AuthContext` warning is a tripwire for `auth_guard` not running. It has to
+    /// stay silent on every route `auth_guard` deliberately admits unauthenticated — otherwise
+    /// `weissman_rbac_missing_authcontext_total` never reaches zero in a live system and the
+    /// regression it exists to catch has no baseline to rise above. `/api/auth/refresh` is the
+    /// case that proved it: every session renewal logged a WARN.
+    #[test]
+    fn missing_authcontext_expected_only_for_declared_public_mutations() {
+        for path in [
+            "/api/auth/refresh",
+            "/api/logout",
+            "/api/auth/signup",
+            "/api/onboarding/register",
+            "/api/webhooks/paddle",
+            "/api/agents/enroll",
+            "/api/agents/session",
+            "/api/deception/aws-events",
+            "/api/integrations/slack/interactivity",
+            "/api/v1/alerts/aws-canary",
+            "/api/auth/saml/acs",
+        ] {
+            assert!(
+                missing_authcontext_is_expected(&Method::POST, path),
+                "{path} is on the unauthenticated allow-list, so it must not trip the warning"
+            );
+        }
+        assert!(missing_authcontext_is_expected(&Method::POST, "/api/login"));
+
+        // Protected mutations must still trip it — that is the regression being guarded.
+        for path in ["/api/clients", "/api/playbooks", "/api/admin/users"] {
+            assert!(
+                !missing_authcontext_is_expected(&Method::POST, path),
+                "{path} requires a JWT, so a missing AuthContext there is a real defect"
+            );
+        }
+        // Allow-listed as GET only: a POST to it is not admitted unauthenticated.
+        assert!(!missing_authcontext_is_expected(
+            &Method::POST,
+            "/api/health"
+        ));
     }
 }

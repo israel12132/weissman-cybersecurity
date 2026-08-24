@@ -22,6 +22,25 @@ note() { echo "WARN: $1"; warn=$((warn + 1)); }
 
 section() { echo ""; echo "== $1 =="; }
 
+section "Toolchain"
+# Several checks below shell out to node scripts that import frontend sources, and those
+# use import attributes (`with { type: 'json' }`) — Node >= 20.10. On an older Node the
+# run dies with a raw `SyntaxError: Unexpected token 'with'` pointing at a frontend file,
+# which reads as a code defect and invites "fix" it by reverting to the removed `assert`
+# syntax. That would break the supported runtime instead: frontend/package.json requires
+# Node >= 22.22.0 and `assert` is a syntax error there. Say so plainly up front.
+if command -v node >/dev/null 2>&1; then
+  node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  node_minor="$(node -p 'process.versions.node.split(".")[1]' 2>/dev/null || echo 0)"
+  if (( node_major > 20 || (node_major == 20 && node_minor >= 10) )); then
+    ok "node $(node --version) supports import attributes"
+  else
+    bad "node $(node --version) is too old — import attributes need >= 20.10 and frontend/package.json requires >= 22.22.0. Install a newer Node; do NOT downgrade the import syntax to 'assert', which was removed in Node 22"
+  fi
+else
+  bad "node not installed — the delivery-prep and engine audits below cannot run"
+fi
+
 section "Alert delivery"
 # A go-live gate that never checks whether an alert can reach a human is not a go-live gate.
 # This stack shipped with all three Alertmanager receivers — including the Watchdog
@@ -29,16 +48,53 @@ section "Alert delivery"
 # `.invalid` placeholder hosts. Alerts fired, went nowhere, and nothing noticed for four days.
 # Placeholders are the correct default for an unconfigured stack (monitoring/secrets/README.md);
 # they are not acceptable at go-live, so these fail rather than warn.
-for secret in slack_api_url pagerduty_routing_key watchdog_url; do
-  f="monitoring/secrets/${secret}"
-  if [[ ! -s "$f" ]]; then
-    bad "alert secret ${secret} is missing or empty"
-  elif grep -qE '\.invalid([/:]|$)|^DISABLED$' "$f"; then
-    bad "alert secret ${secret} is still an inert placeholder — no alert can reach a human"
-  else
+alert_secret_configured() {
+  local f="monitoring/secrets/${1}"
+  [[ -s "$f" ]] && ! grep -qE '\.invalid([/:]|$)|^DISABLED$' "$f"
+}
+
+# Slack and the Watchdog dead-man's-switch are not optional: one carries the alert,
+# the other is the only thing that notices when the alert pipeline itself dies.
+for secret in slack_api_url watchdog_url; do
+  if alert_secret_configured "$secret"; then
     ok "alert secret ${secret} configured"
+  elif [[ ! -s "monitoring/secrets/${secret}" ]]; then
+    bad "alert secret ${secret} is missing or empty"
+  else
+    bad "alert secret ${secret} is still an inert placeholder — no alert can reach a human"
   fi
 done
+
+# PagerDuty is the paging tier, and alertmanager.yml already documents running
+# Slack-only ("leave it empty to stay Slack-only"). This gate contradicted that by
+# failing on the empty file, so the documented configuration could not pass go-live.
+#
+# Opting out is allowed, but it must be a decision rather than the default: the
+# committed placeholder means "not configured yet", and silently accepting it is how
+# a stack ships believing it pages someone. WEISSMAN_ALERT_PAGERDUTY_OPTOUT=1 is the
+# acknowledgement, mirroring WEISSMAN_ALLOW_SINGLE_NODE in security_startup.rs.
+#
+# The opt-out is only honoured when Slack works. Waiving both would leave no path to
+# a human at all, which is the exact failure this section exists to prevent.
+pagerduty_receiver_active() {
+  grep -qE '^[[:space:]]*pagerduty_configs:' monitoring/alertmanager.yml
+}
+
+if pagerduty_receiver_active; then
+  if alert_secret_configured pagerduty_routing_key; then
+    ok "alert secret pagerduty_routing_key configured"
+  else
+    # Blanking the key does NOT disable the receiver. Measured against this config,
+    # Alertmanager attempts the notification either way — placeholder or empty file —
+    # PagerDuty rejects it, and AlertDeliveryFailing then fires forever. So a waiver
+    # has to remove the receiver, which is why declaring the opt-out is not enough.
+    bad "pagerduty_configs is active but the routing key is a placeholder — every critical alert will fail delivery and fire AlertDeliveryFailing (comment out pagerduty_configs in monitoring/alertmanager.yml to run Slack-only)"
+  fi
+elif alert_secret_configured slack_api_url; then
+  note "PagerDuty paging disabled (pagerduty_configs commented out) — critical alerts are Slack-only, nobody is paged out of hours"
+else
+  bad "PagerDuty is disabled AND Slack is unconfigured — no alert can reach a human"
+fi
 grep -q "job_name: 'alertmanager'" monitoring/prometheus.yml \
   && ok "alertmanager is a scrape target (delivery failures are observable)" \
   || bad "alertmanager is not scraped — notification failures cannot be detected"

@@ -77,6 +77,22 @@ jobs:
         working-directory: monitoring/alerts/tests
         run: promtool test rules ./*.test.yml
 
+      - name: Install amtool
+        run: |
+          set -euo pipefail
+          VERSION=0.28.1
+          curl -sSfL "https://github.com/prometheus/alertmanager/releases/download/v${VERSION}/alertmanager-${VERSION}.linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin "alertmanager-${VERSION}.linux-amd64/amtool"
+          amtool --version
+
+      # The rules above are proven to fire, and go_live_check.sh proves the delivery
+      # secrets are real before go-live. alertmanager.yml sits between them and was
+      # validated by nothing. Its top-level route falls through to `default`, which
+      # has no delivery config, so one mislabeled severity yields an alert that fires
+      # correctly and pages nobody.
+      - name: Alert delivery routes reach a real receiver
+        run: ./scripts/verify_alert_delivery_routes.sh
+
       - name: No real Alertmanager secret may be committed
         # monitoring/secrets/* is gitignored, but these three files are already TRACKED as
         # documented inert placeholders — and .gitignore does not apply to tracked files. So an
@@ -122,6 +138,20 @@ jobs:
 
       - name: Launcher flag / secret / bind-mount contract
         run: bash scripts/test_launcher_contract.sh
+
+      # Same failure mode as the launcher, one layer up: the nightly E2E booted
+      # weissman-server/worker in production mode without WEISSMAN_ADMIN_PASSWORD,
+      # so both refused to start and the job died in a health check for seven
+      # consecutive nights. This compares every production launch step in the
+      # workflows against the guards in security_startup.rs.
+      - name: CI production boot env contract
+        run: python3 scripts/verify_ci_production_boot_env.py
+
+      # .mergify.yml says its check names "must match the ci.yml job name: values
+      # exactly" and nothing verified it, so three blocking jobs were absent from
+      # the queue and a PR could merge while they were red.
+      - name: Merge queue covers every blocking job
+        run: python3 scripts/verify_merge_queue_contract.py
 
   python-audit:
     name: Python — pip-audit & lint
@@ -712,11 +742,26 @@ jobs:
         # LTO + parallelize codegen so it fits in the runner's memory; the published image (via
         # the publish job, which passes no build-args) keeps the full fat-LTO profile. The image
         # here only needs to build + be Trivy-scanned; it never runs the live stack.
+        # Build backend FIRST and alone, then the rest. `backend` and `worker` are the
+        # same image — same context, same deploy/backend.Dockerfile, same build-args — and
+        # `docker compose build a b c` drives them concurrently, so the single heaviest
+        # operation in CI (a release build of the ~350k-LOC workspace) ran TWICE at once.
+        # That is what the LTO/codegen overrides above were fighting, and it still lost:
+        # the step died mid-build with the runner gone and no logs retained. Sequencing
+        # halves peak memory and makes `worker` a pure layer-cache hit instead of a
+        # duplicate full compile.
         run: |
-          docker compose build \
-            --build-arg CARGO_PROFILE_RELEASE_LTO=false \
-            --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-            backend worker gateway
+          set -euo pipefail
+          build() {
+            docker compose build \
+              --build-arg CARGO_PROFILE_RELEASE_LTO=false \
+              --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+              "$@"
+          }
+          build backend
+          df -h /
+          build worker gateway
+          df -h /
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the

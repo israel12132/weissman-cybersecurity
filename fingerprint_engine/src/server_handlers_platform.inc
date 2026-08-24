@@ -12,6 +12,9 @@ struct OnboardingTargetBody {
     ip_ranges: Option<Vec<String>>,
     #[serde(default)]
     contact_email: Option<String>,
+    /// Optional industry classification; validated by `api_clients_create`.
+    #[serde(default)]
+    sector: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +52,7 @@ async fn api_onboarding_target(
         aws_cross_account_role_arn: None,
         aws_external_id: None,
         gcp_project_id: None,
+        sector: body.sector,
         engagement_modules: None,
         onboarding: None,
     };

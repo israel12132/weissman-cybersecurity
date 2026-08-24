@@ -2,9 +2,16 @@
 
 ## Objectives
 
+> **Committed RPO is ≤ 1 hour.** That is the figure in `SECURITY_AND_COMPLIANCE.md`,
+> `SIG_CAIQ_PREP_QA.md` and the Bank of Israel Directive 361 mapping, and it is what
+> customers are entitled to. The 15 minutes below is the *measured capability* of the
+> Tier 2 PITR configuration — headroom against the commitment, not a second promise.
+> Quote ≤ 1 hour externally; use 15 minutes for capacity planning.
+
 | Metric | Target | Notes |
 |--------|--------|-------|
-| **RPO** (Recovery Point Objective) | **15 minutes** | With WAL/PITR enabled (`scripts/backup_pitr_setup.sh`); **24 hours** with logical `pg_dump` only |
+| **RPO** — committed | **≤ 1 hour** | Contractual objective; the figure quoted to customers and auditors |
+| **RPO** — measured capability | **15 minutes** | With WAL/PITR enabled (`scripts/backup_pitr_setup.sh`); **24 hours** with logical `pg_dump` only |
 | **RTO** (Recovery Time Objective) | **4 hours** | Full stack restore on fresh VPS/K8s including Postgres PITR replay + Redis cold start |
 | **RTO (degraded read-only)** | **1 hour** | Restore latest base backup + replay WAL to last consistent point |
 
