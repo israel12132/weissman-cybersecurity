@@ -1094,6 +1094,18 @@ async fn api_openapi_spec() -> Response {
                     }
                 }
             },
+            "/api/auth/tenant-directory": {
+                "get": {
+                    "summary": "Workspace options for the login form's tenant picker",
+                    "description": "Slug + display name of active workspaces, for the pre-authentication tenant select. Returns listing=\"restricted\" with an empty list on multi-tenant production instances unless WEISSMAN_PUBLIC_TENANT_DIRECTORY=1.",
+                    "tags": ["Auth"],
+                    "security": [],
+                    "responses": {
+                        "200": { "description": "listing (enumerated|restricted), tenants[{slug,name}], default_slug, allow_custom" },
+                        "503": { "description": "Directory unavailable — client falls back to manual slug entry" }
+                    }
+                }
+            },
             "/api/auth/verify": {
                 "get": {
                     "summary": "Verify email + create the tenant/admin user",

@@ -502,6 +502,21 @@ pub async fn active_tenant_ids(pool: &PgPool) -> Result<Vec<i64>, sqlx::Error> {
         .await
 }
 
+/// `(slug, name)` of every active tenant, for the login screen's workspace picker only.
+///
+/// Backed by the `public.login_tenant_directory()` SECURITY DEFINER function (migration
+/// `20260824120000`). Same reason as [`active_tenant_ids`] — `tenants` is FORCE ROW LEVEL SECURITY,
+/// and a login request has no tenant scope yet, so reading the table directly returns an empty list
+/// and reports success. Unlike [`active_tenant_ids`] this returns slugs and display names, which is
+/// a customer list on a multi-tenant instance: only the login-directory endpoint may call it, and
+/// that endpoint decides whether an anonymous caller is allowed to see the result
+/// (`WEISSMAN_PUBLIC_TENANT_DIRECTORY`). Background sweeps must keep using [`active_tenant_ids`].
+pub async fn login_tenant_directory(pool: &PgPool) -> Result<Vec<(String, String)>, sqlx::Error> {
+    sqlx::query_as("SELECT slug, name FROM public.login_tenant_directory()")
+        .fetch_all(pool)
+        .await
+}
+
 /// Like [`begin_tenant_tx`], but takes an owned [`Arc`] so the returned future is [`Send`] when used
 /// from long-lived tasks (e.g. panic-shielded orchestrator cycles) without capturing `&PgPool`.
 pub async fn begin_tenant_tx_arc(
