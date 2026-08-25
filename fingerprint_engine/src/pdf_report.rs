@@ -229,21 +229,78 @@ impl PdfBuilder {
     }
 
     fn text(&mut self, font_size: i32, s: &str) {
+        self.text_font("F1", font_size, s);
+    }
+
+    /// Text at the left margin in an explicit font (F1 Helvetica, F2 Bold, F3 Oblique).
+    fn text_font(&mut self, font: &str, font_size: i32, s: &str) {
         let t = pdf_escape(s);
         self.current.push_str(&format!(
-            "BT /F1 {} Tf 72 {} Td ({}) Tj ET\n",
-            font_size, self.y as i32, t
+            "BT /{} {} Tf 72 {} Td ({}) Tj ET\n",
+            font, font_size, self.y as i32, t
         ));
         self.y -= font_size as f64 + 4.0;
     }
 
     fn text_at(&mut self, x: f64, font_size: i32, s: &str) {
+        self.text_at_font(x, "F1", font_size, s);
+    }
+
+    /// Text at (x, current y) in an explicit font; advances the cursor like `text_at`.
+    fn text_at_font(&mut self, x: f64, font: &str, font_size: i32, s: &str) {
         let t = pdf_escape(s);
         self.current.push_str(&format!(
-            "BT /F1 {} Tf {} {} Td ({}) Tj ET\n",
-            font_size, x, self.y, t
+            "BT /{} {} Tf {} {} Td ({}) Tj ET\n",
+            font, font_size, x, self.y, t
         ));
         self.y -= font_size as f64 + 4.0;
+    }
+
+    /// Draw a string at an absolute (x, y) in a given font WITHOUT moving the layout cursor —
+    /// for composed elements (cover, KPI cards) where the caller controls positioning.
+    fn draw_text(&mut self, x: f64, y: f64, font: &str, font_size: f64, s: &str) {
+        let t = pdf_escape(s);
+        self.current.push_str(&format!(
+            "BT /{} {:.1} Tf {:.1} {:.1} Td ({}) Tj ET\n",
+            font, font_size, x, y, t
+        ));
+    }
+
+    /// Like [`draw_text`] but horizontally centred on `cx`, using an approximate Helvetica advance
+    /// width (bold glyphs are a touch wider). Good enough for cover/KPI composition.
+    fn draw_text_centered(&mut self, cx: f64, y: f64, font: &str, font_size: f64, s: &str) {
+        let per = if font == "F2" { 0.56 } else { 0.50 };
+        let w = s.chars().count() as f64 * font_size * per;
+        self.draw_text(cx - w / 2.0, y, font, font_size, s);
+    }
+
+    /// Section header: bold title with a short accent rule beneath it. The one consistent heading
+    /// treatment across the report — this is most of what makes it read as "designed".
+    fn section_header(&mut self, title: &str, accent: (f64, f64, f64)) {
+        self.ensure_space(40.0);
+        self.set_fill_rgb(0.10, 0.12, 0.16);
+        self.text_font("F2", 16, title);
+        let rule_y = self.y + 6.0;
+        self.set_fill_rgb(accent.0, accent.1, accent.2);
+        self.rect_fill(72.0, rule_y, 46.0, 2.4);
+        self.y -= 10.0;
+    }
+
+    /// A rounded-ish (square) filled panel with a hairline border — the card primitive.
+    fn panel(
+        &mut self,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        fill: (f64, f64, f64),
+        border: (f64, f64, f64),
+    ) {
+        self.set_fill_rgb(fill.0, fill.1, fill.2);
+        self.rect_fill(x, y, w, h);
+        self.set_stroke_rgb(border.0, border.1, border.2);
+        self.current.push_str("0.6 w\n");
+        self.rect_stroke(x, y, w, h);
     }
 
     fn set_fill_rgb(&mut self, r: f64, g: f64, b: f64) {
@@ -399,6 +456,133 @@ impl PdfBuilder {
             pdf_escape(hash_short)
         ));
     }
+
+    /// Vector brand mark: a cyan shield with a bold "W", drawn at an absolute centre. No raster
+    /// asset — the mark is part of the content stream so it scales and prints crisply.
+    fn brand_mark(&mut self, cx: f64, top_y: f64, w: f64) {
+        let half = w / 2.0;
+        let h = w * 1.15;
+        let shoulder = top_y - h * 0.55;
+        let tip = top_y - h;
+        // Shield silhouette.
+        self.set_fill_rgb(0.13, 0.83, 0.93);
+        self.current
+            .push_str(&format!("{:.1} {:.1} m\n", cx - half, top_y));
+        self.current
+            .push_str(&format!("{:.1} {:.1} l\n", cx + half, top_y));
+        self.current
+            .push_str(&format!("{:.1} {:.1} l\n", cx + half, shoulder));
+        self.current.push_str(&format!("{:.1} {:.1} l\n", cx, tip));
+        self.current
+            .push_str(&format!("{:.1} {:.1} l\n", cx - half, shoulder));
+        self.current.push_str("h f\n");
+        // Inner bevel for depth.
+        let ih = half * 0.72;
+        self.set_fill_rgb(0.04, 0.24, 0.32);
+        self.current
+            .push_str(&format!("{:.1} {:.1} m\n", cx - ih, top_y - w * 0.16));
+        self.current
+            .push_str(&format!("{:.1} {:.1} l\n", cx + ih, top_y - w * 0.16));
+        self.current.push_str(&format!(
+            "{:.1} {:.1} l\n",
+            cx + ih * 0.82,
+            shoulder - w * 0.02
+        ));
+        self.current
+            .push_str(&format!("{:.1} {:.1} l\n", cx, tip + w * 0.10));
+        self.current.push_str(&format!(
+            "{:.1} {:.1} l\n",
+            cx - ih * 0.82,
+            shoulder - w * 0.02
+        ));
+        self.current.push_str("h f\n");
+        // Bold W monogram.
+        self.set_fill_rgb(0.13, 0.83, 0.93);
+        self.draw_text(cx - w * 0.30, top_y - w * 0.62, "F2", w * 0.62, "W");
+    }
+}
+
+/// Assemble page content streams into a base-14 %PDF-1.4 document with three fonts —
+/// F1 Helvetica, F2 Helvetica-Bold, F3 Helvetica-Oblique — so reports have real typographic
+/// hierarchy without embedding any font program. Object layout: 1 = catalog, 2 = pages, then
+/// interleaved page/contents objects, then the three font objects.
+fn assemble_pdf(streams: &[String]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut offsets: Vec<usize> = vec![0];
+    out.extend_from_slice(b"%PDF-1.4\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(out.len());
+
+    let n = streams.len();
+    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
+    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
+    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
+    out.extend_from_slice(
+        format!(
+            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
+            pages_refs.trim(),
+            n
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+
+    let font_base = 3 + 2 * n;
+    let (f1, f2, f3) = (font_base, font_base + 1, font_base + 2);
+    for (i, stream_body) in streams.iter().enumerate() {
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R /F2 {} 0 R /F3 {} 0 R >> >> >>\nendobj\n",
+                page_objects[i], contents_objects[i], f1, f2, f3
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
+                contents_objects[i],
+                stream_body.len(),
+                stream_body
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+    }
+
+    for (obj, base) in [
+        (f1, "Helvetica"),
+        (f2, "Helvetica-Bold"),
+        (f3, "Helvetica-Oblique"),
+    ] {
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /{} >>\nendobj\n",
+                obj, base
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+    }
+
+    let xref_start = out.len();
+    let num_objs = f3;
+    out.extend_from_slice(b"xref\n");
+    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for off in offsets.iter().skip(1).take(num_objs) {
+        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            num_objs + 1,
+            xref_start
+        )
+        .as_bytes(),
+    );
+    out
 }
 
 /// Build enterprise PDF: cover, executive summary, remediation roadmap, technical findings.
@@ -442,48 +626,111 @@ pub fn build_client_report_pdf(
 
     let mut b = PdfBuilder::new();
 
-    // ---------- COVER PAGE ----------
-    b.set_fill_rgb(0.0, 0.0, 0.0);
-    b.text(24, "WEISSMAN CYBERSECURITY");
-    b.y -= 8.0;
-    b.set_fill_rgb(0.4, 0.5, 0.6);
-    b.text(12, "Executive Security Assessment Report");
-    b.text_at(72.0, 14, &format!("{}", client_name));
-    b.y -= 4.0;
-    b.set_fill_rgb(0.5, 0.5, 0.55);
-    b.text(10, &format!("Report Generated: {} (Israel)", date));
-    b.y -= 24.0;
+    // ---------- COVER PAGE (dark, full-bleed) ----------
+    let cx = PAGE_W / 2.0;
+    // Deep navy field.
+    b.set_fill_rgb(0.035, 0.047, 0.071);
+    b.rect_fill(0.0, 0.0, PAGE_W, PAGE_H);
+    // Brand accent rules top and bottom.
+    b.set_fill_rgb(0.13, 0.83, 0.93);
+    b.rect_fill(0.0, PAGE_H - 5.0, PAGE_W, 5.0);
+    b.set_fill_rgb(0.55, 0.36, 0.96);
+    b.rect_fill(0.0, PAGE_H - 8.0, PAGE_W * 0.42, 3.0);
+    b.set_fill_rgb(0.13, 0.83, 0.93);
+    b.rect_fill(0.0, 0.0, PAGE_W, 3.0);
 
-    let gauge_cx = PAGE_W / 2.0;
-    let gauge_cy = 380.0;
-    b.radial_gauge(gauge_cx, gauge_cy, 70.0, score);
-    b.set_fill_rgb(0.2, 0.8, 0.95);
-    b.text_at(gauge_cx - 18.0, 22, &format!("{}", score));
-    b.set_fill_rgb(0.6, 0.65, 0.7);
-    b.text_at(gauge_cx - 30.0, 10, "Security Score");
-    b.set_fill_rgb(0.5, 0.58, 0.68);
-    b.text_at(
-        gauge_cx - 118.0,
-        9,
+    // Vector shield + wordmark.
+    b.brand_mark(cx, 724.0, 52.0);
+    b.set_fill_rgb(0.93, 0.96, 0.99);
+    b.draw_text_centered(cx, 612.0, "F2", 30.0, "WEISSMAN");
+    b.set_fill_rgb(0.13, 0.83, 0.93);
+    b.draw_text_centered(cx, 592.0, "F1", 10.0, "C Y B E R S E C U R I T Y");
+    b.set_fill_rgb(0.16, 0.2, 0.28);
+    b.rect_fill(cx - 95.0, 576.0, 190.0, 0.8);
+
+    // Title block.
+    b.set_fill_rgb(0.82, 0.87, 0.93);
+    b.draw_text_centered(cx, 544.0, "F2", 21.0, "EXECUTIVE SECURITY ASSESSMENT");
+    b.set_fill_rgb(0.13, 0.83, 0.93);
+    b.draw_text_centered(cx, 516.0, "F2", 17.0, client_name);
+    b.set_fill_rgb(0.5, 0.56, 0.66);
+    b.draw_text_centered(
+        cx,
+        498.0,
+        "F3",
+        10.0,
+        &format!("Generated {} (Israel)", date),
+    );
+
+    // Security-score gauge.
+    let gauge_cx = cx;
+    let gauge_cy = 372.0;
+    b.radial_gauge(gauge_cx, gauge_cy, 66.0, score);
+    b.set_fill_rgb(0.13, 0.83, 0.93);
+    b.draw_text_centered(gauge_cx, gauge_cy - 6.0, "F2", 30.0, &format!("{}", score));
+    b.set_fill_rgb(0.55, 0.62, 0.72);
+    b.draw_text_centered(gauge_cx, gauge_cy - 26.0, "F1", 9.0, "SECURITY SCORE / 100");
+    b.set_fill_rgb(0.45, 0.52, 0.62);
+    b.draw_text_centered(
+        gauge_cx,
+        gauge_cy - 96.0,
+        "F3",
+        8.5,
         &format!(
             "Remediation Priority Index (avg): {}/100 — PoE, entropy, stack/CVE correlation",
             avg_remediation_priority
         ),
     );
-    b.y = gauge_cy - 100.0;
+
+    // KPI band: severity counts as four cards.
+    let cards: [(&str, i64, (f64, f64, f64)); 4] = [
+        ("CRITICAL", critical, (0.90, 0.25, 0.25)),
+        ("HIGH", high, (0.95, 0.55, 0.20)),
+        ("MEDIUM", medium, (0.92, 0.78, 0.22)),
+        ("LOW / INFO", low_info, (0.28, 0.72, 0.45)),
+    ];
+    let card_w = 112.0;
+    let gap = 12.0;
+    let total_w = card_w * 4.0 + gap * 3.0;
+    let start_x = (PAGE_W - total_w) / 2.0;
+    let card_y = 210.0;
+    let card_h = 62.0;
+    for (i, (label, count, color)) in cards.iter().enumerate() {
+        let x = start_x + (card_w + gap) * i as f64;
+        b.panel(
+            x,
+            card_y,
+            card_w,
+            card_h,
+            (0.07, 0.09, 0.13),
+            (0.16, 0.2, 0.28),
+        );
+        b.set_fill_rgb(color.0, color.1, color.2);
+        b.rect_fill(x, card_y + card_h - 3.0, card_w, 3.0);
+        b.draw_text_centered(
+            x + card_w / 2.0,
+            card_y + 28.0,
+            "F2",
+            24.0,
+            &format!("{}", count),
+        );
+        b.set_fill_rgb(0.55, 0.62, 0.72);
+        b.draw_text_centered(x + card_w / 2.0, card_y + 12.0, "F1", 8.0, label);
+    }
 
     if !hash.is_empty() {
-        b.y = FOOTER_Y + 60.0;
+        b.y = FOOTER_Y + 58.0;
         b.certified_badge(hash);
     }
-    b.y = FOOTER_Y;
-    b.set_fill_rgb(0.4, 0.4, 0.45);
-    b.text_at(72.0, 8, "(c) Weissman Cybersecurity — Confidential.");
+    // Confidential footer bar.
+    b.set_fill_rgb(0.07, 0.09, 0.13);
+    b.rect_fill(0.0, 0.0, PAGE_W, 26.0);
+    b.set_fill_rgb(0.45, 0.5, 0.6);
+    b.draw_text_centered(cx, 9.0, "F1", 8.0, "WEISSMAN CYBERSECURITY  ·  STRICTLY CONFIDENTIAL  ·  DISTRIBUTION LIMITED TO AUTHORIZED PARTIES");
     b.new_page();
 
     // ---------- EXECUTIVE SUMMARY ----------
-    b.set_fill_rgb(0.0, 0.0, 0.0);
-    b.text(16, "Executive Summary");
+    b.section_header("Executive Summary", (0.13, 0.83, 0.93));
     b.set_fill_rgb(0.35, 0.4, 0.5);
     b.text(10, &format!("{} | {}", client_name, date));
     b.y -= 16.0;
@@ -579,8 +826,7 @@ pub fn build_client_report_pdf(
     b.new_page();
 
     // ---------- REMEDIATION ROADMAP ----------
-    b.set_fill_rgb(0.0, 0.0, 0.0);
-    b.text(16, "Executive Remediation Roadmap");
+    b.section_header("Executive Remediation Roadmap", (0.55, 0.36, 0.96));
     b.set_fill_rgb(0.4, 0.45, 0.55);
     b.text(10, "Top 3 strategic actions derived from findings.");
     b.y -= 20.0;
@@ -655,8 +901,7 @@ pub fn build_client_report_pdf(
     b.new_page();
 
     // ---------- THREAT INTELLIGENCE BOX ----------
-    b.set_fill_rgb(0.0, 0.0, 0.0);
-    b.text(14, "Threat Intelligence");
+    b.section_header("Threat Intelligence", (0.90, 0.35, 0.35));
     b.set_fill_rgb(0.08, 0.1, 0.15);
     b.rect_fill(72.0, b.y - 42.0, PAGE_W - 144.0, 38.0);
     b.set_stroke_rgb(0.6, 0.25, 0.25);
@@ -679,8 +924,7 @@ pub fn build_client_report_pdf(
         .filter(|f| should_include_in_detailed_findings(f))
         .collect();
 
-    b.set_fill_rgb(0.0, 0.0, 0.0);
-    b.text(16, "Technical Finding Details");
+    b.section_header("Technical Finding Details", (0.13, 0.83, 0.93));
     b.set_fill_rgb(0.4, 0.45, 0.55);
     b.text(
         10,
@@ -781,78 +1025,7 @@ pub fn build_client_report_pdf(
 
     let streams = b.finish();
 
-    let mut out = Vec::new();
-    let mut offsets: Vec<usize> = vec![0];
-    out.extend_from_slice(b"%PDF-1.4\n");
-    offsets.push(out.len());
-    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-    offsets.push(out.len());
-
-    let n = streams.len();
-    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
-    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
-
-    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
-    out.extend_from_slice(
-        format!(
-            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
-            pages_refs.trim(),
-            n
-        )
-        .as_bytes(),
-    );
-    offsets.push(out.len());
-
-    let font_obj = 3 + 2 * n;
-    for (i, stream_body) in streams.iter().enumerate() {
-        out.extend_from_slice(
-            format!(
-                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
-                page_objects[i],
-                contents_objects[i],
-                font_obj
-            )
-            .as_bytes(),
-        );
-        offsets.push(out.len());
-        out.extend_from_slice(
-            format!(
-                "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
-                contents_objects[i],
-                stream_body.len(),
-                stream_body
-            )
-            .as_bytes(),
-        );
-        offsets.push(out.len());
-    }
-
-    out.extend_from_slice(
-        format!(
-            "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-            font_obj
-        )
-        .as_bytes(),
-    );
-    offsets.push(out.len());
-
-    let xref_start = out.len();
-    let num_objs = font_obj;
-    out.extend_from_slice(b"xref\n");
-    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
-    out.extend_from_slice(b"0000000000 65535 f \n");
-    for off in offsets.iter().skip(1).take(num_objs) {
-        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
-    }
-    out.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
-            num_objs + 1,
-            xref_start
-        )
-        .as_bytes(),
-    );
-    Ok(out)
+    Ok(assemble_pdf(&streams))
 }
 
 /// Minimal PDF (single page) when full build not needed. Helvetica only.
@@ -975,73 +1148,7 @@ pub fn build_executive_board_pdf(
     );
 
     let streams = b.finish();
-    let mut out = Vec::new();
-    let mut offsets: Vec<usize> = vec![0];
-    out.extend_from_slice(b"%PDF-1.4\n");
-    offsets.push(out.len());
-    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-    offsets.push(out.len());
-    let n = streams.len();
-    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
-    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
-    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
-    out.extend_from_slice(
-        format!(
-            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
-            pages_refs.trim(),
-            n
-        )
-        .as_bytes(),
-    );
-    offsets.push(out.len());
-    let font_obj = 3 + 2 * n;
-    for (i, stream_body) in streams.iter().enumerate() {
-        out.extend_from_slice(
-            format!(
-                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
-                page_objects[i],
-                contents_objects[i],
-                font_obj
-            )
-            .as_bytes(),
-        );
-        offsets.push(out.len());
-        out.extend_from_slice(
-            format!(
-                "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
-                contents_objects[i],
-                stream_body.len(),
-                stream_body
-            )
-            .as_bytes(),
-        );
-        offsets.push(out.len());
-    }
-    out.extend_from_slice(
-        format!(
-            "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-            font_obj
-        )
-        .as_bytes(),
-    );
-    offsets.push(out.len());
-    let xref_start = out.len();
-    let num_objs = font_obj;
-    out.extend_from_slice(b"xref\n");
-    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
-    out.extend_from_slice(b"0000000000 65535 f \n");
-    for off in offsets.iter().skip(1).take(num_objs) {
-        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
-    }
-    out.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
-            num_objs + 1,
-            xref_start
-        )
-        .as_bytes(),
-    );
-    Ok(out)
+    Ok(assemble_pdf(&streams))
 }
 
 /// Framework-specific compliance audit PDF from live control status rows.
@@ -1174,73 +1281,7 @@ pub fn build_compliance_framework_pdf(
     );
 
     let streams = b.finish();
-    let mut out = Vec::new();
-    let mut offsets: Vec<usize> = vec![0];
-    out.extend_from_slice(b"%PDF-1.4\n");
-    offsets.push(out.len());
-    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-    offsets.push(out.len());
-    let n = streams.len();
-    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
-    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
-    let pages_refs: String = page_objects.iter().map(|i| format!("{} 0 R ", i)).collect();
-    out.extend_from_slice(
-        format!(
-            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
-            pages_refs.trim(),
-            n
-        )
-        .as_bytes(),
-    );
-    offsets.push(out.len());
-    let font_obj = 3 + 2 * n;
-    for (i, stream_body) in streams.iter().enumerate() {
-        out.extend_from_slice(
-            format!(
-                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
-                page_objects[i],
-                contents_objects[i],
-                font_obj
-            )
-            .as_bytes(),
-        );
-        offsets.push(out.len());
-        out.extend_from_slice(
-            format!(
-                "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
-                contents_objects[i],
-                stream_body.len(),
-                stream_body
-            )
-            .as_bytes(),
-        );
-        offsets.push(out.len());
-    }
-    out.extend_from_slice(
-        format!(
-            "{} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-            font_obj
-        )
-        .as_bytes(),
-    );
-    offsets.push(out.len());
-    let xref_start = out.len();
-    let num_objs = font_obj;
-    out.extend_from_slice(b"xref\n");
-    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
-    out.extend_from_slice(b"0000000000 65535 f \n");
-    for off in offsets.iter().skip(1).take(num_objs) {
-        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
-    }
-    out.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
-            num_objs + 1,
-            xref_start
-        )
-        .as_bytes(),
-    );
-    Ok(out)
+    Ok(assemble_pdf(&streams))
 }
 
 /// Build HTML report (unchanged structure). Strictly live from DB. Israel time. Rating, heatmap, cURL, integrity.
@@ -1734,6 +1775,54 @@ mod tests {
         assert_eq!(streams.len(), 2);
         assert!(streams[0].contains("(a)"));
         assert!(streams[1].contains("(b)"));
+    }
+
+    #[test]
+    fn client_report_pdf_is_valid_and_premium() {
+        let findings = vec![
+            row(
+                1,
+                "SQL Injection",
+                "critical",
+                "sqli_engine",
+                "{\"remediation\":\"Use params\"}",
+                "curl -X POST",
+            ),
+            row(2, "Missing HSTS", "medium", "pki_tls", "", ""),
+        ];
+        let pdf = build_client_report_pdf("Acme Corp", &findings, None).expect("pdf");
+        // Structurally valid.
+        assert!(pdf.starts_with(b"%PDF-1.4"));
+        assert!(pdf.ends_with(b"%%EOF\n"));
+        let s = String::from_utf8_lossy(&pdf);
+        // All three base-14 fonts are declared (the premium typographic hierarchy). Plain Helvetica
+        // is matched with the trailing " >>" so it does not also match "-Bold"/"-Oblique".
+        assert!(s.contains("/BaseFont /Helvetica >>"));
+        assert!(s.contains("/BaseFont /Helvetica-Bold"));
+        assert!(s.contains("/BaseFont /Helvetica-Oblique"));
+        // Every page resource dict exposes F1/F2/F3.
+        assert!(s.contains("/F1"));
+        assert!(s.contains("/F2"));
+        assert!(s.contains("/F3"));
+        // Cover carries the wordmark and section headers render.
+        assert!(s.contains("(WEISSMAN)"));
+        assert!(s.contains("(Executive Summary)"));
+        // xref /Size is consistent with the emitted object count (no dangling refs).
+        assert!(s.contains("/Root 1 0 R"));
+    }
+
+    #[test]
+    fn assemble_pdf_declares_three_fonts_and_matches_xref_size() {
+        let streams = vec!["BT /F1 12 Tf 72 700 Td (hi) Tj ET\n".to_string()];
+        let pdf = assemble_pdf(&streams);
+        let s = String::from_utf8_lossy(&pdf);
+        // 1 page => font objects are 5,6,7 and /Size is 8.
+        assert!(s.contains("/F1 5 0 R /F2 6 0 R /F3 7 0 R"));
+        assert!(s.contains("/Size 8"));
+        assert!(s.contains("/BaseFont /Helvetica-Bold"));
+        assert!(s.contains("/BaseFont /Helvetica-Oblique"));
+        assert!(pdf.starts_with(b"%PDF-1.4"));
+        assert!(pdf.ends_with(b"%%EOF\n"));
     }
 
     #[test]
