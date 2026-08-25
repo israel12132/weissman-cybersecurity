@@ -39,6 +39,8 @@ config.yaml
 .env.dev
 .env.staging
 .env.production
+# Bare-metal overrides written by start_weissman.sh (generated secrets, resolved DSNs).
+.env.local
 monitoring/prometheus-web.generated.yml
 
 # Runtime data files
