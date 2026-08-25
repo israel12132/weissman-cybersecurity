@@ -1,39 +1,36 @@
 /**
- * Unified page export — CSV + PDF for Command Center panels.
+ * Unified page export — CSV + Excel + PDF for Command Center panels.
  *
- * CSV goes through `downloadCsv`, which prefixes any cell beginning with = + - @ (or
- * tab/CR) with a single quote, so exported data can never be evaluated as a spreadsheet
- * formula (CSV injection). PDF is generated fully client-side by `buildSimpleTextPdf`
- * (no external libraries, CSP-safe). Both take the same (header, rows) shape so a page
- * defines its columns once and gets both formats.
+ * CSV goes through `downloadCsv` (formula-injection safe, UTF-8 BOM). Excel and PDF
+ * prefer the live `/api/export/workbook` and `/api/export/document` engines and fall
+ * back to CSV / client-side text PDF when the API is unreachable.
  */
 import { downloadCsv } from './exportFindingsCsv'
-import { buildSimpleTextPdf, downloadBytes } from './pdfExport'
+import { exportWorkbook, tableToWorkbookSpec } from './exportWorkbook'
+import { exportDocument, tableToDocumentSpec } from './documentExport'
 
 /** Formula-injection-safe CSV of `rows` (array of arrays) under `header` (array of strings). */
 export function exportRowsCsv(header, rows, filenamePrefix) {
   downloadCsv(Array.isArray(rows) ? rows : [], Array.isArray(header) ? header : [], filenamePrefix)
 }
 
-/**
- * Self-contained text PDF of the same tabular data. `title` is the document heading.
- * buildSimpleTextPdf caps at 120 lines / 120 chars per line, which comfortably covers
- * the pre-aggregated panels this is used for; longer rows are truncated by that helper.
- */
+/** Board-grade PDF of the same tabular data via `/api/export/document`. */
 export function exportRowsPdf(title, header, rows, filenamePrefix) {
   const safeHeader = Array.isArray(header) ? header : []
   const safeRows = Array.isArray(rows) ? rows : []
-  const lines = [
-    String(title || filenamePrefix || 'Weissman export'),
-    `Generated ${new Date().toISOString()}`,
-    '',
-    safeHeader.join('  |  '),
-    ...safeRows.map((r) => (Array.isArray(r) ? r : []).map((c) => String(c ?? '')).join('  |  ')),
-  ]
-  downloadBytes(
-    buildSimpleTextPdf(lines),
-    `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.pdf`,
-    'application/pdf',
+  return exportDocument(
+    tableToDocumentSpec({ title, header: safeHeader, rows: safeRows }),
+    filenamePrefix,
+  )
+}
+
+/** Board-grade XLSX of the same tabular data via `/api/export/workbook`. */
+export function exportRowsXlsx(title, header, rows, filenamePrefix) {
+  const safeHeader = Array.isArray(header) ? header : []
+  const safeRows = Array.isArray(rows) ? rows : []
+  return exportWorkbook(
+    tableToWorkbookSpec({ title, header: safeHeader, rows: safeRows }),
+    filenamePrefix,
   )
 }
 

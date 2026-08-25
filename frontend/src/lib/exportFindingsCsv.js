@@ -1,3 +1,5 @@
+export const UTF8_BOM = '\uFEFF'
+
 /**
  * Export tenant findings rows to CSV — live data only, no fabricated columns.
  */
@@ -12,11 +14,13 @@ export function escapeCsvCell(v) {
 }
 
 export function downloadCsv(rows, header, filenamePrefix) {
+  const safeHeader = Array.isArray(header) ? header : []
+  const safeRows = Array.isArray(rows) ? rows : []
   const lines = [
-    header.join(','),
-    ...rows.map((row) => row.map(escapeCsvCell).join(',')),
+    safeHeader.map(escapeCsvCell).join(','),
+    ...safeRows.map((row) => (Array.isArray(row) ? row : []).map(escapeCsvCell).join(',')),
   ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const blob = new Blob([UTF8_BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

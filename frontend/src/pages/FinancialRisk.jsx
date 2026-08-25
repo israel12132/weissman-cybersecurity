@@ -22,6 +22,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd } from '../lib/riskFormat'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.financialRisk'
 const columnHelper = createColumnHelper()
@@ -32,30 +33,21 @@ function fmtUsdFull(n) {
 
 function contributorsCsv(rows) {
   const header = ['label', 'node_type', 'business_value_usd', 'crown_jewel', 'kev_present', 'max_cvss', 'max_epss', 'sle_usd', 'ale_usd']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((r) =>
-      [
-        r.label,
-        r.node_type,
-        r.business_value_usd,
-        r.crown_jewel,
-        r.kev_present,
-        r.max_cvss,
-        r.max_epss,
-        r.sle_usd,
-        r.ale_usd,
-      ].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-financial-risk-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(
+    rows.map((r) => [
+      r.label,
+      r.node_type,
+      r.business_value_usd,
+      r.crown_jewel,
+      r.kev_present,
+      r.max_cvss,
+      r.max_epss,
+      r.sle_usd,
+      r.ale_usd,
+    ]),
+    header,
+    'weissman-financial-risk',
+  )
 }
 
 export default function FinancialRisk() {

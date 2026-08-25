@@ -10,6 +10,7 @@ import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import { api } from '../utils/apiFetch';
 import { ENGINES_BY_ID } from '../lib/enginesRegistry';
 import Button from '../components/ui/Button'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const NS = 'pages.engineManagementConsole';
 
@@ -27,19 +28,12 @@ function exportEnginesCsv(engines) {
   const header = ['id', 'name', 'category', 'enabled', 'description'];
   const rows = engines.map((e) => [
     e.id,
-    (e.name || '').replace(/"/g, '""'),
+    e.name || '',
     e.category ?? '',
     e.enabled ? 'yes' : 'no',
-    (e.description || '').replace(/"/g, '""'),
+    e.description || '',
   ]);
-  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `engines-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(rows, header, 'engines');
 }
 
 /**

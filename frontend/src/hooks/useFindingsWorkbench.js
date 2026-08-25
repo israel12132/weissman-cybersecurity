@@ -1,5 +1,7 @@
 import { useMemo, useState, useCallback } from 'react'
 import { exportStandardFindingsCsv } from '../lib/exportFindingsCsv'
+import { exportWorkbook, tableToWorkbookSpec } from '../lib/exportWorkbook'
+import { exportDocument, tableToDocumentSpec } from '../lib/documentExport'
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
 
@@ -49,6 +51,26 @@ export function useFindingsWorkbench(findings, { csvPrefix = 'weissman-findings'
     exportStandardFindingsCsv(filteredFindings, csvPrefix)
   }, [filteredFindings, csvPrefix])
 
+  const findingsTable = useCallback(() => {
+    const header = ['severity', 'title', 'type', 'description', 'remediation']
+    const rows = filteredFindings.map((f) => [
+      f.severity, f.title, f.type, f.description, f.remediation,
+    ])
+    return { header, rows }
+  }, [filteredFindings])
+
+  const exportXlsx = useCallback(() => {
+    if (!filteredFindings.length) return
+    const { header, rows } = findingsTable()
+    return exportWorkbook(tableToWorkbookSpec({ title: csvPrefix, header, rows }), csvPrefix)
+  }, [filteredFindings.length, findingsTable, csvPrefix])
+
+  const exportPdf = useCallback(() => {
+    if (!filteredFindings.length) return
+    const { header, rows } = findingsTable()
+    return exportDocument(tableToDocumentSpec({ title: csvPrefix, header, rows }), csvPrefix)
+  }, [filteredFindings.length, findingsTable, csvPrefix])
+
   return {
     searchQuery,
     setSearchQuery,
@@ -58,6 +80,8 @@ export function useFindingsWorkbench(findings, { csvPrefix = 'weissman-findings'
     filteredFindings,
     counts,
     exportCsv,
+    exportXlsx,
+    exportPdf,
     total: sorted.length,
   }
 }

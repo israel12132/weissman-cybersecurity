@@ -15,6 +15,7 @@ import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useClientIntegrations } from '../hooks/useClientIntegrations'
 import { prefillParamsForEngine } from '../lib/engineClientPrefill'
 import Button from '../components/ui/Button'
+import { exportPolicyFindingsCsv } from '../lib/exportFindingsCsv'
 
 const ENGINE_ID = 'iac_misconfig'
 
@@ -738,23 +739,6 @@ spec:
 
 const splitCsv = (s) => String(s || '').split(/[\n,]/).map((x) => x.trim()).filter(Boolean)
 
-function exportPolicyFindingsCsv(rows, filenamePrefix) {
-  const header = ['severity', 'policy_id', 'title', 'file', 'resource', 'framework', 'description']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...rows.map((f) =>
-      [f.severity, f.policy_id, f.title, f.file, f.resource, f.framework, f.description].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-}
 const numOr = (v, d) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : d

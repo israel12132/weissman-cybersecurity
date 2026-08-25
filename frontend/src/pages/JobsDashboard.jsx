@@ -15,6 +15,7 @@ import { normalizeJobStatus } from '../lib/useJobPoll'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
 import Button from '../components/ui/Button'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 
 const columnHelper = createColumnHelper()
 
@@ -30,31 +31,19 @@ const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancell
 
 function exportJobsCsv(jobs, _t) {
   const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...jobs.map((j) =>
-      [
-        j.id || j.job_id,
-        j.kind || j.type,
-        normalizeJobStatus(j.status),
-        j.target,
-        j.engine,
-        j.client_id,
-        j.created_at,
-        j.updated_at || j.completed_at,
-        j.attempt_count ?? j.retries,
-        j.last_error,
-      ].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `weissman-jobs-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const rows = jobs.map((j) => [
+    j.id || j.job_id,
+    j.kind || j.type,
+    normalizeJobStatus(j.status),
+    j.target,
+    j.engine,
+    j.client_id,
+    j.created_at,
+    j.updated_at || j.completed_at,
+    j.attempt_count ?? j.retries,
+    j.last_error,
+  ])
+  downloadCsv(rows, header, 'weissman-jobs')
 }
 
 export default function JobsDashboard() {

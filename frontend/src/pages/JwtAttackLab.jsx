@@ -12,6 +12,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import SupremeIntelligencePanels, { extractSupremeFromFindings } from '../components/engine/SupremeIntelligencePanels'
 import Button from '../components/ui/Button'
+import { exportStandardFindingsCsv } from '../lib/exportFindingsCsv'
 
 const ACCENT = '#a855f7'
 
@@ -36,21 +37,7 @@ const ATTACK_REF_KEYS = [
 const SEV_FILTER_OPTIONS = ['all', 'critical', 'high', 'medium', 'low', 'info']
 
 function exportFindingsCsv(findings, filenamePrefix) {
-  const header = ['severity', 'title', 'type', 'description', 'remediation']
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [
-    header.join(','),
-    ...findings.map((f) =>
-      [f.severity, f.title, f.type, f.description, f.remediation].map(esc).join(','),
-    ),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  exportStandardFindingsCsv(findings, filenamePrefix)
 }
 
 function KpiStrip({ counts, total, jobId, lastUpdated, t }) {

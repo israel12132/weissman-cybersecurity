@@ -124,6 +124,7 @@ export const PasswordSprayCommandCenter = React$lazy(() => import('../pages/Pass
 export const SamlSecurityCommandCenter = React$lazy(() => import('../pages/SamlSecurityCommandCenter'))
 export const KillChainOrchestrator = React$lazy(() => import('../pages/KillChainOrchestrator'))
 export const AIAnalysisEngine = React$lazy(() => import('../pages/AIAnalysisEngine'))
+export const AiReadiness = React$lazy(() => import('../pages/AiReadiness'))
 export const ExploitResearchLab = React$lazy(() => import('../pages/ExploitResearchLab'))
 export const Clients = React$lazy(() => import('../pages/Clients'))
 export const ClientNew = React$lazy(() => import('../pages/ClientNew'))
