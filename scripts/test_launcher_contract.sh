@@ -478,6 +478,12 @@ if grep -q 'WEISSMAN_DOCKER_AUTOSTART' "$DAEMON_LIB"; then
 else
   bad "no WEISSMAN_DOCKER_AUTOSTART escape hatch"
 fi
+if grep -q 'weissman_docker_fix_bridge_icc' "$DAEMON_LIB" \
+   && grep -q 'bridge-nf-call-iptables' "$DAEMON_LIB"; then
+  ok "daemon helper restores container-to-container traffic on mixed nft/legacy hosts"
+else
+  bad "$DAEMON_LIB does not fix bridge-nf-call-iptables — backend cannot reach redis on nested hosts"
+fi
 
 # Boot gate: SYSTEM READY is a lie unless migrations, roles and /api/ask all passed.
 start_body="$(sed -n '/^cmd_start()/,/^}/p' "$LAUNCHER")"

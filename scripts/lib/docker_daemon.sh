@@ -110,6 +110,7 @@ weissman_docker_ensure() {
       _wd_warn "Docker only answers through sudo — add yourself to the docker group to avoid it: sudo usermod -aG docker ${USER:-\$USER} && newgrp docker"
     fi
     _wd_log "Docker daemon is up"
+    weissman_docker_fix_bridge_icc
     return 0
   fi
   if [ "${WEISSMAN_DOCKER_AUTOSTART:-1}" != 1 ]; then
@@ -126,5 +127,24 @@ weissman_docker_ensure() {
     return 1
   fi
   _wd_log "Docker daemon is up (started via ${WEISSMAN_DOCKER_START_METHOD} in $((SECONDS - began))s)"
+  weissman_docker_fix_bridge_icc
   return 0
+}
+
+# br_netfilter sends bridged frames through iptables. On hosts where Docker's
+# isolation rules were installed into a mixed nft/legacy stack, that black-holes
+# container-to-container traffic on the Compose network (backend cannot PING
+# redis even though both containers are "healthy"). Turning the hook off restores
+# L2 ICC on the bridge — the same default Linux bridge behaviour Docker used
+# before br_netfilter was enabled globally. Different compose networks stay on
+# different bridges.
+weissman_docker_fix_bridge_icc() {
+  [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]] || return 0
+  local cur
+  cur="$(cat /proc/sys/net/bridge/bridge-nf-call-iptables 2>/dev/null || echo 1)"
+  [[ "$cur" != 0 ]] || return 0
+  if echo 0 | weissman_sudo_run tee /proc/sys/net/bridge/bridge-nf-call-iptables >/dev/null 2>&1; then
+    echo 0 | weissman_sudo_run tee /proc/sys/net/bridge/bridge-nf-call-ip6tables >/dev/null 2>&1 || true
+    _wd_log "disabled bridge-nf-call-iptables so containers on the same Compose network can reach each other"
+  fi
 }
