@@ -184,15 +184,29 @@ is_production() {
 # Secrets — generated once into .env.local (0600), never regenerated
 # ─────────────────────────────────────────────────────────────────────────────
 
+# NOTE for everything below: never end a random-source pipeline with `head -c`. Closing the pipe
+# kills the producer with SIGPIPE, `set -o pipefail` turns that into exit 141, and `set -e` then
+# aborts the launcher mid-bootstrap — which is exactly how a fresh clone ended up with an empty
+# WEISSMAN_ADMIN_PASSWORD and no way to log in. Bound the INPUT, then slice in the shell.
 rand_b64() {
-  if have openssl; then openssl rand -base64 48 | tr -d '\n/+='
-  else head -c 64 /dev/urandom | base64 | tr -d '\n/+=' | head -c 48; fi
+  local raw
+  if have openssl; then
+    raw="$(openssl rand -base64 48)"
+  else
+    raw="$(head -c 96 /dev/urandom | base64)"
+  fi
+  raw="${raw//[$'\n'\/+=]/}"
+  printf '%s' "${raw:0:48}"
 }
 
 # URL-safe alphabet: these values end up inside postgres:// DSNs, where '+' and '=' need
 # percent-encoding and break authentication in confusing ways when they do not get it.
 rand_alnum() {
-  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "${1:-32}"
+  local n="${1:-32}" out=""
+  while [ "${#out}" -lt "$n" ]; do
+    out+="$(LC_ALL=C tr -dc 'A-Za-z0-9' <<<"$(head -c $((n * 4)) /dev/urandom | base64)")"
+  done
+  printf '%s' "${out:0:n}"
 }
 
 rand_hex32() {
@@ -367,13 +381,16 @@ docker_ok() { [ "$DOCKER_AVAILABLE" = 1 ]; }
 container_exists()  { dk inspect "$1" >/dev/null 2>&1; }
 container_running() { [ "$(dk inspect -f '{{.State.Running}}' "$1" 2>/dev/null || echo false)" = true ]; }
 
+# The `|| true` on these three: `head` closing the pipe early SIGPIPEs the producer, and with
+# pipefail + set -e that aborts the launcher instead of yielding an empty answer. Callers already
+# treat empty as "unknown".
 container_env_value() {
   dk inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" 2>/dev/null \
-    | sed -n "s/^$2=//p" | head -1
+    | sed -n "s/^$2=//p" | head -1 || true
 }
 
 container_published_port() {
-  dk port "$1" "$2/tcp" 2>/dev/null | head -1 | sed 's/.*://'
+  dk port "$1" "$2/tcp" 2>/dev/null | head -1 | sed 's/.*://' || true
 }
 
 container_ip() {
@@ -394,7 +411,7 @@ compose_container() {
   [ "$all" = 1 ] && args+=(-a)
   dk "${args[@]}" --filter "label=com.docker.compose.project=$(compose_project)" \
                   --filter "label=com.docker.compose.service=${service}" \
-                  --format '{{.Names}}' 2>/dev/null | head -1
+                  --format '{{.Names}}' 2>/dev/null | head -1 || true
 }
 
 # host:port at which a container is reachable FROM THIS HOST: its published port when it has
@@ -481,9 +498,15 @@ start_or_create_pg_container() {
   fi
   local i
   for ((i = 0; i < 60; i++)); do
-    if dk exec "$PG_CONTAINER" pg_isready -U postgres >/dev/null 2>&1 \
-       && adopt_pg_container "$PG_CONTAINER"; then
-      return 0
+    if dk exec "$PG_CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
+      adopt_pg_container "$PG_CONTAINER" && return 0
+      # pg_isready alone is not enough to stop waiting: during first-boot initdb the entrypoint
+      # runs a socket-only server that already answers it. Only once the published port is
+      # reachable is a failure definitely about credentials rather than startup.
+      if container_endpoint "$PG_CONTAINER" 5432 >/dev/null 2>&1; then
+        warn "${PG_CONTAINER} is accepting connections but its credentials did not work: remove it with 'docker rm -f ${PG_CONTAINER}', or set DATABASE_URL"
+        return 1
+      fi
     fi
     sleep 1
   done
@@ -769,10 +792,23 @@ redis_resolve_endpoint() {
   return 1
 }
 
+# A Redis container started by this launcher carries its own password in argv
+# (`--requirepass X`). Recovering it from the container means a rotated — or deleted — .env
+# cannot orphan a container that is running perfectly well.
+container_redis_password() {
+  dk inspect -f '{{range .Config.Cmd}}{{println .}}{{end}}' "$1" 2>/dev/null \
+    | awk '/^--requirepass$/ { found = 1; next } found { print; exit }' || true
+}
+
 adopt_redis_container() {
-  local name="$1" endpoint
+  local name="$1" endpoint pass
   container_running "$name" || return 1
   endpoint="$(container_endpoint "$name" 6379)" || return 1
+  pass="$(container_redis_password "$name")"
+  if [ -n "$pass" ] && redis_ping_parts "${endpoint%%:*}" "${endpoint##*:}" "$pass"; then
+    RESOLVED_REDIS_URL="$(redis_url_for "$endpoint" "$pass")"
+    return 0
+  fi
   redis_resolve_endpoint "$endpoint"
 }
 
@@ -801,6 +837,12 @@ start_or_create_redis_container() {
   local i
   for ((i = 0; i < 30; i++)); do
     adopt_redis_container "$REDIS_CONTAINER" && return 0
+    # Once the port answers, waiting longer cannot change the answer — say what is wrong
+    # instead of burning the rest of the timeout in silence.
+    if container_endpoint "$REDIS_CONTAINER" 6379 >/dev/null 2>&1; then
+      warn "${REDIS_CONTAINER} is up but rejected every credential available (it was created with a different password): remove it with 'docker rm -f ${REDIS_CONTAINER}', or set REDIS_URL"
+      return 1
+    fi
     sleep 1
   done
   return 1

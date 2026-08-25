@@ -202,7 +202,8 @@ mod tests {
             std::thread::current().id()
         ));
         let mut f = std::fs::File::create(&path).expect("create temp env file");
-        f.write_all(contents.as_bytes()).expect("write temp env file");
+        f.write_all(contents.as_bytes())
+            .expect("write temp env file");
         path
     }
 

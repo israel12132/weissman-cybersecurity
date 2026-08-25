@@ -379,5 +379,149 @@ else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+head_ "13. Bare-metal launcher contract (start_weissman.sh)"
+# This launcher used to refuse to run at all whenever the repo .env came from the Docker stack:
+# PRODUCTION.env.template ships DATABASE_URL/REDIS_URL/WEISSMAN_MIGRATE_URL blank, so the guard
+# fired on every machine that had ever run start_weissman_live.sh. The checks below are hermetic
+# — a copied script in a temp dir, ports that cannot be listening, container creation and Docker
+# autostart both disabled — so they never touch the real .env, the daemon, or the network.
+BARE=start_weissman.sh
+
+while read -r flag; do
+  if grep -qE "^[[:space:]]+(-[a-z]\|)?${flag}\)" "$BARE"; then
+    ok "documented flag $flag is implemented"
+  else
+    bad "documented flag $flag has no case branch in $BARE"
+  fi
+done < <(sed -n '/^# Flags:/,/^#$/p' "$BARE" | grep -oE '^#   --[a-z-]+' | sed 's/^#   //')
+
+bare_help="$(bash "$BARE" --help 2>&1 || true)"
+if grep -q -- "--no-worker" <<<"$bare_help" && ! grep -q "set -euo pipefail" <<<"$bare_help"; then
+  ok "$BARE --help prints usage without leaking script source"
+else
+  bad "$BARE --help output is wrong (missing flags, or leaking 'set -euo pipefail')"
+fi
+
+# Capture first: the launcher exits non-zero here (correctly), and `pipefail` would make a
+# `… | grep` pipeline report that status rather than whether the text matched.
+bare_bogus="$(bash "$BARE" --definitely-not-a-flag 2>&1 || true)"
+if grep -q "unknown flag" <<<"$bare_bogus"; then
+  ok "$BARE rejects a bogus flag"
+else
+  bad "$BARE accepted a bogus flag — argument validation is not running"
+fi
+
+BARE_TMP="$(mktemp -d)"
+trap 'rm -rf "$STUB" "$BARE_TMP"' EXIT
+cp "$BARE" "$BARE_TMP/"
+# A .env exactly like the one start_weissman_live.sh writes: production markers, real secrets,
+# datastore URLs left blank for Compose to fill in.
+cat >"$BARE_TMP/.env" <<'ENVEOF'
+WEISSMAN_ENV=production
+WEISSMAN_COOKIE_SECURE=1
+PORT=8000
+DATABASE_URL=
+WEISSMAN_AUTH_DATABASE_URL=
+WEISSMAN_MIGRATE_URL=
+REDIS_URL=
+WEISSMAN_JWT_SECRET=contract-test-jwt-secret-value-at-least-48-chars-long
+WEISSMAN_ADMIN_EMAIL=admin@localhost
+WEISSMAN_ADMIN_PASSWORD=contract-test-admin-password
+ENVEOF
+
+# Hermetic run: ports 1 and 2 are never listening and the container names cannot exist, so
+# discovery latches onto nothing the machine running this test happens to have up — not even a
+# real Docker daemon (which the launcher legitimately reaches through sudo).
+bare_env=(
+  WEISSMAN_PG_PORT=1
+  WEISSMAN_REDIS_PORT=2
+  WEISSMAN_PG_CONTAINER=weissman-contract-test-absent-pg
+  WEISSMAN_REDIS_CONTAINER=weissman-contract-test-absent-redis
+)
+bare_out="$(
+  env "${bare_env[@]}" \
+    bash "$BARE_TMP/$BARE" --no-docker-start --no-provision --no-frontend-build 2>&1 || true
+)"
+
+if grep -q "DATABASE_URL is not set" <<<"$bare_out"; then
+  bad "the launcher still refuses to start over a blank DATABASE_URL in the Docker-stack .env"
+else
+  ok "a blank DATABASE_URL in .env no longer stops the launcher"
+fi
+if grep -q "no Postgres is reachable" <<<"$bare_out"; then
+  ok "with nothing to connect to, it fails at datastore resolution with instructions"
+else
+  bad "expected a datastore-resolution failure with instructions, got: $(head -c 200 <<<"$bare_out")"
+fi
+# The secrets in .env belong to the Docker stack; copying them into a second file on disk would
+# duplicate live credentials for no reason.
+if [[ -f "$BARE_TMP/.env.local" ]] && grep -q 'WEISSMAN_JWT_SECRET' "$BARE_TMP/.env.local"; then
+  bad "a secret already present in .env was copied into .env.local"
+else
+  ok "secrets inherited from .env are not duplicated into .env.local"
+fi
+
+# Same run without any .env: every secret must be generated, at production strength, 0600.
+rm -f "$BARE_TMP/.env" "$BARE_TMP/.env.local"
+env "${bare_env[@]}" \
+  bash "$BARE_TMP/$BARE" --no-docker-start --no-provision --no-frontend-build >/dev/null 2>&1 || true
+if [[ -f "$BARE_TMP/.env.local" ]]; then
+  ok ".env.local is bootstrapped when nothing supplies the secrets"
+  mode="$(stat -c '%a' "$BARE_TMP/.env.local" 2>/dev/null || stat -f '%Lp' "$BARE_TMP/.env.local")"
+  if [[ "$mode" == "600" ]]; then
+    ok ".env.local is created 0600"
+  else
+    bad ".env.local is mode ${mode}, not 600 — generated secrets are world/group readable"
+  fi
+  # Same floors security_startup.rs enforces, so a generated file can never fail the boot guard.
+  while IFS=: read -r key min; do
+    val="$(grep -E "^${key}=" "$BARE_TMP/.env.local" | tail -1 | cut -d= -f2-)"
+    if ((${#val} >= min)); then
+      ok "generated ${key} meets the production floor (>= ${min})"
+    else
+      bad "generated ${key} is ${#val} chars; security_startup.rs requires ${min}"
+    fi
+  done <<'FLOORS'
+WEISSMAN_JWT_SECRET:48
+WEISSMAN_METRICS_TOKEN:32
+WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:32
+WEISSMAN_JOB_ORCHESTRATOR_SECRET:32
+WEISSMAN_ADMIN_PASSWORD:12
+FLOORS
+else
+  bad ".env.local was not created — a fresh clone has no JWT secret and no admin login"
+fi
+
+# Docker may only be reachable through sudo (socket permissions). Every call therefore has to go
+# through the dk() wrapper; a raw `docker …` silently breaks that whole path.
+if grep -nE '^[[:space:]]*(if |! )?docker (inspect|run|start|exec|ps|port|rm|logs)\b' "$BARE" >/dev/null; then
+  bad "$BARE calls docker directly somewhere instead of the dk() wrapper: $(grep -nE '^[[:space:]]*(if |! )?docker (inspect|run|start|exec|ps|port|rm|logs)\b' "$BARE" | head -1)"
+else
+  ok "every Docker call goes through the dk() wrapper (works when only sudo can reach the socket)"
+fi
+
+# Cross-file contract: the launcher resolves the configuration, then tells the server not to
+# replay the file over it. Both halves must exist or PORT=9999 silently becomes :8000 again.
+if grep -q 'export WEISSMAN_ENV_PROCESS_WINS=1' "$BARE" \
+   && grep -q 'WEISSMAN_ENV_PROCESS_WINS' crates/weissman-db/src/env_bootstrap.rs; then
+  ok "WEISSMAN_ENV_PROCESS_WINS is exported by the launcher and honoured by env_bootstrap"
+else
+  bad "WEISSMAN_ENV_PROCESS_WINS is not wired end to end — .env will override resolved values"
+fi
+
+# The banner prints the database it connected to; it must never print the password with it.
+if sed -n '/^print_banner()/,/^}/p' "$BARE" | grep -q 'redact_dsn'; then
+  ok "the banner redacts DSN passwords"
+else
+  bad "the banner prints DATABASE_URL unredacted"
+fi
+
+if grep -qE '^\.env\.local$' .gitignore; then
+  ok ".env.local is gitignored (it holds generated secrets)"
+else
+  bad ".env.local is not gitignored — generated secrets can be committed"
+fi
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
