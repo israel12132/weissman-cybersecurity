@@ -122,7 +122,7 @@ const RULES: &[VectorRule] = &[
     VectorRule {
         id: "cloud_imds_credential_theft",
         name: "SSRF → Cloud IMDS credential theft → account takeover",
-        base_severity: "high",
+        base_severity: "critical",
         novelty: 5,
         tactics: &["TA0001", "TA0006", "TA0004"],
         mitre_chain: &["T1190", "T1552.005", "T1078.004"],
@@ -322,23 +322,20 @@ pub fn synthesize(findings: &[FindingLite]) -> Vec<AttackVector> {
             continue;
         }
 
-        // Severity: the strongest evidence severity, floored by the rule and bumped one level for a
-        // fully-corroborated (all-preconditions-met) chain.
+        // Severity: the strongest evidence severity, floored by the rule's inherent danger. No
+        // blanket escalation — a fully-corroborated chain is the normal firing case, so bumping on
+        // it would make almost every vector critical and destroy the signal.
         let evidence_rank = evidence
             .iter()
             .map(|f| severity_rank(&f.severity))
             .max()
             .unwrap_or(0);
-        let mut rank = evidence_rank.max(severity_rank(rule.base_severity));
-        if matched_count == rule.preconditions.len() && rank < 5 {
-            rank += 1;
-        }
+        let rank = evidence_rank.max(severity_rank(rule.base_severity));
         let severity = rank_to_severity(rank);
 
         let confidence = matched_count as f64 / rule.preconditions.len() as f64;
         // Priority blends how bad (severity), how sure (confidence), and how rare (novelty).
-        let priority =
-            (rank as f64) * confidence * (rule.novelty as f64) / 5.0;
+        let priority = (rank as f64) * confidence * (rule.novelty as f64) / 5.0;
 
         // Client scope: if every evidence finding shares a client_id, attribute the vector to it.
         let client_ids: std::collections::BTreeSet<i64> =
@@ -442,7 +439,13 @@ mod tests {
             .all(|v| v.id != "external_exposure_lateral_movement"));
         // Add a genuinely distinct network finding and the vector should now fire.
         let mut two = findings.clone();
-        two.push(f("2", "network_scan", "high", "Flat internal network", "smb reachable, no segmentation"));
+        two.push(f(
+            "2",
+            "network_scan",
+            "high",
+            "Flat internal network",
+            "smb reachable, no segmentation",
+        ));
         assert!(synthesize(&two)
             .iter()
             .any(|v| v.id == "external_exposure_lateral_movement"));
@@ -451,13 +454,25 @@ mod tests {
     #[test]
     fn ssrf_plus_cloud_metadata_fires_imds_chain() {
         let findings = vec![
-            f("1", "ssrf_engine", "high", "SSRF in /fetch", "server-side request forgery"),
-            f("2", "aws_attack_engine", "medium", "Cloud metadata reachable", "instance metadata 169.254 exposed"),
+            f(
+                "1",
+                "ssrf_engine",
+                "high",
+                "SSRF in /fetch",
+                "server-side request forgery",
+            ),
+            f(
+                "2",
+                "aws_attack_engine",
+                "medium",
+                "Cloud metadata reachable",
+                "instance metadata 169.254 exposed",
+            ),
         ];
         let v = synthesize(&findings);
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].id, "cloud_imds_credential_theft");
-        // both preconditions met -> confidence 1.0 and severity bumped above the high evidence
+        // both preconditions met -> confidence 1.0; severity is the rule's inherent critical floor
         assert!((v[0].confidence - 1.0).abs() < f64::EPSILON);
         assert_eq!(v[0].severity, "critical");
         assert_eq!(v[0].mitre_chain, vec!["T1190", "T1552.005", "T1078.004"]);
@@ -468,7 +483,13 @@ mod tests {
     #[test]
     fn required_precondition_missing_does_not_fire() {
         // SSRF alone (no cloud metadata) must not synthesize the IMDS chain.
-        let findings = vec![f("1", "ssrf_engine", "high", "SSRF", "server-side request forgery")];
+        let findings = vec![f(
+            "1",
+            "ssrf_engine",
+            "high",
+            "SSRF",
+            "server-side request forgery",
+        )];
         assert!(synthesize(&findings)
             .iter()
             .all(|v| v.id != "cloud_imds_credential_theft"));
@@ -478,8 +499,20 @@ mod tests {
     fn keyword_matching_works_without_exact_engine_id() {
         // Match the CSP leg by description keyword even though the engine id is generic.
         let findings = vec![
-            f("1", "keylogger_engine", "low", "Session-replay SDK", "hotjar session replay present"),
-            f("2", "web_scan", "medium", "Header check", "missing content-security-policy header"),
+            f(
+                "1",
+                "keylogger_engine",
+                "low",
+                "Session-replay SDK",
+                "hotjar session replay present",
+            ),
+            f(
+                "2",
+                "web_scan",
+                "medium",
+                "Header check",
+                "missing content-security-policy header",
+            ),
         ];
         let v = synthesize(&findings);
         assert!(v.iter().any(|x| x.id == "client_side_credential_capture"));
@@ -489,11 +522,35 @@ mod tests {
     fn vectors_sorted_by_priority_desc() {
         let findings = vec![
             // supply-chain (critical, novelty 5) + cicd -> high priority
-            f("1", "supply_chain_scanner", "high", "Vulnerable dependency", "outdated component"),
-            f("2", "cicd_pipeline_engine", "high", "Unpinned action", "github action pipeline unpinned"),
+            f(
+                "1",
+                "supply_chain_scanner",
+                "high",
+                "Vulnerable dependency",
+                "outdated component",
+            ),
+            f(
+                "2",
+                "cicd_pipeline_engine",
+                "high",
+                "Unpinned action",
+                "github action pipeline unpinned",
+            ),
             // email spoof (medium, novelty 3) -> lower priority
-            f("3", "email_dns_posture", "medium", "DMARC p=none", "dmarc p=none spf"),
-            f("4", "osint_engine", "low", "Employee emails", "employee email address harvested via osint"),
+            f(
+                "3",
+                "email_dns_posture",
+                "medium",
+                "DMARC p=none",
+                "dmarc p=none spf",
+            ),
+            f(
+                "4",
+                "osint_engine",
+                "low",
+                "Employee emails",
+                "employee email address harvested via osint",
+            ),
         ];
         let v = synthesize(&findings);
         assert!(v.len() >= 2);
@@ -506,8 +563,20 @@ mod tests {
     #[test]
     fn json_envelope_reports_counts_and_highest_severity() {
         let findings = vec![
-            f("1", "ssrf_engine", "high", "SSRF", "server-side request forgery"),
-            f("2", "aws_attack_engine", "high", "IMDS", "instance metadata 169.254"),
+            f(
+                "1",
+                "ssrf_engine",
+                "high",
+                "SSRF",
+                "server-side request forgery",
+            ),
+            f(
+                "2",
+                "aws_attack_engine",
+                "high",
+                "IMDS",
+                "instance metadata 169.254",
+            ),
         ];
         let out = synthesize_json(&findings);
         assert_eq!(out["ok"], json!(true));
