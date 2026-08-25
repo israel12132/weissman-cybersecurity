@@ -139,6 +139,10 @@ services:
       context: .
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:stable
+    # Operator .env (LLM keys, max-power flags). Explicit `environment:` entries still win.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
@@ -172,6 +176,21 @@ services:
       WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}
       WEISSMAN_MASTER_BOOTSTRAP_BCRYPT: ${WEISSMAN_MASTER_BOOTSTRAP_BCRYPT:-}
       PORT: "8000"
+      # OpenAI / OpenAI-compatible LLM (Council, Ask Weissman, embeddings, AI engines).
+      # Interpolated from host `.env` — never commit the API key.
+      WEISSMAN_LLM_BASE_URL: ${WEISSMAN_LLM_BASE_URL:-}
+      WEISSMAN_LLM_MODEL: ${WEISSMAN_LLM_MODEL:-}
+      WEISSMAN_LLM_API_KEY: ${WEISSMAN_LLM_API_KEY:-}
+      WEISSMAN_LLM_ENDPOINTS: ${WEISSMAN_LLM_ENDPOINTS:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      WEISSMAN_EMBEDDINGS_BASE_URL: ${WEISSMAN_EMBEDDINGS_BASE_URL:-}
+      WEISSMAN_EMBEDDINGS_MODEL: ${WEISSMAN_EMBEDDINGS_MODEL:-}
+      WEISSMAN_COUNCIL_EMBEDDING_MODEL: ${WEISSMAN_COUNCIL_EMBEDDING_MODEL:-}
+      WEISSMAN_COUNCIL_MODEL_CODER: ${WEISSMAN_COUNCIL_MODEL_CODER:-}
+      WEISSMAN_COUNCIL_MODEL_GENERALIST: ${WEISSMAN_COUNCIL_MODEL_GENERALIST:-}
+      WEISSMAN_COUNCIL_MODEL_SYNTHESIZER: ${WEISSMAN_COUNCIL_MODEL_SYNTHESIZER:-}
+      WEISSMAN_COUNCIL_SINGLE_MODEL: ${WEISSMAN_COUNCIL_SINGLE_MODEL:-}
     expose:
       - "8000"
     depends_on:
@@ -214,6 +233,9 @@ services:
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:stable
     entrypoint: ["/usr/local/bin/weissman-worker"]
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
@@ -222,6 +244,21 @@ services:
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
+      WEISSMAN_LLM_BASE_URL: ${WEISSMAN_LLM_BASE_URL:-}
+      WEISSMAN_LLM_MODEL: ${WEISSMAN_LLM_MODEL:-}
+      WEISSMAN_LLM_API_KEY: ${WEISSMAN_LLM_API_KEY:-}
+      WEISSMAN_LLM_ENDPOINTS: ${WEISSMAN_LLM_ENDPOINTS:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      WEISSMAN_EMBEDDINGS_BASE_URL: ${WEISSMAN_EMBEDDINGS_BASE_URL:-}
+      WEISSMAN_EMBEDDINGS_MODEL: ${WEISSMAN_EMBEDDINGS_MODEL:-}
+      WEISSMAN_COUNCIL_EMBEDDING_MODEL: ${WEISSMAN_COUNCIL_EMBEDDING_MODEL:-}
+      WEISSMAN_COUNCIL_MODEL_CODER: ${WEISSMAN_COUNCIL_MODEL_CODER:-}
+      WEISSMAN_COUNCIL_MODEL_GENERALIST: ${WEISSMAN_COUNCIL_MODEL_GENERALIST:-}
+      WEISSMAN_COUNCIL_MODEL_SYNTHESIZER: ${WEISSMAN_COUNCIL_MODEL_SYNTHESIZER:-}
+      WEISSMAN_COUNCIL_SINGLE_MODEL: ${WEISSMAN_COUNCIL_SINGLE_MODEL:-}
+      WEISSMAN_WORKER_HEAVY_CONCURRENCY: ${WEISSMAN_WORKER_HEAVY_CONCURRENCY:-6}
+      WEISSMAN_WORKER_LIGHT_CONCURRENCY: ${WEISSMAN_WORKER_LIGHT_CONCURRENCY:-16}
     depends_on:
       backend:
         condition: service_healthy

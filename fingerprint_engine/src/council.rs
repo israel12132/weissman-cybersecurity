@@ -266,7 +266,7 @@ impl CouncilConfig {
         .unwrap_or_default();
         let _ = tx.commit().await.map_err(|e| e.to_string())?;
 
-        let base = openai_chat::normalize_openai_base_url(base.trim());
+        let base = openai_chat::resolve_llm_base_url(&base);
         let supreme = matches!(
             std::env::var("WEISSMAN_SUPREME_COUNCIL").as_deref(),
             Ok("1") | Ok("true") | Ok("yes")

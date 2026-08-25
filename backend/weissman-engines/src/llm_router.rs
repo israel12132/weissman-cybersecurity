@@ -22,11 +22,11 @@
 //! ]
 //! ```
 //! `model` is optional (empty ⇒ resolved via [`crate::openai_chat::resolve_llm_model`]). Auth
-//! reuses the existing `WEISSMAN_LLM_API_KEY` bearer.
+//! reuses `WEISSMAN_LLM_API_KEY`, then the OpenAI alias `OPENAI_API_KEY`.
 
 use crate::openai_chat::{
     chat_completion_text, chat_completion_text_json_object, endpoint_circuit_open,
-    resolve_llm_model, LlmError, DEFAULT_LLM_BASE_URL,
+    resolve_llm_model, LlmError,
 };
 use serde::Deserialize;
 
@@ -79,15 +79,11 @@ fn parse_endpoints(raw: &str) -> Vec<LlmEndpoint> {
 }
 
 /// The single default endpoint used when no chain is configured — mirrors the base client's
-/// `WEISSMAN_LLM_BASE_URL` / [`DEFAULT_LLM_BASE_URL`] resolution.
+/// `WEISSMAN_LLM_BASE_URL` / `OPENAI_BASE_URL` / `OPENAI_API_KEY` resolution.
 fn default_endpoint() -> LlmEndpoint {
-    let base_url = std::env::var("WEISSMAN_LLM_BASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_LLM_BASE_URL.to_string());
     LlmEndpoint {
         label: "default".to_string(),
-        base_url,
+        base_url: crate::openai_chat::resolve_llm_base_url(""),
         model: String::new(),
     }
 }

@@ -539,6 +539,7 @@ async fn process_one(
 }
 
 fn main() {
+    weissman_db::env_bootstrap::load_process_environment();
     // Scanning engines recurse over untrusted, arbitrarily-nested network data — HTML trees,
     // JSON / SBOM dependency graphs, redirect chains, protocol frames. Tokio's default 2 MiB
     // worker-thread stack can overflow on legitimately-deep (but finite) input and, because a

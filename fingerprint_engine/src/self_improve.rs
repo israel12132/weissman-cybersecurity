@@ -79,9 +79,27 @@ fn norm_level(s: &str) -> String {
 
 // ─── Toggle (live GUI control) ──────────────────────────────────────────────────
 
+fn env_flag_truthy(raw: Option<&str>) -> bool {
+    matches!(
+        raw.map(str::trim)
+            .map(|s| s.to_ascii_lowercase())
+            .as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    )
+}
+
+/// `WEISSMAN_SELF_IMPROVE=1` forces the autonomous engine on for every tenant.
+fn env_forces_self_improve() -> bool {
+    env_flag_truthy(std::env::var("WEISSMAN_SELF_IMPROVE").ok().as_deref())
+}
+
 /// Whether the autonomous engine is enabled for this tenant (system config
 /// `self_improve_enabled` = "1"/"true"/"yes"). Defaults to disabled (opt-in).
+/// `WEISSMAN_SELF_IMPROVE=1` forces on for every tenant (max-power profile).
 pub async fn is_enabled(pool: &PgPool, tenant_id: i64) -> bool {
+    if env_forces_self_improve() {
+        return true;
+    }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return false;
     };
@@ -166,6 +184,7 @@ pub async fn status_summary(pool: &PgPool, tenant_id: i64) -> Value {
     }
     json!({
         "enabled": enabled,
+        "forced_by_env": env_forces_self_improve(),
         "interval_secs": interval,
         "counts": {
             "pending": pending,
@@ -525,6 +544,7 @@ pub async fn run_cycle(
     .unwrap_or_default();
     let _ = tx.commit().await;
 
+    let llm_base = weissman_engines::openai_chat::resolve_llm_base_url(&llm_base);
     if !llm_base.trim().is_empty() {
         let signal_summary = signals
             .iter()
@@ -766,6 +786,17 @@ mod tests {
         assert_eq!(back.title, "Wire it");
         assert_eq!(back.affected_files, vec!["a.rs".to_string()]);
         assert_eq!(back.source, "llm");
+    }
+
+    #[test]
+    fn env_flag_truthy_accepts_common_on_values() {
+        for v in ["1", "true", "TRUE", " yes ", "On"] {
+            assert!(env_flag_truthy(Some(v)), "expected truthy for {v:?}");
+        }
+        for v in ["0", "false", "off", "", "no"] {
+            assert!(!env_flag_truthy(Some(v)), "expected falsy for {v:?}");
+        }
+        assert!(!env_flag_truthy(None));
     }
 
     #[test]

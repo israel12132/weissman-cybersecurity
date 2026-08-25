@@ -233,7 +233,7 @@ async fn get_config_tx(
     tenant_id: i64,
     key: &str,
 ) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+    let raw = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
     .bind(tenant_id)
@@ -241,8 +241,11 @@ async fn get_config_tx(
     .fetch_optional(&mut **tx)
     .await
     .ok()
-    .flatten()
-    .filter(|s: &String| !s.is_empty())
+    .flatten();
+    if key == "llm_base_url" {
+        return weissman_engines::openai_chat::overlay_tenant_llm_base_url(raw.as_deref());
+    }
+    raw.filter(|s: &String| !s.is_empty())
 }
 
 use weissman_core::models::engine::{
@@ -791,9 +794,11 @@ async fn load_semantic_config(
         .await
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.7);
-    let llm_model = get_config_tx(tx, tenant_id, "llm_model")
-        .await
-        .unwrap_or_default();
+    let llm_model = weissman_engines::openai_chat::resolve_llm_model(
+        &get_config_tx(tx, tenant_id, "llm_model")
+            .await
+            .unwrap_or_default(),
+    );
     let max_sequence_depth = get_config_tx(tx, tenant_id, "max_sequence_depth")
         .await
         .and_then(|s| s.parse().ok())

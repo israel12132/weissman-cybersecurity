@@ -33,8 +33,8 @@ endpoint.
 | `model` | no | Model id. Empty ⇒ resolved from `WEISSMAN_LLM_MODEL` / default at call time. |
 
 Unset / empty / invalid ⇒ a single default endpoint from `WEISSMAN_LLM_BASE_URL` (or the
-built-in default), preserving current behavior. Auth reuses the existing `WEISSMAN_LLM_API_KEY`
-bearer.
+built-in default), preserving current behavior. Auth reuses `WEISSMAN_LLM_API_KEY`,
+then the OpenAI alias `OPENAI_API_KEY`.
 
 ## Behavior
 

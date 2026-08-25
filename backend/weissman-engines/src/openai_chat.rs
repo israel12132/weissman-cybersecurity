@@ -488,6 +488,101 @@ pub fn normalize_openai_base_url(raw: &str) -> String {
     }
 }
 
+/// First non-empty trimmed candidate. Used for API keys and base URLs.
+#[must_use]
+pub fn first_nonempty_owned<I>(candidates: I) -> Option<String>
+where
+    I: IntoIterator<Item = Option<String>>,
+{
+    for c in candidates {
+        if let Some(s) = c {
+            let t = s.trim();
+            if !t.is_empty() {
+                return Some(t.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// True when the URL is the migration-seeded loopback vLLM placeholder
+/// (`http://127.0.0.1:8000/v1`), not an operator-chosen endpoint.
+#[must_use]
+pub fn is_seeded_loopback_llm_url(url: &str) -> bool {
+    let n = url.trim().trim_end_matches('/').to_ascii_lowercase();
+    n.contains("127.0.0.1:8000") || n.contains("localhost:8000")
+}
+
+/// Pick chat base URL: an explicit tenant URL wins unless it is the seeded
+/// loopback placeholder, in which case `env_base` overlays so a cloud OpenAI
+/// key actually reaches OpenAI instead of the local API port.
+#[must_use]
+pub fn pick_llm_base_url(config_base: &str, env_base: Option<&str>) -> String {
+    let config = config_base.trim();
+    let env = env_base.map(str::trim).filter(|s| !s.is_empty());
+    let chosen = if !config.is_empty() && !is_seeded_loopback_llm_url(config) {
+        config
+    } else if let Some(e) = env {
+        e
+    } else if config.is_empty() {
+        DEFAULT_LLM_BASE_URL
+    } else {
+        config
+    };
+    normalize_openai_base_url(chosen)
+}
+
+/// Env overlay for LLM base URL: `WEISSMAN_LLM_BASE_URL`, then `OPENAI_BASE_URL`,
+/// then `https://api.openai.com/v1` when `OPENAI_API_KEY` is set (so a cloud key
+/// works without a second URL variable).
+fn env_llm_base_url() -> Option<String> {
+    if let Some(u) = first_nonempty_owned([
+        std::env::var("WEISSMAN_LLM_BASE_URL").ok(),
+        std::env::var("OPENAI_BASE_URL").ok(),
+    ]) {
+        return Some(u);
+    }
+    std::env::var("OPENAI_API_KEY")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|_| "https://api.openai.com/v1".to_string())
+}
+
+/// Resolve the chat/completions base URL from tenant config + process env.
+#[must_use]
+pub fn resolve_llm_base_url(config_base: &str) -> String {
+    pick_llm_base_url(config_base, env_llm_base_url().as_deref())
+}
+
+/// Overlay env onto a tenant-stored LLM base URL.
+///
+/// Returns `None` only when the tenant row is empty **and** no OpenAI/env URL is
+/// configured — so callers that skip LLM when "not configured" keep skipping.
+/// Seeded loopback plus `OPENAI_API_KEY` / `WEISSMAN_LLM_BASE_URL` becomes OpenAI.
+#[must_use]
+pub fn overlay_tenant_llm_base_url_with_env(
+    db_value: Option<&str>,
+    env_base: Option<&str>,
+) -> Option<String> {
+    let db = db_value.unwrap_or("").trim();
+    let resolved = pick_llm_base_url(db, env_base);
+    if !db.is_empty() {
+        return Some(resolved);
+    }
+    let fallback = normalize_openai_base_url("");
+    if resolved == fallback {
+        None
+    } else {
+        Some(resolved)
+    }
+}
+
+#[must_use]
+pub fn overlay_tenant_llm_base_url(db_value: Option<&str>) -> Option<String> {
+    overlay_tenant_llm_base_url_with_env(db_value, env_llm_base_url().as_deref())
+}
+
 #[must_use]
 pub fn chat_completions_endpoint(base_url: &str) -> String {
     format!(
@@ -524,13 +619,14 @@ pub fn resolve_llm_model(config_model: &str) -> String {
         .unwrap_or_else(|| DEFAULT_LLM_MODEL.to_string())
 }
 
-/// Optional Bearer for vLLM / proxies (`WEISSMAN_LLM_API_KEY`).
+/// Optional Bearer for hosted LLM endpoints.
+/// Prefers `WEISSMAN_LLM_API_KEY`, then the OpenAI alias `OPENAI_API_KEY`.
 #[must_use]
 pub fn llm_api_key_from_env() -> Option<String> {
-    std::env::var("WEISSMAN_LLM_API_KEY")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+    first_nonempty_owned([
+        std::env::var("WEISSMAN_LLM_API_KEY").ok(),
+        std::env::var("OPENAI_API_KEY").ok(),
+    ])
 }
 
 #[derive(Debug, Clone)]
@@ -1100,12 +1196,17 @@ fn apply_bearer_blocking(
     crate::llm_handshake::apply_to_blocking_request(req)
 }
 
-/// List of fallback models when primary model is unavailable
+/// List of fallback models when primary model is unavailable.
+/// OpenAI cloud ids sit last so a local vLLM host is not forced onto gpt-*;
+/// they still catch the common case where env defaulted to Llama but the
+/// operator pointed the base URL at api.openai.com.
 const FALLBACK_MODELS: &[&str] = &[
     "meta-llama/Llama-3.2-3B-Instruct",
     "meta-llama/Meta-Llama-3.1-8B-Instruct",
     "mistralai/Mistral-7B-Instruct-v0.2",
     "mistralai/Mistral-7B-Instruct-v0.3",
+    "gpt-4o-mini",
+    "gpt-4o",
 ];
 
 /// Check if a model is available on the vLLM/OpenAI server
@@ -1192,4 +1293,92 @@ pub async fn resolve_model_with_fallback(
         resolved
     );
     Ok(resolved)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_nonempty_skips_blank_and_prefers_weissman_key() {
+        assert_eq!(
+            first_nonempty_owned([Some("  ".into()), Some(" sk-abc ".into())]).as_deref(),
+            Some("sk-abc")
+        );
+        assert_eq!(first_nonempty_owned([None, Some("".into()), None]), None);
+        assert_eq!(
+            first_nonempty_owned([Some("weissman-key".into()), Some("openai-key".into())])
+                .as_deref(),
+            Some("weissman-key")
+        );
+    }
+
+    #[test]
+    fn pick_llm_base_url_overlays_env_on_seeded_loopback() {
+        assert_eq!(
+            pick_llm_base_url(
+                "http://127.0.0.1:8000/v1",
+                Some("https://api.openai.com/v1")
+            ),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            pick_llm_base_url(
+                "https://tenant-vllm.internal/v1",
+                Some("https://api.openai.com/v1")
+            ),
+            "https://tenant-vllm.internal/v1"
+        );
+        assert_eq!(
+            pick_llm_base_url("", Some("https://api.openai.com")),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            pick_llm_base_url("http://127.0.0.1:8000/v1", None),
+            "http://127.0.0.1:8000/v1"
+        );
+        assert_eq!(
+            pick_llm_base_url("http://localhost:8000", Some("https://api.openai.com/v1")),
+            "https://api.openai.com/v1"
+        );
+    }
+
+    #[test]
+    fn seeded_loopback_detects_common_placeholders() {
+        assert!(is_seeded_loopback_llm_url("http://127.0.0.1:8000/v1"));
+        assert!(is_seeded_loopback_llm_url("http://localhost:8000"));
+        assert!(!is_seeded_loopback_llm_url("https://api.openai.com/v1"));
+        assert!(!is_seeded_loopback_llm_url("http://vllm.internal:8000/v1"));
+    }
+
+    #[test]
+    fn overlay_tenant_skips_when_nothing_configured() {
+        assert_eq!(overlay_tenant_llm_base_url_with_env(None, None), None);
+        assert_eq!(overlay_tenant_llm_base_url_with_env(Some(""), None), None);
+        assert_eq!(
+            overlay_tenant_llm_base_url_with_env(Some("   "), None),
+            None
+        );
+        assert_eq!(
+            overlay_tenant_llm_base_url_with_env(Some("http://127.0.0.1:8000/v1"), None).as_deref(),
+            Some("http://127.0.0.1:8000/v1")
+        );
+        assert_eq!(
+            overlay_tenant_llm_base_url_with_env(Some("https://api.openai.com"), None).as_deref(),
+            Some("https://api.openai.com/v1")
+        );
+        assert_eq!(
+            overlay_tenant_llm_base_url_with_env(None, Some("https://api.openai.com/v1"))
+                .as_deref(),
+            Some("https://api.openai.com/v1")
+        );
+        assert_eq!(
+            overlay_tenant_llm_base_url_with_env(
+                Some("http://127.0.0.1:8000/v1"),
+                Some("https://api.openai.com/v1")
+            )
+            .as_deref(),
+            Some("https://api.openai.com/v1")
+        );
+    }
 }

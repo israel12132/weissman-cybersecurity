@@ -221,7 +221,10 @@ async fn load_llm_tenant_config(pool: &sqlx::PgPool, tenant_id: i64) -> Option<(
             .and_then(|r| r.try_get::<String, _>("value").ok())
             .unwrap_or_default();
     let _ = tx.commit().await.ok()?;
-    Some((base, model))
+    Some((
+        weissman_engines::openai_chat::resolve_llm_base_url(&base),
+        weissman_engines::openai_chat::resolve_llm_model(&model),
+    ))
 }
 
 /// Merge edge assignment into async job payload (scan API). Loads LLM base URL / model from tenant `system_configs`.

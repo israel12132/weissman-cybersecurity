@@ -122,6 +122,18 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: metrics_token
+            - name: WEISSMAN_LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: llm_api_key
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: openai_api_key
+                  optional: true
             - name: WEISSMAN_MIGRATIONS_DIR
               value: "/srv/migrations"
           readinessProbe:

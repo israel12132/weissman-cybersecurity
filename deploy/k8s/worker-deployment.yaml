@@ -35,11 +35,11 @@ spec:
               drop: ["ALL"]
           resources:
             requests:
-              cpu: 200m
-              memory: 384Mi
+              cpu: 500m
+              memory: 1Gi
             limits:
-              cpu: "2"
-              memory: 2Gi
+              cpu: "4"
+              memory: 6Gi
           envFrom:
             - configMapRef:
                 name: weissman-config
@@ -69,6 +69,18 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: job_orchestrator_secret
+            - name: WEISSMAN_LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: llm_api_key
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: openai_api_key
+                  optional: true
           # Liveness stays a pure process check: a wedged *process* is worth restarting, but the
           # failure these probes were split for — every claim erroring against the database — is
           # not fixed by a restart, and putting it on liveness would crash-loop the whole fleet
