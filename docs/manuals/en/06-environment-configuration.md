@@ -19,6 +19,7 @@ Reference for all Weissman environment variables. Source of truth: **`PRODUCTION
 | Deployment | Primary file |
 |------------|--------------|
 | Docker Compose | `.env` at repo root (from `PRODUCTION.env.template`) |
+| Bare metal (`./start_weissman.sh`) | `.env.local` at repo root, then `.env` |
 | systemd | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret (`deploy/k8s/configmap.yaml`) |
 | Override chain | `WEISSMAN_ENV_FILE` loads an additional file last |
@@ -29,6 +30,21 @@ Docker Compose **requires** at minimum:
 WEISSMAN_JWT_SECRET=<strong>
 WEISSMAN_ADMIN_PASSWORD=<strong-min-12>
 ```
+
+### How files combine
+
+- A **blank** entry (`DATABASE_URL=`) is not a value. `PRODUCTION.env.template` ships the
+  datastore URLs blank because Compose supplies them per container, so the loader ignores those
+  lines completely: they never erase a value the process already has, and never define the
+  variable as an empty string. That is what makes
+  `DATABASE_URL=postgres://… ./start_weissman.sh` work, and what lets a blank
+  `WEISSMAN_AUTH_DATABASE_URL` fall back to `DATABASE_URL` as documented below.
+- Later files override earlier ones, and `WEISSMAN_ENV_FILE` is applied **last**, so an
+  operator-chosen file wins over every implicit location.
+- `WEISSMAN_ENV_PROCESS_WINS=1` inverts that for launchers: env files may then only fill gaps,
+  never replace a value already in the process environment. `start_weissman.sh` sets it because
+  it has already resolved the whole configuration itself; without it, `PORT=9999
+  ./start_weissman.sh` still bound `:8000` from `.env`.
 
 ---
 

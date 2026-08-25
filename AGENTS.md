@@ -51,6 +51,11 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 - **Full audit gate (G1–G7):** `bash scripts/full_audit_gate.sh`
 
 ### Development Flow
+`./start_weissman.sh` does steps 1–4 in one command: it starts the Docker daemon if it is
+installed but down, resolves or provisions Postgres + Redis, generates any missing secret into
+`.env.local`, builds, and runs `weissman-server` + `weissman-worker` with a health gate. Add
+`--debug` for the fast cargo profile. To do it by hand instead:
+
 1. Ensure Docker daemon is running (`sudo dockerd &` if needed)
 2. Start Postgres + Redis containers
 3. Build Rust workspace: `cargo build`

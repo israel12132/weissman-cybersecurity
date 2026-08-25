@@ -30,27 +30,36 @@ budget **20–40 minutes** on a fresh host (subsequent boots reuse the images an
 The launcher waits up to 45 min for health — raise `WEISSMAN_BOOT_TIMEOUT` (seconds) on a
 slow box.
 
-**Local dev (hot-reload UI):**
+**Bare metal (host processes, one command):**
 
 ```bash
-# 1) Bring up just the datastores (compose service names, not host binaries):
-docker compose up -d postgres redis
+./start_weissman.sh
+```
 
-# 2) Point the server at them and run it (bare-metal path; DATABASE_URL is required):
-export DATABASE_URL=postgres://weissman_app:weissman_dev_secret@127.0.0.1:5432/weissman
-export REDIS_URL=redis://127.0.0.1:6379/0
-cargo run -p weissman-server        # or ./start_weissman.sh with .env.local
+It resolves the whole configuration itself: reuses the secrets already in `.env` and generates
+anything missing into `.env.local` (0600), finds Postgres and Redis — a running Docker stack
+container, a container it created earlier, or a datastore already listening on this host — and
+creates containers only as a last resort, starting the Docker daemon first if it is installed but
+down. It then builds and runs `weissman-server` **and** `weissman-worker`, so scans actually
+execute, and prints the login banner once `/api/health` answers.
 
-# 3) Hot-reload UI (proxies /api → :8000):
+```bash
+./start_weissman.sh --no-worker         # API only (scans enqueue but never execute)
+./start_weissman.sh --no-provision      # never create containers; fail with instructions
+./start_weissman.sh --debug             # cargo debug profile, for fast rebuilds
+DATABASE_URL=… REDIS_URL=… PORT=9999 ./start_weissman.sh   # anything you export wins
+```
+
+**Hot-reload UI** (proxies `/api` → `:8000`) on top of that:
+
+```bash
 cd frontend && npm ci && npm run dev
 # → http://localhost:5173/command-center/login
 ```
 
-> The datastores are only reachable on the host if you publish their ports. The default
-> compose file `expose`s them on the internal network only; for local bare-metal dev add a
-> `ports:` mapping or run Postgres/Redis directly on the host.
-
-**Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` from `.env`.
+**Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD`. On a machine with no `.env`, the
+launcher generates them and prints the password once in its banner (also stored in `.env.local`).
+An existing database keeps the account it already has — boot never overwrites a live password.
 
 **Verify:**
 
