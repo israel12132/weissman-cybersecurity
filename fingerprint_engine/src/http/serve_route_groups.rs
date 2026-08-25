@@ -51,6 +51,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/threat-analysis/:client_id",
             get(api_threat_analysis_for_client),
         )
+        // Cross-domain attack-vector synthesis: fuse findings into composite multi-stage vectors.
+        .route(
+            "/api/analytics/attack-vectors",
+            get(api_analytics_attack_vectors),
+        )
         // Global remediation priority: one ranked, root-cause-deduplicated "fix-first" program
         // fusing effective_risk (EPSS/KEV) + attack-graph choke points across all findings.
         .route(
@@ -179,6 +184,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
         .route("/api/auth/signup", post(crate::signup::api_signup))
         .route("/api/auth/verify", get(crate::signup::api_verify))
+        .route(
+            "/api/auth/tenant-directory",
+            get(crate::tenant_directory::api_auth_tenant_directory),
+        )
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
         .route(

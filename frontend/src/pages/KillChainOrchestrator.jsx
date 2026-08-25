@@ -25,13 +25,13 @@ import Button from '../components/ui/Button'
 // ─── Kill Chain Phases (MITRE scaffolding — engines/findings are live) ────────
 
 const PHASE_DEFS = [
-  { id: 'reconnaissance', icon: '🔭', color: '#22d3ee', mitre: 'TA0043', techniques: ['T1595', 'T1592', 'T1589', 'T1590', 'T1597', 'T1598'], riskWeight: 0.10 },
-  { id: 'weaponization', icon: '⚗️', color: '#a78bfa', mitre: 'TA0001', techniques: ['T1587', 'T1588', 'T1583', 'T1584'], riskWeight: 0.15 },
-  { id: 'delivery', icon: '📦', color: '#f97316', mitre: 'TA0001', techniques: ['T1566', 'T1190', 'T1195', 'T1091'], riskWeight: 0.20 },
-  { id: 'exploitation', icon: '💥', color: '#ef4444', mitre: 'TA0002', techniques: ['T1203', 'T1211', 'T1068', 'T1210'], riskWeight: 0.25 },
-  { id: 'installation', icon: '🔩', color: '#f59e0b', mitre: 'TA0003', techniques: ['T1543', 'T1547', 'T1574', 'T1505'], riskWeight: 0.10 },
-  { id: 'c2', icon: '📡', color: '#6366f1', mitre: 'TA0011', techniques: ['T1071', 'T1090', 'T1572', 'T1008'], riskWeight: 0.10 },
-  { id: 'exfiltration', icon: '📤', color: '#10b981', mitre: 'TA0010', techniques: ['T1041', 'T1048', 'T1537', 'T1020'], riskWeight: 0.10 },
+  { id: 'reconnaissance', icon: '🔭', color: '#22d3ee', mitre: 'TA0043', techniques: ['T1595', 'T1595.001', 'T1595.002', 'T1595.003', 'T1592', 'T1589', 'T1589.001', 'T1589.002', 'T1590', 'T1591', 'T1596', 'T1597', 'T1598', 'T1593', 'T1594'], riskWeight: 0.10 },
+  { id: 'weaponization', icon: '⚗️', color: '#a78bfa', mitre: 'TA0001', techniques: ['T1587', 'T1587.001', 'T1587.004', 'T1588', 'T1588.001', 'T1588.005', 'T1588.006', 'T1583', 'T1584', 'T1585', 'T1586', 'T1608'], riskWeight: 0.15 },
+  { id: 'delivery', icon: '📦', color: '#f97316', mitre: 'TA0001', techniques: ['T1566', 'T1566.001', 'T1566.002', 'T1566.003', 'T1190', 'T1189', 'T1195', 'T1195.001', 'T1195.002', 'T1091', 'T1133', 'T1200', 'T1078', 'T1078.004'], riskWeight: 0.20 },
+  { id: 'exploitation', icon: '💥', color: '#ef4444', mitre: 'TA0002', techniques: ['T1203', 'T1211', 'T1068', 'T1210', 'T1212', 'T1204', 'T1204.001', 'T1204.002', 'T1559', 'T1055', 'T1611', 'T1190'], riskWeight: 0.25 },
+  { id: 'installation', icon: '🔩', color: '#f59e0b', mitre: 'TA0003', techniques: ['T1543', 'T1543.003', 'T1547', 'T1547.001', 'T1574', 'T1505', 'T1505.003', 'T1136', 'T1053', 'T1053.005', 'T1546', 'T1037', 'T1556'], riskWeight: 0.10 },
+  { id: 'c2', icon: '📡', color: '#6366f1', mitre: 'TA0011', techniques: ['T1071', 'T1071.001', 'T1071.004', 'T1090', 'T1090.003', 'T1572', 'T1008', 'T1105', 'T1573', 'T1573.002', 'T1568', 'T1568.002', 'T1102', 'T1104'], riskWeight: 0.10 },
+  { id: 'exfiltration', icon: '📤', color: '#10b981', mitre: 'TA0010', techniques: ['T1041', 'T1048', 'T1048.001', 'T1048.002', 'T1048.003', 'T1537', 'T1567', 'T1567.001', 'T1567.002', 'T1567.004', 'T1020', 'T1029', 'T1030', 'T1011', 'T1052'], riskWeight: 0.10 },
 ]
 
 function buildPhases(t) {
@@ -295,6 +295,75 @@ function buildEngineStatusFromFindings(findings) {
   return map
 }
 
+/** Collapse a backend job status into the lifecycle bucket the badge renders. */
+function normalizeRunStatus(status) {
+  const s = (status || '').toLowerCase()
+  if (s === 'completed' || s === 'succeeded' || s === 'success') return 'completed'
+  if (s === 'running') return 'running'
+  if (s === 'pending' || s === 'queued') return 'running'
+  if (s === 'failed' || s === 'dead' || s === 'cancelled' || s === 'error') return 'failed'
+  return null
+}
+
+/**
+ * Merge findings-derived status with real per-engine run history from
+ * `/api/engines/history-summary`.
+ *
+ * The old view keyed engine badges off findings alone, so an engine that ran to completion but
+ * produced no findings (e.g. a clean keylogger scan) rendered "idle/ממתין" forever — the bug this
+ * fixes. With run history, a badge distinguishes: has findings → count+severity; queued/running →
+ * live; completed with zero findings → surface clear; failed → failed; never dispatched → not run.
+ */
+function buildEngineStatus(findings, history) {
+  const map = buildEngineStatusFromFindings(findings)
+  const engines = history?.engines || {}
+  for (const [rawId, info] of Object.entries(engines)) {
+    const id = String(rawId).toLowerCase().replace(/[-\s]/g, '_')
+    if (!id) continue
+    if (!map[id]) map[id] = { findingCount: 0, maxSeverity: 'info', lastAt: '' }
+    map[id].runStatus = normalizeRunStatus(info?.status)
+    map[id].runAt = info?.updated_at || info?.created_at || ''
+    map[id].runFindings = Number(info?.findings_count || 0)
+  }
+  return map
+}
+
+/**
+ * Resolve the visual badge for an engine in a phase. Returns null when the engine has never run
+ * and has no findings (the genuine "not run" state), so callers render the muted placeholder.
+ */
+function engineBadge(st, t) {
+  if (st?.findingCount > 0) {
+    const sm = severityMeta(st.maxSeverity, t)
+    return {
+      kind: 'findings',
+      text: `${st.findingCount} · ${sm.label}`,
+      color: sm.color,
+      title: st.lastAt ? t('pages.killChainOrchestrator.last_finding', { date: st.lastAt.slice(0, 10) }) : undefined,
+    }
+  }
+  if (st?.runStatus === 'running') {
+    return { kind: 'running', text: t('pages.killChainOrchestrator.status_running'), color: '#f59e0b', pulse: true }
+  }
+  if (st?.runStatus === 'failed') {
+    return {
+      kind: 'failed',
+      text: t('pages.killChainOrchestrator.status_failed'),
+      color: '#ef4444',
+      title: st.runAt ? t('pages.killChainOrchestrator.last_run', { date: st.runAt.slice(0, 10) }) : undefined,
+    }
+  }
+  if (st?.runStatus === 'completed') {
+    return {
+      kind: 'clear',
+      text: t('pages.killChainOrchestrator.status_clear'),
+      color: '#10b981',
+      title: st.runAt ? t('pages.killChainOrchestrator.last_run', { date: st.runAt.slice(0, 10) }) : undefined,
+    }
+  }
+  return null
+}
+
 function parseFindingsResponse(data) {
   return Array.isArray(data) ? data : Array.isArray(data?.findings) ? data.findings : []
 }
@@ -357,6 +426,7 @@ export default function KillChainOrchestrator() {
   const [findings, setFindings] = useState([])
   const [chainsFromApi, setChainsFromApi] = useState(null)
   const [execKpis, setExecKpis] = useState(null)
+  const [engineHistory, setEngineHistory] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeChain, setActiveChain] = useState(null)
@@ -368,16 +438,18 @@ export default function KillChainOrchestrator() {
     setError(null)
     try {
       const FAILED = Symbol('failed')
-      const [chainsData, findingsData, kpisData] = await Promise.all([
+      const [chainsData, findingsData, kpisData, historyData] = await Promise.all([
         apiFetch('/api/soc/kill-chains').catch(() => null),
         apiFetch('/api/findings?limit=2000').catch(() => FAILED),
         apiFetch('/api/dashboard/exec-kpis').catch(() => null),
+        apiFetch('/api/engines/history-summary').catch(() => null),
       ])
       const apiChains = normalizeApiChains(chainsData?.chains)
       if (findingsData === FAILED && !apiChains.length) throw new Error(t('pages.killChainOrchestrator.load_error', { error: '' }))
       setChainsFromApi(apiChains.length ? apiChains : null)
       setFindings(parseFindingsResponse(findingsData === FAILED ? null : findingsData))
       setExecKpis(kpisData)
+      setEngineHistory(historyData)
     } catch (e) {
       setError(e.message || t('pages.killChainOrchestrator.load_error', { error: '' }))
     } finally {
@@ -395,8 +467,8 @@ export default function KillChainOrchestrator() {
   )
 
   const engineStatusById = useMemo(
-    () => buildEngineStatusFromFindings(findings),
-    [findings],
+    () => buildEngineStatus(findings, engineHistory),
+    [findings, engineHistory],
   )
 
   const phases = useMemo(() => buildPhases(t), [t])
@@ -726,7 +798,7 @@ export default function KillChainOrchestrator() {
                                       <div className="flex flex-wrap gap-1">
                                         {phase.engines.map((e) => {
                                           const st = engineStatusById[e.id]
-                                          const sm = st ? severityMeta(st.maxSeverity, t) : null
+                                          const badge = engineBadge(st, t)
                                           return (
                                             <Link
                                               key={e.id}
@@ -734,20 +806,20 @@ export default function KillChainOrchestrator() {
                                               className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded bg-[var(--row-hover-bg)] text-[var(--text-tertiary)] border border-[var(--border-default)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)] transition-colors"
                                             >
                                               <span>{e.label}</span>
-                                              {st?.findingCount > 0 ? (
+                                              {badge ? (
                                                 <span
-                                                  className="font-mono px-1 py-px rounded border"
+                                                  className={`font-mono px-1 py-px rounded border ${badge.pulse ? 'animate-pulse' : ''}`}
                                                   style={{
-                                                    color: sm.color,
-                                                    borderColor: `${sm.color}40`,
-                                                    backgroundColor: `${sm.color}12`,
+                                                    color: badge.color,
+                                                    borderColor: `${badge.color}40`,
+                                                    backgroundColor: `${badge.color}12`,
                                                   }}
-                                                  title={st.lastAt ? t('pages.killChainOrchestrator.last_finding', { date: st.lastAt.slice(0, 10) }) : undefined}
+                                                  title={badge.title}
                                                 >
-                                                  {st.findingCount} · {sm.label}
+                                                  {badge.text}
                                                 </span>
                                               ) : (
-                                                <span className="text-[var(--text-disabled)] font-mono">{t('pages.killChainOrchestrator.idle')}</span>
+                                                <span className="text-[var(--text-disabled)] font-mono">{t('pages.killChainOrchestrator.status_not_run')}</span>
                                               )}
                                             </Link>
                                           )
@@ -761,9 +833,16 @@ export default function KillChainOrchestrator() {
                                     <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">{t('pages.killChainOrchestrator.mitre_techniques')}</div>
                                     <div className="flex flex-wrap gap-1">
                                       {phase.techniques.map((technique) => (
-                                        <span key={technique} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30">
+                                        <a
+                                          key={technique}
+                                          href={`https://attack.mitre.org/techniques/${technique.replace('.', '/')}/`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#6366f1]/20 text-[#a5b4fc] border border-[#6366f1]/30 hover:bg-[#6366f1]/30 transition-colors"
+                                          title={t('pages.killChainOrchestrator.view_technique', { technique })}
+                                        >
                                           {technique}
-                                        </span>
+                                        </a>
                                       ))}
                                     </div>
                                   </div>

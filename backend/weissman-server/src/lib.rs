@@ -98,6 +98,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
     fingerprint_engine::db::ensure_admin_user(&pools.auth).await?;
     fingerprint_engine::db::ensure_master_bootstrap_user(&pools.auth).await?;
+    fingerprint_engine::db::ensure_platform_owner(&pools.auth, &pools.app).await?;
     let intel_pool = match weissman_db::connect_intel_from_env().await {
         Ok(p) => std::sync::Arc::new(p),
         Err(e) => {

@@ -56,6 +56,10 @@ ADMIN_EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
 # operator's `WEISSMAN_OAST_DOMAIN=... ./start_weissman_live.sh` with the template's blank
 # line, enabling the oast profile but starting the listener with an empty domain.
 OAST_DOMAIN_CLI="${WEISSMAN_OAST_DOMAIN:-}"
+# Captured before `.env` is sourced so an operator can inject the platform-owner
+# identity without it being clobbered by blank template lines.
+MASTER_BOOTSTRAP_EMAIL_CLI="${WEISSMAN_MASTER_BOOTSTRAP_EMAIL:-}"
+MASTER_BOOTSTRAP_PASSWORD_CLI="${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}"
 WITH_MONITORING=1
 # OAST out-of-band listener: on automatically when WEISSMAN_OAST_DOMAIN is set (it needs a
 # DNS zone the operator delegates), off otherwise.
@@ -307,6 +311,15 @@ ensure_env() {
     admin_pw="$(gen_password)"
     env_set WEISSMAN_ADMIN_PASSWORD "$admin_pw"
     generated_admin=1
+  fi
+
+  # Platform owner (ceo + is_superadmin). Persist a shell-provided identity so a rebuild
+  # keeps the same operator instead of leaving the template's blank MASTER_BOOTSTRAP_* lines.
+  if [[ -n "$MASTER_BOOTSTRAP_EMAIL_CLI" ]]; then
+    env_set WEISSMAN_MASTER_BOOTSTRAP_EMAIL "$MASTER_BOOTSTRAP_EMAIL_CLI"
+  fi
+  if [[ -n "$MASTER_BOOTSTRAP_PASSWORD_CLI" ]]; then
+    env_set WEISSMAN_MASTER_BOOTSTRAP_PASSWORD "$MASTER_BOOTSTRAP_PASSWORD_CLI"
   fi
 
   # Monitoring UIs get their OWN generated credential — never a copy of the platform admin
