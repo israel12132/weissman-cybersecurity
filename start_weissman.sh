@@ -498,12 +498,17 @@ start_or_create_pg_container() {
   else
     [ "$PROVISION" = 1 ] || return 1
     log "provisioning Postgres ${PG_CONTAINER} (${PG_IMAGE}) on 127.0.0.1:${PG_HOST_PORT}"
+    # max_connections=200 matches docker-compose.yml and deploy/k8s/postgres-ha.yaml. The image
+    # default of 100 is below what the server and worker pools ask for together, so every boot
+    # warned about over-subscription and load would eventually hit SQLSTATE 53300.
+    #
     # Report what Docker actually said. Guessing ("is the port free?") sent operators hunting
     # for a port conflict when the real answer was a pull failure or an unwritable image store.
     if ! err="$(dk run -d --name "$PG_CONTAINER" \
                   -e POSTGRES_USER=postgres -e "POSTGRES_PASSWORD=$(rand_alnum 32)" \
                   -e "POSTGRES_DB=${PG_DB}" \
-                  -p "127.0.0.1:${PG_HOST_PORT}:5432" "$PG_IMAGE" 2>&1 >/dev/null)"; then
+                  -p "127.0.0.1:${PG_HOST_PORT}:5432" "$PG_IMAGE" \
+                  postgres -c max_connections="${WEISSMAN_PG_MAX_CONNECTIONS:-200}" 2>&1 >/dev/null)"; then
       warn "docker could not create ${PG_CONTAINER}: ${err}"
       # A half-created container would masquerade as "exists" on the next run.
       dk rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
