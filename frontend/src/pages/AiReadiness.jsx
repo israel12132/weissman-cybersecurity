@@ -5,17 +5,21 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { createColumnHelper } from '@tanstack/react-table'
 import { KeyRound, Radio, CheckCircle2, XCircle } from 'lucide-react'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EmptyState from '../components/ui/EmptyState'
+import DataTable from '../components/ui/DataTable'
 import { apiFetch } from '../utils/apiFetch'
 import { downloadCsv } from '../lib/exportFindingsCsv'
 import { exportWorkbook, tableToWorkbookSpec } from '../lib/exportWorkbook'
 import { exportDocument, tableToDocumentSpec } from '../lib/documentExport'
 import Button from '../components/ui/Button'
+
+const columnHelper = createColumnHelper()
 
 const NS = 'pages.aiReadiness'
 
@@ -102,12 +106,20 @@ export default function AiReadiness() {
   const onExport = () => downloadCsv(exportTable.rows, exportTable.header, 'weissman-ai-readiness')
   const onExportXlsx = () =>
     exportWorkbook(
-      tableToWorkbookSpec({ title: t(`${NS}.title`), header: exportTable.header, rows: exportTable.rows }),
+      tableToWorkbookSpec({
+        title: t(`${NS}.title`),
+        header: exportTable.header,
+        rows: exportTable.rows,
+      }),
       'weissman-ai-readiness',
     )
   const onExportPdf = () =>
     exportDocument(
-      tableToDocumentSpec({ title: t(`${NS}.title`), header: exportTable.header, rows: exportTable.rows }),
+      tableToDocumentSpec({
+        title: t(`${NS}.title`),
+        header: exportTable.header,
+        rows: exportTable.rows,
+      }),
       'weissman-ai-readiness',
     )
 
@@ -125,6 +137,60 @@ export default function AiReadiness() {
   }
 
   const configured = rows.filter((r) => r.configured).length
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('configured', {
+        header: t(`${NS}.col_status`),
+        cell: (ctx) =>
+          ctx.getValue() ? (
+            <span className="inline-flex items-center gap-1 text-emerald-300 text-[11px] font-mono">
+              <CheckCircle2 className="w-3.5 h-3.5" /> {t(`${NS}.ready`)}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-amber-300 text-[11px] font-mono">
+              <XCircle className="w-3.5 h-3.5" /> {t(`${NS}.missing`)}
+            </span>
+          ),
+      }),
+      columnHelper.accessor('label', {
+        header: t(`${NS}.col_provider`),
+        cell: (ctx) => (
+          <span className="text-[12px] font-mono text-[var(--text-primary)]">
+            <span className="text-[var(--text-muted)]">{ctx.row.original.kind}</span>
+            {' · '}
+            {ctx.getValue()}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('key_env', {
+        header: t(`${NS}.col_env`),
+        cell: (ctx) => (
+          <span className="text-[11px] font-mono text-cyan-200 inline-flex items-center gap-1">
+            <KeyRound className="w-3 h-3" />
+            {ctx.getValue()}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('fingerprint', {
+        header: t(`${NS}.col_fingerprint`),
+        cell: (ctx) => (
+          <span className="text-[11px] font-mono text-[var(--text-tertiary)]">
+            {ctx.getValue() || '—'}
+          </span>
+        ),
+      }),
+      columnHelper.accessor('model', {
+        header: t(`${NS}.col_model`),
+        cell: (ctx) => (
+          <span className="text-[11px] font-mono text-[var(--text-tertiary)]">
+            {ctx.getValue() || '—'}
+          </span>
+        ),
+      }),
+    ],
+    [t],
+  )
 
   return (
     <PageShell
@@ -170,82 +236,68 @@ export default function AiReadiness() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(`${NS}.kpi_providers`)}</p>
-            <p className="text-2xl font-mono text-cyan-300">{rows.filter((r) => r.kind === 'llm').length}</p>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+              {t(`${NS}.kpi_providers`)}
+            </p>
+            <p className="text-2xl font-mono text-cyan-300">
+              {rows.filter((r) => r.kind === 'llm').length}
+            </p>
           </div>
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(`${NS}.kpi_ready`)}</p>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+              {t(`${NS}.kpi_ready`)}
+            </p>
             <p className="text-2xl font-mono text-emerald-300">{configured}</p>
           </div>
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(`${NS}.kpi_missing`)}</p>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+              {t(`${NS}.kpi_missing`)}
+            </p>
             <p className="text-2xl font-mono text-amber-300">{rows.length - configured}</p>
           </div>
           <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">{t(`${NS}.kpi_chain`)}</p>
-            <p className="text-2xl font-mono text-[var(--text-primary)]">{Array.isArray(data?.active_endpoints) ? data.active_endpoints.length : 0}</p>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+              {t(`${NS}.kpi_chain`)}
+            </p>
+            <p className="text-2xl font-mono text-[var(--text-primary)]">
+              {Array.isArray(data?.active_endpoints) ? data.active_endpoints.length : 0}
+            </p>
           </div>
         </div>
 
         {probe && (
-          <div className={`rounded-xl border px-4 py-3 text-[12px] font-mono ${probe.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'}`}>
+          <div
+            className={`rounded-xl border px-4 py-3 text-[12px] font-mono ${probe.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'}`}
+          >
             {probe.ok
-              ? t(`${NS}.probe_ok`, { label: probe.label || probe.provider, ms: probe.latency_ms, status: probe.http_status })
-              : t(`${NS}.probe_fail`, { detail: probe.detail || `HTTP ${probe.http_status || '—'}` })}
+              ? t(`${NS}.probe_ok`, {
+                  label: probe.label || probe.provider,
+                  ms: probe.latency_ms,
+                  status: probe.http_status,
+                })
+              : t(`${NS}.probe_fail`, {
+                  detail: probe.detail || `HTTP ${probe.http_status || '—'}`,
+                })}
           </div>
         )}
 
-        {error && (
-          <EmptyState title={t(`${NS}.load_failed`)} body={error} />
-        )}
+        {error && <EmptyState title={t(`${NS}.load_failed`)} body={error} />}
 
         {loading && !data ? (
           <SkeletonTable rows={8} />
+        ) : rows.length === 0 ? (
+          <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
+        ) : filtered.length === 0 ? (
+          <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-[var(--border-default)]">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-[var(--border-default)] text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
-                  <th className="px-3 py-2">{t(`${NS}.col_status`)}</th>
-                  <th className="px-3 py-2">{t(`${NS}.col_provider`)}</th>
-                  <th className="px-3 py-2">{t(`${NS}.col_env`)}</th>
-                  <th className="px-3 py-2">{t(`${NS}.col_fingerprint`)}</th>
-                  <th className="px-3 py-2">{t(`${NS}.col_model`)}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => (
-                  <tr key={`${r.kind}-${r.id}`} className="border-b border-[var(--border-default)]/60 hover:bg-[var(--row-hover-bg)]">
-                    <td className="px-3 py-2">
-                      {r.configured ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-300 text-[11px] font-mono">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> {t(`${NS}.ready`)}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-amber-300 text-[11px] font-mono">
-                          <XCircle className="w-3.5 h-3.5" /> {t(`${NS}.missing`)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-[12px] font-mono text-[var(--text-primary)]">
-                      <span className="text-[var(--text-muted)]">{r.kind}</span>
-                      {' · '}
-                      {r.label}
-                    </td>
-                    <td className="px-3 py-2 text-[11px] font-mono text-cyan-200 inline-flex items-center gap-1">
-                      <KeyRound className="w-3 h-3" />
-                      {r.key_env}
-                    </td>
-                    <td className="px-3 py-2 text-[11px] font-mono text-[var(--text-tertiary)]">{r.fingerprint || '—'}</td>
-                    <td className="px-3 py-2 text-[11px] font-mono text-[var(--text-tertiary)]">{r.model || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length === 0 && (
-              <EmptyState title={t(`${NS}.empty_title`)} body={t(`${NS}.empty_body`)} />
-            )}
-          </div>
+          <DataTable
+            id="ai-readiness-table"
+            columns={columns}
+            data={filtered}
+            animateRows={false}
+            getRowId={(r) => `${r.kind}-${r.id}`}
+            getRowAccentColor={(r) => (r.configured ? '#34d399' : '#fbbf24')}
+          />
         )}
       </div>
     </PageShell>
