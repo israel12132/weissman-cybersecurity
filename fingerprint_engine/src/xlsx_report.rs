@@ -18,11 +18,21 @@ const LINE: u32 = 0xE4_EAF1;
 const ROSE: u32 = 0x9B_1C2E;
 const AMBER: u32 = 0xC2_410C;
 const GOLD: u32 = 0xC7_7A12;
-const TEAL: u32 = 0x0E_7C86;
+const TEAL: u32 = BRAND;
 const ZEBRA: u32 = 0xEE_F3F8;
 
 fn rgb(v: u32) -> Color {
     Color::RGB(v)
+}
+
+/// Same leading-character rule as [`crate::csv_safe`]: stop Excel from treating a
+/// cell as a formula even when the value is stored as a shared string.
+fn formula_safe_text(s: &str) -> String {
+    let mut s = s.replace(['\r', '\n'], " ");
+    if s.starts_with(['=', '+', '-', '@', '\t']) {
+        s.insert(0, '\'');
+    }
+    s
 }
 
 /// Render a validated [`WorkbookSpec`] to `.xlsx` bytes.
@@ -228,7 +238,8 @@ fn render_inner(spec: &WorkbookSpec) -> Result<Vec<u8>, XlsxError> {
                         continue;
                     }
                 }
-                sheet.write_with_format(excel_row, c as u16, raw, fmt)?;
+                let safe = formula_safe_text(raw);
+                sheet.write_with_format(excel_row, c as u16, safe.as_str(), fmt)?;
             }
             let _ = ncols;
         }
@@ -404,6 +415,22 @@ mod tests {
     fn empty_rows_still_produce_headers() {
         let mut spec = sample();
         spec.sheets[0].rows.clear();
+        let bytes = render_workbook(&spec).expect("xlsx");
+        assert_eq!(&bytes[0..2], b"PK");
+    }
+
+    #[test]
+    fn formula_like_cells_are_prefixed() {
+        assert_eq!(formula_safe_text("=CMD('calc')"), "'=CMD('calc')");
+        assert_eq!(formula_safe_text("+1+1"), "'+1+1");
+        assert_eq!(formula_safe_text("Open RDP"), "Open RDP");
+        let mut spec = sample();
+        spec.sheets[0].rows.push(vec![
+            "=CMD('calc')".into(),
+            "pwn".into(),
+            "low".into(),
+            "1".into(),
+        ]);
         let bytes = render_workbook(&spec).expect("xlsx");
         assert_eq!(&bytes[0..2], b"PK");
     }

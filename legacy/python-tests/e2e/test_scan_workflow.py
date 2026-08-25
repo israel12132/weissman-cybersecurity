@@ -8,12 +8,11 @@ These tests simulate real user workflows from start to finish.
 Run with: pytest tests/e2e/test_scan_workflow.py -v
 """
 
-import pytest
-import time
 import asyncio
-
-# Mock imports - replace with actual API client
+import time
 from unittest.mock import Mock
+
+import pytest
 
 try:
     import websockets
