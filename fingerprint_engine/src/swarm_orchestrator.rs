@@ -358,6 +358,7 @@ async fn exploitation_agent(
         .ok()
         .flatten()
         .unwrap_or_else(|| "http://127.0.0.1:8000/v1".to_string());
+        let llm_base_url = weissman_engines::openai_chat::resolve_llm_base_url(&llm_base_url);
         let temp: f64 = sqlx::query_scalar::<_, String>(
             "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = 'llm_temperature'",
         )

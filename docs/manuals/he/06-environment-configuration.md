@@ -108,7 +108,7 @@ Header: `X-Weissman-Destructive-Confirm`.
 
 | משתנה | השפעה |
 |--------|--------|
-| `WEISSMAN_LLM_BASE_URL` | Council, NL query |
+| `WEISSMAN_LLM_BASE_URL` / `OPENAI_API_KEY` / `WEISSMAN_LLM_API_KEY` | Council, NL query |
 | `WEISSMAN_ALERT_WEBHOOK_URL` | Webhook התראות |
 | `WEISSMAN_PAGER_WEBHOOK_URL` | PagerDuty |
 | `WEISSMAN_SMTP_*` | אימייל |

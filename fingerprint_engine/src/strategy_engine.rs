@@ -70,7 +70,7 @@ async fn cfg_string(
     tenant_id: i64,
     key: &str,
 ) -> Option<String> {
-    sqlx::query_scalar::<_, String>(
+    let raw = sqlx::query_scalar::<_, String>(
         "SELECT value FROM system_configs WHERE tenant_id = $1 AND key = $2",
     )
     .bind(tenant_id)
@@ -78,8 +78,11 @@ async fn cfg_string(
     .fetch_optional(&mut **tx)
     .await
     .ok()
-    .flatten()
-    .filter(|s| !s.trim().is_empty())
+    .flatten();
+    if key == "llm_base_url" {
+        return weissman_engines::openai_chat::overlay_tenant_llm_base_url(raw.as_deref());
+    }
+    raw.filter(|s| !s.trim().is_empty())
 }
 
 async fn load_stealth(

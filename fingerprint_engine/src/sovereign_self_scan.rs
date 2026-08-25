@@ -68,6 +68,7 @@ async fn run_sovereign_self_scan(pool: &PgPool, telemetry: &Sender<String>) -> R
     .map_err(|e| e.to_string())?;
     let _ = tx.commit().await;
 
+    let llm_base = weissman_engines::openai_chat::resolve_llm_base_url(&llm_base);
     if llm_base.trim().is_empty() {
         return Ok(());
     }

@@ -63,10 +63,7 @@ impl EmbeddingsConfig {
             .trim_end_matches('/')
             .trim_end_matches("/v1")
             .to_string();
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .or_else(|_| std::env::var("WEISSMAN_LLM_API_KEY"))
-            .ok()
-            .filter(|s| !s.trim().is_empty());
+        let api_key = weissman_engines::openai_chat::llm_api_key_from_env();
         // Default to a local open-weight embedding model (same one the council uses). Output is
         // padded/truncated to EMBEDDING_DIM, so any provider's dimension works.
         let model = std::env::var("WEISSMAN_EMBEDDINGS_MODEL")

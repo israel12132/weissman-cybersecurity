@@ -15,7 +15,6 @@ use tokio::sync::broadcast;
 static LAST_EMERGENCY_SCAN_MS: AtomicU64 = AtomicU64::new(0);
 
 const EMERGENCY_COOLDOWN_SECS: u64 = 900;
-const LLM_BASE_DEFAULT: &str = "http://127.0.0.1:8000/v1";
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -537,15 +536,10 @@ pub fn spawn_ingest_worker(
             {
                 continue;
             }
-            let llm_base = std::env::var("WEISSMAN_LLM_BASE_URL")
-                .or_else(|_| std::env::var("LLM_BASE_URL"))
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| LLM_BASE_DEFAULT.to_string());
-            let llm_model = std::env::var("WEISSMAN_LLM_MODEL")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or_default();
+            let llm_base = weissman_engines::openai_chat::resolve_llm_base_url(
+                &std::env::var("LLM_BASE_URL").unwrap_or_default(),
+            );
+            let llm_model = weissman_engines::openai_chat::resolve_llm_model("");
             run_one_cycle(
                 app_pool.clone(),
                 intel_pool.clone(),

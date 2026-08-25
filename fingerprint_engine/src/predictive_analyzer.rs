@@ -141,6 +141,7 @@ async fn run_security_events_llm_cycle(
     .map_err(|e| e.to_string())?
     .unwrap_or_default();
     let _ = tx.commit().await;
+    let llm_base = weissman_engines::openai_chat::resolve_llm_base_url(&llm_base);
     if llm_base.trim().is_empty() {
         return Ok(());
     }

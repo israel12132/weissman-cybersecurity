@@ -10,7 +10,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use tokio::sync::mpsc;
 use tracing::warn;
-use weissman_engines::openai_chat::{self, LlmError, DEFAULT_LLM_BASE_URL};
+use weissman_engines::openai_chat::{self, LlmError};
 
 /// After this many seconds without a bypass batch, decay adrenaline (streak −1) toward baseline temperature.
 const ADRENALINE_DECAY_SECS: u64 = 85;
@@ -72,10 +72,7 @@ pub struct GenerativeLlmConfig {
 impl GenerativeLlmConfig {
     #[must_use]
     pub fn from_env(tenant_id: Option<i64>) -> Self {
-        let base_url = std::env::var("WEISSMAN_LLM_BASE_URL")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| DEFAULT_LLM_BASE_URL.to_string());
+        let base_url = openai_chat::resolve_llm_base_url("");
         let model = openai_chat::resolve_llm_model("");
         let temperature = std::env::var("WEISSMAN_GENERATIVE_FUZZ_TEMPERATURE")
             .ok()

@@ -54,4 +54,6 @@ stringData:
   metrics_token: "${WEISSMAN_METRICS_TOKEN}"
   integrations_vault_key: "${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}"
   dual_approval_secret: "${WEISSMAN_DUAL_APPROVAL_SECRET:-}"
+  llm_api_key: "${WEISSMAN_LLM_API_KEY:-}"
+  openai_api_key: "${OPENAI_API_KEY:-}"
 EOF

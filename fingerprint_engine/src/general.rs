@@ -188,7 +188,7 @@ async fn llm_rank_clients(
     .fetch_optional(&mut *tx)
     .await
     .ok()??;
-    let base = weissman_engines::openai_chat::normalize_openai_base_url(base.trim());
+    let base = weissman_engines::openai_chat::resolve_llm_base_url(&base);
     if base.is_empty() {
         let _ = tx.commit().await.ok();
         return None;
