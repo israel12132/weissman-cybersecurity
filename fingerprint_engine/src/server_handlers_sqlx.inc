@@ -1280,6 +1280,7 @@ async fn api_clients_readiness(
 
     let row = sqlx::query(
         r#"SELECT id, name, domains, ip_ranges, contact_email,
+            COALESCE(sector,'') AS sector,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
             COALESCE(gcp_project_id,'') AS gcp_project_id,
@@ -1320,6 +1321,7 @@ async fn api_clients_readiness(
     let mut client_snapshot = json!({
         "id": r.try_get::<i64,_>("id").ok(),
         "name": r.try_get::<String,_>("name").ok(),
+        "sector": r.try_get::<String,_>("sector").ok(),
         "domains": r.try_get::<String,_>("domains").ok(),
         "ip_ranges": r.try_get::<String,_>("ip_ranges").ok(),
         "contact_email": r.try_get::<String,_>("contact_email").ok(),

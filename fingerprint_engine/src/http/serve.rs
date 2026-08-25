@@ -1141,6 +1141,8 @@ struct EnterpriseSettingsPatch {
 #[derive(Deserialize)]
 struct ClientBody {
     name: Option<String>,
+    #[serde(default)]
+    sector: Option<String>,
     domains: Option<String>,
     tech_stack: Option<String>,
     ip_ranges: Option<String>,

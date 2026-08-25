@@ -41,6 +41,7 @@ async fn api_onboarding_target(
     let ip_ranges = body.ip_ranges.unwrap_or_default();
     let client_body = ClientBody {
         name: Some(body.name),
+        sector: None,
         domains: Some(serde_json::to_string(&domain_list).unwrap_or_else(|_| "[]".into())),
         tech_stack: Some("[]".into()),
         ip_ranges: Some(serde_json::to_string(&ip_ranges).unwrap_or_else(|_| "[]".into())),

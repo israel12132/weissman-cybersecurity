@@ -555,6 +555,7 @@ async fn api_clients_list(
     let rows = sqlx::query(
         r#"SELECT id, name, domains, tech_stack, ip_ranges,
             COALESCE(contact_email,'') AS contact_email,
+            COALESCE(sector,'') AS sector,
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
@@ -573,6 +574,7 @@ async fn api_clients_list(
             json!({
                 "id": r.try_get::<i64,_>("id").ok(),
                 "name": r.try_get::<String,_>("name").ok(),
+                "sector": r.try_get::<String,_>("sector").ok(),
                 "domains": r.try_get::<String,_>("domains").ok(),
                 "tech_stack": r.try_get::<String,_>("tech_stack").ok(),
                 "ip_ranges": r.try_get::<String,_>("ip_ranges").ok(),
@@ -782,6 +784,7 @@ async fn api_clients_get(
     let row = sqlx::query(
         r#"SELECT id, name, domains, tech_stack, ip_ranges,
             COALESCE(contact_email,'') AS contact_email,
+            COALESCE(sector,'') AS sector,
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
@@ -808,6 +811,7 @@ async fn api_clients_get(
         Json(json!({
             "id": r.try_get::<i64,_>("id").ok(),
             "name": r.try_get::<String,_>("name").ok(),
+            "sector": r.try_get::<String,_>("sector").ok(),
             "domains": r.try_get::<String,_>("domains").ok(),
             "tech_stack": r.try_get::<String,_>("tech_stack").ok(),
             "ip_ranges": r.try_get::<String,_>("ip_ranges").ok(),
@@ -848,6 +852,16 @@ async fn api_clients_create(
     let tech_stack = body.tech_stack.as_deref().unwrap_or("[]");
     let ip_ranges = body.ip_ranges.as_deref().unwrap_or("[]");
     let contact_email = body.contact_email.as_deref().unwrap_or("").trim();
+    let sector = match crate::client_sector::normalize_client_sector(body.sector.as_deref()) {
+        Ok(s) => s,
+        Err(detail) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": detail, "code": "invalid_sector"})),
+            )
+                .into_response();
+        }
+    };
     let auto_detect = body.auto_detect_tech_stack.unwrap_or(true);
     let aws_arn = body
         .aws_cross_account_role_arn
@@ -886,10 +900,10 @@ async fn api_clients_create(
     let id: i64 = match sqlx::query_scalar::<_, i64>(
         r#"INSERT INTO clients (
             tenant_id, name, domains, tech_stack, ip_ranges,
-            contact_email, auto_detect_tech_stack,
+            contact_email, sector, auto_detect_tech_stack,
             aws_cross_account_role_arn, aws_external_id, gcp_project_id,
             client_configs
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id"#,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id"#,
     )
     .bind(auth.tenant_id)
     .bind(name)
@@ -897,6 +911,7 @@ async fn api_clients_create(
     .bind(tech_stack)
     .bind(ip_ranges)
     .bind(contact_email)
+    .bind(&sector)
     .bind(auto_detect)
     .bind(aws_arn)
     .bind(aws_ext)
@@ -960,6 +975,7 @@ async fn api_clients_update(
             COALESCE(tech_stack,'[]') AS tech_stack,
             COALESCE(ip_ranges,'[]') AS ip_ranges,
             COALESCE(contact_email,'') AS contact_email,
+            COALESCE(sector,'') AS sector,
             COALESCE(auto_detect_tech_stack, true) AS auto_detect_tech_stack,
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
@@ -977,6 +993,7 @@ async fn api_clients_update(
         cur_tech,
         cur_ip,
         cur_contact,
+        cur_sector,
         cur_auto_detect,
         cur_aws_arn,
         cur_aws_ext,
@@ -988,6 +1005,7 @@ async fn api_clients_update(
             r.try_get::<String, _>("tech_stack").unwrap_or_else(|_| "[]".to_string()),
             r.try_get::<String, _>("ip_ranges").unwrap_or_else(|_| "[]".to_string()),
             r.try_get::<String, _>("contact_email").unwrap_or_default(),
+            r.try_get::<String, _>("sector").unwrap_or_default(),
             r.try_get::<bool, _>("auto_detect_tech_stack").unwrap_or(true),
             r.try_get::<String, _>("aws_cross_account_role_arn").unwrap_or_default(),
             r.try_get::<String, _>("aws_external_id").unwrap_or_default(),
@@ -1007,6 +1025,21 @@ async fn api_clients_update(
         .as_deref()
         .unwrap_or(cur_contact.as_str())
         .trim();
+    let sector = if body.sector.is_some() {
+        match crate::client_sector::normalize_client_sector(body.sector.as_deref()) {
+            Ok(s) => s,
+            Err(detail) => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"ok": false, "detail": detail, "code": "invalid_sector"})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        cur_sector
+    };
     let auto_detect = body.auto_detect_tech_stack.unwrap_or(cur_auto_detect);
     let aws_arn = body
         .aws_cross_account_role_arn
@@ -1025,15 +1058,16 @@ async fn api_clients_update(
         .trim();
     if sqlx::query(
         r#"UPDATE clients SET name = $1, domains = $2, tech_stack = $3, ip_ranges = $4,
-            contact_email = $5, auto_detect_tech_stack = $6,
-            aws_cross_account_role_arn = $7, aws_external_id = $8, gcp_project_id = $9,
-            updated_at = now() WHERE id = $10"#,
+            contact_email = $5, sector = $6, auto_detect_tech_stack = $7,
+            aws_cross_account_role_arn = $8, aws_external_id = $9, gcp_project_id = $10,
+            updated_at = now() WHERE id = $11"#,
     )
         .bind(name)
         .bind(domains)
         .bind(tech_stack)
         .bind(ip_ranges)
         .bind(contact_email)
+        .bind(&sector)
         .bind(auto_detect)
         .bind(aws_arn)
         .bind(aws_ext)
