@@ -45,7 +45,11 @@ USAGE
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+# shellcheck source=scripts/lib/docker_daemon.sh
+. "$ROOT/scripts/lib/docker_daemon.sh"
+
 COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.prod.yml)
+# Rebuilt by ensure_docker_ready once we know whether the socket needs sudo.
 COMPOSE=(docker compose "${COMPOSE_FILES[@]}")
 # Built by resolve_profiles() once we know which optional stacks are on.
 PROFILES=()
@@ -173,7 +177,7 @@ check_ports_free() {
     case "$rc" in
       0)
         # Already ours (a previous run of this stack) is fine; anything else is a conflict.
-        if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${port}->"; then
+        if ! "${WEISSMAN_DOCKER[@]}" ps --format '{{.Ports}}' 2>/dev/null | grep -q ":${port}->"; then
           die "port :${port} is already in use — free it or run ./start_weissman_live.sh stop"
         fi
         ;;
@@ -185,13 +189,26 @@ check_ports_free() {
   fi
 }
 
+# Bring the daemon up if it is down, and settle on the invocation that reaches it (which may be
+# `sudo -n docker`). Every subcommand needs this, not just `start`: stop/status/logs also talk to
+# the daemon. Cheap and idempotent once it is answering.
+ensure_docker_ready() {
+  weissman_docker_ensure || die "$(cat <<'EOF'
+Docker is required — the entire platform runs as one Compose stack.
+Install Docker 24+ with Compose v2 (https://docs.docker.com/engine/install/), or start its
+daemon, then re-run. Set WEISSMAN_DOCKER_AUTOSTART=0 to stop this launcher trying to start it.
+EOF
+)"
+  COMPOSE=("${WEISSMAN_DOCKER[@]}" compose "${COMPOSE_FILES[@]}")
+  "${WEISSMAN_DOCKER[@]}" compose version >/dev/null 2>&1 || die "docker compose v2 required"
+}
+
 check_prereqs() {
   need_cmd docker
   need_cmd openssl
   # wait_healthy() and verify_live() both probe the stack over HTTP.
   need_cmd curl
-  docker compose version >/dev/null 2>&1 || die "docker compose v2 required"
-  docker info >/dev/null 2>&1 || die "Docker daemon not running — start dockerd first"
+  ensure_docker_ready
 
   if [[ -x "$ROOT/scripts/verify_docker_build_integrity.sh" ]]; then
     "$ROOT/scripts/verify_docker_build_integrity.sh" || die "Docker build context incomplete — fix before deploy"
@@ -246,9 +263,12 @@ ensure_env() {
   # Self-hosted customers run scans without Paddle until billing is configured.
   # Set WEISSMAN_BILLING_STRICT=1 + PADDLE_* in .env when enabling SaaS billing.
 
-  # Remove dev-only bypass flags if present.
+  # Disable dev-only bypass flags — by commenting them out, not by deleting the line. This file
+  # is the operator's record of their deployment; silently removing entries from it loses
+  # information and makes the next diff of .env against the template lie about what was set.
   if grep -qE '^WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=' .env; then
-    sed -i '/^WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=/d' .env
+    sed -i 's|^WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=|# disabled by start_weissman_live.sh (forbidden in production): WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=|' .env
+    log "commented out WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD — production refuses to boot with it"
   fi
 
   # --- Compose / DB secrets ---
@@ -452,7 +472,7 @@ wait_healthy() {
 
       # One inspect, several fields — cheaper and race-free versus several calls.
       IFS='|' read -r state health running restarting count < <(
-        docker inspect -f \
+        "${WEISSMAN_DOCKER[@]}" inspect -f \
           '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.Running}}|{{.State.Restarting}}|{{.RestartCount}}' \
           "$cid" 2>/dev/null || echo 'missing|none|false|false|0'
       )
@@ -536,6 +556,82 @@ verify_live() {
   log "All live checks passed."
 }
 
+psql_q() {
+  dc exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-weissman}" \
+    -tAc "$1" 2>/dev/null | tr -d '[:space:]'
+}
+
+# "The containers are healthy" is not the same as "the database is the shape the code expects".
+# Every migration is recorded in `_sqlx_migrations` — including the no-tx ones, which
+# no_tx_migrations.rs writes with an SQLx-compatible checksum after running them outside a
+# transaction — so the count is a direct answer to "did the schema finish building?".
+verify_migrations() {
+  local expected applied
+  expected="$(find crates/weissman-db/migrations -name '*.sql' 2>/dev/null | wc -l | tr -d ' ')"
+  applied="$(psql_q "SELECT count(*) FROM _sqlx_migrations WHERE success")"
+  if [[ -z "$applied" ]]; then
+    die "could not read _sqlx_migrations — migrations did not run: ./start_weissman_live.sh logs backend"
+  fi
+  if [[ "$expected" -gt 0 && "$applied" -lt "$expected" ]]; then
+    die "only ${applied} of ${expected} migrations are applied — check: ./start_weissman_live.sh logs backend"
+  fi
+  local failed
+  failed="$(psql_q "SELECT count(*) FROM _sqlx_migrations WHERE NOT success")"
+  [[ "${failed:-0}" == "0" ]] || die "${failed} migration(s) recorded as failed — check: ./start_weissman_live.sh logs backend"
+  log "Migrations: ${applied} applied, 0 failed (${expected} on disk, no-tx runner included)."
+}
+
+# Role separation is a property of the database, not of the compose file: the migrations create
+# weissman_app / weissman_auth / weissman_ro and the boot-time sync aligns their passwords with
+# the DSNs. A role that exists but cannot log in silently degrades the app to one identity — and
+# for weissman_ro that also switches /api/ask off.
+verify_role_separation() {
+  local role missing=()
+  for role in weissman_app weissman_auth weissman_ro; do
+    if [[ "$(psql_q "SELECT rolcanlogin FROM pg_roles WHERE rolname = '${role}'")" != "t" ]]; then
+      missing+=("$role")
+    fi
+  done
+  if ((${#missing[@]})); then
+    die "database role(s) missing or cannot log in: ${missing[*]} — check DB_APP_PASSWORD / DB_AUTH_PASSWORD / DB_RO_PASSWORD in .env, then: ./start_weissman_live.sh logs backend"
+  fi
+  log "Role separation: weissman_app, weissman_auth and weissman_ro all present with LOGIN."
+}
+
+# /api/ask compiles natural language to parameterised SQL and runs it as weissman_ro. It answers
+# 503 when no read-only pool was configured, so probing it is the only way to know the role
+# actually reached the server — the env var being present in the compose file proves nothing.
+verify_ask_armed() {
+  local email pass token code
+  email="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
+  pass="${WEISSMAN_ADMIN_PASSWORD:-}"
+  if [[ -z "$pass" ]]; then
+    die "no WEISSMAN_ADMIN_PASSWORD in .env — cannot prove /api/ask is armed"
+  fi
+  token="$(curl -sf -X POST "http://127.0.0.1/api/login" -H 'Content-Type: application/json' \
+    -d "{\"email\":\"${email}\",\"password\":\"${pass}\"}" 2>/dev/null \
+    | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')"
+  if [[ -z "$token" ]]; then
+    die "could not log in as ${email} to probe /api/ask — check WEISSMAN_ADMIN_PASSWORD and: ./start_weissman_live.sh logs backend"
+  fi
+  code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1/api/ask" \
+    -H 'Content-Type: application/json' -H "Authorization: Bearer ${token}" \
+    -d '{"question":"how many findings are open"}' || echo 000)"
+  case "$code" in
+    503)
+      die "/api/ask is disabled: the server has no read-only pool. WEISSMAN_READ_ONLY_DATABASE_URL is not reaching the backend — check DB_RO_PASSWORD in .env and the backend environment"
+      ;;
+    000)
+      die "/api/ask did not answer — check: ./start_weissman_live.sh logs backend"
+      ;;
+    *)
+      # Anything that is not 503 means the weissman_ro pool exists and the route is armed. A
+      # non-2xx here is about the question or the LLM provider, not about the plumbing.
+      log "Ask Weissman (/api/ask): armed on the weissman_ro read-only role (HTTP ${code})."
+      ;;
+  esac
+}
+
 print_banner() {
   # shellcheck disable=SC1091
   set -a && source .env && set +a
@@ -545,7 +641,7 @@ print_banner() {
   cat <<EOF
 
 ================================================================================
-  WEISSMAN LIVE — production stack is running
+  SYSTEM READY — Weissman LIVE stack is up, migrated and answering
 ================================================================================
   Command Center : ${base}/command-center/login   (the URL users log in at)
   Local access   : http://127.0.0.1/command-center/  (this host only)
@@ -656,6 +752,9 @@ cmd_start() {
   compose_up
   wait_healthy
   verify_live
+  verify_migrations
+  verify_role_separation
+  verify_ask_armed
   # Grafana keeps credentials in its own volume, so its password can only be aligned once
   # the container is actually running — unlike the Prometheus config, which must exist first.
   if [[ "$WITH_MONITORING" -eq 1 && -x "${ROOT}/scripts/sync_monitoring_admin.sh" ]]; then
@@ -665,9 +764,10 @@ cmd_start() {
   print_banner
 }
 
-# For non-start commands: infer which optional stacks are present from .env so
-# ps / logs / down operate on their containers too.
+# For non-start commands: bring the daemon up (stop/status/logs all need it) and infer which
+# optional stacks are present from .env so ps / logs / down operate on their containers too.
 resolve_optional_stacks_from_env() {
+  ensure_docker_ready
   if [[ -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then WITH_OAST=1; fi
   resolve_profiles
 }
