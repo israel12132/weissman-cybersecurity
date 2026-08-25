@@ -101,7 +101,6 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: admin_password
-                  optional: true
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
@@ -122,6 +121,17 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: metrics_token
+            - name: WEISSMAN_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: vault_key
+            - name: WEISSMAN_INTEGRATIONS_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: integrations_vault_key
+                  optional: true
             - name: WEISSMAN_MIGRATIONS_DIR
               value: "/srv/migrations"
           readinessProbe:

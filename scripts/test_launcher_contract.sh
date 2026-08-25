@@ -128,7 +128,7 @@ done
 head_ "4. Server/worker parity — secrets the worker's own startup guard demands"
 # security_startup.rs checks these outside the Server-only scope, so weissman-worker
 # enforces them too. A var wired only into `backend:` makes the worker crash-loop.
-for var in WEISSMAN_JWT_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET; do
+for var in WEISSMAN_JWT_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET WEISSMAN_VAULT_KEY WEISSMAN_ADMIN_PASSWORD; do
   for file in docker-compose.yml docker-compose.prod.yml; do
     # Count occurrences after the worker: key, before the next top-level service.
     if sed -n '/^  worker:/,/^  [a-z]/p' "$file" | grep -q "${var}:"; then
@@ -377,6 +377,50 @@ if grep -q 'wasm-bindgen-cli.*--version' deploy/frontend.Dockerfile; then
   ok "wasm-bindgen-cli is version-pinned"
 else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+head_ "13. Production boot: vault keys actually reach the containers"
+# security_startup.rs refuses production boot without WEISSMAN_VAULT_KEY (64 hex).
+# Compose does not inject host/.env vars into a container unless they appear in
+# `environment:` or `env_file`. Boot-required secrets belong in `environment:`.
+if sed -n '/^  backend:/,/^  worker:/p' docker-compose.prod.yml | grep -q 'WEISSMAN_VAULT_KEY:'; then
+  ok "prod overlay interpolates WEISSMAN_VAULT_KEY into backend environment"
+else
+  bad "backend is missing WEISSMAN_VAULT_KEY in environment: — production boot dies in ~10s"
+fi
+if sed -n '/^  worker:/,/^  oast:/p' docker-compose.prod.yml | grep -q 'WEISSMAN_VAULT_KEY:'; then
+  ok "prod overlay interpolates WEISSMAN_VAULT_KEY into worker environment"
+else
+  bad "worker is missing WEISSMAN_VAULT_KEY — worker production boot dies after backend is healthy"
+fi
+if grep -q 'http://127\.0\.0\.1:8000/api/health' docker-compose.yml; then
+  ok "backend healthcheck probes 127.0.0.1 (not IPv6 localhost)"
+else
+  bad "backend healthcheck still uses localhost — can fail while the API is bound on IPv4"
+fi
+# compose_up used to `set -e` abort on "backend is unhealthy" without logs, after a
+# 45-minute image build. Dump backend logs on that path.
+if sed -n '/^compose_up()/,/^}/p' "$LAUNCHER" | grep -q diagnose_service; then
+  ok "compose_up dumps backend logs when compose up fails"
+else
+  bad "compose_up does not dump backend logs on failure"
+fi
+if sed -n '/^print_banner()/,/^}/p' "$LAUNCHER" | grep -q GRAFANA_ADMIN_PASSWORD; then
+  ok "banner documents Grafana's dedicated password"
+else
+  bad "banner still claims Grafana uses WEISSMAN_ADMIN_PASSWORD"
+fi
+if grep -q 'key: vault_key' deploy/k8s/backend-deployment.yaml \
+   && grep -q 'key: vault_key' deploy/k8s/worker-deployment.yaml; then
+  ok "k8s backend+worker consume vault_key from weissman-secrets"
+else
+  bad "k8s deployments do not wire vault_key — production pods will crash-loop"
+fi
+if grep -q '^  vault_key:' deploy/k8s/secret.example.yaml; then
+  ok "k8s secret template includes vault_key"
+else
+  bad "k8s secret.example.yaml missing vault_key"
 fi
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"

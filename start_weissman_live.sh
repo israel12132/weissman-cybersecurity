@@ -364,6 +364,14 @@ validate_env() {
   # weissman-worker; catching it here beats waiting out the health-check timeout.
   require_len WEISSMAN_JOB_ORCHESTRATOR_SECRET 32 "regenerate with: openssl rand -base64 48"
   require_len WEISSMAN_ADMIN_PASSWORD 12
+  require_len WEISSMAN_INTEGRATIONS_VAULT_KEY 32 "regenerate with: openssl rand -base64 48"
+
+  # CEO vault dedicated_key_configured() requires exactly 32 bytes as 64 hex chars.
+  # A base64 value here looks "set" in .env and still fails closed at boot.
+  local vk="${WEISSMAN_VAULT_KEY:-}"
+  if [[ ! "$vk" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    die "WEISSMAN_VAULT_KEY must be exactly 64 hex chars (openssl rand -hex 32) — production refuses to boot without a dedicated CEO vault key"
+  fi
 
   local weak_frags=(weissman_dev_secret weissman_auth_dev)
   for key in DB_APP_PASSWORD DB_AUTH_PASSWORD POSTGRES_PASSWORD; do
@@ -398,7 +406,13 @@ compose_up() {
   if [[ "$WITH_MONITORING" -eq 1 ]]; then extras+=" + monitoring"; fi
   if [[ "$WITH_OAST" -eq 1 ]]; then extras+=" + OAST listener"; fi
   log "Starting LIVE stack (Postgres, Redis, API, Worker, Gateway${extras})..."
-  dc "${up_args[@]}"
+  if dc "${up_args[@]}"; then
+    return 0
+  fi
+  log "ERROR: docker compose up failed — dumping backend logs (this is usually a production boot-guard, not a slow healthcheck)"
+  dc ps || true
+  diagnose_service backend
+  die "compose up failed: backend did not become healthy. Search the logs above for '[startup]'. Typical missing keys: WEISSMAN_VAULT_KEY (64 hex), WEISSMAN_INTEGRATIONS_VAULT_KEY, WEISSMAN_ADMIN_PASSWORD on the worker."
 }
 
 # Services this run expects to come up, in the order we report them.
@@ -598,8 +612,8 @@ EOF
   fi
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
     cat <<EOF
-  Grafana        : http://127.0.0.1:3000  (${login_email} / same as WEISSMAN_ADMIN_PASSWORD)
-  Prometheus     : http://127.0.0.1:9090  (${login_email} / same password — health targets UI)
+  Grafana        : http://127.0.0.1:3000  (${login_email} / GRAFANA_ADMIN_PASSWORD in .env — not the Command Center password)
+  Prometheus     : http://127.0.0.1:9090  (${login_email} / WEISSMAN_ADMIN_PASSWORD — health targets UI)
   Status page    : http://127.0.0.1/command-center/status  (uses Command Center login)
 EOF
   fi

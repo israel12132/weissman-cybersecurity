@@ -21,9 +21,19 @@ require REDIS_URL
 require WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET
 require WEISSMAN_JOB_ORCHESTRATOR_SECRET
 require WEISSMAN_METRICS_TOKEN
+require WEISSMAN_VAULT_KEY
+require WEISSMAN_ADMIN_PASSWORD
 
 if [[ "${#WEISSMAN_JWT_SECRET}" -lt 48 ]]; then
   echo "error: WEISSMAN_JWT_SECRET must be >= 48 chars" >&2
+  exit 1
+fi
+if [[ ! "${WEISSMAN_VAULT_KEY}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+  echo "error: WEISSMAN_VAULT_KEY must be exactly 64 hex chars (openssl rand -hex 32)" >&2
+  exit 1
+fi
+if [[ "${#WEISSMAN_ADMIN_PASSWORD}" -lt 12 ]]; then
+  echo "error: WEISSMAN_ADMIN_PASSWORD must be >= 12 chars" >&2
   exit 1
 fi
 for v in WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET WEISSMAN_METRICS_TOKEN; do
@@ -48,10 +58,11 @@ stringData:
   jwt_secret: "${WEISSMAN_JWT_SECRET}"
   redis_url: "${REDIS_URL}"
   admin_email: "${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
-  admin_password: "${WEISSMAN_ADMIN_PASSWORD:-}"
+  admin_password: "${WEISSMAN_ADMIN_PASSWORD}"
   destructive_confirm_secret: "${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET}"
   job_orchestrator_secret: "${WEISSMAN_JOB_ORCHESTRATOR_SECRET}"
   metrics_token: "${WEISSMAN_METRICS_TOKEN}"
+  vault_key: "${WEISSMAN_VAULT_KEY}"
   integrations_vault_key: "${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}"
   dual_approval_secret: "${WEISSMAN_DUAL_APPROVAL_SECRET:-}"
 EOF

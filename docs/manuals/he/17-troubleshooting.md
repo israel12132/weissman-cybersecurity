@@ -47,6 +47,7 @@ journalctl -u weissman-server -n 50
 | COOKIE_SECURE | HTTPS + `=1` |
 | MIGRATE_URL | superuser URL |
 | DESTRUCTIVE secret | generate |
+| `CEO genesis vault has no dedicated key` / אין מפתח vault | `WEISSMAN_VAULT_KEY` = 64 hex (`openssl rand -hex 32`). `./start_weissman_live.sh` מייצר אותו; חייב להגיע לקונטיינר דרך `environment:` |
 | DB password weak | rotate Postgres |
 
 ### Compose exit 15

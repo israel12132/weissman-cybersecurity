@@ -37,6 +37,7 @@ WEISSMAN_ENV=production
 | `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` חסר או < 32 תווים | Refuse boot |
 | `WEISSMAN_METRICS_TOKEN` חסר או < 32 תווים | Refuse boot |
 | `WEISSMAN_JOB_ORCHESTRATOR_SECRET` חסר או < 32 תווים (server + worker) | Refuse boot |
+| `WEISSMAN_VAULT_KEY` חסר או לא 64 תווי hex (server + worker) | Refuse boot |
 | JWT ב-`?access_token=` | נדחה ב-runtime |
 
 ---
@@ -50,6 +51,8 @@ openssl rand -base64 48   # WEISSMAN_JWT_SECRET (מינימום 48 תווים ב
 openssl rand -base64 48   # WEISSMAN_METRICS_TOKEN (≥32)
 openssl rand -base64 48   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (≥32)
 openssl rand -base64 48   # WEISSMAN_JOB_ORCHESTRATOR_SECRET (≥32)
+openssl rand -hex 32      # WEISSMAN_VAULT_KEY (בדיוק 64 תווי hex)
+openssl rand -base64 48   # WEISSMAN_INTEGRATIONS_VAULT_KEY (≥32)
 ```
 
 החליפו סיסמת admin אחרי login ראשון.

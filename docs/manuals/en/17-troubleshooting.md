@@ -50,6 +50,7 @@ Common messages:
 | `WEISSMAN_COOKIE_SECURE must be 1` | Set cookie secure + HTTPS |
 | `WEISSMAN_MIGRATE_URL` required | Set migration superuser URL |
 | `WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET` unset | Generate and set secret |
+| `no dedicated secrets-at-rest key` / `CEO genesis vault has no dedicated key` | Set `WEISSMAN_VAULT_KEY` to 64 hex (`openssl rand -hex 32`) and restart. `./start_weissman_live.sh` generates this; it must appear in compose `environment:`, not only in `.env` on the host. |
 | Weak DB password fragment | Rotate Postgres passwords |
 
 Ensure `WEISSMAN_ENV=production` only when fully hardened.
