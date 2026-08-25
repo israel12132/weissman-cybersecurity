@@ -139,6 +139,10 @@ services:
       context: .
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:stable
+    # Operator .env (LLM keys, max-power flags). Explicit `environment:` entries still win.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
@@ -229,6 +233,9 @@ services:
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:stable
     entrypoint: ["/usr/local/bin/weissman-worker"]
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
@@ -250,6 +257,8 @@ services:
       WEISSMAN_COUNCIL_MODEL_GENERALIST: ${WEISSMAN_COUNCIL_MODEL_GENERALIST:-}
       WEISSMAN_COUNCIL_MODEL_SYNTHESIZER: ${WEISSMAN_COUNCIL_MODEL_SYNTHESIZER:-}
       WEISSMAN_COUNCIL_SINGLE_MODEL: ${WEISSMAN_COUNCIL_SINGLE_MODEL:-}
+      WEISSMAN_WORKER_HEAVY_CONCURRENCY: ${WEISSMAN_WORKER_HEAVY_CONCURRENCY:-6}
+      WEISSMAN_WORKER_LIGHT_CONCURRENCY: ${WEISSMAN_WORKER_LIGHT_CONCURRENCY:-16}
     depends_on:
       backend:
         condition: service_healthy

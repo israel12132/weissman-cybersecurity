@@ -49,7 +49,7 @@ fn fuzz_max_in_flight() -> usize {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(100)
-        .clamp(8, 100)
+        .clamp(8, 256)
 }
 
 fn new_fuzz_rate_limiter() -> Arc<DefaultDirectRateLimiter> {
