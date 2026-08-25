@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 
@@ -21,7 +21,14 @@ vi.mock('../../hooks/useEngineRequirements', async (importOriginal) => {
     ...orig,
     useEngineRequirements: () => ({
       catalog: {
-        modules: { baseline_asm: { label_en: 'Baseline ASM', label_he: 'ASM', requirements: [], engine_count: 1 } },
+        modules: {
+          baseline_asm: {
+            label_en: 'Baseline ASM',
+            label_he: 'ASM',
+            requirements: [],
+            engine_count: 1,
+          },
+        },
         requirements: {
           msa_acknowledged: { label_en: 'MSA', scope: 'client' },
           emergency_contact: { label_en: 'Emergency Contact', scope: 'client' },
@@ -57,12 +64,14 @@ describe('ClientOnboardingWizard — sector dropdown', () => {
     const msaCheckbox = screen.getByRole('checkbox', { hidden: true })
     fireEvent.click(msaCheckbox)
 
-    // emergency_contact_phone input
-    const phoneInput = screen.getByRole('textbox', { hidden: true })
+    // Two labeled textboxes on the legal step; target the required phone field.
+    const phoneInput = screen.getByRole('textbox', {
+      name: /pages\.clientOnboarding\.emergency_phone/,
+    })
     fireEvent.change(phoneInput, { target: { value: '+972501234567' } })
 
     // Click Next to advance to step 1 (basic info)
-    const nextBtn = screen.getByRole('button', { name: /next|הבא/i })
+    const nextBtn = screen.getByRole('button', { name: 'pages.clientOnboarding.next' })
     fireEvent.click(nextBtn)
   }
 
