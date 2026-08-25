@@ -24,8 +24,8 @@ export async function exportWorkbook(spec, filenamePrefix) {
   try {
     const res = await apiFetch('/api/export/workbook', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(spec),
+      raw: true,
+      body: spec,
     })
     if (!res.ok) throw new Error(`xlsx ${res.status}`)
     const blob = await res.blob()

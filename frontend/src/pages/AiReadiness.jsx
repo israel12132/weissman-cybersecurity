@@ -59,9 +59,8 @@ export default function AiReadiness() {
     setLoading(true)
     setError('')
     try {
-      const res = await apiFetch('/api/ai/readiness')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData(await res.json())
+      const payload = await apiFetch('/api/ai/readiness')
+      setData(payload)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
       setData(null)
@@ -116,8 +115,8 @@ export default function AiReadiness() {
     setProbing(true)
     setProbe(null)
     try {
-      const res = await apiFetch('/api/ai/readiness/probe', { method: 'POST' })
-      setProbe(await res.json())
+      const payload = await apiFetch('/api/ai/readiness/probe', { method: 'POST' })
+      setProbe(payload)
     } catch (e) {
       setProbe({ ok: false, detail: e.message })
     } finally {

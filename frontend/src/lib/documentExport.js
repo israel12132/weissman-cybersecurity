@@ -15,8 +15,8 @@ export async function exportDocument(spec, filenamePrefix) {
   try {
     const res = await apiFetch('/api/export/document', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(spec),
+      raw: true,
+      body: spec,
     })
     if (!res.ok) throw new Error(`pdf ${res.status}`)
     const blob = await res.blob()
