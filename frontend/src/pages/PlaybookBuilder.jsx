@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -19,16 +19,32 @@ import {
   Loader2,
   Search,
   Download,
+  Library,
+  Upload,
+  BookmarkPlus,
 } from 'lucide-react'
 import { apiFetch } from '../utils/apiFetch'
 import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { downloadBytes } from '../lib/pdfExport'
 import ShellScanActions from '../components/engine/ShellScanActions'
-import { confirmDialog } from '../utils/confirmDialog'
+import { confirmDialog, promptDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
+import Modal from '../components/ui/Modal'
 import PlaybookGraph from '../components/PlaybookGraph'
+import PlaybookTemplateGallery from '../components/PlaybookTemplateGallery'
 import { downloadCsv } from '../lib/exportFindingsCsv'
+import {
+  ACTION_KINDS,
+  ENGINE_FILTER_OPTIONS,
+  blankPlaybook,
+  deleteCustomTemplate,
+  loadCustomTemplates,
+  mergeCatalog,
+  parseImportedPlaybook,
+  saveCustomTemplate,
+  templateToDraft,
+} from '../lib/playbookCatalog'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 const SEV_COLORS = {
@@ -38,16 +54,6 @@ const SEV_COLORS = {
   low:      { bg: 'bg-sky-500/15', ring: 'ring-sky-500/40', text: 'text-sky-200' },
   info:     { bg: 'bg-[var(--border-strong)]/15', ring: 'ring-[var(--border-strong)]/40', text: 'text-[var(--text-secondary)]' },
 }
-
-const ACTION_KINDS = [
-  { kind: 'set_status',   labelKey: 'playbooks.action.set_status',   params: { status: 'IN_PROGRESS' } },
-  { kind: 'slack_notify', labelKey: 'playbooks.action.slack_notify', params: { url: '', template: '{{severity}}: {{title}} on {{target}}' } },
-  { kind: 'webhook',      labelKey: 'playbooks.action.webhook',      params: { url: '', template: '{{title}}' } },
-  { kind: 'open_pr',      labelKey: 'playbooks.action.open_pr',      params: { title: 'Auto-fix: {{title}}' } },
-  { kind: 'isolate_host', labelKey: 'playbooks.action.isolate_host', params: { target: '{{target}}', duration_seconds: 900 } },
-  { kind: 'page_oncall',  labelKey: 'playbooks.action.page_oncall',  params: { team: 'sec-oncall', severity: '{{severity}}' } },
-  { kind: 'http_post',    labelKey: 'playbooks.action.http_post',    params: { url: '', body: { } } },
-]
 
 function exportPlaybooksCsv(list) {
   // Reuse the shared exporter so cells are neutralized against spreadsheet formula
@@ -62,26 +68,6 @@ function exportPlaybooksCsv(list) {
     Array.isArray(pb.actions) ? pb.actions.length : 0,
   ])
   downloadCsv(rows, header, 'playbooks')
-}
-
-function buildExamplePlaybook(t) {
-  return {
-  name: t('playbooks.example_name'),
-  description: t('playbooks.example_description'),
-  enabled: true,
-  trigger: {
-    severity: ['critical'],
-    kev: true,
-    exposed: true,
-    cooldown_seconds: 3600,
-  },
-  actions: [
-    { kind: 'set_status',   params: { status: 'IN_PROGRESS' } },
-    { kind: 'isolate_host', params: { target: '{{target}}', duration_seconds: 1800 } },
-    { kind: 'page_oncall',  params: { team: 'sec-oncall', severity: 'critical' } },
-    { kind: 'slack_notify', params: { template: 'KEV CRITICAL on {{target}}: {{title}} (cvss={{cvss}} epss={{epss}})' } },
-  ],
-  }
 }
 
 const STATUS_META = {
@@ -246,6 +232,11 @@ export default function PlaybookBuilder() {
   const [jsonSource, setJsonSource] = useState('')
   const [jsonError, setJsonError] = useState(false)
   const [librarySearch, setLibrarySearch] = useState('')
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [customTemplates, setCustomTemplates] = useState(() => loadCustomTemplates())
+  const importRef = useRef(null)
+
+  const catalog = useMemo(() => mergeCatalog(customTemplates), [customTemplates])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -290,15 +281,69 @@ export default function PlaybookBuilder() {
 
   const startNew = () => {
     setSelected(null)
-    setDraft({
-      name: '',
-      description: '',
-      enabled: false,
-      trigger: { severity: [], cooldown_seconds: 3600 },
-      actions: [],
-    })
+    setDraft(blankPlaybook())
+    setGalleryOpen(false)
     setStatusMsg(null)
     setFireResult(null)
+  }
+
+  const applyTemplate = (template) => {
+    setSelected(null)
+    setDraft(templateToDraft(template, t))
+    setGalleryOpen(false)
+    setStatusMsg({ kind: 'info', text: t('playbooks.catalog.loaded') })
+    setFireResult(null)
+  }
+
+  const refreshCustomTemplates = () => setCustomTemplates(loadCustomTemplates())
+
+  const handleDeleteCustom = async (id) => {
+    const entry = customTemplates.find((p) => p.id === id)
+    if (!(await confirmDialog(t('playbooks.catalog.delete_custom_confirm', { name: entry?.name || id })))) return
+    deleteCustomTemplate(id)
+    refreshCustomTemplates()
+  }
+
+  const handleSaveAsTemplate = async () => {
+    if (!draft) return
+    const name = await promptDialog({
+      title: t('playbooks.catalog.save_as_template'),
+      label: t('playbooks.name_placeholder'),
+      defaultValue: draft.name || '',
+      placeholder: t('playbooks.name_placeholder'),
+      confirmLabel: t('playbooks.catalog.save_as_template'),
+      cancelLabel: t('common.cancel', 'Cancel'),
+      required: true,
+    })
+    if (!name) return
+    const saved = saveCustomTemplate(draft, { name, description: draft.description || '' })
+    if (!saved) {
+      setStatusMsg({ kind: 'err', text: t('playbooks.name_required') })
+      return
+    }
+    refreshCustomTemplates()
+    setStatusMsg({ kind: 'ok', text: t('playbooks.catalog.saved_template') })
+  }
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const text = await file.text()
+      const parsed = parseImportedPlaybook(text)
+      if (!parsed) {
+        setStatusMsg({ kind: 'err', text: t('playbooks.catalog.import_invalid') })
+        return
+      }
+      setSelected(null)
+      setDraft(parsed)
+      setGalleryOpen(false)
+      setStatusMsg({ kind: 'info', text: t('playbooks.catalog.imported') })
+      setFireResult(null)
+    } catch {
+      setStatusMsg({ kind: 'err', text: t('playbooks.catalog.import_invalid') })
+    }
   }
 
   const startEdit = (pb) => {
@@ -311,13 +356,6 @@ export default function PlaybookBuilder() {
       actions: pb.actions || [],
     })
     setStatusMsg(null)
-    setFireResult(null)
-  }
-
-  const insertExample = () => {
-    setSelected(null)
-    setDraft(JSON.parse(JSON.stringify(buildExamplePlaybook(t))))
-    setStatusMsg({ kind: 'info', text: t('playbooks.loaded_example') })
     setFireResult(null)
   }
 
@@ -375,6 +413,9 @@ export default function PlaybookBuilder() {
     if (!draft) return
     setStatusMsg(null)
     setFireResult({ loading: true })
+    const cvePrefix = Array.isArray(draft.trigger?.cve_prefixes) && draft.trigger.cve_prefixes[0]
+      ? String(draft.trigger.cve_prefixes[0]).replace(/-+$/, '')
+      : 'CVE-2024'
     const sampleEvent = {
       kind: 'finding_persisted',
       tenant_id: 0,
@@ -390,7 +431,7 @@ export default function PlaybookBuilder() {
       epss: draft.trigger?.epss_min ?? 0.85,
       kev: !!draft.trigger?.kev,
       kev_known_ransomware: !!draft.trigger?.kev,
-      cve: 'CVE-2024-12345',
+      cve: `${cvePrefix}-12345`,
       signature_hash: 'preview',
       internet_exposed: !!draft.trigger?.exposed,
     }
@@ -419,6 +460,29 @@ export default function PlaybookBuilder() {
         ? draft.trigger.severity.filter((x) => x !== s)
         : [...(draft.trigger?.severity || []), s],
     })
+
+  const toggleEngine = (id) => {
+    const current = draft.trigger?.engines || []
+    updateTrigger({
+      engines: current.includes(id) ? current.filter((x) => x !== id) : [...current, id],
+    })
+  }
+
+  const addCustomEngine = (raw) => {
+    const id = String(raw || '').trim()
+    if (!id) return
+    const current = draft.trigger?.engines || []
+    if (current.includes(id)) return
+    updateTrigger({ engines: [...current, id] })
+  }
+
+  const setCvePrefixes = (raw) => {
+    const list = String(raw || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    updateTrigger({ cve_prefixes: list.length ? list : undefined })
+  }
 
   const addAction = (kind) => {
     const template = ACTION_KINDS.find((a) => a.kind === kind) || ACTION_KINDS[0]
@@ -530,10 +594,19 @@ export default function PlaybookBuilder() {
             </Link>
             <Button variant="unstyled"
               type="button"
-              onClick={insertExample}
-              className="rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
+              onClick={() => importRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
             >
-              {t('playbooks.insert_example')}
+              <Upload className="h-3.5 w-3.5" />
+              {t('playbooks.catalog.import_json')}
+            </Button>
+            <Button variant="unstyled"
+              type="button"
+              onClick={() => setGalleryOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] text-[var(--text-tertiary)] ring-1 ring-white/[0.1] transition-all hover:bg-[var(--row-hover-bg)] hover:text-[var(--text-primary)]"
+            >
+              <Library className="h-3.5 w-3.5" />
+              {t('playbooks.catalog.browse')}
             </Button>
             <Button variant="unstyled"
               type="button"
@@ -543,6 +616,15 @@ export default function PlaybookBuilder() {
               <Plus className="h-4 w-4" />
               {t('playbooks.new_playbook')}
             </Button>
+            <input
+              ref={importRef}
+              type="file"
+              accept="application/json,.json"
+              className="sr-only"
+              aria-hidden="true"
+              tabIndex={-1}
+              onChange={handleImportFile}
+            />
           </div>
         </div>
       </header>
@@ -580,7 +662,18 @@ export default function PlaybookBuilder() {
                 {t('common.loading')}
               </div>
             ) : list.length === 0 ? (
-              <p className="py-6 text-[12px] leading-relaxed text-[var(--text-muted)]">{t('playbooks.no_playbooks')}</p>
+              <div className="py-6">
+                <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">{t('playbooks.no_playbooks')}</p>
+                <Button
+                  variant="unstyled"
+                  type="button"
+                  onClick={() => setGalleryOpen(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] text-violet-200 ring-1 ring-violet-400/30 hover:bg-violet-500/10"
+                >
+                  <Library className="h-3.5 w-3.5" />
+                  {t('playbooks.catalog.browse')}
+                </Button>
+              </div>
             ) : filteredList.length === 0 ? (
               <p className="py-6 text-[12px] leading-relaxed text-[var(--text-muted)]">{t('playbooks.no_library_match')}</p>
             ) : (
@@ -624,11 +717,13 @@ export default function PlaybookBuilder() {
         {/* Center — Editor */}
         <main className="overflow-y-auto custom-scroll p-5 lg:p-6">
           {!draft ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--row-hover-bg)] ring-1 ring-white/[0.08]">
-                <Zap className="h-7 w-7 text-[var(--text-disabled)]" />
-              </div>
-              <p className="max-w-sm text-[14px] text-[var(--text-muted)]">{t('playbooks.pick_playbook')}</p>
+            <div className="mx-auto max-w-5xl px-1 py-2">
+              <PlaybookTemplateGallery
+                templates={catalog}
+                onSelect={applyTemplate}
+                onCreateBlank={startNew}
+                onDeleteCustom={handleDeleteCustom}
+              />
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-6">
@@ -636,6 +731,7 @@ export default function PlaybookBuilder() {
               <div className="space-y-3">
                 <input
                   type="text"
+                  data-testid="playbook-name"
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   placeholder={t('playbooks.name_placeholder')}
@@ -704,6 +800,65 @@ export default function PlaybookBuilder() {
                       {t('playbooks.require_exposed')}
                     </ToggleChip>
                   </div>
+                  <div>
+                    <p className="mb-2 text-[11px] text-[var(--text-muted)]">{t('playbooks.engines_any')}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ENGINE_FILTER_OPTIONS.map((id) => {
+                        const active = (draft.trigger?.engines || []).includes(id)
+                        return (
+                          <Button
+                            variant="unstyled"
+                            type="button"
+                            key={id}
+                            onClick={() => toggleEngine(id)}
+                            className={`rounded-full px-2.5 py-1 font-mono text-[10px] ring-1 transition-all ${
+                              active
+                                ? 'bg-cyan-500/15 text-cyan-200 ring-cyan-400/35'
+                                : 'bg-[var(--row-hover-bg)] text-[var(--text-muted)] ring-white/[0.08] hover:text-[var(--text-tertiary)]'
+                            }`}
+                          >
+                            {id}
+                          </Button>
+                        )
+                      })}
+                      {(draft.trigger?.engines || [])
+                        .filter((id) => !ENGINE_FILTER_OPTIONS.includes(id))
+                        .map((id) => (
+                          <Button
+                            variant="unstyled"
+                            type="button"
+                            key={id}
+                            onClick={() => toggleEngine(id)}
+                            className="rounded-full bg-cyan-500/15 px-2.5 py-1 font-mono text-[10px] text-cyan-200 ring-1 ring-cyan-400/35"
+                          >
+                            {id}
+                          </Button>
+                        ))}
+                    </div>
+                    <input
+                      type="text"
+                      aria-label={t('playbooks.engine_add')}
+                      placeholder={t('playbooks.engine_add')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addCustomEngine(e.currentTarget.value)
+                          e.currentTarget.value = ''
+                        }
+                      }}
+                      className="mt-2 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 text-[12px] text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
+                    />
+                  </div>
+                  <label className="block">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t('playbooks.cve_prefixes')}</span>
+                    <input
+                      type="text"
+                      value={(draft.trigger?.cve_prefixes || []).join(', ')}
+                      onChange={(e) => setCvePrefixes(e.target.value)}
+                      placeholder={t('playbooks.cve_prefixes_placeholder')}
+                      className="mt-1 block w-full rounded-lg bg-[var(--bg-2)] px-3 py-2 font-mono text-[12px] text-[var(--text-primary)] ring-1 ring-white/[0.08] placeholder:text-[var(--text-disabled)] focus:outline-none focus:ring-cyan-400/30"
+                    />
+                  </label>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">{t('playbooks.epss_min')}</span>
@@ -822,6 +977,15 @@ export default function PlaybookBuilder() {
                   <Download className="h-4 w-4" />
                   {t('playbooks.export_json_playbook')}
                 </Button>
+                <Button variant="unstyled"
+                  type="button"
+                  onClick={handleSaveAsTemplate}
+                  disabled={!draft}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[12px] font-medium text-violet-200 ring-1 ring-violet-400/30 transition-all hover:bg-violet-500/10 disabled:opacity-40"
+                >
+                  <BookmarkPlus className="h-4 w-4" />
+                  {t('playbooks.catalog.save_as_template')}
+                </Button>
                 {selected && (
                   <Button variant="unstyled"
                     type="button"
@@ -925,6 +1089,24 @@ export default function PlaybookBuilder() {
           </div>
         </aside>
       </div>
+
+      <Modal
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        title={t('playbooks.catalog.title')}
+        description={t('playbooks.catalog.subtitle')}
+        size="2xl"
+      >
+        <div className="pb-4">
+          <PlaybookTemplateGallery
+            templates={catalog}
+            onSelect={applyTemplate}
+            onCreateBlank={startNew}
+            onDeleteCustom={handleDeleteCustom}
+            compact
+          />
+        </div>
+      </Modal>
 
       <style>{`
         .playbook-builder-root {

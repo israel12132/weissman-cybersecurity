@@ -442,7 +442,7 @@ export const ROUTE_META = {
     why: 'automation — Slack, webhook, status.',
     when: 'after first findings.',
     where: '/command-center/playbooks',
-    how: 'Create → conditions → actions → dry-run.',
+    how: 'Pick a catalog playbook or + New → conditions → actions → dry-run → Save.',
     howMuch: 'unlimited playbooks',
     who: 'SOC automation',
     output: 'automated responses',
