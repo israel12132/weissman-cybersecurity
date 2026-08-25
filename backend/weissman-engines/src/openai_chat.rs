@@ -6,6 +6,7 @@
 //! would need a bespoke colocated plugin plus a non-HTTP wire format on both sides. The supported
 //! path remains HTTP JSON against stock OpenAI-compatible servers (loopback UDS/TCP tuning is deployment-level).
 
+use crate::llm_providers::{apply_auth, apply_auth_blocking, AuthStyle};
 use crate::llm_sanitize;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -29,6 +30,31 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
 const LLM_RETRY_ATTEMPTS: u32 = 3;
 const LLM_RETRY_INITIAL_BACKOFF_MS: u64 = 250;
 const LLM_RETRY_MAX_BACKOFF_MS: u64 = 2_000;
+
+/// Per-call credentials injected by the multi-provider router. Empty ⇒ fall back to
+/// `WEISSMAN_LLM_API_KEY` Bearer, preserving the historical single-key client.
+#[derive(Clone, Debug, Default)]
+pub struct LlmCallAuth {
+    pub api_key: Option<String>,
+    pub style: AuthStyle,
+}
+
+tokio::task_local! {
+    static LLM_CALL_AUTH: LlmCallAuth;
+}
+
+/// Run `f` with `auth` visible to [`apply_bearer`] / health probes on this task.
+pub async fn with_call_auth<F, Fut, R>(auth: LlmCallAuth, f: F) -> R
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = R>,
+{
+    LLM_CALL_AUTH.scope(auth, f()).await
+}
+
+fn current_call_auth() -> LlmCallAuth {
+    LLM_CALL_AUTH.try_with(Clone::clone).unwrap_or_default()
+}
 
 /// Optional global hook: `(tenant_id, prompt_tokens, completion_tokens, model, operation)` — typically spawns DB insert.
 pub type LlmUsageReporter = Arc<dyn Fn(i64, u32, u32, String, &'static str) + Send + Sync>;
@@ -190,14 +216,15 @@ async fn ensure_llm_reachable(_client: &reqwest::Client, base_url: &str) -> Resu
     Ok(())
 }
 
-fn apply_bearer(mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    if let Some(ref k) = llm_api_key_from_env() {
-        req = req.header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", k.trim()),
-        );
-    }
-    crate::llm_handshake::apply_to_request(req)
+fn apply_bearer(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    let call = current_call_auth();
+    let key = call.api_key.clone().or_else(llm_api_key_from_env);
+    let style = if call.api_key.is_some() {
+        call.style
+    } else {
+        AuthStyle::Bearer
+    };
+    crate::llm_handshake::apply_to_request(apply_auth(req, style, key.as_deref()))
 }
 
 /// JSON shape for API / job results when LLM fails.
@@ -475,21 +502,51 @@ where
 }
 
 /// Normalize base: trim, ensure `/v1` suffix for OpenAI-style paths.
+/// Azure deployment URLs and already-qualified `/v1beta/openai` hosts are left intact.
 #[must_use]
 pub fn normalize_openai_base_url(raw: &str) -> String {
     let s = raw.trim().trim_end_matches('/');
     if s.is_empty() {
         return DEFAULT_LLM_BASE_URL.to_string();
     }
-    if s.ends_with("/v1") {
+    if s.contains("/openai/deployments/") {
+        return s.to_string();
+    }
+    if s.ends_with("/v1")
+        || s.ends_with("/v1beta/openai")
+        || s.contains("/openai/v1")
+        || s.contains("/compatibility/v1")
+        || s.contains("/inference/v1")
+    {
         s.to_string()
     } else {
         format!("{}/v1", s)
     }
 }
 
+fn azure_api_version() -> String {
+    std::env::var("AZURE_OPENAI_API_VERSION")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "2024-10-21".to_string())
+}
+
+fn with_azure_api_version(url: &str) -> String {
+    if url.contains("/openai/deployments/") && !url.contains("api-version=") {
+        let sep = if url.contains('?') { "&" } else { "?" };
+        format!("{url}{sep}api-version={}", azure_api_version())
+    } else {
+        url.to_string()
+    }
+}
+
 #[must_use]
 pub fn chat_completions_endpoint(base_url: &str) -> String {
+    let raw = base_url.trim().trim_end_matches('/');
+    if raw.contains("/openai/deployments/") {
+        return with_azure_api_version(&format!("{raw}/chat/completions"));
+    }
     format!(
         "{}/chat/completions",
         normalize_openai_base_url(base_url).trim_end_matches('/')
@@ -498,6 +555,10 @@ pub fn chat_completions_endpoint(base_url: &str) -> String {
 
 #[must_use]
 pub fn embeddings_endpoint(base_url: &str) -> String {
+    let raw = base_url.trim().trim_end_matches('/');
+    if raw.contains("/openai/deployments/") {
+        return with_azure_api_version(&format!("{raw}/embeddings"));
+    }
     format!(
         "{}/embeddings",
         normalize_openai_base_url(base_url).trim_end_matches('/')
@@ -1089,15 +1150,14 @@ pub fn chat_completion_text_blocking(
 }
 
 fn apply_bearer_blocking(
-    mut req: reqwest::blocking::RequestBuilder,
+    req: reqwest::blocking::RequestBuilder,
 ) -> reqwest::blocking::RequestBuilder {
-    if let Some(ref k) = llm_api_key_from_env() {
-        req = req.header(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", k.trim()),
-        );
-    }
-    crate::llm_handshake::apply_to_blocking_request(req)
+    let key = llm_api_key_from_env();
+    crate::llm_handshake::apply_to_blocking_request(apply_auth_blocking(
+        req,
+        AuthStyle::Bearer,
+        key.as_deref(),
+    ))
 }
 
 /// List of fallback models when primary model is unavailable

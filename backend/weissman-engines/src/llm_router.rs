@@ -18,15 +18,17 @@
 //! ```json
 //! [
 //!   {"label":"vllm-local","base_url":"http://127.0.0.1:8000/v1"},
-//!   {"label":"openai","base_url":"https://api.openai.com/v1","model":"gpt-4o-mini"}
+//!   {"label":"openai","base_url":"https://api.openai.com/v1","model":"gpt-4o-mini","api_key_env":"OPENAI_API_KEY"}
 //! ]
 //! ```
-//! `model` is optional (empty ⇒ resolved via [`crate::openai_chat::resolve_llm_model`]). Auth
-//! reuses the existing `WEISSMAN_LLM_API_KEY` bearer.
+//! `model` is optional (empty ⇒ resolved via [`crate::openai_chat::resolve_llm_model`]).
+//! When `WEISSMAN_LLM_ENDPOINTS` is unset, [`crate::llm_providers::discover_endpoints`]
+//! builds the chain from whichever provider API keys are present in the environment.
 
+use crate::llm_providers::{self, AuthStyle};
 use crate::openai_chat::{
     chat_completion_text, chat_completion_text_json_object, endpoint_circuit_open,
-    resolve_llm_model, LlmError, DEFAULT_LLM_BASE_URL,
+    resolve_llm_model, with_call_auth, LlmCallAuth, LlmError, DEFAULT_LLM_BASE_URL,
 };
 use serde::Deserialize;
 
@@ -42,6 +44,31 @@ pub struct LlmEndpoint {
     pub base_url: String,
     /// Model id; empty ⇒ resolved from `WEISSMAN_LLM_MODEL` / default at call time.
     pub model: String,
+    /// Catalog id (`openai`, `anthropic`, …); empty for a hand-written JSON entry.
+    pub provider: String,
+    /// Per-endpoint secret. `None` ⇒ `WEISSMAN_LLM_API_KEY` Bearer at call time.
+    pub api_key: Option<String>,
+    pub auth: AuthStyle,
+}
+
+impl LlmEndpoint {
+    fn from_resolved(ep: llm_providers::ResolvedEndpoint) -> Self {
+        Self {
+            label: ep.label,
+            base_url: ep.base_url,
+            model: ep.model,
+            provider: ep.provider.to_string(),
+            api_key: ep.api_key,
+            auth: ep.auth,
+        }
+    }
+
+    fn call_auth(&self) -> LlmCallAuth {
+        LlmCallAuth {
+            api_key: self.api_key.clone(),
+            style: self.auth,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,6 +78,23 @@ struct RawEndpoint {
     base_url: String,
     #[serde(default)]
     model: String,
+    #[serde(default)]
+    provider: String,
+    #[serde(default)]
+    api_key: String,
+    #[serde(default)]
+    api_key_env: String,
+    #[serde(default)]
+    auth: String,
+}
+
+fn parse_auth(raw: &str) -> AuthStyle {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "x_api_key" | "x-api-key" | "anthropic" => AuthStyle::XApiKey,
+        "api_key_header" | "api-key" | "azure" => AuthStyle::ApiKeyHeader,
+        "none" => AuthStyle::None,
+        _ => AuthStyle::Bearer,
+    }
 }
 
 /// Parse the `WEISSMAN_LLM_ENDPOINTS` JSON payload. Pure (no env access) so it is unit-tested
@@ -66,14 +110,34 @@ fn parse_endpoints(raw: &str) -> Vec<LlmEndpoint> {
     list.into_iter()
         .filter(|e| !e.base_url.trim().is_empty())
         .enumerate()
-        .map(|(i, e)| LlmEndpoint {
-            label: if e.label.trim().is_empty() {
-                format!("endpoint-{i}")
+        .map(|(i, e)| {
+            let api_key = if !e.api_key.trim().is_empty() {
+                Some(e.api_key.trim().to_string())
+            } else if !e.api_key_env.trim().is_empty() {
+                llm_providers::env_nonempty(e.api_key_env.trim())
             } else {
-                e.label
-            },
-            base_url: e.base_url,
-            model: e.model,
+                None
+            };
+            let provider = e.provider.trim().to_string();
+            let auth = if e.auth.trim().is_empty() {
+                llm_providers::by_id(&provider)
+                    .map(|p| p.auth)
+                    .unwrap_or(AuthStyle::Bearer)
+            } else {
+                parse_auth(&e.auth)
+            };
+            LlmEndpoint {
+                label: if e.label.trim().is_empty() {
+                    format!("endpoint-{i}")
+                } else {
+                    e.label
+                },
+                base_url: e.base_url,
+                model: e.model,
+                provider,
+                api_key,
+                auth,
+            }
         })
         .collect()
 }
@@ -89,27 +153,35 @@ fn default_endpoint() -> LlmEndpoint {
         label: "default".to_string(),
         base_url,
         model: String::new(),
+        provider: String::new(),
+        api_key: None,
+        auth: AuthStyle::Bearer,
     }
 }
 
-/// Resolve the ordered endpoint chain from the environment, falling back to the single
-/// default endpoint when unset/empty/invalid.
+/// Resolve the ordered endpoint chain from the environment, falling back to auto-discovery
+/// from present API keys, then to the single default endpoint.
 #[must_use]
 pub fn resolve_endpoints() -> Vec<LlmEndpoint> {
-    let configured = std::env::var(LLM_ENDPOINTS_ENV)
-        .ok()
-        .map(|raw| parse_endpoints(&raw))
-        .unwrap_or_default();
-    if configured.is_empty() {
-        if std::env::var(LLM_ENDPOINTS_ENV).is_ok_and(|r| !r.trim().is_empty()) {
-            tracing::warn!(
-                target: "llm_router",
-                "WEISSMAN_LLM_ENDPOINTS set but unparseable/empty; using default endpoint"
-            );
-        }
+    let raw = std::env::var(LLM_ENDPOINTS_ENV).ok();
+    let configured = raw.as_deref().map(parse_endpoints).unwrap_or_default();
+    if !configured.is_empty() {
+        return configured;
+    }
+    if raw.as_ref().is_some_and(|r| !r.trim().is_empty()) {
+        tracing::warn!(
+            target: "llm_router",
+            "WEISSMAN_LLM_ENDPOINTS set but unparseable/empty; using discovered/default endpoints"
+        );
+    }
+    let discovered: Vec<LlmEndpoint> = llm_providers::discover_endpoints()
+        .into_iter()
+        .map(LlmEndpoint::from_resolved)
+        .collect();
+    if discovered.is_empty() {
         vec![default_endpoint()]
     } else {
-        configured
+        discovered
     }
 }
 
@@ -235,35 +307,39 @@ async fn routed_inner(
 
     for ep in order {
         let model = resolve_call_model(&ep.model, model_override);
-        let attempt = if json_mode {
-            chat_completion_text_json_object(
-                client,
-                &ep.base_url,
-                &model,
-                system,
-                user,
-                temperature,
-                max_tokens,
-                tenant_id,
-                operation,
-                sanitize_user_input,
-            )
-            .await
-        } else {
-            chat_completion_text(
-                client,
-                &ep.base_url,
-                &model,
-                system,
-                user,
-                temperature,
-                max_tokens,
-                tenant_id,
-                operation,
-                sanitize_user_input,
-            )
-            .await
-        };
+        let auth = ep.call_auth();
+        let attempt = with_call_auth(auth, || async {
+            if json_mode {
+                chat_completion_text_json_object(
+                    client,
+                    &ep.base_url,
+                    &model,
+                    system,
+                    user,
+                    temperature,
+                    max_tokens,
+                    tenant_id,
+                    operation,
+                    sanitize_user_input,
+                )
+                .await
+            } else {
+                chat_completion_text(
+                    client,
+                    &ep.base_url,
+                    &model,
+                    system,
+                    user,
+                    temperature,
+                    max_tokens,
+                    tenant_id,
+                    operation,
+                    sanitize_user_input,
+                )
+                .await
+            }
+        })
+        .await;
         match attempt {
             Ok(text) => {
                 metrics::counter!(
@@ -314,6 +390,9 @@ mod tests {
             label: label.to_string(),
             base_url: base_url.to_string(),
             model: model.to_string(),
+            provider: String::new(),
+            api_key: None,
+            auth: AuthStyle::Bearer,
         }
     }
 

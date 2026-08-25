@@ -31,10 +31,15 @@ endpoint.
 | `base_url` | yes | OpenAI-compatible base URL. Entries without one are dropped. |
 | `label` | no | Name for logs/metrics. Defaults to `endpoint-<n>`. |
 | `model` | no | Model id. Empty ⇒ resolved from `WEISSMAN_LLM_MODEL` / default at call time. |
+| `provider` | no | Catalog id (`openai`, `anthropic`, …). Selects auth style when `auth` is omitted. |
+| `api_key_env` | no | Env var holding this endpoint's secret. |
+| `auth` | no | `bearer` (default), `x_api_key`, `api_key_header`, or `none`. |
 
-Unset / empty / invalid ⇒ a single default endpoint from `WEISSMAN_LLM_BASE_URL` (or the
-built-in default), preserving current behavior. Auth reuses the existing `WEISSMAN_LLM_API_KEY`
-bearer.
+Unset / empty / invalid ⇒ auto-discover from present provider API keys
+(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … — see `docs/operations/AI-KEYS.md`),
+then the single default endpoint from `WEISSMAN_LLM_BASE_URL`. Auth is per
+endpoint (`api_key_env` / discovered key); the historical `WEISSMAN_LLM_API_KEY`
+Bearer remains the fallback for JSON entries that do not name a key.
 
 ## Behavior
 
@@ -82,6 +87,6 @@ rate on the primary endpoint is an early warning; any `exhausted` increment is a
   JSON-object variant) and generative fuzzing (`generative_fuzz_llm.rs` uses the routed text
   variant). Still direct and unmigrated: the reporter (`reporter.rs`) and the ~40 engine call
   sites that call `openai_chat::chat_completion_text` — a mechanical follow-up.
-- **Planned:** per-endpoint API keys (today all endpoints share `WEISSMAN_LLM_API_KEY`);
-  weighted / cost-aware routing; a routed variant for the embedding path
+- **Shipped:** per-endpoint API keys (`api_key` / `api_key_env` on each JSON entry, plus auto-discovery from provider env vars). See `docs/operations/AI-KEYS.md`.
+- **Still open:** weighted / cost-aware routing; a routed variant for the embedding path
   (`openai_chat::create_embedding` has no router wrapper yet).
