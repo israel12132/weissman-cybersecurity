@@ -14,10 +14,11 @@ fn env_truthy(name: &str) -> bool {
     })
 }
 
-/// Set by a launcher that has already resolved the whole configuration itself
-/// (`start_weissman.sh`): env files may then only FILL gaps, never contradict the process.
+/// Set by a wrapper that has already resolved the whole configuration itself (systemd units
+/// that export `DATABASE_URL` then `exec` the binary): env files may then only FILL gaps,
+/// never contradict the process.
 ///
-/// Without it, `PORT=9999 ./start_weissman.sh` bound :8000 anyway — the launcher honoured the
+/// Without it, `PORT=9999 weissman-server` bound :8000 anyway — the wrapper honoured the
 /// caller, then this loader replayed `PORT=8000` from the repo `.env` on top of it.
 fn process_env_wins() -> bool {
     env_truthy("WEISSMAN_ENV_PROCESS_WINS")
@@ -30,9 +31,9 @@ fn process_env_wins() -> bool {
 /// as empty. `PRODUCTION.env.template`, and therefore every `.env` copied from it, ships
 /// `DATABASE_URL=`, `REDIS_URL=`, `WEISSMAN_MIGRATE_URL=` and `WEISSMAN_AUTH_DATABASE_URL=`
 /// blank on purpose, because Compose supplies them per container. Treating those as real values
-/// is what made `DATABASE_URL=postgres://… ./start_weissman.sh` die with "DATABASE_URL is not
-/// set", and what turned a blank `WEISSMAN_AUTH_DATABASE_URL` into an empty DSN instead of the
-/// documented fallback to `DATABASE_URL`.
+/// is what made an exported `DATABASE_URL=postgres://…` die with "DATABASE_URL is not set", and
+/// what turned a blank `WEISSMAN_AUTH_DATABASE_URL` into an empty DSN instead of the documented
+/// fallback to `DATABASE_URL`.
 fn apply_entries<I>(entries: I)
 where
     I: IntoIterator<Item = Result<(String, String), dotenvy::Error>>,
@@ -210,8 +211,8 @@ mod tests {
     #[test]
     fn blank_entry_never_erases_an_exported_value() {
         // PRODUCTION.env.template ships DATABASE_URL= blank (Compose fills it per container).
-        // Replaying that over a bare-metal export is what made `DATABASE_URL=… ./start_weissman.sh`
-        // fail with "DATABASE_URL is not set".
+        // Replaying that over an exported DSN is what made `DATABASE_URL=…` fail with
+        // "DATABASE_URL is not set".
         let key = "WEISSMAN_TEST_EB_BLANK";
         std::env::set_var(key, "postgres://u:p@127.0.0.1:5432/weissman");
         let path = env_file(&format!("{key}=\n"));

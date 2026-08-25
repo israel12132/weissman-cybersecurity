@@ -18,9 +18,8 @@
 
 | פריסה | קובץ |
 |--------|------|
-| Docker Compose | `.env` (מ-`PRODUCTION.env.template`) |
-| Bare metal (`./start_weissman.sh`) | `.env.local` ואז `.env` |
-| systemd | `/etc/weissman/weissman.env` |
+| Docker Compose (`./start_weissman.sh`) | `.env` (מ-`PRODUCTION.env.template`) |
+| systemd (בלי Docker) | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret |
 | Override | `WEISSMAN_ENV_FILE` (נטען אחרון — גובר על כולם) |
 
@@ -36,13 +35,15 @@ WEISSMAN_ADMIN_PASSWORD=<חזק-12+>
 - ערך **ריק** (`DATABASE_URL=`) אינו ערך. `PRODUCTION.env.template` משאיר את כתובות ה-datastore
   ריקות כי Compose מזריק אותן לכל קונטיינר, ולכן הטוען מתעלם מהשורות האלה לגמרי: הן לא מוחקות
   ערך שכבר קיים בסביבת התהליך ולא מגדירות משתנה כמחרוזת ריקה. בזכות זה
-  `DATABASE_URL=postgres://… ./start_weissman.sh` עובד, ו-`WEISSMAN_AUTH_DATABASE_URL` ריק חוזר
-  ל-`DATABASE_URL` כמתועד.
+  `WEISSMAN_AUTH_DATABASE_URL` ריק חוזר ל-`DATABASE_URL` כמתועד, במקום להפוך ל-DSN ריק.
 - קבצים מאוחרים גוברים על מוקדמים, ו-`WEISSMAN_ENV_FILE` נטען **אחרון** — כך שקובץ שבחר המפעיל
   גובר על כל מיקום מובלע.
-- `WEISSMAN_ENV_PROCESS_WINS=1` הופך את הכיוון עבור משגרים: קבצי env רק ממלאים חוסרים ולעולם לא
-  מחליפים ערך שכבר נמצא בסביבת התהליך. `start_weissman.sh` מגדיר זאת כי הוא כבר פתר את כל
-  התצורה בעצמו; בלי זה, `PORT=9999 ./start_weissman.sh` עדיין נקשר ל-`:8000` מתוך `.env`.
+- `WEISSMAN_ENV_PROCESS_WINS=1` הופך את הכיוון עבור מעטפות (יחידות systemd שמייצאות
+  `DATABASE_URL` ואז `exec` לבינארי): קבצי env רק ממלאים חוסרים ולעולם לא מחליפים ערך שכבר
+  נמצא בסביבת התהליך. בלי זה, `PORT=9999 weissman-server` עדיין נקשר ל-`:8000` מתוך `.env`.
+- `./start_weissman.sh` הוא Docker-first: הוא לא טוען `.env.local` לתוך תהליכי מארח.
+  Compose מזריק `DATABASE_URL`, `WEISSMAN_AUTH_DATABASE_URL`,
+  `WEISSMAN_READ_ONLY_DATABASE_URL` ו-`REDIS_URL` מסיסמאות התפקידים ב-`.env`.
 
 ---
 

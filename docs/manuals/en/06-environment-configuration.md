@@ -18,9 +18,8 @@ Reference for all Weissman environment variables. Source of truth: **`PRODUCTION
 
 | Deployment | Primary file |
 |------------|--------------|
-| Docker Compose | `.env` at repo root (from `PRODUCTION.env.template`) |
-| Bare metal (`./start_weissman.sh`) | `.env.local` at repo root, then `.env` |
-| systemd | `/etc/weissman/weissman.env` |
+| Docker Compose (`./start_weissman.sh`) | `.env` at repo root (from `PRODUCTION.env.template`) |
+| systemd (no Docker) | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret (`deploy/k8s/configmap.yaml`) |
 | Override chain | `WEISSMAN_ENV_FILE` loads an additional file last |
 
@@ -36,15 +35,17 @@ WEISSMAN_ADMIN_PASSWORD=<strong-min-12>
 - A **blank** entry (`DATABASE_URL=`) is not a value. `PRODUCTION.env.template` ships the
   datastore URLs blank because Compose supplies them per container, so the loader ignores those
   lines completely: they never erase a value the process already has, and never define the
-  variable as an empty string. That is what makes
-  `DATABASE_URL=postgres://… ./start_weissman.sh` work, and what lets a blank
-  `WEISSMAN_AUTH_DATABASE_URL` fall back to `DATABASE_URL` as documented below.
+  variable as an empty string. That is what lets a blank `WEISSMAN_AUTH_DATABASE_URL` fall
+  back to `DATABASE_URL` as documented below, instead of becoming an empty DSN.
 - Later files override earlier ones, and `WEISSMAN_ENV_FILE` is applied **last**, so an
   operator-chosen file wins over every implicit location.
-- `WEISSMAN_ENV_PROCESS_WINS=1` inverts that for launchers: env files may then only fill gaps,
-  never replace a value already in the process environment. `start_weissman.sh` sets it because
-  it has already resolved the whole configuration itself; without it, `PORT=9999
-  ./start_weissman.sh` still bound `:8000` from `.env`.
+- `WEISSMAN_ENV_PROCESS_WINS=1` inverts that for wrappers (systemd units that export
+  `DATABASE_URL` then `exec` the binary): env files may then only fill gaps, never replace a
+  value already in the process environment. Without it, `PORT=9999 weissman-server` still
+  bound `:8000` from `.env`.
+- `./start_weissman.sh` is Docker-first: it does not load `.env.local` into host processes.
+  Compose interpolates `DATABASE_URL`, `WEISSMAN_AUTH_DATABASE_URL`,
+  `WEISSMAN_READ_ONLY_DATABASE_URL` and `REDIS_URL` from the role passwords in `.env`.
 
 ---
 
