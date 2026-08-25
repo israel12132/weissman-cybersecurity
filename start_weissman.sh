@@ -42,6 +42,7 @@ fi
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "[!] DATABASE_URL is not set — weissman-server needs a reachable Postgres." >&2
   echo "    e.g. DATABASE_URL=postgres://user:pass@localhost:5432/weissman ./start_weissman.sh" >&2
+  echo "    If you meant the Docker LIVE stack on this host, run: ./start_weissman_live.sh" >&2
   exit 1
 fi
 

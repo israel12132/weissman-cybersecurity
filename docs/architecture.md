@@ -160,9 +160,10 @@ In-process background loops (`weissman-server`):
 
 ## Migration system
 
-- Files live in `crates/weissman-db/migrations/`.
+- Files live in `crates/weissman-db/migrations/` (canonical).
   `sqlx::migrate!("./migrations")` runs them at boot via
-  `weissman_db::run_migrations(url)`.
+  `weissman_db::run_migrations(url)`. `fingerprint_engine/migrations/` is a
+  byte-synced mirror — `bash scripts/check-migration-sync.sh` must exit 0.
 - Files whose first line is `-- weissman:no-transaction` are handled by
   `no_tx_migrations::apply_no_tx_migrations` **before** SQLx's runner.
   See [docs/operations.md](operations.md#no-transaction-migrations) for

@@ -423,5 +423,34 @@ else
   bad "k8s secret.example.yaml missing vault_key"
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+head_ "14. Live boot: migration trees must be in the Docker integrity gate"
+# sqlx::migrate! embeds crates/weissman-db/migrations. A file that exists only in
+# fingerprint_engine/migrations is applied on a host/CLI run, then the Docker
+# backend crash-loops: "migration N was previously applied but is missing in the
+# resolved migrations". CI has check-migration-sync.sh; the live launcher must
+# refuse to compose-up if those trees drifted.
+if grep -q 'check-migration-sync.sh' scripts/verify_docker_build_integrity.sh; then
+  ok "docker integrity runs check-migration-sync.sh"
+else
+  bad "docker integrity does not gate migration-tree drift — live boot can VersionMissing"
+fi
+if grep -q 'without --no-build' start_weissman_live.sh \
+   && grep -q 'SQL migrations are compiled' start_weissman_live.sh; then
+  ok "launcher warns that --no-build skips compiled migration changes"
+else
+  bad "launcher does not warn that --no-build cannot pick up a new sqlx migration"
+fi
+if grep -q 'start_weissman_live.sh' start_weissman.sh; then
+  ok "bare-metal launcher points Docker-stack operators at start_weissman_live.sh"
+else
+  bad "start_weissman.sh does not mention the Docker live launcher"
+fi
+if [[ -f crates/weissman-db/migrations/20260818120000_clients_sector.sql ]]; then
+  ok "canonical tree ships 20260818120000_clients_sector.sql"
+else
+  bad "weissman-db is missing 20260818120000_clients_sector.sql — live Postgres already has this version"
+fi
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

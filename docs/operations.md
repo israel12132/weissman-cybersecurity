@@ -98,8 +98,12 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 ### Standard (transactional) migrations
 
 Place a SQL file in `crates/weissman-db/migrations/` named
-`<yyyymmddHHMMSS>_<description>.sql`. SQLx wraps it in `BEGIN/COMMIT` and runs
-it at boot via `weissman_db::run_migrations`. Idempotent SQL recommended
+`<yyyymmddHHMMSS>_<description>.sql` **and copy the same file** to
+`fingerprint_engine/migrations/` (`bash scripts/check-migration-sync.sh` must
+exit 0). SQLx wraps it in `BEGIN/COMMIT` and embeds the **weissman-db** tree at
+compile time via `weissman_db::run_migrations`. A version recorded in
+`_sqlx_migrations` that is missing from weissman-db makes the live backend exit
+with `VersionMissing`. Idempotent SQL recommended
 (`CREATE … IF NOT EXISTS`, `ALTER … ADD COLUMN IF NOT EXISTS`).
 
 ### No-transaction migrations

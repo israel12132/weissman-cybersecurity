@@ -3,8 +3,9 @@
 **Do not use this for the running platform.** The authoritative database schema is
 owned by the **Rust sqlx migrations**:
 
-- `fingerprint_engine/migrations/` (applied at boot by `weissman-server`)
-- mirrored to `crates/weissman-db/migrations/` (kept in sync; CI gate
+- `crates/weissman-db/migrations/` — **canonical**; compiled into `weissman-server`
+  and copied to `/srv/migrations` in the backend image
+- `fingerprint_engine/migrations/` — byte-synced **mirror** (CI gate
   `scripts/check-migration-sync.sh`)
 
 These Alembic revisions (`001_initial_postgres`, `002_…`, `003_multi_tenancy`)
@@ -25,8 +26,8 @@ WEISSMAN_ALLOW_LEGACY_ALEMBIC=1 DATABASE_URL=postgres://… alembic upgrade head
 
 ## Adding/altering schema
 
-Create a new SQL migration under `fingerprint_engine/migrations/` and mirror it to
-`crates/weissman-db/migrations/`. See `docs/operations.md` for the migration runner,
+Create a new SQL migration under `crates/weissman-db/migrations/` **and** copy it to
+`fingerprint_engine/migrations/` (same filename, same body). See `docs/operations.md` for the migration runner,
 the no-transaction (`CONCURRENTLY`) pre-runner, and RLS conventions.
 
 > Removal of this directory (and the rest of the legacy Python tree under `src/`) is a

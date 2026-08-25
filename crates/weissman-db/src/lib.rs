@@ -104,7 +104,9 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
 
     // Phase 2 — standard transactional migrations (these create the tables that
     // any deferred no-tx index builds depend on).
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    if let Err(e) = sqlx::migrate!("./migrations").run(&pool).await {
+        return Err(map_migrate_error(e));
+    }
 
     // Phase 3 — finalize no-tx migrations deferred in phase 1 now that phase 2 has
     // created their dependencies (e.g. CREATE INDEX CONCURRENTLY on a table that a
@@ -116,6 +118,31 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
         }
     }
     Ok(())
+}
+
+/// sqlx's default `VersionMissing` text is accurate but not actionable on a live host
+/// whose `_sqlx_migrations` row came from the fingerprint_engine mirror while the
+/// compiled backend embeds `crates/weissman-db/migrations`.
+fn map_migrate_error(err: sqlx::migrate::MigrateError) -> sqlx::migrate::MigrateError {
+    let msg = err.to_string();
+    if msg.contains("previously applied but is missing in the resolved migrations")
+        || msg.contains("migration was previously applied but has been modified")
+    {
+        sqlx::migrate::MigrateError::Source(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "{msg}. Canonical SQL is crates/weissman-db/migrations (Docker copies it to \
+                 /srv/migrations and sqlx::migrate! embeds it at compile time). \
+                 fingerprint_engine/migrations is a byte-synced mirror — never apply only one \
+                 tree. Copy the missing file into BOTH directories, run \
+                 `bash scripts/check-migration-sync.sh`, and rebuild the backend image \
+                 (`./start_weissman_live.sh` without --no-build). Do not DELETE the \
+                 `_sqlx_migrations` row and do not wipe the Postgres volume."
+            ),
+        )))
+    } else {
+        err
+    }
 }
 
 /// Warn loudly when this process's configured pool ceilings cannot all fit in the server's
@@ -742,5 +769,58 @@ mod url_and_path_helper_tests {
             acquire_retry_backoff(20),
             std::time::Duration::from_millis(2_000)
         );
+    }
+
+    #[test]
+    fn clients_sector_migration_is_in_the_canonical_tree() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("migrations/20260818120000_clients_sector.sql");
+        assert!(
+            path.is_file(),
+            "missing {path:?} — sqlx::migrate! would VersionMissing on live Postgres that already applied this version from fingerprint_engine/migrations"
+        );
+        let sql = std::fs::read_to_string(&path).expect("read sector migration");
+        assert!(
+            sql.contains("ADD COLUMN IF NOT EXISTS sector"),
+            "sector migration must add clients.sector"
+        );
+    }
+
+    #[test]
+    fn fingerprint_engine_migration_filenames_match_weissman_db() {
+        let crate_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let canonical = crate_dir.join("migrations");
+        let mirror = crate_dir.join("../../fingerprint_engine/migrations");
+        assert!(canonical.is_dir(), "missing {canonical:?}");
+        assert!(mirror.is_dir(), "missing {mirror:?}");
+        let names = |dir: &std::path::Path| -> Vec<String> {
+            let mut v: Vec<String> = std::fs::read_dir(dir)
+                .unwrap_or_else(|e| panic!("read {dir:?}: {e}"))
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.ends_with(".sql"))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(
+            names(&canonical),
+            names(&mirror),
+            "keep fingerprint_engine/migrations and crates/weissman-db/migrations filename-synced"
+        );
+    }
+
+    #[test]
+    fn map_migrate_error_explains_version_missing() {
+        let src = sqlx::migrate::MigrateError::Source(Box::new(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "migration 20260818120000 was previously applied but is missing in the resolved migrations",
+        )));
+        let mapped = super::map_migrate_error(src);
+        let text = mapped.to_string();
+        assert!(text.contains("20260818120000"), "{text}");
+        assert!(text.contains("crates/weissman-db/migrations"), "{text}");
+        assert!(text.contains("check-migration-sync.sh"), "{text}");
+        assert!(text.contains("without --no-build"), "{text}");
     }
 }

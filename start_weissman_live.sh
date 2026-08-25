@@ -401,6 +401,8 @@ compose_up() {
   local up_args=(up -d)
   if [[ "$SKIP_BUILD" -eq 0 ]]; then
     up_args+=(--build)
+  else
+    log "WARN: --no-build reuses weissman-backend:stable. SQL migrations are compiled into that image — after a migration fix you must rebuild (drop --no-build)."
   fi
   local extras=""
   if [[ "$WITH_MONITORING" -eq 1 ]]; then extras+=" + monitoring"; fi
@@ -412,7 +414,7 @@ compose_up() {
   log "ERROR: docker compose up failed — dumping backend logs (this is usually a production boot-guard, not a slow healthcheck)"
   dc ps || true
   diagnose_service backend
-  die "compose up failed: backend did not become healthy. Search the logs above for '[startup]'. Typical missing keys: WEISSMAN_VAULT_KEY (64 hex), WEISSMAN_INTEGRATIONS_VAULT_KEY, WEISSMAN_ADMIN_PASSWORD on the worker."
+  die "compose up failed: backend did not become healthy. Search the logs above for '[startup]' or 'FATAL: migration'. Typical missing keys: WEISSMAN_VAULT_KEY (64 hex), WEISSMAN_INTEGRATIONS_VAULT_KEY, WEISSMAN_ADMIN_PASSWORD on the worker. If logs say 'missing in the resolved migrations', rebuild the backend image without --no-build after syncing crates/weissman-db/migrations."
 }
 
 # Services this run expects to come up, in the order we report them.
