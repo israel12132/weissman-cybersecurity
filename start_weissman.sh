@@ -269,6 +269,17 @@ tcp_open() {
   fi
 }
 
+# Give a datastore that was just started the few seconds it needs to accept connections,
+# instead of probing once and calling it dead.
+wait_reachable() {
+  local probe="$1" url="$2" deadline=$((SECONDS + ${3:-20}))
+  while ((SECONDS < deadline)); do
+    "$probe" "$url" && return 0
+    sleep 1
+  done
+  return 1
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Docker
 # ─────────────────────────────────────────────────────────────────────────────
@@ -307,26 +318,29 @@ docker_responds() {
 }
 
 start_docker_daemon() {
+  log "Docker daemon is not responding — starting it"
   if have systemctl && systemctl list-unit-files 2>/dev/null | grep -q '^docker\.'; then
-    log "Docker daemon is down — starting it with systemctl"
     sudo_run systemctl start docker.socket >/dev/null 2>&1 || true
     if sudo_run systemctl start docker >/dev/null 2>&1; then
       DOCKER_START_METHOD=systemctl
       return 0
     fi
+    log "  systemctl could not start it — trying service(8)"
   fi
   if have service; then
-    log "Docker daemon is down — starting it with service(8)"
     if sudo_run service docker start >/dev/null 2>&1; then
       DOCKER_START_METHOD=service
       return 0
     fi
+    log "  service(8) could not start it — trying dockerd directly"
   fi
   if have dockerd; then
     # No usable init system (plain container images, some CI runners). AGENTS.md documents
-    # `sudo dockerd &` for exactly this case.
-    log "no init system started Docker — launching dockerd directly (log: ${DOCKERD_LOG})"
-    if sudo_run sh -c "dockerd >>'${DOCKERD_LOG}' 2>&1 &"; then
+    # `sudo dockerd &` for exactly this case. The log path travels in the environment so a
+    # path with a quote in it cannot break the command.
+    log "  launching dockerd directly (log: ${DOCKERD_LOG})"
+    if sudo_run env WEISSMAN_DOCKERD_LOG="$DOCKERD_LOG" \
+         sh -c 'dockerd >>"$WEISSMAN_DOCKERD_LOG" 2>&1 &'; then
       DOCKER_START_METHOD=dockerd
       return 0
     fi
@@ -610,14 +624,13 @@ resolve_postgres() {
   if [ -n "${DATABASE_URL:-}" ]; then
     DB_SOURCE="configured DATABASE_URL"
     if ! pg_reachable "$DATABASE_URL"; then
-      # A stopped container we own is the common case; start it and re-check before blaming
-      # the operator's configuration.
+      # A stopped container we own is the common case — after a reboot, or after the Docker
+      # daemon was restarted. Start it and re-check before blaming the operator's config.
       if docker_ok && container_exists "$PG_CONTAINER" && ! container_running "$PG_CONTAINER"; then
         log "starting ${PG_CONTAINER} for the configured DATABASE_URL"
         dk start "$PG_CONTAINER" >/dev/null || true
-        sleep 3
       fi
-      pg_reachable "$DATABASE_URL" \
+      wait_reachable pg_reachable "$DATABASE_URL" 30 \
         || die "DATABASE_URL is set but Postgres did not answer at $(redact_dsn "$DATABASE_URL") — start it, or unset DATABASE_URL to let this launcher resolve one"
     fi
     export WEISSMAN_MIGRATE_URL="${WEISSMAN_MIGRATE_URL:-$DATABASE_URL}"
@@ -851,8 +864,16 @@ start_or_create_redis_container() {
 resolve_redis() {
   if [ -n "${REDIS_URL:-}" ]; then
     REDIS_SOURCE="configured REDIS_URL"
-    redis_reachable "$REDIS_URL" \
-      || die "REDIS_URL is set but Redis did not answer at $(redact_dsn "$REDIS_URL") — start it, or unset REDIS_URL to let this launcher resolve one"
+    if ! redis_reachable "$REDIS_URL"; then
+      # Same recovery as Postgres above: a container this launcher created is simply stopped
+      # after a reboot or a Docker restart.
+      if docker_ok && container_exists "$REDIS_CONTAINER" && ! container_running "$REDIS_CONTAINER"; then
+        log "starting ${REDIS_CONTAINER} for the configured REDIS_URL"
+        dk start "$REDIS_CONTAINER" >/dev/null || true
+      fi
+      wait_reachable redis_reachable "$REDIS_URL" 20 \
+        || die "REDIS_URL is set but Redis did not answer at $(redact_dsn "$REDIS_URL") — start it, or unset REDIS_URL to let this launcher resolve one"
+    fi
     return 0
   fi
 
