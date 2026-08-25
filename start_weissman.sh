@@ -620,22 +620,32 @@ use_stack_pg_roles() {
   fi
 }
 
+# 0 = the configured DATABASE_URL is usable; 1 = it was this launcher's own record of a
+# container that no longer exists, so it has been dropped and discovery should continue.
+# Anything else is the operator's configuration and a hard failure.
+use_configured_pg() {
+  if ! pg_reachable "$DATABASE_URL"; then
+    # A stopped container we own is the common case — after a reboot, or after the Docker
+    # daemon was restarted. Start it and re-check before blaming the operator's config.
+    if docker_ok && container_exists "$PG_CONTAINER" && ! container_running "$PG_CONTAINER"; then
+      log "starting ${PG_CONTAINER} for the configured DATABASE_URL"
+      dk start "$PG_CONTAINER" >/dev/null || true
+    elif ! container_exists "$PG_CONTAINER" && recorded_by_launcher DATABASE_URL; then
+      forget_recorded DATABASE_URL
+      return 1
+    fi
+    wait_reachable pg_reachable "$DATABASE_URL" 30 \
+      || die "DATABASE_URL is set but Postgres did not answer at $(redact_dsn "$DATABASE_URL") — start it, or unset DATABASE_URL to let this launcher resolve one"
+  fi
+  DB_SOURCE="configured DATABASE_URL"
+  export WEISSMAN_MIGRATE_URL="${WEISSMAN_MIGRATE_URL:-$DATABASE_URL}"
+  warn_weak_db_password "$DATABASE_URL"
+  return 0
+}
+
 resolve_postgres() {
   if [ -n "${DATABASE_URL:-}" ]; then
-    DB_SOURCE="configured DATABASE_URL"
-    if ! pg_reachable "$DATABASE_URL"; then
-      # A stopped container we own is the common case — after a reboot, or after the Docker
-      # daemon was restarted. Start it and re-check before blaming the operator's config.
-      if docker_ok && container_exists "$PG_CONTAINER" && ! container_running "$PG_CONTAINER"; then
-        log "starting ${PG_CONTAINER} for the configured DATABASE_URL"
-        dk start "$PG_CONTAINER" >/dev/null || true
-      fi
-      wait_reachable pg_reachable "$DATABASE_URL" 30 \
-        || die "DATABASE_URL is set but Postgres did not answer at $(redact_dsn "$DATABASE_URL") — start it, or unset DATABASE_URL to let this launcher resolve one"
-    fi
-    export WEISSMAN_MIGRATE_URL="${WEISSMAN_MIGRATE_URL:-$DATABASE_URL}"
-    warn_weak_db_password "$DATABASE_URL"
-    return 0
+    use_configured_pg && return 0
   fi
 
   if docker_ok; then
@@ -861,20 +871,27 @@ start_or_create_redis_container() {
   return 1
 }
 
+use_configured_redis() {
+  if ! redis_reachable "$REDIS_URL"; then
+    # Same recovery as Postgres: a container this launcher created is simply stopped after a
+    # reboot or a Docker restart — or gone, in which case our record of it is stale.
+    if docker_ok && container_exists "$REDIS_CONTAINER" && ! container_running "$REDIS_CONTAINER"; then
+      log "starting ${REDIS_CONTAINER} for the configured REDIS_URL"
+      dk start "$REDIS_CONTAINER" >/dev/null || true
+    elif ! container_exists "$REDIS_CONTAINER" && recorded_by_launcher REDIS_URL; then
+      forget_recorded REDIS_URL
+      return 1
+    fi
+    wait_reachable redis_reachable "$REDIS_URL" 20 \
+      || die "REDIS_URL is set but Redis did not answer at $(redact_dsn "$REDIS_URL") — start it, or unset REDIS_URL to let this launcher resolve one"
+  fi
+  REDIS_SOURCE="configured REDIS_URL"
+  return 0
+}
+
 resolve_redis() {
   if [ -n "${REDIS_URL:-}" ]; then
-    REDIS_SOURCE="configured REDIS_URL"
-    if ! redis_reachable "$REDIS_URL"; then
-      # Same recovery as Postgres above: a container this launcher created is simply stopped
-      # after a reboot or a Docker restart.
-      if docker_ok && container_exists "$REDIS_CONTAINER" && ! container_running "$REDIS_CONTAINER"; then
-        log "starting ${REDIS_CONTAINER} for the configured REDIS_URL"
-        dk start "$REDIS_CONTAINER" >/dev/null || true
-      fi
-      wait_reachable redis_reachable "$REDIS_URL" 20 \
-        || die "REDIS_URL is set but Redis did not answer at $(redact_dsn "$REDIS_URL") — start it, or unset REDIS_URL to let this launcher resolve one"
-    fi
-    return 0
+    use_configured_redis && return 0
   fi
 
   local stack_redis=""
@@ -934,6 +951,25 @@ persist_resolved() {
   grep -qE "^${key}=" "$LOCAL_ENV_FILE" 2>/dev/null && return 0
   env_local_write "$key" "$val"
   log "recorded $key in ${LOCAL_ENV_FILE##*/}"
+}
+
+# True when this value is the launcher's own bookkeeping in .env.local rather than something
+# the operator configured. Only those may be second-guessed.
+recorded_by_launcher() {
+  local key="$1"
+  [ -f "$LOCAL_ENV_FILE" ] || return 1
+  grep -qxF "${key}=${!key}" "$LOCAL_ENV_FILE"
+}
+
+# A recorded URL whose container no longer exists is stale bookkeeping, not operator intent
+# (someone ran `docker rm` or pruned). Drop it and let discovery run again.
+forget_recorded() {
+  local key="$1" tmp
+  tmp="$(mktemp)"
+  grep -vxF "${key}=${!key}" "$LOCAL_ENV_FILE" >"$tmp" && mv "$tmp" "$LOCAL_ENV_FILE"
+  chmod 600 "$LOCAL_ENV_FILE"
+  log "${key} in ${LOCAL_ENV_FILE##*/} pointed at a container that no longer exists — dropped it and resolving again"
+  unset "$key"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
