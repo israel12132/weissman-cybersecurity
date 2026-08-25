@@ -71,6 +71,10 @@ If the daemon is down, the launcher starts it (`systemctl` → `service` → `do
 `WEISSMAN_DOCKER_AUTOSTART=0` to disable that. It uses `sudo` only when the socket is not
 readable by this user, and never prompts for a password unless stdin is a TTY.
 
+On nested cgroup v2 hosts that cannot apply memory limits (the parent only delegated
+cpu/cpuset/pids), the launcher adds `docker-compose.cgroup-fallback.yml` so containers
+still start. Production limits stay in `docker-compose.yml` for hosts that can enforce them.
+
 **Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` at
 http://127.0.0.1/command-center/login  
 Production forces Secure cookies (`WEISSMAN_COOKIE_SECURE=1`) — put TLS in front of `:80`

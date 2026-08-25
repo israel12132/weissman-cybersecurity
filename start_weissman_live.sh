@@ -189,6 +189,38 @@ check_ports_free() {
   fi
 }
 
+# True when this host cannot attach the memory controller to a container. Nested
+# cgroup v2 (the parent is "domain threaded" and only delegated cpu/cpuset/pids)
+# makes runc refuse to start any container that has deploy.resources.limits.memory:
+#   cannot enter cgroupv2 "/sys/fs/cgroup/docker" with domain controllers -- it is in threaded mode
+# Production compose keeps those limits; the launcher adds docker-compose.cgroup-fallback.yml
+# on hosts that physically cannot apply them, so `./start_weissman.sh` still brings the
+# stack up instead of dying after a 40-minute image build.
+cgroup_memory_limits_usable() {
+  # cgroup v1: a dedicated memory hierarchy means limits work.
+  [[ -d /sys/fs/cgroup/memory ]] && return 0
+  grep -qw memory /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null
+}
+
+apply_cgroup_fallback() {
+  case "${WEISSMAN_CGROUP_FALLBACK:-auto}" in
+    0|false|no) return 0 ;;
+    1|true|yes) ;;
+    *) cgroup_memory_limits_usable && return 0 ;;
+  esac
+  local overlay="$ROOT/docker-compose.cgroup-fallback.yml"
+  [[ -f "$overlay" ]] || {
+    log "WARN: cgroup memory limits are unusable on this host but $overlay is missing — containers with deploy.resources.limits.memory will fail to start"
+    return 0
+  }
+  local f
+  for f in "${COMPOSE_FILES[@]}"; do
+    if [[ "$f" == "$overlay" ]]; then return 0; fi
+  done
+  COMPOSE_FILES+=(-f "$overlay")
+  log "WARN: this host cannot apply cgroup memory limits (cgroup v2 has no memory in subtree_control) — starting without deploy.resources so the stack can boot"
+}
+
 # Bring the daemon up if it is down, and settle on the invocation that reaches it (which may be
 # `sudo -n docker`). Every subcommand needs this, not just `start`: stop/status/logs also talk to
 # the daemon. Cheap and idempotent once it is answering.
@@ -199,6 +231,7 @@ Install Docker 24+ with Compose v2 (https://docs.docker.com/engine/install/), or
 daemon, then re-run. Set WEISSMAN_DOCKER_AUTOSTART=0 to stop this launcher trying to start it.
 EOF
 )"
+  apply_cgroup_fallback
   COMPOSE=("${WEISSMAN_DOCKER[@]}" compose "${COMPOSE_FILES[@]}")
   "${WEISSMAN_DOCKER[@]}" compose version >/dev/null 2>&1 || die "docker compose v2 required"
 }

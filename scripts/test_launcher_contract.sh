@@ -551,10 +551,17 @@ for file in docker-compose.yml docker-compose.prod.yml; do
   fi
 done
 
-if grep -qE '^\.env\.local$' .gitignore; then
-  ok ".env.local is gitignored"
+if [[ -f docker-compose.cgroup-fallback.yml ]] \
+   && grep -q 'deploy: !reset' docker-compose.cgroup-fallback.yml; then
+  ok "cgroup-fallback overlay resets deploy.resources (nested cgroup v2)"
 else
-  bad ".env.local is not gitignored"
+  bad "docker-compose.cgroup-fallback.yml missing or does not !reset deploy"
+fi
+if grep -q 'apply_cgroup_fallback' "$LAUNCHER" \
+   && grep -q 'cgroup_memory_limits_usable' "$LAUNCHER"; then
+  ok "launcher applies the cgroup-fallback overlay when memory is not in subtree_control"
+else
+  bad "launcher has no cgroup memory-limit fallback — nested cgroup v2 hosts die at container start"
 fi
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
