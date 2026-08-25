@@ -407,7 +407,7 @@ pub async fn export_vault_criticals_csv(
     tenant_id: i64,
 ) -> Result<String, sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    let rows = sqlx::query(
+    let db_rows = sqlx::query(
         r#"SELECT id, tech_fingerprint, component_ref, severity, detection_signature,
                   LEFT(remediation_patch, 2000) AS patch_excerpt, created_at
            FROM genesis_vaccine_vault
@@ -418,9 +418,57 @@ pub async fn export_vault_criticals_csv(
     .fetch_all(&mut *tx)
     .await?;
     let _ = tx.commit().await;
-    let mut w = String::from(
-        "id,tech_fingerprint,component_ref,severity,detection_signature,patch_excerpt,created_at\n",
+    let w = crate::csv_safe::document(
+        &[
+            "id",
+            "tech_fingerprint",
+            "component_ref",
+            "severity",
+            "detection_signature",
+            "patch_excerpt",
+            "created_at",
+        ],
+        {
+            let mut rows = Vec::with_capacity(db_rows.len());
+            for r in db_rows {
+                let id: i64 = r.try_get("id").unwrap_or(0);
+                let tf: String = r.try_get("tech_fingerprint").unwrap_or_default();
+                let cr: String = r.try_get("component_ref").unwrap_or_default();
+                let sev: String = r.try_get("severity").unwrap_or_default();
+                let det: String = r.try_get("detection_signature").unwrap_or_default();
+                let pe: String = r.try_get("patch_excerpt").unwrap_or_default();
+                let ct: chrono::DateTime<chrono::Utc> = r
+                    .try_get("created_at")
+                    .unwrap_or_else(|_| chrono::Utc::now());
+                rows.push(vec![id.to_string(), tf, cr, sev, det, pe, ct.to_rfc3339()]);
+            }
+            rows
+        },
     );
+    Ok(w)
+}
+
+pub async fn export_vault_criticals_xlsx(
+    pool: &PgPool,
+    tenant_id: i64,
+    lang: crate::pdf::Lang,
+) -> Result<Vec<u8>, String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows = sqlx::query(
+        r#"SELECT id, tech_fingerprint, component_ref, severity, detection_signature,
+                  LEFT(remediation_patch, 2000) AS patch_excerpt, created_at
+           FROM genesis_vaccine_vault
+           WHERE lower(trim(severity)) = 'critical'
+           ORDER BY id DESC
+           LIMIT 2000"#,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+    let _ = tx.commit().await;
+    let mut table: Vec<Vec<String>> = Vec::with_capacity(rows.len());
     for r in rows {
         let id: i64 = r.try_get("id").unwrap_or(0);
         let tf: String = r.try_get("tech_fingerprint").unwrap_or_default();
@@ -431,22 +479,53 @@ pub async fn export_vault_criticals_csv(
         let ct: chrono::DateTime<chrono::Utc> = r
             .try_get("created_at")
             .unwrap_or_else(|_| chrono::Utc::now());
-        let esc = |s: &str| {
-            let x = s.replace('"', "\"\"");
-            format!("\"{}\"", x.replace('\n', " "))
-        };
-        w.push_str(&format!(
-            "{},{},{},{},{},{},{}\n",
-            id,
-            esc(&tf),
-            esc(&cr),
-            esc(&sev),
-            esc(&det),
-            esc(&pe),
-            esc(&ct.to_rfc3339())
-        ));
+        table.push(vec![id.to_string(), tf, cr, sev, det, pe, ct.to_rfc3339()]);
     }
-    Ok(w)
+    let columns = vec![
+        crate::pdf::spec::ColumnSpec {
+            title: "id".into(),
+            weight: 0.8,
+            style: "mono".into(),
+        },
+        crate::pdf::spec::ColumnSpec {
+            title: "tech_fingerprint".into(),
+            weight: 2.0,
+            style: "mono".into(),
+        },
+        crate::pdf::spec::ColumnSpec {
+            title: "component_ref".into(),
+            weight: 1.4,
+            style: "".into(),
+        },
+        crate::pdf::spec::ColumnSpec {
+            title: "severity".into(),
+            weight: 1.0,
+            style: "severity".into(),
+        },
+        crate::pdf::spec::ColumnSpec {
+            title: "detection_signature".into(),
+            weight: 2.0,
+            style: "".into(),
+        },
+        crate::pdf::spec::ColumnSpec {
+            title: "patch_excerpt".into(),
+            weight: 2.4,
+            style: "".into(),
+        },
+        crate::pdf::spec::ColumnSpec {
+            title: "created_at".into(),
+            weight: 1.4,
+            style: "".into(),
+        },
+    ];
+    crate::xlsx_report::table_workbook(
+        "Genesis vault — criticals",
+        "ceo-vault",
+        "ceo",
+        lang,
+        columns,
+        table,
+    )
 }
 
 #[derive(Debug, Serialize)]
