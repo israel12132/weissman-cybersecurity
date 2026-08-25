@@ -12,6 +12,7 @@ import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton, { CopyableField } from '../components/ui/CopyButton'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeJobStatus } from '../lib/useJobPoll'
+import { isTenantFullScanTimeout, tenantFullScanTimeoutSecs } from '../lib/jobLastErrorExplain'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
 import Button from '../components/ui/Button'
@@ -420,6 +421,9 @@ export default function JobsDashboard() {
                           </div>
                         </div>
                       </div>
+                      {selectedJob.trigger && (
+                        <CopyableField label={t('pages.jobsDashboard.field_trigger')} value={selectedJob.trigger} />
+                      )}
                       {selectedJob.target && (
                         <CopyableField label={t('pages.jobsDashboard.col_target')} value={selectedJob.target} />
                       )}
@@ -444,6 +448,13 @@ export default function JobsDashboard() {
                           <pre className="text-[11px] font-mono text-rose-200 whitespace-pre-wrap break-words">
                             {selectedJob.last_error}
                           </pre>
+                          {isTenantFullScanTimeout(selectedJob.last_error) && (
+                            <p className="mt-2 text-[11px] leading-relaxed text-rose-100/80">
+                              {t('pages.jobsDashboard.timeout_tenant_full_scan_help', {
+                                seconds: tenantFullScanTimeoutSecs(selectedJob.last_error),
+                              })}
+                            </p>
+                          )}
                         </div>
                       )}
                     </>

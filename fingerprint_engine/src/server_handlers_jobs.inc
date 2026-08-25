@@ -80,6 +80,8 @@ async fn api_async_jobs_list(
             } else {
                 None
             };
+            let trigger = payload.get("trigger").and_then(Value::as_str).map(|s| s.to_string());
+            let resume_generation = payload.get("resume_generation").and_then(Value::as_u64);
             json!({
                 "id": id_uuid.to_string(),
                 "kind": r.try_get::<String, _>("kind").unwrap_or_default(),
@@ -87,6 +89,8 @@ async fn api_async_jobs_list(
                 "engine": engine,
                 "target": target,
                 "client_id": client_id,
+                "trigger": trigger,
+                "resume_generation": resume_generation,
                 "attempt_count": r.try_get::<i32, _>("attempt_count").unwrap_or(0),
                 "last_error": r.try_get::<Option<String>, _>("last_error").ok().flatten(),
                 "worker_id": r.try_get::<Option<String>, _>("worker_id").ok().flatten(),

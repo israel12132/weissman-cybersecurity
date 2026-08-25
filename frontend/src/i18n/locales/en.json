@@ -1541,7 +1541,9 @@
       "field_created": "Created",
       "field_updated": "Updated",
       "field_heartbeat": "Heartbeat",
-      "field_error": "Last error"
+      "field_error": "Last error",
+      "field_trigger": "Trigger",
+      "timeout_tenant_full_scan_help": "The worker stopped this full-tenant scan after {{seconds}} seconds. Engines run one after another; a hung probe used to consume the whole hour, then the job retried from the first engine. Current workers cap each engine at 180s and continue leftover work on a follow-up job instead of looping on this timeout."
     },
     "billing": {
       "title": "Billing & Usage",
