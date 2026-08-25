@@ -19,20 +19,12 @@ use std::env;
 use std::path::Path;
 
 fn main() {
+    weissman_db::env_bootstrap::load_process_environment();
     let rt = fingerprint_engine::hpc_runtime::build_scan_runtime().unwrap_or_else(|e| {
         eprintln!("[Weissman] FATAL: tokio runtime: {e}");
         std::process::exit(1);
     });
     rt.block_on(async {
-    // Load .env from current dir or project root so WEISSMAN_ADMIN_* and PORT are set
-    let _ = dotenvy::dotenv();
-    if let Ok(mut parent) = std::env::current_dir() {
-        parent.pop();
-        let env_path = parent.join(".env");
-        if env_path.exists() {
-            let _ = dotenvy::from_path(env_path);
-        }
-    }
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!("Usage:");

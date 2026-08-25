@@ -5,8 +5,16 @@
 
 use std::path::Path;
 
+/// Compiled max-power capability profile (`deploy/env.max-power.env`). No secrets.
+const COMPILED_MAX_POWER_ENV: &str = include_str!("../../../deploy/env.max-power.env");
+
 /// Load environment files so `DATABASE_URL` is set even when `WorkingDirectory` is not the repo root.
 /// Later sources override earlier ones (explicit production paths win).
+///
+/// After files are loaded, the compiled max-power capability profile is applied so a `git pull`
+/// + rebuild + restart turns Genesis/Council/fuzz/crons on at full strength without a separate
+/// env-edit step. Secrets (JWT, DB, OpenAI keys) stay in `.env` — they are not in the fragment.
+/// Skip with `WEISSMAN_MAX_POWER=0`, `WEISSMAN_E2E_STACK=1`, or CI (`CI` / `GITHUB_ACTIONS`).
 pub fn load_process_environment() {
     // E2E / CI local stack: never load repo `.env` (often production) over explicit dev exports.
     let e2e_stack = std::env::var("WEISSMAN_E2E_STACK")
@@ -65,6 +73,69 @@ pub fn load_process_environment() {
             "dev-metrics-token-32-bytes-minimum-xx",
         );
     }
+
+    apply_compiled_max_power_profile();
+}
+
+fn env_flag_truthy(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+/// Parse `KEY=value` lines from a dotenv-style fragment (comments and blanks skipped).
+pub fn parse_env_fragment(text: &str) -> Vec<(&str, &str)> {
+    text.lines()
+        .filter_map(|line| {
+            let s = line.trim();
+            if s.is_empty() || s.starts_with('#') {
+                return None;
+            }
+            let (k, v) = s.split_once('=')?;
+            let k = k.trim();
+            if k.is_empty() {
+                None
+            } else {
+                Some((k, v.trim()))
+            }
+        })
+        .collect()
+}
+
+fn skip_compiled_max_power() -> bool {
+    env_flag_truthy("WEISSMAN_E2E_STACK")
+        || env_flag_truthy("CI")
+        || env_flag_truthy("GITHUB_ACTIONS")
+        || matches!(
+            std::env::var("WEISSMAN_MAX_POWER")
+                .ok()
+                .as_deref()
+                .map(str::trim)
+                .map(|s| s.to_ascii_lowercase())
+                .as_deref(),
+            Some("0") | Some("false") | Some("no") | Some("off")
+        )
+}
+
+/// Overlay compiled capability flags (not secrets) so the binary itself is max-power.
+fn apply_compiled_max_power_profile() {
+    if skip_compiled_max_power() {
+        return;
+    }
+    let pairs = parse_env_fragment(COMPILED_MAX_POWER_ENV);
+    for (k, v) in &pairs {
+        std::env::set_var(k, v);
+    }
+    eprintln!(
+        "[Weissman] compiled max-power profile applied ({} keys). Set WEISSMAN_MAX_POWER=0 to skip.",
+        pairs.len()
+    );
 }
 
 /// Production detection mirroring weissman_core::tls_policy::is_production_environment.
@@ -152,5 +223,34 @@ mod tests {
         assert!(
             validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok()
         );
+    }
+
+    #[test]
+    fn compiled_max_power_fragment_is_live_only_and_complete() {
+        let pairs = parse_env_fragment(COMPILED_MAX_POWER_ENV);
+        assert!(
+            pairs.len() >= 100,
+            "expected a full capability profile, got {}",
+            pairs.len()
+        );
+        let map: std::collections::HashMap<&str, &str> = pairs.into_iter().collect();
+        assert_eq!(map.get("WEISSMAN_GENESIS_PROTOCOL").copied(), Some("1"));
+        assert_eq!(map.get("WEISSMAN_SUPREME_COUNCIL").copied(), Some("1"));
+        assert_eq!(map.get("WEISSMAN_GENERATIVE_FUZZ").copied(), Some("1"));
+        assert_eq!(map.get("WEISSMAN_SELF_IMPROVE").copied(), Some("1"));
+        assert_eq!(map.get("WEISSMAN_LLM_MODEL").copied(), Some("gpt-4o"));
+        assert_eq!(map.get("WEISSMAN_ADVISORY_FINDINGS").copied(), Some("0"));
+        assert_eq!(map.get("WEISSMAN_ALLOW_INSECURE_TLS").copied(), Some("0"));
+        assert_eq!(map.get("WEISSMAN_HEAL_AUTO_MERGE").copied(), Some("0"));
+        for (k, v) in &map {
+            assert!(!v.starts_with("sk-"), "secret leaked in {k}");
+            assert!(!k.contains("API_KEY"), "API key must not be compiled in");
+        }
+    }
+
+    #[test]
+    fn parse_env_fragment_skips_comments() {
+        let pairs = parse_env_fragment("# hi\nFOO=bar\n\n# x\nBAZ=1\n");
+        assert_eq!(pairs, vec![("FOO", "bar"), ("BAZ", "1")]);
     }
 }
