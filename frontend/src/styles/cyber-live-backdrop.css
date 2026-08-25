@@ -130,14 +130,14 @@
   width: 100%;
   height: calc(100% + 56px);
   background-image:
-    linear-gradient(rgba(148, 233, 255, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 233, 255, 0.09) 1px, transparent 1px);
+    linear-gradient(rgba(148, 233, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 233, 255, 0.16) 1px, transparent 1px);
   background-size: 56px 56px;
-  mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 62%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 62%, transparent 100%);
-  opacity: 0.75;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 66%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 66%, transparent 100%);
+  opacity: 0.95;
   will-change: transform;
-  animation: wm-cbg-scroll-56 16s linear infinite;
+  animation: wm-cbg-scroll-56 12s linear infinite;
 }
 
 @keyframes wm-cbg-scroll-56 {
@@ -158,9 +158,9 @@
   height: 62%;
   perspective: 620px;
   perspective-origin: 50% 0%;
-  mask-image: linear-gradient(180deg, transparent 0%, #000 38%, #000 88%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 38%, #000 88%, transparent 100%);
-  opacity: 0.55;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 92%, transparent 100%);
+  opacity: 0.9;
 }
 
 .wm-cbg-floor-plane {
@@ -172,11 +172,11 @@
   transform-origin: 50% 100%;
   transform: rotateX(74deg);
   background-image:
-    linear-gradient(rgba(34, 211, 238, 0.3) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34, 211, 238, 0.18) 1px, transparent 1px);
+    linear-gradient(rgba(34, 211, 238, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.32) 1px, transparent 1px);
   background-size: 80px 80px;
   will-change: transform;
-  animation: wm-cbg-floor-run 5.6s linear infinite;
+  animation: wm-cbg-floor-run 5s linear infinite;
 }
 
 /* Rotation is constant; only the tiled offset moves, one 80px cell per cycle. */
@@ -203,9 +203,9 @@
   background-image: repeating-linear-gradient(
     180deg,
     rgba(34, 211, 238, 0) 0px,
-    rgba(34, 211, 238, 0) 300px,
-    rgba(34, 211, 238, 0.42) 352px,
-    rgba(165, 243, 252, 0.62) 366px,
+    rgba(34, 211, 238, 0) 288px,
+    rgba(34, 211, 238, 0.55) 352px,
+    rgba(186, 246, 255, 0.85) 366px,
     rgba(34, 211, 238, 0) 420px
   );
   mask-image:
@@ -216,8 +216,8 @@
     linear-gradient(180deg, transparent 0%, #000 18%, #000 74%, transparent 100%);
   mask-composite: intersect;
   -webkit-mask-composite: source-in;
-  opacity: 0.85;
-  animation: wm-cbg-rain-near 7.5s linear infinite;
+  opacity: 0.95;
+  animation: wm-cbg-rain-near 6.5s linear infinite;
 }
 
 .wm-cbg-rain--far {
@@ -227,7 +227,7 @@
     180deg,
     rgba(56, 189, 248, 0) 0px,
     rgba(56, 189, 248, 0) 500px,
-    rgba(56, 189, 248, 0.24) 566px,
+    rgba(56, 189, 248, 0.34) 566px,
     rgba(56, 189, 248, 0) 640px
   );
   mask-image:
@@ -270,17 +270,17 @@
   background-image: repeating-linear-gradient(
     180deg,
     rgba(34, 211, 238, 0) 0px,
-    rgba(34, 211, 238, 0) 430px,
-    rgba(34, 211, 238, 0.05) 500px,
-    rgba(103, 232, 249, 0.34) 556px,
-    rgba(34, 211, 238, 0.05) 558px,
+    rgba(34, 211, 238, 0) 420px,
+    rgba(34, 211, 238, 0.07) 500px,
+    rgba(125, 240, 255, 0.5) 556px,
+    rgba(34, 211, 238, 0.07) 558px,
     rgba(34, 211, 238, 0) 560px
   );
   mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
-  opacity: 0.5;
+  opacity: 0.7;
   will-change: transform;
-  animation: wm-cbg-sweep-run 13s linear infinite;
+  animation: wm-cbg-sweep-run 10s linear infinite;
 }
 
 @keyframes wm-cbg-sweep-run {
@@ -303,16 +303,16 @@
   background: conic-gradient(
     from 0deg,
     rgba(34, 211, 238, 0) 0deg,
-    rgba(34, 211, 238, 0) 268deg,
-    rgba(34, 211, 238, 0.05) 322deg,
-    rgba(103, 232, 249, 0.16) 352deg,
+    rgba(34, 211, 238, 0) 262deg,
+    rgba(34, 211, 238, 0.07) 322deg,
+    rgba(125, 240, 255, 0.24) 352deg,
     rgba(34, 211, 238, 0) 360deg
   );
-  mask-image: radial-gradient(circle at 50% 50%, #000 0%, rgba(0, 0, 0, 0.55) 42%, transparent 72%);
-  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 0%, rgba(0, 0, 0, 0.55) 42%, transparent 72%);
-  opacity: 0.55;
+  mask-image: radial-gradient(circle at 50% 50%, #000 0%, rgba(0, 0, 0, 0.6) 42%, transparent 74%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 0%, rgba(0, 0, 0, 0.6) 42%, transparent 74%);
+  opacity: 0.75;
   will-change: transform;
-  animation: wm-cbg-spin 26s linear infinite;
+  animation: wm-cbg-spin 20s linear infinite;
 }
 
 @keyframes wm-cbg-spin {
@@ -331,12 +331,12 @@
   left: -240px;
   width: calc(100% + 240px);
   height: calc(100% + 240px);
-  background-image: radial-gradient(circle at 30% 30%, rgba(186, 230, 253, 0.5) 0 1.2px, transparent 1.6px),
-    radial-gradient(circle at 72% 64%, rgba(34, 211, 238, 0.35) 0 1px, transparent 1.4px);
+  background-image: radial-gradient(circle at 30% 30%, rgba(196, 236, 255, 0.7) 0 1.4px, transparent 1.9px),
+    radial-gradient(circle at 72% 64%, rgba(34, 211, 238, 0.5) 0 1.1px, transparent 1.6px);
   background-size: 240px 240px;
-  opacity: 0.55;
+  opacity: 0.7;
   will-change: transform;
-  animation: wm-cbg-motes-drift 32s linear infinite;
+  animation: wm-cbg-motes-drift 26s linear infinite;
 }
 
 @keyframes wm-cbg-motes-drift {
@@ -381,6 +381,6 @@
 .wm-cbg-vignette {
   inset: 0;
   background:
-    radial-gradient(110% 85% at 50% 45%, rgba(3, 7, 18, 0) 45%, rgba(2, 4, 12, 0.72) 100%),
-    linear-gradient(180deg, rgba(2, 4, 12, 0.5) 0%, rgba(2, 4, 12, 0) 26%, rgba(2, 4, 12, 0.6) 100%);
+    radial-gradient(115% 90% at 50% 45%, rgba(3, 7, 18, 0) 52%, rgba(2, 4, 12, 0.62) 100%),
+    linear-gradient(180deg, rgba(2, 4, 12, 0.45) 0%, rgba(2, 4, 12, 0) 26%, rgba(2, 4, 12, 0.35) 100%);
 }

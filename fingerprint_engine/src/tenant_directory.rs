@@ -117,7 +117,9 @@ pub fn display_name(name: &str, slug: &str) -> String {
 /// `api_login` itself resolves slugs on), then the app pool — `login_tenant_directory()` is SECURITY
 /// DEFINER, so it returns the same rows either way, but a deployment that only configures one of the
 /// two must not lose the picker over it.
-async fn read_directory(state: &crate::http::AppState) -> Result<Vec<(String, String)>, sqlx::Error> {
+async fn read_directory(
+    state: &crate::http::AppState,
+) -> Result<Vec<(String, String)>, sqlx::Error> {
     match weissman_db::login_tenant_directory(state.auth_pool.as_ref()).await {
         Ok(rows) => Ok(rows),
         Err(auth_err) => {
@@ -138,7 +140,9 @@ fn no_store(mut response: Response) -> Response {
     response
 }
 
-pub async fn api_auth_tenant_directory(State(state): State<Arc<crate::http::AppState>>) -> Response {
+pub async fn api_auth_tenant_directory(
+    State(state): State<Arc<crate::http::AppState>>,
+) -> Response {
     let rows = match read_directory(&state).await {
         Ok(rows) => rows,
         Err(e) => {

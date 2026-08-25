@@ -245,11 +245,7 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     // Workspace picker options for the login form — the field is filled in before any JWT exists.
     // Returns slug + display name only, and withholds the list entirely on multi-tenant production
     // instances unless the operator opts in (fingerprint_engine/src/tenant_directory.rs).
-    (
-        Method::GET,
-        "/api/auth/tenant-directory",
-        RouteGate::Always,
-    ),
+    (Method::GET, "/api/auth/tenant-directory", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),

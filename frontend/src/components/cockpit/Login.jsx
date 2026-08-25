@@ -110,7 +110,7 @@ function BrandPanel({ t }) {
     <aside className="relative hidden min-h-screen flex-col justify-between overflow-hidden lg:flex lg:w-[52%] xl:w-[55%]">
       {/* Readability scrim: the live backdrop keeps moving underneath the headline. */}
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#030712]/85 via-[#030712]/45 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#030712]/82 via-[#030712]/28 to-transparent"
         aria-hidden
       />
 
