@@ -600,9 +600,19 @@ pub async fn ensure_admin_user(auth_pool: &PgPool) -> Result<(), sqlx::Error> {
     .fetch_one(auth_pool)
     .await?;
     if exists {
+        // Deliberate: boot must never silently reset a live account's password from the
+        // environment. Say so, though — a launcher that just generated WEISSMAN_ADMIN_PASSWORD
+        // will print it, and the operator has no other way to learn that this database keeps
+        // the password it was created with.
+        tracing::info!(
+            target: "security_audit",
+            %email,
+            "admin account already exists; WEISSMAN_ADMIN_PASSWORD was NOT applied (the account keeps its current password — reset it from Settings, or with the account-recovery flow)"
+        );
         return Ok(());
     }
     auth_access::insert_user_auth(auth_pool, tenant_id, &email, Some(&hash), "admin").await?;
+    tracing::info!(target: "security_audit", %email, "admin account created from environment");
     Ok(())
 }
 

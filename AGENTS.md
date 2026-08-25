@@ -51,12 +51,17 @@ This is a Rust-first monorepo (Cargo workspace) with a React/Vite frontend and l
 - **Full audit gate (G1–G7):** `bash scripts/full_audit_gate.sh`
 
 ### Development Flow
-1. Ensure Docker daemon is running (`sudo dockerd &` if needed)
-2. Start Postgres + Redis containers
-3. Build Rust workspace: `cargo build`
-4. Start backend: `./target/debug/weissman-server`
-5. Start frontend: `cd frontend && npm run dev`
-6. Access app at http://localhost:5173/command-center/
+`./start_weissman.sh` is the front door: it starts the Docker daemon if it is installed but
+down, then runs `./start_weissman_live.sh`, which brings up the production Compose stack
+(`docker-compose.yml` + `docker-compose.prod.yml`) — Postgres 16 (pgvector), Redis,
+weissman-server, weissman-worker, Nginx gateway — on one network. It prints **SYSTEM READY**
+only after `/api/health` answers, 104+ migrations are applied, the app/auth/ro roles can
+LOGIN, and `/api/ask` is not 503. Access http://127.0.0.1/command-center/
+
+To iterate on the SPA against that stack: `cd frontend && npm ci && npm run dev` (Vite proxies
+`/api` to `http://127.0.0.1:8000`; publish the backend or point the proxy at the gateway on
+`:80`). Do not run the API/worker as host processes; role separation and `/api/ask` are
+Compose-injected (`postgres` / `redis` service names).
 
 ### Audit / delivery scripts
 | Script | Purpose |

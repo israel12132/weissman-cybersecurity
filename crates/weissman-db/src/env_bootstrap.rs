@@ -5,49 +5,104 @@
 
 use std::path::Path;
 
+fn env_truthy(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|v| {
+        matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
+}
+
+/// Set by a wrapper that has already resolved the whole configuration itself (systemd units
+/// that export `DATABASE_URL` then `exec` the binary): env files may then only FILL gaps,
+/// never contradict the process.
+///
+/// Without it, `PORT=9999 weissman-server` bound :8000 anyway — the wrapper honoured the
+/// caller, then this loader replayed `PORT=8000` from the repo `.env` on top of it.
+fn process_env_wins() -> bool {
+    env_truthy("WEISSMAN_ENV_PROCESS_WINS")
+}
+
+/// Apply env-file entries on top of the process environment.
+///
+/// A **blank** entry is not a value — it is a key the operator left for someone else to fill —
+/// so it is ignored completely: it neither erases what is already set nor defines the variable
+/// as empty. `PRODUCTION.env.template`, and therefore every `.env` copied from it, ships
+/// `DATABASE_URL=`, `REDIS_URL=`, `WEISSMAN_MIGRATE_URL=` and `WEISSMAN_AUTH_DATABASE_URL=`
+/// blank on purpose, because Compose supplies them per container. Treating those as real values
+/// is what made an exported `DATABASE_URL=postgres://…` die with "DATABASE_URL is not set", and
+/// what turned a blank `WEISSMAN_AUTH_DATABASE_URL` into an empty DSN instead of the documented
+/// fallback to `DATABASE_URL`.
+fn apply_entries<I>(entries: I)
+where
+    I: IntoIterator<Item = Result<(String, String), dotenvy::Error>>,
+{
+    let fill_only = process_env_wins();
+    for (key, value) in entries.into_iter().flatten() {
+        if value.trim().is_empty() {
+            continue;
+        }
+        if fill_only && std::env::var(&key).is_ok_and(|v| !v.trim().is_empty()) {
+            continue;
+        }
+        std::env::set_var(key, value);
+    }
+}
+
+fn apply_env_file(path: &Path) {
+    if let Ok(entries) = dotenvy::from_path_iter(path) {
+        apply_entries(entries);
+    }
+}
+
 /// Load environment files so `DATABASE_URL` is set even when `WorkingDirectory` is not the repo root.
-/// Later sources override earlier ones (explicit production paths win).
+/// Later sources override earlier ones (explicit production paths win), and `WEISSMAN_ENV_FILE`
+/// is applied last so it can override them all — the precedence the manuals document.
 pub fn load_process_environment() {
     // E2E / CI local stack: never load repo `.env` (often production) over explicit dev exports.
-    let e2e_stack = std::env::var("WEISSMAN_E2E_STACK")
-        .ok()
-        .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes"));
+    let e2e_stack = env_truthy("WEISSMAN_E2E_STACK");
 
     if !e2e_stack {
-        let _ = dotenvy::dotenv();
+        // dotenvy's own search (cwd upwards). Applied through apply_entries rather than
+        // `dotenv()` so it obeys the same blank-is-not-a-value rule as every file below.
+        if let Ok(entries) = dotenvy::dotenv_iter() {
+            apply_entries(entries);
+        }
+
+        if let Ok(cwd) = std::env::current_dir() {
+            let p = cwd.join(".env");
+            if p.is_file() {
+                apply_env_file(&p);
+            }
+        }
+
+        if let Ok(mut p) = std::env::current_dir() {
+            if p.pop() {
+                let env = p.join(".env");
+                if env.is_file() {
+                    apply_env_file(&env);
+                }
+            }
+        }
+
+        // Common absolute deploy path (systemd WorkingDirectory often not the git checkout).
+        let deploy = Path::new("/root/weissman-bot/.env");
+        if deploy.is_file() {
+            apply_env_file(deploy);
+        }
     }
 
+    // Last, so an operator-chosen file actually wins over the implicit ones above.
     if let Ok(p) = std::env::var("WEISSMAN_ENV_FILE") {
         let path = Path::new(p.trim());
         if path.is_file() {
-            let _ = dotenvy::from_path_override(path);
+            apply_env_file(path);
         }
     }
 
     if e2e_stack {
         return;
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        let p = cwd.join(".env");
-        if p.is_file() {
-            let _ = dotenvy::from_path_override(&p);
-        }
-    }
-
-    if let Ok(mut p) = std::env::current_dir() {
-        if p.pop() {
-            let env = p.join(".env");
-            if env.is_file() {
-                let _ = dotenvy::from_path_override(&env);
-            }
-        }
-    }
-
-    // Common absolute deploy path (systemd WorkingDirectory often not the git checkout).
-    let deploy = Path::new("/root/weissman-bot/.env");
-    if deploy.is_file() {
-        let _ = dotenvy::from_path_override(deploy);
     }
 
     // Dev-only convenience: give the metrics endpoint a token when none is set so local
@@ -135,6 +190,85 @@ pub fn validate_database_url(url: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    /// `WEISSMAN_ENV_PROCESS_WINS` is process-global, so the tests that toggle it must not
+    /// overlap with each other.
+    static PROCESS_WINS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn env_file(contents: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "weissman-env-bootstrap-{}-{:?}.env",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let mut f = std::fs::File::create(&path).expect("create temp env file");
+        f.write_all(contents.as_bytes())
+            .expect("write temp env file");
+        path
+    }
+
+    #[test]
+    fn blank_entry_never_erases_an_exported_value() {
+        // PRODUCTION.env.template ships DATABASE_URL= blank (Compose fills it per container).
+        // Replaying that over an exported DSN is what made `DATABASE_URL=…` fail with
+        // "DATABASE_URL is not set".
+        let key = "WEISSMAN_TEST_EB_BLANK";
+        std::env::set_var(key, "postgres://u:p@127.0.0.1:5432/weissman");
+        let path = env_file(&format!("{key}=\n"));
+        apply_env_file(&path);
+        assert_eq!(
+            std::env::var(key).as_deref(),
+            Ok("postgres://u:p@127.0.0.1:5432/weissman")
+        );
+        std::env::remove_var(key);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn blank_entry_leaves_the_key_unset_rather_than_empty() {
+        // "Unset" and "set to empty string" are the same to `unwrap_or_default()` but opposite
+        // to `unwrap_or_else(fallback)`: a blank WEISSMAN_AUTH_DATABASE_URL used to reach
+        // connect_pools as an empty DSN instead of falling back to DATABASE_URL.
+        let key = "WEISSMAN_TEST_EB_FILL_BLANK";
+        std::env::remove_var(key);
+        let path = env_file(&format!("{key}=\n"));
+        apply_env_file(&path);
+        assert!(std::env::var(key).is_err());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn real_value_overrides_by_default() {
+        let _guard = PROCESS_WINS_LOCK.lock().expect("env lock poisoned");
+        std::env::remove_var("WEISSMAN_ENV_PROCESS_WINS");
+        let key = "WEISSMAN_TEST_EB_OVERRIDE";
+        std::env::set_var(key, "from-process");
+        let path = env_file(&format!("{key}=from-file\n"));
+        apply_env_file(&path);
+        assert_eq!(std::env::var(key).as_deref(), Ok("from-file"));
+        std::env::remove_var(key);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn process_env_wins_keeps_the_launcher_resolved_value() {
+        let _guard = PROCESS_WINS_LOCK.lock().expect("env lock poisoned");
+        let key = "WEISSMAN_TEST_EB_PROCESS_WINS";
+        let unset = "WEISSMAN_TEST_EB_PROCESS_WINS_GAP";
+        std::env::set_var("WEISSMAN_ENV_PROCESS_WINS", "1");
+        std::env::set_var(key, "resolved-by-launcher");
+        std::env::remove_var(unset);
+        let path = env_file(&format!("{key}=from-file\n{unset}=from-file\n"));
+        // Occupied keys survive; gaps are still filled from the file.
+        apply_env_file(&path);
+        assert_eq!(std::env::var(key).as_deref(), Ok("resolved-by-launcher"));
+        assert_eq!(std::env::var(unset).as_deref(), Ok("from-file"));
+        std::env::remove_var("WEISSMAN_ENV_PROCESS_WINS");
+        std::env::remove_var(key);
+        std::env::remove_var(unset);
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn rejects_missing_user() {

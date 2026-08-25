@@ -27,7 +27,7 @@ head_() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 # ─────────────────────────────────────────────────────────────────────────────
 head_ "1. Shell syntax"
-for f in "$LAUNCHER" start_weissman.sh start_weissman_rust.sh scripts/sync_monitoring_admin.sh; do
+for f in "$LAUNCHER" start_weissman.sh start_weissman_rust.sh scripts/sync_monitoring_admin.sh scripts/lib/docker_daemon.sh; do
   if bash -n "$f" 2>/dev/null; then ok "$f parses"; else bad "$f has a syntax error"; fi
 done
 
@@ -35,20 +35,34 @@ done
 head_ "2. CLI flag contract (regression guard for the swallowed-first-flag bug)"
 # Stub docker so the run dies in check_prereqs — which happens AFTER parse_args but BEFORE
 # ensure_env, so a real .env is never read or written.
+#
+# The live launcher now starts the daemon (and will use `sudo -n docker` when PATH docker
+# cannot talk to the socket). A stub `docker` alone is not enough: `sudo -n docker info`
+# would reach the REAL daemon via sudo's secure_path, proceed into ensure_env, and mutate
+# the operator's .env. Stub sudo so it re-execs from PATH, and disable autostart so a
+# failed `info` does not spend 90s launching dockerd.
 STUB="$(mktemp -d)"
 trap 'rm -rf "$STUB"' EXIT
 cat >"$STUB/docker" <<'STUBEOF'
 #!/bin/bash
 [ "$1" = "compose" ] && [ "$2" = "version" ] && exit 0
-[ "$1" = "info" ] && exit 1     # -> "Docker daemon not running", i.e. we got past parse_args
+[ "$1" = "info" ] && exit 1     # -> weissman_docker_ensure fails (AUTOSTART=0), i.e. we got past parse_args
 exit 0
 STUBEOF
 chmod +x "$STUB/docker"
+cat >"$STUB/sudo" <<'STUBEOF'
+#!/bin/bash
+while [ "${1:-}" = "-n" ] || [ "${1:-}" = "--non-interactive" ]; do shift; done
+exec "$@"
+STUBEOF
+chmod +x "$STUB/sudo"
+
+LAUNCHER_STUB_ENV=(WEISSMAN_DOCKER_AUTOSTART=0 PATH="$STUB:$PATH")
 
 assert_flag_accepted() {
   local desc="$1"; shift
   local out
-  out="$(PATH="$STUB:$PATH" bash "$LAUNCHER" "$@" 2>&1 || true)"
+  out="$(env "${LAUNCHER_STUB_ENV[@]}" bash "$LAUNCHER" "$@" 2>&1 || true)"
   if grep -q "unknown flag" <<<"$out"; then
     bad "$desc — rejected: $(grep -m1 'unknown flag' <<<"$out")"
   else
@@ -68,7 +82,7 @@ assert_flag_accepted "(no arguments)"
 # A genuinely bogus flag must still be rejected — otherwise the check above proves nothing.
 # Capture first: the launcher exits non-zero here (correctly), and `pipefail` would make a
 # `... | grep` pipeline report that exit status rather than whether the text matched.
-bogus_out="$(PATH="$STUB:$PATH" bash "$LAUNCHER" --definitely-not-a-flag 2>&1 || true)"
+bogus_out="$(env "${LAUNCHER_STUB_ENV[@]}" bash "$LAUNCHER" --definitely-not-a-flag 2>&1 || true)"
 if grep -q "unknown flag" <<<"$bogus_out"; then
   ok "bogus flag is still rejected"
 else
@@ -76,7 +90,7 @@ else
 fi
 
 # --help must render the usage block, not shell source lines.
-help_out="$(PATH="$STUB:$PATH" bash "$LAUNCHER" --help 2>&1 || true)"
+help_out="$(env "${LAUNCHER_STUB_ENV[@]}" bash "$LAUNCHER" --help 2>&1 || true)"
 if grep -q -- "--no-monitoring" <<<"$help_out" && ! grep -q "set -euo pipefail" <<<"$help_out"; then
   ok "--help prints usage without leaking script source"
 else
@@ -199,19 +213,25 @@ fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 head_ "7. Production overlay renders (structure + interpolation)"
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+COMPOSE_CLI=()
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE_CLI=(docker compose)
+elif sudo -n docker compose version >/dev/null 2>&1; then
+  COMPOSE_CLI=(sudo -n docker compose)
+fi
+if ((${#COMPOSE_CLI[@]})); then
   # Synthetic env satisfying every ${VAR:?}; `config` needs no daemon.
   declare -a envassign=()
   for var in "${required[@]}"; do envassign+=("$var=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"); done
   for var in POSTGRES_USER POSTGRES_DB DB_APP_USER DB_AUTH_USER DB_RO_USER WEISSMAN_ADMIN_EMAIL; do envassign+=("$var=weissman"); done
-  if env "${envassign[@]}" docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  if env "${envassign[@]}" "${COMPOSE_CLI[@]}" -f docker-compose.yml -f docker-compose.prod.yml \
        --profile monitoring config >/dev/null 2>/tmp/compose_config_err; then
     ok "prod overlay renders (--profile monitoring)"
   else
     bad "prod overlay failed to render: $(tr '\n' ' ' </tmp/compose_config_err | head -c 200)"
   fi
   # The OAST profile adds the oast service (with its own ${VAR:?} vars) — validate it too.
-  if env "${envassign[@]}" docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  if env "${envassign[@]}" "${COMPOSE_CLI[@]}" -f docker-compose.yml -f docker-compose.prod.yml \
        --profile monitoring --profile oast config >/dev/null 2>/tmp/compose_config_err; then
     ok "prod overlay renders (--profile monitoring --profile oast)"
   else
@@ -377,6 +397,177 @@ if grep -q 'wasm-bindgen-cli.*--version' deploy/frontend.Dockerfile; then
   ok "wasm-bindgen-cli is version-pinned"
 else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+head_ "13. Docker-first launcher contract (start_weissman.sh → Compose stack)"
+# ./start_weissman.sh is the front door to the LIVE Compose stack, not a host-process path.
+# These checks are static + --help only: they never write .env and never start containers.
+FRONT=start_weissman.sh
+DAEMON_LIB=scripts/lib/docker_daemon.sh
+
+if grep -q 'scripts/lib/docker_daemon.sh' "$FRONT" && grep -q 'weissman_docker_ensure' "$FRONT"; then
+  ok "$FRONT sources docker_daemon.sh and calls weissman_docker_ensure"
+else
+  bad "$FRONT does not bring the Docker daemon up before handing over"
+fi
+if grep -q 'scripts/lib/docker_daemon.sh' "$LAUNCHER" && grep -q 'weissman_docker_ensure' "$LAUNCHER"; then
+  ok "$LAUNCHER sources docker_daemon.sh and calls weissman_docker_ensure"
+else
+  bad "$LAUNCHER talks to Docker without the shared daemon helper"
+fi
+if grep -q 'exec "$LIVE" "$@"' "$FRONT"; then
+  ok "$FRONT execs start_weissman_live.sh (one architecture, not a second stack)"
+else
+  bad "$FRONT does not exec start_weissman_live.sh"
+fi
+
+# --help must work without a daemon (operators and this suite read the flag list first).
+help_ln="$(grep -nE -- '-h\|--help\)' "$FRONT" | head -1 | cut -d: -f1)"
+ensure_ln="$(grep -n 'weissman_docker_ensure' "$FRONT" | head -1 | cut -d: -f1)"
+if [[ -n "$help_ln" && -n "$ensure_ln" && "$help_ln" -lt "$ensure_ln" ]]; then
+  ok "$FRONT --help is intercepted before weissman_docker_ensure"
+else
+  bad "$FRONT --help is not intercepted before Docker bring-up (help_ln=${help_ln:-?} ensure_ln=${ensure_ln:-?})"
+fi
+front_help="$(bash "$FRONT" --help 2>&1 || true)"
+if grep -q -- "--no-monitoring" <<<"$front_help" && ! grep -q "set -euo pipefail" <<<"$front_help"; then
+  ok "$FRONT --help prints the live flag list without leaking script source"
+else
+  bad "$FRONT --help output is wrong (missing --no-monitoring, or leaking 'set -euo pipefail')"
+fi
+if grep -qE -- '--no-worker|--no-provision' "$FRONT"; then
+  bad "$FRONT still documents a host-process path (--no-worker / --no-provision)"
+else
+  ok "$FRONT has no host-process flags (--no-worker / --no-provision)"
+fi
+
+# Raw `docker …` breaks the sudo-socket path. The front door must not call the CLI at all;
+# the live launcher must go through "${WEISSMAN_DOCKER[@]}" (or dc(), which is rebuilt from it).
+if grep -nE '^[[:space:]]*(if |! )?docker (inspect|run|start|exec|ps|port|rm|logs|compose)\b' "$FRONT" >/dev/null; then
+  bad "$FRONT calls docker directly: $(grep -nE '^[[:space:]]*(if |! )?docker (inspect|run|start|exec|ps|port|rm|logs|compose)\b' "$FRONT" | head -1)"
+else
+  ok "$FRONT does not call docker directly (thin wrapper)"
+fi
+if grep -nE '^[[:space:]]*(if |! )?docker (inspect|run|start|exec|ps|port|rm|logs)\b' "$LAUNCHER" >/dev/null; then
+  bad "$LAUNCHER calls docker directly instead of WEISSMAN_DOCKER: $(grep -nE '^[[:space:]]*(if |! )?docker (inspect|run|start|exec|ps|port|rm|logs)\b' "$LAUNCHER" | head -1)"
+else
+  ok "$LAUNCHER Docker calls go through WEISSMAN_DOCKER / dc()"
+fi
+if grep -Fq 'COMPOSE=("${WEISSMAN_DOCKER[@]}" compose' "$LAUNCHER"; then
+  ok "COMPOSE is rebuilt from WEISSMAN_DOCKER once the socket path is known"
+else
+  bad "COMPOSE is not rebuilt from WEISSMAN_DOCKER — sudo-socket hosts will fail compose"
+fi
+
+# Daemon helper: start order + never block on sudo in CI.
+if grep -q 'systemctl start docker' "$DAEMON_LIB" \
+   && grep -q 'service docker start' "$DAEMON_LIB" \
+   && grep -q 'dockerd' "$DAEMON_LIB"; then
+  ok "daemon autostart tries systemctl, then service(8), then dockerd"
+else
+  bad "$DAEMON_LIB is missing a start method (systemctl / service / dockerd)"
+fi
+if grep -q '\[ -t 0 \]' "$DAEMON_LIB" && grep -q 'sudo -n true' "$DAEMON_LIB"; then
+  ok "sudo prompts only on a TTY (CI / non-interactive fails fast)"
+else
+  bad "$DAEMON_LIB may block forever on an invisible sudo password prompt"
+fi
+if grep -q 'WEISSMAN_DOCKER_AUTOSTART' "$DAEMON_LIB"; then
+  ok "WEISSMAN_DOCKER_AUTOSTART can disable daemon bring-up"
+else
+  bad "no WEISSMAN_DOCKER_AUTOSTART escape hatch"
+fi
+if grep -q 'weissman_docker_fix_bridge_icc' "$DAEMON_LIB" \
+   && grep -q 'bridge-nf-call-iptables' "$DAEMON_LIB"; then
+  ok "daemon helper restores container-to-container traffic on mixed nft/legacy hosts"
+else
+  bad "$DAEMON_LIB does not fix bridge-nf-call-iptables — backend cannot reach redis on nested hosts"
+fi
+
+# Boot gate: SYSTEM READY is a lie unless migrations, roles and /api/ask all passed.
+start_body="$(sed -n '/^cmd_start()/,/^}/p' "$LAUNCHER")"
+for fn in verify_migrations verify_role_separation verify_ask_armed; do
+  if grep -q "^${fn}()" "$LAUNCHER" && grep -qE "^[[:space:]]+${fn}$" <<<"$start_body"; then
+    ok "cmd_start calls ${fn}"
+  else
+    bad "cmd_start does not call ${fn} — SYSTEM READY can print on a half-built stack"
+  fi
+done
+# Order: health, then schema, then roles, then ask, then the banner.
+order="$(grep -E '^[[:space:]]+(verify_live|verify_migrations|verify_role_separation|verify_ask_armed|print_banner)$' <<<"$start_body" | tr -d ' ' | paste -sd, -)"
+if [[ "$order" == "verify_live,verify_migrations,verify_role_separation,verify_ask_armed,print_banner" ]]; then
+  ok "boot gate order is health → migrations → roles → /api/ask → banner"
+else
+  bad "boot gate order is ${order:-empty}, expected health → migrations → roles → /api/ask → banner"
+fi
+if grep -q 'SYSTEM READY' "$LAUNCHER"; then
+  ok "banner prints SYSTEM READY"
+else
+  bad "banner does not print SYSTEM READY"
+fi
+ask_body="$(sed -n '/^verify_ask_armed()/,/^}/p' "$LAUNCHER")"
+if grep -q '503' <<<"$ask_body" && grep -q 'die' <<<"$ask_body"; then
+  ok "verify_ask_armed dies on HTTP 503 (read-only pool missing)"
+else
+  bad "verify_ask_armed does not fail closed on /api/ask 503"
+fi
+role_body="$(sed -n '/^verify_role_separation()/,/^}/p' "$LAUNCHER")"
+if grep -q 'weissman_app' <<<"$role_body" && grep -q 'weissman_auth' <<<"$role_body" && grep -q 'weissman_ro' <<<"$role_body"; then
+  ok "verify_role_separation checks weissman_app / weissman_auth / weissman_ro LOGIN"
+else
+  bad "verify_role_separation does not check all three roles"
+fi
+mig_body="$(sed -n '/^verify_migrations()/,/^}/p' "$LAUNCHER")"
+if grep -q '_sqlx_migrations' <<<"$mig_body"; then
+  ok "verify_migrations counts _sqlx_migrations (no-tx runner included)"
+else
+  bad "verify_migrations does not query _sqlx_migrations"
+fi
+
+# Forbidden production flags are commented out, not deleted — .env is the operator's record.
+if grep -q "s|^WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD=" "$LAUNCHER" \
+   && grep -q 'disabled by start_weissman_live.sh' "$LAUNCHER"; then
+  ok "WEISSMAN_ALLOW_DEFAULT_ADMIN_PASSWORD is commented out, not deleted"
+else
+  bad "forbidden flag is stripped from .env instead of commented out"
+fi
+
+# One Compose network: the five core services must not opt out via network_mode.
+for svc in postgres redis backend worker gateway; do
+  if grep -qE "^  ${svc}:" docker-compose.yml; then
+    ok "compose defines service ${svc}"
+  else
+    bad "compose is missing service ${svc}"
+  fi
+  block="$(sed -n "/^  ${svc}:/,/^  [a-z]/p" docker-compose.yml)"
+  if grep -qE '^[[:space:]]+network_mode:' <<<"$block"; then
+    bad "${svc} sets network_mode — it is not on the shared Compose network"
+  else
+    ok "${svc} joins the default Compose network"
+  fi
+done
+# Role-separation DSNs must reach the backend in BOTH files (dev compose + prod overlay).
+for file in docker-compose.yml docker-compose.prod.yml; do
+  be="$(sed -n '/^  backend:/,/^  [a-z]/p' "$file")"
+  if grep -q 'WEISSMAN_AUTH_DATABASE_URL' <<<"$be" && grep -q 'WEISSMAN_READ_ONLY_DATABASE_URL' <<<"$be"; then
+    ok "backend in $file gets AUTH + READ_ONLY DSNs (/api/ask)"
+  else
+    bad "backend in $file is missing WEISSMAN_AUTH_DATABASE_URL or WEISSMAN_READ_ONLY_DATABASE_URL"
+  fi
+done
+
+if [[ -f docker-compose.cgroup-fallback.yml ]] \
+   && grep -q 'deploy: !reset' docker-compose.cgroup-fallback.yml; then
+  ok "cgroup-fallback overlay resets deploy.resources (nested cgroup v2)"
+else
+  bad "docker-compose.cgroup-fallback.yml missing or does not !reset deploy"
+fi
+if grep -q 'apply_cgroup_fallback' "$LAUNCHER" \
+   && grep -q 'cgroup_memory_limits_usable' "$LAUNCHER"; then
+  ok "launcher applies the cgroup-fallback overlay when memory is not in subtree_control"
+else
+  bad "launcher has no cgroup memory-limit fallback — nested cgroup v2 hosts die at container start"
 fi
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
