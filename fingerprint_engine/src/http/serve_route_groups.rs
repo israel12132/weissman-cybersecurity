@@ -51,6 +51,11 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/threat-analysis/:client_id",
             get(api_threat_analysis_for_client),
         )
+        // Cross-domain attack-vector synthesis: fuse findings into composite multi-stage vectors.
+        .route(
+            "/api/analytics/attack-vectors",
+            get(api_analytics_attack_vectors),
+        )
         // Global remediation priority: one ranked, root-cause-deduplicated "fix-first" program
         // fusing effective_risk (EPSS/KEV) + attack-graph choke points across all findings.
         .route(

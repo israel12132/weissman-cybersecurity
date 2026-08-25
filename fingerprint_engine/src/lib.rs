@@ -45,6 +45,7 @@ pub mod attack_chain_planner;
 pub mod attack_coverage;
 pub mod attack_exposure;
 pub mod attack_path;
+pub mod attack_vector_synthesis;
 pub mod audit_log;
 pub mod auth_bootstrap;
 pub mod auth_jwt;
