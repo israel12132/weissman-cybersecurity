@@ -122,9 +122,9 @@ class TestCompleteScanWorkflow:
         assert "findings" in results
         assert "summary" in results
 
-        # Step 5: Export PDF report
-        export_response = api_client.post(
-            f"/api/export/pdf/{scan_id}",
+        # Step 5: Export PDF report (board-grade document engine)
+        export_response = api_client.get(
+            "/api/reports/executive",
             headers={"Authorization": f"Bearer {authenticated_session.token}"},
         )
         assert export_response.status_code == 200
@@ -380,9 +380,26 @@ class TestExportWorkflow:
         ]
 
         response = api_client.post(
-            "/api/export/pdf",
+            "/api/export/document",
             headers={"Authorization": f"Bearer {authenticated_session.token}"},
-            json={"findings": findings},
+            json={
+                "title": "XSS export probe",
+                "sections": [
+                    {
+                        "title": "Findings",
+                        "blocks": [
+                            {
+                                "type": "table",
+                                "columns": [{"title": "Title"}, {"title": "Description"}, {"title": "Severity"}],
+                                "rows": [
+                                    [f["title"], f["description"], f["severity"]]
+                                    for f in findings
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
         )
 
         assert response.status_code == 200
@@ -396,9 +413,18 @@ class TestExportWorkflow:
     def test_excel_export_workflow(self, api_client, authenticated_session):
         """Complete Excel export workflow."""
         response = api_client.post(
-            "/api/export/excel",
+            "/api/export/workbook",
             headers={"Authorization": f"Bearer {authenticated_session.token}"},
-            json={"scan_id": "test_scan_123"},
+            json={
+                "title": "Excel export probe",
+                "sheets": [
+                    {
+                        "name": "Scan",
+                        "columns": [{"title": "scan_id"}],
+                        "rows": [["test_scan_123"]],
+                    }
+                ],
+            },
         )
 
         assert response.status_code == 200

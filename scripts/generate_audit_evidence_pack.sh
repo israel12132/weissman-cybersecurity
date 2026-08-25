@@ -191,6 +191,19 @@ NODE
 log "Render PDF"
 node scripts/render_evidence_pack_pdf.mjs "$MANIFEST" "$OUT_DIR/evidence-pack.pdf"
 
+# Prefer the product document engine when the binary is available so the pack
+# matches customer-facing reports (embedded fonts, bilingual chrome).
+DOCGEN="$ROOT/target/debug/weissman-docgen"
+if [[ ! -x "$DOCGEN" ]]; then
+  cargo build -p fingerprint_engine --bin weissman-docgen >/dev/null 2>&1 || true
+fi
+if [[ -x "$DOCGEN" ]]; then
+  log "Board-grade evidence pack via weissman-docgen"
+  node scripts/render_evidence_pack_spec.mjs "$MANIFEST" "$OUT_DIR/evidence-pack.docspec.json" "$OUT_DIR/evidence-pack.bookspec.json"
+  "$DOCGEN" --pdf --in "$OUT_DIR/evidence-pack.docspec.json" --out "$OUT_DIR/evidence-pack.pdf" || true
+  "$DOCGEN" --xlsx --in "$OUT_DIR/evidence-pack.bookspec.json" --out "$OUT_DIR/evidence-pack.xlsx" || true
+fi
+
 FAIL=0
 for s in "$WIRING_STATUS" "$REALITY_STATUS" "$UI_STATUS" "$SCAN_WIRING_STATUS"; do
   [[ "$s" == "PASS" ]] || FAIL=1
