@@ -195,6 +195,7 @@
     "incident_response": "תגובה לאירועים",
     "threat_emulation": "APT Emulation",
     "kill_chain": "שרשרת הריג",
+    "attack_vectors": "וקטורי תקיפה",
     "ai_analysis": "ניתוח AI",
     "exploit_lab": "מעבדת exploit",
     "council_queue": "Council Queue",
@@ -3081,6 +3082,32 @@
           "description": "חילוץ נתונים רגישים מהיעד דרך ערוצים סמויים או שימוש לרעה באחסון ענן."
         }
       }
+    },
+    "attackVectors": {
+      "title": "אנליטיקת וקטורי תקיפה",
+      "subtitle": "סינתזה חוצת-תחומים · וקטורי תקיפה מרובי-שלבים",
+      "data_source_note": "מסונתז מ-/api/analytics/attack-vectors · {{rules}} חוקי מיזוג על {{findings}} ממצאים חיים. כל וקטור מבוסס ראיות מממצאים אמיתיים.",
+      "load_error": "טעינת אנליטיקת וקטורי התקיפה נכשלה: {{error}}.",
+      "loading": "מתאם ממצאים בין תחומים…",
+      "kpi_vectors": "וקטורי תקיפה",
+      "kpi_highest": "חומרה מרבית",
+      "kpi_critical": "וקטורים קריטיים",
+      "kpi_confidence": "ודאות ממוצעת",
+      "priority": "עדיפות",
+      "confidence": "ודאות",
+      "novelty": "חדשנות",
+      "business_impact": "השפעה עסקית",
+      "evidence": "ראיות ({{count}})",
+      "recommended_actions": "פעולות מומלצות",
+      "empty_title": "אין עדיין וקטורי תקיפה מורכבים",
+      "empty_body": "וקטורי תקיפה מסונתזים כאשר ממצאים מתחומים שונים מתואמים (למשל SSRF יחד עם חשיפת מטא-דאטה של ענן). הרץ עוד מנועים על היעדים כדי לחשוף שרשראות מרובות-שלבים.",
+      "cta_findings": "פתח ממצאים",
+      "cta_engines": "עיין במנועים",
+      "severity_critical": "קריטי",
+      "severity_high": "גבוה",
+      "severity_medium": "בינוני",
+      "severity_low": "נמוך",
+      "severity_info": "מידע"
     },
     "rateLimitAnalytics": {
       "title": "ניתוח מגבלות קצב",
