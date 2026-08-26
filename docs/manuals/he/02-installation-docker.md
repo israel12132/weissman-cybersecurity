@@ -107,6 +107,7 @@ Prometheus + Grafana — ספר 16.
 | משתנה | תפקיד |
 |--------|--------|
 | `WEISSMAN_MIGRATE_URL` | migrations אוטומטיות |
+| `WEISSMAN_VAULT_KEY` | מפתח vault ייעודי (64 hex) — חובה ב-production |
 | `WEISSMAN_PUBLIC_BASE_URL` | URL ציבורי |
 | `WEISSMAN_BILLING_STRICT` | פעיל ב-production |
 | `PADDLE_*` | Billing — ספר 08 |
@@ -135,7 +136,7 @@ docker compose down -v   # ⚠️ מוחק volume של Postgres
 | תסמין | פתרון |
 |--------|--------|
 | Compose exit 15 | בדקו `.env`, הציטוט של משתנים עם `:` |
-| Backend unhealthy | `docker compose logs backend` |
+| Backend unhealthy | `docker compose logs backend` — JWT, `WEISSMAN_VAULT_KEY` (64 hex) |
 | 502 על /api | המתינו ל-healthcheck |
 | Jobs תקועים | `docker compose restart worker` |
 

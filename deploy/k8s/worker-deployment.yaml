@@ -69,6 +69,22 @@ spec:
                 secretKeyRef:
                   name: weissman-secrets
                   key: job_orchestrator_secret
+            - name: WEISSMAN_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: admin_password
+            - name: WEISSMAN_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: vault_key
+            - name: WEISSMAN_INTEGRATIONS_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: weissman-secrets
+                  key: integrations_vault_key
+                  optional: true
           # Liveness stays a pure process check: a wedged *process* is worth restarting, but the
           # failure these probes were split for — every claim erroring against the database — is
           # not fixed by a restart, and putting it on liveness would crash-loop the whole fleet

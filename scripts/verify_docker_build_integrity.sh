@@ -86,6 +86,16 @@ while IFS= read -r member; do
   [[ -f "${member}/Cargo.toml" ]] && ok "workspace member $member" || bad "workspace member missing: $member"
 done < <(grep -E '^\s+".*"' Cargo.toml | tr -d '," ' | grep -v '^\[workspace\]' | grep '/' || true)
 
+section "SQL migration mirror (fingerprint_engine ↔ weissman-db)"
+# Live backend embeds crates/weissman-db/migrations at compile time. A file that exists
+# only in fingerprint_engine/migrations is applied by host/sqlx CLI runs, then Docker
+# boot dies with sqlx VersionMissing (20260818120000_clients_sector.sql).
+if bash "$ROOT/scripts/check-migration-sync.sh"; then
+  ok "migration trees byte-synced"
+else
+  bad "migration trees drifted — live backend will crash: previously applied but missing in resolved migrations"
+fi
+
 echo ""
 if [[ "$fail" -ne 0 ]]; then
   echo "Docker build integrity check FAILED."

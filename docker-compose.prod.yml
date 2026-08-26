@@ -20,8 +20,9 @@
 #   WEISSMAN_JWT_SECRET (>=48 chars)   WEISSMAN_ADMIN_PASSWORD
 #   WEISSMAN_METRICS_TOKEN (>=32)      WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (>=32)
 #   WEISSMAN_JOB_ORCHESTRATOR_SECRET (>=32)
+#   WEISSMAN_VAULT_KEY (64 hex)        WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32)
 #   WEISSMAN_PUBLIC_BASE_URL (https)   POSTGRES_PASSWORD  DB_APP_PASSWORD
-#   DB_AUTH_PASSWORD  REDIS_PASSWORD   (monitoring uses WEISSMAN_ADMIN_* — optional GRAFANA_ADMIN_PASSWORD override)
+#   DB_AUTH_PASSWORD  REDIS_PASSWORD   GRAFANA_ADMIN_PASSWORD (must NOT equal the platform admin password)
 # Bounded container logs. Docker's json-file driver defaults to *unbounded* growth and
 # /etc/docker/daemon.json does not exist on the deployment host, so nothing capped it. Postgres
 # alone wrote 101 MB in 9.5h (155,589 ERROR + 155,588 STATEMENT entries, each dumping the full
@@ -72,13 +73,10 @@ services:
 
   backend:
     logging: *default-logging
-    # Pull in the operator's full .env so OPTIONAL settings the app reads directly
-    # (WEISSMAN_SMTP_*, WEISSMAN_LLM_API_KEY, NVD_API_KEY, WEISSMAN_INTEGRATIONS_VAULT_KEY,
-    # PADDLE_*, ...) actually reach the process. Without this, only the ~19 keys listed
-    # under `environment:` below were passed and everything else in .env was silently
-    # dropped. The explicit entries below still WIN over env_file, so every ${VAR:?} guard
-    # and derived DSN keeps its exact value. `required: false` so `compose config` and the
-    # interpolation-only path still work before a .env exists (Compose v2.24+).
+    # Optional operator settings (SMTP, LLM, Paddle, ...). Boot-required secrets still
+    # belong in `environment:` below — Compose does not pass .env into the container
+    # unless a key is listed here or via env_file, and the production boot guards
+    # need the vault keys to be interpolated like JWT/admin password.
     env_file:
       - path: .env
         required: false
@@ -99,6 +97,14 @@ services:
       WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:?set a 32+ char WEISSMAN_METRICS_TOKEN}
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:?set a 32+ char WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET}
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:?set a 32+ char WEISSMAN_JOB_ORCHESTRATOR_SECRET}
+      # Dedicated secrets-at-rest keys. Production boot refuses to derive these from
+      # WEISSMAN_JWT_SECRET. They MUST be in `environment:` (interpolated from .env) —
+      # relying on env_file alone left them on the host while the container crashed in ~10s
+      # with "is unhealthy" and no Command Center.
+      #   WEISSMAN_VAULT_KEY: exactly 64 hex chars (`openssl rand -hex 32`)
+      #   WEISSMAN_INTEGRATIONS_VAULT_KEY: >=32 chars (`openssl rand -base64 48`)
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:?set WEISSMAN_VAULT_KEY to 64 hex chars (openssl rand -hex 32)}
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:?set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars)}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       WEISSMAN_AGENT_BIN_DIR: /srv/bin/agents
       # The gateway forwards X-Forwarded-For / X-Real-IP; without this the backend keys
@@ -122,8 +128,8 @@ services:
     # would SIGKILL the worker mid-drain and make the drain pointless — in-flight
     # scans would still be killed mid-write, just after a longer pause.
     stop_grace_period: 40s
-    # Same as backend: the worker runs the scan engines and needs the operator's optional
-    # settings (LLM keys, OAST config, vault keys, ...). Explicit entries below still win.
+    # Same as backend: optional operator settings (LLM, OAST, ...) via env_file.
+    # Boot-required vault/admin secrets are interpolated in `environment:` below.
     env_file:
       - path: .env
         required: false
@@ -134,6 +140,10 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
       WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?set a strong 32+ char WEISSMAN_JWT_SECRET}
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:?set a 32+ char WEISSMAN_JOB_ORCHESTRATOR_SECRET}
+      # Same production guards as the API process (security_startup.rs worker scope).
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:?set a strong WEISSMAN_ADMIN_PASSWORD}
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:?set WEISSMAN_VAULT_KEY to 64 hex chars (openssl rand -hex 32)}
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:?set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars)}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       # OAST correlation for engines running off the request thread (same as backend).
       WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}

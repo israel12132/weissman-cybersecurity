@@ -5,7 +5,9 @@
 **Authoritative migrations:** `crates/weissman-db/migrations/`
 
 The runtime migrator (`weissman-db`, started via `WEISSMAN_MIGRATE_URL` on boot) reads SQL from
-`WEISSMAN_MIGRATIONS_DIR` (Docker: `/srv/migrations`) or this directory in native dev.
+`WEISSMAN_MIGRATIONS_DIR` (Docker: `/srv/migrations`) **and** embeds the same tree at compile
+time via `sqlx::migrate!("./migrations")`. A version that exists in Postgres `_sqlx_migrations`
+but not in this directory makes the live backend refuse to start (`VersionMissing`).
 
 ## Mirror tree (CI sync only)
 

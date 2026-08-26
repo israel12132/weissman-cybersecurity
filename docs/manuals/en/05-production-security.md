@@ -40,6 +40,8 @@ This activates guards in `fingerprint_engine/src/security_startup.rs` (`enforce_
 | `WEISSMAN_METRICS_TOKEN` unset or < 32 chars (server) | Refuses boot |
 | `REDIS_URL` unset without `WEISSMAN_ALLOW_SINGLE_NODE=1` (server) | Refuses boot |
 | `WEISSMAN_JOB_ORCHESTRATOR_SECRET` unset or < 32 chars (server + worker) | Refuses boot |
+| `WEISSMAN_VAULT_KEY` missing or not 64 hex chars (server + worker) | Refuses boot |
+| `WEISSMAN_INTEGRATIONS_VAULT_KEY` missing and no 64-hex vault key | Refuses boot |
 | JWT via `?access_token=` query param | Rejected at runtime |
 
 ---
@@ -53,6 +55,8 @@ openssl rand -base64 48   # WEISSMAN_JWT_SECRET (minimum 48 characters enforced 
 openssl rand -base64 48   # WEISSMAN_METRICS_TOKEN (≥32)
 openssl rand -base64 48   # WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (≥32)
 openssl rand -base64 48   # WEISSMAN_JOB_ORCHESTRATOR_SECRET (≥32)
+openssl rand -hex 32      # WEISSMAN_VAULT_KEY (exactly 64 hex chars)
+openssl rand -base64 48   # WEISSMAN_INTEGRATIONS_VAULT_KEY (≥32)
 ```
 
 Generate unique Postgres passwords for `weissman_app`, `weissman_auth`, and superuser migration role.

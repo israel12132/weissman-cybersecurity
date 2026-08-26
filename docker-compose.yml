@@ -165,6 +165,11 @@ services:
       # Production: set WEISSMAN_ENV=production + WEISSMAN_METRICS_TOKEN (≥32 chars) in `.env`
       WEISSMAN_ENV: ${WEISSMAN_ENV:-}
       WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:-}
+      # Secrets-at-rest keys. Production boot (security_startup.rs) refuses to derive these
+      # from WEISSMAN_JWT_SECRET. They must be listed here — Compose does not pass host/.env
+      # variables into the container unless they appear in `environment:` or `env_file`.
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:-}
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}
       # Optional first-boot master admin. All THREE must reach the container or the feature
       # is inert: crates/weissman-db/src/lib.rs skips bootstrap unless WEISSMAN_MASTER_BOOTSTRAP_EMAIL
       # is set together with a password or bcrypt hash. (EMAIL was previously never plumbed.)
@@ -180,8 +185,10 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # PORT env var defaults to 8000 - see backend environment section
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
+      # PORT env var defaults to 8000 - see backend environment section.
+      # Use 127.0.0.1, not localhost: Debian images often resolve localhost to ::1 first,
+      # and this process binds IPv4 (0.0.0.0), so an IPv6 probe can fail while the API is up.
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -222,6 +229,12 @@ services:
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
+      # Production guards run in the worker too (security_startup.rs). These must reach
+      # this process, not only the API container.
+      WEISSMAN_ENV: ${WEISSMAN_ENV:-}
+      WEISSMAN_ADMIN_PASSWORD: ${WEISSMAN_ADMIN_PASSWORD:-}
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:-}
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:-}
     depends_on:
       backend:
         condition: service_healthy
@@ -293,7 +306,7 @@ services:
       # green with the backend unreachable, and "gateway healthy" told an operator nothing
       # about whether the site actually worked. /api/health proxies to weissman_backend, so
       # this now fails when the upstream is down.
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/health"]
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3

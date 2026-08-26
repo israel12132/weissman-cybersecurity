@@ -115,6 +115,7 @@ Starts Prometheus + Grafana (port 3000) — see manual 16.
 | Variable | Purpose |
 |----------|---------|
 | `WEISSMAN_MIGRATE_URL` | Auto-set in compose; runs SQL migrations |
+| `WEISSMAN_VAULT_KEY` | Dedicated 64-hex CEO vault key — required in production |
 | `WEISSMAN_PUBLIC_BASE_URL` | Public URL for links/SSO |
 | `WEISSMAN_BILLING_STRICT` | Auto-on when `WEISSMAN_ENV=production` |
 | `PADDLE_*` | Billing (manual 08) |
@@ -152,7 +153,7 @@ docker compose down -v   # ⚠️ deletes Postgres volume
 | Symptom | Fix |
 |---------|-----|
 | Compose exit 15 on start | Quote env vars with `:` in error messages; check `.env` |
-| Backend unhealthy | `docker compose logs backend` — JWT secret, DB password |
+| Backend unhealthy | `docker compose logs backend` — JWT secret, `WEISSMAN_VAULT_KEY` (64 hex), DB password |
 | 502 on /api | Wait for backend healthcheck; check gateway depends_on |
 | Worker idle, jobs queued | `docker compose ps worker`; restart worker |
 
