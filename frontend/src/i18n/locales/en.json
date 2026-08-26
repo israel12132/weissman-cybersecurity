@@ -305,7 +305,7 @@
   },
   "playbooks": {
     "title": "SOAR Playbooks",
-    "subtitle": "Build when {conditions} do [actions] rules that fire on every new finding.",
+    "subtitle": "Select a production-grade playbook or build your own: when {conditions} do [actions] on every live finding.",
     "subtitle_code": "when {conditions} do [actions]",
     "subtitle_footer": "Live data only.",
     "new_playbook": "+ New playbook",
@@ -372,7 +372,88 @@
     "no_library_match": "No playbooks match your search.",
     "json_invalid": "Invalid JSON",
     "saving": "Saving…",
-    "actions_ok": "{{ok}}/{{total}} ok · {{failed}} failed"
+    "actions_ok": "{{ok}}/{{total}} ok · {{failed}} failed",
+    "engines_any": "Engines (any of)",
+    "engine_add": "Add engine id and press Enter",
+    "cve_prefixes": "CVE prefixes",
+    "cve_prefixes_placeholder": "CVE-2024, CVE-2025",
+    "catalog": {
+      "title": "Playbook catalog",
+      "subtitle": "Select a production-grade SOAR playbook, start from scratch, or save your own. Templates load disabled — review isolate / page / webhook params, then Save.",
+      "browse": "Catalog",
+      "search": "Search catalog…",
+      "categories": "Playbook categories",
+      "category_all": "All",
+      "category_containment": "Containment",
+      "category_identity": "Identity",
+      "category_exposure": "Exposure",
+      "category_secrets": "Secrets",
+      "category_cloud": "Cloud",
+      "category_supply_chain": "Supply chain",
+      "category_threat": "Threat hunt",
+      "category_custom": "Custom",
+      "blank_title": "Start from scratch",
+      "blank_desc": "Empty trigger and actions. Add conditions, then the live action kinds the engine actually runs.",
+      "use": "Use this playbook",
+      "loaded": "Catalog playbook loaded. Review params, then Save to persist.",
+      "save_as_template": "Save to catalog",
+      "saved_template": "Saved to your catalog. It is selectable next to the built-in playbooks.",
+      "delete_custom": "Remove custom template",
+      "delete_custom_confirm": "Remove custom template \"{{name}}\" from this browser?",
+      "import_json": "Import JSON",
+      "imported": "Imported playbook loaded as a new draft. Save to persist.",
+      "import_invalid": "That file is not a valid playbook (need trigger/actions JSON).",
+      "no_match": "No catalog playbooks match that filter.",
+      "untitled": "Untitled playbook",
+      "kev_exposed": {
+        "name": "Critical KEV → isolate + page",
+        "description": "CISA-KEV critical finding on an internet-exposed asset: isolate 30 minutes, page sec-oncall, mark IN_PROGRESS, Slack the war room."
+      },
+      "ransomware_kev": {
+        "name": "Ransomware KEV lockdown",
+        "description": "Critical/high KEV on an exposed asset: isolate 60 minutes, page on-call, freeze the ticket, notify Slack. Short cooldown to stop repeat fires."
+      },
+      "epss_exposed": {
+        "name": "High-EPSS exposed triage",
+        "description": "Critical/high with EPSS ≥ 0.70 on an internet-exposed asset: open the ticket and fan out Slack + webhook into SIEM/ITSM."
+      },
+      "asm_critical": {
+        "name": "ASM critical exposure",
+        "description": "Attack-surface engine (asm) critical + internet-exposed: acknowledge, Slack war-room, webhook into the ticketing bus."
+      },
+      "secret_leak": {
+        "name": "Secret leak break-glass",
+        "description": "Leak hunter / secrets-manager / credential-stuffing at critical or high: page identity on-call, freeze the finding, Slack the identity desk."
+      },
+      "identity_attack": {
+        "name": "Identity attack containment",
+        "description": "Password spray, Kerberos, SAML, or identity-attack-chain: isolate the host 15 minutes, page identity on-call, mark IN_PROGRESS."
+      },
+      "cloud_iam": {
+        "name": "Cloud IAM escalation",
+        "description": "cloud_iam_escalation at critical/high: page cloud on-call and Slack the cloud desk. No host isolate — this is identity, not a workstation."
+      },
+      "iac_pr": {
+        "name": "IaC / supply-chain auto-PR",
+        "description": "iac_misconfig or supply_chain: open a remediation PR, mark IN_PROGRESS, notify Slack. 24h cooldown to avoid PR storms."
+      },
+      "apt_hunt": {
+        "name": "APT hunt alert",
+        "description": "APT28/29/41 or lateral-movement at critical/high: page threat-hunt, Slack IR. No isolate — hunt first, contain after confirmation."
+      },
+      "cve_wave": {
+        "name": "CVE-2024/2025 wave",
+        "description": "Internet-exposed critical/high findings whose CVE starts with CVE-2024 or CVE-2025: page on-call, freeze, Slack."
+      },
+      "email_dns": {
+        "name": "Email DNS / subdomain takeover",
+        "description": "email_dns_posture or subdomain_takeover at critical/high: open the ticket, Slack, webhook to DNS ops."
+      },
+      "tls_downgrade": {
+        "name": "TLS downgrade on exposed asset",
+        "description": "tls_downgrade critical/high on an internet-exposed asset: freeze the finding and Slack PKI/platform. No isolate."
+      }
+    }
   },
   "clients_page": {
     "title": "Client Management",

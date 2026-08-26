@@ -9,6 +9,7 @@ const SIZES = {
   md: 'max-w-md',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  '2xl': 'max-w-6xl',
 }
 
 /**
@@ -19,7 +20,7 @@ const SIZES = {
  * @param {() => void} onClose — invoked on ESC, overlay click, or close button
  * @param {string} title — heading text (labels the dialog)
  * @param {string} description — optional sub-heading (describes the dialog)
- * @param {'sm'|'md'|'lg'|'xl'} size
+ * @param {'sm'|'md'|'lg'|'xl'|'2xl'} size
  * @param {React.ReactNode} footer — optional footer content (end-aligned row)
  * @param {boolean} closeOnOverlay — close when the scrim is clicked
  * @param {boolean} closeOnEsc — close when Escape is pressed

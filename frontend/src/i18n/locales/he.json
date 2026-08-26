@@ -295,7 +295,7 @@
   },
   "playbooks": {
     "title": "מדריכי SOAR",
-    "subtitle": "בנה כללים של when {conditions} do [actions] שמופעלים על כל ממצא חדש.",
+    "subtitle": "בחר מדריך ברמת ייצור או בנה משלך: when {conditions} do [actions] על כל ממצא חי.",
     "subtitle_code": "when {conditions} do [actions]",
     "subtitle_footer": "נתונים חיים בלבד.",
     "new_playbook": "+ מדריך חדש",
@@ -362,7 +362,88 @@
     "no_library_match": "אין מדריכים התואמים לחיפוש.",
     "json_invalid": "JSON לא תקין",
     "saving": "שומר…",
-    "actions_ok": "{{ok}}/{{total}} הצליחו · {{failed}} נכשלו"
+    "actions_ok": "{{ok}}/{{total}} הצליחו · {{failed}} נכשלו",
+    "engines_any": "מנועים (כל אחד מ)",
+    "engine_add": "הוסף מזהה מנוע ולחץ Enter",
+    "cve_prefixes": "קידומות CVE",
+    "cve_prefixes_placeholder": "CVE-2024, CVE-2025",
+    "catalog": {
+      "title": "קטלוג מדריכים",
+      "subtitle": "בחר מדריך SOAR ברמת ייצור, התחל מאפס, או שמור מדריך משלך. התבניות נטענות כבויות — בדוק בידוד / קריאה לתורנות / webhook, ואז שמור.",
+      "browse": "קטלוג",
+      "search": "חיפוש בקטלוג…",
+      "categories": "קטגוריות מדריכים",
+      "category_all": "הכול",
+      "category_containment": "הכלה",
+      "category_identity": "זהות",
+      "category_exposure": "חשיפה",
+      "category_secrets": "סודות",
+      "category_cloud": "ענן",
+      "category_supply_chain": "שרשרת אספקה",
+      "category_threat": "ציד איומים",
+      "category_custom": "מותאם",
+      "blank_title": "התחל מאפס",
+      "blank_desc": "טריגר ופעולות ריקים. הוסף תנאים, ואז את סוגי הפעולות שהמנוע באמת מריץ.",
+      "use": "השתמש במדריך",
+      "loaded": "מדריך מהקטלוג נטען. בדוק פרמטרים, ואז שמור כדי לשמר.",
+      "save_as_template": "שמור לקטלוג",
+      "saved_template": "נשמר לקטלוג שלך. ניתן לבחור אותו לצד המדריכים המובנים.",
+      "delete_custom": "הסר תבנית מותאמת",
+      "delete_custom_confirm": "להסיר את התבנית \"{{name}}\" מהדפדפן הזה?",
+      "import_json": "ייבא JSON",
+      "imported": "מדריך מיובא נטען כטיוטה חדשה. שמור כדי לשמר.",
+      "import_invalid": "הקובץ אינו מדריך תקין (נדרש JSON עם trigger/actions).",
+      "no_match": "אין מדריכים בקטלוג שתואמים לסינון.",
+      "untitled": "מדריך ללא שם",
+      "kev_exposed": {
+        "name": "KEV קריטי → בידוד + קריאה לתורנות",
+        "description": "ממצא קריטי ברשימת CISA-KEV על נכס חשוף לאינטרנט: בידוד ל-30 דקות, קריאה ל-sec-oncall, סטטוס IN_PROGRESS, Slack לחדר מלחמה."
+      },
+      "ransomware_kev": {
+        "name": "נעילת KEV כופרה",
+        "description": "KEV קריטי/גבוה על נכס חשוף: בידוד ל-60 דקות, קריאה לתורנות, הקפאת הטיקט, התראת Slack. cooldown קצר למניעת הפעלות חוזרות."
+      },
+      "epss_exposed": {
+        "name": "טריאז' EPSS גבוה בחשיפה",
+        "description": "קריטי/גבוה עם EPSS ≥ 0.70 על נכס חשוף לאינטרנט: פתיחת טיקט והפצה ל-Slack ול-webhook של SIEM/ITSM."
+      },
+      "asm_critical": {
+        "name": "חשיפת ASM קריטית",
+        "description": "מנוע משטח תקיפה (asm) קריטי + חשוף לאינטרנט: אישור, Slack לחדר מלחמה, webhook למערכת הטיקטים."
+      },
+      "secret_leak": {
+        "name": "שבירת זכוכית לדליפת סוד",
+        "description": "Leak hunter / secrets-manager / credential-stuffing בקריטי או גבוה: קריאה לתורנות זהות, הקפאת הממצא, Slack לשולחן הזהות."
+      },
+      "identity_attack": {
+        "name": "הכלת מתקפת זהות",
+        "description": "Password spray, Kerberos, SAML או identity-attack-chain: בידוד המארח ל-15 דקות, קריאה לתורנות זהות, סטטוס IN_PROGRESS."
+      },
+      "cloud_iam": {
+        "name": "הסלמת IAM בענן",
+        "description": "cloud_iam_escalation בקריטי/גבוה: קריאה לתורנות ענן ו-Slack לשולחן הענן. בלי בידוד מארח — זו זהות, לא תחנת עבודה."
+      },
+      "iac_pr": {
+        "name": "PR אוטומטי ל-IaC / שרשרת אספקה",
+        "description": "iac_misconfig או supply_chain: פתיחת PR לתיקון, סטטוס IN_PROGRESS, Slack. cooldown של 24 שעות למניעת סערת PRs."
+      },
+      "apt_hunt": {
+        "name": "התראת ציד APT",
+        "description": "APT28/29/41 או תנועה רוחבית בקריטי/גבוה: קריאה לציד איומים, Slack ל-IR. בלי בידוד — קודם ציד, הכלה אחרי אישור."
+      },
+      "cve_wave": {
+        "name": "גל CVE-2024/2025",
+        "description": "ממצאים קריטיים/גבוהים חשופים לאינטרנט ש-CVE שלהם מתחיל ב-CVE-2024 או CVE-2025: קריאה לתורנות, הקפאה, Slack."
+      },
+      "email_dns": {
+        "name": "DNS דוא״ל / השתלטות סאבדומיין",
+        "description": "email_dns_posture או subdomain_takeover בקריטי/גבוה: פתיחת טיקט, Slack, webhook לצוות DNS."
+      },
+      "tls_downgrade": {
+        "name": "הורדת TLS על נכס חשוף",
+        "description": "tls_downgrade קריטי/גבוה על נכס חשוף לאינטרנט: הקפאת הממצא ו-Slack ל-PKI/פלטפורמה. בלי בידוד."
+      }
+    }
   },
   "clients_page": {
     "title": "ניהול לקוחות",
