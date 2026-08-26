@@ -42,7 +42,7 @@ export function MegaNav() {
   }
 
   return (
-    <header ref={barRef} className="sticky top-0 z-50 border-b border-[var(--line)] bg-[rgba(7,9,12,0.78)] backdrop-blur-xl">
+    <header ref={barRef} className="sticky top-0 z-50 overflow-visible border-b border-[var(--line)] bg-[rgba(7,9,12,0.92)] backdrop-blur-xl">
       <div className="site-wrap flex h-[var(--nav-h)] items-center justify-between gap-3">
         <A href="/" className="shrink-0" aria-label={t('a11y.home')}>
           <Logo size={34} />
@@ -201,9 +201,9 @@ function DesktopItem({
         <div
           id={panelId}
           role="menu"
-          className="absolute left-1/2 top-full z-50 w-[min(52rem,calc(100vw-2rem))] -translate-x-1/2 pt-3"
+          className="absolute left-1/2 top-full z-[80] w-[min(52rem,calc(100vw-2rem))] -translate-x-1/2 pt-3"
         >
-          <div className="surface grid gap-6 p-6 shadow-[var(--shadow)] md:grid-cols-2">
+          <div className="grid gap-6 rounded-[14px] border border-[var(--line-strong)] bg-[#10141b] p-6 shadow-[var(--shadow)] md:grid-cols-2">
             {item.mega!.map((col, ci) => (
               <div key={col.id}>
                 <p className="eyebrow mb-3">{t(`nav.mega.${item.id}.${col.id}`)}</p>
