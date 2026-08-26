@@ -39,6 +39,7 @@ config.yaml
 .env.dev
 .env.staging
 .env.production
+.env.local
 monitoring/prometheus-web.generated.yml
 
 # Runtime data files

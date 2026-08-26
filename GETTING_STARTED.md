@@ -19,38 +19,41 @@
 
 ## Quick start
 
-**Production / customer deploy (one command):**
+**One command (full Docker stack):**
 
 ```bash
-./start_weissman_live.sh --url https://your-company.example
+./start_weissman.sh
+# or: ./start_weissman_live.sh --url https://your-company.example
 ```
 
-First boot compiles the Rust workspace and builds the frontend + WASM inside Docker, so
-budget **20–40 minutes** on a fresh host (subsequent boots reuse the images and are ~1 min).
-The launcher waits up to 45 min for health — raise `WEISSMAN_BOOT_TIMEOUT` (seconds) on a
-slow box.
+Starts `dockerd` if needed, writes role-separated DSNs into `.env`
+(`DATABASE_URL`, `WEISSMAN_AUTH_DATABASE_URL`, `WEISSMAN_READ_ONLY_DATABASE_URL`,
+`WEISSMAN_MIGRATE_URL`), wires LLM env (`WEISSMAN_LLM_BASE_URL`,
+`WEISSMAN_LLM_API_KEY`, `WEISSMAN_NL_QUERY_MODEL`), then:
 
-**Local dev (hot-reload UI):**
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+
+bringing up Postgres 16 + pgvector, Redis, weissman-server, weissman-worker, and
+the Nginx gateway. First boot compiles inside Docker (**20–40 minutes** on a fresh
+host). The launcher waits for `/api/health`, a running worker, and a live
+`POST /api/ask` (must not 503) before printing **System Ready**.
+
+```
+http://127.0.0.1/command-center/
+```
+
+Set `WEISSMAN_LLM_BASE_URL` (and `WEISSMAN_LLM_API_KEY` if the provider needs a
+bearer) in `.env` so Ask Weissman and Supreme Council RAG can call a real model.
+A host Ollama/vLLM is reachable as `http://host.docker.internal:11434/v1`.
+
+**Hot-reload UI** (optional; proxies `/api` to the gateway / backend):
 
 ```bash
-# 1) Bring up just the datastores (compose service names, not host binaries):
-docker compose up -d postgres redis
-
-# 2) Point the server at them and run it (bare-metal path; DATABASE_URL is required):
-export DATABASE_URL=postgres://weissman_app:weissman_dev_secret@127.0.0.1:5432/weissman
-export REDIS_URL=redis://127.0.0.1:6379/0
-cargo run -p weissman-server        # or ./start_weissman.sh with .env.local
-
-# 3) Hot-reload UI (proxies /api → :8000):
 cd frontend && npm ci && npm run dev
 # → http://localhost:5173/command-center/login
 ```
 
-> The datastores are only reachable on the host if you publish their ports. The default
-> compose file `expose`s them on the internal network only; for local bare-metal dev add a
-> `ports:` mapping or run Postgres/Redis directly on the host.
-
-**Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` from `.env`.
+**Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` from `.env` or `.env.local`.
 
 **Verify:**
 

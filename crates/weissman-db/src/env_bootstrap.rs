@@ -7,31 +7,40 @@ use std::path::Path;
 
 /// Load environment files so `DATABASE_URL` is set even when `WorkingDirectory` is not the repo root.
 /// Later sources override earlier ones (explicit production paths win).
+///
+/// Empty values are never applied: a Docker-stack `.env` from `start_weissman_live.sh` ships
+/// `DATABASE_URL=` (compose injects the URL per-container). Applying that would wipe a URL the
+/// process already has — `./start_weissman.sh` sets `WEISSMAN_SKIP_DOTENV=1` as a belt-and-braces
+/// guard against the same file flipping `WEISSMAN_ENV` back to production.
 pub fn load_process_environment() {
-    // E2E / CI local stack: never load repo `.env` (often production) over explicit dev exports.
-    let e2e_stack = std::env::var("WEISSMAN_E2E_STACK")
-        .ok()
-        .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes"));
+    let e2e_stack = env_flag_truthy("WEISSMAN_E2E_STACK");
+    let skip_dotenv = env_flag_truthy("WEISSMAN_SKIP_DOTENV");
 
-    if !e2e_stack {
-        let _ = dotenvy::dotenv();
+    if !e2e_stack && !skip_dotenv {
+        if let Ok(cwd) = std::env::current_dir() {
+            let p = cwd.join(".env");
+            if p.is_file() {
+                apply_env_file(&p, false);
+            }
+        }
     }
 
     if let Ok(p) = std::env::var("WEISSMAN_ENV_FILE") {
         let path = Path::new(p.trim());
         if path.is_file() {
-            let _ = dotenvy::from_path_override(path);
+            apply_env_file(path, true);
         }
     }
 
-    if e2e_stack {
+    if e2e_stack || skip_dotenv {
+        apply_dev_metrics_token();
         return;
     }
 
     if let Ok(cwd) = std::env::current_dir() {
         let p = cwd.join(".env");
         if p.is_file() {
-            let _ = dotenvy::from_path_override(&p);
+            apply_env_file(&p, true);
         }
     }
 
@@ -39,7 +48,7 @@ pub fn load_process_environment() {
         if p.pop() {
             let env = p.join(".env");
             if env.is_file() {
-                let _ = dotenvy::from_path_override(&env);
+                apply_env_file(&env, true);
             }
         }
     }
@@ -47,9 +56,13 @@ pub fn load_process_environment() {
     // Common absolute deploy path (systemd WorkingDirectory often not the git checkout).
     let deploy = Path::new("/root/weissman-bot/.env");
     if deploy.is_file() {
-        let _ = dotenvy::from_path_override(deploy);
+        apply_env_file(deploy, true);
     }
 
+    apply_dev_metrics_token();
+}
+
+fn apply_dev_metrics_token() {
     // Dev-only convenience: give the metrics endpoint a token when none is set so local
     // runs work. NEVER in production — a source-committed token would satisfy the
     // WEISSMAN_METRICS_TOKEN startup guard with a publicly-known value, leaving /api/metrics
@@ -64,6 +77,63 @@ pub fn load_process_environment() {
             "WEISSMAN_METRICS_TOKEN",
             "dev-metrics-token-32-bytes-minimum-xx",
         );
+    }
+}
+
+fn env_flag_truthy(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes" | "TRUE" | "YES"))
+}
+
+/// Parse dotenv-style assignments. Empty values are dropped so they cannot clobber a
+/// caller-supplied `DATABASE_URL` / `REDIS_URL`.
+fn parse_env_assignments(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line).trim();
+        let Some((key, val)) = line.split_once('=') else {
+            continue;
+        };
+        if key.is_empty()
+            || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            || key.chars().next().is_some_and(|c| c.is_ascii_digit())
+        {
+            continue;
+        }
+        let val = strip_matching_quotes(val.trim());
+        if val.is_empty() {
+            continue;
+        }
+        out.push((key.to_string(), val));
+    }
+    out
+}
+
+fn strip_matching_quotes(val: &str) -> String {
+    let bytes = val.as_bytes();
+    if bytes.len() >= 2
+        && ((bytes[0] == b'"' && *bytes.last().unwrap() == b'"')
+            || (bytes[0] == b'\'' && *bytes.last().unwrap() == b'\''))
+    {
+        return val[1..val.len() - 1].to_string();
+    }
+    val.to_string()
+}
+
+fn apply_env_file(path: &Path, override_existing: bool) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    for (key, val) in parse_env_assignments(&text) {
+        if !override_existing && std::env::var(&key).is_ok() {
+            continue;
+        }
+        std::env::set_var(key, val);
     }
 }
 
@@ -152,5 +222,31 @@ mod tests {
         assert!(
             validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok()
         );
+    }
+
+    #[test]
+    fn parse_skips_empty_database_url() {
+        let rows = parse_env_assignments(
+            "WEISSMAN_ENV=production\nDATABASE_URL=\nREDIS_URL=\nWEISSMAN_JWT_SECRET=abc\n",
+        );
+        let keys: Vec<&str> = rows.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(keys.contains(&"WEISSMAN_ENV"));
+        assert!(keys.contains(&"WEISSMAN_JWT_SECRET"));
+        assert!(!keys.contains(&"DATABASE_URL"));
+        assert!(!keys.contains(&"REDIS_URL"));
+    }
+
+    #[test]
+    fn parse_strips_quotes_and_export() {
+        let rows = parse_env_assignments("export REDIS_URL=\"redis://127.0.0.1:6379/0\"\n");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "REDIS_URL");
+        assert_eq!(rows[0].1, "redis://127.0.0.1:6379/0");
+    }
+
+    #[test]
+    fn parse_keeps_base64_padding() {
+        let rows = parse_env_assignments("WEISSMAN_JWT_SECRET=abc+def/ghi=\n");
+        assert_eq!(rows[0].1, "abc+def/ghi=");
     }
 }

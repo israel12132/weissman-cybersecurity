@@ -102,6 +102,28 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+# Bring the Docker daemon up if the CLI is present but `docker info` fails.
+# Cloud / bare-metal boxes often have dockerd installed but not running.
+ensure_docker_daemon() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  command -v dockerd >/dev/null 2>&1 || die "Docker daemon not running and dockerd is not installed"
+  log "Docker daemon not running — starting dockerd..."
+  sudo dockerd >/tmp/weissman-dockerd.log 2>&1 &
+  local i
+  for i in $(seq 1 50); do
+    sudo chmod 666 /var/run/docker.sock 2>/dev/null || true
+    if docker info >/dev/null 2>&1; then
+      log "Docker daemon is up"
+      return 0
+    fi
+    sleep 0.4
+  done
+  tail -30 /tmp/weissman-dockerd.log >&2 || true
+  die "Docker daemon failed to start — see /tmp/weissman-dockerd.log"
+}
+
 # NOTE: callers pass only the flags — the leading `start|stop|...` word (when present) is
 # already consumed by the dispatcher above. Do NOT shift here: an extra shift silently ate
 # the first flag, which made the documented `--url https://your.domain` form die with
@@ -191,7 +213,7 @@ check_prereqs() {
   # wait_healthy() and verify_live() both probe the stack over HTTP.
   need_cmd curl
   docker compose version >/dev/null 2>&1 || die "docker compose v2 required"
-  docker info >/dev/null 2>&1 || die "Docker daemon not running — start dockerd first"
+  ensure_docker_daemon
 
   if [[ -x "$ROOT/scripts/verify_docker_build_integrity.sh" ]]; then
     "$ROOT/scripts/verify_docker_build_integrity.sh" || die "Docker build context incomplete — fix before deploy"
@@ -227,6 +249,83 @@ env_set() {
     mv "$tmp" .env
   else
     printf '%s=%s\n' "$key" "$val" >>.env
+  fi
+}
+
+# Compose interpolates these from DB_* / POSTGRES_* pieces. Writing the full DSNs
+# into .env is required so env_file, operators, and /api/ask boot-path all see the
+# same values. An empty WEISSMAN_READ_ONLY_DATABASE_URL makes POST /api/ask return 503.
+sync_role_database_urls() {
+  local db pg_user app_user auth_user ro_user
+  local pg_pw app_pw auth_pw ro_pw
+  db="$(env_get POSTGRES_DB)"
+  db="${db:-weissman}"
+  pg_user="$(env_get POSTGRES_USER)"
+  pg_user="${pg_user:-postgres}"
+  app_user="$(env_get DB_APP_USER)"
+  app_user="${app_user:-weissman_app}"
+  auth_user="$(env_get DB_AUTH_USER)"
+  auth_user="${auth_user:-weissman_auth}"
+  ro_user="$(env_get DB_RO_USER)"
+  ro_user="${ro_user:-weissman_ro}"
+  pg_pw="$(env_get POSTGRES_PASSWORD)"
+  app_pw="$(env_get DB_APP_PASSWORD)"
+  auth_pw="$(env_get DB_AUTH_PASSWORD)"
+  ro_pw="$(env_get DB_RO_PASSWORD)"
+  [[ -n "$pg_pw" && -n "$app_pw" && -n "$auth_pw" && -n "$ro_pw" ]] \
+    || die "DB role passwords missing after generation — cannot write role-separated DATABASE_URLs"
+  env_set DATABASE_URL "postgresql://${app_user}:${app_pw}@postgres:5432/${db}"
+  env_set WEISSMAN_AUTH_DATABASE_URL "postgresql://${auth_user}:${auth_pw}@postgres:5432/${db}"
+  env_set WEISSMAN_READ_ONLY_DATABASE_URL "postgresql://${ro_user}:${ro_pw}@postgres:5432/${db}"
+  env_set WEISSMAN_MIGRATE_URL "postgresql://${pg_user}:${pg_pw}@postgres:5432/${db}"
+  log "Wrote DATABASE_URL + WEISSMAN_AUTH_DATABASE_URL + WEISSMAN_READ_ONLY_DATABASE_URL + WEISSMAN_MIGRATE_URL (role-separated, host=postgres)"
+}
+
+# Alias LLM env vars so Ask Weissman (NL→SQL) and Supreme Council RAG see one set of keys.
+# Never invent an API key. If a key exists without a base URL, default to OpenAI's public API.
+wire_llm_env() {
+  local llm_url llm_key llm_model openai_key openai_url llm_base_alias nl_model
+  llm_url="$(env_get WEISSMAN_LLM_BASE_URL)"
+  llm_key="$(env_get WEISSMAN_LLM_API_KEY)"
+  llm_model="$(env_get WEISSMAN_LLM_MODEL)"
+  openai_key="$(env_get OPENAI_API_KEY)"
+  openai_url="$(env_get OPENAI_BASE_URL)"
+  llm_base_alias="$(env_get LLM_BASE_URL)"
+  nl_model="$(env_get WEISSMAN_NL_QUERY_MODEL)"
+
+  if [[ -z "$llm_key" && -n "$openai_key" ]]; then
+    env_set WEISSMAN_LLM_API_KEY "$openai_key"
+    llm_key="$openai_key"
+    log "Aliased OPENAI_API_KEY → WEISSMAN_LLM_API_KEY"
+  fi
+  if [[ -z "$openai_key" && -n "$llm_key" ]]; then
+    env_set OPENAI_API_KEY "$llm_key"
+  fi
+  if [[ -z "$llm_url" && -n "$openai_url" ]]; then
+    env_set WEISSMAN_LLM_BASE_URL "$openai_url"
+    llm_url="$openai_url"
+  fi
+  if [[ -z "$llm_url" && -n "$llm_base_alias" ]]; then
+    env_set WEISSMAN_LLM_BASE_URL "$llm_base_alias"
+    llm_url="$llm_base_alias"
+  fi
+  if [[ -z "$llm_url" && -n "$llm_key" ]]; then
+    env_set WEISSMAN_LLM_BASE_URL "https://api.openai.com/v1"
+    llm_url="https://api.openai.com/v1"
+    log "WEISSMAN_LLM_BASE_URL defaulted to https://api.openai.com/v1 (API key is set)"
+  fi
+  if [[ -n "$llm_url" ]]; then
+    env_set OPENAI_BASE_URL "$llm_url"
+    env_set LLM_BASE_URL "$llm_url"
+  fi
+  if [[ -z "$nl_model" && -n "$llm_model" ]]; then
+    env_set WEISSMAN_NL_QUERY_MODEL "$llm_model"
+    nl_model="$llm_model"
+  fi
+  if [[ -z "$llm_url" ]]; then
+    log "WARN: WEISSMAN_LLM_BASE_URL is unset — Ask Weissman / Supreme Council will fail closed until you set it (and WEISSMAN_LLM_API_KEY if the provider requires a bearer). Example: WEISSMAN_LLM_BASE_URL=http://host.docker.internal:11434/v1"
+  else
+    log "LLM wired: WEISSMAN_LLM_BASE_URL=${llm_url}  model=${llm_model:-default}  nl_query_model=${nl_model:-default}"
   fi
 }
 
@@ -318,6 +417,11 @@ ensure_env() {
   if [[ -z "$(env_get GRAFANA_ADMIN_PASSWORD)" ]]; then
     env_set GRAFANA_ADMIN_PASSWORD "$(gen_password)"
   fi
+
+  # Role-separated DSNs written into .env so operators (and env_file) see the same
+  # URLs compose interpolates. Empty WEISSMAN_READ_ONLY_DATABASE_URL → /api/ask 503.
+  sync_role_database_urls
+  wire_llm_env
 
   if [[ -n "$PUBLIC_URL" ]]; then
     env_set WEISSMAN_PUBLIC_BASE_URL "$PUBLIC_URL"
@@ -513,6 +617,38 @@ verify_live() {
     || log "WARN: backend reports postgres_ok=false — check: ./start_weissman_live.sh logs postgres"
 
   curl -sf "http://127.0.0.1/command-center/" >/dev/null || die "/command-center/ failed"
+
+  local wid whealth wrunning
+  wid="$(dc ps -q worker 2>/dev/null || true)"
+  [[ -n "$wid" ]] || die "weissman-worker container is not running"
+  wrunning="$(docker inspect -f '{{.State.Running}}' "$wid" 2>/dev/null || echo false)"
+  [[ "$wrunning" == "true" ]] || die "weissman-worker is not running"
+  whealth="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$wid")"
+  if [[ "$whealth" != "healthy" && "$whealth" != "none" ]]; then
+    die "weissman-worker health=${whealth} (expected healthy)"
+  fi
+  log "weissman-worker is running (health=${whealth})"
+
+  # /api/ask requires analyst auth. 401/403 means the route is live and the read-only pool
+  # is configured. 503 means WEISSMAN_READ_ONLY_DATABASE_URL did not reach the backend.
+  local ask_code
+  ask_code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1/api/ask" \
+    -H 'Content-Type: application/json' \
+    -d '{"question":"how many critical findings?"}' || echo 000)"
+  case "$ask_code" in
+    503)
+      die "/api/ask returned 503 — WEISSMAN_READ_ONLY_DATABASE_URL is not reaching the backend (Ask Weissman disabled)"
+      ;;
+    401|403)
+      log "/api/ask is armed (HTTP ${ask_code} auth required — read-only pool is configured)"
+      ;;
+    200)
+      log "/api/ask answered HTTP 200"
+      ;;
+    *)
+      die "/api/ask unexpected HTTP ${ask_code} — route is not reachable"
+      ;;
+  esac
   # NOTE: do not probe /api/config/public here — despite the name it is behind auth_guard
   # (not in PUBLIC_ROUTES) and returns 401 unauthenticated, and its body leaks tenant_id.
   # The gateway->backend hop is already exercised by /api/health above.
@@ -534,6 +670,7 @@ verify_live() {
   fi
 
   log "All live checks passed."
+  log "System Ready"
 }
 
 print_banner() {
@@ -545,11 +682,13 @@ print_banner() {
   cat <<EOF
 
 ================================================================================
-  WEISSMAN LIVE — production stack is running
+  WEISSMAN LIVE — System Ready
 ================================================================================
   Command Center : ${base}/command-center/login   (the URL users log in at)
   Local access   : http://127.0.0.1/command-center/  (this host only)
   API health     : http://127.0.0.1/api/health
+  Ask Weissman   : POST http://127.0.0.1/api/ask  (login required; read-only role is configured)
+  LLM            : ${WEISSMAN_LLM_BASE_URL:-UNSET — set WEISSMAN_LLM_BASE_URL in .env for Council / NL→SQL}
   Admin email    : ${login_email}
 EOF
   # Production forces Secure-only session cookies (WEISSMAN_COOKIE_SECURE=1). Browsers do

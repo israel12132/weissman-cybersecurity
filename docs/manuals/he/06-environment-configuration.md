@@ -22,6 +22,7 @@
 | systemd | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret |
 | Override | `WEISSMAN_ENV_FILE` |
+| הרצה מקומית בפקודה אחת | `./start_weissman.sh` מפעיל dockerd אם צריך, כותב DSN לפי תפקידים + LLM ל-`.env`, ואז `docker compose up -d` (postgres, redis, backend, worker, nginx). `/api/ask` דורש `WEISSMAN_READ_ONLY_DATABASE_URL`. |
 
 Docker Compose **דורש** מינימום:
 
