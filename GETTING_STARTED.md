@@ -30,18 +30,18 @@ budget **20–40 minutes** on a fresh host (subsequent boots reuse the images an
 The launcher waits up to 45 min for health — raise `WEISSMAN_BOOT_TIMEOUT` (seconds) on a
 slow box.
 
-**Local dev (hot-reload UI):**
+**Local / laptop (one command — Postgres, Redis, API, worker, UI):**
 
 ```bash
-# 1) Bring up just the datastores (compose service names, not host binaries):
-docker compose up -d postgres redis
+./start_weissman.sh --pull
+# → unsticks a leftover merge, pulls main, starts the full stack
+# Docker hosts (no cargo/systemd): uses start_weissman_live.sh
+# Hosts with cargo: Docker Postgres/Redis + weissman-server + weissman-worker
+```
 
-# 2) Point the server at them and run it (bare-metal path; DATABASE_URL is required):
-export DATABASE_URL=postgres://weissman_app:weissman_dev_secret@127.0.0.1:5432/weissman
-export REDIS_URL=redis://127.0.0.1:6379/0
-cargo run -p weissman-server        # or ./start_weissman.sh with .env.local
+Hot-reload UI only (proxies `/api` → `:8000`):
 
-# 3) Hot-reload UI (proxies /api → :8000):
+```bash
 cd frontend && npm ci && npm run dev
 # → http://localhost:5173/command-center/login
 ```
