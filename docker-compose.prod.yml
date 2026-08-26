@@ -20,6 +20,7 @@
 #   WEISSMAN_JWT_SECRET (>=48 chars)   WEISSMAN_ADMIN_PASSWORD
 #   WEISSMAN_METRICS_TOKEN (>=32)      WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET (>=32)
 #   WEISSMAN_JOB_ORCHESTRATOR_SECRET (>=32)
+#   WEISSMAN_VAULT_KEY (64 hex)        WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32)
 #   WEISSMAN_PUBLIC_BASE_URL (https)   POSTGRES_PASSWORD  DB_APP_PASSWORD
 #   DB_AUTH_PASSWORD  REDIS_PASSWORD   (monitoring uses WEISSMAN_ADMIN_* — optional GRAFANA_ADMIN_PASSWORD override)
 # Bounded container logs. Docker's json-file driver defaults to *unbounded* growth and
@@ -99,6 +100,25 @@ services:
       WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:?set a 32+ char WEISSMAN_METRICS_TOKEN}
       WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ${WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET:?set a 32+ char WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET}
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:?set a 32+ char WEISSMAN_JOB_ORCHESTRATOR_SECRET}
+      # security_startup.rs refuses production boot unless these dedicated vault keys
+      # are present. They used to arrive only via env_file; if that mapping was skipped
+      # (Compose long-syntax env_file + required:false, or a .env copied from the
+      # template before the launcher filled them), the backend exited in <1s and
+      # Compose reported "backend-1 is unhealthy" with no useful interpolator error.
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:?set WEISSMAN_VAULT_KEY to 64 hex chars (openssl rand -hex 32)}
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:?set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars)}
+      # Discrete pieces so the process can rebuild DSNs if env_file injects empty
+      # DATABASE_URL=/REDIS_URL= lines from PRODUCTION.env.template.
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-weissman}
+      DB_APP_USER: ${DB_APP_USER:-weissman_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
+      DB_AUTH_USER: ${DB_AUTH_USER:-weissman_auth}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:?set DB_AUTH_PASSWORD}
+      DB_RO_USER: ${DB_RO_USER:-weissman_ro}
+      DB_RO_PASSWORD: ${DB_RO_PASSWORD:?set DB_RO_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       WEISSMAN_AGENT_BIN_DIR: /srv/bin/agents
       # The gateway forwards X-Forwarded-For / X-Real-IP; without this the backend keys
@@ -134,6 +154,15 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
       WEISSMAN_JWT_SECRET: ${WEISSMAN_JWT_SECRET:?set a strong 32+ char WEISSMAN_JWT_SECRET}
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:?set a 32+ char WEISSMAN_JOB_ORCHESTRATOR_SECRET}
+      # Same vault-key requirement as the server (worker startup guard is not Server-scoped).
+      WEISSMAN_VAULT_KEY: ${WEISSMAN_VAULT_KEY:?set WEISSMAN_VAULT_KEY to 64 hex chars (openssl rand -hex 32)}
+      WEISSMAN_INTEGRATIONS_VAULT_KEY: ${WEISSMAN_INTEGRATIONS_VAULT_KEY:?set WEISSMAN_INTEGRATIONS_VAULT_KEY (>=32 chars)}
+      POSTGRES_DB: ${POSTGRES_DB:-weissman}
+      DB_APP_USER: ${DB_APP_USER:-weissman_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD}
+      DB_AUTH_USER: ${DB_AUTH_USER:-weissman_auth}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:?set DB_AUTH_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       # OAST correlation for engines running off the request thread (same as backend).
       WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}

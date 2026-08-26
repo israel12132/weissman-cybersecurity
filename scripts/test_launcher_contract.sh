@@ -138,6 +138,20 @@ for var in WEISSMAN_JWT_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET; do
     fi
   done
 done
+# Production-only: security_startup.rs refuses worker boot without dedicated vault keys.
+# They must be in the prod overlay's worker environment (not only env_file).
+for var in WEISSMAN_VAULT_KEY WEISSMAN_INTEGRATIONS_VAULT_KEY; do
+  if sed -n '/^  worker:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q "${var}:"; then
+    ok "$var reaches the worker in docker-compose.prod.yml"
+  else
+    bad "$var missing from the worker environment in docker-compose.prod.yml"
+  fi
+  if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q "${var}:"; then
+    ok "$var reaches the backend in docker-compose.prod.yml"
+  else
+    bad "$var missing from the backend environment in docker-compose.prod.yml"
+  fi
+done
 
 # ─────────────────────────────────────────────────────────────────────────────
 head_ "5. Bind-mount contract — a missing host path becomes a DIRECTORY, not a file"
@@ -247,6 +261,27 @@ if grep -qE '\bdc (ps|logs|up|down)' "$LAUNCHER" && ! grep -qE '"\$\{COMPOSE\[@\
   ok "compose calls go through the profile-aware dc() helper"
 else
   bad "a raw \${COMPOSE[@]} ps call bypasses --profile monitoring (profiled services will never be found)"
+fi
+
+# compose up used to abort on "backend-1 is unhealthy" without printing the FATAL line
+# that actually explains the crash (vault key, checksum, Redis).
+if grep -q "diagnose_compose_failure" "$LAUNCHER" \
+   && sed -n '/^compose_up()/,/^}/p' "$LAUNCHER" | grep -q "diagnose_compose_failure"; then
+  ok "compose_up dumps backend logs when docker compose fails"
+else
+  bad "compose_up does not diagnose backend logs on compose failure"
+fi
+
+if sed -n '/^gen_secret()/,/^}/p' "$LAUNCHER" | grep -q 'openssl rand -hex'; then
+  ok "gen_secret emits URL-safe hex (no + in DATABASE_URL/REDIS_URL)"
+else
+  bad "gen_secret still emits base64 — '+' in passwords breaks DSN userinfo"
+fi
+
+if grep -q "WEISSMAN_VAULT_KEY must be exactly 64 hex" "$LAUNCHER"; then
+  ok "validate_env rejects a missing/invalid WEISSMAN_VAULT_KEY before compose up"
+else
+  bad "validate_env does not check WEISSMAN_VAULT_KEY — backend will crash as unhealthy"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
