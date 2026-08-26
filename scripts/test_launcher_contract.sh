@@ -379,5 +379,65 @@ else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+head_ "13. start_weissman.sh — local Docker stack (one command)"
+# The host launcher used to refuse repo .env (Docker-stack empty DATABASE_URL) and exit
+# without starting anything. It must bring up Postgres + Redis + server + worker instead.
+if grep -q 'Not sourcing' start_weissman.sh; then
+  bad "start_weissman.sh still refuses to load repo .env instead of starting Docker datastores"
+else
+  ok "start_weissman.sh no longer dead-ends on Docker-stack .env"
+fi
+for needle in ensure_docker ensure_postgres ensure_redis weissman-worker WEISSMAN_SKIP_DOTENV; do
+  if grep -q "$needle" start_weissman.sh; then
+    ok "start_weissman.sh contains $needle"
+  else
+    bad "start_weissman.sh missing $needle"
+  fi
+done
+
+dry_out="$(env -u DATABASE_URL -u REDIS_URL -u WEISSMAN_MIGRATE_URL -u WEISSMAN_ENV \
+  -u WEISSMAN_COOKIE_SECURE -u WEISSMAN_PUBLIC_BASE_URL -u PORT \
+  WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+if grep -q 'PLAN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/weissman' <<<"$dry_out" \
+   && grep -q 'PLAN docker_postgres=weissman-postgres' <<<"$dry_out" \
+   && grep -q 'PLAN docker_redis=weissman-redis' <<<"$dry_out" \
+   && grep -q 'PLAN worker=1' <<<"$dry_out" \
+   && grep -q 'PLAN SKIP_DOTENV=1' <<<"$dry_out"; then
+  ok "dry-run fills local Docker URLs and starts worker"
+else
+  bad "dry-run plan is wrong: $(tr '\n' ' ' <<<"$dry_out" | head -c 400)"
+fi
+
+stack_env="$(mktemp)"
+cat >"$stack_env" <<'EOF'
+WEISSMAN_ENV=production
+WEISSMAN_COOKIE_SECURE=1
+DATABASE_URL=
+REDIS_URL=
+WEISSMAN_MIGRATE_URL=
+WEISSMAN_JWT_SECRET=contract-test-jwt-secret-value-32chars-minimum
+EOF
+stack_out="$(env -u DATABASE_URL -u REDIS_URL -u WEISSMAN_MIGRATE_URL -u WEISSMAN_ENV \
+  -u WEISSMAN_COOKIE_SECURE -u WEISSMAN_PUBLIC_BASE_URL \
+  WEISSMAN_ENV_FILE="$stack_env" WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+rm -f "$stack_env"
+if grep -q 'PLAN WEISSMAN_ENV=development' <<<"$stack_out" \
+   && grep -q 'PLAN WEISSMAN_COOKIE_SECURE=0' <<<"$stack_out" \
+   && grep -q 'PLAN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/weissman' <<<"$stack_out" \
+   && grep -q 'PLAN docker_stack_env=1' <<<"$stack_out"; then
+  ok "Docker-stack .env (empty DATABASE_URL + production) becomes a local HTTP stack"
+else
+  bad "Docker-stack env handling is wrong: $(tr '\n' ' ' <<<"$stack_out" | head -c 400)"
+fi
+
+keep_out="$(DATABASE_URL='postgres://app:secret@db.internal:5432/weissman' \
+  WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+if grep -q 'PLAN DATABASE_URL=postgres://app:secret@db.internal:5432/weissman' <<<"$keep_out"; then
+  ok "caller DATABASE_URL is preserved"
+else
+  bad "caller DATABASE_URL was overwritten: $(tr '\n' ' ' <<<"$keep_out" | head -c 300)"
+fi
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

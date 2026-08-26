@@ -22,6 +22,7 @@ Reference for all Weissman environment variables. Source of truth: **`PRODUCTION
 | systemd | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret (`deploy/k8s/configmap.yaml`) |
 | Override chain | `WEISSMAN_ENV_FILE` loads an additional file last |
+| Local one-command | `./start_weissman.sh` loads `.env.local` then `.env` (skips empty values), starts Docker Postgres + Redis, sets `WEISSMAN_SKIP_DOTENV=1` |
 
 Docker Compose **requires** at minimum:
 

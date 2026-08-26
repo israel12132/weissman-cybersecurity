@@ -22,6 +22,7 @@
 | systemd | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret |
 | Override | `WEISSMAN_ENV_FILE` |
+| הרצה מקומית בפקודה אחת | `./start_weissman.sh` טוען `.env.local` ואז `.env` (מדלג על ערכים ריקים), מפעיל Postgres + Redis ב-Docker |
 
 Docker Compose **דורש** מינימום:
 

@@ -30,27 +30,27 @@ budget **20–40 minutes** on a fresh host (subsequent boots reuse the images an
 The launcher waits up to 45 min for health — raise `WEISSMAN_BOOT_TIMEOUT` (seconds) on a
 slow box.
 
-**Local dev (hot-reload UI):**
+**Local full stack (one command):**
 
 ```bash
-# 1) Bring up just the datastores (compose service names, not host binaries):
-docker compose up -d postgres redis
+./start_weissman.sh
+# starts Docker (dockerd if needed) → Postgres + Redis → weissman-server + weissman-worker
+# → http://127.0.0.1:8000/command-center/
+```
 
-# 2) Point the server at them and run it (bare-metal path; DATABASE_URL is required):
-export DATABASE_URL=postgres://weissman_app:weissman_dev_secret@127.0.0.1:5432/weissman
-export REDIS_URL=redis://127.0.0.1:6379/0
-cargo run -p weissman-server        # or ./start_weissman.sh with .env.local
+The launcher will not source empty `DATABASE_URL` / `REDIS_URL` lines from a Docker-stack
+`.env` (written by `./start_weissman_live.sh`). It loads JWT/admin secrets from that file,
+starts `weissman-postgres` + `weissman-redis` on localhost, and runs the host binaries.
+`./start_weissman.sh stop` kills server + worker; containers keep running (data persists).
 
-# 3) Hot-reload UI (proxies /api → :8000):
+**Hot-reload UI** (optional, proxies `/api` → `:8000` while the launcher server is up):
+
+```bash
 cd frontend && npm ci && npm run dev
 # → http://localhost:5173/command-center/login
 ```
 
-> The datastores are only reachable on the host if you publish their ports. The default
-> compose file `expose`s them on the internal network only; for local bare-metal dev add a
-> `ports:` mapping or run Postgres/Redis directly on the host.
-
-**Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` from `.env`.
+**Login:** `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` from `.env` or `.env.local`.
 
 **Verify:**
 
