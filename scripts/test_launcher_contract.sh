@@ -380,63 +380,74 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-head_ "13. start_weissman.sh — local Docker stack (one command)"
-# The host launcher used to refuse repo .env (Docker-stack empty DATABASE_URL) and exit
-# without starting anything. It must bring up Postgres + Redis + server + worker instead.
+head_ "13. start_weissman.sh — full Docker Compose stack (one command)"
+# ./start_weissman.sh is the operator-facing name for the full compose stack
+# (postgres+pgvector, redis, backend, worker, nginx gateway). It must not dead-end
+# on an empty Docker-stack DATABASE_URL, and it must write role-separated DSNs so
+# /api/ask is not 503.
 if grep -q 'Not sourcing' start_weissman.sh; then
-  bad "start_weissman.sh still refuses to load repo .env instead of starting Docker datastores"
+  bad "start_weissman.sh still refuses to load repo .env instead of starting Compose"
 else
   ok "start_weissman.sh no longer dead-ends on Docker-stack .env"
 fi
-for needle in ensure_docker ensure_postgres ensure_redis weissman-worker WEISSMAN_SKIP_DOTENV; do
+for needle in start_weissman_live.sh 'docker compose' postgres redis backend worker gateway; do
   if grep -q "$needle" start_weissman.sh; then
-    ok "start_weissman.sh contains $needle"
+    ok "start_weissman.sh mentions $needle"
   else
     bad "start_weissman.sh missing $needle"
   fi
 done
+if grep -q 'ensure_docker_daemon' "$LAUNCHER"; then
+  ok "live launcher starts dockerd when the daemon is down"
+else
+  bad "live launcher does not start dockerd (ensure_docker_daemon missing)"
+fi
+if grep -q 'sync_role_database_urls' "$LAUNCHER" \
+   && grep -q 'env_set WEISSMAN_READ_ONLY_DATABASE_URL' "$LAUNCHER" \
+   && grep -q 'env_set WEISSMAN_AUTH_DATABASE_URL' "$LAUNCHER"; then
+  ok "launcher writes WEISSMAN_READ_ONLY_DATABASE_URL and WEISSMAN_AUTH_DATABASE_URL into .env"
+else
+  bad "launcher does not write role-separated DSNs into .env"
+fi
+if grep -q 'wire_llm_env' "$LAUNCHER" && grep -q 'WEISSMAN_NL_QUERY_MODEL' "$LAUNCHER"; then
+  ok "launcher wires LLM / NL-query env"
+else
+  bad "launcher does not wire LLM env"
+fi
+vbody="$(sed -n '/^verify_live()/,/^}/p' "$LAUNCHER")"
+if grep -q '/api/ask' <<<"$vbody" && grep -q '503' <<<"$vbody"; then
+  ok "verify_live refuses a 503 from /api/ask (missing read-only pool)"
+else
+  bad "verify_live does not probe /api/ask for the 503 missing-RO-pool failure"
+fi
+if grep -q 'System Ready' "$LAUNCHER"; then
+  ok "launcher prints System Ready after live checks"
+else
+  bad "launcher never prints System Ready"
+fi
+if grep -q 'WEISSMAN_NL_QUERY_MODEL' docker-compose.yml \
+   && grep -q 'WEISSMAN_LLM_BASE_URL' docker-compose.yml \
+   && grep -q 'host.docker.internal' docker-compose.yml; then
+  ok "compose passes LLM env into backend/worker (host.docker.internal extra_hosts)"
+else
+  bad "compose is missing LLM env or host.docker.internal extra_hosts"
+fi
+if grep -qE '^WEISSMAN_READ_ONLY_DATABASE_URL=' PRODUCTION.env.template \
+   && grep -qE '^WEISSMAN_NL_QUERY_MODEL=' PRODUCTION.env.template; then
+  ok "PRODUCTION.env.template documents READ_ONLY URL and NL query model"
+else
+  bad "PRODUCTION.env.template missing WEISSMAN_READ_ONLY_DATABASE_URL or WEISSMAN_NL_QUERY_MODEL"
+fi
 
-dry_out="$(env -u DATABASE_URL -u REDIS_URL -u WEISSMAN_MIGRATE_URL -u WEISSMAN_ENV \
-  -u WEISSMAN_COOKIE_SECURE -u WEISSMAN_PUBLIC_BASE_URL -u PORT \
-  WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
-if grep -q 'PLAN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/weissman' <<<"$dry_out" \
-   && grep -q 'PLAN docker_postgres=weissman-postgres' <<<"$dry_out" \
-   && grep -q 'PLAN docker_redis=weissman-redis' <<<"$dry_out" \
-   && grep -q 'PLAN worker=1' <<<"$dry_out" \
-   && grep -q 'PLAN SKIP_DOTENV=1' <<<"$dry_out"; then
-  ok "dry-run fills local Docker URLs and starts worker"
+dry_out="$(WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+if grep -q 'PLAN compose=docker-compose.yml+docker-compose.prod.yml' <<<"$dry_out" \
+   && grep -q 'PLAN services=postgres,redis,backend,worker,gateway' <<<"$dry_out" \
+   && grep -q 'PLAN role_urls=DATABASE_URL,WEISSMAN_AUTH_DATABASE_URL,WEISSMAN_READ_ONLY_DATABASE_URL,WEISSMAN_MIGRATE_URL' <<<"$dry_out" \
+   && grep -q 'PLAN verify=/api/health,worker,/api/ask' <<<"$dry_out" \
+   && grep -q 'PLAN system_ready=1' <<<"$dry_out"; then
+  ok "dry-run plans full compose stack + role URLs + /api/ask gate"
 else
   bad "dry-run plan is wrong: $(tr '\n' ' ' <<<"$dry_out" | head -c 400)"
-fi
-
-stack_env="$(mktemp)"
-cat >"$stack_env" <<'EOF'
-WEISSMAN_ENV=production
-WEISSMAN_COOKIE_SECURE=1
-DATABASE_URL=
-REDIS_URL=
-WEISSMAN_MIGRATE_URL=
-WEISSMAN_JWT_SECRET=contract-test-jwt-secret-value-32chars-minimum
-EOF
-stack_out="$(env -u DATABASE_URL -u REDIS_URL -u WEISSMAN_MIGRATE_URL -u WEISSMAN_ENV \
-  -u WEISSMAN_COOKIE_SECURE -u WEISSMAN_PUBLIC_BASE_URL \
-  WEISSMAN_ENV_FILE="$stack_env" WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
-rm -f "$stack_env"
-if grep -q 'PLAN WEISSMAN_ENV=development' <<<"$stack_out" \
-   && grep -q 'PLAN WEISSMAN_COOKIE_SECURE=0' <<<"$stack_out" \
-   && grep -q 'PLAN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/weissman' <<<"$stack_out" \
-   && grep -q 'PLAN docker_stack_env=1' <<<"$stack_out"; then
-  ok "Docker-stack .env (empty DATABASE_URL + production) becomes a local HTTP stack"
-else
-  bad "Docker-stack env handling is wrong: $(tr '\n' ' ' <<<"$stack_out" | head -c 400)"
-fi
-
-keep_out="$(DATABASE_URL='postgres://app:secret@db.internal:5432/weissman' \
-  WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
-if grep -q 'PLAN DATABASE_URL=postgres://app:secret@db.internal:5432/weissman' <<<"$keep_out"; then
-  ok "caller DATABASE_URL is preserved"
-else
-  bad "caller DATABASE_URL was overwritten: $(tr '\n' ' ' <<<"$keep_out" | head -c 300)"
 fi
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"

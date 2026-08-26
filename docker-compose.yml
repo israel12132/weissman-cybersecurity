@@ -22,6 +22,19 @@ x-logging: &default-logging
     max-size: "50m"
     max-file: "3"
 
+# Ask Weissman (NL→SQL) + Supreme Council RAG. Passed into backend and worker.
+# Values come from repo-root `.env` (compose interpolation). Empty is valid: the
+# process then uses its documented defaults / fails closed with a live error, never a stub.
+x-weissman-ai-env: &weissman-ai-env
+  WEISSMAN_LLM_BASE_URL: ${WEISSMAN_LLM_BASE_URL:-}
+  WEISSMAN_LLM_API_KEY: ${WEISSMAN_LLM_API_KEY:-}
+  WEISSMAN_LLM_MODEL: ${WEISSMAN_LLM_MODEL:-}
+  WEISSMAN_NL_QUERY_MODEL: ${WEISSMAN_NL_QUERY_MODEL:-}
+  WEISSMAN_LLM_ENDPOINTS: ${WEISSMAN_LLM_ENDPOINTS:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+
 services:
   postgres:
     # Least privilege. The stack previously ran every container with the full default
@@ -139,7 +152,13 @@ services:
       context: .
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:stable
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - path: .env
+        required: false
     environment:
+      <<: *weissman-ai-env
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       # Read-only role for "Ask Weissman" (NL->SQL, /api/ask). SELECT-only, 15s statement
@@ -213,8 +232,14 @@ services:
       context: .
       dockerfile: deploy/backend.Dockerfile
     image: weissman-backend:stable
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - path: .env
+        required: false
     entrypoint: ["/usr/local/bin/weissman-worker"]
     environment:
+      <<: *weissman-ai-env
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_AUTH_DATABASE_URL: postgresql://${DB_AUTH_USER:-weissman_auth}:${DB_AUTH_PASSWORD:-weissman_auth_dev}@postgres:5432/${POSTGRES_DB:-weissman}
       REDIS_URL: redis://redis:6379/0

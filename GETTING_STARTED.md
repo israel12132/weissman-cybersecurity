@@ -19,31 +19,34 @@
 
 ## Quick start
 
-**Production / customer deploy (one command):**
-
-```bash
-./start_weissman_live.sh --url https://your-company.example
-```
-
-First boot compiles the Rust workspace and builds the frontend + WASM inside Docker, so
-budget **20–40 minutes** on a fresh host (subsequent boots reuse the images and are ~1 min).
-The launcher waits up to 45 min for health — raise `WEISSMAN_BOOT_TIMEOUT` (seconds) on a
-slow box.
-
-**Local full stack (one command):**
+**One command (full Docker stack):**
 
 ```bash
 ./start_weissman.sh
-# starts Docker (dockerd if needed) → Postgres + Redis → weissman-server + weissman-worker
-# → http://127.0.0.1:8000/command-center/
+# or: ./start_weissman_live.sh --url https://your-company.example
 ```
 
-The launcher will not source empty `DATABASE_URL` / `REDIS_URL` lines from a Docker-stack
-`.env` (written by `./start_weissman_live.sh`). It loads JWT/admin secrets from that file,
-starts `weissman-postgres` + `weissman-redis` on localhost, and runs the host binaries.
-`./start_weissman.sh stop` kills server + worker; containers keep running (data persists).
+Starts `dockerd` if needed, writes role-separated DSNs into `.env`
+(`DATABASE_URL`, `WEISSMAN_AUTH_DATABASE_URL`, `WEISSMAN_READ_ONLY_DATABASE_URL`,
+`WEISSMAN_MIGRATE_URL`), wires LLM env (`WEISSMAN_LLM_BASE_URL`,
+`WEISSMAN_LLM_API_KEY`, `WEISSMAN_NL_QUERY_MODEL`), then:
 
-**Hot-reload UI** (optional, proxies `/api` → `:8000` while the launcher server is up):
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+
+bringing up Postgres 16 + pgvector, Redis, weissman-server, weissman-worker, and
+the Nginx gateway. First boot compiles inside Docker (**20–40 minutes** on a fresh
+host). The launcher waits for `/api/health`, a running worker, and a live
+`POST /api/ask` (must not 503) before printing **System Ready**.
+
+```
+http://127.0.0.1/command-center/
+```
+
+Set `WEISSMAN_LLM_BASE_URL` (and `WEISSMAN_LLM_API_KEY` if the provider needs a
+bearer) in `.env` so Ask Weissman and Supreme Council RAG can call a real model.
+A host Ollama/vLLM is reachable as `http://host.docker.internal:11434/v1`.
+
+**Hot-reload UI** (optional; proxies `/api` to the gateway / backend):
 
 ```bash
 cd frontend && npm ci && npm run dev

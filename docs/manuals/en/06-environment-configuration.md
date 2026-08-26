@@ -22,7 +22,7 @@ Reference for all Weissman environment variables. Source of truth: **`PRODUCTION
 | systemd | `/etc/weissman/weissman.env` |
 | Kubernetes | ConfigMap + Secret (`deploy/k8s/configmap.yaml`) |
 | Override chain | `WEISSMAN_ENV_FILE` loads an additional file last |
-| Local one-command | `./start_weissman.sh` loads `.env.local` then `.env` (skips empty values), starts Docker Postgres + Redis, sets `WEISSMAN_SKIP_DOTENV=1` |
+| Local one-command | `./start_weissman.sh` starts dockerd if needed, writes role-separated DSNs + LLM env into `.env`, then `docker compose up -d` (postgres, redis, backend, worker, nginx gateway). `/api/ask` is gated on `WEISSMAN_READ_ONLY_DATABASE_URL`. |
 
 Docker Compose **requires** at minimum:
 
