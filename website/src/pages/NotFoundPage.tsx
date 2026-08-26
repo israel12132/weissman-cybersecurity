@@ -1,19 +1,19 @@
 import { Layout } from '../components/Layout'
 import { ButtonLink } from '../components/Button'
+import { useI18n } from '../i18n'
 
 export function NotFoundPage() {
+  const { t } = useI18n()
   return (
     <Layout announce={false}>
       <div className="site-wrap py-24 text-center">
-        <p className="eyebrow">404</p>
-        <h1 className="display mt-3 text-4xl text-ink">This path is not a page.</h1>
-        <p className="mx-auto mt-4 max-w-md text-muted">
-          The public site returns a real 404 for unknown URLs so crawlers and monitors are not shown the homepage.
-        </p>
+        <p className="eyebrow">{t('notFound.eyebrow')}</p>
+        <h1 className="display mt-3 text-4xl text-ink">{t('notFound.title')}</h1>
+        <p className="mx-auto mt-4 max-w-md text-muted">{t('notFound.body')}</p>
         <div className="mt-8 flex justify-center gap-3">
-          <ButtonLink href="/">Home</ButtonLink>
+          <ButtonLink href="/">{t('cta.home')}</ButtonLink>
           <ButtonLink variant="ghost" href="/platform/">
-            Platform
+            {t('cta.platform')}
           </ButtonLink>
         </div>
       </div>

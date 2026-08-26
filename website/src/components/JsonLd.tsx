@@ -1,46 +1,60 @@
 import { useEffect } from 'react'
 import { company } from '../content/site'
 import { metrics } from '../content/metrics'
+import { localeMeta } from '../i18n/locale'
+import { useI18n } from '../i18n'
+
+function localeHome(origin: string, locale: 'en' | 'he') {
+  return locale === 'he' ? `${origin}/he/` : `${origin}/`
+}
 
 export function JsonLd() {
+  const { locale, t } = useI18n()
   useEffect(() => {
     const org = {
       '@context': 'https://schema.org',
       '@type': 'Organization',
       name: company.legalName,
-      url: company.origin,
+      url: localeHome(company.origin, locale),
       email: company.emails.sales,
+      inLanguage: localeMeta[locale].htmlLang,
       address: {
         '@type': 'PostalAddress',
-        addressLocality: 'Tel Aviv-Yafo',
+        addressLocality: locale === 'he' ? 'תל אביב-יפו' : 'Tel Aviv-Yafo',
         addressCountry: 'IL',
       },
     }
     const app = {
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
-      name: 'Weissman Cybersecurity Platform',
+      name: t('brand.product'),
       applicationCategory: 'SecurityApplication',
       operatingSystem: 'Web, Linux, macOS, Windows',
-      url: company.origin,
+      url: localeHome(company.origin, locale),
+      inLanguage: localeMeta[locale].htmlLang,
       offers: {
         '@type': 'Offer',
         price: String(metrics.cloudPriceUsd.value),
         priceCurrency: 'USD',
       },
-      description:
-        'Autonomous offensive-security and active-defence platform with live probes, attack-path intelligence, and a SOC Command Center.',
+      description: t('brand.jsonLdDescription'),
     }
 
-    const nodes = [org, app].map((data, i) => {
-      const el = document.createElement('script')
-      el.type = 'application/ld+json'
-      el.id = `weissman-ld-${i}`
+    const payloads = [org, app]
+    const nodes = payloads.map((data, i) => {
+      const id = `weissman-ld-${i}`
+      let el = document.getElementById(id) as HTMLScriptElement | null
+      const created = !el
+      if (!el) {
+        el = document.createElement('script')
+        el.type = 'application/ld+json'
+        el.id = id
+        document.head.appendChild(el)
+      }
       el.text = JSON.stringify(data)
-      document.head.appendChild(el)
-      return el
+      return created ? el : null
     })
-    return () => nodes.forEach((n) => n.remove())
-  }, [])
+    return () => nodes.forEach((n) => n?.remove())
+  }, [locale, t])
   return null
 }

@@ -78,7 +78,7 @@ RUN npm config set fetch-retries 5 \
 RUN cd website && npm ci --ignore-scripts
 COPY website ./website
 WORKDIR /build/website
-RUN node scripts/write-html-entries.mjs && npx tsc --noEmit && npx vite build
+RUN node --experimental-strip-types scripts/write-html-entries.ts && npx tsc --noEmit && npx vite build
 
 # Stage 3 — Nginx gateway (non-root, :8080 inside → :80 on host)
 FROM nginxinc/nginx-unprivileged:1.29-alpine

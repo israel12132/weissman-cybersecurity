@@ -23,6 +23,7 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-brand: 'Orbitron', var(--font-sans);
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-he: 'Heebo', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --grid-max: 80rem;
   --nav-h: 4.25rem;
 }

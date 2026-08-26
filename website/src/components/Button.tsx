@@ -1,4 +1,5 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react'
+import { useI18n } from '../i18n'
 
 type Shared = {
   children: ReactNode
@@ -10,12 +11,17 @@ export function ButtonLink({
   children,
   variant = 'primary',
   className = '',
+  href = '#',
   ...rest
 }: Shared & AnchorHTMLAttributes<HTMLAnchorElement>) {
+  const { href: loc } = useI18n()
   return (
-    <a className={`${styles[variant]} group ${className}`} {...rest}>
+    <a className={`${styles[variant]} group ${className}`} href={loc(href)} {...rest}>
       <span>{children}</span>
-      <span aria-hidden className="inline-block transition-transform duration-base group-hover:translate-x-0.5">
+      <span
+        aria-hidden
+        className="inline-block transition-transform duration-base group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+      >
         →
       </span>
     </a>

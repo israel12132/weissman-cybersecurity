@@ -41,6 +41,8 @@ const replaceable = [
   'about',
   'contact',
   'fonts',
+  'he',
+  'js',
 ]
 
 for (const name of replaceable) {

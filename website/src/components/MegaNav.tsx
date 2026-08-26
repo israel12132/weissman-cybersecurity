@@ -1,11 +1,14 @@
 import { useEffect, useId, useRef, useState, type MutableRefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { cta } from '../content/site'
+import { useI18n } from '../i18n'
 import { mainNav, type NavItem } from '../content/nav'
+import { A } from './A'
 import { ButtonLink } from './Button'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import { Logo } from './Logo'
 
 export function MegaNav() {
+  const { t } = useI18n()
   const [openId, setOpenId] = useState<string | null>(null)
   const [mobile, setMobile] = useState(false)
   const [mobileOpen, setMobileOpen] = useState<string | null>(null)
@@ -34,14 +37,18 @@ export function MegaNav() {
     if (openId && firstLink.current) firstLink.current.focus()
   }, [openId])
 
+  function megaLabel(itemId: string, linkId: string, field: 'label' | 'description') {
+    return t(`nav.mega.${itemId}.${linkId}.${field}`)
+  }
+
   return (
     <header ref={barRef} className="sticky top-0 z-50 border-b border-[var(--line)] bg-[rgba(7,9,12,0.78)] backdrop-blur-xl">
-      <div className="site-wrap flex h-[var(--nav-h)] items-center justify-between gap-4">
-        <a href="/" className="shrink-0" aria-label="Weissman home">
+      <div className="site-wrap flex h-[var(--nav-h)] items-center justify-between gap-3">
+        <A href="/" className="shrink-0" aria-label={t('a11y.home')}>
           <Logo size={34} />
-        </a>
+        </A>
 
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-1 lg:flex" aria-label={t('a11y.primaryNav')}>
           {mainNav.map((item) => (
             <DesktopItem
               key={item.id}
@@ -55,30 +62,34 @@ export function MegaNav() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <ButtonLink variant="ghost" href={cta.signIn.href}>
-            {cta.signIn.label}
+          <LanguageSwitcher variant="bar" />
+          <ButtonLink variant="ghost" href="/command-center/login">
+            {t('cta.signIn')}
           </ButtonLink>
-          <ButtonLink href={cta.primary.href}>{cta.primary.label}</ButtonLink>
+          <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
         </div>
 
-        <button
-          type="button"
-          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[12px] border border-[var(--line)] lg:hidden"
-          aria-expanded={mobile}
-          aria-controls="mobile-nav"
-          onClick={() => setMobile((v) => !v)}
-        >
-          <span className="sr-only">{mobile ? 'Close menu' : 'Open menu'}</span>
-          <span aria-hidden className="text-lg">
-            {mobile ? '×' : '☰'}
-          </span>
-        </button>
+        <div className="flex items-center gap-2 lg:hidden">
+          <LanguageSwitcher variant="bar" />
+          <button
+            type="button"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[12px] border border-[var(--line)]"
+            aria-expanded={mobile}
+            aria-controls="mobile-nav"
+            onClick={() => setMobile((v) => !v)}
+          >
+            <span className="sr-only">{mobile ? t('a11y.closeMenu') : t('a11y.openMenu')}</span>
+            <span aria-hidden className="text-lg">
+              {mobile ? '×' : '☰'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {openId && (
         <button
           type="button"
-          aria-label="Close menu overlay"
+          aria-label={t('a11y.closeOverlay')}
           className="fixed inset-0 top-[calc(var(--nav-h)+2.6rem)] z-40 bg-black/45"
           onClick={() => setOpenId(null)}
         />
@@ -86,55 +97,61 @@ export function MegaNav() {
 
       {mobile &&
         createPortal(
-        <div
-          id="mobile-nav"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Mobile navigation"
-          className="fixed inset-0 z-[80] flex flex-col bg-deep lg:hidden"
-        >
-          <div className="flex h-[var(--nav-h)] items-center justify-between border-b border-[var(--line)] px-4">
-            <Logo size={30} />
-            <button type="button" className="min-h-11 min-w-11" onClick={() => setMobile(false)} aria-label="Close menu">
-              ×
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            {mainNav.map((item) => (
-              <div key={item.id} className="border-b border-[var(--line)]">
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center justify-between py-3 text-left text-lg"
-                  aria-expanded={mobileOpen === item.id}
-                  onClick={() => setMobileOpen((cur) => (cur === item.id ? null : item.id))}
-                >
-                  {item.label}
-                  <span aria-hidden>{mobileOpen === item.id ? '–' : '+'}</span>
-                </button>
-                {mobileOpen === item.id && (
-                  <ul className="space-y-1 pb-4">
-                    {(item.mega ?? []).flatMap((col) => col.links).map((link) => (
-                      <li key={link.href}>
-                        <a className="block min-h-11 rounded-[12px] px-2 py-2 text-muted hover:bg-elevated hover:text-ink" href={link.href}>
-                          <span className="block text-ink">{link.label}</span>
-                          {link.description && <span className="text-sm text-dim">{link.description}</span>}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-            <div className="mt-6 flex flex-col gap-3">
-              <ButtonLink href={cta.primary.href}>{cta.primary.label}</ButtonLink>
-              <ButtonLink variant="ghost" href={cta.signIn.href}>
-                {cta.signIn.label}
-              </ButtonLink>
+          <div
+            id="mobile-nav"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('a11y.mobileNav')}
+            className="fixed inset-0 z-[80] flex flex-col bg-deep lg:hidden"
+          >
+            <div className="flex h-[var(--nav-h)] items-center justify-between border-b border-[var(--line)] px-4">
+              <Logo size={30} />
+              <button type="button" className="min-h-11 min-w-11" onClick={() => setMobile(false)} aria-label={t('a11y.closeMenu')}>
+                ×
+              </button>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {mainNav.map((item) => (
+                <div key={item.id} className="border-b border-[var(--line)]">
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center justify-between py-3 text-start text-lg"
+                    aria-expanded={mobileOpen === item.id}
+                    onClick={() => setMobileOpen((cur) => (cur === item.id ? null : item.id))}
+                  >
+                    {t(`nav.${item.id}`)}
+                    <span aria-hidden>{mobileOpen === item.id ? '–' : '+'}</span>
+                  </button>
+                  {mobileOpen === item.id && (
+                    <ul className="space-y-1 pb-4">
+                      {(item.mega ?? []).flatMap((col) =>
+                        col.links.map((link) => (
+                          <li key={link.id}>
+                            <A
+                              className="block min-h-11 rounded-[12px] px-2 py-2 text-muted hover:bg-elevated hover:text-ink"
+                              href={link.href}
+                            >
+                              <span className="block text-ink">{megaLabel(item.id, link.id, 'label')}</span>
+                              <span className="text-sm text-dim">{megaLabel(item.id, link.id, 'description')}</span>
+                            </A>
+                          </li>
+                        )),
+                      )}
+                    </ul>
+                  )}
+                </div>
+              ))}
+              <div className="mt-6 flex flex-col gap-3">
+                <LanguageSwitcher variant="drawer" />
+                <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
+                <ButtonLink variant="ghost" href="/command-center/login">
+                  {t('cta.signIn')}
+                </ButtonLink>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </header>
   )
 }
@@ -152,6 +169,7 @@ function DesktopItem({
   onClose: () => void
   firstLinkRef?: MutableRefObject<HTMLAnchorElement | null>
 }) {
+  const { t, href } = useI18n()
   const panelId = useId()
   const hasMega = Boolean(item.mega?.length)
 
@@ -171,12 +189,12 @@ function DesktopItem({
             }
           }}
         >
-          {item.label}
+          {t(`nav.${item.id}`)}
         </button>
       ) : (
-        <a className="inline-flex min-h-11 items-center px-3 text-sm text-muted hover:text-ink" href={item.href}>
-          {item.label}
-        </a>
+        <A className="inline-flex min-h-11 items-center px-3 text-sm text-muted hover:text-ink" href={item.href}>
+          {t(`nav.${item.id}`)}
+        </A>
       )}
 
       {hasMega && open && (
@@ -187,19 +205,21 @@ function DesktopItem({
         >
           <div className="surface grid gap-6 p-6 shadow-[var(--shadow)] md:grid-cols-2">
             {item.mega!.map((col, ci) => (
-              <div key={col.heading}>
-                <p className="eyebrow mb-3">{col.heading}</p>
+              <div key={col.id}>
+                <p className="eyebrow mb-3">{t(`nav.mega.${item.id}.${col.id}`)}</p>
                 <ul className="space-y-1">
                   {col.links.map((link, li) => (
-                    <li key={link.href}>
+                    <li key={link.id}>
                       <a
                         role="menuitem"
                         ref={ci === 0 && li === 0 ? firstLinkRef : undefined}
                         className="block rounded-[12px] px-3 py-2 hover:bg-white/5"
-                        href={link.href}
+                        href={href(link.href)}
                       >
-                        <span className="block text-sm font-medium text-ink">{link.label}</span>
-                        {link.description && <span className="text-xs text-dim">{link.description}</span>}
+                        <span className="block text-sm font-medium text-ink">
+                          {t(`nav.mega.${item.id}.${link.id}.label`)}
+                        </span>
+                        <span className="text-xs text-dim">{t(`nav.mega.${item.id}.${link.id}.description`)}</span>
                       </a>
                     </li>
                   ))}

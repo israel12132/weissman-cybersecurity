@@ -2,47 +2,52 @@ import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { Section } from '../components/Section'
 import { ButtonLink } from '../components/Button'
-import { solutions, cta } from '../content/site'
+import { solutionIds } from '../content/site'
+import { metrics } from '../content/metrics'
+import { useI18n } from '../i18n'
 
 export function SolutionsPage() {
-  const [id, setId] = useState<string>(solutions[0].id)
-  const active = solutions.find((s) => s.id === id) ?? solutions[0]
+  const { t, n } = useI18n()
+  const [id, setId] = useState<(typeof solutionIds)[number]>(solutionIds[0])
+  const vars = {
+    routes: n(metrics.commandCenterRoutes.value),
+    probes: n(metrics.liveProbes.value),
+    techniques: n(metrics.mitreTechniques.value),
+  }
 
   return (
     <Layout>
       <header className="site-wrap py-16">
-        <p className="eyebrow">Solutions</p>
-        <h1 className="display mt-3 max-w-3xl text-4xl text-ink md:text-5xl">Same platform. Different questions.</h1>
-        <p className="mt-5 max-w-2xl text-lg text-muted">
-          Weissman is sold to operators, not industries we invented. These are the audiences already implied by the product: executives, SOC, research, infrastructure, and teams that cannot send data to a public model.
-        </p>
+        <p className="eyebrow">{t('solutions.pageEyebrow')}</p>
+        <h1 className="display mt-3 max-w-3xl text-4xl text-ink md:text-5xl">{t('solutions.pageTitle')}</h1>
+        <p className="mt-5 max-w-2xl text-lg text-muted">{t('solutions.pageLead')}</p>
       </header>
       <Section>
         <div className="grid gap-8 lg:grid-cols-12">
-          <div className="flex flex-col gap-2 lg:col-span-4" role="tablist" aria-label="Audiences">
-            {solutions.map((s) => (
+          <div className="flex flex-col gap-2 lg:col-span-4" role="tablist" aria-label={t('a11y.audiences')}>
+            {solutionIds.map((sid) => (
               <button
-                key={s.id}
+                key={sid}
                 type="button"
                 role="tab"
-                aria-selected={s.id === id}
-                className={`min-h-11 rounded-[12px] px-4 text-left text-sm ${s.id === id ? 'bg-elevated text-ink' : 'text-muted'}`}
-                onClick={() => setId(s.id)}
+                aria-selected={sid === id}
+                className={`min-h-11 rounded-[12px] px-4 text-start text-sm ${sid === id ? 'bg-elevated text-ink' : 'text-muted'}`}
+                onClick={() => setId(sid)}
               >
-                {s.title}
+                {t(`solutions.${sid}.title`)}
               </button>
             ))}
           </div>
           <article className="surface p-6 lg:col-span-8" role="tabpanel">
-            <h2 className="text-2xl text-ink">{active.title}</h2>
-            <p className="mt-3 text-muted">{active.body}</p>
+            <h2 className="text-2xl text-ink">{t(`solutions.${id}.title`)}</h2>
+            <p className="mt-3 text-muted">{t(`solutions.${id}.body`)}</p>
             <ul className="mt-6 space-y-2 text-sm text-muted">
-              {active.points.map((p) => (
-                <li key={p}>▸ {p}</li>
+              {[0, 1, 2].map((i) => (
+                <li key={i}>▸ {t(`solutions.${id}.points.${i}`, vars)}</li>
               ))}
             </ul>
             <div className="mt-8">
-              <ButtonLink href={cta.primary.href}>{cta.primary.label}</ButtonLink>
+              <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
             </div>
           </article>
         </div>

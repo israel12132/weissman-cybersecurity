@@ -7,9 +7,9 @@
     "node": ">=22.14.0"
   },
   "scripts": {
-    "predev": "node scripts/write-html-entries.mjs",
+    "predev": "node --experimental-strip-types scripts/write-html-entries.ts",
     "dev": "vite",
-    "prebuild": "node scripts/write-html-entries.mjs",
+    "prebuild": "node --experimental-strip-types scripts/write-html-entries.ts",
     "build": "tsc --noEmit && vite build && node scripts/merge-into-public.mjs",
     "preview": "vite preview",
     "lint": "eslint .",

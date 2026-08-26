@@ -1,5 +1,6 @@
 import { StrictMode, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
+import { LocaleProvider } from './i18n'
 import { pageIdFromDocument } from './lib/pageFromPath'
 import { HomePage } from './pages/HomePage'
 import { PlatformPage } from './pages/PlatformPage'
@@ -46,4 +47,8 @@ const id = pageIdFromDocument()
 const Page = pages[id] ?? pages['not-found']
 const root = document.getElementById('root')
 if (!root) throw new Error('root missing')
-createRoot(root).render(<StrictMode>{Page()}</StrictMode>)
+createRoot(root).render(
+  <StrictMode>
+    <LocaleProvider>{Page()}</LocaleProvider>
+  </StrictMode>,
+)

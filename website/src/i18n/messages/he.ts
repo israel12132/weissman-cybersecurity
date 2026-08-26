@@ -1,0 +1,938 @@
+/**
+ * Native-register Hebrew for an international cybersecurity company.
+ * Product names, MITRE ATT&CK, and accepted acronyms stay in the original form.
+ */
+export const he = {
+  seo: {
+    home: {
+      title: 'Weissman Cybersecurity — ראיות חיות. תגובה חדה יותר.',
+      description:
+        'Weissman בודק ברציפות משטחי תקיפה מאושרים עם 563 מנועי ייצור, מאמת ממצאים בראיות חיות, ומסייע לצוותי SOC לתעדף ולהגיב.',
+    },
+    platform: {
+      title: 'הפלטפורמה — Weissman Cybersecurity',
+      description:
+        'פלטפורמה אחת לבדיקות חיות, מודיעין נתיבי תקיפה, טלמטריית נקודות קצה, בינה מלאכותית פרטית, אימות OAST ותפעול SOC.',
+    },
+    'endpoint-protection': {
+      title: 'אבטחת נקודות קצה — Weissman Cybersecurity',
+      description:
+        'סוכן Weissman חוצה-פלטפורמות עם זיהויים על המארח ובסיסי UEBA ל-Linux, macOS ו-Windows.',
+    },
+    'vulnerability-research': {
+      title: 'מחקר חולשות אבטחה — Weissman Cybersecurity',
+      description:
+        '303 בדיקות חיות ב-web, ענן, OT, זהות ושרשרת אספקה — כל ממצא מגיע מבדיקת רשת או מארח אמיתית.',
+    },
+    'detection-response': {
+      title: 'זיהוי ותגובה — Weissman Cybersecurity',
+      description:
+        'ממצאים מאוחדים, העשרת KEV/EPSS, פלייבוקים של SOAR, ותיקון ב-PR חתום עם אימות בסנדבוקס.',
+    },
+    'attack-path-intelligence': {
+      title: 'מודיעין נתיבי תקיפה — Weissman Cybersecurity',
+      description:
+        'נתיבים גרפיים מנכסים חשופים לאינטרנט עד לנכסי הכתר, עם ניתוח צווארי בקבוק והערכת הפסד במודל FAIR.',
+    },
+    'private-ai': {
+      title: 'בינה מלאכותית פרטית — Weissman Cybersecurity',
+      description:
+        'הביאו vLLM, Ollama או מודל תואם OpenAI משלכם. Ask Weissman מתרגם שפה טבעית ל-SQL ברשימת היתר, על תפקיד לקריאה בלבד.',
+    },
+    'security-operations': {
+      title: 'תפעול אבטחה — Weissman Cybersecurity',
+      description:
+        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 130 מסלולים תפעוליים לצוותי SOC.',
+    },
+    'oast-validation': {
+      title: 'אימות OAST — Weissman Cybersecurity',
+      description:
+        'מאזיני HTTP ו-DNS מחוץ לפס מאשרים SSRF עיוור, XXE ומחלקות callback לפני שממצא מסומן כמאומת.',
+    },
+    solutions: {
+      title: 'פתרונות — Weissman Cybersecurity',
+      description:
+        'איך מנהלי אבטחת מידע, צוותי SOC, חוקרים ובעלי תשתית משתמשים ב-Weissman כדי לראות סיכון אמיתי, לאמת אותו ולפעול.',
+    },
+    technology: {
+      title: 'טכנולוגיה — Weissman Cybersecurity',
+      description: 'תצפית, ניתוח, אימות ותגובה: איך Weissman הופך בדיקות חיות לפעולה מתעדפת.',
+    },
+    resources: {
+      title: 'משאבים — Weissman Cybersecurity',
+      description:
+        'סקירות טכניות, דיווח אחראי, מסמכים משפטיים והפניות לפלטפורמה מ-Weissman Cybersecurity.',
+    },
+    about: {
+      title: 'אודות — Weissman Cybersecurity',
+      description:
+        'Weissman Cybersecurity Ltd., תל אביב-יפו. פלטפורמת אבטחה התקפית אוטונומית והגנה פעילה, שנבנתה ב-Rust.',
+    },
+    contact: {
+      title: 'לתיאום הדגמה — Weissman Cybersecurity',
+      description:
+        'בקשו הדגמה של Weissman או דברו עם הצוות על Cloud SaaS, התקנה עצמית או פריסת Enterprise.',
+    },
+    pricing: {
+      title: 'תמחור — Weissman Cybersecurity',
+      description:
+        'התקנה עצמית בחינם. Cloud SaaS מ-499 דולר לחודש עם ניסיון של 14 יום. Enterprise ל-MSSP ולסביבות מוסדרות.',
+    },
+    signup: {
+      title: 'יצירת סביבת עבודה — Weissman Cybersecurity',
+      description: 'צרו סביבת Weissman. ניסיון 14 יום. בלי כרטיס אשראי. הרשמה עצמית תלויה בהפעלה בפריסה.',
+    },
+    terms: {
+      title: 'תנאי שימוש — Weissman Cybersecurity',
+      description: 'תנאי השימוש לפלטפורמת Weissman Cybersecurity.',
+    },
+    privacy: {
+      title: 'מדיניות פרטיות — Weissman Cybersecurity',
+      description: 'מדיניות הפרטיות של Weissman Cybersecurity Ltd. בהלימה ל-GDPR ול-CCPA.',
+    },
+    'terms-he': {
+      title: 'תנאי שימוש — Weissman Cybersecurity',
+      description: 'תנאי שימוש לפלטפורמת Weissman Cybersecurity.',
+    },
+    'privacy-he': {
+      title: 'מדיניות פרטיות — Weissman Cybersecurity',
+      description: 'מדיניות פרטיות של Weissman Cybersecurity Ltd.',
+    },
+    dpa: {
+      title: 'תוספת עיבוד נתונים — Weissman Cybersecurity',
+      description: 'Data Processing Addendum כולל EU SCCs (2021/914). המסמך המחייב הוא באנגלית.',
+    },
+    subprocessors: {
+      title: 'מעבדי משנה — Weissman Cybersecurity',
+      description: 'מעבדי משנה נוכחיים של Cloud SaaS ומקורות מודיעין איומים. המסמך המחייב הוא באנגלית.',
+    },
+    'security-policy': {
+      title: 'דיווח אחראי — Weissman Cybersecurity',
+      description: 'איך לדווח על חולשת אבטחה ל-Weissman Cybersecurity.',
+    },
+    'not-found': {
+      title: 'הדף לא נמצא — Weissman Cybersecurity',
+      description: 'הדף שביקשתם אינו חלק מהאתר הציבורי של Weissman.',
+    },
+  },
+  a11y: {
+    skip: 'דלגו לתוכן',
+    primaryNav: 'ניווט ראשי',
+    mobileNav: 'ניווט לנייד',
+    openMenu: 'פתיחת תפריט',
+    closeMenu: 'סגירת תפריט',
+    closeOverlay: 'סגירת שכבת התפריט',
+    home: 'דף הבית של Weissman',
+    language: 'שפה',
+    languageEn: 'Switch to English',
+    languageHe: 'מעבר לעברית',
+    currentLanguage: 'שפה נוכחית: {name}',
+    dismissAnnouncement: 'סגירת ההודעה',
+    cookie: 'הודעת עוגיות',
+    onThisPage: 'בדף זה',
+    featuredPrev: 'פריט מומלץ קודם',
+    featuredNext: 'פריט מומלץ הבא',
+    severityFilter: 'סינון לפי חומרה',
+    resourceFilter: 'סינון משאבים',
+    audiences: 'קהלים',
+    platformAreas: 'תחומי הפלטפורמה',
+    attackPathVisual: 'הדמיית נתיב תקיפה להמחשה',
+    attackPathSvg: 'קצה האינטרנט מתחבר דרך צוואר בקבוק אל נכס כתר',
+  },
+  lang: {
+    en: 'English',
+    he: 'עברית',
+    enShort: 'EN',
+    heShort: 'עברית',
+  },
+  brand: {
+    name: 'Weissman',
+    legalName: 'Weissman Cybersecurity Ltd.',
+    location: 'תל אביב-יפו, ישראל',
+    product: 'Weissman Cybersecurity Platform',
+    jsonLdDescription:
+      'פלטפורמת אבטחה התקפית אוטונומית והגנה פעילה, עם בדיקות חיות, מודיעין נתיבי תקיפה ו-Command Center למרכז תפעול אבטחה (SOC).',
+  },
+  cta: {
+    bookDemo: 'לתיאום הדגמה',
+    requestDemo: 'בקשו הדגמה',
+    explorePlatform: 'הכירו את הפלטפורמה',
+    signIn: 'כניסה',
+    startTrial: 'התחילו ניסיון חינם',
+    learnMore: 'למידע נוסף',
+    contactUs: 'צרו קשר',
+    status: 'סטטוס המערכת',
+    apiDocs: 'תיעוד API',
+    github: 'GitHub',
+    howItWorks: 'איך זה עובד',
+    platformOverview: 'סקירת הפלטפורמה',
+    technologyWalkthrough: 'מעבר מלא על הטכנולוגיה',
+    home: 'בית',
+    platform: 'פלטפורמה',
+  },
+  nav: {
+    products: 'מוצרים',
+    solutions: 'פתרונות',
+    technology: 'טכנולוגיה',
+    resources: 'משאבים',
+    company: 'חברה',
+    mega: {
+      products: {
+        platform: 'פלטפורמה',
+        capabilities: 'יכולות',
+        overview: { label: 'סקירת הפלטפורמה', description: 'איך החלקים מתחברים' },
+        commandCenter: { label: 'Command Center', description: 'סביבת SOC ואירועים חיים' },
+        howItWorks: { label: 'איך זה עובד', description: 'תצפית → אימות → תגובה' },
+        endpoint: { label: 'אבטחת נקודות קצה', description: 'זיהויי סוכן ו-UEBA' },
+        research: { label: 'מחקר חולשות אבטחה', description: 'בדיקות חיות בכל התחומים' },
+        detect: { label: 'זיהוי ותגובה', description: 'טריאז׳, SOAR, PRs חתומים' },
+        paths: { label: 'מודיעין נתיבי תקיפה', description: 'נתיבים לנכסי כתר וצווארי בקבוק' },
+        privateAi: { label: 'בינה מלאכותית פרטית', description: 'מודלים שלכם, Ask Weissman' },
+        oast: { label: 'אימות OAST', description: 'callbacks עיוורים — מוכחים' },
+      },
+      solutions: {
+        audience: 'לפי קהל',
+        ciso: { label: 'מנהלי אבטחת מידע', description: 'סיכון, מיפוי, ממשל' },
+        soc: { label: 'צוותי SOC', description: 'טריאז׳ ופלייבוקים' },
+        research: { label: 'חוקרים', description: 'כיסוי שאפשר לבדוק' },
+        infra: { label: 'IT ותשתיות', description: 'היקף, SSO, התקנה עצמית' },
+        sensitive: { label: 'מידע רגיש', description: 'ה-VPC שלכם, המודל שלכם' },
+      },
+      technology: {
+        architecture: 'ארכיטקטורה',
+        how: { label: 'איך זה עובד', description: 'לולאה בארבעה שלבים' },
+        integrity: { label: 'שלמות מנועים', description: 'שער חיווט, בלי מזהים שקטים' },
+        inference: { label: 'הסקה פרטית', description: 'vLLM, Ollama, SQL ברשימת היתר' },
+      },
+      resources: {
+        library: 'ספרייה',
+        all: { label: 'כל המשאבים', description: 'סינון לפי סוג' },
+        disclosure: { label: 'דיווח אחראי', description: 'דיווח על חולשת אבטחה' },
+        api: { label: 'תיעוד API', description: 'OpenAPI 3.1' },
+        status: { label: 'סטטוס המערכת', description: 'בריאות ציבורית' },
+      },
+      company: {
+        weissman: 'Weissman',
+        about: { label: 'אודות', description: 'מי אנחנו' },
+        contact: { label: 'צרו קשר', description: 'הדגמה ומכירות' },
+        pricing: { label: 'תמחור', description: 'עצמי, Cloud, Enterprise' },
+        legal: { label: 'משפטי', description: 'תנאים, פרטיות, DPA' },
+      },
+    },
+    footer: {
+      product: 'מוצר',
+      company: 'חברה',
+      resources: 'משאבים',
+      legal: 'משפטי',
+      platform: 'פלטפורמה',
+      endpoint: 'אבטחת נקודות קצה',
+      research: 'מחקר חולשות אבטחה',
+      detect: 'זיהוי ותגובה',
+      paths: 'מודיעין נתיבי תקיפה',
+      privateAi: 'בינה מלאכותית פרטית',
+      oast: 'אימות OAST',
+      operations: 'תפעול אבטחה',
+      pricing: 'תמחור',
+      about: 'אודות',
+      contact: 'צרו קשר',
+      signIn: 'כניסה',
+      signup: 'יצירת סביבת עבודה',
+      status: 'סטטוס המערכת',
+      library: 'ספריית משאבים',
+      technology: 'טכנולוגיה',
+      solutions: 'פתרונות',
+      api: 'תיעוד API',
+      securityTxt: 'security.txt',
+      terms: 'תנאי שימוש',
+      privacy: 'פרטיות',
+      dpa: 'DPA',
+      subprocessors: 'מעבדי משנה',
+      disclosure: 'דיווח אחראי',
+    },
+    sections: {
+      'why-us': 'למה אנחנו',
+      platform: 'פלטפורמה',
+      capabilities: 'יכולות',
+      'how-it-works': 'איך זה עובד',
+      proof: 'הוכחה',
+      resources: 'משאבים',
+      contact: 'קשר',
+    },
+  },
+  announcement: {
+    kicker: 'גרסה 2026.06.2',
+    text: 'Liminal Boundary Engine היא גרסת הפלטפורמה הנוכחית — בדיקות חיות, ממצאים ממופים ל-ATT&CK, ותפעול ב-Command Center.',
+    hrefLabel: 'לקריאת הסקירה',
+  },
+  cookie: {
+    body: 'אנחנו משתמשים בעוגיות תפעול בלבד — בלי פיקסלי מעקב. השימוש ב-Weissman מהווה הסכמה ל{privacy}.',
+    privacy: 'מדיניות הפרטיות',
+    accept: 'אישור',
+  },
+  hero: {
+    kicker: 'אבטחה התקפית אוטונומית והגנה פעילה',
+    h1: 'משטח התקיפה התמלא ברעש. הראיות שלכם — לא.',
+    lead: 'Weissman תוקף ברציפות את המשטחים שאישרתם — באותה תנועה שיריב היה עושה. {engines} מנועי ייצור, בדיקות חיות, ממצאים ממופים ל-MITRE, ו-Command Center שהופך אימות לפעולה.',
+  },
+  metrics: {
+    productionEngines: 'מנועי ייצור',
+    liveProbes: 'בדיקות חיות',
+    engineAliases: 'כינויים בקטלוג',
+    agentRequired: 'מנועים שדורשים סוכן',
+    commandCenterRoutes: 'מסלולי Command Center',
+    auditedPages: 'דפי ממשק שעברו ביקורת',
+    mitreTechniques: 'טכניקות MITRE ATT&CK',
+    agentDetections: 'זיהויים על המארח',
+    kevRefreshHours: 'רענון CISA KEV (שעות)',
+    epssRefreshHours: 'רענון FIRST EPSS (שעות)',
+    slaUptime: 'יעד זמינות Cloud',
+    trialDays: 'ניסיון Cloud (ימים)',
+    cloudPriceUsd: 'Cloud SaaS / לחודש',
+  },
+  featured: {
+    eyebrow: 'נבחרים',
+    title: 'מהפלטפורמה',
+  },
+  visual: {
+    caption: 'נתיב תקיפה · להמחשה',
+    live: 'בדיקה חיה',
+  },
+  home: {
+    threatEyebrow: 'נוף האיומים',
+    threatTitle: 'המורכבות עלתה. הבהירות חייבת להדביק אותה.',
+    threat: {
+      '01': {
+        title: 'מה השתנה',
+        body: 'משטח התקיפה פרוש היום על web, ענן, זהות, OT, שרשרת אספקה, ועל המודלים שיושבים ליד נתוני הייצור. ממצא שלא הוכח עדיין גוזל שעת אנליסט בדיוק כמו ממצא שהוכח.',
+      },
+      '02': {
+        title: 'איפה הכלים מתפצלים',
+        body: 'סורקים, מערכות טיקטים, פידי מודיעין איומים ו-SOAR חולקים לעיתים קרובות על אותו CVE. קטלוגים עמוסי כינויים ובדיקות מדומות מנפחים כיסוי ומשאירים מחלקות עיוורות בלי אישור.',
+      },
+      '03': {
+        title: 'איך Weissman בנוי',
+        body: 'כל מזהה מנוע ייצור מגיע לבדיקת HTTP, TCP, DNS, TLS או סוכן אמיתית. מחלקות עיוורות ממתינות ל-callback של OAST. הסיכון מסודר לפי KEV, EPSS ונתיב תקיפה — לא לפי מי שצעק אחרון.',
+      },
+    },
+    platformEyebrow: 'פלטפורמה',
+    platformTitle: 'לולאה אחת. שבעה תחומים מאושרים.',
+    platformSub: 'כל תחום נמצא במוצר היום — לא בשקף של מפת דרכים.',
+    interactiveEyebrow: 'מעבר אינטראקטיבי',
+    interactiveTitle: 'איך נראית חקירה',
+    interactiveSub:
+      'שורות לדוגמה בלבד. המסננים ולוח החקירה מתנהגים כמו במוצר; הם לא מחוברים לדייר.',
+    capabilitiesEyebrow: 'יכולות',
+    capabilitiesTitle: 'תוצאות, לא תארים',
+    howEyebrow: 'איך זה עובד',
+    howTitle: 'ארבעה שלבים. בלי טקס.',
+    solutionsEyebrow: 'פתרונות',
+    solutionsTitle: 'נבנה למי שצריך להחליט',
+    proofEyebrow: 'הוכחה',
+    proofTitle: 'נבנה לסביבות קריטיות לאבטחה',
+    proofSub:
+      'אנחנו לא מפרסמים לוגו לקוחות או פרסי אנליסטים שאין לנו. אלה עקרונות תפעול שאפשר לבדוק במוצר ובחבילה המשפטית.',
+    resourcesEyebrow: 'משאבים',
+    resourcesTitle: 'רק מה שאפשר באמת לפרסם',
+    finalTitle: 'ראו את הראיות, ואז החליטו.',
+    finalBody: 'תאמו הדגמה של ה-Command Center, או התחילו ניסיון אם הרשמה עצמית מופעלת בפריסה הזו.',
+  },
+  howItWorks: {
+    observe: {
+      title: 'תצפית',
+      body: 'קולטים לקוח והיקף כתוב. הגילוי והסוכן על נקודת הקצה (כשהוא מותקן) ממפים מה באמת נגיש — דומיינים, תפקידי ענן, מארחים ופרוטוקולים.',
+    },
+    analyse: {
+      title: 'ניתוח',
+      body: 'האורקסטרטור מריץ את סט המנועים המופעל. ממצאים מאוחדים לפי חתימה יציבה, מקובצים, ומועשרים ב-CISA KEV וב-FIRST EPSS ברגע השמירה.',
+    },
+    validate: {
+      title: 'אימות ותעדוף סיכונים',
+      body: 'OAST מאשר callbacks עיוורים. הסקת נתיב התקיפה הולכת מנכסים חשופים לאינטרנט אל נכסי הכתר. מספרי הפסד במודל FAIR יושבים ליד CVSS — לא במקום ראיות.',
+    },
+    respond: {
+      title: 'תגובה',
+      body: 'פלייבוקים של SOAR מודיעים, מבודדים או פותחים pull request חתום. טלאים מאומתים בסנדבוקס זמני לפני מיזוג. חיובי שווא מלמדים את המחזור הבא.',
+    },
+  },
+  capabilities: {
+    probes: {
+      title: 'בדיקות חיות, לא סימולציות',
+      body: 'מזהה בקטלוג שלא יכול להריץ בדיקה אמיתית הוא כשל חיווט. CI דוחה פערים.',
+    },
+    evidence: {
+      title: 'ראיות לפני תיאטרון חומרה',
+      body: 'קריטי וגבוה במחלקות עיוורות ממתינים ל-callback מחוץ לפס — לא לשליחת מטען.',
+    },
+    paths: {
+      title: 'נתיבים אל מה שחשוב',
+      body: 'Dijkstra על גרף הסיכון, מנכסים חשופים לאינטרנט עד לנכסי כתר, עם צווארי בקבוק.',
+    },
+    host: {
+      title: 'אמת מהמארח',
+      body: 'בינארי קטן חוצה-פלטפורמות: זיהויים על המארח ובסיס UEBA של שבעה ימים.',
+    },
+    models: {
+      title: 'המודלים שאתם בוחרים',
+      body: 'מפנים את Council ואת Ask Weissman ל-vLLM, Ollama או לכל נקודת קצה תואמת OpenAI.',
+    },
+    ops: {
+      title: 'תפעול בקונסול אחד',
+      body: 'ממצאים, פלייבוקים, סוכנים, ביקורת ושאלות בשפה טבעית — ה-Command Center שצוותי SOC כבר מריצים.',
+    },
+  },
+  solutions: {
+    pageEyebrow: 'פתרונות',
+    pageTitle: 'אותה פלטפורמה. שאלות אחרות.',
+    pageLead:
+      'Weissman נמכר למפעילים, לא לענפים שהמצאנו. אלה הקהלים שכבר גלומים במוצר: הנהלה, SOC, מחקר, תשתיות, וצוותים שלא יכולים לשלוח נתונים למודל ציבורי.',
+    ciso: {
+      title: 'מנהלי אבטחת מידע והנהלה',
+      body: 'סיכון שקריא לדירקטוריון: הפסד במודל FAIR, מיפוי בקרות ציות (לא תעודה), וערוץ סטטוס חי ב-/status.',
+      points: [
+        'מבטי נתיב תקיפה ורדיוס נזק פיננסי',
+        'מיפוי בקרות ל-SOC 2, ISO 27001, GDPR, NIS2, IEC 62443, PCI, CSA CCM',
+        'שערי אדם-בלולאה לפעולות AI בעלות משקל',
+      ],
+    },
+    soc: {
+      title: 'צוותי SOC',
+      body: 'Command Center לטריאז׳, מגירות ראיות, תגיות MITRE ופלייבוקים שנורים לפי חומרה, KEV וחשיפה.',
+      points: [
+        '{routes} מסלולים תפעוליים',
+        'משוב חיובי-שווא שמעדכן ביטחון',
+        'פעולות Slack, webhook ו-PR חתום',
+      ],
+    },
+    research: {
+      title: 'חוקרי אבטחה',
+      body: 'שקיפות ברמת מנוע, מיפוי ATT&CK מול v19.1, וחשבונאות כנה של בדיקות חיות מול כינויים.',
+      points: [
+        '{probes} מימושי בדיקה חיה נפרדים',
+        '{techniques} טכניקות ממופות',
+        'דיווח אחראי ב-security@weissman.io',
+      ],
+    },
+    infra: {
+      title: 'IT ותשתיות',
+      body: 'אכיפת היקף בקצה ה-API, RLS ב-Postgres רב-דייר, ואותו בינארי על מחשב נייד, VPC או Cloud SaaS.',
+      points: [
+        'יעדים מחוץ להיקף מחזירים 403 לפני שיוצא חבילה',
+        'התקנה עצמית עם Postgres, Redis ו-Ollama אופציונלי',
+        'OIDC ו-SAML למישור הבקרה',
+      ],
+    },
+    sensitive: {
+      title: 'סביבות עם מידע רגיש',
+      body: 'ההסקה נשארת אצלכם. התקנה עצמית ו-BYO-LLM הן דרך ראשונה — לא מסלול מוחלש.',
+      points: [
+        'אין אנליטיקה של צד שלישי באתר הציבורי או במוצר',
+        'DPA עם EU SCCs; מעבדי משנה מפורסמים בפומבי',
+        'נתוני סריקת לקוח מבודדים לפי דייר',
+      ],
+    },
+  },
+  proof: {
+    integrity: {
+      title: 'שלמות לפני מלאי',
+      body: 'ממצאים נשמרים מבדיקות חיות. תוצאות שדורשות סוכן ותוצאות מייעצות מסומנות. הקטלוג לא יציג מנוע שאי אפשר להריץ.',
+    },
+    isolation: {
+      title: 'בידוד הוא מכני',
+      body: 'אבטחת שורות ב-PostgreSQL על טבלאות רב-דייר, סשני JWT, MFA ב-TOTP, ו-OIDC/SAML אופציונלי.',
+    },
+    autonomy: {
+      title: 'אוטונומיה כבויה עד שתבקשו',
+      body: 'לולאות ריבוניות שמשנות מצב ענן דורשות אישור כפול מפורש. בטוח-כברירת-מחדל הוא בחירת מוצר.',
+    },
+    ourselves: {
+      title: 'אנחנו מריצים את אותה לולאה על עצמנו',
+      body: 'Weissman סורק את Weissman. PRs של תיקון חתומים מאומתים בסנדבוקס לפני מיזוג — כולל שלנו.',
+    },
+  },
+  platformPage: {
+    eyebrow: 'פלטפורמה',
+    title: 'זיהוי, אימות, תעדוף סיכונים ותגובה — במשטח בקרה אחד.',
+    lead: 'Weissman הוא לא סורק עם ערכת נושא. מנועים, סוכן, OAST, נתיבי תקיפה, SOAR וה-Command Center חולקים מודל ממצאים אחד ומסלול ביקורת אחד.',
+    modulesEyebrow: 'מודולים',
+    modulesTitle: 'תחומי מוצר מאושרים',
+    indexEyebrow: 'אינדקס',
+    indexTitle: 'כל דף יכולת',
+    loopEyebrow: 'לולאה',
+    loopTitle: 'אותם ארבעה שלבים בכל מקום',
+  },
+  productPage: {
+    outcomes: 'תוצאות',
+    capabilities: 'יכולות',
+    technical: 'טכני',
+    workflow: 'זרימת עבודה',
+    related: 'קשור',
+    outcomesTitle: 'מה משתנה כשזה דולק',
+    capabilitiesTitle: 'במוצר',
+    technicalTitle: 'איך זה באמת בנוי',
+    workflowTitle: 'ארכיטקטורה בשלושה מהלכים',
+    relatedTitle: 'קרוב בפלטפורמה',
+    walkTitle: 'עברו על זה ב-Command Center',
+    missing: 'דף היכולת הזה אינו בקטלוג.',
+    notFound: 'לא נמצא',
+  },
+  products: {
+    'endpoint-protection': {
+      eyebrow: 'נקודת קצה',
+      title: 'אבטחת נקודות קצה שמתחילה על המארח',
+      summary:
+        'סוכן Rust אחד ל-Linux, macOS ו-Windows: זיהויים על המארח ודגימת UEBA שלומדת בסיס של שבעה ימים לפני שהתראות נורות.',
+      ctaLabel: 'לאבטחת נקודות קצה',
+      outcomes: [
+        'חמישה-עשר זיהויים על המארח, כולל process hollowing, התמדה, ARP spoof ושלמות לוגים',
+        'התראות z-score של UEBA אחרי חלון למידה — לא בשעה הרועשת הראשונה',
+        'WSS+JWT למישור הבקרה; בלי סודות קבועים על הדיסק מעבר לטוקן השירות',
+      ],
+      capabilities: [
+        'התקנת שירות חוצת-פלטפורמות (systemd, launchd, Windows Service)',
+        'בדיקות תהליך, התמדה, USB, נוכחות EDR ואנטרופיית לוח גזירים',
+        'בסיסים לפי שעת-שבוע: |z| > 3 בינוני ו-|z| > 6 גבוה',
+        'פורטים ותהליכים חדשים מעלים התראה רק אחרי שלדלי יש מספיק דגימות',
+      ],
+      technical:
+        'הסוכן נרשם ב-HTTPS, מחזיק JWT סשן קצר-חיים, ושולח דגימות בכל דיספאץ׳. UEBA בצד השרת שומר ממוצע וסטיית תקן נעים לכל סוכן, מדד ושעת-שבוע. דגימות מעל 14 יום נמחקות.',
+      workflow: [
+        'התקנה עם טוקן מלוח הבקרה',
+        'למידת המארח במשך שבוע של דלי שעה',
+        'הצגת ממצאי מארח ליד מנועי רשת באותה מגירה',
+      ],
+    },
+    'vulnerability-research': {
+      eyebrow: 'מחקר',
+      title: 'מחקר חולשות אבטחה עם רף של בדיקה חיה',
+      summary:
+        '303 בדיקות חיות — web, API, ענן, OT/ICS, זהות, שרשרת אספקה, AI/LLM ועוד. כינויים מגיעים למימוש אמיתי. CI נכשל אם לא.',
+      ctaLabel: 'למנועי המחקר',
+      outcomes: [
+        '563 מזהי ייצור, כל אחד מחובר לראנר',
+        '226 טכניקות MITRE ATT&CK מול סט Enterprise, Mobile ו-ICS של v19.1',
+        'אין ממצאים מומצאים או אקראיים בנתיב השמירה',
+      ],
+      capabilities: [
+        'בדיקות HTTP, TCP, DNS, TLS וטלמטריית סוכן',
+        'לחיצות יד של פרוטוקולי OT (Modbus, DNP3, EtherNet/IP, IEC 61850, S7) — לא באנר של פורט בלבד',
+        'בדיקות שרשרת אספקה וסודות דלפים מול היקפים מאושרים',
+        'תוויות כנות לתוצאות שדורשות סוכן ולתוצאות מייעצות',
+      ],
+      technical:
+        'PRODUCTION_ENGINE_IDS הוא הקטלוג. engine_dispatch הוא נתיב הביצוע היחיד. verify_engine_wiring.mjs ו-engine_reality_audit.mjs הם החשבונאות הציבורית: בדיקה חיה, כינוי, או דורש-סוכן — אף פעם לא no-op שקט.',
+      workflow: [
+        'הפעלת מנועים לפי לקוח ודייר',
+        'האורקסטרטור מריץ את החיתוך בקצב קבוע',
+        'ממצאים נשמרים עם ראיות, CWE ותגיות ATT&CK',
+      ],
+    },
+    'detection-response': {
+      eyebrow: 'זיהוי + תגובה',
+      title: 'זיהוי שזוכר מה כבר נאמר',
+      summary:
+        'זהות ממצא יציבה, KEV ו-EPSS ברגע השמירה, לולאת חיובי-שווא, ופלייבוקים שמודיעים, מבודדים או פותחים pull request מאומת.',
+      ctaLabel: 'לזיהוי ותגובה',
+      outcomes: [
+        'איחוד לפי יעד, חתימה ו-CWE — ירי חוזר מעלה את seen_count',
+        'הסדר מעדיף ניצול ידוע ו-EPSS גבוה על פני CVSS גולמי',
+        'PRs של תיקון מאומתים בסנדבוקס לפני מיזוג',
+      ],
+      capabilities: [
+        'SOAR DSL: כאשר חומרה / KEV / EPSS / חשיפה — אז פעולה',
+        'פעולות: סטטוס, Slack, webhook, HTTP POST, פתיחת PR, בידוד מארח, קריאה לתורן',
+        'סימון FP בשלוש מדכא; הביטחון מעדכן את risk_score',
+        'השפעת ציות מוצגת ליד הראיות (בקרות ממופות, לא תעודות)',
+      ],
+      technical:
+        'עובדי מודיעין מרעננים CISA KEV כל 6 שעות ו-FIRST EPSS כל 12 שעות (וגם לפי דרישה). דיספאץ׳ פלייבוק הוא אידמפוטנטי ונכתב ליומן הביקורת.',
+      workflow: [
+        'הממצא נשמר עם העשרה',
+        'האנליסט מאשר, מסמן FP, או נותן לפלייבוק לירות',
+        'הטלאי או הבידוד מתועדים',
+      ],
+    },
+    'attack-path-intelligence': {
+      eyebrow: 'נתיבים',
+      title: 'נתיבי תקיפה מהקצה עד לכתר',
+      summary:
+        'גרף סיכון עם Dijkstra מנקודות חשופות לאינטרנט עד לנכסי כתר. קשתות נושאות CVSS, EPSS ו-KEV. צווארי בקבוק הם רכיב ראשון במעלה.',
+      ctaLabel: 'למודיעין נתיבי תקיפה',
+      outcomes: [
+        'Top-K נתיבים, לא צילום של פקעת',
+        'SLE ו-ALE במודל FAIR כשערכי נכס קיימים אצל הלקוח',
+        'צילומי מצב שאפשר לנגן מחדש ב-Command Center',
+      ],
+      capabilities: [
+        'צמתי גרף מממצאים חיים וממלאי',
+        'KEV מרצף הנחות קצב שנתי',
+        'דירוג צוואר בקבוק — איפה תיקון אחד חותך הרבה נתיבים',
+        'רדיוס נזק פיננסי ליד חומרה טכנית',
+      ],
+      technical:
+        'נתיבים נשמרים ב-attack_path_snapshots. מספרי דולר משתמשים ב-SLE = asset_value × max(CVSS/10, 0.5) וב-ARO מושפע EPSS, עם KEV שכופה קצב שנתי מינימלי. אלה פלטי מודל, לא הצעות ביטוח.',
+      workflow: [
+        'בניית הגרף מהממצאים הנוכחיים',
+        'הליכה מחשיפה → כתר',
+        'תעדוף הצומת שקורס את מירב הנתיבים',
+      ],
+    },
+    'private-ai': {
+      eyebrow: 'בינה מלאכותית פרטית',
+      title: 'הסקה שנשארת בנקודת הקצה שאתם קובעים',
+      summary:
+        'Supreme Council ו-Ask Weissman מדברים בפרוטוקול OpenAI. מפנים אותם ל-vLLM, Ollama או API מארח. Ask Weissman לא פולט SQL גולמי.',
+      ctaLabel: 'לבינה מלאכותית פרטית',
+      outcomes: [
+        'מודל שאתם מביאים הוא תנוחת ברירת המחדל לעבודה מוסדרת',
+        'שאלות בשפה טבעית מתקמפלות ל-QueryPlan ברשימת היתר',
+        'אסטרטגיות Council נחתמות ביומן הביקורת',
+      ],
+      capabilities: [
+        'מציע התקפי, מבקר הגנתי עיוור, החלטה ריבונית',
+        'זיכרון וקטורי של ניצחונות מאומתים בלבד — לא של טענות המודל עצמו',
+        'תפקיד Postgres לקריאה בלבד, timeout של 15 שניות לפקודה',
+        'שערי אישור אנושי לפעולות בעלות משקל',
+      ],
+      technical:
+        'Ask Weissman מאמת תוכנית JSON מול שש טבלאות ועמודות מנויות, כופה tenant_id, ומריץ כ-weissman_ro. זיכרון Council נכתב רק אחרי שבדיקה מחוץ לפס מאשרת את האסטרטגיה. כשלי embedding יורדים באיכות; הם לא ממציאים וקטורים.',
+      workflow: [
+        'הגדרת WEISSMAN_LLM_BASE_URL (או השארת יכולות AI כבויות)',
+        'שאלה או סריקה בסיוע Council',
+        'סקירת מסלול הביקורת לפני שמתבצעת פעולה בעלת הרשאות',
+      ],
+    },
+    'security-operations': {
+      eyebrow: 'תפעול',
+      title: 'Command Center שנבנה למי שבמשמרת',
+      summary:
+        '130 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
+      ctaLabel: 'לתפעול אבטחה',
+      outcomes: [
+        'קונסול אחד לסריקות, ראיות ותגובה',
+        'RBAC מדרגת viewer ועד CEO ו-superadmin',
+        'ערוץ /status ציבורי כששאר החדר בוער',
+      ],
+      capabilities: [
+        'טלמטריית SSE ו-WebSocket',
+        'עורך SOAR חזותי',
+        'צפיין יומן ביקורת',
+        'הרשמה עצמית כשהמפעיל מפעיל אותה',
+      ],
+      technical:
+        'ה-SPA הוא React/Vite, מאחורי אותו שער nginx כמו האתר הזה. הוא מדבר עם weissman-server ב-/api וב-/ws. דפי השיווק לא חולקים את עוגיית הסשן שנבנתה למוצר.',
+      workflow: [
+        'כניסה עם MFA',
+        'בחירת לקוח והיקף',
+        'עבודה על ממצאים כמו שהמשמרת כבר עובדת על טיקטים',
+      ],
+    },
+    'oast-validation': {
+      eyebrow: 'OAST',
+      title: 'מחלקות עיוורות ממתינות ל-callback',
+      summary:
+        'מאזין HTTP ו-DNS ייעודי. מנועים שותלים טוקן; הפאזר ממתין עד שהיעד באמת יוצא החוצה. זה ההבדל בין נשלח לבין הוכח.',
+      ctaLabel: 'לאימות OAST',
+      outcomes: [
+        'מחלקות בסגנון SSRF, XXE ו-JNDI לא עולות לקריטי על שליחה בלבד',
+        'callbacks שומרים IP מקור, method, path, כותרות ו-DNS qname',
+        'אותו מאזין משרת גם זרימות canary והונאה',
+      ],
+      capabilities: [
+        'טוקנים ייחודיים לכל סריקה',
+        'לכידת HTTP ו-DNS',
+        'קורלציה לפני חומרה מאומתת',
+        'דומיין OAST שמוגדר בידי המפעיל',
+      ],
+      technical:
+        'weissman-oast-server רושם אינטראקציות לפי טוקן. מנועים משבצים את הטוקן במטענים. קריטי וגבוה למחלקות מחוץ לפס דורשים verification_method שמוכיח callback — לא רק ששתלו בדיקה.',
+      workflow: [
+        'הסריקה שותלת טוקן',
+        'המאזין רושם את ה-callback',
+        'הממצא משודרג רק אחרי קורלציה',
+      ],
+    },
+  },
+  technologyPage: {
+    eyebrow: 'טכנולוגיה',
+    title: 'תצפית. ניתוח. אימות. תגובה.',
+    lead: 'האורקסטרטור הוא לולאה עם היקף, לא סיסמה. ההיקף נאכף לפני חבילות. ממצאים נשמרים רק מבדיקות חיות. מחלקות עיוורות ממתינות ל-OAST. התגובה מבוקרת.',
+    stagesEyebrow: 'שלבים',
+    stagesTitle: 'ממופים למערכת הרצה',
+    integrityEyebrow: 'שלמות',
+    integrityTitle: 'מספרים שאפשר להריץ מחדש',
+  },
+  resourcesPage: {
+    eyebrow: 'משאבים',
+    title: 'חומר שפורסם בלבד.',
+    lead: 'בלי מקרי בוחן מומצאים ובלי הערות אנליסטים. אם קטגוריה ריקה בהמשך — היא נשארת ריקה עד שיהיה מה אמיתי לשים בה.',
+    empty: 'אין פריטים שפורסמו בקטגוריה הזו עדיין.',
+    types: {
+      all: 'הכל',
+      product: 'מוצר',
+      research: 'מחקר',
+      technical: 'טכני',
+      policy: 'מדיניות',
+      demo: 'הדגמה',
+      legal: 'משפטי',
+    },
+    items: {
+      'release-2026-06-2': {
+        title: 'Liminal Boundary Engine — 2026.06.2',
+        summary: 'גרסת CalVer הנוכחית של פלטפורמת Weissman.',
+      },
+      'mitre-coverage': {
+        title: 'כיסוי ATT&CK מול v19.1',
+        summary: '226 טכניקות: 192 מיפויים ראשוניים ועוד 34 תגיות משניות מעוגנות בקוד.',
+      },
+      'engine-integrity': {
+        title: 'חשבונאות שלמות מנועים',
+        summary: '563 מזהים מסווגים כבדיקה חיה, כינוי או דורש-סוכן — תחת שערי CI, בלי רשומות קטלוג שקטות.',
+      },
+      'platform-overview': {
+        title: 'סקירה טכנית של הפלטפורמה',
+        summary: 'תצפית, ניתוח, אימות, תגובה — איך האורקסטרטור וה-Command Center יושבים יחד.',
+      },
+      disclosure: {
+        title: 'דיווח אחראי',
+        summary: 'איך לדווח על חולשת אבטחה. אין כרגע פרס כספי; ניתן קרדיט ב-changelog, בהסכמה.',
+      },
+      'book-demo': {
+        title: 'לתיאום הדגמה',
+        summary: 'עברו על ה-Command Center עם צוות Weissman.',
+      },
+      'api-docs': {
+        title: 'תיעוד OpenAPI 3.1',
+        summary: 'תיעוד אינטראקטיבי ל-API של מישור הבקרה.',
+      },
+      status: {
+        title: 'סטטוס ציבורי',
+        summary: 'בריאות חיה לשירות ה-Cloud.',
+      },
+      terms: {
+        title: 'תנאי שימוש',
+        summary: 'תנאי החוזה לשימוש ב-Cloud ובהתקנה עצמית.',
+      },
+      privacy: {
+        title: 'מדיניות פרטיות',
+        summary: 'מה אנחנו אוספים, מה אנחנו מסרבים לאסוף, ואיך פונים ל-DPO.',
+      },
+      dpa: {
+        title: 'תוספת עיבוד נתונים',
+        summary: 'תנאי מעבד כולל EU SCCs Module 2. המסמך המחייב הוא באנגלית.',
+      },
+      subprocessors: {
+        title: 'מעבדי משנה',
+        summary: 'תשתית, דוא״ל, תשלומים ופידי מודיעין יוצאים. המסמך המחייב הוא באנגלית.',
+      },
+    },
+  },
+  aboutPage: {
+    eyebrow: 'חברה',
+    operateTitle: 'איך אנחנו עובדים',
+    contactTitle: 'קשר',
+    lede: 'Weissman Cybersecurity Ltd. בונה פלטפורמת אבטחה התקפית אוטונומית והגנה פעילה בתל אביב-יפו. החברה מונחית-הנדסה: הקטלוג הציבורי הוא אותו קטלוג ש-CI מאמת.',
+    points: [
+      'מישור בקרה ומנועים ב-Rust; קוד לא-בטוח-לזיכרון נחסם ברמת ה-crate, עם חריג מתועד.',
+      'Command Center ב-React למפעילים; האתר הציבורי והמוצר לא חולקים אנליטיקה של צד שלישי.',
+      'Cloud SaaS או התקנה עצמית — אותו מוצר, מקום אחר לנתונים.',
+    ],
+    registered: 'כתובת רשומה: {location}. מספר חברה: {id} — ימולא אחרי ההתאגדות; לא מומצא כאן.',
+    roles: {
+      sales: 'מכירות',
+      security: 'אבטחה',
+      dpo: 'DPO',
+      legal: 'משפטי',
+      support: 'תמיכה',
+    },
+  },
+  contactPage: {
+    eyebrow: 'קשר',
+    title: 'לתיאום הדגמה',
+    lead: 'ספרו לנו על הסביבה שתרצו לעבור עליה. אם הפריסה הזו לא יכולה לשלוח דוא״ל — הטופס יגיד זאת. הוא לא יעמיד פנים שהבקשה הגיעה.',
+    sales: 'מכירות',
+    security: 'אבטחה',
+    support: 'תמיכה',
+  },
+  pricingPage: {
+    eyebrow: 'תמחור',
+    title: 'משלמים על תפעול, לא על מטריצת פיצ׳רים.',
+    lead: 'התקנה עצמית חינם לתמיד. Cloud SaaS גדל עם השימוש. מספרי הזמינות לפי SLA_AND_STATUS.md, לא לפי עותק שיווקי ישן.',
+    faqsTitle: 'שאלות שכבר עונים עליהן',
+    tiers: {
+      selfHosted: {
+        tier: 'פתוח',
+        name: 'התקנה עצמית',
+        unit: '/לתמיד',
+        blurb: 'רצים על התשתית שלכם, ב-VPC שלכם.',
+        cta: 'לקבל ב-GitHub',
+        items: [
+          'כל {engines} מנועי הייצור',
+          'סוכן נקודת קצה (אריזה ל-Linux / macOS / Windows)',
+          'Postgres רב-דייר + RLS',
+          'תיקון ב-PR אוטומטי',
+          'התראות SMTP + webhook',
+          'תמיכת קהילה (GitHub Issues)',
+          'LLM שאתם מביאים (Ollama / vLLM / תואם OpenAI)',
+        ],
+      },
+      cloud: {
+        tier: 'Professional',
+        name: 'Cloud SaaS',
+        unit: '/לחודש',
+        blurb: 'לצוותי SOC שלא רוצים להפעיל את הערימה.',
+        cta: 'התחילו ניסיון חינם',
+        items: [
+          'כל מה שבהתקנה עצמית',
+          'אירוח עם תושבות נתונים ב-EU-West כברירת מחדל',
+          'עד 25 לקוחות · 300 סריקות בחודש',
+          'SSO (OIDC + SAML)',
+          'יעד זמינות: {sla} (SLA_AND_STATUS.md)',
+          'תמיכה בדוא״ל וב-Slack, מענה תוך 24 שעות',
+          'ניסיון {days} יום בחינם — בלי כרטיס אשראי',
+        ],
+      },
+      enterprise: {
+        tier: 'מותאם',
+        name: 'Enterprise',
+        price: 'דברו איתנו',
+        blurb: 'ל-MSSP, לענפים מוסדרים ולמשטחי תקיפה גדולים.',
+        cta: 'צרו קשר עם מכירות',
+        items: [
+          'עד 500 לקוחות · 5,000 סריקות בחודש (או מותאם)',
+          'אפשרות לפריסה חד-דיירית',
+          'תושבות נתונים מותאמת (IL, EU-West, US-East, AU-East)',
+          'פיתוח מנועים מותאם',
+          'ייצוא יומן ביקורת ל-SIEM שלכם',
+          'CSM ייעודי + סדנת הטמעה',
+          'MSA חתום + DPA + חבילת מיפוי ציות',
+        ],
+      },
+    },
+    faqs: [
+      {
+        q: 'האם משהו אי פעם מדומה?',
+        a: 'אף מנוע ייצור לא ממציא ממצא. כל מזהה בקטלוג פוגע בנקודת קצה או במארח אמיתי, או מסומן כדורש-סוכן עד שהסוכן מקוון.',
+      },
+      {
+        q: 'אפשר להריץ את זה בניתוק אוויר?',
+        a: 'כן. התקנה עצמית מגיעה כ-Docker Compose או systemd עם Postgres ו-Redis. אפשר לשקף מקומית פידי מודיעין איומים. מפנים יכולות AI ל-Ollama או vLLM ברשת שלכם.',
+      },
+      {
+        q: 'מי משלם על המודל?',
+        a: 'אתם, אצל הספק שתבחרו. התקנה עצמית ו-Cloud מדברים בפרוטוקול הצ׳אט של OpenAI. שום דבר לא מחייב LLM שמארח Weissman.',
+      },
+      {
+        q: 'האם Weissman יסרוק דברים שלא אישרנו?',
+        a: 'לא. כל יעד נבדק מול ההיקף המאושר של הלקוח. בדיקות מחוץ להיקף נדחות ב-API עם 403 לפני שיוצאת חבילה.',
+      },
+    ],
+  },
+  signupPage: {
+    title: 'צרו סביבת עבודה',
+    lead: 'ניסיון 14 יום בחינם · בלי כרטיס אשראי. ההרשמה כבויה עד שהמפעיל מדליק אותה.',
+    haveAccount: 'כבר יש חשבון?',
+  },
+  notFound: {
+    eyebrow: '404',
+    title: 'הנתיב הזה אינו דף.',
+    body: 'האתר הציבורי מחזיר 404 אמיתי לכתובות לא מוכרות, כדי שסורקים ומערכות ניטור לא יקבלו את דף הבית.',
+  },
+  legal: {
+    englishOnly:
+      'מסמך משפטי זה מוגש באנגלית. טרם פורסם תרגום עברי מאושר לדף זה. הנוסח האנגלי הוא הנוסח המחייב, והוא ממתין לסקירה משפטית.',
+    missing: 'המסמך חסר.',
+  },
+  demoForm: {
+    name: 'שם',
+    email: 'דוא״ל עבודה',
+    organisation: 'ארגון',
+    role: 'תפקיד',
+    message: 'מה כדאי שנכסה?',
+    sending: 'שולחים…',
+    submit: 'בקשו הדגמה',
+    emailSales: 'שליחת דוא״ל אל {email}',
+    errName: 'הזינו שם.',
+    errEmail: 'הזינו דוא״ל עבודה תקין.',
+    errOrg: 'הזינו שם ארגון.',
+    errMessage: 'ספרו בקצרה מה תרצו לראות (לפחות 10 תווים).',
+    success: 'הבקשה התקבלה. נשיב מ-{email}.',
+    smtpOff: 'הפריסה הזו לא מוגדרת לקבל בקשות הדגמה בדוא״ל. השתמשו ב-{email}.',
+    fail: 'לא ניתן היה לשלוח את הבקשה. נסו שוב או שלחו דוא״ל אל {email}.',
+    network: 'שגיאת רשת. הטופס לא נשלח. שלחו דוא״ל אל {email} או נסו שוב.',
+  },
+  signupForm: {
+    workspace: 'שם סביבת העבודה',
+    email: 'דוא״ל עבודה',
+    password: 'סיסמה',
+    hint: 'לפחות 12 תווים · שילוב אותיות עם ספרות או סימנים',
+    agreeBefore: 'מאשרים את',
+    terms: 'תנאי השימוש',
+    and: 'ול',
+    privacy: 'מדיניות הפרטיות',
+    creating: 'יוצרים…',
+    submit: 'יצירת סביבת עבודה',
+    verify: 'קישור אימות לפיתוח',
+    errWorkspace: 'שם סביבת העבודה חייב להיות 2–80 תווים.',
+    errEmail: 'הזינו דוא״ל עבודה תקין.',
+    errPasswordLen: 'השתמשו בלפחות 12 תווים עם אותיות וספרות או סימנים.',
+    errPasswordMix: 'שלבו אותיות עם ספרות או סימנים.',
+    errTerms: 'יש לאשר את תנאי השימוש ואת מדיניות הפרטיות.',
+    success: 'בדקו את תיבת הדוא״ל כדי לאשר את סביבת העבודה.',
+    gated: 'הרשמה עצמית אינה מופעלת בפריסה הזו. פנו אל {email}.',
+    fail: 'משהו השתבש. נסו שוב.',
+    network: 'שגיאת רשת — סביבת העבודה לא נוצרה. נסו שוב.',
+  },
+  interactive: {
+    title: 'מעבר על Command Center',
+    badge: 'להמחשה — לא נתוני דייר חיים',
+    stream: 'זרם אירועים לדוגמה',
+    asset: 'נכס',
+    all: 'הכל',
+    id: 'ID',
+    finding: 'ממצא',
+    attack: 'ATT&CK',
+    empty: 'אין שורות לדוגמה למסנן הזה.',
+    investigation: 'חקירה',
+    epss: 'EPSS',
+    kev: 'KEV',
+    kevYes: 'ברשימה',
+    kevNo: 'לא',
+    timeline: 'ציר זמן',
+    remediation: 'תיקון מוצע',
+    hidePath: 'הסתרת נתיב תקיפה לדוגמה',
+    showPath: 'הרחבת נתיב תקיפה לדוגמה',
+    severity: {
+      all: 'הכל',
+      critical: 'קריטי',
+      high: 'גבוה',
+      medium: 'בינוני',
+      info: 'מידע',
+    },
+    findings: {
+      'F-1042': {
+        title: 'מועמד SSRF עיוור ממתין ל-callback',
+        timeline: 'בדיקה נשתלה · מאזין במנוחה',
+        evidence: 'טוקן OAST משובץ. אין עדיין callback של HTTP/DNS — לא מסומן כמאומת.',
+        remediation: 'המתינו לקורלציה, ואז הגבילו יציאה משכבת האפליקציה.',
+      },
+      'F-0988': {
+        title: 'נתיב ניהול חשוף לאינטרנט ב-idp-core',
+        timeline: 'בדיקה חיה · 2 חזרות',
+        evidence: 'HTTP 200 על נתיב ניהול בתוך ההיקף. CVE ברשימת KEV צורף בשמירה.',
+        remediation: 'הסירו חשיפה ציבורית; דרשו SSO; סובבו אישורים.',
+      },
+      'F-0771': {
+        title: 'פורט האזנה חדש בתחנת עבודה',
+        timeline: 'UEBA · מחוץ לחלון הלמידה',
+        evidence: 'הפורט לא נראה בדלי שעת-השבוע הזה אחרי 24 דגימות.',
+        remediation: 'אמתו תוכנה צפויה; בודדו אם אין הסבר.',
+      },
+      'F-0610': {
+        title: 'ייעוץ: סוכן לא רשום',
+        timeline: 'קטלוג · agent_required',
+        evidence: 'מנועי מארח מסומנים ריקים עד שסוכן Weissman מקוון.',
+        remediation: 'התקינו את הסוכן אם המארח נמצא בהיקף הכתוב.',
+      },
+    },
+  },
+} as const

@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { announcement } from '../content/site'
+import { useI18n } from '../i18n'
+import { A } from './A'
 
 export function AnnouncementBar() {
+  const { t } = useI18n()
   const key = `weissman_announce_${announcement.id}`
   const [open, setOpen] = useState(() => {
     try {
@@ -17,16 +20,16 @@ export function AnnouncementBar() {
     <div className="border-b border-[var(--line)] bg-[#0c1218] text-sm text-muted">
       <div className="site-wrap flex min-h-11 items-center justify-between gap-4 py-2">
         <p className="m-0">
-          <span className="mr-2 font-semibold text-accent">{announcement.kicker}</span>
-          {announcement.text}{' '}
-          <a className="font-semibold text-ink underline-offset-2 hover:text-accent hover:underline" href={announcement.href}>
-            {announcement.hrefLabel}
-          </a>
+          <span className="me-2 font-semibold text-accent">{t('announcement.kicker')}</span>
+          {t('announcement.text')}{' '}
+          <A className="font-semibold text-ink underline-offset-2 hover:text-accent hover:underline" href={announcement.href}>
+            {t('announcement.hrefLabel')}
+          </A>
         </p>
         <button
           type="button"
           className="min-h-11 min-w-11 shrink-0 text-muted hover:text-ink"
-          aria-label="Dismiss announcement"
+          aria-label={t('a11y.dismissAnnouncement')}
           onClick={() => {
             try {
               localStorage.setItem(key, '1')

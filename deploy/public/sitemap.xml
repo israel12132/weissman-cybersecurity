@@ -1,26 +1,339 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://weissman.io/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://weissman.io/platform/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/endpoint-protection/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/vulnerability-research/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/detection-response/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/attack-path-intelligence/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/private-ai/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/security-operations/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/platform/oast-validation/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://weissman.io/solutions/</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/technology/</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/resources/</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/about/</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/contact/</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/pricing.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/signup.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/terms.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/privacy.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/terms-he.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/privacy-he.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/dpa.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/subprocessors.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://weissman.io/security-policy.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://weissman.io/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/endpoint-protection/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/endpoint-protection/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/endpoint-protection/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/endpoint-protection/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/vulnerability-research/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/vulnerability-research/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/vulnerability-research/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/vulnerability-research/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/detection-response/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/detection-response/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/detection-response/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/detection-response/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/attack-path-intelligence/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/attack-path-intelligence/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/attack-path-intelligence/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/attack-path-intelligence/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/private-ai/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/private-ai/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/private-ai/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/private-ai/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/security-operations/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/security-operations/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/security-operations/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/security-operations/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/platform/oast-validation/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/oast-validation/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/oast-validation/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/oast-validation/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/solutions/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/solutions/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/solutions/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/solutions/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/technology/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/technology/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/technology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/technology/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/resources/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/resources/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/resources/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/resources/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/about/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/about/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/about/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/about/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/contact/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/contact/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/contact/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/contact/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/pricing.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/pricing.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/pricing.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/pricing.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/signup.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/signup.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/signup.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/signup.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/terms.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/terms-he.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/terms.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/privacy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/privacy-he.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/terms-he.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/terms-he.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/terms.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/privacy-he.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/privacy-he.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/dpa.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/dpa.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/dpa.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/dpa.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/subprocessors.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/subprocessors.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/subprocessors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/subprocessors.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/security-policy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/security-policy.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/security-policy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/security-policy.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/endpoint-protection/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/endpoint-protection/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/endpoint-protection/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/endpoint-protection/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/vulnerability-research/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/vulnerability-research/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/vulnerability-research/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/vulnerability-research/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/detection-response/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/detection-response/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/detection-response/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/detection-response/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/attack-path-intelligence/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/attack-path-intelligence/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/attack-path-intelligence/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/attack-path-intelligence/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/private-ai/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/private-ai/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/private-ai/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/private-ai/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/security-operations/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/security-operations/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/security-operations/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/security-operations/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/platform/oast-validation/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/platform/oast-validation/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/platform/oast-validation/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/platform/oast-validation/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/solutions/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/solutions/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/solutions/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/solutions/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/technology/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/technology/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/technology/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/technology/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/resources/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/resources/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/resources/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/resources/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/about/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/about/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/about/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/about/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/contact/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/contact/"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/contact/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/contact/"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/pricing.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/pricing.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/pricing.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/pricing.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/signup.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/signup.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/signup.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/signup.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/dpa.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/dpa.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/dpa.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/dpa.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/subprocessors.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/subprocessors.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/subprocessors.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/subprocessors.html"/>
+  </url>
+  <url>
+    <loc>https://weissman.io/he/security-policy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://weissman.io/security-policy.html"/>
+    <xhtml:link rel="alternate" hreflang="he" href="https://weissman.io/he/security-policy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://weissman.io/security-policy.html"/>
+  </url>
 </urlset>

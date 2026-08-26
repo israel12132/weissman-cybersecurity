@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { homeSectionNav } from '../content/nav'
+import { useI18n } from '../i18n'
 
 export function StickySectionNav() {
-  const [active, setActive] = useState<string>(homeSectionNav[0].id)
+  const { t } = useI18n()
+  const [active, setActive] = useState<string>(homeSectionNav[0])
 
   useEffect(() => {
     const els = homeSectionNav
-      .map((s) => document.getElementById(s.id))
+      .map((id) => document.getElementById(id))
       .filter((n): n is HTMLElement => Boolean(n))
     if (!els.length) return
     const io = new IntersectionObserver(
@@ -22,18 +24,18 @@ export function StickySectionNav() {
 
   return (
     <nav
-      aria-label="On this page"
+      aria-label={t('a11y.onThisPage')}
       className="sticky top-[var(--nav-h)] z-30 hidden border-b border-[var(--line)] bg-[rgba(7,9,12,0.88)] backdrop-blur md:block"
     >
       <ul className="site-wrap flex gap-1 overflow-x-auto py-2">
-        {homeSectionNav.map((s) => (
-          <li key={s.id}>
+        {homeSectionNav.map((id) => (
+          <li key={id}>
             <a
-              href={`#${s.id}`}
-              className={`inline-flex min-h-11 items-center px-3 text-sm ${active === s.id ? 'text-accent' : 'text-muted hover:text-ink'}`}
-              aria-current={active === s.id ? 'location' : undefined}
+              href={`#${id}`}
+              className={`inline-flex min-h-11 items-center px-3 text-sm ${active === id ? 'text-accent' : 'text-muted hover:text-ink'}`}
+              aria-current={active === id ? 'location' : undefined}
             >
-              {s.label}
+              {t(`nav.sections.${id}`)}
             </a>
           </li>
         ))}

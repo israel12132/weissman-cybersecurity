@@ -16,6 +16,31 @@
     }
   }
 
+  html[dir='rtl'] {
+    --font-sans: var(--font-he);
+  }
+
+  html[dir='rtl'] .display {
+    letter-spacing: -0.02em;
+    line-height: 1.22;
+    text-wrap: pretty;
+  }
+
+  html[dir='rtl'] .eyebrow {
+    letter-spacing: 0.04em;
+    text-transform: none;
+  }
+
+  html[dir='rtl'] .uppercase {
+    text-transform: none;
+    letter-spacing: 0.04em;
+  }
+
+  .ltr-isolate {
+    unicode-bidi: isolate;
+    direction: ltr;
+  }
+
   html,
   body {
     background: var(--bg-deep);
@@ -128,7 +153,7 @@
   }
 
   .legal-doc th {
-    text-align: left;
+    text-align: start;
     color: var(--accent);
     padding: 0.5rem;
   }

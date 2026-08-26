@@ -8,79 +8,98 @@ import { ResourceGrid } from '../components/ResourceGrid'
 import { Reveal } from '../components/Reveal'
 import { Section } from '../components/Section'
 import { StickySectionNav } from '../components/StickySectionNav'
-import { capabilities, cta, howItWorks, proofPrinciples, solutions, threatStory } from '../content/site'
+import { A } from '../components/A'
+import {
+  capabilityHrefs,
+  capabilityIds,
+  howItWorksIds,
+  proofIds,
+  solutionIds,
+  threatStoryIds,
+} from '../content/site'
+import { metrics } from '../content/metrics'
+import { useI18n } from '../i18n'
 
 export function HomePage() {
+  const { t, n } = useI18n()
   return (
     <Layout>
       <Hero />
       <FeaturedRail />
       <StickySectionNav />
 
-      <Section id="why-us" eyebrow="Threat landscape" title="Complexity went up. Clarity has to follow.">
+      <Section id="why-us" eyebrow={t('home.threatEyebrow')} title={t('home.threatTitle')}>
         <div className="grid gap-4 md:grid-cols-3">
-          {threatStory.map((s) => (
-            <Reveal key={s.step}>
+          {threatStoryIds.map((step) => (
+            <Reveal key={step}>
               <article className="surface h-full p-6">
-                <p className="font-mono text-xs text-accent">{s.step}</p>
-                <h3 className="mt-3 text-xl text-ink">{s.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-muted">{s.body}</p>
+                <p className="font-mono text-xs text-accent">{step}</p>
+                <h3 className="mt-3 text-xl text-ink">{t(`home.threat.${step}.title`)}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-muted">{t(`home.threat.${step}.body`)}</p>
               </article>
             </Reveal>
           ))}
         </div>
       </Section>
 
-      <Section id="platform" eyebrow="Platform" title="One loop. Seven confirmed surfaces." sub="Each area is in the product today — not a roadmap slide.">
+      <Section id="platform" eyebrow={t('home.platformEyebrow')} title={t('home.platformTitle')} sub={t('home.platformSub')}>
         <PlatformTabs />
       </Section>
 
-      <Section eyebrow="Interactive walkthrough" title="How an investigation reads" sub="Sample rows only. Filters and the investigation panel behave like the product; they are not connected to a tenant.">
+      <Section eyebrow={t('home.interactiveEyebrow')} title={t('home.interactiveTitle')} sub={t('home.interactiveSub')}>
         <InteractiveProduct />
       </Section>
 
-      <Section id="capabilities" eyebrow="Capabilities" title="Outcomes, not adjectives">
+      <Section id="capabilities" eyebrow={t('home.capabilitiesEyebrow')} title={t('home.capabilitiesTitle')}>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {capabilities.map((c) => (
-            <Reveal key={c.title}>
-              <a className="surface group block h-full p-6 transition duration-base hover:-translate-y-0.5 hover:border-accent/40" href={c.href}>
-                <h3 className="text-lg text-ink">{c.title}</h3>
-                <p className="mt-2 text-sm text-muted">{c.body}</p>
+          {capabilityIds.map((id) => (
+            <Reveal key={id}>
+              <A className="surface group block h-full p-6 transition duration-base hover:-translate-y-0.5 hover:border-accent/40" href={capabilityHrefs[id]}>
+                <h3 className="text-lg text-ink">{t(`capabilities.${id}.title`)}</h3>
+                <p className="mt-2 text-sm text-muted">{t(`capabilities.${id}.body`)}</p>
                 <p className="mt-4 text-sm font-semibold text-accent">
-                  Learn more <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
+                  {t('cta.learnMore')}{' '}
+                  <span className="inline-block transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5">→</span>
                 </p>
-              </a>
+              </A>
             </Reveal>
           ))}
         </div>
       </Section>
 
-      <Section id="how-it-works" eyebrow="How it works" title="Four stages. No ceremony.">
+      <Section id="how-it-works" eyebrow={t('home.howEyebrow')} title={t('home.howTitle')}>
         <ol className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {howItWorks.map((s, i) => (
-            <li key={s.id} className="surface p-6">
+          {howItWorksIds.map((id, i) => (
+            <li key={id} className="surface p-6">
               <p className="font-mono text-xs text-ops">0{i + 1}</p>
-              <h3 className="mt-3 text-xl text-ink">{s.title}</h3>
-              <p className="mt-3 text-sm text-muted">{s.body}</p>
+              <h3 className="mt-3 text-xl text-ink">{t(`howItWorks.${id}.title`)}</h3>
+              <p className="mt-3 text-sm text-muted">{t(`howItWorks.${id}.body`)}</p>
             </li>
           ))}
         </ol>
         <div className="mt-8">
           <ButtonLink variant="ghost" href="/technology/">
-            Full technology walkthrough
+            {t('cta.technologyWalkthrough')}
           </ButtonLink>
         </div>
       </Section>
 
-      <Section eyebrow="Solutions" title="Built for the people who have to decide">
+      <Section eyebrow={t('home.solutionsEyebrow')} title={t('home.solutionsTitle')}>
         <div className="grid gap-4 lg:grid-cols-2">
-          {solutions.map((s) => (
-            <article key={s.id} id={s.id} className="surface p-6">
-              <h3 className="text-xl text-ink">{s.title}</h3>
-              <p className="mt-2 text-sm text-muted">{s.body}</p>
+          {solutionIds.map((id) => (
+            <article key={id} id={id} className="surface p-6">
+              <h3 className="text-xl text-ink">{t(`solutions.${id}.title`)}</h3>
+              <p className="mt-2 text-sm text-muted">{t(`solutions.${id}.body`)}</p>
               <ul className="mt-4 space-y-1 text-sm text-muted">
-                {s.points.map((p) => (
-                  <li key={p}>▸ {p}</li>
+                {[0, 1, 2].map((i) => (
+                  <li key={i}>
+                    ▸{' '}
+                    {t(`solutions.${id}.points.${i}`, {
+                      routes: n(metrics.commandCenterRoutes.value),
+                      probes: n(metrics.liveProbes.value),
+                      techniques: n(metrics.mitreTechniques.value),
+                    })}
+                  </li>
                 ))}
               </ul>
             </article>
@@ -88,31 +107,29 @@ export function HomePage() {
         </div>
       </Section>
 
-      <Section id="proof" eyebrow="Proof" title="Built for security-critical environments" sub="We do not publish customer logos or analyst awards we do not have. These are operating principles you can inspect in the product and the legal pack.">
+      <Section id="proof" eyebrow={t('home.proofEyebrow')} title={t('home.proofTitle')} sub={t('home.proofSub')}>
         <div className="grid gap-4 md:grid-cols-2">
-          {proofPrinciples.map((p) => (
-            <article key={p.title} className="surface p-6">
-              <h3 className="text-lg text-ink">{p.title}</h3>
-              <p className="mt-2 text-sm text-muted">{p.body}</p>
+          {proofIds.map((id) => (
+            <article key={id} className="surface p-6">
+              <h3 className="text-lg text-ink">{t(`proof.${id}.title`)}</h3>
+              <p className="mt-2 text-sm text-muted">{t(`proof.${id}.body`)}</p>
             </article>
           ))}
         </div>
       </Section>
 
-      <Section id="resources" eyebrow="Resources" title="What we can actually publish">
+      <Section id="resources" eyebrow={t('home.resourcesEyebrow')} title={t('home.resourcesTitle')}>
         <ResourceGrid />
       </Section>
 
       <section id="contact" className="border-t border-[var(--line)] bg-[radial-gradient(ellipse_at_top,rgba(34,211,238,0.12),transparent_55%)] py-24">
         <div className="site-wrap max-w-3xl text-center">
-          <h2 className="display text-4xl text-ink md:text-5xl">See the evidence, then decide.</h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-muted">
-            Book a demo of the Command Center, or start a trial if self-serve signup is enabled on this deployment.
-          </p>
+          <h2 className="display text-4xl text-ink md:text-5xl">{t('home.finalTitle')}</h2>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-muted">{t('home.finalBody')}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <ButtonLink href={cta.primary.href}>{cta.primary.label}</ButtonLink>
-            <ButtonLink variant="ghost" href={cta.trial.href}>
-              {cta.trial.label}
+            <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
+            <ButtonLink variant="ghost" href="/signup.html">
+              {t('cta.startTrial')}
             </ButtonLink>
           </div>
         </div>
