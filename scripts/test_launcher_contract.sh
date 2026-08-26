@@ -470,6 +470,24 @@ else
   bad "auto-detect without cargo/systemd: $dry"
 fi
 
+# Compose files present → live stack even when cargo is installed. Otherwise a
+# developer laptop with rustup would silently start the host-binary path and never
+# bring up gateway/monitoring — the exact stack the operator's compose output showed.
+dry="$(WEISSMAN_TEST_HIDE_SYSTEMD=1 WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+if grep -qx 'mode=live cmd=start pull=0 pull_only=0' <<<"$dry"; then
+  ok "auto-detect with cargo still chooses live when compose files exist"
+else
+  bad "auto-detect with cargo stole live mode: $dry"
+fi
+
+if grep -q 'pull_latest()' start_weissman.sh \
+   && grep -q 'origin/\${branch}' start_weissman.sh \
+   && ! grep -q 'pull_latest_main' start_weissman.sh; then
+  ok "--pull updates the current deploy branch (does not force checkout main)"
+else
+  bad "--pull still hard-resets to main and would wipe a feature-branch deploy"
+fi
+
 bogus_sw="$(bash start_weissman.sh --definitely-not-a-flag 2>&1 || true)"
 if grep -q "unknown flag" <<<"$bogus_sw"; then
   ok "start_weissman.sh rejects unknown flags"
