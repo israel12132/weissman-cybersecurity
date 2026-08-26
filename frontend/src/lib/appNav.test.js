@@ -40,7 +40,7 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
   })
 
   it('blocks restricted targets for non-privileged roles', () => {
-    for (const to of ['/admin', '/ceo-vault', '/ceo', '/supreme-nerve-center']) {
+    for (const to of ['/admin', '/ceo-vault', '/ceo-keys', '/ceo', '/supreme-nerve-center']) {
       expect(canAccessNavItem({ to }, { role: 'viewer' })).toBe(false)
       expect(canAccessNavItem({ to }, { role: 'analyst' })).toBe(false)
       expect(canAccessNavItem({ to }, null)).toBe(false)
@@ -50,6 +50,10 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
   it('allows restricted targets for ceo / superadmin', () => {
     expect(canAccessNavItem({ to: '/admin' }, { role: 'ceo' })).toBe(true)
     expect(canAccessNavItem({ to: '/ceo-vault' }, { role: 'ceo' })).toBe(true)
+    expect(canAccessNavItem({ to: '/ceo-keys' }, { role: 'ceo' })).toBe(true)
+    expect(canAccessNavItem({ to: '/ceo-keys' }, { role: 'admin' })).toBe(false)
+    expect(canAccessNavItem({ to: '/ceo-keys' }, { role: 'operator' })).toBe(false)
+    expect(canAccessNavItem({ to: '/ceo-keys' }, { is_superadmin: true })).toBe(true)
     expect(canAccessNavItem({ to: '/ceo' }, { is_superadmin: true })).toBe(true)
   })
 
@@ -77,6 +81,7 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
     expect(canAccessNavItem({ to: '/clients' }, portal)).toBe(true)
     expect(canAccessNavItem({ to: '/findings' }, portal)).toBe(true)
     expect(canAccessNavItem({ to: '/admin' }, portal)).toBe(false)
+    expect(canAccessNavItem({ to: '/ceo-keys' }, portal)).toBe(false)
     expect(canAccessNavItem({ to: '/billing' }, portal)).toBe(false)
     expect(canAccessNavItem({ to: '/clients/new' }, portal)).toBe(false)
     expect(canAccessNavItem({ to: '/system-config' }, portal)).toBe(false)

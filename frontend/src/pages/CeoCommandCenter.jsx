@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { KeyRound } from 'lucide-react'
 import CeoWarRoomStream from '../components/ceo/CeoWarRoomStream'
 import CeoGenesisPanel from '../components/ceo/CeoGenesisPanel'
 import CeoVaccineVault from '../components/ceo/CeoVaccineVault'
@@ -71,11 +73,20 @@ export default function CeoCommandCenter() {
               {t('pages.ceoCommandCenter.subtitle')}
             </p>
           </div>
-          <ShellScanActions
-            onRefresh={() => window.location.reload()}
-            onExport={handleExport}
-            exportDisabled={exporting}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/ceo-keys"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-400/40 bg-amber-500/10 text-amber-100 text-xs font-mono uppercase tracking-wider hover:bg-amber-500/20"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              {t('pages.ceoCommandCenter.keys_cta')}
+            </Link>
+            <ShellScanActions
+              onRefresh={() => window.location.reload()}
+              onExport={handleExport}
+              exportDisabled={exporting}
+            />
+          </div>
         </div>
       </header>
 

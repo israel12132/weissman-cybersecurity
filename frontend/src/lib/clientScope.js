@@ -59,6 +59,7 @@ export const PORTAL_BLOCKED_PREFIXES = [
   '/admin',
   '/ceo',
   '/ceo-vault',
+  '/ceo-keys',
   '/supreme-nerve-center',
   '/system-config',
   '/sso-config',

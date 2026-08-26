@@ -54,6 +54,7 @@ describe('clientScope policy', () => {
 
   it('hides tenant-admin surfaces from portal sessions', () => {
     expect(isPortalBlockedPath('/admin')).toBe(true)
+    expect(isPortalBlockedPath('/ceo-keys')).toBe(true)
     expect(isPortalBlockedPath('/clients/new')).toBe(true)
     expect(isPortalBlockedPath('/billing')).toBe(true)
     expect(isPortalBlockedPath('/findings')).toBe(false)

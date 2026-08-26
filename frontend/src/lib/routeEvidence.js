@@ -89,6 +89,7 @@ export const ROUTE_EVIDENCE = {
   '/social-engineering': 'pages.socialEngineering.evidence_notice',
   '/remediation': 'pages.remediationHub.evidence_notice',
   '/ceo-vault': 'pages.ceoVault.evidence_notice',
+  '/ceo-keys': 'pages.ceoKeysCockpit.evidence_notice',
   '/sbom': 'pages.sbomBrowser.evidence_notice',
   '/integrations': 'pages.integrationManager.evidence_notice',
   '/settings/integrations': 'pages.integrationManager.evidence_notice',

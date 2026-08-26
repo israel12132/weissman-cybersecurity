@@ -10,6 +10,8 @@ import {
   MessageSquare,
   Radar,
   GitBranch,
+  Crosshair,
+  Waypoints,
   Zap,
   CalendarClock,
   Bell,
@@ -25,6 +27,7 @@ import {
   PanelLeft,
   Trash2,
   UserPlus,
+  KeyRound,
 } from 'lucide-react'
 import { PRIMARY_NAV, canAccessNavItem } from '../../lib/appNav'
 import { useClient } from '../../context/ClientContext'
@@ -214,7 +217,11 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         defaultOpen: true,
         items: [
           { to: '/threat-intel', label: t('nav.threat_intel'), icon: Radar, id: 'nav-threat-intel' },
-          { to: '/risk-graph', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
+          { to: '/kill-chain', label: t('nav.kill_chain'), icon: Waypoints, id: 'nav-kill-chain' },
+          { to: '/attack-vectors', label: t('nav.attack_vectors'), icon: Crosshair, id: 'nav-attack-vectors' },
+          { to: '/attack-paths', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
+          { to: '/risk-graph', label: t('nav.risk_graph'), icon: GitBranch, id: 'nav-risk-graph' },
+          { to: '/threat-analysis', label: t('nav.threat_analysis'), icon: Radar, id: 'nav-threat-analysis' },
         ],
       },
       {
@@ -241,6 +248,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           { to: '/audit-log', label: t('nav.audit_log'), icon: ScrollText, id: 'nav-audit-log' },
           { to: '/system-config', label: t('nav.system_config'), icon: Settings, id: 'nav-system-config' },
           ...(isCeo ? [{ to: '/admin', label: t('nav.admin'), icon: Shield, id: 'nav-admin-management' }] : []),
+          ...(isCeo ? [{ to: '/ceo-keys', label: t('nav.ceo_keys'), icon: KeyRound, id: 'nav-ceo-keys' }] : []),
         ],
       },
     ]
@@ -276,6 +284,16 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     <>
       {/* Brand */}
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[var(--border-subtle)]">
+        {isCeo && (
+          <Link
+            to="/ceo-keys"
+            className="mb-2 flex items-center justify-center gap-2 text-[9px] font-mono uppercase tracking-[0.18em] py-1.5 rounded-md border border-amber-400/40 text-amber-100 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+            id="nav-ceo-classified-keys"
+          >
+            <KeyRound className="w-3 h-3" />
+            {t('nav.ceo_keys')}
+          </Link>
+        )}
         {isCeo && (
           <Link
             to="/"

@@ -289,6 +289,14 @@ mod tests {
             Some(roles::CEO)
         );
         assert_eq!(
+            required_min_role(&Method::PUT, "/api/ceo/platform-keys"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
+            required_min_role(&Method::DELETE, "/api/ceo/platform-keys/NVD_API_KEY"),
+            Some(roles::CEO)
+        );
+        assert_eq!(
             required_min_role(&Method::POST, "/api/admin/users"),
             Some(roles::ADMIN)
         );

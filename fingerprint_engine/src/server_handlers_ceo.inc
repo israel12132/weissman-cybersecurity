@@ -627,6 +627,105 @@ async fn api_ceo_tenant_engines_put(
     }
 }
 
+#[derive(Deserialize)]
+struct CeoPlatformKeyPutBody {
+    env_name: String,
+    value: String,
+}
+
+async fn api_ceo_platform_keys_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    let j = crate::ceo::platform_keys::list_platform_keys(state.app_pool.as_ref(), auth.tenant_id)
+        .await;
+    (StatusCode::OK, Json(j)).into_response()
+}
+
+async fn api_ceo_platform_keys_put(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<CeoPlatformKeyPutBody>,
+) -> Response {
+    let ip = extract_client_ip(&headers, addr);
+    let actor = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
+    match crate::ceo::platform_keys::put_platform_key(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        &ip,
+        &actor,
+        &body.env_name,
+        &body.value,
+    )
+    .await
+    {
+        Ok(j) => (StatusCode::OK, Json(j)).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_ceo_platform_keys_delete(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> Response {
+    let ip = extract_client_ip(&headers, addr);
+    match crate::ceo::platform_keys::delete_platform_key(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        &ip,
+        &name,
+    )
+    .await
+    {
+        Ok(j) => (StatusCode::OK, Json(j)).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_ceo_platform_keys_reveal(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> Response {
+    let ip = extract_client_ip(&headers, addr);
+    match crate::ceo::platform_keys::reveal_platform_key(
+        state.app_pool.as_ref(),
+        state.auth_pool.as_ref(),
+        auth.tenant_id,
+        auth.user_id,
+        &ip,
+        &name,
+    )
+    .await
+    {
+        Ok(j) => (StatusCode::OK, Json(j)).into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "detail": e })),
+        )
+            .into_response(),
+    }
+}
+
 async fn api_ceo_supreme_nerve_center_get(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,

@@ -593,6 +593,18 @@ export const ROUTE_META = {
     who: 'CEO',
     output: 'vault contents',
   },
+  'ceo-keys': {
+    title: 'מפתחות מסווגים',
+    group: 'ניהול מערכת',
+    what: 'חלונית אחת לכל מפתחות הפלטפורמה — LLM, intel, SMTP, vault, cloud — עם סטטוס חי ואפשרות להוסיף כל מפתח חסר.',
+    why: 'בעלים וצוות מסווג ממלאים פערי סודות בלי לגעת ב-.env על השרת.',
+    when: 'onboarding, סיבוב מפתחות, פער Ask Weissman / Council.',
+    where: '/command-center/ceo-keys',
+    how: 'CEO/superadmin only. GET /api/ceo/platform-keys → PUT to arm.',
+    howMuch: 'strictest RBAC · encrypted keyring',
+    who: 'CEO, superadmin',
+    output: 'armed platform keys',
+  },
 }
 
 /** Friendly Hebrew titles for dynamic / nested routes */
@@ -636,6 +648,7 @@ export const ROUTE_TITLES = {
   'engine-management': 'Engine Management Console',
   'system-config': 'System Configuration',
   metrics: 'Metrics Dashboard',
+  'ceo-keys': 'Classified Keys',
   integrations: 'Integration Manager',
   compliance: 'Compliance Frameworks',
   sbom: 'SBOM Browser',

@@ -93,11 +93,15 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
     let pools = database::connect_pools().await?;
+    fingerprint_engine::ceo::platform_keys::overlay_from_db(pools.app.as_ref()).await;
     weissman_db::auth_rotation::rotate_weissman_auth_password_on_boot()
         .await
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
     fingerprint_engine::db::ensure_admin_user(&pools.auth).await?;
     fingerprint_engine::db::ensure_master_bootstrap_user(&pools.auth).await?;
+    // Raise the env operator to ceo + superadmin so classified keys and owner-only
+    // client lifecycle are reachable after a fresh volume. Credentials stay env-only.
+    fingerprint_engine::db::ensure_platform_owner(&pools.auth, &pools.app).await?;
     // Must complete before we accept traffic: owner-only client create/delete
     // requires is_superadmin (or CEO). Unscoped app-pool writes are a no-op under
     // FORCE RLS, so this uses auth lookup + a tenant-scoped app transaction.

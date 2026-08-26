@@ -56,6 +56,10 @@ ADMIN_EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
 # operator's `WEISSMAN_OAST_DOMAIN=... ./start_weissman_live.sh` with the template's blank
 # line, enabling the oast profile but starting the listener with an empty domain.
 OAST_DOMAIN_CLI="${WEISSMAN_OAST_DOMAIN:-}"
+# Captured before `.env` is sourced so an operator can inject the platform-owner
+# identity without it being clobbered by blank template lines.
+MASTER_BOOTSTRAP_EMAIL_CLI="${WEISSMAN_MASTER_BOOTSTRAP_EMAIL:-}"
+MASTER_BOOTSTRAP_PASSWORD_CLI="${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}"
 WITH_MONITORING=1
 # OAST out-of-band listener: on automatically when WEISSMAN_OAST_DOMAIN is set (it needs a
 # DNS zone the operator delegates), off otherwise.
@@ -90,7 +94,9 @@ dc() {
 }
 
 gen_secret() {
-  openssl rand -base64 48 | tr -d '\n/'
+  # Hex only: base64 used to leak `+` into DATABASE_URL / REDIS_URL userinfo, which
+  # some URI parsers treat as space and then the role password does not match.
+  openssl rand -hex 32
 }
 
 gen_password() {
@@ -309,6 +315,15 @@ ensure_env() {
     generated_admin=1
   fi
 
+  # Platform owner (ceo + is_superadmin). Persist a shell-provided identity so a rebuild
+  # keeps the same operator instead of leaving the template's blank MASTER_BOOTSTRAP_* lines.
+  if [[ -n "$MASTER_BOOTSTRAP_EMAIL_CLI" ]]; then
+    env_set WEISSMAN_MASTER_BOOTSTRAP_EMAIL "$MASTER_BOOTSTRAP_EMAIL_CLI"
+  fi
+  if [[ -n "$MASTER_BOOTSTRAP_PASSWORD_CLI" ]]; then
+    env_set WEISSMAN_MASTER_BOOTSTRAP_PASSWORD "$MASTER_BOOTSTRAP_PASSWORD_CLI"
+  fi
+
   # Monitoring UIs get their OWN generated credential — never a copy of the platform admin
   # password. Grafana is a large third-party app with its own CVE stream and its own exposed
   # login. Copying WEISSMAN_ADMIN_PASSWORD into it (which this did — both values hashed to the
@@ -364,6 +379,12 @@ validate_env() {
   # weissman-worker; catching it here beats waiting out the health-check timeout.
   require_len WEISSMAN_JOB_ORCHESTRATOR_SECRET 32 "regenerate with: openssl rand -base64 48"
   require_len WEISSMAN_ADMIN_PASSWORD 12
+  require_len WEISSMAN_INTEGRATIONS_VAULT_KEY 32 "regenerate with: openssl rand -hex 32"
+  local vault_key
+  vault_key="$(env_get WEISSMAN_VAULT_KEY)"
+  if [[ ! "$vault_key" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    die "WEISSMAN_VAULT_KEY must be exactly 64 hex chars (openssl rand -hex 32) — without it the backend exits immediately and Compose reports unhealthy"
+  fi
 
   local weak_frags=(weissman_dev_secret weissman_auth_dev)
   for key in DB_APP_PASSWORD DB_AUTH_PASSWORD POSTGRES_PASSWORD; do
@@ -398,7 +419,29 @@ compose_up() {
   if [[ "$WITH_MONITORING" -eq 1 ]]; then extras+=" + monitoring"; fi
   if [[ "$WITH_OAST" -eq 1 ]]; then extras+=" + OAST listener"; fi
   log "Starting LIVE stack (Postgres, Redis, API, Worker, Gateway${extras})..."
-  dc "${up_args[@]}"
+  if dc "${up_args[@]}"; then
+    return 0
+  fi
+  log "ERROR: docker compose failed to start the stack — dumping backend logs"
+  diagnose_compose_failure
+}
+
+# Called when `compose up` itself fails (typically: backend exited, so worker/gateway
+# never start: "dependency failed to start: container ...-backend-1 is unhealthy").
+diagnose_compose_failure() {
+  diagnose_service backend
+  local logs
+  logs="$(dc logs backend --tail 120 2>/dev/null || true)"
+  if grep -q "security policy refusal" <<<"$logs"; then
+    die "backend refused the production security policy (see logs above). Usual cause: missing WEISSMAN_VAULT_KEY / WEISSMAN_INTEGRATIONS_VAULT_KEY. Delete those two empty lines from .env if present and re-run ./start_weissman.sh so they are generated."
+  fi
+  if grep -qiE "checksum|was previously applied" <<<"$logs"; then
+    die "backend migration checksum mismatch (see logs above). The Postgres volume was initialised with a different migration of the same version. Inspect: docker compose -f docker-compose.yml -f docker-compose.prod.yml exec postgres psql -U postgres -d weissman -c \"SELECT version, description FROM _sqlx_migrations ORDER BY version DESC LIMIT 20;\""
+  fi
+  if grep -qiE "REDIS_URL is not set|Redis PING failed" <<<"$logs"; then
+    die "backend could not reach Redis (see logs above). Confirm REDIS_PASSWORD in .env matches the running redis container."
+  fi
+  die "backend is unhealthy — see logs above. Re-run: ./start_weissman_live.sh logs backend"
 }
 
 # Services this run expects to come up, in the order we report them.

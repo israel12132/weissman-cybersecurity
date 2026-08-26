@@ -112,6 +112,7 @@ import {
   SystemConfiguration,
   MetricsDashboard,
   CeoVault,
+  CeoKeysCockpit,
   CeoCommandCenter,
   SupremeNerveCenter,
   RiskGraphVisualization,
@@ -129,6 +130,7 @@ import {
   PasswordSprayCommandCenter,
   SamlSecurityCommandCenter,
   KillChainOrchestrator,
+  AttackVectorAnalytics,
   AIAnalysisEngine,
   ExploitResearchLab,
   Clients,
@@ -302,6 +304,7 @@ export default function TacticalApp() {
           <Route path="system-config" element={<RequireRole min="admin"><SystemConfiguration /></RequireRole>} />
           <Route path="metrics" element={<MetricsDashboard />} />
           <Route path="ceo-vault" element={<RequireRole min="ceo"><CeoVault /></RequireRole>} />
+          <Route path="ceo-keys" element={<CeoProtectedRoute><CeoKeysCockpit /></CeoProtectedRoute>} />
           <Route path="risk-graph" element={<RiskGraphVisualization />} />
           <Route path="compliance" element={<ComplianceFrameworks />} />
           <Route path="sbom" element={<SBOMBrowser />} />
@@ -313,6 +316,7 @@ export default function TacticalApp() {
           <Route path="baseline-drift" element={<BaselineAndDrift />} />
           <Route path="identity-context" element={<IdentityContextManager />} />
           <Route path="kill-chain" element={<KillChainOrchestrator />} />
+          <Route path="attack-vectors" element={<AttackVectorAnalytics />} />
           <Route path="ai-analysis" element={<AIAnalysisEngine />} />
           <Route path="exploit-lab" element={<ExploitResearchLab />} />
           <Route path="agents" element={<AgentManagement />} />

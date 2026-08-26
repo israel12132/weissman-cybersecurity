@@ -89,6 +89,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
+      { to: '/attack-vectors', labelKey: 'nav.attack_vectors', icon: '🧬' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
@@ -183,6 +184,7 @@ export const NAV_GROUPS = [
       { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
       { to: '/supreme-nerve-center', labelKey: 'nav.supreme_nerve_center', icon: '🧠', hideFromNav: false },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
+      { to: '/ceo-keys', labelKey: 'nav.ceo_keys', icon: '🔑' },
       { to: '/reports', labelKey: 'nav.reports', icon: '🧾' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
     ],
@@ -307,6 +309,7 @@ function dedupeCrumbs(crumbs) {
 export const NAV_MIN_ROLE = {
   '/admin': 'ceo',
   '/ceo-vault': 'ceo',
+  '/ceo-keys': 'ceo',
   '/ceo': 'ceo',
   '/supreme-nerve-center': 'ceo',
   '/system-config': 'admin',

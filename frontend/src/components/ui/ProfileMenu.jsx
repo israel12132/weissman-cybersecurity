@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   Contrast,
+  KeyRound,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { sessionIdentityLabel, isClientUser } from '../../lib/clientScope'
@@ -39,7 +40,7 @@ const QUICK_LINKS = [
  */
 export default function ProfileMenu({ variant = 'header' }) {
   const { t, i18n } = useTranslation()
-  const { session, logout } = useAuth()
+  const { session, logout, isCeo } = useAuth()
   const { theme, cycleTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -183,6 +184,14 @@ export default function ProfileMenu({ variant = 'header' }) {
                 onClick={() => setOpen(false)}
               />
             ))}
+            {isCeo && (
+              <MenuLink
+                to="/ceo-keys"
+                label={t('nav.ceo_keys')}
+                icon={KeyRound}
+                onClick={() => setOpen(false)}
+              />
+            )}
           </div>
 
           <div className="border-t border-[var(--border-default)] pt-3">
