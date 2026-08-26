@@ -115,6 +115,16 @@ impl EventReplayBuffer {
     /// Sets `gap` when the oldest retained event is newer than `last_seq + 1`, i.e. events
     /// between the client's position and the buffer's window were already evicted.
     pub fn replay_since(&self, viewer_tid: i64, last_seq: u64) -> ReplaySlice {
+        self.replay_since_scoped(viewer_tid, None, last_seq)
+    }
+
+    /// Like [`replay_since`], also filtering customer-portal users to their bound client.
+    pub fn replay_since_scoped(
+        &self,
+        viewer_tid: i64,
+        viewer_cid: Option<i64>,
+        last_seq: u64,
+    ) -> ReplaySlice {
         let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let latest_seq = st.next_seq.saturating_sub(1);
         let gap = st
@@ -126,7 +136,8 @@ impl EventReplayBuffer {
             .iter()
             .filter(|e| e.seq > last_seq)
             .filter_map(|e| {
-                crate::http::tenant_stream::visible_to(&e.raw, viewer_tid).map(|p| (e.seq, p))
+                crate::http::tenant_stream::visible_to_scoped(&e.raw, viewer_tid, viewer_cid)
+                    .map(|p| (e.seq, p))
             })
             .collect();
         ReplaySlice {

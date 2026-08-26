@@ -29,16 +29,7 @@ vi.mock('../../context/AuthContext', () => ({
     verifyMfa: vi.fn(),
     isAuthenticated: false,
     isCeo: false,
-  }),
-}))
-
-vi.mock('../../hooks/useTenantDirectory', () => ({
-  default: () => ({
-    status: 'restricted',
-    tenants: [],
-    defaultSlug: 'default',
-    allowCustom: true,
-    reload: vi.fn(),
+    isOwner: false,
   }),
 }))
 
@@ -82,6 +73,6 @@ describe('Command Center login', () => {
     expect(screen.getByText(`${PLATFORM_RELEASE_NAME} · ${PLATFORM_RELEASE}`)).toBeInTheDocument()
     expect(screen.queryByText(/254 engines/)).not.toBeInTheDocument()
     expect(screen.getByTestId('cyber-live-backdrop')).toBeInTheDocument()
-    expect(screen.getByLabelText('auth.tenant_slug')).toBeInTheDocument()
+    expect(screen.queryByLabelText('auth.tenant_slug')).not.toBeInTheDocument()
   })
 })

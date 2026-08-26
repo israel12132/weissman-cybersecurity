@@ -379,5 +379,68 @@ else
   bad "wasm-bindgen-cli is unpinned — schema-version drift can break the build"
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+head_ "13. start_weissman.sh — full-stack dispatcher (post-pull launcher)"
+# The host start script used to exec weissman-server only (no worker / no datastores).
+# Operators then pasted cargo + systemctl and hit: no cargo, no systemd units, stuck merge.
+# These checks lock the new contract: --pull, mode detect, and "starts everything".
+
+if grep -q 'HTTP server ONLY' start_weissman.sh; then
+  bad "start_weissman.sh still advertises HTTP-only (no worker)"
+else
+  ok "start_weissman.sh no longer claims HTTP-only"
+fi
+
+for needle in weissman-worker --pull start_weissman_live.sh weissman-postgres detect_mode; do
+  if grep -qF -- "$needle" start_weissman.sh; then
+    ok "start_weissman.sh contains $needle"
+  else
+    bad "start_weissman.sh missing $needle"
+  fi
+done
+
+help_sw="$(bash start_weissman.sh --help 2>&1 || true)"
+if grep -qF -- "--pull" <<<"$help_sw" && grep -qF -- "weissman-worker" <<<"$help_sw"; then
+  ok "start_weissman.sh --help documents --pull and the worker"
+else
+  bad "start_weissman.sh --help is missing --pull or worker"
+fi
+
+dry="$(WEISSMAN_START_DRY_RUN=1 WEISSMAN_START_MODE=live bash start_weissman.sh --pull 2>&1 || true)"
+if grep -qx 'mode=live cmd=start pull=1 pull_only=0' <<<"$dry"; then
+  ok "dry-run --pull live → mode=live cmd=start pull=1"
+else
+  bad "dry-run --pull live output: $dry"
+fi
+
+dry="$(WEISSMAN_START_DRY_RUN=1 WEISSMAN_START_MODE=live bash start_weissman.sh --pull-only 2>&1 || true)"
+if grep -qx 'mode=live cmd=start pull=1 pull_only=1' <<<"$dry"; then
+  ok "dry-run --pull-only → pull_only=1"
+else
+  bad "dry-run --pull-only output: $dry"
+fi
+
+dry="$(WEISSMAN_START_DRY_RUN=1 WEISSMAN_START_MODE=local bash start_weissman.sh stop 2>&1 || true)"
+if grep -qx 'mode=local cmd=stop pull=0 pull_only=0' <<<"$dry"; then
+  ok "dry-run stop local → mode=local cmd=stop pull=0"
+else
+  bad "dry-run stop local output: $dry"
+fi
+
+# Hide cargo + systemd so auto-detect must choose Docker (the Pop!_OS laptop path).
+dry="$(WEISSMAN_TEST_HIDE_CARGO=1 WEISSMAN_TEST_HIDE_SYSTEMD=1 WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+if grep -qx 'mode=live cmd=start pull=0 pull_only=0' <<<"$dry"; then
+  ok "auto-detect without cargo/systemd chooses live (Docker)"
+else
+  bad "auto-detect without cargo/systemd: $dry"
+fi
+
+bogus_sw="$(bash start_weissman.sh --definitely-not-a-flag 2>&1 || true)"
+if grep -q "unknown flag" <<<"$bogus_sw"; then
+  ok "start_weissman.sh rejects unknown flags"
+else
+  bad "start_weissman.sh accepted a bogus flag"
+fi
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

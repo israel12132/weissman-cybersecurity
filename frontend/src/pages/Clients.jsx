@@ -15,6 +15,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { confirmDialog } from '../utils/confirmDialog'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import { useAuth } from '../context/AuthContext'
 
 function fmtUsd(n) {
   if (n == null) return '$—'
@@ -28,6 +29,7 @@ function fmtUsd(n) {
 export default function Clients() {
   const { t } = useTranslation()
   const { toast } = useToast()
+  const { canCreateClients, canDeleteClients, isClientUser } = useAuth()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -232,19 +234,22 @@ export default function Clients() {
           onRefresh={loadClients}
           refreshLabel={t('common.refresh')}
         >
+          {canCreateClients && (
           <Link
             to="/clients/new"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-mono border border-violet-500/35 bg-violet-500/12 text-violet-200 hover:bg-violet-500/20 transition-all"
           >
             {t('clients_page.add_new')}
           </Link>
+          )}
         </PremiumPageHeader>
 
-        {/* Fleet-wide (MSSP) posture roll-up across every client in the tenant. */}
-        <PortfolioPosturePanel />
-
-        {/* Fleet-wide ATT&CK exposure: which techniques span the client base. */}
-        <PortfolioAttackPanel />
+        {!isClientUser && (
+          <>
+            <PortfolioPosturePanel />
+            <PortfolioAttackPanel />
+          </>
+        )}
 
         {loading && clients.length === 0 ? (
           <SkeletonWidgetGrid count={4} />
@@ -310,7 +315,7 @@ export default function Clients() {
             icon="shield"
             title={t('clients_page.no_clients_title')}
             body={t('clients_page.no_clients_body')}
-            cta={{ label: t('clients_page.add_first'), to: '/clients/new' }}
+            cta={canCreateClients ? { label: t('clients_page.add_first'), to: '/clients/new' } : undefined}
           />
         )}
 
@@ -451,6 +456,7 @@ export default function Clients() {
                       >
                         {scanningId === client.id ? t('clients_page.queuing') : t('clients_page.scan_now')}
                       </Button>
+                      {canDeleteClients && (
                       <Button variant="unstyled"
                         type="button"
                         onClick={() => deleteClient(client.id, client.name)}
@@ -459,6 +465,7 @@ export default function Clients() {
                       >
                         {t('clients_page.delete_client')}
                       </Button>
+                      )}
                     </div>
                   </div>
                 </article>

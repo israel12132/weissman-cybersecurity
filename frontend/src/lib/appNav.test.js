@@ -63,4 +63,22 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
     expect(canAccessNavItem({ to: '/anything', minRole: 'operator' }, { role: 'analyst' })).toBe(false)
     expect(canAccessNavItem({ to: '/anything', minRole: 'operator' }, { role: 'operator' })).toBe(true)
   })
+
+  it('gates /clients/new to the platform owner', () => {
+    expect(canAccessNavItem({ to: '/clients/new' }, { role: 'viewer' })).toBe(false)
+    expect(canAccessNavItem({ to: '/clients/new' }, { role: 'admin' })).toBe(false)
+    expect(canAccessNavItem({ to: '/clients/new' }, { role: 'operator' })).toBe(false)
+    expect(canAccessNavItem({ to: '/clients/new' }, { role: 'ceo' })).toBe(true)
+    expect(canAccessNavItem({ to: '/clients/new' }, { is_superadmin: true })).toBe(true)
+  })
+
+  it('hides tenant-admin surfaces from customer-portal sessions', () => {
+    const portal = { ok: true, role: 'client', assigned_client_id: 4, is_client_user: true }
+    expect(canAccessNavItem({ to: '/clients' }, portal)).toBe(true)
+    expect(canAccessNavItem({ to: '/findings' }, portal)).toBe(true)
+    expect(canAccessNavItem({ to: '/admin' }, portal)).toBe(false)
+    expect(canAccessNavItem({ to: '/billing' }, portal)).toBe(false)
+    expect(canAccessNavItem({ to: '/clients/new' }, portal)).toBe(false)
+    expect(canAccessNavItem({ to: '/system-config' }, portal)).toBe(false)
+  })
 })

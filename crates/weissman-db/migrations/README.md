@@ -20,6 +20,13 @@ bash scripts/check-migration-sync.sh   # must exit 0 before merge
 
 The script compares filenames and SQL bodies (comments stripped). Comment-only diffs are allowed.
 
+**Never edit a migration that may already be applied.** sqlx records a SHA-384 of the file
+in `_sqlx_migrations` and refuses to boot if the bytes change (`migration N was previously
+applied but has been modified`). Put new SQL in a new `<timestamp>_<description>.sql` file.
+`20260826120000_client_scope_isolation.sql` is frozen at the bytes first shipped in 389751f.
+`20260826115900` drops the two INSERT-only risk_graph policies so that frozen file can apply;
+`20260826180000` recreates them with a WITH CHECK visibility predicate (never USING).
+
 ## Roles applied by migrations
 
 | Role | Purpose |

@@ -6,9 +6,10 @@ import {
 } from '../src/lib/platformScale'
 
 /**
- * Login screen, driven in a real browser: the workspace picker and the backdrop's loop.
+ * Login screen, driven in a real browser: live engine copy and the backdrop's loop.
  *
- * The seam tests are the reason this file exists. "The background loops without a visible jump" is
+ * Customer isolation on main keeps the public form from listing or asking for a tenant.
+ * The seam tests are why this file exists. "The background loops without a visible jump" is
  * not checkable by reading CSS and not checkable by eye — a layer whose travel distance drifts from
  * its tile period animates perfectly smoothly and then teleports by the difference once per cycle,
  * which a screenshot cannot show and a human watching a 60s recording will miss. Here the claim is
@@ -20,40 +21,7 @@ import {
 const LOGIN = '/command-center/login'
 const BACKDROP = '[data-testid="cyber-live-backdrop"]'
 
-type DirectoryPayload = Record<string, unknown>
-
-const ENUMERATED: DirectoryPayload = {
-  ok: true,
-  listing: 'enumerated',
-  tenants: [
-    { slug: 'acme-energy', name: 'Acme Energy Grid' },
-    { slug: 'default', name: 'Default Organization' },
-    { slug: 'northwind-health', name: 'Northwind Health' },
-  ],
-  default_slug: 'default',
-  allow_custom: false,
-  truncated: false,
-}
-
-const RESTRICTED: DirectoryPayload = {
-  ok: true,
-  listing: 'restricted',
-  tenants: [],
-  default_slug: 'default',
-  allow_custom: true,
-  truncated: false,
-}
-
-async function gotoLogin(page: Page, directory: DirectoryPayload | 'unavailable') {
-  await page.route('**/api/auth/tenant-directory', (route) =>
-    directory === 'unavailable'
-      ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"ok":false}' })
-      : route.fulfill({
-          status: 200,
-          contentType: 'application/json; charset=utf-8',
-          body: JSON.stringify(directory),
-        }),
-  )
+async function gotoLogin(page: Page) {
   await page.goto(LOGIN, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector(BACKDROP, { timeout: 30_000 })
 }
@@ -117,50 +85,17 @@ async function frameAt(page: Page, selector: string | null, fraction: number): P
   return page.screenshot({ animations: 'allow' })
 }
 
-test.describe('Login — workspace picker', () => {
-  test('renders the workspaces the directory lists, as a select', async ({ page }) => {
-    await gotoLogin(page, ENUMERATED)
-    const select = page.locator('select#tenant')
-    await expect(select).toBeVisible({ timeout: 20_000 })
-    await expect(select).toHaveValue('default')
-    await expect(select.locator('option')).toHaveText([
-      'Acme Energy Grid · acme-energy',
-      'Default Organization · default',
-      'Northwind Health · northwind-health',
-    ])
-
-    await select.selectOption('northwind-health')
-    await expect(select).toHaveValue('northwind-health')
-  })
-
-  test('adopts a real slug when the form default is not one of them', async ({ page }) => {
-    await gotoLogin(page, {
-      ...ENUMERATED,
-      tenants: [{ slug: 'acme-energy', name: 'Acme Energy Grid' }],
-    })
-    await expect(page.locator('select#tenant')).toHaveValue('acme-energy', { timeout: 20_000 })
-  })
-
-  test('degrades to manual entry, with the reason, when the list is withheld', async ({ page }) => {
-    await gotoLogin(page, RESTRICTED)
-    const input = page.locator('input#tenant')
-    await expect(input).toBeVisible({ timeout: 20_000 })
-    await expect(page.locator('select#tenant')).toHaveCount(0)
-    await expect(page.getByText(/does not publish its workspace list/i)).toBeVisible()
-    await input.fill('ops-eu')
-    await expect(input).toHaveValue('ops-eu')
-  })
-
-  test('degrades to manual entry when the directory endpoint is down', async ({ page }) => {
-    await gotoLogin(page, 'unavailable')
-    await expect(page.locator('input#tenant')).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByText(/Workspace list unavailable/i)).toBeVisible()
+test.describe('Login — live copy and customer isolation', () => {
+  test('does not ask which tenant or client on the public form', async ({ page }) => {
+    await gotoLogin(page)
+    await expect(page.locator('select#tenant, input#tenant')).toHaveCount(0)
+    await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible({ timeout: 20_000 })
   })
 
   test('quotes the shipped engine count and current release, never the retired 254 headline', async ({
     page,
   }) => {
-    await gotoLogin(page, ENUMERATED)
+    await gotoLogin(page)
     await expect(
       page.getByText(new RegExp(`${PRODUCTION_ENGINE_COUNT} attack engines`)),
     ).toBeVisible({ timeout: 20_000 })
@@ -174,7 +109,7 @@ test.describe('Login — workspace picker', () => {
 
 test.describe('Login — live backdrop', () => {
   test('every layer animates, forever', async ({ page }) => {
-    await gotoLogin(page, ENUMERATED)
+    await gotoLogin(page)
     const animations = await backdropAnimations(page)
     expect(animations.length).toBeGreaterThanOrEqual(8)
     for (const animation of animations) {
@@ -189,7 +124,7 @@ test.describe('Login — live backdrop', () => {
   })
 
   test('moves on its own, with no script driving it', async ({ page }) => {
-    await gotoLogin(page, ENUMERATED)
+    await gotoLogin(page)
     await page.addStyleTag({ content: `.wm-cyber-backdrop ~ * { visibility: hidden !important; }` })
     const frames: string[] = []
     for (let i = 0; i < 3; i += 1) {
@@ -204,7 +139,7 @@ test.describe('Login — live backdrop', () => {
   test('has no seam: each layer renders the same frame at t=0 and t=one period', async ({
     page,
   }) => {
-    await gotoLogin(page, ENUMERATED)
+    await gotoLogin(page)
     await isolateBackdrop(page)
 
     for (const { name, klass } of await backdropAnimations(page)) {
@@ -229,7 +164,7 @@ test.describe('Login — live backdrop', () => {
   })
 
   test('has no seam as a whole: the composite wraps too', async ({ page }) => {
-    await gotoLogin(page, ENUMERATED)
+    await gotoLogin(page)
     await isolateBackdrop(page)
     await showOnly(page, null)
 

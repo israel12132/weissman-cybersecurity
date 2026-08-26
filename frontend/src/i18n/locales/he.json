@@ -164,6 +164,8 @@
     "system_health": "תקינות מערכת",
     "scan_active": "סריקה פעילה",
     "client_roster": "רשימת לקוחות",
+    "portal_workspace": "סביבת העבודה שלך",
+    "portal_locked": "נעול ללקוח זה",
     "add_client": "הוסף לקוח",
     "open_menu": "פתח תפריט ניווט",
     "close_menu": "סגור תפריט ניווט",
@@ -438,7 +440,7 @@
     "tenant_directory_unavailable": "רשימת סביבות העבודה אינה זמינה — הזן את המזהה שלך.",
     "tenant_back_to_list": "בחר מהרשימה",
     "tenant_retry": "נסה שוב",
-    "email_placeholder": "admin@weissman.local",
+    "email_placeholder": "you@company.com",
     "password_placeholder": "••••••••",
     "authenticate": "התחבר",
     "authenticating": "מאמת…",
@@ -903,7 +905,12 @@
   "profile": {
     "superadmin": "מנהל-על",
     "ceo": "מנכ\"ל",
-    "tenant": "ארגון {{id}}"
+    "owner": "בעלים",
+    "staff": "צוות",
+    "client_portal": "פורטל לקוח",
+    "signed_in": "מחובר",
+    "bound_workspace": "סביבת לקוח קשורה",
+    "tenant": "סביבת עבודה"
   },
   "audit": {
     "title": "Audit Log",
@@ -2079,7 +2086,11 @@
       "evidence_notice": "ניהול tenant, roster משתמשים ו-mutations של RBAC דרך /api/admin/* ו-/api/users מאומתים. כל שינוי נרשם ב-audit ל-GET /api/audit-logs.",
       "deactivate_title": "השבתת משתמש",
       "deactivate_confirm": "להשבית את המשתמש {{email}}? הגישה תיחסם מיידית.",
-      "deactivate_action": "השבת"
+      "deactivate_action": "השבת",
+      "role_client": "פורטל לקוח",
+      "assigned_client": "לקוח קשור",
+      "assigned_client_placeholder": "בחר את הלקוח שחשבון זה שייך אליו",
+      "assigned_client_required": "משתמשי פורטל לקוח חייבים להיות קשורים ללקוח"
     },
     "complianceFrameworks": {
       "title": "מסגרות ציות",
