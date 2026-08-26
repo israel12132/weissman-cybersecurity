@@ -1,6 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router'
 import i18n from '../i18n'
+import { recoverStaleChunkError } from '../routing/lazyWithRetry'
 import Button from './ui/Button'
 
 const NS = 'components.intelWidgets.routeErrorBoundary'
@@ -19,6 +20,7 @@ export default class RouteErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
+    if (recoverStaleChunkError(error)) return
     if (import.meta.env.DEV) {
       console.error('[CommandCenter]', error, info?.componentStack)
     }
@@ -28,12 +30,8 @@ export default class RouteErrorBoundary extends React.Component {
     // A failed dynamic import (stale chunk after a redeploy) is cached permanently by
     // React.lazy, so re-rendering the same lazy child just re-throws. Only a full reload
     // can recover it; in-render errors can retry in place.
-    const msg = this.state.error?.message || ''
-    if (/Loading chunk|dynamically imported module|Failed to fetch|error loading dynamically/i.test(msg)) {
-      window.location.reload()
-    } else {
-      this.setState({ error: null })
-    }
+    if (recoverStaleChunkError(this.state.error)) return
+    this.setState({ error: null })
   }
 
   render() {
