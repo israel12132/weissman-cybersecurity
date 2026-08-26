@@ -13,10 +13,6 @@
 --
 -- Fail-closed: a scoped GUC never returns another customer's row, even if a
 -- handler forgets a WHERE client_id = $1 filter.
---
--- ALTER POLICY: INSERT-only policies have WITH CHECK and no USING. Never
--- synthesize a USING clause (Postgres: "only WITH CHECK expression allowed
--- for INSERT").
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS assigned_client_id BIGINT REFERENCES clients(id) ON DELETE RESTRICT;
@@ -126,11 +122,9 @@ BEGIN
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND c.relname = 'clients'
     LOOP
-        CONTINUE WHEN position('weissman_client_row_visible' IN coalesce(r.qual, '') || coalesce(r.with_check, '')) > 0;
-        IF r.qual IS NOT NULL THEN
-            new_qual := '(' || r.qual || ') AND ' || vis;
-            EXECUTE format('ALTER POLICY %I ON public.clients USING (%s)', r.polname, new_qual);
-        END IF;
+        CONTINUE WHEN position('weissman_client_row_visible' IN coalesce(r.qual, '')) > 0;
+        new_qual := '(' || coalesce(r.qual, 'true') || ') AND ' || vis;
+        EXECUTE format('ALTER POLICY %I ON public.clients USING (%s)', r.polname, new_qual);
         IF r.with_check IS NOT NULL THEN
             new_check := '(' || r.with_check || ') AND ' || vis;
             EXECUTE format('ALTER POLICY %I ON public.clients WITH CHECK (%s)', r.polname, new_check);
@@ -155,11 +149,9 @@ BEGIN
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND c.relname = 'users'
     LOOP
-        CONTINUE WHEN position('app_current_client_id' IN coalesce(r.qual, '') || coalesce(r.with_check, '')) > 0;
-        IF r.qual IS NOT NULL THEN
-            new_qual := '(' || r.qual || ') AND ' || vis;
-            EXECUTE format('ALTER POLICY %I ON public.users USING (%s)', r.polname, new_qual);
-        END IF;
+        CONTINUE WHEN position('app_current_client_id' IN coalesce(r.qual, '')) > 0;
+        new_qual := '(' || coalesce(r.qual, 'true') || ') AND ' || vis;
+        EXECUTE format('ALTER POLICY %I ON public.users USING (%s)', r.polname, new_qual);
         IF r.with_check IS NOT NULL THEN
             -- Inserts/updates of staff users (assigned_client_id NULL) must still
             -- succeed for owner/staff sessions (GUC empty). Portal sessions cannot
@@ -178,6 +170,7 @@ DECLARE
     vis text;
     new_qual text;
     new_check text;
+    col_type text;
 BEGIN
     FOR r IN
         SELECT n.nspname AS schema_name,
@@ -197,19 +190,17 @@ BEGIN
           AND c.relkind = 'r'
           AND c.relname <> 'tenant_idps'
     LOOP
-        CONTINUE WHEN position('weissman_client_row_visible' IN coalesce(r.qual, '') || coalesce(r.with_check, '')) > 0;
+        CONTINUE WHEN position('weissman_client_row_visible' IN coalesce(r.qual, '')) > 0;
         IF r.data_type IN ('bigint', 'integer', 'smallint', 'numeric') THEN
             vis := 'public.weissman_client_row_visible(client_id)';
         ELSE
             vis := 'public.weissman_client_row_visible_text(client_id::text)';
         END IF;
-        IF r.qual IS NOT NULL THEN
-            new_qual := '(' || r.qual || ') AND ' || vis;
-            EXECUTE format(
-                'ALTER POLICY %I ON %I.%I USING (%s)',
-                r.policy_name, r.schema_name, r.table_name, new_qual
-            );
-        END IF;
+        new_qual := '(' || coalesce(r.qual, 'true') || ') AND ' || vis;
+        EXECUTE format(
+            'ALTER POLICY %I ON %I.%I USING (%s)',
+            r.policy_name, r.schema_name, r.table_name, new_qual
+        );
         IF r.with_check IS NOT NULL THEN
             new_check := '(' || r.with_check || ') AND ' || vis;
             EXECUTE format(
@@ -241,11 +232,9 @@ BEGIN
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'public' AND c.relname = t
         LOOP
-            CONTINUE WHEN position('app_current_client_id' IN coalesce(r.qual, '') || coalesce(r.with_check, '')) > 0;
-            IF r.qual IS NOT NULL THEN
-                new_qual := '(' || r.qual || ') AND ' || vis;
-                EXECUTE format('ALTER POLICY %I ON public.%I USING (%s)', r.polname, t, new_qual);
-            END IF;
+            CONTINUE WHEN position('app_current_client_id' IN coalesce(r.qual, '')) > 0;
+            new_qual := '(' || coalesce(r.qual, 'true') || ') AND ' || vis;
+            EXECUTE format('ALTER POLICY %I ON public.%I USING (%s)', r.polname, t, new_qual);
             IF r.with_check IS NOT NULL THEN
                 new_check := '(' || r.with_check || ') AND ' || vis;
                 EXECUTE format('ALTER POLICY %I ON public.%I WITH CHECK (%s)', r.polname, t, new_check);

@@ -295,7 +295,7 @@ docker compose exec postgres psql -U postgres -d weissman -c "
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Boot fails: `migration #N was previously applied with a different checksum` | The migration SQL file was edited after deploy | Restore the original file, OR supersede with a new migration that achieves the same effect |
+| Boot fails: `migration #N was previously applied but has been modified` | The migration SQL file was edited after deploy | Restore the original file bytes (so SHA-384 matches `_sqlx_migrations`), and put new SQL in a **new** timestamped migration. Never rewrite checksums at runtime. `20260826120000` was restored this way; the INSERT-only policy fix is `20260826180000`. |
 | `/api/ask` returns `503 self_serve_disabled` | `WEISSMAN_READ_ONLY_DATABASE_URL` unset | Provision `weissman_ro`, set the env var, restart backend |
 | `/api/auth/signup` returns `503` | `WEISSMAN_SELF_SERVE_SIGNUP` not `true` | Set the env var (and configure SMTP for production) |
 | Council retrieval falls back to "in-app cosine" path | LLM embeddings unreachable | Verify `OPENAI_BASE_URL` + key; check `target = council_rag` warnings |
