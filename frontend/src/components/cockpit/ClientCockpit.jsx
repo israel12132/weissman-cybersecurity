@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useClient } from '../../context/ClientContext'
 import { useWarRoom } from '../../context/WarRoomContext'
 const OverviewTab = lazy(() => import('./OverviewTab'))
+const CommandCenterDashboard = lazy(() => import('./CommandCenterDashboard'))
 const EngineRoomTab = lazy(() => import('./EngineRoomTab'))
 const FindingsTab = lazy(() => import('./FindingsTab'))
 const IdentityMatrixTab = lazy(() => import('./IdentityMatrixTab'))
@@ -31,6 +32,7 @@ import { useToast } from '../ui/Toaster'
 import Button from '../ui/Button'
 
 const TAB_DEFS = [
+  { id: 'command-center', labelKey: 'command_center', Component: CommandCenterDashboard },
   { id: 'overview', labelKey: 'overview', Component: OverviewTab },
   { id: 'engine-room', labelKey: 'engine_room', Component: EngineRoomTab },
   { id: 'findings', labelKey: 'findings', Component: FindingsTab },
@@ -71,7 +73,7 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   const [neuralWrapRef, neuralSize] = useContainerChartSize(120)
   const { selectedClient, selectedClientId, refreshClients, setPoeJobId } = useClient()
   const [activeTab, setActiveTab] = useState(() =>
-    ceoIntegrated ? 'mission-control' : 'overview',
+    ceoIntegrated ? 'mission-control' : 'command-center',
   )
 
   const tabs = useMemo(() => {

@@ -122,6 +122,7 @@ export function AuthProvider({ children }) {
             ok: true,
             role: data.role,
             is_superadmin: data.is_superadmin === true,
+            is_owner: data.is_superadmin === true || String(data.role || '').toLowerCase() === 'ceo',
           }
         }
         // BLOCKER #3 — server returns 403 + code=mfa_enrollment_required when tenant
@@ -172,6 +173,7 @@ export function AuthProvider({ children }) {
             ok: true,
             role: data.role,
             is_superadmin: data.is_superadmin === true,
+            is_owner: data.is_superadmin === true || String(data.role || '').toLowerCase() === 'ceo',
           }
         }
         return { ok: false, detail: data.detail || 'Invalid code' }

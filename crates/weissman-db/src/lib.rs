@@ -621,6 +621,21 @@ pub async fn active_tenant_ids(pool: &PgPool) -> Result<Vec<i64>, sqlx::Error> {
         .await
 }
 
+/// `(slug, name)` of every active tenant, for the login screen's workspace picker only.
+///
+/// Backed by the `public.login_tenant_directory()` SECURITY DEFINER function (migration
+/// `20260824120000`). Same reason as [`active_tenant_ids`] — `tenants` is FORCE ROW LEVEL SECURITY,
+/// and a login request has no tenant scope yet, so reading the table directly returns an empty list
+/// and reports success. Unlike [`active_tenant_ids`] this returns slugs and display names, which is
+/// a customer list on a multi-tenant instance: only the login-directory endpoint may call it, and
+/// that endpoint decides whether an anonymous caller is allowed to see the result
+/// (`WEISSMAN_PUBLIC_TENANT_DIRECTORY`). Background sweeps must keep using [`active_tenant_ids`].
+pub async fn login_tenant_directory(pool: &PgPool) -> Result<Vec<(String, String)>, sqlx::Error> {
+    sqlx::query_as("SELECT slug, name FROM public.login_tenant_directory()")
+        .fetch_all(pool)
+        .await
+}
+
 /// Like [`begin_tenant_tx`], but takes an owned [`Arc`] so the returned future is [`Send`] when used
 /// from long-lived tasks (e.g. panic-shielded orchestrator cycles) without capturing `&PgPool`.
 pub async fn begin_tenant_tx_arc(
@@ -793,12 +808,165 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
     Ok(())
 }
 
+fn nonempty_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn env_flag(key: &str) -> bool {
+    matches!(
+        std::env::var(key).as_deref(),
+        Ok("1") | Ok("true") | Ok("yes") | Ok("on")
+    )
+}
+
+fn bcrypt_hash_from_env(password_key: &str, bcrypt_key: &str) -> Option<String> {
+    nonempty_env(bcrypt_key).or_else(|| {
+        nonempty_env(password_key).and_then(|p| bcrypt::hash(&p, bcrypt::DEFAULT_COST).ok())
+    })
+}
+
+/// Raise a default-tenant user to the platform ceiling: `role=ceo` and `is_superadmin=true`.
+///
+/// The auth-plane insert (`auth.auth_insert_user`) is forbidden from provisioning `ceo`, so
+/// callers create the row as `admin` first and this function promotes it on the app pool with
+/// `app.ceo_role_assignment=1` (same GUC the admin API uses).
+async fn promote_to_platform_owner(
+    app_pool: &PgPool,
+    tenant_id: i64,
+    email: &str,
+    password_hash: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let mut tx = begin_tenant_tx(app_pool, tenant_id).await?;
+    sqlx::query("SELECT set_config('app.ceo_role_assignment', '1', true)")
+        .execute(&mut *tx)
+        .await?;
+
+    let existing: Option<(i64, String)> = sqlx::query_as(
+        r#"SELECT id, COALESCE(password_hash, '')
+           FROM users
+          WHERE tenant_id = $1
+            AND lower(trim(email)) = lower(trim($2))
+          LIMIT 1"#,
+    )
+    .bind(tenant_id)
+    .bind(email)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    match existing {
+        Some((user_id, current_hash)) => {
+            if let Some(hash) = password_hash {
+                sqlx::query(
+                    r#"UPDATE users
+                          SET role = 'ceo',
+                              is_superadmin = true,
+                              is_active = true,
+                              password_hash = $1,
+                              updated_at = now()
+                        WHERE id = $2 AND tenant_id = $3"#,
+                )
+                .bind(hash)
+                .bind(user_id)
+                .bind(tenant_id)
+                .execute(&mut *tx)
+                .await?;
+            } else {
+                let _ = current_hash;
+                sqlx::query(
+                    r#"UPDATE users
+                          SET role = 'ceo',
+                              is_superadmin = true,
+                              is_active = true,
+                              updated_at = now()
+                        WHERE id = $1 AND tenant_id = $2"#,
+                )
+                .bind(user_id)
+                .bind(tenant_id)
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+        None => {
+            let Some(hash) = password_hash else {
+                tracing::debug!(
+                    target: "security_audit",
+                    email = %email,
+                    "platform-owner promote skipped: user missing and no password hash in env"
+                );
+                tx.commit().await?;
+                return Ok(());
+            };
+            sqlx::query(
+                r#"INSERT INTO users (tenant_id, email, password_hash, role, is_superadmin, is_active)
+                   VALUES ($1, $2, $3, 'ceo', true, true)"#,
+            )
+            .bind(tenant_id)
+            .bind(email)
+            .bind(hash)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    tx.commit().await?;
+    tracing::info!(
+        target: "security_audit",
+        email = %email,
+        "platform owner is ceo + is_superadmin"
+    );
+    Ok(())
+}
+
+/// Promote the env operator to the highest privilege (`ceo` + `is_superadmin`).
+///
+/// * `WEISSMAN_MASTER_BOOTSTRAP_EMAIL` — break-glass owner; password is taken from
+///   `WEISSMAN_MASTER_BOOTSTRAP_PASSWORD` / `_BCRYPT` and rewritten on every boot.
+/// * `WEISSMAN_ADMIN_EMAIL` — Docker/live admin; flags are raised to the ceiling. Password is
+///   rewritten only when `WEISSMAN_ADMIN_FORCE_PASSWORD=1`.
+///
+/// Identities come from env only — nothing is hardcoded.
+pub async fn ensure_platform_owner(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+) -> Result<(), sqlx::Error> {
+    let tid: Option<i64> = sqlx::query_scalar(
+        "SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1",
+    )
+    .fetch_optional(auth_pool)
+    .await?;
+    let Some(tenant_id) = tid else {
+        return Ok(());
+    };
+
+    if let Some(email) = nonempty_env("WEISSMAN_MASTER_BOOTSTRAP_EMAIL") {
+        let hash = bcrypt_hash_from_env(
+            "WEISSMAN_MASTER_BOOTSTRAP_PASSWORD",
+            "WEISSMAN_MASTER_BOOTSTRAP_BCRYPT",
+        );
+        promote_to_platform_owner(app_pool, tenant_id, &email, hash.as_deref()).await?;
+    }
+
+    if let Some(email) = nonempty_env("WEISSMAN_ADMIN_EMAIL") {
+        let hash = if env_flag("WEISSMAN_ADMIN_FORCE_PASSWORD") {
+            bcrypt_hash_from_env("WEISSMAN_ADMIN_PASSWORD", "WEISSMAN_ADMIN_BCRYPT")
+        } else {
+            None
+        };
+        promote_to_platform_owner(app_pool, tenant_id, &email, hash.as_deref()).await?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod url_and_path_helper_tests {
     use super::{
-        acquire_retry_backoff, auth_database_url_from_env, database_url_from_env,
-        is_platform_keyring_description, migrations_dir, resolve_auth_database_url,
-        worker_pool_floor, worker_pool_warm_min,
+        acquire_retry_backoff, auth_database_url_from_env, database_url_from_env, env_flag,
+        is_platform_keyring_description, migrations_dir, nonempty_env,
+        resolve_auth_database_url, worker_pool_floor, worker_pool_warm_min,
     };
     use std::sync::{Mutex, OnceLock};
 
@@ -860,6 +1028,33 @@ mod url_and_path_helper_tests {
         assert_eq!(worker_pool_warm_min(6), 6);
         assert_eq!(worker_pool_warm_min(64), 8);
         std::env::remove_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY");
+    }
+
+    #[test]
+    fn nonempty_env_trims_and_drops_blanks() {
+        let _guard = env_lock();
+        std::env::set_var("WEISSMAN_TEST_NONEMPTY", "  owner@example.com  ");
+        assert_eq!(
+            nonempty_env("WEISSMAN_TEST_NONEMPTY").as_deref(),
+            Some("owner@example.com")
+        );
+        std::env::set_var("WEISSMAN_TEST_NONEMPTY", "   ");
+        assert_eq!(nonempty_env("WEISSMAN_TEST_NONEMPTY"), None);
+        std::env::remove_var("WEISSMAN_TEST_NONEMPTY");
+        assert_eq!(nonempty_env("WEISSMAN_TEST_NONEMPTY"), None);
+    }
+
+    #[test]
+    fn env_flag_accepts_common_truthy_values() {
+        let _guard = env_lock();
+        std::env::set_var("WEISSMAN_TEST_FLAG", "1");
+        assert!(env_flag("WEISSMAN_TEST_FLAG"));
+        std::env::set_var("WEISSMAN_TEST_FLAG", "true");
+        assert!(env_flag("WEISSMAN_TEST_FLAG"));
+        std::env::set_var("WEISSMAN_TEST_FLAG", "0");
+        assert!(!env_flag("WEISSMAN_TEST_FLAG"));
+        std::env::remove_var("WEISSMAN_TEST_FLAG");
+        assert!(!env_flag("WEISSMAN_TEST_FLAG"));
     }
 
     #[test]

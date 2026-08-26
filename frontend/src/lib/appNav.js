@@ -89,6 +89,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/threat-emulation', labelKey: 'nav.threat_emulation', icon: '◈' },
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
+      { to: '/attack-vectors', labelKey: 'nav.attack_vectors', icon: '🧬' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },

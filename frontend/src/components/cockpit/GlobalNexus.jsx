@@ -10,6 +10,8 @@ import {
   MessageSquare,
   Radar,
   GitBranch,
+  Crosshair,
+  Waypoints,
   Zap,
   CalendarClock,
   Bell,
@@ -215,7 +217,11 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         defaultOpen: true,
         items: [
           { to: '/threat-intel', label: t('nav.threat_intel'), icon: Radar, id: 'nav-threat-intel' },
-          { to: '/risk-graph', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
+          { to: '/kill-chain', label: t('nav.kill_chain'), icon: Waypoints, id: 'nav-kill-chain' },
+          { to: '/attack-vectors', label: t('nav.attack_vectors'), icon: Crosshair, id: 'nav-attack-vectors' },
+          { to: '/attack-paths', label: t('nav.attack_paths'), icon: GitBranch, id: 'nav-attack-paths' },
+          { to: '/risk-graph', label: t('nav.risk_graph'), icon: GitBranch, id: 'nav-risk-graph' },
+          { to: '/threat-analysis', label: t('nav.threat_analysis'), icon: Radar, id: 'nav-threat-analysis' },
         ],
       },
       {

@@ -643,7 +643,87 @@ async fn api_threat_analysis_for_client(
         .into_response()
 }
 
-/// Load recent ingested NDR flow samples + ITDR auth events for a client (tenant-scoped, RLS).
+/// `GET /api/analytics/attack-vectors[?client_id=]` — cross-domain attack-vector synthesis.
+///
+/// Loads the tenant's findings and fuses them into composite, multi-stage attack vectors (see
+/// `attack_vector_synthesis`). Evidence-gated: every returned vector is backed by real findings, so
+/// an empty finding set yields an empty vector list rather than fabricated chains.
+async fn api_analytics_attack_vectors(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let client_filter: Option<i64> = q.get("client_id").and_then(|s| s.parse::<i64>().ok());
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(2000)
+        .clamp(1, 5000);
+
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "detail": "Database unavailable", "vectors": []})),
+        )
+            .into_response();
+    };
+    let rows = sqlx::query(
+        r#"SELECT id,
+                  COALESCE(source, '')      AS source,
+                  COALESCE(severity, '')    AS severity,
+                  COALESCE(title, '')       AS title,
+                  COALESCE(description, '') AS description,
+                  client_id
+             FROM vulnerabilities
+            WHERE tenant_id = $1
+              AND ($2::bigint IS NULL OR client_id = $2)
+            ORDER BY discovered_at DESC
+            LIMIT $3"#,
+    )
+    .bind(auth.tenant_id)
+    .bind(client_filter)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await;
+    let _ = tx.commit().await;
+
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(target: "analytics", tenant_id = auth.tenant_id, error = %e, "attack-vector findings query failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "detail": "attack-vector query failed", "vectors": []})),
+            )
+                .into_response();
+        }
+    };
+
+    let findings: Vec<crate::attack_vector_synthesis::FindingLite> = rows
+        .iter()
+        .map(|r| crate::attack_vector_synthesis::FindingLite {
+            id: r
+                .try_get::<i64, _>("id")
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
+            engine: r.try_get::<String, _>("source").unwrap_or_default(),
+            severity: r.try_get::<String, _>("severity").unwrap_or_default(),
+            title: r.try_get::<String, _>("title").unwrap_or_default(),
+            description: r.try_get::<String, _>("description").unwrap_or_default(),
+            client_id: r.try_get::<Option<i64>, _>("client_id").ok().flatten(),
+        })
+        .collect();
+
+    let mut body = crate::attack_vector_synthesis::synthesize_json(&findings);
+    if let Some(obj) = body.as_object_mut() {
+        obj.insert("client_id".to_string(), json!(client_filter));
+        obj.insert(
+            "generated_at".to_string(),
+            json!(chrono::Utc::now().to_rfc3339()),
+        );
+    }
+    (StatusCode::OK, Json(body)).into_response()
+}
 async fn load_ndr_itdr(
     pool: &sqlx::PgPool,
     tenant_id: i64,

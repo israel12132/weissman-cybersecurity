@@ -130,6 +130,7 @@ import {
   PasswordSprayCommandCenter,
   SamlSecurityCommandCenter,
   KillChainOrchestrator,
+  AttackVectorAnalytics,
   AIAnalysisEngine,
   ExploitResearchLab,
   Clients,
@@ -315,6 +316,7 @@ export default function TacticalApp() {
           <Route path="baseline-drift" element={<BaselineAndDrift />} />
           <Route path="identity-context" element={<IdentityContextManager />} />
           <Route path="kill-chain" element={<KillChainOrchestrator />} />
+          <Route path="attack-vectors" element={<AttackVectorAnalytics />} />
           <Route path="ai-analysis" element={<AIAnalysisEngine />} />
           <Route path="exploit-lab" element={<ExploitResearchLab />} />
           <Route path="agents" element={<AgentManagement />} />
