@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-page="subprocessors" data-locale="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090c" />
+  <title>מעבדי משנה — Weissman Cybersecurity</title>
+  <meta name="description" content="מעבדי משנה נוכחיים של Cloud SaaS ומקורות מודיעין איומים. המסמך המחייב הוא באנגלית." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://weissman.io/he/subprocessors.html" />
+  <link rel="alternate" hreflang="en" href="https://weissman.io/subprocessors.html" />
+  <link rel="alternate" hreflang="he" href="https://weissman.io/he/subprocessors.html" />
+  <link rel="alternate" hreflang="x-default" href="https://weissman.io/subprocessors.html" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Weissman Cybersecurity" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:title" content="מעבדי משנה — Weissman Cybersecurity" />
+  <meta property="og:description" content="מעבדי משנה נוכחיים של Cloud SaaS ומקורות מודיעין איומים. המסמך המחייב הוא באנגלית." />
+  <meta property="og:image" content="https://weissman.io/og-cover.svg" />
+  <meta property="og:url" content="https://weissman.io/he/subprocessors.html" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="מעבדי משנה — Weissman Cybersecurity" />
+  <meta name="twitter:description" content="מעבדי משנה נוכחיים של Cloud SaaS ומקורות מודיעין איומים. המסמך המחייב הוא באנגלית." />
+  <script id="weissman-ld-0" type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Weissman Cybersecurity Ltd.","url":"https://weissman.io/he/","email":"weissmancybersecurity@gmail.com","inLanguage":"he","address":{"@type":"PostalAddress","addressLocality":"תל אביב-יפו","addressCountry":"IL"}}</script>
+  <script id="weissman-ld-1" type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Weissman Cybersecurity Platform","applicationCategory":"SecurityApplication","operatingSystem":"Web, Linux, macOS, Windows","url":"https://weissman.io/he/","inLanguage":"he","offers":{"@type":"Offer","url":"https://weissman.io/he/contact/","description":"מי שרוצה את Weissman בארגון יוצר קשר. אין תוכניות מדף באתר. לקוחות קיימים נכנסים ל-Command Center."},"description":"פלטפורמת אבטחה התקפית אוטונומית והגנה פעילה, עם בדיקות חיות, מודיעין נתיבי תקיפה ו-Command Center למרכז תפעול אבטחה (SOC)."}</script>
+  <script type="module" crossorigin src="/assets/main-DX3eQnZu.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-BndqxW4e.css">
+</head>
+<body>
+  <div id="root"><article class="legal-doc"><h1>Subprocessors &amp; data-flow disclosures</h1>
+    <p class="meta">Effective: 2026-06-09 · Maintained per GDPR Art. 28(2) / DPA Annex III</p>
+
+    <p>Weissman engages the following sub-processors and external data sources for
+       the Cloud SaaS edition. Self-hosted installations control all of these
+       independently and may omit any of them.</p>
+
+    <h2>1. Infrastructure sub-processors</h2>
+    <table style="width:100%;border-collapse:collapse;margin-top:1rem">
+      <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.15)">
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Vendor</th>
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Purpose</th>
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Data processed</th>
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Region</th>
+      </tr></thead>
+      <tbody style="font-size:.85rem">
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem">AWS</td>
+          <td style="padding:.5rem">Primary IaaS (EC2, RDS, S3, KMS)</td>
+          <td style="padding:.5rem">All tenant data (encrypted at rest with KMS)</td>
+          <td style="padding:.5rem">EU-West-1 (default), US-East-1, AP-Southeast-2</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem">Cloudflare</td>
+          <td style="padding:.5rem">Edge TLS termination, DDoS protection</td>
+          <td style="padding:.5rem">Request metadata + edge logs (24h)</td>
+          <td style="padding:.5rem">Global edge</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem">Paddle Inc.</td>
+          <td style="padding:.5rem">Payment processing (PCI DSS L1)</td>
+          <td style="padding:.5rem">Billing contact, card-on-file token, invoice history</td>
+          <td style="padding:.5rem">EU (paddle.com) / US</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem">AWS SES / SendGrid</td>
+          <td style="padding:.5rem">Transactional email (verification, MFA, alerts)</td>
+          <td style="padding:.5rem">Recipient email + message body</td>
+          <td style="padding:.5rem">EU-West-1 / global</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>2. Threat-intelligence data sources (outbound only)</h2>
+    <p>These public feeds are <em>pulled</em> to enrich findings; we send the
+       CVE identifier as the only request payload. <strong>No customer-identifying
+       data is transmitted.</strong></p>
+    <table style="width:100%;border-collapse:collapse;margin-top:1rem">
+      <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.15)">
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Source</th>
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Cadence</th>
+        <th style="text-align:left;padding:.5rem;color:#22d3ee;font-size:.85rem">Data exchanged</th>
+      </tr></thead>
+      <tbody style="font-size:.85rem">
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem"><code>cisa.gov</code> — KEV catalog</td>
+          <td style="padding:.5rem">Every 6 hours</td>
+          <td style="padding:.5rem">Outbound: GET the full <code>known_exploited_vulnerabilities.json</code> (~1.5 MB). No identifiers sent.</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem"><code>api.first.org</code> — EPSS</td>
+          <td style="padding:.5rem">Every 12 hours + on-demand</td>
+          <td style="padding:.5rem">Outbound: GET <code>?cve=CVE-NNNN-NNNN[,…]</code>. Only CVE IDs sent; no tenant or asset data.</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem"><code>nvd.nist.gov</code> — NVD CVE feeds</td>
+          <td style="padding:.5rem">Daily</td>
+          <td style="padding:.5rem">Outbound: GET feed deltas. No customer data sent.</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem"><code>osv.dev</code></td>
+          <td style="padding:.5rem">On-demand</td>
+          <td style="padding:.5rem">Outbound: package name + version lookups. No customer data sent.</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+          <td style="padding:.5rem"><code>api.github.com</code> — Advisories</td>
+          <td style="padding:.5rem">Periodic</td>
+          <td style="padding:.5rem">Outbound: GHSA lookups. Bearer token from operator env.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. Optional LLM providers (operator-configured)</h2>
+    <p>When the Council RAG, NL→SQL planner, or generative-fuzz engines are used,
+       the operator configures an OpenAI-compatible inference endpoint. Possible
+       choices and their data implications:</p>
+    <ul>
+      <li><strong>OpenAI</strong> — production endpoints
+        (<code>api.openai.com/v1/chat/completions</code>,
+        <code>/v1/embeddings</code>). Prompts may include scan target URLs,
+        engine names, and (for NL→SQL) the user's natural-language question.
+        <em>Subject to OpenAI's data-handling policy</em>. Opt-out by setting
+        a self-hosted base URL.</li>
+      <li><strong>Self-hosted vLLM / Ollama</strong> — runs on customer or
+        operator infrastructure; no third-party transit. <strong>This is the
+        recommended posture for regulated workloads.</strong></li>
+      <li><strong>Azure OpenAI / Together / Anthropic / other</strong> — any
+        OpenAI-protocol-compatible server works. Operator's choice.</li>
+    </ul>
+    <p>The platform never sends raw vulnerability evidence, customer
+       credentials, or PII to an LLM by default. Code snippets analysed by the
+       <code>predictive_analyzer</code> engine are truncated to 4 000 chars and
+       intended for code-review prompts; operators using public LLMs should
+       only enable predictive analysis on non-sensitive repos.</p>
+
+    <h2>4. Notification of changes</h2>
+    <p>New sub-processors are announced at least 30 days in advance via email
+       to the billing contact and via banner notice in the cockpit. Customers
+       may object; if objection cannot be resolved, the customer may terminate
+       the affected service per the DPA.</p>
+
+    <h2>5. Contact</h2>
+    <p>Updates / questions: <a href="mailto:dpo@weissman.io">dpo@weissman.io</a>.</p>
+</article></div>
+</body>
+</html>

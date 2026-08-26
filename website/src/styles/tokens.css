@@ -1,0 +1,38 @@
+:root {
+  --bg-deep: #07090c;
+  --bg-charcoal: #10141b;
+  --bg-elevated: #161b24;
+  --bg-glow: rgba(34, 211, 238, 0.08);
+  --text: #f4efe6;
+  --text-muted: #b7b1a6;
+  --text-dim: #7d776c;
+  --accent: #22d3ee;
+  --accent-dim: rgba(34, 211, 238, 0.16);
+  --accent-deep: #0ea5e9;
+  --risk: #e8b86d;
+  --ops: #3ee0b2;
+  --danger: #f07167;
+  --line: rgba(244, 239, 230, 0.1);
+  --line-strong: rgba(244, 239, 230, 0.18);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  --duration-swift: 180ms;
+  --duration: 280ms;
+  --duration-slow: 480ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-brand: 'Orbitron', var(--font-sans);
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-he: 'Heebo', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --grid-max: 80rem;
+  --nav-h: 4.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-swift: 1ms;
+    --duration: 1ms;
+    --duration-slow: 1ms;
+  }
+}

@@ -65,6 +65,21 @@ RUN node ../scripts/generate_engine_param_defs.mjs \
  && node ../scripts/verify-provider-wiring.mjs \
  && npx vite build
 
+# Stage 2b — Public marketing site (MPA). Overlay onto deploy/public so
+# .well-known and other committed extras survive.
+FROM node:22-bookworm-slim AS website-build
+RUN npm install -g npm@11.12.1
+WORKDIR /build
+COPY website/package.json website/package-lock.json ./website/
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-factor 3 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000
+RUN cd website && npm ci --ignore-scripts
+COPY website ./website
+WORKDIR /build/website
+RUN node --experimental-strip-types scripts/write-html-entries.ts && npx tsc --noEmit && npx vite build
+
 # Stage 3 — Nginx gateway (non-root, :8080 inside → :80 on host)
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 USER root
@@ -73,5 +88,6 @@ COPY deploy/nginx-gateway.conf          /etc/nginx/conf.d/default.conf
 COPY deploy/nginx-security-headers.inc  /etc/nginx/conf.d/security-headers.inc
 COPY --from=vite-build /build/frontend/dist /usr/share/nginx/html/command-center
 COPY deploy/public                      /usr/share/nginx/html/public
+COPY --from=website-build /build/website/dist/ /usr/share/nginx/html/public/
 USER 101
 EXPOSE 8080

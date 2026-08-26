@@ -242,6 +242,7 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
+    (Method::POST, "/api/public/demo-request", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),
@@ -1962,6 +1963,7 @@ mod public_route_guard_tests {
             (Method::POST, "/api/integrations/slack/interactivity"),
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
+            (Method::POST, "/api/public/demo-request"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
