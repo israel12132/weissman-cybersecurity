@@ -68,6 +68,7 @@ pub mod crypto_engine;
 pub mod data_retention;
 pub mod db;
 pub mod db_backup;
+pub mod demo_request;
 pub mod discovery_engine;
 pub mod embeddings;
 pub mod engine_accounting;
