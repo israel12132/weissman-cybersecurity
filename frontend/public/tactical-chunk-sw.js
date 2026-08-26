@@ -5,7 +5,7 @@
  *    Command Center still boots (from cache) when the network is unavailable.
  *  - PREFETCH_CHUNKS message: warm the cache with predicted route chunks.
  */
-const CACHE = 'weissman-tactical-v2'
+const CACHE = 'weissman-tactical-v3'
 const ASSET_RE = /\/command-center\/assets\/[a-zA-Z0-9_.-]+\.(js|css|wasm)$/
 
 // The app shell is stored under this stable key and served for any navigation

@@ -19,10 +19,18 @@
  */
 import React from 'react'
 
-const RELOAD_GUARD_KEY = 'weissman:chunk-reload-at'
+export const RELOAD_GUARD_KEY = 'weissman:chunk-reload-at'
 const RELOAD_MIN_INTERVAL_MS = 10_000
 const DEFAULT_ATTEMPTS = 3
 const BACKOFF_MS = 250
+
+const STALE_CHUNK_RE =
+  /Loading chunk|dynamically imported module|Failed to fetch dynamically|error loading dynamically|Importing a module script failed/i
+
+export function isStaleChunkError(error) {
+  const msg = error?.message || String(error || '')
+  return STALE_CHUNK_RE.test(msg)
+}
 
 async function importWithRetry(factory, attempts, backoffMs) {
   let lastErr
@@ -41,13 +49,26 @@ async function importWithRetry(factory, attempts, backoffMs) {
   throw lastErr
 }
 
-function reloadOnceForStaleChunk() {
+function bustHashedAssetCaches() {
+  try {
+    if (typeof caches === 'undefined' || !caches.keys) return
+    void caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .catch(() => {})
+  } catch {
+    /* Cache Storage unavailable — reload still fetches a fresh index.html. */
+  }
+}
+
+export function reloadOnceForStaleChunk() {
   // Only reload if we have not already done so very recently: a permanently-missing chunk must
   // reach the error boundary, not put the page into a reload loop.
   try {
     const last = Number(window.sessionStorage.getItem(RELOAD_GUARD_KEY) || 0)
     if (!Number.isFinite(last) || Date.now() - last > RELOAD_MIN_INTERVAL_MS) {
       window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()))
+      bustHashedAssetCaches()
       window.location.reload()
       return true
     }
@@ -56,6 +77,11 @@ function reloadOnceForStaleChunk() {
     // so skip it and let the error propagate.
   }
   return false
+}
+
+/** Reload at most once if `error` looks like a stale hashed-chunk miss. */
+export function recoverStaleChunkError(error) {
+  return isStaleChunkError(error) ? reloadOnceForStaleChunk() : false
 }
 
 export function lazyWithRetry(factory, attempts = DEFAULT_ATTEMPTS) {

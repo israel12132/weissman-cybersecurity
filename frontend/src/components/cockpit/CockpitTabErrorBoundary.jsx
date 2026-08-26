@@ -1,5 +1,6 @@
 import React from 'react'
 import i18n from '../../i18n'
+import { recoverStaleChunkError } from '../../routing/lazyWithRetry'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.cockpitTabErrorBoundary'
@@ -18,10 +19,18 @@ export default class CockpitTabErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
+    if (recoverStaleChunkError(error)) return
     if (import.meta.env.DEV) {
       const label = this.props.tabLabel || this.props.tabId || 'tab'
       console.error('[CockpitTab]', label, error, info?.componentStack)
     }
+  }
+
+  handleRetry = () => {
+    // React.lazy caches a rejected dynamic import forever, so setState(null) cannot recover a
+    // missing hashed chunk after a deploy. Reload onto the current index.html + matching assets.
+    if (recoverStaleChunkError(this.state.error)) return
+    this.setState({ error: null })
   }
 
   render() {
@@ -39,7 +48,7 @@ export default class CockpitTabErrorBoundary extends React.Component {
           <p className="text-[11px] font-mono text-white/40 break-words mb-4">{msg}</p>
           <Button variant="unstyled"
             type="button"
-            onClick={() => this.setState({ error: null })}
+            onClick={this.handleRetry}
             className="px-4 py-2 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/10"
           >
             {i18n.t(`${NS}.retry`)}

@@ -54,6 +54,8 @@ cp "$ROOT/deploy/nginx-gateway.conf" "$WORK/conf/default.conf"
 cp "$ROOT/deploy/nginx-security-headers.inc" "$WORK/conf/security-headers.inc"
 printf 'SPA-SHELL\n'  > "$WORK/html/command-center/index.html"
 printf 'MARKETING\n'  > "$WORK/html/index.html"
+mkdir -p "$WORK/html/command-center/assets"
+printf 'console.log(1)\n' > "$WORK/html/command-center/assets/ok-test.js"
 
 docker run -d --name "$GATEWAY" --network "$NET" -p 127.0.0.1:58089:8080 \
   -v "$WORK/conf:/etc/nginx/conf.d:ro" \
@@ -100,6 +102,31 @@ body="$(curl -sL -m 5 "$B/command-center" | head -1)"
 # ── Unknown paths must 404, not serve the homepage with 200 ─────────────────────
 code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$B/definitely-not-a-real-path-9f3a")"
 [[ "$code" == "404" ]] && ok "unknown path returns 404" || bad "unknown path returned $code (a 200 makes every typo look like a real page)"
+
+# ── Hashed SPA assets: hit immutable, miss must not be cached ───────────────────
+# A rolling deploy can 404 a brand-new chunk for a few seconds. If that 404 is
+# `Cache-Control: immutable`, the browser keeps it for a year and the Command Center
+# surfaces "error loading dynamically imported module" even after the file exists.
+hit="$(curl -s -o /dev/null -m 5 -D- "$B/command-center/assets/ok-test.js")"
+code="$(printf '%s' "$hit" | awk 'NR==1{print $2}')"
+cc="$(printf '%s' "$hit" | awk 'tolower($1)=="cache-control:"{print tolower($0)}')"
+[[ "$code" == "200" ]] && ok "hashed asset hit returns 200" || bad "hashed asset hit returned $code"
+if grep -q 'immutable' <<<"$cc"; then
+  ok "hashed asset hit is cached immutable"
+else
+  bad "hashed asset hit Cache-Control is '$cc' (expected immutable)"
+fi
+miss="$(curl -s -o /dev/null -m 5 -D- "$B/command-center/assets/CeoMissionControlTab-BfGwQoxI.js")"
+code="$(printf '%s' "$miss" | awk 'NR==1{print $2}')"
+cc="$(printf '%s' "$miss" | awk 'tolower($1)=="cache-control:"{print tolower($0)}')"
+[[ "$code" == "404" ]] && ok "missing hashed asset returns 404" || bad "missing hashed asset returned $code"
+if grep -q 'immutable' <<<"$cc"; then
+  bad "missing hashed asset is cached immutable ('$cc') — stale-chunk 404s would stick for a year"
+elif grep -q 'no-store' <<<"$cc"; then
+  ok "missing hashed asset is no-store"
+else
+  bad "missing hashed asset Cache-Control is '$cc' (expected no-store, must not be immutable)"
+fi
 
 # ── Security headers on API responses ───────────────────────────────────────────
 hdrs="$(curl -s -o /dev/null -m 5 -D- "$B/api/health")"
