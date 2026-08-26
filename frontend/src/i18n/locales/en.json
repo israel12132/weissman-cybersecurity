@@ -106,7 +106,12 @@
   "profile": {
     "superadmin": "Superadmin",
     "ceo": "CEO",
-    "tenant": "tenant {{id}}"
+    "owner": "Owner",
+    "staff": "Staff",
+    "client_portal": "Customer portal",
+    "signed_in": "Signed in",
+    "bound_workspace": "bound workspace",
+    "tenant": "workspace"
   },
   "battlespace": {
     "title": "Hyper-Dimensional Cognitive Battlespace",
@@ -169,6 +174,8 @@
     "system_health": "System Health",
     "scan_active": "Scan active",
     "client_roster": "Client Roster",
+    "portal_workspace": "Your workspace",
+    "portal_locked": "Locked to this customer",
     "add_client": "Add Client",
     "beta": "Beta",
     "groups": {
@@ -435,7 +442,7 @@
   },
   "auth": {
     "tenant_slug": "Tenant slug",
-    "email_placeholder": "admin@weissman.local",
+    "email_placeholder": "you@company.com",
     "password_placeholder": "••••••••",
     "authenticate": "Authenticate",
     "authenticating": "Authenticating…",
@@ -2062,7 +2069,11 @@
       "evidence_notice": "Tenant administration, user roster, and RBAC mutations via authenticated /api/admin/* and /api/users endpoints. Every change is audit-logged to GET /api/audit-logs.",
       "deactivate_title": "Deactivate user",
       "deactivate_confirm": "Deactivate user {{email}}? They will lose access immediately.",
-      "deactivate_action": "Deactivate"
+      "deactivate_action": "Deactivate",
+      "role_client": "Customer portal",
+      "assigned_client": "Bound customer",
+      "assigned_client_placeholder": "Select the customer this login belongs to",
+      "assigned_client_required": "Customer-portal users must be bound to a client"
     },
     "complianceFrameworks": {
       "title": "Compliance Frameworks",

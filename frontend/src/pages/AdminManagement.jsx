@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { createColumnHelper } from '@tanstack/react-table'
 import { useAuth } from '../context/AuthContext'
+import { useClient } from '../context/ClientContext'
 import { apiFetch } from '../utils/apiFetch'
 import PageShell from './PageShell'
 import DataTable from '../components/ui/DataTable'
@@ -24,6 +25,7 @@ export default function AdminManagement() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { session, isCeo } = useAuth()
+  const { clients, refreshClients } = useClient()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -34,6 +36,7 @@ export default function AdminManagement() {
   const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState('viewer')
   const [newIsSuperadmin, setNewIsSuperadmin] = useState(false)
+  const [newAssignedClientId, setNewAssignedClientId] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
 
@@ -41,6 +44,7 @@ export default function AdminManagement() {
   const [editingUser, setEditingUser] = useState(null)
   const [editRole, setEditRole] = useState('')
   const [editIsSuperadmin, setEditIsSuperadmin] = useState(false)
+  const [editAssignedClientId, setEditAssignedClientId] = useState('')
   const editModalRef = useRef(null)
   useFocusTrap(editModalRef, !!editingUser)
 
@@ -61,12 +65,17 @@ export default function AdminManagement() {
 
   useEffect(() => {
     loadUsers()
-  }, [loadUsers])
+    refreshClients()
+  }, [loadUsers, refreshClients])
 
   const handleCreateUser = async (e) => {
     e.preventDefault()
     if (!newEmail.trim() || !newPassword.trim()) {
       setError(t('pages.adminManagement.email_password_required'))
+      return
+    }
+    if (newRole === 'client' && !newAssignedClientId) {
+      setError(t('pages.adminManagement.assigned_client_required'))
       return
     }
     setSubmitting(true)
@@ -79,7 +88,8 @@ export default function AdminManagement() {
           email: newEmail.trim(),
           password: newPassword,
           role: newRole,
-          is_superadmin: newIsSuperadmin,
+          is_superadmin: newRole === 'client' ? false : newIsSuperadmin,
+          assigned_client_id: newRole === 'client' ? Number(newAssignedClientId) : null,
         },
       })
       setSuccessMsg(`User ${newEmail} created successfully`)
@@ -87,6 +97,7 @@ export default function AdminManagement() {
       setNewPassword('')
       setNewRole('viewer')
       setNewIsSuperadmin(false)
+      setNewAssignedClientId('')
       await loadUsers()
     } catch (err) {
       if (err?.response) {
@@ -102,6 +113,10 @@ export default function AdminManagement() {
 
   const handleUpdateRole = async () => {
     if (!editingUser) return
+    if (editRole === 'client' && !editAssignedClientId) {
+      setError(t('pages.adminManagement.assigned_client_required'))
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -109,7 +124,8 @@ export default function AdminManagement() {
         method: 'PATCH',
         body: {
           role: editRole,
-          is_superadmin: editIsSuperadmin,
+          is_superadmin: editRole === 'client' ? false : editIsSuperadmin,
+          assigned_client_id: editRole === 'client' ? Number(editAssignedClientId) || null : null,
         },
       })
       setSuccessMsg(`User ${editingUser.email} updated`)
@@ -156,6 +172,7 @@ export default function AdminManagement() {
     setEditingUser(user)
     setEditRole(user.role || 'viewer')
     setEditIsSuperadmin(user.is_superadmin || false)
+    setEditAssignedClientId(user.assigned_client_id ? String(user.assigned_client_id) : '')
   }
 
   const listFindings = useMemo(() => users.map((user) => ({
@@ -163,7 +180,11 @@ export default function AdminManagement() {
     severity: user.is_active === false ? 'high' : user.role === 'ceo' ? 'critical' : 'info',
     title: user.email,
     type: user.role || 'viewer',
-    description: user.is_superadmin ? 'Superadmin' : '',
+    description: user.is_superadmin
+      ? 'Superadmin'
+      : user.assigned_client_id
+        ? `client:${user.assigned_client_id}`
+        : '',
     resource: user.is_active !== false ? 'active' : 'inactive',
   })), [users])
 
@@ -204,6 +225,8 @@ export default function AdminManagement() {
                 ? 'bg-violet-500/20 text-violet-400'
                 : role === 'operator'
                 ? 'bg-cyan-500/20 text-cyan-400'
+                : role === 'client'
+                ? 'bg-sky-500/20 text-sky-300'
                 : role === 'analyst'
                 ? 'bg-emerald-500/20 text-emerald-400'
                 : 'bg-[var(--border-strong)]/20 text-[var(--text-tertiary)]'
@@ -228,6 +251,20 @@ export default function AdminManagement() {
             }`}
           >
             {active ? 'Active' : 'Inactive'}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor((u) => u.assigned_client_id, {
+      id: 'assigned_client',
+      header: 'Workspace',
+      cell: (ctx) => {
+        const cid = ctx.getValue()
+        if (!cid) return <span className="text-[var(--text-muted)]">—</span>
+        const name = clients.find((c) => String(c.id) === String(cid))?.name
+        return (
+          <span className="text-sky-200 font-mono text-xs">
+            {name || `#${cid}`}
           </span>
         )
       },
@@ -271,7 +308,7 @@ export default function AdminManagement() {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t])
+  ], [t, clients])
 
   if (!isCeo && !session?.is_superadmin) {
     return (
@@ -392,8 +429,32 @@ export default function AdminManagement() {
                 <option value="operator">Operator</option>
                 <option value="admin">Admin</option>
                 <option value="ceo">CEO</option>
+                <option value="client">{t('pages.adminManagement.role_client')}</option>
               </select>
             </div>
+            {newRole === 'client' && (
+            <div>
+              <label
+                htmlFor="adminmgmt-new-client"
+                className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
+              >
+                {t('pages.adminManagement.assigned_client')}
+              </label>
+              <select
+                id="adminmgmt-new-client"
+                value={newAssignedClientId}
+                onChange={(e) => setNewAssignedClientId(e.target.value)}
+                required
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+              >
+                <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name || `Client ${c.id}`}</option>
+                ))}
+              </select>
+            </div>
+            )}
+            {newRole !== 'client' && (
             <div className="flex flex-col justify-end">
               <label className="flex items-center gap-2 mb-2 cursor-pointer">
                 <input
@@ -405,6 +466,9 @@ export default function AdminManagement() {
                 />
                 <span className="text-xs text-amber-400 uppercase tracking-widest">Superadmin</span>
               </label>
+            </div>
+            )}
+            <div className="flex flex-col justify-end">
               <Button variant="unstyled"
                 id="adminmgmt-create-user-btn"
                 type="submit"
@@ -490,8 +554,31 @@ export default function AdminManagement() {
                     <option value="operator">Operator</option>
                     <option value="admin">Admin</option>
                     <option value="ceo">CEO</option>
+                    <option value="client">{t('pages.adminManagement.role_client')}</option>
                   </select>
                 </div>
+                {editRole === 'client' && (
+                <div>
+                  <label
+                    htmlFor="adminmgmt-edit-client"
+                    className="block text-xs uppercase tracking-widest text-[var(--text-muted)] mb-2"
+                  >
+                    {t('pages.adminManagement.assigned_client')}
+                  </label>
+                  <select
+                    id="adminmgmt-edit-client"
+                    value={editAssignedClientId}
+                    onChange={(e) => setEditAssignedClientId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] text-white focus:border-cyan-500/50 focus:outline-none text-sm"
+                  >
+                    <option value="">{t('pages.adminManagement.assigned_client_placeholder')}</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name || `Client ${c.id}`}</option>
+                    ))}
+                  </select>
+                </div>
+                )}
+                {editRole !== 'client' && (
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     id="adminmgmt-edit-superadmin"
@@ -502,6 +589,7 @@ export default function AdminManagement() {
                   />
                   <span className="text-sm text-amber-400">Grant Superadmin privileges</span>
                 </label>
+                )}
               </div>
               <div className="flex gap-3 mt-6">
                 <Button variant="unstyled"

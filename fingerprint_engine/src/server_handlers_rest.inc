@@ -828,7 +828,7 @@ async fn api_clients_create(
     headers: HeaderMap,
     body: axum::extract::Json<ClientBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
+    if let Err(r) = crate::client_isolation::require_owner(&auth) {
         return r;
     }
     let name = body.name.as_deref().unwrap_or("").trim();
@@ -1069,7 +1069,7 @@ async fn api_clients_delete(
     headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::ADMIN) {
+    if let Err(r) = crate::client_isolation::require_can_delete_client(&auth) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
@@ -1101,6 +1101,19 @@ async fn api_clients_delete(
         &format!("client_id={} name={}", id, cname.chars().take(200).collect::<String>()),
         &ip,
     )
+    .await;
+    // Unbind portal users before DELETE: assigned_client_id is ON DELETE RESTRICT
+    // and a leftover role=client row would violate users_client_scope_consistency.
+    let _ = sqlx::query(
+        r#"UPDATE users
+           SET is_active = false,
+               role = 'viewer',
+               assigned_client_id = NULL,
+               updated_at = now()
+           WHERE assigned_client_id = $1"#,
+    )
+    .bind(id)
+    .execute(&mut *tx)
     .await;
     let n = sqlx::query("DELETE FROM clients WHERE id = $1").bind(id).execute(&mut *tx).await.map(|r| r.rows_affected()).unwrap_or(0);
     if n == 0 {
@@ -1598,10 +1611,11 @@ async fn ws_timing(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let tenant_id = auth.tenant_id;
+    let viewer_cid = auth.assigned_client_id;
     let mut rx = state.timing_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
             }
         }
@@ -1614,10 +1628,11 @@ async fn ws_ai_redteam(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let tenant_id = auth.tenant_id;
+    let viewer_cid = auth.assigned_client_id;
     let mut rx = state.redteam_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
             }
         }
@@ -1630,10 +1645,11 @@ async fn ws_threat_intel(
     Extension(auth): Extension<AuthContext>,
 ) -> Response {
     let tenant_id = auth.tenant_id;
+    let viewer_cid = auth.assigned_client_id;
     let mut rx = state.radar_broadcast_tx.subscribe();
     ws.on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
-            if let Some(scoped) = crate::http::tenant_stream::visible_to(&msg, tenant_id) {
+            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
             }
         }
@@ -1646,6 +1662,7 @@ async fn api_telemetry_stream(
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
     let viewer_tid = auth.tenant_id;
+    let viewer_cid = auth.assigned_client_id;
     let want_job: Option<String> = q
         .get("job_id")
         .map(|s| s.trim().to_string())
@@ -1653,8 +1670,8 @@ async fn api_telemetry_stream(
     let filter_job = want_job.clone();
     let rx = state.telemetry_broadcast_tx.subscribe();
     let stream = crate::http::sse_bridge::bridge_broadcast(rx, move |payload: &str| {
-        // Tenant isolation: drop events not stamped for this viewer's tenant.
-        if crate::http::tenant_stream::visible_to(payload, viewer_tid).is_none() {
+        // Tenant + customer isolation: drop events not stamped for this viewer.
+        if crate::http::tenant_stream::visible_to_scoped(payload, viewer_tid, viewer_cid).is_none() {
             return false;
         }
         if let Some(ref want) = filter_job {

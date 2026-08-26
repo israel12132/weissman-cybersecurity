@@ -11,12 +11,13 @@ import {
   Users,
   ScrollText,
   Activity,
-  CreditCard,
   Sun,
   Moon,
   Contrast,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { sessionIdentityLabel, isClientUser } from '../../lib/clientScope'
+import { canAccessNavItem } from '../../lib/appNav'
 import { useTheme } from '../../context/ThemeContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
 import useFocusTrap from '../../hooks/useFocusTrap'
@@ -58,12 +59,12 @@ export default function ProfileMenu({ variant = 'header' }) {
     }
   }, [open])
 
-  const email = session?.email || 'admin@localhost'
-  const initial = (email[0] || '?').toUpperCase()
-  const role = (session?.role || 'viewer').toLowerCase()
-  const isSuper = session?.is_superadmin === true
-  const isAdmin = isSuper || role === 'admin'
+  const email = session?.email || t('profile.signed_in')
+  const initial = (String(email).replace(/[^a-zA-Z0-9]/g, '')[0] || '?').toUpperCase()
+  const identity = sessionIdentityLabel(session, t)
+  const portal = isClientUser(session)
   const lang = (i18n.resolvedLanguage || i18n.language || 'en').slice(0, 2)
+  const visibleLinks = QUICK_LINKS.filter((item) => canAccessNavItem(item, session))
 
   const triggerClass = isSidebar
     ? 'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--row-hover-bg)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--row-hover-bg)] transition-colors'
@@ -86,12 +87,12 @@ export default function ProfileMenu({ variant = 'header' }) {
           <span className="flex-1 min-w-0 text-start">
             <span className="block text-[11px] text-[var(--text-primary)] font-mono truncate">{email}</span>
             <span className="block text-[9px] uppercase tracking-widest text-[var(--text-muted)] mt-0.5">
-              {isSuper ? t('profile.ceo') : role}
+              {identity}
             </span>
           </span>
         ) : (
           <span className="hidden sm:inline text-[11px] font-mono uppercase tracking-widest">
-            {isSuper ? t('profile.ceo') : role}
+            {identity}
           </span>
         )}
         <ChevronDown
@@ -112,7 +113,7 @@ export default function ProfileMenu({ variant = 'header' }) {
           <div className="px-1">
             <div className="text-[13px] text-[var(--text-primary)] font-mono truncate">{email}</div>
             <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
-              {isSuper ? t('profile.superadmin') : role}{session?.tenant_id ? ` · ${t('profile.tenant', { id: session.tenant_id })}` : ''}
+              {identity}{portal ? ` · ${t('profile.bound_workspace')}` : ''}
             </div>
           </div>
 
@@ -173,7 +174,7 @@ export default function ProfileMenu({ variant = 'header' }) {
           </div>
 
           <div className="border-t border-[var(--border-default)] pt-3 space-y-0.5">
-            {QUICK_LINKS.map(({ to, labelKey, icon: Icon }) => (
+            {visibleLinks.map(({ to, labelKey, icon: Icon }) => (
               <MenuLink
                 key={to}
                 to={to}
@@ -182,14 +183,6 @@ export default function ProfileMenu({ variant = 'header' }) {
                 onClick={() => setOpen(false)}
               />
             ))}
-            {isAdmin && (
-              <MenuLink
-                to="/billing"
-                label={t('nav.billing')}
-                icon={CreditCard}
-                onClick={() => setOpen(false)}
-              />
-            )}
           </div>
 
           <div className="border-t border-[var(--border-default)] pt-3">

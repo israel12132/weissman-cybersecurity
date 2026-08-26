@@ -54,6 +54,7 @@ pub mod benchmark;
 pub mod billing;
 pub mod ceo;
 pub mod chronos_engine;
+pub mod client_isolation;
 pub mod cloud_hunter;
 pub mod cloud_integration_engine;
 pub mod cognitive_starvation_engine;

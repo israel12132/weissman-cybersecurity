@@ -82,7 +82,7 @@ async fn api_auth_refresh(
     };
     match crate::auth_refresh::rotate_refresh_token(state.auth_pool.as_ref(), &raw).await {
         Ok((user_id, tenant_id, new_refresh)) => {
-            let (role, is_superadmin) =
+            let (role, is_superadmin, assigned_client_id) =
                 match crate::auth_refresh::user_rbac_snapshot(state.auth_pool.as_ref(), user_id).await
                 {
                     Ok(Some(p)) => p,
@@ -109,6 +109,7 @@ async fn api_auth_refresh(
                 role.as_str(),
                 is_superadmin,
                 &binding,
+                assigned_client_id,
             ) {
                 Ok(t) => t,
                 Err(e) => {
@@ -137,6 +138,7 @@ async fn api_auth_refresh(
                     "tenant_id": tenant_id,
                     "role": role,
                     "is_superadmin": is_superadmin,
+                    "assigned_client_id": assigned_client_id,
                     "access_token": minted.token,
                 })),
             )
@@ -173,18 +175,23 @@ async fn api_auth_refresh(
 }
 
 async fn api_auth_me(Extension(auth): Extension<AuthContext>) -> Response {
-    (
-        StatusCode::OK,
-        Json(json!({
-            "ok": true,
-            "user_id": auth.user_id,
-            "tenant_id": auth.tenant_id,
-            "role": auth.role,
-            "is_superadmin": auth.is_superadmin,
-            "is_ceo": crate::http::ceo_rbac::auth_is_ceo(&auth),
-        })),
-    )
-        .into_response()
+    let mut body = json!({
+        "ok": true,
+        "user_id": auth.user_id,
+        "tenant_id": auth.tenant_id,
+        "role": auth.role,
+        "is_superadmin": auth.is_superadmin,
+        "is_ceo": crate::http::ceo_rbac::auth_is_ceo(&auth),
+        "assigned_client_id": auth.assigned_client_id,
+    });
+    if let Some(obj) = body.as_object_mut() {
+        if let Some(Value::Object(caps)) = crate::client_isolation::capabilities_json(&auth).as_object() {
+            for (k, v) in caps {
+                obj.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    (StatusCode::OK, Json(body)).into_response()
 }
 
 fn extract_access_cookie(headers: &HeaderMap) -> Option<String> {

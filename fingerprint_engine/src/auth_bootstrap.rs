@@ -50,6 +50,28 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
     // existing credential is preserved.
     if !hash.is_empty() {
         if is_active {
+            // The configured operator identity is the platform owner. Client
+            // create/delete is owner-only (CEO/superadmin); promote without
+            // touching the password the operator chose after first boot.
+            if let Err(e) = sqlx::query(
+                r#"UPDATE users
+                   SET is_superadmin = true
+                   WHERE id = $1
+                     AND COALESCE(is_superadmin, false) = false
+                     AND assigned_client_id IS NULL
+                     AND lower(trim(COALESCE(role, ''))) <> 'client'"#,
+            )
+            .bind(user_id)
+            .execute(app_pool)
+            .await
+            {
+                tracing::warn!(
+                    target: "auth_bootstrap",
+                    user_id,
+                    error = %e,
+                    "owner superadmin promotion failed"
+                );
+            }
             return; // healthy account — never touch the operator's chosen password
         }
         if let Err(e) = sqlx::query("UPDATE users SET is_active = true WHERE id = $1")
@@ -78,12 +100,19 @@ pub async fn sync_admin_credentials(app_pool: &PgPool) {
         }
     };
 
-    if let Err(e) =
-        sqlx::query("UPDATE users SET password_hash = $1, is_active = true WHERE id = $2")
-            .bind(&new_hash)
-            .bind(user_id)
-            .execute(app_pool)
-            .await
+    if let Err(e) = sqlx::query(
+        r#"UPDATE users
+           SET password_hash = $1,
+               is_active = true,
+               is_superadmin = true
+           WHERE id = $2
+             AND assigned_client_id IS NULL
+             AND lower(trim(COALESCE(role, ''))) <> 'client'"#,
+    )
+    .bind(&new_hash)
+    .bind(user_id)
+    .execute(app_pool)
+    .await
     {
         tracing::warn!(target: "auth_bootstrap", user_id, error = %e, "admin credential bootstrap failed");
         return;

@@ -133,6 +133,34 @@ async fn api_metrics_dashboard(
         .into_response()
 }
 
+/// Live FAIR-style score from RLS-visible vulnerabilities (portal-safe).
+async fn live_security_score_from_vulns(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> i64 {
+    let rows = sqlx::query(
+        r#"SELECT lower(trim(severity)) AS sev, COUNT(*)::bigint AS n
+           FROM vulnerabilities
+           GROUP BY 1"#,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .unwrap_or_default();
+    let mut crit = 0i64;
+    let mut high = 0i64;
+    let mut med = 0i64;
+    for row in rows {
+        let sev: String = row.try_get("sev").unwrap_or_default();
+        let n: i64 = row.try_get("n").unwrap_or(0);
+        match sev.as_str() {
+            "critical" | "crit" => crit = n,
+            "high" => high = n,
+            "medium" | "med" => med = n,
+            _ => {}
+        }
+    }
+    (100i64 - crit * 25 - high * 15 - med * 5).max(0)
+}
+
 async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth): Extension<AuthContext>) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"total_vulnerabilities":0,"active_scans":0,"security_score":0,"assets_monitored":0,"threats_mitigated":0}))).into_response();
@@ -141,19 +169,28 @@ async fn api_dashboard_stats(State(state): State<Arc<AppState>>, Extension(auth)
         .fetch_one(&mut *tx).await.unwrap_or(0);
     let client_count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*)::bigint FROM clients")
         .fetch_one(&mut *tx).await.unwrap_or(0);
-    let score: i64 = sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
-        .fetch_optional(&mut *tx).await.ok().flatten()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|j| {
-            let by = j.get("by_severity")?.as_object()?;
-            let crit = by.get("critical").and_then(Value::as_i64).unwrap_or(0);
-            let high = by.get("high").and_then(Value::as_i64).unwrap_or(0);
-            let med = by.get("medium").and_then(Value::as_i64).unwrap_or(0);
-            Some((100i64 - crit * 25 - high * 15 - med * 5).max(0))
-        }).unwrap_or(0);
-    let summary_json: Option<Value> = sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
-        .fetch_optional(&mut *tx).await.ok().flatten()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok());
+    // Portal sessions must not read tenant-wide report_runs (no client_id column).
+    let score: i64 = if auth.assigned_client_id.is_some() {
+        live_security_score_from_vulns(&mut tx).await
+    } else {
+        sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
+            .fetch_optional(&mut *tx).await.ok().flatten()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .and_then(|j| {
+                let by = j.get("by_severity")?.as_object()?;
+                let crit = by.get("critical").and_then(Value::as_i64).unwrap_or(0);
+                let high = by.get("high").and_then(Value::as_i64).unwrap_or(0);
+                let med = by.get("medium").and_then(Value::as_i64).unwrap_or(0);
+                Some((100i64 - crit * 25 - high * 15 - med * 5).max(0))
+            }).unwrap_or(0)
+    };
+    let summary_json: Option<Value> = if auth.assigned_client_id.is_some() {
+        None
+    } else {
+        sqlx::query_scalar::<_, String>("SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1")
+            .fetch_optional(&mut *tx).await.ok().flatten()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+    };
     let _ = tx.commit().await;
     let active = crate::orchestrator::is_scanning_active();
     let attack_surface_targets = summary_json.as_ref().and_then(|j| j.get("attack_surface_targets")).and_then(Value::as_u64).unwrap_or(0) as i64;
@@ -2277,36 +2314,99 @@ fn login_timing_equalizer_hash() -> &'static str {
     H.get_or_init(|| bcrypt::hash("weissman-login-timing-equalizer", 12).unwrap_or_default())
 }
 
+/// Resolve which tenant a login belongs to.
+///
+/// The login screen does not ask for a tenant or a client. Owner/staff and
+/// portal users are identified by email. An explicit `tenant_slug` (API/SSO/E2E)
+/// still wins when provided.
+async fn resolve_login_tenant_id(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    slug: &str,
+    email: &str,
+) -> Option<i64> {
+    let lookup_by_slug = |pool: &PgPool, slug: &str| {
+        let slug = slug.to_string();
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
+            )
+            .bind(slug)
+            .fetch_optional(&pool)
+            .await
+            .ok()
+            .flatten()
+        }
+    };
+    if !slug.is_empty() {
+        if let Some(id) = lookup_by_slug(auth_pool, slug).await {
+            return Some(id);
+        }
+        return lookup_by_slug(app_pool, slug).await;
+    }
+    let rows = sqlx::query(
+        r#"SELECT u.tenant_id, t.slug
+           FROM auth.v_user_lookup u
+           JOIN tenants t ON t.id = u.tenant_id AND t.active = true
+           WHERE lower(trim(u.email)) = lower(trim($1)) AND u.is_active = true
+           ORDER BY CASE WHEN t.slug = 'default' THEN 0 ELSE 1 END, u.tenant_id
+           LIMIT 8"#,
+    )
+    .bind(email)
+    .fetch_all(auth_pool)
+    .await;
+    let rows = match rows {
+        Ok(r) if !r.is_empty() => r,
+        _ => sqlx::query(
+            r#"SELECT u.tenant_id, t.slug
+               FROM users u
+               JOIN tenants t ON t.id = u.tenant_id AND t.active = true
+               WHERE lower(trim(u.email)) = lower(trim($1)) AND u.is_active = true
+               ORDER BY CASE WHEN t.slug = 'default' THEN 0 ELSE 1 END, u.tenant_id
+               LIMIT 8"#,
+        )
+        .bind(email)
+        .fetch_all(app_pool)
+        .await
+        .unwrap_or_default(),
+    };
+    if rows.is_empty() {
+        return None;
+    }
+    if rows.len() == 1 {
+        return rows[0].try_get::<i64, _>("tenant_id").ok();
+    }
+    rows.iter().find_map(|r| {
+        let slug = r.try_get::<String, _>("slug").ok()?;
+        if slug == "default" {
+            r.try_get::<i64, _>("tenant_id").ok()
+        } else {
+            None
+        }
+    })
+}
+
 async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap, body: axum::extract::Json<LoginBody>) -> Response {
     let ip = extract_client_ip(&headers, addr);
     let email = body.email.trim();
     let password = body.password.as_str();
     let slug = body.tenant_slug.trim();
-    let slug = if slug.is_empty() { "default" } else { slug };
-    let tenant_key: i64 = match sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
+    let Some(tenant_key) = resolve_login_tenant_id(
+        state.auth_pool.as_ref(),
+        state.app_pool.as_ref(),
+        slug,
+        email,
     )
-    .bind(slug)
-    .fetch_optional(state.auth_pool.as_ref())
     .await
-    {
-        Ok(Some(id)) => id,
-        _ => match sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM tenants WHERE slug = $1 AND active = true LIMIT 1",
+    else {
+        // Same generic 401 as a bad password — do not leak whether the email exists.
+        let _ = bcrypt::verify(password, login_timing_equalizer_hash());
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"ok": false, "detail": "Invalid email or password"})),
         )
-        .bind(slug)
-        .fetch_optional(state.app_pool.as_ref())
-        .await
-        {
-            Ok(Some(id)) => id,
-            _ => {
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    Json(json!({"ok": false, "detail": "Invalid email or password"})),
-                )
-                    .into_response();
-            }
-        },
+            .into_response();
     };
     if let Some(retry_after) = match crate::http::check_lockout_status(tenant_key, email).await {
         crate::http::LockoutStatus::Locked(secs) => Some(secs),
@@ -2334,7 +2434,8 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
         r#"SELECT u.id, COALESCE(u.password_hash,'') AS password_hash, u.tenant_id,
                   COALESCE(NULLIF(trim(u.role), ''), 'viewer') AS role,
                   COALESCE(u.is_superadmin, false) AS is_superadmin,
-                  COALESCE(u.mfa_enabled, false) AS mfa_enabled
+                  COALESCE(u.mfa_enabled, false) AS mfa_enabled,
+                  u.assigned_client_id
            FROM auth.v_user_lookup u
            WHERE u.tenant_id = $1 AND lower(trim(u.email)) = lower(trim($2)) AND u.is_active = true"#,
     )
@@ -2361,7 +2462,8 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 r#"SELECT u.id, COALESCE(u.password_hash,'') AS password_hash, u.tenant_id,
                           COALESCE(NULLIF(trim(u.role), ''), 'viewer') AS role,
                           COALESCE(u.is_superadmin, false) AS is_superadmin,
-                          COALESCE(u.mfa_enabled, false) AS mfa_enabled
+                          COALESCE(u.mfa_enabled, false) AS mfa_enabled,
+                          u.assigned_client_id
                    FROM users u
                    WHERE u.tenant_id = $1 AND lower(trim(u.email)) = lower(trim($2)) AND u.is_active = true"#,
             )
@@ -2377,7 +2479,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     };
     let auth_pool_degraded = row.1;
     let row = row.0;
-    let (user_id, hash, tenant_id, role, is_superadmin, mfa_enabled) = match row {
+    let (user_id, hash, tenant_id, role, is_superadmin, mfa_enabled, assigned_client_id) = match row {
         Some(r) => (
             r.try_get::<i64, _>("id").unwrap_or(0),
             r.try_get::<String, _>("password_hash").unwrap_or_default(),
@@ -2385,6 +2487,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             r.try_get::<String, _>("role").unwrap_or_else(|_| "viewer".into()),
             r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
             r.try_get::<bool, _>("mfa_enabled").unwrap_or(false),
+            r.try_get::<Option<i64>, _>("assigned_client_id").ok().flatten().filter(|id| *id > 0),
         ),
         None => {
             // Constant-time: burn one bcrypt verify so a non-existent email costs
@@ -2467,6 +2570,23 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 }
                 Err(_) => false,
             };
+            if crate::client_isolation::is_client_role(&role) && assigned_client_id.is_none() {
+                tracing::error!(
+                    target: "auth",
+                    user_id,
+                    tenant_id,
+                    "client-role account has no assigned_client_id"
+                );
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({
+                        "ok": false,
+                        "detail": "This account is not bound to a customer workspace. Contact the platform owner.",
+                        "code": "client_scope_unbound"
+                    })),
+                )
+                    .into_response();
+            }
             if tenant_requires_mfa && !mfa_enabled {
                 tracing::warn!(target: "auth", user_id, tenant_id, "MFA required by tenant policy but user has not enrolled");
                 return (
@@ -2527,6 +2647,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                     "tenant_id": tenant_id,
                     "role": role,
                     "is_superadmin": is_superadmin,
+                    "assigned_client_id": assigned_client_id,
                     "access_token": access_jwt,
                 })),
             )

@@ -464,11 +464,26 @@ pub async fn set_tenant_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: i64,
 ) -> Result<(), sqlx::Error> {
+    set_tenant_tx_scoped(tx, tenant_id, None).await
+}
+
+/// Stamp tenant + optional customer-client RLS GUCs on an open transaction.
+///
+/// `client_id = None` (or empty GUC) means owner/staff/worker: every client in
+/// the tenant remains visible. A concrete id locks portal users to that customer.
+pub async fn set_tenant_tx_scoped(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    client_id: Option<i64>,
+) -> Result<(), sqlx::Error> {
+    let client_guc = client_id.map(|id| id.to_string()).unwrap_or_default();
     sqlx::query(
         "SELECT set_config('app.current_tenant_id', $1, true), \
-                set_config('lock_timeout', $2, true)",
+                set_config('app.current_client_id', $2, true), \
+                set_config('lock_timeout', $3, true)",
     )
     .bind(tenant_id.to_string())
+    .bind(client_guc)
     .bind(advisory_lock::lock_timeout_setting())
     .execute(&mut **tx)
     .await?;
@@ -479,8 +494,16 @@ pub async fn begin_tenant_tx(
     pool: &PgPool,
     tenant_id: i64,
 ) -> Result<Transaction<'_, Postgres>, sqlx::Error> {
+    begin_tenant_tx_scoped(pool, tenant_id, None).await
+}
+
+pub async fn begin_tenant_tx_scoped(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+) -> Result<Transaction<'_, Postgres>, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    set_tenant_tx(&mut tx, tenant_id).await?;
+    set_tenant_tx_scoped(&mut tx, tenant_id, client_id).await?;
     Ok(tx)
 }
 
@@ -508,8 +531,16 @@ pub async fn begin_tenant_tx_arc(
     pool: Arc<PgPool>,
     tenant_id: i64,
 ) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    begin_tenant_tx_arc_scoped(pool, tenant_id, None).await
+}
+
+pub async fn begin_tenant_tx_arc_scoped(
+    pool: Arc<PgPool>,
+    tenant_id: i64,
+    client_id: Option<i64>,
+) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    set_tenant_tx(&mut tx, tenant_id).await?;
+    set_tenant_tx_scoped(&mut tx, tenant_id, client_id).await?;
     Ok(tx)
 }
 

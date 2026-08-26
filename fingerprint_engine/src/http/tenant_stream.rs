@@ -49,12 +49,37 @@ pub fn stamp_value(tenant_id: i64, mut value: Value) -> String {
 /// event). Fail-closed: unstamped payloads and cross-tenant payloads return `None`.
 #[must_use]
 pub fn visible_to(raw: &str, viewer_tid: i64) -> Option<String> {
+    visible_to_scoped(raw, viewer_tid, None)
+}
+
+/// Tenant filter plus optional customer-client filter.
+///
+/// Portal users (`viewer_cid = Some`) only receive events that name their client
+/// (or system-wide `_tid = 0` events). Missing `client_id` on a tenant event is
+/// dropped — fail-closed so another customer's scan progress cannot leak.
+#[must_use]
+pub fn visible_to_scoped(raw: &str, viewer_tid: i64, viewer_cid: Option<i64>) -> Option<String> {
     let v: Value = serde_json::from_str(raw).ok()?;
     let tid = v.get("_tid").and_then(Value::as_i64)?;
     if tid != SYSTEM_TENANT && tid != viewer_tid {
         return None;
     }
-    // If we wrapped a non-object payload, hand back the original string.
+    if let Some(cid) = viewer_cid {
+        if tid != SYSTEM_TENANT {
+            let event_cid = v
+                .get("client_id")
+                .or_else(|| v.get("_cid"))
+                .and_then(|x| {
+                    x.as_i64()
+                        .or_else(|| x.as_u64().and_then(|n| i64::try_from(n).ok()))
+                        .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+                });
+            match event_cid {
+                Some(id) if id == cid => {}
+                _ => return None,
+            }
+        }
+    }
     if let Some(inner) = v.get("_raw").and_then(Value::as_str) {
         return Some(inner.to_string());
     }
@@ -86,9 +111,15 @@ mod tests {
     }
 
     #[test]
-    fn non_object_payload_roundtrips() {
-        let msg = stamp(5, "plain-text-progress");
-        assert_eq!(visible_to(&msg, 5).as_deref(), Some("plain-text-progress"));
-        assert!(visible_to(&msg, 6).is_none());
+    fn client_scope_hides_other_customers() {
+        let mine = stamp(42, r#"{"event":"finding","client_id":7}"#);
+        let other = stamp(42, r#"{"event":"finding","client_id":8}"#);
+        let unscoped = stamp(42, r#"{"event":"scan_start"}"#);
+        assert!(visible_to_scoped(&mine, 42, Some(7)).is_some());
+        assert!(visible_to_scoped(&other, 42, Some(7)).is_none());
+        assert!(visible_to_scoped(&unscoped, 42, Some(7)).is_none());
+        assert!(visible_to_scoped(&other, 42, None).is_some());
+        let sys = stamp(SYSTEM_TENANT, r#"{"event":"maintenance"}"#);
+        assert!(visible_to_scoped(&sys, 42, Some(7)).is_some());
     }
 }

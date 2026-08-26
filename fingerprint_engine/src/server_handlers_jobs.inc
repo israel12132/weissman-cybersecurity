@@ -27,6 +27,7 @@ async fn api_async_jobs_list(
             .into_response();
     };
 
+    let scoped_client = auth.assigned_client_id;
     let rows = sqlx::query(
         r#"SELECT id, kind, status,
                   COALESCE(payload, '{}'::jsonb) AS payload,
@@ -40,6 +41,11 @@ async fn api_async_jobs_list(
              FROM weissman_async_jobs
             WHERE tenant_id = $4
               AND ($3::text IS NULL OR status = $3)
+              AND (
+                    $5::bigint IS NULL
+                    OR payload->>'client_id' = $5::text
+                    OR (jsonb_typeof(payload->'client_id') = 'number' AND (payload->>'client_id')::bigint = $5)
+                  )
             ORDER BY created_at DESC
             LIMIT $1 OFFSET $2"#,
     )
@@ -47,16 +53,23 @@ async fn api_async_jobs_list(
     .bind(offset)
     .bind(status_filter.as_deref())
     .bind(auth.tenant_id)
+    .bind(scoped_client)
     .fetch_all(&mut *tx)
     .await
     .unwrap_or_default();
 
     let total: i64 = sqlx::query_scalar::<_, i64>(
         r#"SELECT COUNT(*)::bigint FROM weissman_async_jobs
-            WHERE tenant_id = $2 AND ($1::text IS NULL OR status = $1)"#,
+            WHERE tenant_id = $2 AND ($1::text IS NULL OR status = $1)
+              AND (
+                    $3::bigint IS NULL
+                    OR payload->>'client_id' = $3::text
+                    OR (jsonb_typeof(payload->'client_id') = 'number' AND (payload->>'client_id')::bigint = $3)
+                  )"#,
     )
     .bind(status_filter.as_deref())
     .bind(auth.tenant_id)
+    .bind(scoped_client)
     .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
@@ -120,6 +133,13 @@ async fn api_async_job_status(
     match db::job_queue::get_job_for_tenant(state.app_pool.as_ref(), auth.tenant_id, job_id).await {
         Ok(Some(mut status)) => {
             status.payload = crate::scan_payload_redaction::redact_for_api(&status.payload);
+            if !crate::client_isolation::payload_visible_to(&auth, &status.payload) {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok": false, "detail": "Not found", "error_code": "not_found"})),
+                )
+                    .into_response();
+            }
             return (StatusCode::OK, Json(json!(status))).into_response();
         }
         Err(e) => {
