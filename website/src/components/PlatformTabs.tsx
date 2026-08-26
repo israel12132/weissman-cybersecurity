@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { platformTabs, type Product } from '../content/products'
 import { useI18n } from '../i18n'
 import { ButtonLink } from './Button'
-import { ProductVisual } from './ProductVisual'
+import { ProductScene } from './ProductScene'
+import { track } from '../lib/analytics'
 
 const accentVar: Record<Product['accent'], string> = {
   accent: 'var(--accent)',
@@ -28,7 +29,10 @@ export function PlatformTabs() {
             id={`tab-${p.id}`}
             aria-controls={`panel-${p.id}`}
             className={`min-h-11 shrink-0 rounded-[12px] px-4 text-sm ${p.id === id ? 'bg-elevated text-ink' : 'text-muted hover:text-ink'}`}
-            onClick={() => setId(p.id)}
+            onClick={() => {
+              setId(p.id)
+              track('product_demo_interact', { surface: 'platform_tabs', id: p.id })
+            }}
           >
             {t(`products.${p.id}.eyebrow`)}
           </button>
@@ -62,7 +66,7 @@ export function PlatformTabs() {
           </div>
         </div>
         <div className="lg:col-span-6">
-          <ProductVisual accent={color} />
+          <ProductScene productId={active.id} accent={active.accent} />
         </div>
       </div>
     </div>

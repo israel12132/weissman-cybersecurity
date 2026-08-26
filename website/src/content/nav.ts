@@ -137,6 +137,7 @@ export const footerNav = {
 export const homeSectionNav = [
   'why-us',
   'platform',
+  'experience',
   'capabilities',
   'how-it-works',
   'proof',

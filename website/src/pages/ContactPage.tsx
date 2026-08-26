@@ -1,4 +1,5 @@
 import { DemoForm } from '../components/DemoForm'
+import { DemoJourney } from '../components/DemoJourney'
 import { Layout } from '../components/Layout'
 import { Ltr } from '../components/Ltr'
 import { company } from '../content/site'
@@ -13,6 +14,9 @@ export function ContactPage() {
           <p className="eyebrow">{t('contactPage.eyebrow')}</p>
           <h1 className="display mt-3 text-4xl text-ink md:text-5xl">{t('contactPage.title')}</h1>
           <p className="mt-5 text-lg text-muted">{t('contactPage.lead')}</p>
+          <div className="mt-8">
+            <DemoJourney />
+          </div>
           <ul className="mt-8 space-y-2 text-sm text-muted">
             <li>
               {t('contactPage.sales')}:{' '}
@@ -35,6 +39,7 @@ export function ContactPage() {
           </ul>
         </div>
         <div className="lg:col-span-7">
+          <p className="mb-4 text-sm font-medium text-ink">{t('demoJourney.formTitle')}</p>
           <DemoForm />
         </div>
       </div>

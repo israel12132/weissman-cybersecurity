@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type MutableRefObject } from 'react
 import { createPortal } from 'react-dom'
 import { useI18n } from '../i18n'
 import { mainNav, type NavItem } from '../content/nav'
+import { track } from '../lib/analytics'
 import { A } from './A'
 import { ButtonLink } from './Button'
 import { LanguageSwitcher } from './LanguageSwitcher'
@@ -54,7 +55,10 @@ export function MegaNav() {
               key={item.id}
               item={item}
               open={openId === item.id}
-              onOpen={() => setOpenId(item.id)}
+              onOpen={() => {
+                setOpenId(item.id)
+                track('nav_interact', { item: item.id, surface: 'mega' })
+              }}
               onClose={() => setOpenId(null)}
               firstLinkRef={openId === item.id ? firstLink : undefined}
             />
@@ -66,7 +70,9 @@ export function MegaNav() {
           <ButtonLink variant="ghost" href="/command-center/login">
             {t('cta.signIn')}
           </ButtonLink>
-          <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
+          <ButtonLink href="/contact/" analyticsEvent="demo_cta_click" analyticsPayload={{ placement: 'nav' }}>
+            {t('cta.bookDemo')}
+          </ButtonLink>
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
@@ -143,7 +149,9 @@ export function MegaNav() {
               ))}
               <div className="mt-6 flex flex-col gap-3">
                 <LanguageSwitcher variant="drawer" />
-                <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
+                <ButtonLink href="/contact/" analyticsEvent="demo_cta_click" analyticsPayload={{ placement: 'mobile_nav' }}>
+                  {t('cta.bookDemo')}
+                </ButtonLink>
                 <ButtonLink variant="ghost" href="/command-center/login">
                   {t('cta.signIn')}
                 </ButtonLink>

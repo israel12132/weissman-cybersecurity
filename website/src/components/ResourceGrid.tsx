@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { resources, resourceTypeIds, type ResourceType } from '../content/resources'
 import { useI18n } from '../i18n'
 import { A } from './A'
+import { track } from '../lib/analytics'
 
 export function ResourceGrid() {
   const { t, date } = useI18n()
@@ -29,7 +30,11 @@ export function ResourceGrid() {
         <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {rows.map((r) => (
             <li key={r.id}>
-              <A className="surface block h-full p-5 transition duration-base hover:-translate-y-0.5 hover:border-accent/40" href={r.href}>
+              <A
+                className="surface block h-full p-5 transition duration-base hover:-translate-y-0.5 hover:border-accent/40"
+                href={r.href}
+                onClick={() => track('resource_click', { id: r.id, type: r.type })}
+              >
                 <p className="text-[0.7rem] uppercase tracking-[0.14em] text-dim">{t(`resourcesPage.types.${r.type}`)}</p>
                 <h3 className="mt-2 text-lg text-ink">{t(`resourcesPage.items.${r.id}.title`)}</h3>
                 <p className="mt-2 text-sm text-muted">{t(`resourcesPage.items.${r.id}.summary`)}</p>

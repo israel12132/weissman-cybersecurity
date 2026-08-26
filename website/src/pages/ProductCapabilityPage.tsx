@@ -1,6 +1,6 @@
 import { ButtonLink } from '../components/Button'
 import { Layout } from '../components/Layout'
-import { ProductVisual } from '../components/ProductVisual'
+import { ProductScene } from '../components/ProductScene'
 import { Section } from '../components/Section'
 import { A } from '../components/A'
 import { products, type Product } from '../content/products'
@@ -45,14 +45,16 @@ export function ProductCapabilityPage({ productId }: { productId: string }) {
             <h1 className="display mt-3 text-4xl text-ink md:text-5xl">{t(`products.${product.id}.title`)}</h1>
             <p className="mt-5 max-w-xl text-lg text-muted">{t(`products.${product.id}.summary`)}</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
+              <ButtonLink href="/contact/" analyticsEvent="demo_cta_click" analyticsPayload={{ placement: 'product' }}>
+                {t('cta.bookDemo')}
+              </ButtonLink>
               <ButtonLink variant="ghost" href="/platform/">
                 {t('cta.platformOverview')}
               </ButtonLink>
             </div>
           </div>
           <div className="lg:col-span-6">
-            <ProductVisual accent={color} />
+            <ProductScene productId={product.id} accent={product.accent} />
           </div>
         </div>
       </header>

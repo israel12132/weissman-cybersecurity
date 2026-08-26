@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { submitDemoRequest } from '../lib/submitDemoRequest'
 import { company } from '../content/site'
 import { useI18n } from '../i18n'
+import { track } from '../lib/analytics'
 import { Button } from './Button'
 import { TextWithLtr } from './Ltr'
 
@@ -13,6 +14,7 @@ export function DemoForm() {
   const [detail, setDetail] = useState('')
   const [mailto, setMailto] = useState<string | undefined>()
   const [errors, setErrors] = useState<FieldErr>({})
+  const started = useRef(false)
 
   function validate(fd: FormData): FieldErr {
     const e: FieldErr = {}
@@ -46,6 +48,7 @@ export function DemoForm() {
     if (result.ok) {
       setStatus('success')
       setDetail(t('demoForm.success'))
+      track('form_complete', { form: 'demo' })
       ev.currentTarget.reset()
     } else {
       setStatus('error')
@@ -55,7 +58,16 @@ export function DemoForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="surface space-y-4 p-6">
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      className="surface space-y-4 p-6"
+      onFocusCapture={() => {
+        if (started.current) return
+        started.current = true
+        track('form_start', { form: 'demo' })
+      }}
+    >
       <Field id="name" label={t('demoForm.name')} error={errors.name} required />
       <Field id="email" label={t('demoForm.email')} type="email" error={errors.email} required />
       <Field id="company" label={t('demoForm.organisation')} error={errors.company} required />

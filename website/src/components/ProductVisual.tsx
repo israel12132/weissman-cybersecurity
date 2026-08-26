@@ -17,8 +17,21 @@ export function ProductVisual({ accent = 'var(--accent)' }: { accent?: string })
             </linearGradient>
           </defs>
           <rect width="560" height="320" fill="#0a0e14" rx="10" />
-          <path d="M70 80 H210 Q250 80 250 120 V200 Q250 240 290 240 H470" stroke="url(#pv-line)" strokeWidth="2" fill="none" />
-          <path d="M70 200 H180 Q220 200 220 160" stroke={accent} strokeOpacity="0.35" strokeWidth="1.5" fill="none" />
+          <path
+            d="M70 80 H210 Q250 80 250 120 V200 Q250 240 290 240 H470"
+            stroke="url(#pv-line)"
+            strokeWidth="2"
+            fill="none"
+            className="theater-dash"
+          />
+          <path
+            d="M70 200 H180 Q220 200 220 160"
+            stroke={accent}
+            strokeOpacity="0.35"
+            strokeWidth="1.5"
+            fill="none"
+            className="theater-dash"
+          />
           <Node x={70} y={80} label="edge-web" tone="#22d3ee" />
           <Node x={70} y={200} label="vpn-gw" tone="#e8b86d" />
           <Node x={250} y={160} label="idp-core" tone="#22d3ee" />

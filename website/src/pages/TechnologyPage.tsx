@@ -1,14 +1,15 @@
 import { Layout } from '../components/Layout'
 import { Section } from '../components/Section'
 import { ButtonLink } from '../components/Button'
-import { howItWorksIds } from '../content/site'
+import { MetricCounter } from '../components/MetricCounter'
+import { ProcessTimeline } from '../components/ProcessTimeline'
 import { metrics } from '../content/metrics'
 import { useI18n } from '../i18n'
 
 const TECH_METRICS = ['productionEngines', 'liveProbes', 'mitreTechniques', 'agentDetections'] as const
 
 export function TechnologyPage() {
-  const { t, n } = useI18n()
+  const { t } = useI18n()
   return (
     <Layout>
       <header className="site-wrap py-16">
@@ -17,25 +18,15 @@ export function TechnologyPage() {
         <p className="mt-5 max-w-2xl text-lg text-muted">{t('technologyPage.lead')}</p>
       </header>
       <Section eyebrow={t('technologyPage.stagesEyebrow')} title={t('technologyPage.stagesTitle')}>
-        <ol className="space-y-4">
-          {howItWorksIds.map((id, i) => (
-            <li key={id} className="surface grid gap-4 p-6 md:grid-cols-12">
-              <p className="font-mono text-accent md:col-span-2">0{i + 1}</p>
-              <div className="md:col-span-10">
-                <h2 className="text-2xl text-ink">{t(`howItWorks.${id}.title`)}</h2>
-                <p className="mt-2 text-muted">{t(`howItWorks.${id}.body`)}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <ProcessTimeline />
       </Section>
       <Section eyebrow={t('technologyPage.integrityEyebrow')} title={t('technologyPage.integrityTitle')}>
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {TECH_METRICS.map((key) => (
-            <div key={key} className="surface p-5">
-              <dt className="text-xs uppercase tracking-[0.14em] text-dim">{t(`metrics.${key}`)}</dt>
-              <dd className="mt-2 font-mono text-3xl text-accent" dir="ltr">
-                {n(metrics[key].value)}
+            <div key={key} className="border-b border-[var(--line)] pb-5">
+              <dt className="text-xs tracking-[0.14em] text-dim">{t(`metrics.${key}`)}</dt>
+              <dd className="mt-2 font-mono text-3xl text-accent">
+                <MetricCounter value={metrics[key].value} />
               </dd>
               <p className="mt-2 font-mono text-[0.65rem] text-dim" dir="ltr">
                 {metrics[key].verify}
@@ -45,7 +36,9 @@ export function TechnologyPage() {
         </dl>
       </Section>
       <Section>
-        <ButtonLink href="/contact/">{t('cta.bookDemo')}</ButtonLink>
+        <ButtonLink href="/contact/" analyticsEvent="demo_cta_click" analyticsPayload={{ placement: 'technology' }}>
+          {t('cta.bookDemo')}
+        </ButtonLink>
       </Section>
     </Layout>
   )

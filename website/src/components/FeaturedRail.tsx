@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { featuredRail } from '../content/resources'
 import { useI18n } from '../i18n'
 import { A } from './A'
+import { track } from '../lib/analytics'
 
 export function FeaturedRail() {
   const { t, dir } = useI18n()
@@ -41,7 +42,11 @@ export function FeaturedRail() {
         >
           {featuredRail.map((item) => (
             <li key={item.id} className="w-[min(20rem,80vw)] shrink-0 snap-start">
-              <A className="surface block h-full p-5 transition duration-base hover:-translate-y-0.5 hover:border-accent/40" href={item.href}>
+              <A
+                className="surface block h-full p-5 transition duration-base hover:-translate-y-0.5 hover:border-accent/40"
+                href={item.href}
+                onClick={() => track('resource_click', { id: item.id, surface: 'featured' })}
+              >
                 <p className="text-[0.7rem] uppercase tracking-[0.14em] text-dim">{t(`resourcesPage.types.${item.type}`)}</p>
                 <h3 className="mt-2 text-lg text-ink">{t(`resourcesPage.items.${item.id}.title`)}</h3>
                 <p className="mt-2 text-sm text-muted">{t(`resourcesPage.items.${item.id}.summary`)}</p>

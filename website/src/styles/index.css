@@ -145,6 +145,40 @@
     border-radius: 0.3em;
   }
 
+  .theater-dash {
+    stroke-dasharray: 7 11;
+    animation: theater-flow 1.4s linear infinite;
+  }
+
+  .hero-scroll-cue {
+    animation: cue-pulse 1.6s var(--ease) infinite;
+  }
+
+  @keyframes theater-flow {
+    to {
+      stroke-dashoffset: -36;
+    }
+  }
+
+  @keyframes cue-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scaleY(0.7);
+    }
+    50% {
+      opacity: 1;
+      transform: scaleY(1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .theater-dash,
+    .hero-scroll-cue {
+      animation: none;
+    }
+  }
+
   .legal-doc table {
     width: 100%;
     border-collapse: collapse;

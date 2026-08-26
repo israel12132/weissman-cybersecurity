@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { alternatePath, persistLocale, type Locale } from '../i18n/locale'
 import { useI18n } from '../i18n'
+import { track } from '../lib/analytics'
 
 function Globe({ className = '' }: { className?: string }) {
   return (
@@ -18,6 +19,7 @@ export function LanguageSwitcher({ variant = 'bar' }: { variant?: 'bar' | 'drawe
 
   function go(next: Locale) {
     persistLocale(next)
+    track('language_change', { from: locale, to: next })
   }
 
   const enHref = alternatePath(path, 'en')
