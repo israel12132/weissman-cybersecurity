@@ -5,8 +5,8 @@
 # Postgres · Redis · weissman-server · weissman-worker · Command Center UI
 #
 # Usage (from the repo root, e.g. ~/weissman-cybersecurity):
-#   ./start_weissman.sh --pull     # unstick git, pull main, then start everything
-#   ./start_weissman.sh            # start everything (already on latest main)
+#   ./start_weissman.sh --pull     # unstick git, pull THIS branch (or main if detached), then start
+#   ./start_weissman.sh            # start everything (already on the deployed branch)
 #   ./start_weissman.sh stop
 #   ./start_weissman.sh status
 #   ./start_weissman.sh logs
@@ -50,13 +50,13 @@ Weissman — start the full stack (Postgres, Redis, weissman-server, weissman-wo
 
 Usage:
   ./start_weissman.sh [--pull] [start] [flags]  pull (optional) then start everything
-  ./start_weissman.sh --pull-only               unstick git + pull main, then exit
+  ./start_weissman.sh --pull-only               unstick git + pull the current branch, then exit
   ./start_weissman.sh stop                      stop server + worker (data stays)
   ./start_weissman.sh status                    show what is running + /api/health
   ./start_weissman.sh logs                      follow server/worker or compose logs
 
 Flags:
-  --pull                 abort a stuck merge, stash local edits, checkout main, pull
+  --pull                 abort a stuck merge, stash local edits, pull the current branch
   --pull-only            same git repair as --pull, then exit without starting
   --live, --docker       force Docker Compose stack (start_weissman_live.sh)
   --local                force host binaries + Docker Postgres/Redis
@@ -69,6 +69,7 @@ Flags:
 
 After a laptop pull (Pop!_OS, no host cargo, no systemd units):
   ./start_weissman.sh --pull
+  (updates the branch you are on — main for production, or the deployed feature branch)
 USAGE
 }
 
@@ -164,6 +165,12 @@ detect_mode() {
   fi
   if systemd_units_installed; then
     MODE=systemd
+  elif have_cmd docker && [[ -f "$ROOT/docker-compose.yml" && -f "$ROOT/docker-compose.prod.yml" ]]; then
+    # Customer / live deploy: one command starts the full Compose stack (API, worker,
+    # gateway, monitoring). Cargo on PATH must not steal this into the host-binary
+    # "local" path — that stack has no gateway and is not what ./start_weissman.sh
+    # is documented to bring up after a pull.
+    MODE=live
   elif have_cmd cargo; then
     MODE=local
   elif have_cmd docker; then
@@ -182,47 +189,54 @@ git_in_progress() {
     || [[ -f "$ROOT/.git/CHERRY_PICK_HEAD" ]]
 }
 
-pull_latest_main() {
+pull_latest() {
   [[ -d "$ROOT/.git" ]] || die "not a git checkout — cannot --pull"
 
   if [[ -f "$ROOT/.git/MERGE_HEAD" ]]; then
-    log "Aborting unfinished merge so main can be updated..."
+    log "Aborting unfinished merge so the deploy branch can be updated..."
     git merge --abort || die "git merge --abort failed — run git status"
   fi
   if [[ -d "$ROOT/.git/rebase-merge" || -d "$ROOT/.git/rebase-apply" ]]; then
-    log "Aborting unfinished rebase so main can be updated..."
+    log "Aborting unfinished rebase so the deploy branch can be updated..."
     git rebase --abort || die "git rebase --abort failed — run git status"
   fi
   if [[ -f "$ROOT/.git/CHERRY_PICK_HEAD" ]]; then
-    log "Aborting unfinished cherry-pick so main can be updated..."
+    log "Aborting unfinished cherry-pick so the deploy branch can be updated..."
     git cherry-pick --abort || die "git cherry-pick --abort failed — run git status"
   fi
 
   if ! git diff --quiet || ! git diff --cached --quiet; then
     local stamp
-    stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    stamp="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
     log "Stashing local edits so git pull can proceed (recover with: git stash pop)..."
     git stash push -m "weissman-start auto-stash ${stamp}"
   fi
 
-  log "Fetching origin/main..."
-  git fetch origin main
-  if ! git checkout main; then
-    log "checkout main still blocked — stashing remaining local edits and retrying..."
-    git stash push -m "weissman-start auto-stash-retry $(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ -z "$branch" || "$branch" == "HEAD" ]]; then
+    log "Detached HEAD — deploying origin/main"
+    branch=main
+    git fetch origin main
     git checkout main || die "git checkout main failed — run git status"
+  else
+    log "Fetching origin/${branch} (current deploy branch)..."
+    if ! git fetch origin "$branch"; then
+      die "git fetch origin ${branch} failed — the deployed branch must exist on origin (do not use a local-only branch)"
+    fi
   fi
-  if git merge-base --is-ancestor HEAD origin/main && git pull --ff-only origin main; then
-    log "main is up to date with origin/main ($(git rev-parse --short HEAD))"
+
+  if git merge-base --is-ancestor HEAD "origin/${branch}" && git pull --ff-only origin "$branch"; then
+    log "${branch} is up to date with origin/${branch} ($(git rev-parse --short HEAD))"
     return 0
   fi
   # Laptop checkouts that started a merge, or picked up a stray local commit, must
   # still be able to start the stack. Dirty files are already stashed; unique local
   # commits remain in reflog.
-  log "main is not a fast-forward of origin/main — resetting to origin/main"
+  log "${branch} is not a fast-forward of origin/${branch} — resetting to origin/${branch}"
   log "Recover discarded commits with: git reflog"
-  git reset --hard origin/main
-  log "main is at origin/main ($(git rev-parse --short HEAD))"
+  git reset --hard "origin/${branch}"
+  log "${branch} is at origin/${branch} ($(git rev-parse --short HEAD))"
 }
 
 # ── env (local / systemd host binaries) ──────────────────────────────────────
@@ -540,7 +554,7 @@ if [[ "$CMD" == start && -d "$ROOT/.git" && "$DO_PULL" -eq 0 ]] && git_in_progre
 fi
 
 if [[ "$DO_PULL" -eq 1 ]]; then
-  pull_latest_main
+  pull_latest
   if [[ "$PULL_ONLY" -eq 1 ]]; then
     log "Pull finished — not starting ( --pull-only ). Start with: ./start_weissman.sh"
     exit 0
