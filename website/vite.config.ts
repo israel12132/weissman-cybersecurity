@@ -27,6 +27,12 @@ export default defineConfig({
   resolve: {
     alias: { '@': resolve(root, 'src') },
   },
+  preview: {
+    host: true,
+    port: 4173,
+    strictPort: true,
+    allowedHosts: true,
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
