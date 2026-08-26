@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId, useCallback } from 'react'
+import { useState, useEffect, useRef, useId, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Loader2, AlertCircle, Shield, CheckCircle2, Globe2 } from 'lucide-react'
@@ -8,6 +8,14 @@ import { useTranslation } from 'react-i18next'
 import LanguageSwitcher from '../LanguageSwitcher'
 import Logo from '../Logo'
 import Button from '../ui/Button'
+import CyberLiveBackdrop from '../CyberLiveBackdrop'
+import { FloatingInput } from '../auth/AuthFields'
+import TenantSlugField from '../auth/TenantSlugField'
+import {
+  PLATFORM_RELEASE,
+  PLATFORM_RELEASE_NAME,
+  PRODUCTION_ENGINE_COUNT,
+} from '../../lib/platformScale'
 
 const formVariants = {
   initial: { opacity: 0, x: 24 },
@@ -95,116 +103,31 @@ function AuthAlert({ variant = 'error', children }) {
   )
 }
 
-const FloatingInput = React.forwardRef(function FloatingInput(
-  {
-    id,
-    label,
-    type = 'text',
-    value,
-    onChange,
-    required,
-    autoComplete,
-    inputMode,
-    placeholder,
-    disabled,
-    endAdornment,
-    className = '',
-    inputClassName = '',
-    onFocus,
-    onBlur,
-  },
-  ref,
-) {
-  const [focused, setFocused] = useState(false)
-  const floated = focused || (value != null && String(value).length > 0)
-
-  return (
-    <div className={`relative ${className}`}>
-      <label
-        htmlFor={id}
-        className={`pointer-events-none absolute start-4 z-10 origin-start transition-all duration-200 ${
-          floated
-            ? 'top-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-400/80'
-            : 'top-1/2 -translate-y-1/2 text-sm text-white/45'
-        }`}
-      >
-        {label}
-      </label>
-      <input
-        ref={ref}
-        id={id}
-        type={type}
-        value={value}
-        onChange={onChange}
-        required={required}
-        autoComplete={autoComplete}
-        inputMode={inputMode}
-        placeholder={floated ? placeholder : undefined}
-        disabled={disabled}
-        onFocus={(e) => {
-          setFocused(true)
-          onFocus?.(e)
-        }}
-        onBlur={(e) => {
-          setFocused(false)
-          onBlur?.(e)
-        }}
-        className={`peer w-full rounded-xl border bg-white/[0.03] px-4 pb-3 pt-7 text-sm text-white outline-none transition-all duration-200 placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50 ${
-          endAdornment ? 'pe-12' : ''
-        } ${
-          focused
-            ? 'border-cyan-400/50 shadow-[0_0_0_3px_rgba(34,211,238,0.12),0_0_24px_rgba(34,211,238,0.08)]'
-            : 'border-white/10 hover:border-white/20'
-        } ${inputClassName}`}
-      />
-      {endAdornment}
-    </div>
-  )
-})
-
 function BrandPanel({ t }) {
   const trustItems = [
-    { icon: Shield, label: t('auth.trust_engines') },
+    { icon: Shield, label: t('auth.trust_engines', { engines: PRODUCTION_ENGINE_COUNT }) },
     { icon: CheckCircle2, label: t('auth.trust_soc2') },
     { icon: Globe2, label: t('auth.trust_region') },
   ]
 
   return (
     <aside className="relative hidden min-h-screen flex-col justify-between overflow-hidden lg:flex lg:w-[52%] xl:w-[55%]">
-      {/* Animated mesh */}
-      <div className="pointer-events-none absolute inset-0 bg-[#030712]" aria-hidden>
-        <div
-          className="absolute -left-1/4 top-0 h-[70%] w-[70%] rounded-full opacity-40 blur-3xl"
-          style={{
-            background: 'radial-gradient(circle, rgba(34,211,238,0.22) 0%, transparent 70%)',
-            animation: 'auth-mesh-drift 18s ease-in-out infinite',
-          }}
-        />
-        <div
-          className="absolute -bottom-1/4 -right-1/4 h-[80%] w-[80%] rounded-full opacity-30 blur-3xl"
-          style={{
-            background: 'radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 65%)',
-            animation: 'auth-mesh-drift 22s ease-in-out infinite reverse',
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-[0.035]"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.8) 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-[#030712]/80" />
-      </div>
+      {/* Readability scrim: the live backdrop keeps moving underneath the headline. */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#030712]/82 via-[#030712]/28 to-transparent"
+        aria-hidden
+      />
 
       <div className="relative z-10 flex flex-1 flex-col justify-center px-12 xl:px-16 py-16">
         <Logo size={48} glow className="mb-10" />
+        <p className="mb-4 font-mono text-[11px] tracking-[0.16em] text-cyan-400/80">
+          {t('auth.brand_release', { name: PLATFORM_RELEASE_NAME, release: PLATFORM_RELEASE })}
+        </p>
         <h1 className="max-w-md font-holo text-3xl font-semibold leading-tight tracking-tight text-white xl:text-4xl">
           {t('auth.brand_tagline')}
         </h1>
         <p className="mt-5 max-w-lg text-base leading-relaxed text-white/55">
-          {t('auth.brand_story')}
+          {t('auth.brand_story', { engines: PRODUCTION_ENGINE_COUNT })}
         </p>
 
         <ul className="mt-10 flex flex-wrap gap-3" aria-label={t('auth.trust_label')}>
@@ -317,25 +240,13 @@ export default function Login() {
   const step = mfaToken ? 'mfa' : 'credentials'
 
   return (
-    <div className="relative min-h-screen bg-[#030712] text-white">
-      <style>{`
-        @keyframes auth-mesh-drift {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(4%, -3%) scale(1.04); }
-          66% { transform: translate(-3%, 2%) scale(0.97); }
-        }
-      `}</style>
+    <div className="relative min-h-screen overflow-hidden bg-[#030712] text-white">
+      <CyberLiveBackdrop />
 
-      <div className="flex min-h-screen flex-col lg:flex-row">
+      <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <BrandPanel t={t} />
 
-        <main className="relative flex flex-1 flex-col">
-          {/* Mobile ambient glow */}
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-cyan-500/[0.06] to-transparent lg:hidden"
-            aria-hidden
-          />
-
+        <main className="relative flex flex-1 flex-col bg-[#030712]/80 backdrop-blur-md lg:border-s lg:border-white/[0.07] lg:bg-[#030712]/65 lg:shadow-[-24px_0_60px_-30px_rgba(34,211,238,0.25)]">
           <header className="relative z-10 flex items-center justify-between px-6 pt-6 lg:justify-end lg:px-10 lg:pt-8">
             <div className="lg:hidden">
               <Logo compact size={36} glow />
@@ -347,7 +258,11 @@ export default function Login() {
             <div className="mx-auto w-full max-w-md">
               {/* Mobile trust strip */}
               <ul className="mb-6 flex flex-wrap justify-center gap-2 lg:hidden" aria-label={t('auth.trust_label')}>
-                {[t('auth.trust_engines'), t('auth.trust_soc2'), t('auth.trust_region')].map((label) => (
+                {[
+                  t('auth.trust_engines', { engines: PRODUCTION_ENGINE_COUNT }),
+                  t('auth.trust_soc2'),
+                  t('auth.trust_region'),
+                ].map((label) => (
                   <li
                     key={label}
                     className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] tracking-wide text-white/50"
@@ -452,13 +367,10 @@ export default function Login() {
                     onSubmit={handleSubmit}
                     className="space-y-4"
                   >
-                    <FloatingInput
+                    <TenantSlugField
                       id="tenant"
-                      label={t('auth.tenant_slug')}
-                      type="text"
-                      autoComplete="organization"
                       value={tenantSlug}
-                      onChange={(e) => setTenantSlug(e.target.value)}
+                      onChange={setTenantSlug}
                       disabled={submitting}
                     />
                     <FloatingInput
