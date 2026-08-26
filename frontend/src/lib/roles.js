@@ -16,6 +16,10 @@ export const ROLE_RANK = ROLE_LADDER.reduce((acc, role, i) => {
   return acc
 }, {})
 
+// Customer-portal identity: operator-equivalent writes on *their* client only.
+// Isolation is enforced by assigned_client_id + server middleware/RLS, not by rank.
+ROLE_RANK.client = ROLE_RANK.operator
+
 /**
  * Resolve the effective role of a session.
  * `is_superadmin` always wins regardless of the stored role string.
@@ -26,6 +30,7 @@ export function effectiveRole(session) {
   if (!session || session.ok === false) return 'viewer'
   if (session.is_superadmin === true) return 'superadmin'
   const r = (session.role || '').toString().trim().toLowerCase()
+  if (r === 'client') return 'client'
   return ROLE_RANK[r] ? r : 'viewer'
 }
 

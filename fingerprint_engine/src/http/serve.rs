@@ -404,12 +404,9 @@ async fn auth_guard(
 struct LoginBody {
     email: String,
     password: String,
-    #[serde(default = "default_tenant_slug")]
+    /// Optional. Empty ⇒ resolve the user by email (unique active account, preferring `default`).
+    #[serde(default)]
     tenant_slug: String,
-}
-
-fn default_tenant_slug() -> String {
-    "default".to_string()
 }
 
 async fn default_tenant_id(auth_pool: &PgPool) -> Option<i64> {
@@ -909,8 +906,18 @@ async fn ws_command_center(
     let replay = state.replay_buffer.clone();
     let last_event_id = crate::http::event_replay::parse_last_event_id(query.as_deref());
     let tenant_id = auth.tenant_id;
+    let assigned_client_id = auth.assigned_client_id;
     ws.on_upgrade(move |socket| async move {
-        handle_ws_command_center(socket, pool, tenant_id, sequenced, replay, last_event_id).await;
+        handle_ws_command_center(
+            socket,
+            pool,
+            tenant_id,
+            assigned_client_id,
+            sequenced,
+            replay,
+            last_event_id,
+        )
+        .await;
     })
 }
 
@@ -918,6 +925,7 @@ async fn handle_ws_command_center(
     mut socket: WebSocket,
     pool: Arc<PgPool>,
     tenant_id: i64,
+    assigned_client_id: Option<i64>,
     sequenced: Arc<tokio::sync::broadcast::Sender<String>>,
     replay: Arc<crate::http::event_replay::EventReplayBuffer>,
     last_event_id: Option<u64>,
@@ -925,7 +933,9 @@ async fn handle_ws_command_center(
     // Subscribe BEFORE the init snapshot + replay so no live event can slip through the gap
     // between "replay up to seq N" and "start listening". Duplicates are removed by seq below.
     let mut rx = sequenced.subscribe();
-    let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else {
+    let Ok(mut tx) =
+        weissman_db::begin_tenant_tx_scoped(pool.as_ref(), tenant_id, assigned_client_id).await
+    else {
         return;
     };
     let vuln_count: i64 =
@@ -937,24 +947,28 @@ async fn handle_ws_command_center(
         .fetch_one(&mut *tx)
         .await
         .unwrap_or(0);
-    let score: i64 = sqlx::query_scalar::<_, String>(
-        "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .ok()
-    .flatten()
-    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-    .and_then(|j| {
-        j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
-            (100i64
-                - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
-                - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
-                - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
-                .max(0)
+    let score: i64 = if assigned_client_id.is_some() {
+        live_security_score_from_vulns(&mut tx).await
+    } else {
+        sqlx::query_scalar::<_, String>(
+            "SELECT summary FROM report_runs ORDER BY created_at DESC LIMIT 1",
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|j| {
+            j.get("by_severity").and_then(|b| b.as_object()).map(|by| {
+                (100i64
+                    - by.get("critical").and_then(Value::as_i64).unwrap_or(0) * 25
+                    - by.get("high").and_then(Value::as_i64).unwrap_or(0) * 15
+                    - by.get("medium").and_then(Value::as_i64).unwrap_or(0) * 5)
+                    .max(0)
+            })
         })
-    })
-    .unwrap_or(0);
+        .unwrap_or(0)
+    };
     let _ = tx.commit().await;
     let globe = json!({
         "scanPulses": [],
@@ -977,7 +991,7 @@ async fn handle_ws_command_center(
     // that are also still buffered in the live channel we subscribed to above.
     let mut last_delivered = last_event_id.unwrap_or(0);
     if let Some(last_id) = last_event_id {
-        let slice = replay.replay_since(tenant_id, last_id);
+        let slice = replay.replay_since_scoped(tenant_id, assigned_client_id, last_id);
         if slice.gap {
             // Buffer no longer covers the client's position — have it refetch source-of-truth.
             let dropped = slice.latest_seq.saturating_sub(last_id);
@@ -1024,7 +1038,11 @@ async fn handle_ws_command_center(
                         // Dedup: skip events already sent during reconnect replay above.
                         if seq.is_none_or(|s| s > last_delivered) {
                             // Tenant isolation: only forward events stamped for this socket's tenant.
-                            if let Some(scoped) = crate::http::tenant_stream::visible_to(&raw, tenant_id) {
+                            if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(
+                                &raw,
+                                tenant_id,
+                                assigned_client_id,
+                            ) {
                                 if let Some(normalized) = normalize_cc_event(&scoped) {
                                     let frame = match seq {
                                         Some(s) => cc_with_seq(&normalized, s),
@@ -1060,7 +1078,12 @@ async fn handle_ws_command_center(
                 }
             }
             _ = ticker.tick() => {
-                let Ok(mut tx) = db::begin_tenant_tx(pool.as_ref(), tenant_id).await else { continue; };
+                let Ok(mut tx) = weissman_db::begin_tenant_tx_scoped(
+                    pool.as_ref(),
+                    tenant_id,
+                    assigned_client_id,
+                )
+                .await else { continue; };
                 let row = sqlx::query(
                     "SELECT id, title, severity, client_id::text AS client_id FROM vulnerabilities ORDER BY discovered_at DESC LIMIT 1",
                 )
@@ -1560,8 +1583,11 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     let auth_pool_boot = auth_pool.clone();
     let app_pool_boot = app_pool.clone();
     tokio::spawn(async move {
-        crate::auth_bootstrap::sync_admin_credentials(app_pool_boot.as_ref()).await;
-        let _ = auth_pool_boot; // keep auth pool warm for future bootstrap hooks
+        crate::auth_bootstrap::sync_admin_credentials(
+            auth_pool_boot.as_ref(),
+            app_pool_boot.as_ref(),
+        )
+        .await;
     });
     // ── Singleton workers — leader replica only ────────────────────────────────
     if is_leader {
@@ -1810,6 +1836,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
+        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))

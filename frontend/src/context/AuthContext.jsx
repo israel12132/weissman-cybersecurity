@@ -6,6 +6,14 @@ import {
 } from '../lib/apiBase'
 import { apiFetch } from '../utils/apiFetch'
 import { effectiveRole, sessionRoleRank, sessionHasRole } from '../lib/roles'
+import {
+  assignedClientId,
+  canCreateClients,
+  canDeleteClients,
+  isClientUser,
+  isPlatformOwner,
+  isStaffUser,
+} from '../lib/clientScope'
 import { queryClient } from '../lib/queryClient'
 import { invalidateAgentFleetCache } from '../hooks/useAgentFleetStatus'
 import { invalidateEngineCapabilitiesCache } from '../lib/useEngineCapabilities'
@@ -80,17 +88,19 @@ export function AuthProvider({ children }) {
   }, [checkAuth])
 
   const login = useCallback(
-    async (email, password, tenantSlug = 'default') => {
+    async (email, password, tenantSlug) => {
       try {
+        const payload = {
+          email: email.trim(),
+          password,
+        }
+        const slug = typeof tenantSlug === 'string' ? tenantSlug.trim() : ''
+        if (slug) payload.tenant_slug = slug
         const r = await fetch(apiUrl('/api/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            email: email.trim(),
-            password,
-            tenant_slug: (tenantSlug || 'default').trim() || 'default',
-          }),
+          body: JSON.stringify(payload),
         })
         const data = await r.json().catch(() => ({}))
         if (r.ok && data.mfa_required && data.mfa_token) {
@@ -104,6 +114,7 @@ export function AuthProvider({ children }) {
             tenant_id: data.tenant_id,
             role: data.role,
             is_superadmin: data.is_superadmin === true,
+            assigned_client_id: data.assigned_client_id ?? null,
           })
           setIsAuthenticated(true)
           await refreshSession()
@@ -153,6 +164,7 @@ export function AuthProvider({ children }) {
             tenant_id: data.tenant_id,
             role: data.role,
             is_superadmin: data.is_superadmin === true,
+            assigned_client_id: data.assigned_client_id ?? null,
           })
           setIsAuthenticated(true)
           await refreshSession()
@@ -205,12 +217,24 @@ export function AuthProvider({ children }) {
   const role = effectiveRole(session)
   const roleRank = sessionRoleRank(session)
   const hasRole = useCallback((minRole) => sessionHasRole(session, minRole), [session])
+  const isOwner = isPlatformOwner(session)
+  const isClientPortal = isClientUser(session)
+  const isStaff = isStaffUser(session)
+  const assignedClient = assignedClientId(session)
+  const allowCreateClients = canCreateClients(session)
+  const allowDeleteClients = canDeleteClients(session)
 
   const value = {
     isAuthenticated,
     isLoading,
     session,
     isCeo,
+    isOwner,
+    isStaff,
+    isClientUser: isClientPortal,
+    assignedClientId: assignedClient,
+    canCreateClients: allowCreateClients,
+    canDeleteClients: allowDeleteClients,
     role,
     roleRank,
     hasRole,
@@ -229,11 +253,40 @@ export function useAuth() {
   return ctx
 }
 
+/** Safe when ClientProvider is mounted without AuthProvider (unit tests). */
+export function useAuthOptional() {
+  return useContext(AuthContext)
+}
+
 /**
  * Convenience hook for role checks in pages/components.
  * `usePermissions().hasRole('admin')` → boolean.
  */
 export function usePermissions() {
-  const { role, roleRank, hasRole, isCeo, session } = useAuth()
-  return { role, roleRank, hasRole, isCeo, isSuperadmin: session?.is_superadmin === true }
+  const {
+    role,
+    roleRank,
+    hasRole,
+    isCeo,
+    isOwner,
+    isStaff,
+    isClientUser: isClientPortal,
+    canCreateClients: allowCreate,
+    canDeleteClients: allowDelete,
+    assignedClientId: assigned,
+    session,
+  } = useAuth()
+  return {
+    role,
+    roleRank,
+    hasRole,
+    isCeo,
+    isOwner,
+    isStaff,
+    isClientUser: isClientPortal,
+    canCreateClients: allowCreate,
+    canDeleteClients: allowDelete,
+    assignedClientId: assigned,
+    isSuperadmin: session?.is_superadmin === true,
+  }
 }

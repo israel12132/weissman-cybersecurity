@@ -232,27 +232,26 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [tenantSlug, setTenantSlug] = useState('default')
   const [error, setError] = useState('')
   const [errorCode, setErrorCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [mfaToken, setMfaToken] = useState(null)
   const [mfaCode, setMfaCode] = useState('')
-  const { login, verifyMfa, isAuthenticated, isCeo } = useAuth()
+  const { login, verifyMfa, isAuthenticated, isCeo, isOwner } = useAuth()
   const navigate = useNavigate()
   const mfaInputRef = useRef(null)
   const emailInputRef = useRef(null)
   const errorRegionId = useId()
 
   const postLoginPath = useCallback((result) => {
-    if (result?.is_superadmin === true) return '/'
+    if (result?.is_superadmin === true || result?.is_owner === true) return '/'
     const role = String(result?.role || '').trim().toLowerCase()
     return role === 'ceo' ? '/' : '/operations'
   }, [])
 
   useEffect(() => {
-    if (isAuthenticated) navigate(isCeo ? '/' : '/operations', { replace: true })
-  }, [isAuthenticated, isCeo, navigate])
+    if (isAuthenticated) navigate(isOwner || isCeo ? '/' : '/operations', { replace: true })
+  }, [isAuthenticated, isCeo, isOwner, navigate])
 
   useEffect(() => {
     if (mfaToken && mfaInputRef.current) {
@@ -268,7 +267,7 @@ export default function Login() {
     setErrorCode('')
     setSubmitting(true)
     try {
-      const result = await login(email, password, tenantSlug)
+      const result = await login(email, password)
       if (result.ok) {
         navigate(postLoginPath(result), { replace: true })
         return
@@ -310,8 +309,9 @@ export default function Login() {
   }
 
   const beginSso = (path) => {
-    const slug = encodeURIComponent((tenantSlug || 'default').trim() || 'default')
-    window.location.href = apiUrl(`${path}?tenant_slug=${slug}&idp_name=${path.includes('saml') ? 'enterprise_saml' : 'enterprise'}`)
+    // SSO IdP resolution is tenant-scoped on the server. The login screen never
+    // asks which tenant or client — default workspace, no role/client picker.
+    window.location.href = apiUrl(`${path}?tenant_slug=default&idp_name=${path.includes('saml') ? 'enterprise_saml' : 'enterprise'}`)
   }
 
   const step = mfaToken ? 'mfa' : 'credentials'
@@ -453,15 +453,6 @@ export default function Login() {
                     className="space-y-4"
                   >
                     <FloatingInput
-                      id="tenant"
-                      label={t('auth.tenant_slug')}
-                      type="text"
-                      autoComplete="organization"
-                      value={tenantSlug}
-                      onChange={(e) => setTenantSlug(e.target.value)}
-                      disabled={submitting}
-                    />
-                    <FloatingInput
                       id="email"
                       label={t('common.email')}
                       type="email"
@@ -469,6 +460,7 @@ export default function Login() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
+                      placeholder={t('auth.email_placeholder')}
                       disabled={submitting}
                       ref={emailInputRef}
                     />

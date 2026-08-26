@@ -3,6 +3,7 @@
  * Only routes registered in main.jsx — no fake nav items.
  */
 import { sessionHasRole } from './roles'
+import { canCreateClients, isClientUser, isPortalBlockedPath } from './clientScope'
 
 /** @typedef {{ to: string, labelKey: string, icon?: string, exact?: boolean, beta?: boolean, hideFromNav?: boolean, minRole?: string }} NavItem */
 /** @typedef {{ id: string, labelKey: string, items: NavItem[] }} NavGroup */
@@ -309,12 +310,16 @@ export const NAV_MIN_ROLE = {
   '/ceo': 'ceo',
   '/supreme-nerve-center': 'ceo',
   '/system-config': 'admin',
+  '/clients/new': 'ceo',
 }
 
 /** Gate restricted nav targets via the shared RBAC ladder. */
 export function canAccessNavItem(item, session) {
   if (item?.hideFromNav) return false
-  const min = item?.minRole || NAV_MIN_ROLE[item?.to]
+  const to = item?.to
+  if (isClientUser(session) && isPortalBlockedPath(to)) return false
+  if (to === '/clients/new' && !canCreateClients(session)) return false
+  const min = item?.minRole || NAV_MIN_ROLE[to]
   if (!min) return true
   return sessionHasRole(session, min)
 }

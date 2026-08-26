@@ -28,7 +28,7 @@ impl StreamBinding {
     }
 }
 
-/// Authenticated session: JWT claims (`sub`, `tid`, `role`, `is_superadmin`, `jti`) + stream binding.
+/// Authenticated session: JWT claims (`sub`, `tid`, `role`, `is_superadmin`, `cid`, `jti`) + stream binding.
 #[derive(Clone, Debug)]
 pub struct AuthContext {
     pub user_id: i64,
@@ -43,6 +43,8 @@ pub struct AuthContext {
     pub bind_ip: Option<String>,
     /// TLS/JA3 fingerprint at token mint when proxy provides it.
     pub bind_tls_fp: Option<String>,
+    /// Bound customer id for portal users. `None` = owner/staff (all clients).
+    pub assigned_client_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,6 +72,9 @@ struct JwtClaims {
     /// TLS fingerprint at mint time when available.
     #[serde(default)]
     bind_tls_fp: Option<String>,
+    /// Bound customer (`clients.id`) for portal users. Absent for owner/staff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cid: Option<i64>,
 }
 
 pub const WEISSMAN_COOKIE_NAME: &str = "weissman_token";
@@ -197,6 +202,7 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 jti: c.jti,
                 bind_ip: c.bind_ip,
                 bind_tls_fp: c.bind_tls_fp,
+                assigned_client_id: None,
             })
         }
         Some("refresh") | Some("mfa_pending") => None,
@@ -220,6 +226,7 @@ fn auth_context_from_claims(c: JwtClaims) -> Option<AuthContext> {
                 jti: c.jti,
                 bind_ip: c.bind_ip,
                 bind_tls_fp: c.bind_tls_fp,
+                assigned_client_id: c.cid.filter(|id| *id > 0),
             })
         }
     }
@@ -252,6 +259,7 @@ pub fn create_agent_session_token(
         jti: None,
         bind_ip: None,
         bind_tls_fp: None,
+        cid: None,
     };
     encode(
         &Header::default(),
@@ -274,6 +282,7 @@ pub fn create_access_token(
     role: &str,
     is_superadmin: bool,
     binding: &StreamBinding,
+    assigned_client_id: Option<i64>,
 ) -> Result<MintedAccessToken, jsonwebtoken::errors::Error> {
     let secret = jwt_secret();
     if secret.is_empty() {
@@ -288,6 +297,7 @@ pub fn create_access_token(
         role_norm.to_string()
     };
     let jti = uuid::Uuid::new_v4().to_string();
+    let cid = assigned_client_id.filter(|id| *id > 0);
     let claims = JwtClaims {
         sub: user_id,
         tid: tenant_id,
@@ -300,6 +310,7 @@ pub fn create_access_token(
         jti: Some(jti.clone()),
         bind_ip: binding.bind_ip.clone(),
         bind_tls_fp: binding.bind_tls_fp.clone(),
+        cid,
     };
     let token = encode(
         &Header::default(),
@@ -321,6 +332,7 @@ pub fn create_session_token(
         "viewer",
         false,
         &StreamBinding::default(),
+        None,
     )
     .map(|m| m.token)
 }
@@ -359,6 +371,7 @@ pub fn create_mfa_pending_token(
         jti: None,
         bind_ip: None,
         bind_tls_fp: None,
+        cid: None,
     };
     encode(
         &Header::default(),
@@ -415,6 +428,7 @@ pub fn verify_mfa_pending_token(token: &str) -> Option<AuthContext> {
         jti: c.jti,
         bind_ip: c.bind_ip,
         bind_tls_fp: c.bind_tls_fp,
+        assigned_client_id: c.cid.filter(|id| *id > 0),
     })
 }
 
@@ -555,6 +569,7 @@ mod agent_token_tests {
             jti: Some("test-jti".to_string()),
             bind_ip: None,
             bind_tls_fp: None,
+            cid: None,
         };
         let token = encode(
             &Header::default(),
@@ -581,6 +596,7 @@ mod agent_token_tests {
             jti: None,
             bind_ip: None,
             bind_tls_fp: None,
+            cid: None,
         };
         let token = encode(
             &Header::default(),
@@ -635,6 +651,7 @@ mod agent_token_tests {
             jti: Some("j".to_string()),
             bind_ip: None,
             bind_tls_fp: None,
+            cid: None,
         };
         let token = encode(
             &Header::default(),
@@ -665,6 +682,7 @@ mod agent_token_tests {
             jti: Some("j".to_string()),
             bind_ip: None,
             bind_tls_fp: None,
+            cid: None,
         };
         let token = encode(
             &Header::default(),
