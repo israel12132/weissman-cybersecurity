@@ -138,6 +138,20 @@ for var in WEISSMAN_JWT_SECRET WEISSMAN_JOB_ORCHESTRATOR_SECRET; do
     fi
   done
 done
+# Production-only: security_startup.rs refuses worker boot without dedicated vault keys.
+# They must be in the prod overlay's worker environment (not only env_file).
+for var in WEISSMAN_VAULT_KEY WEISSMAN_INTEGRATIONS_VAULT_KEY; do
+  if sed -n '/^  worker:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q "${var}:"; then
+    ok "$var reaches the worker in docker-compose.prod.yml"
+  else
+    bad "$var missing from the worker environment in docker-compose.prod.yml"
+  fi
+  if sed -n '/^  backend:/,/^  [a-z]/p' docker-compose.prod.yml | grep -q "${var}:"; then
+    ok "$var reaches the backend in docker-compose.prod.yml"
+  else
+    bad "$var missing from the backend environment in docker-compose.prod.yml"
+  fi
+done
 
 # ─────────────────────────────────────────────────────────────────────────────
 head_ "5. Bind-mount contract — a missing host path becomes a DIRECTORY, not a file"
@@ -247,6 +261,27 @@ if grep -qE '\bdc (ps|logs|up|down)' "$LAUNCHER" && ! grep -qE '"\$\{COMPOSE\[@\
   ok "compose calls go through the profile-aware dc() helper"
 else
   bad "a raw \${COMPOSE[@]} ps call bypasses --profile monitoring (profiled services will never be found)"
+fi
+
+# compose up used to abort on "backend-1 is unhealthy" without printing the FATAL line
+# that actually explains the crash (vault key, checksum, Redis).
+if grep -q "diagnose_compose_failure" "$LAUNCHER" \
+   && sed -n '/^compose_up()/,/^}/p' "$LAUNCHER" | grep -q "diagnose_compose_failure"; then
+  ok "compose_up dumps backend logs when docker compose fails"
+else
+  bad "compose_up does not diagnose backend logs on compose failure"
+fi
+
+if sed -n '/^gen_secret()/,/^}/p' "$LAUNCHER" | grep -q 'openssl rand -hex'; then
+  ok "gen_secret emits URL-safe hex (no + in DATABASE_URL/REDIS_URL)"
+else
+  bad "gen_secret still emits base64 — '+' in passwords breaks DSN userinfo"
+fi
+
+if grep -q "WEISSMAN_VAULT_KEY must be exactly 64 hex" "$LAUNCHER"; then
+  ok "validate_env rejects a missing/invalid WEISSMAN_VAULT_KEY before compose up"
+else
+  bad "validate_env does not check WEISSMAN_VAULT_KEY — backend will crash as unhealthy"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -433,6 +468,24 @@ if grep -qx 'mode=live cmd=start pull=0 pull_only=0' <<<"$dry"; then
   ok "auto-detect without cargo/systemd chooses live (Docker)"
 else
   bad "auto-detect without cargo/systemd: $dry"
+fi
+
+# Compose files present → live stack even when cargo is installed. Otherwise a
+# developer laptop with rustup would silently start the host-binary path and never
+# bring up gateway/monitoring — the exact stack the operator's compose output showed.
+dry="$(WEISSMAN_TEST_HIDE_SYSTEMD=1 WEISSMAN_START_DRY_RUN=1 bash start_weissman.sh 2>&1 || true)"
+if grep -qx 'mode=live cmd=start pull=0 pull_only=0' <<<"$dry"; then
+  ok "auto-detect with cargo still chooses live when compose files exist"
+else
+  bad "auto-detect with cargo stole live mode: $dry"
+fi
+
+if grep -q 'pull_latest()' start_weissman.sh \
+   && grep -q 'origin/\${branch}' start_weissman.sh \
+   && ! grep -q 'pull_latest_main' start_weissman.sh; then
+  ok "--pull updates the current deploy branch (does not force checkout main)"
+else
+  bad "--pull still hard-resets to main and would wipe a feature-branch deploy"
 fi
 
 bogus_sw="$(bash start_weissman.sh --definitely-not-a-flag 2>&1 || true)"

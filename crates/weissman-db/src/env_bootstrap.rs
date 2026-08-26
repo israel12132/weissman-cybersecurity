@@ -25,6 +25,7 @@ pub fn load_process_environment() {
     }
 
     if e2e_stack {
+        apply_compose_dsn_fallbacks();
         return;
     }
 
@@ -65,6 +66,8 @@ pub fn load_process_environment() {
             "dev-metrics-token-32-bytes-minimum-xx",
         );
     }
+
+    apply_compose_dsn_fallbacks();
 }
 
 /// Production detection mirroring weissman_core::tls_policy::is_production_environment.
@@ -132,6 +135,141 @@ pub fn validate_database_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn nonempty_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// RFC 3986 unreserved — safe in URI userinfo without percent-encoding.
+fn is_unreserved(b: u8) -> bool {
+    matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~')
+}
+
+/// Percent-encode a URI userinfo password so `+` `/` in launcher secrets cannot
+/// be parsed as space or as the path separator.
+pub fn percent_encode_userinfo(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() * 3);
+    for &b in raw.as_bytes() {
+        if is_unreserved(b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn password_userinfo_needs_encode(pass: &str) -> bool {
+    pass.bytes()
+        .any(|b| matches!(b, b'+' | b'/' | b' ' | b'@' | b'?' | b'#' | b'[' | b']'))
+}
+
+/// Re-encode the password in `scheme://user:password@host/...` when it contains
+/// characters that break URI parsers. Returns `None` when no change is needed.
+pub fn reencode_url_password(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let at = rest.rfind('@')?;
+    let userinfo = &rest[..at];
+    let host = &rest[at + 1..];
+    let (user, pass) = userinfo.split_once(':')?;
+    if pass.is_empty() || !password_userinfo_needs_encode(pass) {
+        return None;
+    }
+    Some(format!(
+        "{scheme}://{user}:{}@{host}",
+        percent_encode_userinfo(pass)
+    ))
+}
+
+fn postgres_url(user: &str, password: &str, host: &str, db: &str) -> String {
+    format!(
+        "postgresql://{}:{}@{host}:5432/{db}",
+        percent_encode_userinfo(user),
+        percent_encode_userinfo(password)
+    )
+}
+
+fn dsn_unusable(url: Option<&str>) -> bool {
+    match url.map(str::trim).filter(|s| !s.is_empty()) {
+        None => true,
+        Some(u) => validate_database_url(u).is_err(),
+    }
+}
+
+/// Compose `env_file` can inject empty `DATABASE_URL=` / `REDIS_URL=` lines from
+/// `PRODUCTION.env.template`. Rebuild from discrete password pieces, then
+/// percent-encode `+` in existing URLs so role AUTH matches `requirepass`.
+pub fn apply_compose_dsn_fallbacks() {
+    let host = nonempty_env("WEISSMAN_DB_HOST").unwrap_or_else(|| "postgres".into());
+    let db = nonempty_env("POSTGRES_DB").unwrap_or_else(|| "weissman".into());
+
+    if dsn_unusable(std::env::var("DATABASE_URL").ok().as_deref()) {
+        if let Some(pass) = nonempty_env("DB_APP_PASSWORD") {
+            let user = nonempty_env("DB_APP_USER").unwrap_or_else(|| "weissman_app".into());
+            std::env::set_var("DATABASE_URL", postgres_url(&user, &pass, &host, &db));
+        }
+    }
+    if dsn_unusable(std::env::var("WEISSMAN_AUTH_DATABASE_URL").ok().as_deref()) {
+        if let Some(pass) = nonempty_env("DB_AUTH_PASSWORD") {
+            let user = nonempty_env("DB_AUTH_USER").unwrap_or_else(|| "weissman_auth".into());
+            std::env::set_var(
+                "WEISSMAN_AUTH_DATABASE_URL",
+                postgres_url(&user, &pass, &host, &db),
+            );
+        }
+    }
+    if dsn_unusable(
+        std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
+            .ok()
+            .as_deref(),
+    ) {
+        if let Some(pass) = nonempty_env("DB_RO_PASSWORD") {
+            let user = nonempty_env("DB_RO_USER").unwrap_or_else(|| "weissman_ro".into());
+            std::env::set_var(
+                "WEISSMAN_READ_ONLY_DATABASE_URL",
+                postgres_url(&user, &pass, &host, &db),
+            );
+        }
+    }
+    if dsn_unusable(std::env::var("WEISSMAN_MIGRATE_URL").ok().as_deref()) {
+        if let Some(pass) = nonempty_env("POSTGRES_PASSWORD") {
+            let user = nonempty_env("POSTGRES_USER").unwrap_or_else(|| "postgres".into());
+            std::env::set_var(
+                "WEISSMAN_MIGRATE_URL",
+                postgres_url(&user, &pass, &host, &db),
+            );
+        }
+    }
+    if std::env::var("REDIS_URL")
+        .map(|s| s.trim().is_empty())
+        .unwrap_or(true)
+    {
+        if let Some(pass) = nonempty_env("REDIS_PASSWORD") {
+            let rhost = nonempty_env("WEISSMAN_REDIS_HOST").unwrap_or_else(|| "redis".into());
+            std::env::set_var(
+                "REDIS_URL",
+                format!("redis://:{}@{rhost}:6379/0", percent_encode_userinfo(&pass)),
+            );
+        }
+    }
+
+    for var in [
+        "DATABASE_URL",
+        "WEISSMAN_AUTH_DATABASE_URL",
+        "WEISSMAN_READ_ONLY_DATABASE_URL",
+        "WEISSMAN_MIGRATE_URL",
+        "REDIS_URL",
+    ] {
+        if let Ok(url) = std::env::var(var) {
+            if let Some(fixed) = reencode_url_password(&url) {
+                std::env::set_var(var, fixed);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,6 +289,111 @@ mod tests {
     fn accepts_postgres_user() {
         assert!(
             validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok()
+        );
+    }
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn with_env(pairs: &[(&str, Option<&str>)], f: impl FnOnce()) {
+        let _g = ENV_LOCK.lock().expect("env lock");
+        let prev: Vec<(String, Option<String>)> = pairs
+            .iter()
+            .map(|(k, _)| ((*k).to_string(), std::env::var(k).ok()))
+            .collect();
+        for (k, v) in pairs {
+            match v {
+                Some(v) => std::env::set_var(k, v),
+                None => std::env::remove_var(k),
+            }
+        }
+        f();
+        for (k, v) in prev {
+            match v {
+                Some(v) => std::env::set_var(&k, v),
+                None => std::env::remove_var(&k),
+            }
+        }
+    }
+
+    #[test]
+    fn encodes_plus_and_equals_once_plus_is_present() {
+        let out =
+            reencode_url_password("postgresql://weissman_app:abc+def=@postgres:5432/weissman")
+                .expect("should re-encode");
+        assert_eq!(
+            out,
+            "postgresql://weissman_app:abc%2Bdef%3D@postgres:5432/weissman"
+        );
+    }
+
+    #[test]
+    fn encodes_redis_password_with_plus() {
+        let out = reencode_url_password("redis://:pass+word@redis:6379/0").expect("encode");
+        assert_eq!(out, "redis://:pass%2Bword@redis:6379/0");
+    }
+
+    #[test]
+    fn leaves_url_safe_password_alone() {
+        assert!(reencode_url_password(
+            "postgresql://weissman_app:hexonlysecret@postgres:5432/weissman"
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn rebuilds_empty_database_url_from_compose_pieces() {
+        with_env(
+            &[
+                ("DATABASE_URL", Some("")),
+                ("DB_APP_USER", Some("weissman_app")),
+                ("DB_APP_PASSWORD", Some("abc+def")),
+                ("POSTGRES_DB", Some("weissman")),
+                ("WEISSMAN_DB_HOST", Some("postgres")),
+                ("REDIS_URL", Some("redis://redis:6379/0")),
+                ("WEISSMAN_AUTH_DATABASE_URL", None),
+                ("WEISSMAN_READ_ONLY_DATABASE_URL", None),
+                ("WEISSMAN_MIGRATE_URL", None),
+                ("DB_AUTH_PASSWORD", None),
+                ("DB_RO_PASSWORD", None),
+                ("POSTGRES_PASSWORD", None),
+                ("REDIS_PASSWORD", None),
+            ],
+            || {
+                apply_compose_dsn_fallbacks();
+                assert_eq!(
+                    std::env::var("DATABASE_URL").unwrap(),
+                    "postgresql://weissman_app:abc%2Bdef@postgres:5432/weissman"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn rebuilds_empty_redis_url_from_password() {
+        with_env(
+            &[
+                ("REDIS_URL", Some("")),
+                ("REDIS_PASSWORD", Some("secret+plus")),
+                ("WEISSMAN_REDIS_HOST", Some("redis")),
+                (
+                    "DATABASE_URL",
+                    Some("postgresql://weissman_app:ok@postgres:5432/weissman"),
+                ),
+                ("WEISSMAN_AUTH_DATABASE_URL", None),
+                ("WEISSMAN_READ_ONLY_DATABASE_URL", None),
+                ("WEISSMAN_MIGRATE_URL", None),
+                ("DB_APP_PASSWORD", None),
+                ("DB_AUTH_PASSWORD", None),
+                ("DB_RO_PASSWORD", None),
+                ("POSTGRES_PASSWORD", None),
+            ],
+            || {
+                apply_compose_dsn_fallbacks();
+                assert_eq!(
+                    std::env::var("REDIS_URL").unwrap(),
+                    "redis://:secret%2Bplus@redis:6379/0"
+                );
+            },
         );
     }
 }
