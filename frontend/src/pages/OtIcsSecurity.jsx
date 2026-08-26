@@ -17,6 +17,8 @@ import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const FINDINGS_ACCENT = '#f97316';
 
@@ -387,15 +389,12 @@ export default function OtIcsSecurity() {
         {clients.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.otIcsSecurity.client_label')}</span>
-            <select
+            <ScopedClientControl
               value={selectedClientId ?? ''}
-              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-            >
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            />
           </div>
         )}
 

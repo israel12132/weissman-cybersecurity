@@ -29,6 +29,7 @@ const EXACT = {
   '/threat-intel': () => import(/* webpackChunkName: "page-threat-intel" */ '../pages/ThreatIntelHub'),
   '/dark-web': () => import(/* webpackChunkName: "page-dark-web" */ '../pages/DarkWebMonitor'),
   '/jobs': () => import(/* webpackChunkName: "page-jobs" */ '../pages/JobsDashboard'),
+  '/pdf-intelligence': () => import(/* webpackChunkName: "page-pdf-intelligence" */ '../pages/PdfCommandCenter'),
   '/remediation': () => import(/* webpackChunkName: "page-remediation" */ '../pages/RemediationHub'),
   '/remediation-analytics': () => import(/* webpackChunkName: "page-remediation-analytics" */ '../pages/RemediationAnalytics'),
   '/incident-response': () => import(/* webpackChunkName: "page-incident" */ '../pages/IncidentResponseCenter'),

@@ -86,6 +86,7 @@ export const FindingSuppressions = React$lazy(() => import('../pages/FindingSupp
 export const CryptoPosture = React$lazy(() => import('../pages/CryptoPosture.jsx'))
 export const LiveFeed = React$lazy(() => import('../pages/LiveFeed.jsx'))
 export const ReportHistory = React$lazy(() => import('../pages/ReportHistory.jsx'))
+export const PdfCommandCenter = React$lazy(() => import('../pages/PdfCommandCenter.jsx'))
 export const ExecutiveOverview = React$lazy(() => import('../pages/ExecutiveOverview.jsx'))
 export const AgentManagement = React$lazy(() => import('../pages/AgentManagement'))
 export const DarkWebMonitor = React$lazy(() => import('../pages/DarkWebMonitor'))

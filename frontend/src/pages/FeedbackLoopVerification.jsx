@@ -11,6 +11,8 @@ import EmptyState from '../components/ui/EmptyState'
 import { SkeletonBar } from '../components/ui/Skeleton'
 import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const DEFAULT_TEMPLATE = 'multi_step_state_chain'
 
@@ -147,14 +149,14 @@ export default function FeedbackLoopVerification() {
           </h3>
 
           {clients.length > 0 && (
-            <select
+            <ScopedClientControl
               value={selectedClientId ?? ''}
-              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
               className="w-full rounded-xl bg-[var(--row-hover-bg)] border border-[var(--border-default)] px-3 py-2 text-[12px] text-[var(--text-secondary)] focus:outline-none focus:border-violet-500/40"
-            >
-              <option value="">{t('pages.feedbackLoopVerification.select_client')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+              placeholder={t('pages.feedbackLoopVerification.select_client')}
+              allowEmpty
+            />
           )}
 
           <input

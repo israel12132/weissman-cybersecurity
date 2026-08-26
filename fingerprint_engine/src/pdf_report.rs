@@ -1435,6 +1435,177 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// One editor section in the central PDF intelligence pack.
+#[derive(Debug, Clone)]
+pub struct IntelligencePackSection {
+    pub id: String,
+    pub title: String,
+    pub lines: Vec<String>,
+}
+
+/// World-class board/regulator pack assembled from live findings + compliance
+/// mappings. Empty `sections` still emits a cover that states no live evidence
+/// was available — callers should fail closed before invoking this when the
+/// corpus is empty.
+pub fn build_intelligence_pack_pdf(
+    org_label: &str,
+    client_opt: Option<&str>,
+    doc_title: &str,
+    critical: u32,
+    high: u32,
+    medium: u32,
+    low: u32,
+    sections: &[IntelligencePackSection],
+) -> Result<Vec<u8>, String> {
+    let date = israel_now();
+    let mut b = PdfBuilder::new();
+    b.set_fill_rgb(0.04, 0.07, 0.12);
+    b.text(22, "WEISSMAN — PDF INTELLIGENCE COMMAND");
+    b.set_fill_rgb(0.2, 0.75, 0.95);
+    b.text(14, &truncate_ascii(doc_title, 90));
+    b.set_fill_rgb(0.55, 0.62, 0.72);
+    b.text(11, &format!("Organization: {}", truncate_ascii(org_label, 80)));
+    if let Some(c) = client_opt {
+        b.text(11, &format!("Scope (client): {}", truncate_ascii(c, 80)));
+    }
+    b.text(10, &format!("Generated (Israel): {}", date));
+    b.text(
+        10,
+        "Live corpus: report_runs, executive briefing, compliance_mappings, vulnerabilities.",
+    );
+    b.y -= 10.0;
+    b.set_fill_rgb(0.2, 0.75, 0.95);
+    b.text(13, "Risk posture (live findings)");
+    b.set_fill_rgb(0.9, 0.92, 0.95);
+    b.text(
+        11,
+        &format!("Critical {critical}  |  High {high}  |  Medium {medium}  |  Low {low}"),
+    );
+    b.y -= 8.0;
+    for section in sections {
+        b.ensure_space(36.0);
+        b.set_fill_rgb(0.2, 0.75, 0.95);
+        b.text(12, &truncate_ascii(&section.title, 90));
+        b.set_fill_rgb(0.82, 0.86, 0.90);
+        if section.lines.is_empty() {
+            b.text(10, "(no live rows for this section)");
+        }
+        for line in &section.lines {
+            b.ensure_space(16.0);
+            for wrapped in wrap_text_simple(line, 92) {
+                b.text(9, &truncate_ascii(&wrapped, 96));
+            }
+        }
+        b.y -= 6.0;
+    }
+    b.set_fill_rgb(0.45, 0.5, 0.55);
+    b.ensure_space(24.0);
+    b.text(8, "(c) Weissman Cybersecurity — Confidential. Live evidence only.");
+    let streams = b.finish();
+    encode_helvetica_pdf(streams)
+}
+
+fn wrap_text_simple(text: &str, max_chars: usize) -> Vec<String> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Vec::new();
+    }
+    if t.chars().count() <= max_chars {
+        return vec![t.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for word in t.split_whitespace() {
+        if cur.is_empty() {
+            cur = word.to_string();
+            continue;
+        }
+        if cur.chars().count() + 1 + word.chars().count() <= max_chars {
+            cur.push(' ');
+            cur.push_str(word);
+        } else {
+            out.push(std::mem::take(&mut cur));
+            cur = word.to_string();
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+fn encode_helvetica_pdf(streams: Vec<String>) -> Result<Vec<u8>, String> {
+    if streams.is_empty() {
+        return Err("empty pdf streams".into());
+    }
+    let mut out = Vec::new();
+    let mut offsets: Vec<usize> = vec![0];
+    out.extend_from_slice(b"%PDF-1.4\n");
+    offsets.push(out.len());
+    out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    offsets.push(out.len());
+    let n = streams.len();
+    let page_objects: Vec<usize> = (0..n).map(|i| 3 + i * 2).collect();
+    let contents_objects: Vec<usize> = (0..n).map(|i| 4 + i * 2).collect();
+    let pages_refs: String = page_objects.iter().map(|i| format!("{i} 0 R ")).collect();
+    out.extend_from_slice(
+        format!(
+            "2 0 obj\n<< /Type /Pages /Kids [ {}] /Count {} >>\nendobj\n",
+            pages_refs.trim(),
+            n
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let font_obj = 3 + 2 * n;
+    for (i, stream_body) in streams.iter().enumerate() {
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>\nendobj\n",
+                page_objects[i],
+                contents_objects[i],
+                font_obj
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+        out.extend_from_slice(
+            format!(
+                "{} 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
+                contents_objects[i],
+                stream_body.len(),
+                stream_body
+            )
+            .as_bytes(),
+        );
+        offsets.push(out.len());
+    }
+    out.extend_from_slice(
+        format!(
+            "{font_obj} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"
+        )
+        .as_bytes(),
+    );
+    offsets.push(out.len());
+    let xref_start = out.len();
+    let num_objs = font_obj;
+    out.extend_from_slice(b"xref\n");
+    out.extend_from_slice(format!("0 {} \n", num_objs + 1).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for off in offsets.iter().skip(1).take(num_objs) {
+        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+            num_objs + 1,
+            xref_start
+        )
+        .as_bytes(),
+    );
+    Ok(out)
+}
+
 #[cfg(test)]
 mod watermark_tests {
     use super::*;

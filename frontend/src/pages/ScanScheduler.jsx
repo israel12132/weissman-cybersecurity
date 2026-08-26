@@ -11,6 +11,8 @@ import { confirmDialog } from '../utils/confirmDialog'
 import EmptyState from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toaster'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 /**
  * ScanScheduler - Automated scan scheduling and management
@@ -590,21 +592,16 @@ function ScheduleModal({ schedule, template, onClose, onSave }) {
             <label htmlFor="schedule-client" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Target Client
             </label>
-            <select
-              id="schedule-client"
+            <ScopedClientControl
               value={formData.client_id}
-              onChange={(e) =>
-                setFormData({ ...formData, client_id: e.target.value, target_client: '' })
-              }
+              onChange={(id) =>
+                setFormData({ ...formData, client_id: id, target_client: '' })}
+              clients={clients}
               className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-            >
-              <option value="">All clients (manual run requires a client)</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+              id="schedule-client"
+              placeholder="All clients (manual run requires a client)"
+              allowEmpty
+            />
           </div>
 
           {error && (

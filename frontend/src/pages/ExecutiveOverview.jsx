@@ -16,6 +16,7 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { useClient } from '../context/ClientContext'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
 import { apiFetch } from '../utils/apiFetch'
 import { fmtUsd, postureGradeColor as gradeColor, postureScoreColor as scoreColor } from '../lib/riskFormat'
 import Button from '../components/ui/Button'
@@ -172,19 +173,14 @@ export default function ExecutiveOverview() {
               className="w-40 sm:w-52 bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
             />
           </div>
-          <select
+          <ScopedClientControl
             value={selectedClientId ?? ''}
-            onChange={(e) => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(id) => setSelectedClientId(id ? Number(id) : null)}
+            clients={clients}
             className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-cyan-500/40"
-            aria-label={t(`${NS}.select_client`)}
-          >
-            <option value="">{t(`${NS}.all_clients`)}</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name || c.domain || `#${c.id}`}
-              </option>
-            ))}
-          </select>
+            placeholder={t(`${NS}.all_clients`)}
+            allowEmpty
+          />
           <ShellScanActions onRefresh={() => { loadGlobal(); loadClient(selectedClientId) }} refreshLoading={global.loading} exportDisabled />
         </div>
       }

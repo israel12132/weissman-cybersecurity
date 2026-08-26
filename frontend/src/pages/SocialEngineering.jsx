@@ -14,6 +14,8 @@ import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll } from '../lib/useJobPoll';
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const TEMPLATES = [
   'Password Reset',
@@ -300,15 +302,12 @@ export default function SocialEngineering() {
               <p className="text-xs text-[var(--text-tertiary)]">{t('pages.socialEngineering.run_assessment_subtitle', { engine: ASSESSMENT_ENGINE })}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={scanClientId}
-                onChange={(e) => setScanClientId(e.target.value)}
-                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-xs text-white font-mono"
-              >
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <ScopedClientControl
+              value={scanClientId}
+              onChange={(id) => setScanClientId(id)}
+              clients={clients}
+              className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-xs text-white font-mono"
+            />
               <Button variant="unstyled"
                 type="button"
                 onClick={runAssessment}
@@ -431,15 +430,14 @@ export default function SocialEngineering() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[var(--text-tertiary)]">{t('common.client')}</label>
-                <select value={createClientId} onChange={(e) => setCreateClientId(e.target.value)} className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white">
-                  {clients.length === 0 ? (
-                    <option value="">{t('pages.socialEngineering.no_clients')}</option>
-                  ) : (
-                    clients.map((client) => (
-                      <option key={client.id} value={client.id}>{client.name || `${t('common.client')} ${client.id}`}</option>
-                    ))
-                  )}
-                </select>
+                <ScopedClientControl
+              value={createClientId}
+              onChange={(id) => setCreateClientId(id)}
+              clients={clients}
+              className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-2)] px-3 py-2 text-sm text-white"
+              placeholder={t('pages.socialEngineering.no_clients')}
+              allowEmpty
+            />
               </div>
               {createError && <p className="text-sm text-red-400">{createError}</p>}
             </div>

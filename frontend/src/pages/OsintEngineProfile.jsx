@@ -19,6 +19,8 @@ import EvidenceNotice from '../components/ui/EvidenceNotice'
 import EmptyState from '../components/ui/EmptyState'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const columnHelper = createColumnHelper()
 
@@ -412,16 +414,14 @@ export default function OsintEngineProfile() {
             <h3 className="text-xs font-mono text-[var(--text-tertiary)] uppercase tracking-widest">{t('pages.osintEngineProfile.run_heading')}</h3>
             <div>
               <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('pages.osintEngineProfile.client_label')}</label>
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
-              >
-                <option value="">{t('pages.osintEngineProfile.select_client')}</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <ScopedClientControl
+              value={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              clients={clients}
+              className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
+              placeholder={t('pages.osintEngineProfile.select_client')}
+              allowEmpty
+            />
               <div className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{t('pages.osintEngineProfile.active_client', { name: selectedClientName })}</div>
             </div>
             <div>

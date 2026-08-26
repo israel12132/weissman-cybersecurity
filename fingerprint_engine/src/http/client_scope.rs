@@ -45,7 +45,6 @@ async fn enforce(auth: Option<&AuthContext>, req: Request) -> Result<Request, Re
 
     let method = req.method().clone();
     let path = req.uri().path().to_string();
-    let query = req.uri().query().map(str::to_string);
 
     if !client_isolation::is_client_scoped(auth) {
         if client_isolation::is_client_create_path(&method, &path) {
@@ -85,13 +84,8 @@ async fn enforce(auth: Option<&AuthContext>, req: Request) -> Result<Request, Re
             return Err(r);
         }
     }
-    if let Some(q_cid) = client_isolation::extract_query_client_id(query.as_deref()) {
-        if let Err(r) = client_isolation::bind_requested_client(auth, Some(q_cid)) {
-            return Err(r);
-        }
-    }
-
-    let req = match inject_missing_query_client_id(auth, req) {
+    // Query `client_id` is never trusted: rewrite to the bound customer (insert or override).
+    let req = match force_query_client_id_uri(auth, req) {
         Ok(r) => r,
         Err(resp) => return Err(resp),
     };
@@ -102,14 +96,19 @@ async fn enforce(auth: Option<&AuthContext>, req: Request) -> Result<Request, Re
     Ok(req)
 }
 
-/// Portal GETs that omit `?client_id=` still auto-aim at the bound customer.
-fn inject_missing_query_client_id(auth: &AuthContext, req: Request) -> Result<Request, Response> {
+/// Scoped sessions always bind `?client_id=` to the assigned customer.
+/// A UI-supplied id is overwritten; a missing id is filled.
+fn force_query_client_id_uri(auth: &AuthContext, req: Request) -> Result<Request, Response> {
     let Some(cid) = auth.assigned_client_id else {
         return Ok(req);
     };
-    let Some(new_q) = client_isolation::inject_query_client_id(req.uri().query(), cid) else {
+    let Some(new_q) = client_isolation::force_query_client_id(req.uri().query(), cid) else {
         return Ok(req);
     };
+    let current = req.uri().query().unwrap_or("");
+    if current == new_q {
+        return Ok(req);
+    }
     let path = req.uri().path().to_string();
     let rebuilt = format!("{path}?{new_q}");
     let Ok(uri) = rebuilt.parse() else {

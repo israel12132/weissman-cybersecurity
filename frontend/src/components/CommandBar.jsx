@@ -4,10 +4,14 @@
  */
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { formatApiErrorFromBody, formatApiErrorResponse } from '../lib/apiError.js'
+import { formatApiErrorFromBody } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { launchEngineScan } from '../lib/launchEngineScan'
 import Button from './ui/Button'
+import { useClient } from '../context/ClientContext'
+import ScopedClientControl from './clients/ScopedClientControl'
+import { isClientUser } from '../lib/clientScope'
+import { useAuthOptional } from '../context/AuthContext'
 
 const ENGINE_IDS = [
   { id: 'supply_chain', color: 'emerald' },
@@ -36,32 +40,12 @@ function getFirstTarget(client) {
 
 export default function CommandBar({ onScanLaunched, onError }) {
   const { t } = useTranslation()
+  const auth = useAuthOptional()
+  const { clients, clientsError, selectedClientId, setSelectedClientId } = useClient()
   const [target, setTarget] = useState('')
-  const [clients, setClients] = useState([])
-  const [clientsError, setClientsError] = useState(null)
-  const [selectedClientId, setSelectedClientId] = useState('')
   const [loading, setLoading] = useState(null)
   const [lastResult, setLastResult] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const list = await apiFetch('/api/clients')
-        if (cancelled) return
-        setClients(Array.isArray(list) ? list : [])
-        setClientsError(Array.isArray(list) ? null : t('components.commandBar.clients_error'))
-      } catch (e) {
-        if (!cancelled) {
-          setClients([])
-          setClientsError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || t('components.commandBar.network_error')))
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [t])
+  const scoped = isClientUser(auth?.session)
 
   useEffect(() => {
     if (!selectedClientId) return
@@ -126,19 +110,13 @@ export default function CommandBar({ onScanLaunched, onError }) {
       )}
       <div className="soc-command-bar-inner">
         <label className="soc-command-bar-label">{t('components.commandBar.target_label')}</label>
-        <select
-          className="soc-command-bar-select"
+        <ScopedClientControl
           value={selectedClientId}
-          onChange={(e) => setSelectedClientId(e.target.value)}
-          aria-label={t('components.commandBar.client_aria')}
-        >
-          <option value="">{t('components.commandBar.select_client')}</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name || c.id} {getFirstTarget(c) ? `(${getFirstTarget(c)})` : ''}
-            </option>
-          ))}
-        </select>
+          onChange={setSelectedClientId}
+          clients={clients}
+          className="soc-command-bar-select"
+          placeholder={t('components.commandBar.select_client')}
+        />
         <input
           type="text"
           placeholder={t('components.commandBar.target_url_placeholder')}
@@ -147,6 +125,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
           className="soc-command-bar-input"
           aria-label={t('components.commandBar.target_placeholder')}
         />
+        {!scoped && (
         <Button variant="unstyled"
           type="button"
           disabled={loading != null}
@@ -156,6 +135,7 @@ export default function CommandBar({ onScanLaunched, onError }) {
         >
           {loading === 'run-all' ? '…' : t('components.commandBar.scan_all')}
         </Button>
+        )}
         <div className="soc-command-bar-engines">
           {ENGINE_IDS.map(({ id, color }) => {
             const label = t(`components.commandBar.engines.${id}.label`)

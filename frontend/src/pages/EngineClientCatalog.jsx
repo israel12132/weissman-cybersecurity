@@ -24,6 +24,8 @@ import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 // ─── Client Profiles ─────────────────────────────────────────────────────────
 // Each profile declares which engine *groups* are relevant for that client type.
@@ -645,16 +647,14 @@ export default function EngineClientCatalog() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-black/40 to-black/20">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
-          <select
-            value={selectedClientId ?? ''}
-            onChange={(e) => setSelectedClientId(e.target.value || null)}
-            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
-          >
-            <option value="">{t('engines.select_client')}</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <ScopedClientControl
+              value={selectedClientId ?? ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
+              className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
+              placeholder={t('engines.select_client')}
+              allowEmpty
+            />
           {!selectedClientId && (
             <span className="text-[10px] font-mono text-amber-400/70">
               ⚠ {t('engines.catalog_select_client_warn')}

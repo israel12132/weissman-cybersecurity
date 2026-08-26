@@ -265,7 +265,8 @@
     "ceo_vault": "CEO Vault",
     "supreme_nerve_center": "מרכז עצבים עליון",
     "system_core": "System Core",
-    "operations_view": "Operations"
+    "operations_view": "Operations",
+    "pdf_intelligence": "מודיעין PDF"
   },
   "ask_weissman": {
     "title": "שאל את Weissman",
@@ -1556,7 +1557,10 @@
       "field_created": "נוצר",
       "field_updated": "עודכן",
       "field_heartbeat": "Heartbeat",
-      "field_error": "שגיאה אחרונה"
+      "field_error": "שגיאה אחרונה",
+      "diagnostics_title": "אבחון תור (חי)",
+      "diagnostics_line": "עובדים {{workers}} · ממתינים {{pending}} · Redis {{redis}}",
+      "field_stuck": "סיבת תקיעה"
     },
     "billing": {
       "title": "חיוב ושימוש",
@@ -1807,6 +1811,21 @@
           "enable_failed": "הפעלת MFA נכשלה",
           "disable_failed": "השבתת MFA נכשלה"
         }
+      },
+      "ownership": {
+        "title": "איפה ההגדרות חיות",
+        "intro": "לכל בקרה יש דף בעלים אחד. מתגים כפולים הוסרו כדי ששינוי לא יתנגש בשקט.",
+        "this_page": "דף זה — מדיניות טננט",
+        "this_page_hint": "זהות ארגון, מדיניות סיסמה/סשן/MFA, timeout סריקה, שמירת נתונים, ביצועים, מסגרות ציות.",
+        "integrations": "מרכז אינטגרציות",
+        "integrations_hint": "SIEM, טיקטים, צ׳אט, מחברי SOAR (קנוני: /settings/integrations).",
+        "system_core": "ליבת מערכת",
+        "system_core_hint": "קריפטו PDF (RFC 3161), Ghost Network / התחמקות WAF, endpoint LLM סמנטי.",
+        "sso": "תצורת SSO",
+        "sso_hint": "IdP, OIDC ו-SAML — לא משוכפלים כאן.",
+        "integrations_canonical": "מחברי webhook, SIEM ודוא״ל לא נערכים כאן. השתמשו במרכז האינטגרציות (טננט) או בלשונית האינטגרציות של לקוח (סודות לפי לקוח).",
+        "open_integrations": "פתח מרכז אינטגרציות",
+        "open_client_integrations": "רשימת לקוחות → סודות לפי לקוח"
       }
     },
     "darkWebMonitor": {
@@ -3014,7 +3033,8 @@
       "evidence_notice": "אינטגרציות SIEM, ticketing ו-webhook מוגדרות ב-GET/PUT /api/integrations. בריאות delivery משקפת קריאה outbound אחרונה מוצלחת — credentials לא מוצגים ב-UI.",
       "delete_failed": "מחיקת האינטגרציה נכשלה",
       "delete_success": "האינטגרציה נמחקה",
-      "delete_title": "מחיקת אינטגרציה"
+      "delete_title": "מחיקת אינטגרציה",
+      "canonical_note": "נתיב קנוני: /settings/integrations (גם /integrations הוא אותו מרכז). מפתחות API לפי לקוח חיים בלשונית האינטגרציות של הלקוח — לא כאן."
     },
     "killChainOrchestrator": {
       "title": "מתזמן שרשרת הריג",
@@ -5672,6 +5692,37 @@
       "select_client_opt": "— בחר —",
       "target": "יעד",
       "target_required": "נדרש יעד"
+    },
+    "pdfCommandCenter": {
+      "title": "פיקוד מודיעין PDF",
+      "subtitle": "אוסף כל ארטיפקטי הדוחות החיים ומרכיב חבילת דירקטוריון/רגולטור. קורפוס ריק נכשל בגלוי — לעולם לא PDF מזויף.",
+      "badge": "קורפוס חי",
+      "evidence_notice": "קורפוס מ-GET /api/pdf-intelligence (report_runs + vulnerabilities + מיפויי compliance_engine). הרכבה ב-POST /api/pdf-intelligence/compose. scope ריק מחזיר כשל גלוי — Weissman לא ממציא ממצאים.",
+      "all_clients": "כל הלקוחות בטננט",
+      "search_placeholder": "חיפוש ארטיפקטים, נתיבים, סוגים…",
+      "load_failed": "טעינת צילום מודיעין PDF נכשלה",
+      "export_csv": "ייצוא CSV של הקורפוס",
+      "kpi_artifacts": "ארטיפקטים",
+      "kpi_findings": "ממצאים חיים",
+      "kpi_frameworks": "מסגרות ממופות",
+      "kpi_scope": "היקף",
+      "tenant_wide": "כל הטננט",
+      "empty_title": "אין ראיות חיות לאריזה",
+      "corpus_title": "קורפוס PDF חי",
+      "corpus_empty": "אין ארטיפקטים שתואמים לחיפוש.",
+      "no_path": "אין נתיב שמור",
+      "findings_n": "{{count}} ממצאים",
+      "editor_title": "עורך חבילה מקצועי",
+      "doc_title": "כותרת המסמך",
+      "doc_title_placeholder": "כותרת חבילת דירקטוריון / רגולטור",
+      "section_on": "כלול",
+      "section_off": "הושמט",
+      "compose": "הרכבת חבילת מודיעין",
+      "composing": "מרכיב…",
+      "compose_failed": "ההרכבה נכשלה",
+      "frameworks_title": "מיפויי בקרות חיים",
+      "frameworks_empty": "אין מיפויי ציות בטננט זה עדיין. זרע mappings וחזור.",
+      "controls_line": "{{mapped}} בקרות ממופות · {{violated}} מופרות כעת"
     }
   },
   "components": {
@@ -6897,7 +6948,8 @@
       "gadget_chains_label": "Safe Gadget Chains (JSON) — framework ID → payload בןign בלבד",
       "gadget_chains_hint": "למשל {\"CommonsCollections4\":\"<safe OOB DNS>\",\"Jackson\":\"<safe echo>\"}. ללא RCE.",
       "gadget_chains_placeholder": "{\"CommonsCollections4\":\"\",\"Jackson\":\"\"}",
-      "poe_footer": "בשימוש Exploit Synthesis ו-Memory Lab. מטריצת Verified Exploitability ב-PDF עם חותמת זמן."
+      "poe_footer": "בשימוש Exploit Synthesis ו-Memory Lab. מטריצת Verified Exploitability ב-PDF עם חותמת זמן.",
+      "ownership_banner": "ליבת המערכת אחראית על קריפטו, Ghost Network ו-LLM סמנטי. מדיניות טננט חיה בהגדרות מערכת; מחברים חיים באינטגרציות."
     },
     "ceo": {
       "integratedCommandDeck": {
@@ -7178,6 +7230,13 @@
       "retry_in": "נסה שוב בעוד",
       "min_abbr": "דק׳",
       "close": "סגור"
+    },
+    "scopedClient": {
+      "unbound": "אין לקוח משויך",
+      "locked_hint": "חשבון זה נעול ללקוח אחד. מנועים, דוחות ומשימות מקושרים אוטומטית — השרת מתעלם מכל client_id אחר.",
+      "bound_aria": "לקוח משויך: {{name}}",
+      "locked": "נעול",
+      "select": "בחר לקוח"
     }
   },
   "supremeNerveCenter": {

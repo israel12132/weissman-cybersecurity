@@ -466,6 +466,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/telemetry/stream", get(api_telemetry_stream))
         .route("/api/latency-probe", post(api_latency_probe))
         .route("/api/poe-scan/run", post(api_poe_scan_run))
+        .route("/api/jobs/diagnostics", get(api_async_jobs_diagnostics))
         .route("/api/jobs", get(api_async_jobs_list))
         .route("/api/jobs/:job_id", get(api_async_job_status))
         .route("/api/poe-scan/status/:job_id", get(api_poe_scan_status))
@@ -635,6 +636,8 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/soc/network-protocols", get(api_soc_network_protocols))
         .route("/api/reports/executive", get(api_reports_executive))
+        .route("/api/pdf-intelligence", get(api_pdf_intelligence))
+        .route("/api/pdf-intelligence/compose", post(api_pdf_intelligence_compose))
         .route(
             "/api/sovereign/phantom-trap",
             post(api_sovereign_phantom_trap),

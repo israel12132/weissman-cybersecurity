@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Settings, Database, Shield, Zap, Globe, Lock, AlertTriangle, Save, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import PageShell from './PageShell';
@@ -180,6 +181,29 @@ export default function SystemConfiguration() {
     >
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
+
+        <div className="rounded-2xl border border-[var(--border-default)] bg-white/[0.02] p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-white">{t(`${NS}.ownership.title`)}</h3>
+          <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.ownership.intro`)}</p>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+            <li className="rounded-lg border border-white/5 px-3 py-2">
+              <span className="text-[var(--text-primary)]">{t(`${NS}.ownership.this_page`)}</span>
+              <span className="block text-[var(--text-muted)]">{t(`${NS}.ownership.this_page_hint`)}</span>
+            </li>
+            <li className="rounded-lg border border-white/5 px-3 py-2">
+              <Link to="/settings/integrations" className="text-cyan-300 hover:underline">{t(`${NS}.ownership.integrations`)}</Link>
+              <span className="block text-[var(--text-muted)]">{t(`${NS}.ownership.integrations_hint`)}</span>
+            </li>
+            <li className="rounded-lg border border-white/5 px-3 py-2">
+              <Link to="/system-core" className="text-cyan-300 hover:underline">{t(`${NS}.ownership.system_core`)}</Link>
+              <span className="block text-[var(--text-muted)]">{t(`${NS}.ownership.system_core_hint`)}</span>
+            </li>
+            <li className="rounded-lg border border-white/5 px-3 py-2">
+              <Link to="/sso-config" className="text-cyan-300 hover:underline">{t(`${NS}.ownership.sso`)}</Link>
+              <span className="block text-[var(--text-muted)]">{t(`${NS}.ownership.sso_hint`)}</span>
+            </li>
+          </ul>
+        </div>
 
         {saveMessage && (
           <div
@@ -720,74 +744,27 @@ function ScanningSettings({ config, onChange }) {
   );
 }
 
-function IntegrationsSettings({ config, onChange }) {
+function IntegrationsSettings() {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-bold text-white mb-4">{t(`${NS}.sections.integrations.title`)}</h3>
-
-      <div className="space-y-4">
-        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.webhook`)}</h4>
-          <input
-            type="text"
-            aria-label={t(`${NS}.sections.integrations.webhook`)}
-            value={config.webhook_url || ''}
-            onChange={(e) => onChange('webhook_url', e.target.value)}
-            placeholder={t(`${NS}.placeholders.webhook_url`)}
-            className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-          />
-        </div>
-
-        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.siem`)}</h4>
-          <div className="space-y-3">
-            <select
-              aria-label={t(`${NS}.sections.integrations.siem`)}
-              value={config.siem_type || 'none'}
-              onChange={(e) => onChange('siem_type', e.target.value)}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-            >
-              {SIEM_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {t(`${NS}.${opt.labelKey}`)}
-                </option>
-              ))}
-            </select>
-            {config.siem_type && config.siem_type !== 'none' && (
-              <input
-                type="text"
-                aria-label={t(`${NS}.placeholders.siem_endpoint`)}
-                value={config.siem_endpoint || ''}
-                onChange={(e) => onChange('siem_endpoint', e.target.value)}
-                placeholder={t(`${NS}.placeholders.siem_endpoint`)}
-                className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="bg-[var(--row-hover-bg)] border border-[var(--border-default)] rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-white mb-3">{t(`${NS}.sections.integrations.email`)}</h4>
-          <div className="space-y-3">
-            <input
-              type="text"
-              aria-label={t(`${NS}.placeholders.smtp_server`)}
-              value={config.smtp_server || ''}
-              onChange={(e) => onChange('smtp_server', e.target.value)}
-              placeholder={t(`${NS}.placeholders.smtp_server`)}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-            />
-            <input
-              type="number"
-              aria-label={t(`${NS}.placeholders.smtp_port`)}
-              value={config.smtp_port || 587}
-              onChange={(e) => onChange('smtp_port', parseInt(e.target.value, 10))}
-              placeholder={t(`${NS}.placeholders.smtp_port`)}
-              className="w-full px-3 py-2 bg-[var(--bg-2)] border border-[var(--border-default)] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-            />
-          </div>
+      <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-5 space-y-3">
+        <p className="text-sm text-[var(--text-secondary)]">{t(`${NS}.ownership.integrations_canonical`)}</p>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/settings/integrations"
+            className="inline-flex items-center rounded-lg border border-cyan-400/40 px-3 py-1.5 text-xs font-mono text-cyan-200 hover:bg-cyan-500/10"
+          >
+            {t(`${NS}.ownership.open_integrations`)}
+          </Link>
+          <Link
+            to="/clients"
+            className="inline-flex items-center rounded-lg border border-[var(--border-default)] px-3 py-1.5 text-xs font-mono text-[var(--text-tertiary)] hover:text-white"
+          >
+            {t(`${NS}.ownership.open_client_integrations`)}
+          </Link>
         </div>
       </div>
     </div>

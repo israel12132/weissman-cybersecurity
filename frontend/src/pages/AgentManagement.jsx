@@ -16,6 +16,8 @@ import { apiUrl } from '../lib/apiBase'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import Button from '../components/ui/Button'
 import { useApiQuery } from '../hooks/useApiQuery'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const columnHelper = createColumnHelper()
 
@@ -282,16 +284,14 @@ export default function AgentManagement() {
           <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">{t('agents.issue_token')}</h2>
           {(actionErr || err) && <div className="text-[12px] font-mono text-rose-400">{actionErr || err}</div>}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_140px_auto] gap-3">
-            <select
+            <ScopedClientControl
               value={tokenClient}
-              onChange={(e) => setTokenClient(e.target.value)}
+              onChange={(id) => setTokenClient(id)}
+              clients={clients}
               className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm font-mono text-white"
-            >
-              <option value="">{t('agents.select_client')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} (#{c.id})</option>
-              ))}
-            </select>
+              placeholder={t('agents.select_client')}
+              allowEmpty
+            />
             <input
               type="number"
               min={5}

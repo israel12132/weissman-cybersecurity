@@ -440,7 +440,7 @@ pub async fn maybe_enqueue_credential_hunt(
         "target": t,
     });
     let id =
-        weissman_db::job_queue::enqueue(pool, tenant_id, "command_center_engine", payload, None)
+        crate::async_jobs::enqueue(pool, tenant_id, "command_center_engine", payload, None)
             .await?;
     info!(target: "sovereign_evolution", tenant_id, %id, "autonomous credential-hunt pivot enqueued");
     Ok(Some(id))
@@ -464,12 +464,12 @@ pub async fn maybe_enqueue_learning_on_failure(
         "target_seed": seed,
         "failure_context": failure_context,
     });
-    let id = weissman_db::job_queue::enqueue(
+    let id = crate::async_jobs::enqueue(
         pool,
         tenant_id,
         "sovereign_learning_feedback",
         payload,
-        Some("sovereign-learning-loop"),
+        Some("sovereign-learning-loop".into()),
     )
     .await?;
     info!(

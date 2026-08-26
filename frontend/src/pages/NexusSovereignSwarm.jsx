@@ -15,6 +15,8 @@ import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { promptDialog } from '../utils/confirmDialog'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ENGINE_ID = 'nexus_sovereign_swarm'
 
@@ -1700,16 +1702,14 @@ export default function NexusSovereignSwarm() {
               <Section title={t('nexusSwarm.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
-                  <select
-                    value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
-                  >
-                    <option value="">—</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name || c.id}</option>
-                    ))}
-                  </select>
+                  <ScopedClientControl
+              value={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              clients={clients}
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-400/40"
+              placeholder="—"
+              allowEmpty
+            />
                 </label>
                 <Txt label={t('common.target', 'Target')} value={target} onChange={setTarget} placeholder="https://target.example" />
               </Section>

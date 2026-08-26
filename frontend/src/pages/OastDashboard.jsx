@@ -10,6 +10,8 @@ import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const PROBE_IDS = ['log4shell', 'blind_ssrf', 'blind_xss', 'xxe_oob', 'cmd_dns', 'host_ssrf']
 
@@ -222,14 +224,14 @@ export default function OastDashboard() {
 
       <div className="flex items-center gap-2 mb-8">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.oastDashboard.client')}</span>
-        <select
-          value={selectedClientId ?? ''}
-          onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-        >
-          <option value="">{t('pages.oastDashboard.select_client')}</option>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ScopedClientControl
+              value={selectedClientId ?? ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
+              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
+              placeholder={t('pages.oastDashboard.select_client')}
+              allowEmpty
+            />
       </div>
 
       {toast && (

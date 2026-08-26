@@ -11,6 +11,8 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { ENGINES_BY_ID } from '../lib/enginesRegistry'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const ENGINE_ID = 'risk_superposition_collapse'
 
@@ -479,16 +481,14 @@ export default function RiskSuperpositionCollapse() {
             </label>
 
             <Field label={t('pages.superpositionCollapse.client')}>
-              <select
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
-              >
-                <option value="">{t('pages.superpositionCollapse.select_client')}</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name || c.id}</option>
-                ))}
-              </select>
+              <ScopedClientControl
+              value={clientId}
+              onChange={(id) => setClientId(id)}
+              clients={clients}
+              className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-strong)] px-3 py-2 text-sm text-white"
+              placeholder={t('pages.superpositionCollapse.select_client')}
+              allowEmpty
+            />
             </Field>
             <Field label={t('pages.superpositionCollapse.target')}>
               <input

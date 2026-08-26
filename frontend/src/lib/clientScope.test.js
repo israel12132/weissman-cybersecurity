@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import {
   assignedClientId,
+  allowedClientIds,
   isClientUser,
   isPlatformOwner,
   isStaffUser,
   canCreateClients,
   canDeleteClients,
   isPortalBlockedPath,
+  shouldHideClientPicker,
+  filterVisibleClients,
+  boundClientId,
 } from './clientScope.js'
 
 const owner = { ok: true, role: 'ceo', is_owner: true, can_create_clients: true, can_delete_clients: true }
@@ -52,12 +56,26 @@ describe('clientScope policy', () => {
     expect(isStaffUser(portal)).toBe(false)
   })
 
-  it('hides tenant-admin surfaces from portal sessions', () => {
+  it('hides portal blocked paths from portal sessions', () => {
     expect(isPortalBlockedPath('/admin')).toBe(true)
     expect(isPortalBlockedPath('/clients/new')).toBe(true)
     expect(isPortalBlockedPath('/billing')).toBe(true)
     expect(isPortalBlockedPath('/findings')).toBe(false)
     expect(isPortalBlockedPath('/clients')).toBe(false)
     expect(isPortalBlockedPath('/engines')).toBe(false)
+  })
+
+  it('never offers a client picker to a scoped session', () => {
+    expect(shouldHideClientPicker(portal, [{ id: 7 }, { id: 8 }])).toBe(true)
+    expect(shouldHideClientPicker(staff, [{ id: 1 }, { id: 2 }])).toBe(false)
+    expect(shouldHideClientPicker(staff, [{ id: 1 }])).toBe(true)
+    expect(boundClientId(portal, [{ id: 7 }, { id: 99 }])).toBe(7)
+    expect(filterVisibleClients(portal, [{ id: 7 }, { id: 99 }])).toEqual([{ id: 7 }])
+    expect(allowedClientIds(portal)).toEqual([7])
+    expect(allowedClientIds({ ...portal, allowed_client_ids: [3, 4] })).toEqual([3, 4])
+    expect(shouldHideClientPicker(staff, [])).toBe(false)
+    expect(shouldHideClientPicker(staff, [{ id: 1 }])).toBe(true)
+    expect(shouldHideClientPicker({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4], client_picker_hidden: false }, [{ id: 3 }, { id: 4 }])).toBe(false)
+    expect(filterVisibleClients({ ...portal, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }, { id: 9 }])).toEqual([{ id: 3 }, { id: 4 }])
   })
 })

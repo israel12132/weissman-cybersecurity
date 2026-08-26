@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router'
 import { Plug, Check, AlertTriangle, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -191,6 +192,12 @@ export default function IntegrationManager() {
       )}
     >
       <div className="space-y-6">
+        <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-4 py-3 text-[12px] text-cyan-100/90">
+          {t('pages.integrationManager.canonical_note')}{' '}
+          <Link to="/system-config" className="underline text-cyan-300">{t('nav.system_config')}</Link>
+          {' · '}
+          <Link to="/clients" className="underline text-cyan-300">{t('nav.clients')}</Link>
+        </div>
         {loadError && (
           <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-center justify-between gap-4">
             <span className="flex items-center gap-2">

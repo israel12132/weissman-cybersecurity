@@ -3,7 +3,7 @@ import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useAuthOptional } from './AuthContext'
-import { assignedClientId, isClientUser } from '../lib/clientScope'
+import { assignedClientId, boundClientId, filterVisibleClients, isClientUser, shouldHideClientPicker } from '../lib/clientScope'
 
 const defaultConfig = {
   enabled_engines: ['osint', 'asm', 'nexus_sovereign_swarm', 'bola_idor', 'llm_redteam', 'pki_tls', 'edr_evasion', 'saml_attack', 'zero_day_prediction'],
@@ -28,10 +28,10 @@ function parseConfigFromResponse(data) {
 export function ClientProvider({ children }) {
   const auth = useAuthOptional()
   const session = auth?.session
-  const lockedClientId = isClientUser(session) ? assignedClientId(session) : null
-  const clientScopeLocked = lockedClientId != null
+  const lockedClientId = assignedClientId(session)
+  const clientScopeLocked = isClientUser(session) || lockedClientId != null
 
-  const [clients, setClients] = useState([])
+  const [clientsRaw, setClients] = useState([])
   const [clientsError, setClientsError] = useState(null)
   const [selectedClientId, setSelectedClientIdState] = useState(lockedClientId)
   const [clientConfig, setClientConfigState] = useState(defaultConfig)
@@ -60,11 +60,18 @@ export function ClientProvider({ children }) {
     [clientScopeLocked, lockedClientId],
   )
 
+  const clients = useMemo(
+    () => filterVisibleClients(session, clientsRaw),
+    [session, clientsRaw],
+  )
+  const clientPickerHidden = shouldHideClientPicker(session, clients)
+
   useEffect(() => {
-    if (clientScopeLocked && lockedClientId != null) {
-      setSelectedClientIdState(lockedClientId)
+    const bound = boundClientId(session, clients, selectedClientId)
+    if (bound != null && String(bound) !== String(selectedClientId)) {
+      setSelectedClientIdState(bound)
     }
-  }, [clientScopeLocked, lockedClientId])
+  }, [session, clients, selectedClientId])
 
   const dismissConfigError = useCallback(() => setConfigError(null), [])
   const dismissClientsError = useCallback(() => setClientsError(null), [])
@@ -206,6 +213,7 @@ export function ClientProvider({ children }) {
       setSelectedClientId,
       selectedClient,
       clientScopeLocked,
+      clientPickerHidden,
       clientConfig,
       setClientConfig,
       patchConfig,
@@ -229,6 +237,7 @@ export function ClientProvider({ children }) {
       setSelectedClientId,
       selectedClient,
       clientScopeLocked,
+      clientPickerHidden,
       clientConfig,
       setClientConfig,
       patchConfig,

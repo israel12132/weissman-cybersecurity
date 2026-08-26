@@ -69,6 +69,7 @@ export default function JobsDashboard() {
   const [search, setSearch] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [diagnostics, setDiagnostics] = useState(null)
   const hasLoadedRef = useRef(false)
 
   const loadJobs = useCallback(async () => {
@@ -91,6 +92,12 @@ export default function JobsDashboard() {
       setError('')
       setLastUpdated(new Date())
       hasLoadedRef.current = true
+      try {
+        const diag = await apiFetch('/api/jobs/diagnostics')
+        setDiagnostics(diag)
+      } catch {
+        setDiagnostics(null)
+      }
     } catch (err) {
       if (hasLoadedRef.current) return
       if (err?.response) {
@@ -276,6 +283,33 @@ export default function JobsDashboard() {
           {t('pages.jobsDashboard.evidence_notice')}
         </div>
 
+        {diagnostics && (
+          <div
+            className={`rounded-xl border px-4 py-3 text-[12px] space-y-2 ${
+              Array.isArray(diagnostics.blockers) && diagnostics.blockers.length
+                ? 'border-orange-500/35 bg-orange-500/10 text-orange-100'
+                : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-100/90'
+            }`}
+            role="status"
+          >
+            <div className="font-mono text-[10px] uppercase tracking-widest opacity-80">
+              {t('pages.jobsDashboard.diagnostics_title')}
+            </div>
+            <p>
+              {t('pages.jobsDashboard.diagnostics_line', {
+                workers: diagnostics.live_workers ?? 0,
+                pending: diagnostics.pending ?? 0,
+                redis: diagnostics.redis_ok ? t('common.online') : t('common.offline'),
+              })}
+            </p>
+            {(diagnostics.blockers || []).map((b) => (
+              <p key={b.code} className="text-orange-200">
+                {b.detail}
+              </p>
+            ))}
+          </div>
+        )}
+
         {lastUpdated && (
           <p className="text-[11px] font-mono text-[var(--text-muted)]">
             {t('pages.jobsDashboard.last_updated', {
@@ -436,6 +470,11 @@ export default function JobsDashboard() {
                           <div>{t('pages.jobsDashboard.field_heartbeat')}: {fmtTime(selectedJob.heartbeat_at)}</div>
                         )}
                       </div>
+                      {selectedJob.stuck_reason && (
+                        <div role="status" className="rounded-lg border border-orange-500/30 bg-orange-950/20 p-3 text-[11px] font-mono text-orange-200">
+                          {t('pages.jobsDashboard.field_stuck')}: {selectedJob.stuck_reason}
+                        </div>
+                      )}
                       {selectedJob.last_error && (
                         <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3">
                           <div className="text-[10px] font-mono text-rose-300/70 uppercase mb-1">

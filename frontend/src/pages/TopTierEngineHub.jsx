@@ -11,6 +11,8 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 function badgeClass(kind) {
   if (kind === 'command_center_engine') return 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
@@ -226,16 +228,14 @@ export default function TopTierEngineHub() {
             {t('pages.topTierEngineHub.reality_body')}
           </p>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-            <select
+            <ScopedClientControl
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
+              onChange={(id) => setClientId(id)}
+              clients={clients}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">{t('pages.topTierEngineHub.client_optional')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              placeholder={t('pages.topTierEngineHub.client_optional')}
+              allowEmpty
+            />
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}

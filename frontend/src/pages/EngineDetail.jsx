@@ -27,6 +27,8 @@ import { useRegisterHubClient } from '../context/EngineHubContext'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
 import Button from '../components/ui/Button'
+import ScopedClientControl from '../components/clients/ScopedClientControl'
+
 
 const columnHelper = createColumnHelper()
 
@@ -819,16 +821,16 @@ export default function EngineDetail() {
           {/* Client */}
           <div>
             <label htmlFor="engine-client" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
-            <select
-              id="engine-client"
+            <ScopedClientControl
               value={selectedClientId ?? ''}
-              onChange={(e) => setSelectedClientId(e.target.value || null)}
-              disabled={running}
+              onChange={(id) => setSelectedClientId(id || null)}
+              clients={clients}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-            >
-              <option value="">{t('engines.select_client')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+              id="engine-client"
+              disabled={running}
+              placeholder={t('engines.select_client')}
+              allowEmpty
+            />
           </div>
 
           {/* Target */}

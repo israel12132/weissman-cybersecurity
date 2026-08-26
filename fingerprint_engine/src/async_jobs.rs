@@ -95,38 +95,38 @@ pub async fn enqueue(
                 }
             }
             Ok(None) => {
-                if weissman_core::tls_policy::is_production_environment() {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
-                    )
-                    .bind(id)
-                    .bind("job bus dispatch produced no signed envelope in production")
-                    .execute(pool)
-                    .await;
-                    return Err(sqlx::Error::Protocol(
-                        "job bus dispatch produced no signed envelope".into(),
-                    ));
-                }
+                let reason = "job bus dispatch produced no signed envelope";
+                let _ = sqlx::query(
+                    "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2, \
+                     run_after = NULL, updated_at = now() WHERE id = $1",
+                )
+                .bind(id)
+                .bind(reason)
+                .execute(pool)
+                .await;
+                tracing::error!(
+                    target: "async_jobs",
+                    job_id = %id, tenant_id, kind,
+                    "zero-trust dispatch produced no envelope — failing the job (never leave a held row to expire envelope-less)"
+                );
+                return Err(sqlx::Error::Protocol(reason.into()));
             }
             Err(e) => {
-                if weissman_core::tls_policy::is_production_environment() {
-                    let _ = sqlx::query(
-                        "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2 WHERE id = $1",
-                    )
-                    .bind(id)
-                    .bind(format!("job bus dispatch failed: {e}"))
-                    .execute(pool)
-                    .await;
-                    return Err(sqlx::Error::Protocol(format!(
-                        "job bus dispatch failed: {e}"
-                    )));
-                }
-                tracing::warn!(
+                let reason = format!("job bus dispatch failed: {e}");
+                let _ = sqlx::query(
+                    "UPDATE weissman_async_jobs SET status = 'failed', last_error = $2, \
+                     run_after = NULL, updated_at = now() WHERE id = $1",
+                )
+                .bind(id)
+                .bind(&reason)
+                .execute(pool)
+                .await;
+                tracing::error!(
                     target: "async_jobs",
-                    job_id = %id,
-                    error = %e,
-                    "job bus dispatch event failed (row enqueued)"
+                    job_id = %id, tenant_id, kind, error = %e,
+                    "job bus dispatch event failed — failing the job instead of leaving it stuck pending"
                 );
+                return Err(sqlx::Error::Protocol(reason));
             }
         }
     } else if weissman_core::tls_policy::is_production_environment()

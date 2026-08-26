@@ -344,6 +344,12 @@ export default function SystemCore() {
   return (
     <AppShell title={t('components.systemCore.title')}>
       <LabForensicEvidence />
+      <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3 text-[12px] text-cyan-100/90">
+        {t('components.systemCore.ownership_banner')}{' '}
+        <Link to="/system-config" className="underline text-cyan-300">{t('nav.system_config')}</Link>
+        {' · '}
+        <Link to="/settings/integrations" className="underline text-cyan-300">{t('nav.integrations')}</Link>
+      </div>
 
       {error && (
         <div className="mb-4 p-3 rounded bg-rose-500/20 border border-rose-400/50 text-rose-300 text-sm">
