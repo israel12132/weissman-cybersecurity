@@ -27,7 +27,7 @@ import {
   UserPlus,
   KeyRound,
 } from 'lucide-react'
-import { PRIMARY_NAV } from '../../lib/appNav'
+import { PRIMARY_NAV, canAccessNavItem } from '../../lib/appNav'
 import { useClient } from '../../context/ClientContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
@@ -145,9 +145,9 @@ function NavSection({ id, title, children, open, onToggle }) {
 
 export default function GlobalNexus({ ceoIntegrated = false }) {
   const { t } = useTranslation()
-  const { isCeo } = useAuth()
+  const { isCeo, session, canCreateClients, canDeleteClients, isClientUser } = useAuth()
   const { toast } = useToast()
-  const { clients, clientsError, dismissClientsError, selectedClientId, setSelectedClientId, refreshClients } = useClient()
+  const { clients, clientsError, dismissClientsError, selectedClientId, setSelectedClientId, refreshClients, clientScopeLocked } = useClient()
   const [stats, setStats] = useState({ total_vulnerabilities: 0, security_score: 0, active_scans: 0 })
   const [deletingId, setDeletingId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -182,6 +182,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       '/ask': { icon: MessageSquare, id: 'nav-ask-weissman' },
     }
     return PRIMARY_NAV.map((item) => {
+      if (!canAccessNavItem(item, session)) return null
       const m = meta[item.to]
       if (!m) return null
       return {
@@ -194,7 +195,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
         betaLabel: t('nav.beta'),
       }
     }).filter(Boolean)
-  }, [t, engineCountLabel])
+  }, [t, engineCountLabel, session])
 
   const navSections = useMemo(() => {
     const sections = [
@@ -348,7 +349,9 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
             open={sectionOpen[section.id] ?? section.defaultOpen ?? false}
             onToggle={toggleSection}
           >
-            {section.items.map((item) => (
+            {section.items
+              .filter((item) => canAccessNavItem(item, session))
+              .map((item) => (
               <NavLink key={item.id} {...item} />
             ))}
           </NavSection>
@@ -358,7 +361,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       {/* Client roster */}
       <div className="shrink-0 border-t border-[var(--border-subtle)] max-h-[28vh] lg:max-h-[22vh] flex flex-col min-h-0">
         <div className="px-4 py-2 text-[9px] font-mono uppercase tracking-[0.22em] text-[var(--text-muted)]">
-          {t('nav.client_roster')}
+          {isClientUser ? t('nav.portal_workspace') : t('nav.client_roster')}
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           {clientsError && (
@@ -393,7 +396,11 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                 <li key={id} className="flex items-center group">
                   <Button variant="unstyled"
                     type="button"
-                    onClick={() => setSelectedClientId(id)}
+                    onClick={() => {
+                      if (clientScopeLocked) return
+                      setSelectedClientId(id)
+                    }}
+                    disabled={clientScopeLocked && !selected}
                     className={`relative flex-1 min-w-0 text-start ps-4 pe-2 py-2 text-[12px] font-medium transition-all border-s-2 ${
                       selected
                         ? 'bg-cyan-500/[0.07] border-cyan-400 text-[var(--text-primary)] shadow-[inset_0_0_16px_rgba(34,211,238,0.05)]'
@@ -401,7 +408,13 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                     }`}
                   >
                     <span className="block truncate">{c.name || `Client ${id}`}</span>
+                    {clientScopeLocked && selected && (
+                      <span className="block text-[9px] font-mono uppercase tracking-widest text-cyan-400/70 mt-0.5">
+                        {t('nav.portal_locked')}
+                      </span>
+                    )}
                   </Button>
+                  {canDeleteClients && (
                   <Button variant="unstyled"
                     type="button"
                     onClick={async (e) => {
@@ -432,6 +445,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                     )}
                   </Button>
+                  )}
                 </li>
               )
             })}
@@ -442,6 +456,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
       {/* New client — routes to the dedicated onboarding surface (full parameter set:
           scope, engine modules, AWS/GCP/Azure/OT integrations, RoE, stealth, eBPF).
           The inline quick-add form was removed to avoid a weaker duplicate path. */}
+      {canCreateClients && (
       <div className="border-t border-[var(--border-subtle)] p-3 shrink-0 bg-[var(--bg-1)]/90">
         <Link
           id="nav-new-client"
@@ -453,6 +468,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           {t('nav.add_client')}
         </Link>
       </div>
+      )}
 
       {/* Footer: profile + language */}
       <div className="shrink-0 border-t border-[var(--border-subtle)] px-3 py-3 bg-[var(--bg-1)]/95 space-y-2.5">

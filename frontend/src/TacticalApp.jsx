@@ -8,7 +8,7 @@ import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/cockpit/ProtectedRoute'
 import CeoProtectedRoute from './components/ceo/CeoProtectedRoute'
-import RequireRole from './components/auth/RequireRole'
+import RequireRole, { RequireStaff } from './components/auth/RequireRole'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import { ToastProvider } from './components/ui/Toaster'
 import RateLimitProvider from './components/RateLimitProvider'
@@ -251,7 +251,7 @@ export default function TacticalApp() {
           <Route path="council-queue" element={<CouncilHitlQueue />} />
           <Route path="self-improve" element={<SelfImprovementConsole />} />
           <Route path="roe-approvals" element={<RoeApprovals />} />
-          <Route path="sso-config" element={<SsoDashboard />} />
+          <Route path="sso-config" element={<RequireStaff><SsoDashboard /></RequireStaff>} />
           <Route path="digital-twin" element={<DigitalTwinSimulator />} />
           <Route path="digital-twin/:clientId" element={<DigitalTwinSimulator />} />
           <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
@@ -285,7 +285,7 @@ export default function TacticalApp() {
           <Route path="engine-reliability" element={<EngineReliability />} />
           <Route path="admin" element={<RequireRole min="ceo"><AdminManagement /></RequireRole>} />
           <Route path="clients" element={<Clients />} />
-          <Route path="clients/new" element={<ClientNew />} />
+          <Route path="clients/new" element={<RequireRole min="ceo"><ClientNew /></RequireRole>} />
           <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="clients/:id/integrations" element={<ClientIntegrations />} />
           <Route path="clients/:id/engagements" element={<ClientEngagements />} />
@@ -299,7 +299,7 @@ export default function TacticalApp() {
           <Route path="social-engineering" element={<SocialEngineering />} />
           <Route path="remediation" element={<RemediationHub />} />
           <Route path="remediation-analytics" element={<RemediationAnalytics />} />
-          <Route path="engine-management" element={<EngineManagementConsole />} />
+          <Route path="engine-management" element={<RequireStaff><EngineManagementConsole /></RequireStaff>} />
           <Route path="system-config" element={<RequireRole min="admin"><SystemConfiguration /></RequireRole>} />
           <Route path="metrics" element={<MetricsDashboard />} />
           <Route path="ceo-vault" element={<RequireRole min="ceo"><CeoVault /></RequireRole>} />
@@ -318,8 +318,8 @@ export default function TacticalApp() {
           <Route path="ai-analysis" element={<AIAnalysisEngine />} />
           <Route path="exploit-lab" element={<ExploitResearchLab />} />
           <Route path="agents" element={<AgentManagement />} />
-          <Route path="audit-log" element={<AuditLog />} />
-          <Route path="billing" element={<Billing />} />
+          <Route path="audit-log" element={<RequireStaff><AuditLog /></RequireStaff>} />
+          <Route path="billing" element={<RequireStaff><Billing /></RequireStaff>} />
           <Route path="playbooks" element={<PlaybookBuilder />} />
           <Route path="ask" element={<AskWeissman />} />
           <Route path="ceo" element={<CeoProtectedRoute><CeoCommandCenter /></CeoProtectedRoute>} />

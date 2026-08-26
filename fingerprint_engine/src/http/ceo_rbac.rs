@@ -56,6 +56,7 @@ mod tests {
             jti: None,
             bind_ip: None,
             bind_tls_fp: None,
+            assigned_client_id: None,
         }
     }
 

@@ -50,4 +50,12 @@ describe('roles ladder', () => {
     expect(sessionHasRole({ role: 'CEO' }, 'ceo')).toBe(true)
     expect(sessionHasRole({ role: 'Admin' }, 'ADMIN')).toBe(true)
   })
+
+  it('client portal ranks with operator for in-scope engine writes', () => {
+    expect(effectiveRole({ ok: true, role: 'client' })).toBe('client')
+    expect(ROLE_RANK.client).toBe(ROLE_RANK.operator)
+    expect(sessionHasRole({ role: 'client' }, 'operator')).toBe(true)
+    expect(sessionHasRole({ role: 'client' }, 'admin')).toBe(false)
+    expect(sessionHasRole({ role: 'client' }, 'ceo')).toBe(false)
+  })
 })

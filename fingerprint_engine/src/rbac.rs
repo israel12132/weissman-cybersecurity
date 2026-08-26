@@ -19,6 +19,8 @@ pub mod roles {
     pub const OPERATOR: &str = "operator";
     pub const ADMIN: &str = "admin";
     pub const CEO: &str = "ceo";
+    /// Customer-portal identity. Isolated to `assigned_client_id`.
+    pub const CLIENT: &str = "client";
 }
 
 #[must_use]
@@ -26,7 +28,9 @@ pub fn role_rank(role: &str) -> u8 {
     match role.trim().to_ascii_lowercase().as_str() {
         roles::CEO => 5,
         roles::ADMIN => 4,
-        roles::OPERATOR => 3,
+        // Portal users operate engines on their own customer (operator-equivalent
+        // writes) but client-lifecycle and staff-only routes are gated separately.
+        roles::OPERATOR | roles::CLIENT => 3,
         roles::ANALYST => 2,
         roles::VIEWER => 1,
         _ => 0,
@@ -145,11 +149,16 @@ pub fn required_min_role(method: &Method, path: &str) -> Option<&'static str> {
         return Some(roles::ADMIN);
     }
     if path.starts_with("/api/clients") {
-        return Some(if *method == Method::DELETE {
-            roles::ADMIN
-        } else {
-            roles::OPERATOR
-        });
+        // Create (POST /api/clients) and delete are owner-only (CEO/superadmin).
+        // Nested mutations (scan, config, update) stay operator+ so staff and
+        // in-scope portal users can still run engines on a customer they can see.
+        if *method == Method::DELETE {
+            return Some(roles::CEO);
+        }
+        if *method == Method::POST && (path == "/api/clients" || path == "/api/clients/") {
+            return Some(roles::CEO);
+        }
+        return Some(roles::OPERATOR);
     }
     // Tuning outbound traffic-shaping (stealth pacing) is an operational lever:
     // operator+ only, never a read-only viewer or triage analyst.
@@ -236,6 +245,7 @@ mod tests {
             jti: None,
             bind_ip: None,
             bind_tls_fp: None,
+            assigned_client_id: None,
         }
     }
 
@@ -250,6 +260,8 @@ mod tests {
         assert!(require_role(&ctx("viewer", false), "operator").is_err());
         assert!(require_operator(&ctx("operator", false)).is_ok());
         assert!(require_operator(&ctx("analyst", false)).is_err());
+        assert!(require_operator(&ctx("client", false)).is_ok());
+        assert_eq!(role_rank("client"), role_rank("operator"));
     }
 
     #[test]
@@ -288,14 +300,18 @@ mod tests {
             required_min_role(&Method::POST, "/api/admin/users"),
             Some(roles::ADMIN)
         );
-        // Client create/update = operator+, delete = admin+ (matches README RBAC).
+        // Client create = owner (ceo+); nested client mutations = operator+; delete = owner.
         assert_eq!(
             required_min_role(&Method::POST, "/api/clients"),
-            Some(roles::OPERATOR)
+            Some(roles::CEO)
         );
         assert_eq!(
             required_min_role(&Method::DELETE, "/api/clients/5"),
-            Some(roles::ADMIN)
+            Some(roles::CEO)
+        );
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/clients/5/scan/run-all"),
+            Some(roles::OPERATOR)
         );
         // Stealth traffic-shaping tuning is operator+.
         assert_eq!(

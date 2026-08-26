@@ -15,14 +15,16 @@ pub enum SessionCookieError {
     InactiveUser,
 }
 
-/// Role + superadmin for JWT (from `auth.v_user_lookup`). `None` when user is missing or deactivated.
+/// Role + superadmin + bound customer for JWT (from `auth.v_user_lookup`).
+/// `None` when user is missing or deactivated.
 pub async fn user_rbac_snapshot(
     pool: &PgPool,
     user_id: i64,
-) -> Result<Option<(String, bool)>, sqlx::Error> {
+) -> Result<Option<(String, bool, Option<i64>)>, sqlx::Error> {
     let row = sqlx::query(
         r#"SELECT COALESCE(NULLIF(trim(role), ''), 'viewer') AS role,
-                  COALESCE(is_superadmin, false) AS is_superadmin
+                  COALESCE(is_superadmin, false) AS is_superadmin,
+                  assigned_client_id
            FROM auth.v_user_lookup
            WHERE id = $1 AND is_active = true"#,
     )
@@ -34,6 +36,10 @@ pub async fn user_rbac_snapshot(
             r.try_get::<String, _>("role")
                 .unwrap_or_else(|_| "viewer".into()),
             r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
+            r.try_get::<Option<i64>, _>("assigned_client_id")
+                .ok()
+                .flatten()
+                .filter(|id| *id > 0),
         )
     }))
 }
@@ -45,7 +51,7 @@ pub async fn build_session_cookie_headers(
     tenant_id: i64,
     binding: &crate::auth_jwt::StreamBinding,
 ) -> Result<(String, String, String), SessionCookieError> {
-    let (role, is_superadmin) = user_rbac_snapshot(pool, user_id)
+    let (role, is_superadmin, assigned_client_id) = user_rbac_snapshot(pool, user_id)
         .await?
         .ok_or(SessionCookieError::InactiveUser)?;
     let minted = crate::auth_jwt::create_access_token(
@@ -54,6 +60,7 @@ pub async fn build_session_cookie_headers(
         role.as_str(),
         is_superadmin,
         binding,
+        assigned_client_id,
     )?;
     let access_line = crate::auth_jwt::session_cookie_value(&minted.token);
     let refresh = issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti)).await?;
@@ -65,7 +72,9 @@ pub async fn revalidate_auth_context(
     pool: &PgPool,
     auth: &crate::auth_jwt::AuthContext,
 ) -> Result<Option<crate::auth_jwt::AuthContext>, sqlx::Error> {
-    let Some((role, is_superadmin)) = user_rbac_snapshot(pool, auth.user_id).await? else {
+    let Some((role, is_superadmin, assigned_client_id)) =
+        user_rbac_snapshot(pool, auth.user_id).await?
+    else {
         return Ok(None);
     };
     // Re-derive the tenant from the DB as well: revalidation is the one place authority is
@@ -101,6 +110,7 @@ pub async fn revalidate_auth_context(
         jti: auth.jti.clone(),
         bind_ip: auth.bind_ip.clone(),
         bind_tls_fp: auth.bind_tls_fp.clone(),
+        assigned_client_id,
     }))
 }
 

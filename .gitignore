@@ -11,6 +11,8 @@ reports/
 *.db
 logs/
 .e2e-stack/
+.weissman-run/
+.env.local
 evidence-pack/
 frontend/playwright-report/
 frontend/test-results/

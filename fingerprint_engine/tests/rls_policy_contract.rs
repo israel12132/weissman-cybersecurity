@@ -136,9 +136,9 @@ fn ndr_itdr_ingest_migration_in_sync_both_dirs() {
 #[test]
 fn platform_keyring_migration_revokes_ro_and_auth() {
     let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("migrations/20260826120000_platform_keyring.sql");
+        .join("migrations/20260826130100_platform_keyring.sql");
     let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../crates/weissman-db/migrations/20260826120000_platform_keyring.sql");
+        .join("../crates/weissman-db/migrations/20260826130100_platform_keyring.sql");
     let a = std::fs::read_to_string(&fe).unwrap_or_default();
     let b = std::fs::read_to_string(&db).unwrap_or_default();
     assert!(!a.is_empty(), "platform_keyring migration present");

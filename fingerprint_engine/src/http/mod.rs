@@ -20,6 +20,7 @@ pub mod sse_bridge;
 pub mod sse_context;
 pub mod tenant_scan_limit;
 pub mod tenant_stream;
+pub mod client_scope;
 
 pub use client_ip::extract_client_ip;
 pub use serve::{

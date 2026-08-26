@@ -23,6 +23,9 @@ pub struct CreateUserBody {
     pub role: String,
     #[serde(default)]
     pub is_superadmin: bool,
+    /// Required when `role=client`. Forbidden for owner/staff roles.
+    #[serde(default)]
+    pub assigned_client_id: Option<i64>,
 }
 
 fn default_role() -> String {
@@ -33,6 +36,7 @@ fn default_role() -> String {
 pub struct UpdateUserBody {
     pub role: Option<String>,
     pub is_superadmin: Option<bool>,
+    pub assigned_client_id: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -42,6 +46,7 @@ struct UserInfo {
     role: String,
     is_superadmin: bool,
     is_active: bool,
+    assigned_client_id: Option<i64>,
     created_at: Option<String>,
 }
 
@@ -162,6 +167,7 @@ pub async fn api_admin_users_list(
         SELECT id, email, COALESCE(role, 'viewer') AS role,
                COALESCE(is_superadmin, false) AS is_superadmin,
                COALESCE(is_active, true) AS is_active,
+               assigned_client_id,
                created_at
         FROM users
         WHERE tenant_id = $1
@@ -186,6 +192,11 @@ pub async fn api_admin_users_list(
                         .unwrap_or_else(|_| "viewer".to_string()),
                     is_superadmin: r.try_get::<bool, _>("is_superadmin").unwrap_or(false),
                     is_active: r.try_get::<bool, _>("is_active").unwrap_or(true),
+                    assigned_client_id: r
+                        .try_get::<Option<i64>, _>("assigned_client_id")
+                        .ok()
+                        .flatten()
+                        .filter(|id| *id > 0),
                     created_at: r
                         .try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
                         .ok()
@@ -256,13 +267,50 @@ pub async fn api_admin_users_create(
     };
 
     let role = body.role.trim().to_lowercase();
-    let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
+    let valid_roles = [
+        "viewer",
+        "analyst",
+        "operator",
+        "admin",
+        "ceo",
+        crate::client_isolation::CLIENT_ROLE,
+    ];
     // Reject unknown roles instead of silently downgrading to "viewer": a botched or typo'd
     // role otherwise creates a user the operator did not intend.
     if !valid_roles.contains(&role.as_str()) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo"})),
+            Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo|client"})),
+        )
+            .into_response();
+    }
+
+    let assigned_client_id = body.assigned_client_id.filter(|id| *id > 0);
+    if crate::client_isolation::is_client_role(&role) {
+        if assigned_client_id.is_none() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "detail": "assigned_client_id is required for customer-portal (client) users"
+                })),
+            )
+                .into_response();
+        }
+        if body.is_superadmin {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "A customer-portal user cannot be superadmin"})),
+            )
+                .into_response();
+        }
+    } else if assigned_client_id.is_some() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok": false,
+                "detail": "assigned_client_id is only valid for role=client"
+            })),
         )
             .into_response();
     }
@@ -288,8 +336,8 @@ pub async fn api_admin_users_create(
         }
     }
 
-    // Only superadmin can create superadmin users
-    let is_superadmin = if auth.is_superadmin {
+    // Only superadmin can create superadmin users. Portal users are never superadmin.
+    let is_superadmin = if auth.is_superadmin && !crate::client_isolation::is_client_role(&role) {
         body.is_superadmin
     } else {
         false
@@ -306,6 +354,27 @@ pub async fn api_admin_users_create(
                 .into_response();
         }
     };
+
+    if crate::client_isolation::is_client_role(&role) {
+        let cid = assigned_client_id.unwrap();
+        let exists_client: Option<i64> = sqlx::query_scalar(
+            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+        )
+        .bind(cid)
+        .bind(auth.tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        if exists_client.is_none() {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "assigned_client_id does not exist in this workspace"})),
+            )
+                .into_response();
+        }
+    }
 
     let exists: Option<i64> = sqlx::query_scalar(
         "SELECT id FROM users WHERE tenant_id = $1 AND lower(trim(email)) = $2 LIMIT 1",
@@ -333,8 +402,8 @@ pub async fn api_admin_users_create(
     }
 
     let query = r#"
-        INSERT INTO users (tenant_id, email, password_hash, role, is_superadmin, is_active)
-        VALUES ($1, $2, $3, $4, $5, true)
+        INSERT INTO users (tenant_id, email, password_hash, role, is_superadmin, is_active, assigned_client_id)
+        VALUES ($1, $2, $3, $4, $5, true, $6)
         RETURNING id
     "#;
 
@@ -344,6 +413,7 @@ pub async fn api_admin_users_create(
         .bind(&hash)
         .bind(&role)
         .bind(is_superadmin)
+        .bind(assigned_client_id)
         .fetch_one(&mut *tx)
         .await
     {
@@ -358,6 +428,7 @@ pub async fn api_admin_users_create(
                     "email": email,
                     "role": role,
                     "is_superadmin": is_superadmin,
+                    "assigned_client_id": assigned_client_id,
                 })),
             )
                 .into_response()
@@ -397,8 +468,8 @@ pub async fn api_admin_users_update(
         }
     };
 
-    let target: Option<(String, bool)> = sqlx::query_as(
-        "SELECT role, is_superadmin FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+    let target: Option<(String, bool, Option<i64>)> = sqlx::query_as(
+        "SELECT role, is_superadmin, assigned_client_id FROM users WHERE id = $1 AND tenant_id = $2 LIMIT 1",
     )
     .bind(user_id)
     .bind(auth.tenant_id)
@@ -407,7 +478,7 @@ pub async fn api_admin_users_update(
     .ok()
     .flatten();
 
-    let (target_role, target_is_superadmin) = match target {
+    let (target_role, target_is_superadmin, target_assigned_client) = match target {
         Some(t) => t,
         None => {
             let _ = tx.rollback().await;
@@ -443,14 +514,21 @@ pub async fn api_admin_users_update(
     let valid_role: Option<String> = match body.role.as_ref() {
         Some(r) => {
             let role = r.trim().to_lowercase();
-            let valid_roles = ["viewer", "analyst", "operator", "admin", "ceo"];
+            let valid_roles = [
+                "viewer",
+                "analyst",
+                "operator",
+                "admin",
+                "ceo",
+                crate::client_isolation::CLIENT_ROLE,
+            ];
             if valid_roles.contains(&role.as_str()) {
                 Some(role)
             } else {
                 let _ = tx.rollback().await;
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo"})),
+                    Json(json!({"ok": false, "detail": "role must be one of viewer|analyst|operator|admin|ceo|client"})),
                 )
                     .into_response();
             }
@@ -486,8 +564,9 @@ pub async fn api_admin_users_update(
     // clause (which is what made the denial branch unreachable).
     let has_role_change = valid_role.is_some();
     let has_superadmin_change = body.is_superadmin.is_some();
+    let has_client_change = body.assigned_client_id.is_some();
 
-    if !has_role_change && !has_superadmin_change {
+    if !has_role_change && !has_superadmin_change && !has_client_change {
         return (
             StatusCode::OK,
             Json(json!({"ok": true, "detail": "No changes"})),
@@ -503,61 +582,64 @@ pub async fn api_admin_users_update(
         }
     }
 
-    // Execute update with proper parameter binding
-    let update_sql = if let Some(ref role) = valid_role {
-        if let Some(is_sa) = body.is_superadmin {
-            if auth.is_superadmin {
-                sqlx::query(
-                    "UPDATE users SET role = $1, is_superadmin = $2 WHERE id = $3 AND tenant_id = $4",
-                )
-                .bind(role)
-                .bind(is_sa)
-                .bind(user_id)
-                .bind(auth.tenant_id)
-                .execute(&mut *tx)
-                .await
-            } else {
-                sqlx::query("UPDATE users SET role = $1 WHERE id = $2 AND tenant_id = $3")
-                    .bind(role)
-                    .bind(user_id)
-                    .bind(auth.tenant_id)
-                    .execute(&mut *tx)
-                    .await
-            }
-        } else {
-            sqlx::query("UPDATE users SET role = $1 WHERE id = $2 AND tenant_id = $3")
-                .bind(role)
-                .bind(user_id)
-                .bind(auth.tenant_id)
-                .execute(&mut *tx)
-                .await
-        }
-    } else if let Some(is_sa) = body.is_superadmin {
-        if auth.is_superadmin {
-            sqlx::query("UPDATE users SET is_superadmin = $1 WHERE id = $2 AND tenant_id = $3")
-                .bind(is_sa)
-                .bind(user_id)
-                .bind(auth.tenant_id)
-                .execute(&mut *tx)
-                .await
-        } else {
+    let new_role = valid_role
+        .as_deref()
+        .unwrap_or(target_role.as_str())
+        .to_string();
+    let new_sa = if crate::client_isolation::is_client_role(&new_role) {
+        false
+    } else {
+        body.is_superadmin.unwrap_or(target_is_superadmin)
+    };
+    let new_cid: Option<i64> = if crate::client_isolation::is_client_role(&new_role) {
+        let cid = body
+            .assigned_client_id
+            .filter(|id| *id > 0)
+            .or(target_assigned_client.filter(|id| *id > 0));
+        let Some(cid) = cid else {
+            let _ = tx.rollback().await;
             return (
-                StatusCode::FORBIDDEN,
-                Json(
-                    json!({"ok": false, "detail": "Only superadmin can modify superadmin status"}),
-                ),
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "detail": "assigned_client_id is required for customer-portal (client) users"
+                })),
+            )
+                .into_response();
+        };
+        let exists_client: Option<i64> = sqlx::query_scalar(
+            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
+        )
+        .bind(cid)
+        .bind(auth.tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten();
+        if exists_client.is_none() {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": "assigned_client_id does not exist in this workspace"})),
             )
                 .into_response();
         }
+        Some(cid)
     } else {
-        return (
-            StatusCode::OK,
-            Json(json!({"ok": true, "detail": "No changes"})),
-        )
-            .into_response();
+        None
     };
 
-    match update_sql {
+    match sqlx::query(
+        "UPDATE users SET role = $1, is_superadmin = $2, assigned_client_id = $3 WHERE id = $4 AND tenant_id = $5",
+    )
+    .bind(&new_role)
+    .bind(new_sa)
+    .bind(new_cid)
+    .bind(user_id)
+    .bind(auth.tenant_id)
+    .execute(&mut *tx)
+    .await
+    {
         Ok(_) => {
             if let Err(e) = tx.commit().await {
                 tracing::error!(target: "admin", error = %e, "Failed to commit user update");
@@ -572,6 +654,7 @@ pub async fn api_admin_users_update(
         }
         Err(e) => {
             tracing::error!(target: "admin", error = %e, "Failed to update user");
+            let _ = tx.rollback().await;
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"ok": false, "detail": "Failed to update user"})),
@@ -726,6 +809,7 @@ mod tests {
             role: "analyst".to_string(),
             is_superadmin: false,
             is_active: true,
+            assigned_client_id: None,
             created_at: None,
         };
         let v = serde_json::to_value(&u).unwrap();
@@ -734,6 +818,7 @@ mod tests {
         assert_eq!(v["role"], json!("analyst"));
         assert_eq!(v["is_superadmin"], json!(false));
         assert_eq!(v["is_active"], json!(true));
+        assert_eq!(v["assigned_client_id"], json!(null));
         assert_eq!(v["created_at"], serde_json::Value::Null);
     }
 }

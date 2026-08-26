@@ -73,3 +73,24 @@ export default function RequireRole({ min = 'admin', children }) {
 
   return children
 }
+
+/** Owner + staff only. Customer-portal sessions stay inside their bound workspace. */
+export function RequireStaff({ children }) {
+  const { isAuthenticated, isLoading, isClientUser } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#030712]">
+        <div className="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+      </div>
+    )
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+  if (isClientUser) {
+    return <Navigate to="/operations" replace />
+  }
+  return children
+}
