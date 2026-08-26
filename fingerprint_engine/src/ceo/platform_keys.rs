@@ -97,6 +97,15 @@ pub static CATALOG: &[KeySpec] = &[
         None,
     ),
     spec(
+        "WEISSMAN_JWT_SECRET_PREVIOUS",
+        &[],
+        "core",
+        true,
+        true,
+        "optional",
+        None,
+    ),
+    spec(
         "WEISSMAN_JOB_ORCHESTRATOR_SECRET",
         &[],
         "core",
@@ -236,13 +245,16 @@ pub static CATALOG: &[KeySpec] = &[
     ),
     spec(
         "SHODAN_API_KEY",
-        &[],
+        &["WEISSMAN_SHODAN_API_KEY"],
         "intel",
         true,
         false,
         "optional",
         None,
     ),
+    spec("OTX_API_KEY", &[], "intel", true, false, "recommended", None),
+    spec("HIBP_API_KEY", &[], "intel", true, false, "optional", None),
+    spec("INTELX_API_KEY", &[], "intel", true, false, "optional", None),
     spec("CENSYS_API_ID", &[], "intel", true, false, "optional", None),
     spec(
         "CENSYS_API_SECRET",
@@ -359,6 +371,51 @@ pub static CATALOG: &[KeySpec] = &[
         &["ALERT_EMAIL_TO"],
         "notify",
         false,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "TELEGRAM_BOT_TOKEN",
+        &[],
+        "notify",
+        true,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "TELEGRAM_CHAT_ID",
+        &[],
+        "notify",
+        false,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "PAGERDUTY_ROUTING_KEY",
+        &[],
+        "notify",
+        true,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "OPSGENIE_API_KEY",
+        &[],
+        "notify",
+        true,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "WEISSMAN_PAGER_WEBHOOK_URL",
+        &[],
+        "notify",
+        true,
         false,
         "optional",
         None,
@@ -572,6 +629,60 @@ pub static CATALOG: &[KeySpec] = &[
         true,
         true,
         "recommended",
+        None,
+    ),
+    spec(
+        "WEISSMAN_ROE_CONTRACT_SECRET",
+        &[],
+        "crypto",
+        true,
+        true,
+        "recommended",
+        None,
+    ),
+    spec(
+        "WEISSMAN_FORENSIC_SEAL_SECRET",
+        &[],
+        "crypto",
+        true,
+        true,
+        "recommended",
+        None,
+    ),
+    spec(
+        "WEISSMAN_COUNCIL_DEBATE_SIGNING_SECRET",
+        &[],
+        "crypto",
+        true,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "WEISSMAN_UI_PROVENANCE_SECRET",
+        &[],
+        "crypto",
+        true,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "WEISSMAN_SOVEREIGN_SWARM_HMAC_SECRET",
+        &[],
+        "crypto",
+        true,
+        false,
+        "optional",
+        None,
+    ),
+    spec(
+        "WEISSMAN_CF_API_TOKEN",
+        &[],
+        "ops",
+        true,
+        false,
+        "optional",
         None,
     ),
     spec(
@@ -1390,5 +1501,29 @@ mod tests {
         assert!(required >= 8);
         let summary = summary_json(&keys);
         assert!(summary["total"].as_u64().unwrap() >= 40);
+    }
+
+    #[test]
+    fn catalog_covers_live_intel_notify_and_crypto_keys() {
+        let names: HashSet<&str> = CATALOG.iter().map(|s| s.env_name).collect();
+        for n in [
+            "OTX_API_KEY",
+            "HIBP_API_KEY",
+            "INTELX_API_KEY",
+            "TELEGRAM_BOT_TOKEN",
+            "TELEGRAM_CHAT_ID",
+            "PAGERDUTY_ROUTING_KEY",
+            "OPSGENIE_API_KEY",
+            "WEISSMAN_JWT_SECRET_PREVIOUS",
+            "WEISSMAN_ROE_CONTRACT_SECRET",
+            "WEISSMAN_FORENSIC_SEAL_SECRET",
+            "WEISSMAN_CF_API_TOKEN",
+        ] {
+            assert!(names.contains(n), "catalog missing {n}");
+        }
+        assert_eq!(
+            canonical_name("WEISSMAN_SHODAN_API_KEY"),
+            "SHODAN_API_KEY"
+        );
     }
 }

@@ -52,6 +52,7 @@ describe('canAccessNavItem (RBAC nav gating)', () => {
     expect(canAccessNavItem({ to: '/ceo-vault' }, { role: 'ceo' })).toBe(true)
     expect(canAccessNavItem({ to: '/ceo-keys' }, { role: 'ceo' })).toBe(true)
     expect(canAccessNavItem({ to: '/ceo-keys' }, { role: 'admin' })).toBe(false)
+    expect(canAccessNavItem({ to: '/ceo-keys' }, { role: 'operator' })).toBe(false)
     expect(canAccessNavItem({ to: '/ceo-keys' }, { is_superadmin: true })).toBe(true)
     expect(canAccessNavItem({ to: '/ceo' }, { is_superadmin: true })).toBe(true)
   })

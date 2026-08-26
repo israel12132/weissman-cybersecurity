@@ -40,3 +40,34 @@ pub async fn ceo_rbac_middleware(request: Request<Body>, next: Next) -> Response
     }
     next.run(request).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth_jwt::AuthContext;
+
+    fn ctx(role: &str, superadmin: bool) -> AuthContext {
+        AuthContext {
+            user_id: 1,
+            tenant_id: 1,
+            role: role.to_string(),
+            is_superadmin: superadmin,
+            agent_id: None,
+            jti: None,
+            bind_ip: None,
+            bind_tls_fp: None,
+        }
+    }
+
+    #[test]
+    fn classified_key_api_is_owner_or_superadmin_only() {
+        assert!(auth_is_ceo(&ctx("ceo", false)));
+        assert!(auth_is_ceo(&ctx("CEO", false)));
+        assert!(auth_is_ceo(&ctx("admin", true)));
+        assert!(auth_is_ceo(&ctx("viewer", true)));
+        assert!(!auth_is_ceo(&ctx("admin", false)));
+        assert!(!auth_is_ceo(&ctx("operator", false)));
+        assert!(!auth_is_ceo(&ctx("analyst", false)));
+        assert!(!auth_is_ceo(&ctx("viewer", false)));
+    }
+}

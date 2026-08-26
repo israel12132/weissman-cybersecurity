@@ -128,4 +128,41 @@ describe('CeoKeysCockpit', () => {
     expect(screen.getByDisplayValue('WEISSMAN_LLM_API_KEY')).toBeInTheDocument()
     expect(screen.getByText('pages.ceoKeysCockpit.add_title')).toBeInTheDocument()
   })
+
+  it('saves a missing key through PUT /api/ceo/platform-keys', async () => {
+    put.mockResolvedValue({
+      summary: { total: 2, armed: 2, missing: 0, required_missing: 0, custom: 0 },
+      keys: payload.keys.map((k) =>
+        k.env_name === 'WEISSMAN_LLM_API_KEY'
+          ? { ...k, configured: true, sources: ['keyring'], last4: 'live', value_len: 7, in_keyring: true }
+          : k,
+      ),
+    })
+    render(
+      <MemoryRouter>
+        <CeoKeysCockpit />
+      </MemoryRouter>,
+    )
+    fireEvent.click((await screen.findAllByText('pages.ceoKeysCockpit.add'))[0])
+    fireEvent.change(screen.getByPlaceholderText('pages.ceoKeysCockpit.value_placeholder'), {
+      target: { value: 'sk-live' },
+    })
+    fireEvent.click(screen.getByText('pages.ceoKeysCockpit.save'))
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith('/api/ceo/platform-keys', {
+        env_name: 'WEISSMAN_LLM_API_KEY',
+        value: 'sk-live',
+      }),
+    )
+  })
+
+  it('opens an empty dialog so any custom env name can be added', async () => {
+    render(
+      <MemoryRouter>
+        <CeoKeysCockpit />
+      </MemoryRouter>,
+    )
+    fireEvent.click(await screen.findByText('pages.ceoKeysCockpit.add_any'))
+    expect(screen.getByPlaceholderText('pages.ceoKeysCockpit.env_placeholder')).toHaveValue('')
+  })
 })
