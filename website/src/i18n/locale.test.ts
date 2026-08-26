@@ -6,6 +6,7 @@ import { listMessageKeys, translate } from './t'
 import { products } from '../content/products'
 import { resources } from '../content/resources'
 import { metrics } from '../content/metrics'
+import { company, CUSTOMER_LOGIN_HREF } from '../content/site'
 
 describe('locale routing', () => {
   it('prefixes Hebrew marketing paths and keeps English unprefixed', () => {
@@ -75,5 +76,19 @@ describe('content integrity', () => {
     expect(metrics.productionEngines.value).toBe(563)
     expect(metrics.liveProbes.value).toBe(303)
     expect(metrics.slaUptime.value).toBe('99.95%')
+  })
+
+  it('routes commercial contact to the sales mailbox and live Command Center login', () => {
+    expect(company.emails.sales).toBe('weissmancybersecurity@gmail.com')
+    expect(CUSTOMER_LOGIN_HREF).toBe('/command-center/login')
+    expect(localizeHref(CUSTOMER_LOGIN_HREF, 'he')).toBe('/command-center/login')
+  })
+
+  it('does not advertise packaged website prices', () => {
+    expect(en.pricingPage).not.toHaveProperty('tiers')
+    expect(he.pricingPage).not.toHaveProperty('tiers')
+    expect(JSON.stringify(en) + JSON.stringify(he)).not.toMatch(/\$499/)
+    expect(metrics).not.toHaveProperty('cloudPriceUsd')
+    expect(metrics).not.toHaveProperty('trialDays')
   })
 })

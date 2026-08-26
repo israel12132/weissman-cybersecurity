@@ -18,4 +18,4 @@ Legal article bodies are verbatim extracts in `src/content/legal/`.
 
 ## Demo form
 
-`POST /api/public/demo-request` — see `src/lib/submitDemoRequest.ts`. If SMTP is not configured the API returns **503** and the UI shows `sales@weissman.io`. The form never claims success without a 2xx.
+`POST /api/public/demo-request` — see `src/lib/submitDemoRequest.ts`. If SMTP is not configured the API returns **503** and the UI shows `weissmancybersecurity@gmail.com`. The form never claims success without a 2xx. Services are scoped by conversation, not packaged website tiers. Customer login is `/command-center/login`.

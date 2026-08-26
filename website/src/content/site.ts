@@ -4,7 +4,7 @@ export const company = {
   domain: 'weissman.io',
   origin: 'https://weissman.io',
   emails: {
-    sales: 'sales@weissman.io',
+    sales: 'weissmancybersecurity@gmail.com',
     security: 'security@weissman.io',
     dpo: 'dpo@weissman.io',
     legal: 'legal@weissman.io',
@@ -32,4 +32,4 @@ export const capabilityHrefs: Record<(typeof capabilityIds)[number], string> = {
 }
 export const solutionIds = ['ciso', 'soc', 'research', 'infra', 'sensitive'] as const
 export const proofIds = ['integrity', 'isolation', 'autonomy', 'ourselves'] as const
-export const pricingTierIds = ['selfHosted', 'cloud', 'enterprise'] as const
+export const CUSTOMER_LOGIN_HREF = '/command-center/login'

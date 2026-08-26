@@ -21,17 +21,36 @@ function collectHtml(dir: string, acc: Record<string, string> = {}): Record<stri
   return acc
 }
 
+const SYSTEM_PROXY = {
+  '/api': {
+    target: 'http://127.0.0.1:8000',
+    changeOrigin: true,
+    cookieDomainRewrite: '',
+    cookiePathRewrite: '/',
+  },
+  '/ws': { target: 'ws://127.0.0.1:8000', ws: true, changeOrigin: true },
+  '/command-center': {
+    target: 'http://127.0.0.1:5173',
+    changeOrigin: true,
+    ws: true,
+  },
+} as const
+
 export default defineConfig({
   plugins: [react()],
   appType: 'mpa',
   resolve: {
     alias: { '@': resolve(root, 'src') },
   },
+  server: {
+    proxy: SYSTEM_PROXY,
+  },
   preview: {
     host: true,
     port: 4173,
     strictPort: true,
     allowedHosts: true,
+    proxy: SYSTEM_PROXY,
   },
   build: {
     outDir: 'dist',

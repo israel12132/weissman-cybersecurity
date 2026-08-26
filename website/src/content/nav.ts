@@ -115,7 +115,6 @@ export const footerNav = {
     { id: 'about', href: '/about/' },
     { id: 'contact', href: '/contact/' },
     { id: 'signIn', href: '/command-center/login' },
-    { id: 'signup', href: '/signup.html' },
     { id: 'status', href: '/status' },
   ],
   resources: [

@@ -1,3 +1,4 @@
+import { CustomerLoginLink } from '../components/CustomerLoginLink'
 import { DemoForm } from '../components/DemoForm'
 import { DemoJourney } from '../components/DemoJourney'
 import { Layout } from '../components/Layout'
@@ -37,6 +38,12 @@ export function ContactPage() {
               </a>
             </li>
           </ul>
+          <div className="mt-8">
+            <p className="text-sm text-dim">{t('signupPage.haveAccount')}</p>
+            <div className="mt-3">
+              <CustomerLoginLink />
+            </div>
+          </div>
         </div>
         <div className="lg:col-span-7">
           <p className="mb-4 text-sm font-medium text-ink">{t('demoJourney.formTitle')}</p>

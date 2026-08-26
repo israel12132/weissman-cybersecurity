@@ -8,6 +8,8 @@
  * 503 means SMTP is not configured on this deployment — show the mailto fallback.
  */
 
+import { company } from '../content/site'
+
 export type DemoPayload = {
   name: string
   email: string
@@ -20,9 +22,12 @@ export type DemoResult =
   | { ok: true; detail: string }
   | { ok: false; status: number; detail: string; mailto?: string }
 
-const MAILTO = 'mailto:sales@weissman.io?subject=Weissman%20Demo%20Request'
+function salesMailto() {
+  return `mailto:${company.emails.sales}?subject=Weissman%20Demo%20Request`
+}
 
 export async function submitDemoRequest(payload: DemoPayload): Promise<DemoResult> {
+  const mailto = salesMailto()
   try {
     const res = await fetch('/api/public/demo-request', {
       method: 'POST',
@@ -31,7 +36,7 @@ export async function submitDemoRequest(payload: DemoPayload): Promise<DemoResul
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
     if (res.ok) {
-      return { ok: true, detail: data.detail || 'Request received. We will reply from sales@weissman.io.' }
+      return { ok: true, detail: data.detail || `Request received. We will reply from ${company.emails.sales}.` }
     }
     if (res.status === 503) {
       return {
@@ -39,22 +44,22 @@ export async function submitDemoRequest(payload: DemoPayload): Promise<DemoResul
         status: 503,
         detail:
           data.detail ||
-          'This deployment is not configured to accept demo requests over email. Use sales@weissman.io instead.',
-        mailto: MAILTO,
+          `This deployment is not configured to accept demo requests over email. Use ${company.emails.sales} instead.`,
+        mailto,
       }
     }
     return {
       ok: false,
       status: res.status,
-      detail: data.detail || 'The request could not be sent. Try again or email sales@weissman.io.',
-      mailto: MAILTO,
+      detail: data.detail || `The request could not be sent. Try again or email ${company.emails.sales}.`,
+      mailto,
     }
   } catch {
     return {
       ok: false,
       status: 0,
-      detail: 'Network error. The form was not submitted. Email sales@weissman.io or retry.',
-      mailto: MAILTO,
+      detail: `Network error. The form was not submitted. Email ${company.emails.sales} or retry.`,
+      mailto,
     }
   }
 }

@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { company } from '../content/site'
-import { metrics } from '../content/metrics'
 import { localeMeta } from '../i18n/locale'
 import { useI18n } from '../i18n'
 
@@ -34,8 +33,8 @@ export function JsonLd() {
       inLanguage: localeMeta[locale].htmlLang,
       offers: {
         '@type': 'Offer',
-        price: String(metrics.cloudPriceUsd.value),
-        priceCurrency: 'USD',
+        url: `${localeHome(company.origin, locale)}contact/`,
+        description: t('pricingPage.lead'),
       },
       description: t('brand.jsonLdDescription'),
     }

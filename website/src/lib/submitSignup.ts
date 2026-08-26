@@ -1,3 +1,5 @@
+import { company } from '../content/site'
+
 export type SignupPayload = {
   workspace_name: string
   email: string
@@ -24,7 +26,7 @@ export async function submitSignup(payload: SignupPayload): Promise<SignupResult
       return {
         ok: false,
         status: 503,
-        detail: data.detail || 'Self-serve signup is not enabled on this deployment. Contact sales@weissman.io.',
+        detail: data.detail || `Self-serve signup is not enabled on this deployment. Contact ${company.emails.sales}.`,
       }
     }
     return {

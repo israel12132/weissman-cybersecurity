@@ -5,6 +5,7 @@ import { mainNav, type NavItem } from '../content/nav'
 import { track } from '../lib/analytics'
 import { A } from './A'
 import { ButtonLink } from './Button'
+import { CustomerLoginLink } from './CustomerLoginLink'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { Logo } from './Logo'
 
@@ -67,9 +68,7 @@ export function MegaNav() {
 
         <div className="hidden items-center gap-2 lg:flex">
           <LanguageSwitcher variant="bar" />
-          <ButtonLink variant="ghost" href="/command-center/login">
-            {t('cta.signIn')}
-          </ButtonLink>
+          <CustomerLoginLink />
           <ButtonLink href="/contact/" analyticsEvent="demo_cta_click" analyticsPayload={{ placement: 'nav' }}>
             {t('cta.bookDemo')}
           </ButtonLink>
@@ -152,9 +151,7 @@ export function MegaNav() {
                 <ButtonLink href="/contact/" analyticsEvent="demo_cta_click" analyticsPayload={{ placement: 'mobile_nav' }}>
                   {t('cta.bookDemo')}
                 </ButtonLink>
-                <ButtonLink variant="ghost" href="/command-center/login">
-                  {t('cta.signIn')}
-                </ButtonLink>
+                <CustomerLoginLink />
               </div>
             </div>
           </div>,

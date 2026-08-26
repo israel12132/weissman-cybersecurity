@@ -111,23 +111,22 @@ export const pages = [
     file: 'contact/index.html',
     path: '/contact/',
     title: 'Book a Demo — Weissman Cybersecurity',
-    description:
-      'Request a Weissman demo or speak with the team about Cloud SaaS, self-hosted, or enterprise deployment.',
+    description: 'Request a Weissman demo or speak with the team about deploying the platform in your environment.',
   },
   {
     id: 'pricing',
     file: 'pricing.html',
     path: '/pricing.html',
-    title: 'Pricing — Weissman Cybersecurity',
+    title: 'Services — Weissman Cybersecurity',
     description:
-      'Self-hosted is free. Cloud SaaS from $499 per month with a 14-day trial. Enterprise for MSSPs and regulated environments.',
+      'Weissman is not sold as packaged website tiers. Contact us to scope the platform for your organisation. Existing customers sign in to Command Center.',
   },
   {
     id: 'signup',
     file: 'signup.html',
     path: '/signup.html',
-    title: 'Create your workspace — Weissman Cybersecurity',
-    description: 'Create a Weissman workspace. 14-day trial. No credit card required. Self-serve signup is deployment-gated.',
+    title: 'Request access — Weissman Cybersecurity',
+    description: 'Contact Weissman to request platform access. Existing customers sign in to Command Center.',
   },
   {
     id: 'terms',

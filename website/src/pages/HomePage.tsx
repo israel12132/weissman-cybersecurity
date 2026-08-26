@@ -1,4 +1,5 @@
 import { ButtonLink } from '../components/Button'
+import { CustomerLoginLink } from '../components/CustomerLoginLink'
 import { DemoForm } from '../components/DemoForm'
 import { DemoJourney } from '../components/DemoJourney'
 import { FeaturedRail } from '../components/FeaturedRail'
@@ -188,9 +189,10 @@ export function HomePage() {
               <DemoJourney />
             </div>
             <div className="mt-8">
-              <ButtonLink variant="ghost" href="/signup.html" analyticsEvent="platform_cta_click" analyticsPayload={{ placement: 'final_trial' }}>
-                {t('cta.startTrial')}
-              </ButtonLink>
+              <p className="text-sm text-dim">{t('signupPage.haveAccount')}</p>
+              <div className="mt-3">
+                <CustomerLoginLink />
+              </div>
             </div>
           </div>
           <div className="lg:col-span-7">

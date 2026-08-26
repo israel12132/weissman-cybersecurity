@@ -66,14 +66,4 @@ export const metrics = {
     label: 'Cloud availability objective',
     verify: 'SLA_AND_STATUS.md',
   },
-  trialDays: {
-    value: 14,
-    label: 'Cloud trial (days)',
-    verify: 'deploy/public/signup.html + terms.html',
-  },
-  cloudPriceUsd: {
-    value: 499,
-    label: 'Cloud SaaS / month',
-    verify: 'Existing public pricing page',
-  },
 } as const

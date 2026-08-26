@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { ORIGIN, pages } from './pages.mjs'
 import { en } from '../src/i18n/messages/en.ts'
 import { he } from '../src/i18n/messages/he.ts'
+import { company } from '../src/content/site.ts'
 import { localeMeta, localizeHref, type Locale } from '../src/i18n/locale.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -54,7 +55,7 @@ function jsonLd(locale: Locale) {
     '@type': 'Organization',
     name: 'Weissman Cybersecurity Ltd.',
     url: home,
-    email: 'sales@weissman.io',
+    email: company.emails.sales,
     inLanguage: meta.htmlLang,
     address: {
       '@type': 'PostalAddress',
@@ -70,7 +71,11 @@ function jsonLd(locale: Locale) {
     operatingSystem: 'Web, Linux, macOS, Windows',
     url: home,
     inLanguage: meta.htmlLang,
-    offers: { '@type': 'Offer', price: '499', priceCurrency: 'USD' },
+    offers: {
+      '@type': 'Offer',
+      url: `${home}contact/`,
+      description: catalogs[locale].pricingPage.lead,
+    },
     description: catalogs[locale].brand.jsonLdDescription,
   }
   return `<script id="weissman-ld-0" type="application/ld+json">${JSON.stringify(org)}</script>
