@@ -166,11 +166,10 @@ export function AttackTheater() {
             </g>
           </svg>
         </div>
-
-        <p className="pointer-events-none absolute bottom-3 start-3 end-3 font-mono text-[10px] leading-relaxed text-dim sm:text-[11px]">
-          {noise ? t('hero.captionNoise') : path ? t('hero.captionPath') : t('hero.captionPriority')}
-        </p>
       </div>
+      <p className="border-t border-[var(--line)] px-3 py-2 font-mono text-[10px] leading-relaxed text-dim sm:text-[11px]">
+        {noise ? t('hero.captionNoise') : path ? t('hero.captionPath') : t('hero.captionPriority')}
+      </p>
     </div>
   )
 }
