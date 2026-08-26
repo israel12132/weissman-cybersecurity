@@ -12,7 +12,7 @@ import en from '../i18n/locales/en.json'
 import he from '../i18n/locales/he.json'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const changelog = readFileSync(resolve(here, '../../CHANGELOG.md'), 'utf8')
+const changelog = readFileSync(resolve(here, '../../../CHANGELOG.md'), 'utf8')
 const loginSrc = readFileSync(resolve(here, '../components/cockpit/Login.jsx'), 'utf8')
 const routeChunksSrc = readFileSync(resolve(here, '../routing/routeChunks.js'), 'utf8')
 
