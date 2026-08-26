@@ -541,6 +541,10 @@ async fn api_clients_list(
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0)
         .max(0);
+    let scoped = match crate::client_isolation::bind_requested_client(&auth, None) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -559,10 +563,13 @@ async fn api_clients_list(
             COALESCE(aws_cross_account_role_arn,'') AS aws_cross_account_role_arn,
             COALESCE(aws_external_id,'') AS aws_external_id,
             COALESCE(gcp_project_id,'') AS gcp_project_id
-           FROM clients ORDER BY id LIMIT $1 OFFSET $2"#,
+           FROM clients
+           WHERE ($3::bigint IS NULL OR id = $3)
+           ORDER BY id LIMIT $1 OFFSET $2"#,
     )
         .bind(limit)
         .bind(offset)
+        .bind(scoped)
         .fetch_all(&mut *tx)
         .await
         .unwrap_or_default();
@@ -607,6 +614,9 @@ async fn api_clients_scan_run_all(
     trace_ext: Option<Extension<crate::request_trace::TraceId>>,
 ) -> Response {
     if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
         return r;
     }
 
@@ -772,6 +782,9 @@ async fn api_clients_get(
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
 ) -> Response {
+    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
+        return r;
+    }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -945,6 +958,9 @@ async fn api_clients_update(
     body: axum::extract::Json<ClientBody>,
 ) -> Response {
     if let Err(r) = crate::rbac::require_role(&auth, crate::rbac::roles::OPERATOR) {
+        return r;
+    }
+    if let Err(r) = crate::client_isolation::bind_requested_client(&auth, Some(id)) {
         return r;
     }
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
@@ -1526,8 +1542,12 @@ async fn api_scan(
         )
             .into_response();
     }
-    let engine = body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
-    let target = body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
+    let mut scan_body = body.0;
+    if let Err(r) = crate::client_isolation::force_json_client_id(&auth, &mut scan_body) {
+        return r;
+    }
+    let engine = scan_body.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
+    let target = scan_body.get("target").and_then(Value::as_str).unwrap_or("").to_string();
     let ip = extract_client_ip(&headers, addr);
     if let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await {
         let u = audit_log::user_email_for_id(&state.auth_pool, auth.user_id).await;
@@ -1535,7 +1555,7 @@ async fn api_scan(
         let _ = tx.commit().await;
     }
     let (job_kind, mut payload) =
-        match crate::scan_routing::route_scan_job(&body.0, auth.tenant_id, state.app_pool.as_ref())
+        match crate::scan_routing::route_scan_job(&scan_body, auth.tenant_id, state.app_pool.as_ref())
             .await
         {
             Ok(x) => x,
@@ -1559,7 +1579,7 @@ async fn api_scan(
                 return resp;
             }
         };
-    if let Some(t) = body
+    if let Some(t) = scan_body
         .get("target")
         .and_then(Value::as_str)
         .map(|s| s.trim())

@@ -1583,8 +1583,11 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     let auth_pool_boot = auth_pool.clone();
     let app_pool_boot = app_pool.clone();
     tokio::spawn(async move {
-        crate::auth_bootstrap::sync_admin_credentials(app_pool_boot.as_ref()).await;
-        let _ = auth_pool_boot; // keep auth pool warm for future bootstrap hooks
+        crate::auth_bootstrap::sync_admin_credentials(
+            auth_pool_boot.as_ref(),
+            app_pool_boot.as_ref(),
+        )
+        .await;
     });
     // ── Singleton workers — leader replica only ────────────────────────────────
     if is_leader {

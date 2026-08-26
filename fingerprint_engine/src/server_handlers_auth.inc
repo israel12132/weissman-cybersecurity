@@ -184,11 +184,12 @@ async fn api_auth_me(Extension(auth): Extension<AuthContext>) -> Response {
         "is_ceo": crate::http::ceo_rbac::auth_is_ceo(&auth),
         "assigned_client_id": auth.assigned_client_id,
     });
-    if let Some(obj) = body.as_object_mut() {
-        if let Some(Value::Object(caps)) = crate::client_isolation::capabilities_json(&auth).as_object() {
-            for (k, v) in caps {
-                obj.insert(k.clone(), v.clone());
-            }
+    if let (Some(obj), Some(caps)) = (
+        body.as_object_mut(),
+        crate::client_isolation::capabilities_json(&auth).as_object(),
+    ) {
+        for (k, v) in caps {
+            obj.insert(k.clone(), v.clone());
         }
     }
     (StatusCode::OK, Json(body)).into_response()

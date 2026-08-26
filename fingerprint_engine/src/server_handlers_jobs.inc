@@ -19,6 +19,11 @@ async fn api_async_jobs_list(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
+    let scoped_client = match crate::client_isolation::bind_requested_client(&auth, None) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -27,7 +32,6 @@ async fn api_async_jobs_list(
             .into_response();
     };
 
-    let scoped_client = auth.assigned_client_id;
     let rows = sqlx::query(
         r#"SELECT id, kind, status,
                   COALESCE(payload, '{}'::jsonb) AS payload,

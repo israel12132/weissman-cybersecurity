@@ -850,7 +850,12 @@ async fn api_findings(
     };
     let client_filter: Option<i64> = q
         .get("client_id")
-        .and_then(|s| s.parse::<i64>().ok());
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|id| *id > 0);
+    let client_filter = match crate::client_isolation::bind_requested_client(&auth, client_filter) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
 
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (

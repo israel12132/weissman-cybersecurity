@@ -809,6 +809,7 @@ mod tests {
             role: "analyst".to_string(),
             is_superadmin: false,
             is_active: true,
+            assigned_client_id: None,
             created_at: None,
         };
         let v = serde_json::to_value(&u).unwrap();
@@ -817,6 +818,7 @@ mod tests {
         assert_eq!(v["role"], json!("analyst"));
         assert_eq!(v["is_superadmin"], json!(false));
         assert_eq!(v["is_active"], json!(true));
+        assert_eq!(v["assigned_client_id"], json!(null));
         assert_eq!(v["created_at"], serde_json::Value::Null);
     }
 }
