@@ -132,3 +132,22 @@ fn ndr_itdr_ingest_migration_in_sync_both_dirs() {
         "migration must be identical in both dirs (sync check)"
     );
 }
+
+#[test]
+fn platform_keyring_migration_revokes_ro_and_auth() {
+    let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations/20260826120000_platform_keyring.sql");
+    let db = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/weissman-db/migrations/20260826120000_platform_keyring.sql");
+    let a = std::fs::read_to_string(&fe).unwrap_or_default();
+    let b = std::fs::read_to_string(&db).unwrap_or_default();
+    assert!(!a.is_empty(), "platform_keyring migration present");
+    assert_eq!(
+        a, b,
+        "platform_keyring migration must be identical in both dirs"
+    );
+    assert!(a.contains("CREATE TABLE IF NOT EXISTS public.platform_keyring"));
+    assert!(a.contains("REVOKE ALL ON TABLE public.platform_keyring FROM weissman_ro"));
+    assert!(a.contains("REVOKE ALL ON TABLE public.platform_keyring FROM weissman_auth"));
+    assert!(a.contains("TO weissman_app"));
+}

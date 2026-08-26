@@ -3,6 +3,7 @@
 pub mod god_mode;
 pub mod hpc;
 pub mod ops_status;
+pub mod platform_keys;
 pub mod safe_mode;
 pub mod sovereign;
 pub mod strategy;

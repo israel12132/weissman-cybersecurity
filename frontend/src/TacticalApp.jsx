@@ -112,6 +112,7 @@ import {
   SystemConfiguration,
   MetricsDashboard,
   CeoVault,
+  CeoKeysCockpit,
   CeoCommandCenter,
   SupremeNerveCenter,
   RiskGraphVisualization,
@@ -302,6 +303,7 @@ export default function TacticalApp() {
           <Route path="system-config" element={<RequireRole min="admin"><SystemConfiguration /></RequireRole>} />
           <Route path="metrics" element={<MetricsDashboard />} />
           <Route path="ceo-vault" element={<RequireRole min="ceo"><CeoVault /></RequireRole>} />
+          <Route path="ceo-keys" element={<CeoProtectedRoute><CeoKeysCockpit /></CeoProtectedRoute>} />
           <Route path="risk-graph" element={<RiskGraphVisualization />} />
           <Route path="compliance" element={<ComplianceFrameworks />} />
           <Route path="sbom" element={<SBOMBrowser />} />

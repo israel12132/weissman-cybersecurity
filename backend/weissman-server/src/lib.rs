@@ -93,6 +93,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
     let pools = database::connect_pools().await?;
+    fingerprint_engine::ceo::platform_keys::overlay_from_db(pools.app.as_ref()).await;
     weissman_db::auth_rotation::rotate_weissman_auth_password_on_boot()
         .await
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;

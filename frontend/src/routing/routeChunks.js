@@ -106,6 +106,7 @@ export const EngineReliability = React$lazy(() => import('../pages/EngineReliabi
 export const SystemConfiguration = React$lazy(() => import('../pages/SystemConfiguration'))
 export const MetricsDashboard = React$lazy(() => import('../pages/MetricsDashboard'))
 export const CeoVault = React$lazy(() => import('../pages/CeoVault'))
+export const CeoKeysCockpit = React$lazy(() => import('../pages/CeoKeysCockpit'))
 export const CeoCommandCenter = React$lazy(() => import('../pages/CeoCommandCenter'))
 export const SupremeNerveCenter = React$lazy(() => import('../pages/SupremeNerveCenter'))
 export const RiskGraphVisualization = React$lazy(() => import('../pages/RiskGraphVisualization'))

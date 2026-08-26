@@ -15,12 +15,14 @@ import {
   Sun,
   Moon,
   Contrast,
+  KeyRound,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { SUPPORTED_LANGUAGES } from '../../i18n'
 import useFocusTrap from '../../hooks/useFocusTrap'
 import Button from './Button'
+import { canAccessNavItem } from '../../lib/appNav'
 
 const QUICK_LINKS = [
   { to: '/ask', labelKey: 'nav.ask_weissman', icon: MessageSquare },
@@ -38,7 +40,7 @@ const QUICK_LINKS = [
  */
 export default function ProfileMenu({ variant = 'header' }) {
   const { t, i18n } = useTranslation()
-  const { session, logout } = useAuth()
+  const { session, logout, isCeo } = useAuth()
   const { theme, cycleTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -173,7 +175,7 @@ export default function ProfileMenu({ variant = 'header' }) {
           </div>
 
           <div className="border-t border-[var(--border-default)] pt-3 space-y-0.5">
-            {QUICK_LINKS.map(({ to, labelKey, icon: Icon }) => (
+            {QUICK_LINKS.filter((item) => canAccessNavItem(item, session)).map(({ to, labelKey, icon: Icon }) => (
               <MenuLink
                 key={to}
                 to={to}
@@ -182,6 +184,14 @@ export default function ProfileMenu({ variant = 'header' }) {
                 onClick={() => setOpen(false)}
               />
             ))}
+            {isCeo && (
+              <MenuLink
+                to="/ceo-keys"
+                label={t('nav.ceo_keys')}
+                icon={KeyRound}
+                onClick={() => setOpen(false)}
+              />
+            )}
             {isAdmin && (
               <MenuLink
                 to="/billing"

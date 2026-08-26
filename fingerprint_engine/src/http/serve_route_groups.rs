@@ -763,6 +763,18 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
                 .post(api_ceo_hpc_policy_put),
         )
         .route(
+            "/api/ceo/platform-keys",
+            get(api_ceo_platform_keys_get).put(api_ceo_platform_keys_put),
+        )
+        .route(
+            "/api/ceo/platform-keys/:name/reveal",
+            post(api_ceo_platform_keys_reveal),
+        )
+        .route(
+            "/api/ceo/platform-keys/:name",
+            delete(api_ceo_platform_keys_delete),
+        )
+        .route(
             "/api/ceo/vault/export/criticals",
             get(api_ceo_vault_export_criticals),
         )

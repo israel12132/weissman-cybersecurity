@@ -182,6 +182,7 @@ export const NAV_GROUPS = [
       { to: '/ceo', labelKey: 'nav.ceo', icon: '👔' },
       { to: '/supreme-nerve-center', labelKey: 'nav.supreme_nerve_center', icon: '🧠', hideFromNav: false },
       { to: '/ceo-vault', labelKey: 'nav.ceo_vault', icon: '🔒' },
+      { to: '/ceo-keys', labelKey: 'nav.ceo_keys', icon: '🔑' },
       { to: '/reports', labelKey: 'nav.reports', icon: '🧾' },
       { to: '/audit-log', labelKey: 'nav.audit_log', icon: '📋' },
     ],
@@ -306,6 +307,7 @@ function dedupeCrumbs(crumbs) {
 export const NAV_MIN_ROLE = {
   '/admin': 'ceo',
   '/ceo-vault': 'ceo',
+  '/ceo-keys': 'ceo',
   '/ceo': 'ceo',
   '/supreme-nerve-center': 'ceo',
   '/system-config': 'admin',

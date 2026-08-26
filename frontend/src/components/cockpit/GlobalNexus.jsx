@@ -25,6 +25,7 @@ import {
   PanelLeft,
   Trash2,
   UserPlus,
+  KeyRound,
 } from 'lucide-react'
 import { PRIMARY_NAV } from '../../lib/appNav'
 import { useClient } from '../../context/ClientContext'
@@ -240,6 +241,7 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
           { to: '/audit-log', label: t('nav.audit_log'), icon: ScrollText, id: 'nav-audit-log' },
           { to: '/system-config', label: t('nav.system_config'), icon: Settings, id: 'nav-system-config' },
           ...(isCeo ? [{ to: '/admin', label: t('nav.admin'), icon: Shield, id: 'nav-admin-management' }] : []),
+          ...(isCeo ? [{ to: '/ceo-keys', label: t('nav.ceo_keys'), icon: KeyRound, id: 'nav-ceo-keys' }] : []),
         ],
       },
     ]
@@ -275,6 +277,16 @@ export default function GlobalNexus({ ceoIntegrated = false }) {
     <>
       {/* Brand */}
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-[var(--border-subtle)]">
+        {isCeo && (
+          <Link
+            to="/ceo-keys"
+            className="mb-2 flex items-center justify-center gap-2 text-[9px] font-mono uppercase tracking-[0.18em] py-1.5 rounded-md border border-amber-400/40 text-amber-100 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+            id="nav-ceo-classified-keys"
+          >
+            <KeyRound className="w-3 h-3" />
+            {t('nav.ceo_keys')}
+          </Link>
+        )}
         {isCeo && (
           <Link
             to="/"

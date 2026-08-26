@@ -600,6 +600,7 @@ async fn async_main() {
             std::process::exit(1);
         }
     };
+    fingerprint_engine::ceo::platform_keys::overlay_from_db(app_pool.as_ref()).await;
     fingerprint_engine::observability::register_llm_tenant_metering(app_pool.clone());
 
     let auth_url =
