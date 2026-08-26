@@ -179,6 +179,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/docs/", get(crate::api_docs::api_docs_swagger))
         .route("/api/auth/signup", post(crate::signup::api_signup))
         .route("/api/auth/verify", get(crate::signup::api_verify))
+        .route(
+            "/api/auth/tenant-directory",
+            get(crate::tenant_directory::api_auth_tenant_directory),
+        )
         .route("/api/reports", get(api_reports))
         .route("/api/command-center/scan", post(api_scan))
         .route(

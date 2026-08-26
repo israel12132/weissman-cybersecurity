@@ -168,6 +168,7 @@ pub mod target_profile;
 pub mod telemetry_bus;
 pub mod template_engine;
 pub mod template_probe;
+pub mod tenant_directory;
 pub mod tenant_quota;
 pub mod threat_intel_engine;
 pub mod timing_engine;
