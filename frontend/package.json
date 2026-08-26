@@ -8,8 +8,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node ../scripts/generate_engine_param_defs.mjs && bash ../scripts/build-ui-provenance-wasm.sh && bash ../scripts/build-ast-cap-wasm.sh && node ../scripts/verify-import-cycles.mjs && node ../scripts/verify-provider-wiring.mjs && vite build",
+    "dev:www": "vite --config vite.www.config.js",
+    "build": "node ../scripts/generate_engine_param_defs.mjs && bash ../scripts/build-ui-provenance-wasm.sh && bash ../scripts/build-ast-cap-wasm.sh && node ../scripts/verify-import-cycles.mjs && node ../scripts/verify-provider-wiring.mjs && vite build && vite build --config vite.www.config.js",
+    "build:www": "vite build --config vite.www.config.js",
     "preview": "vite preview",
+    "preview:www": "vite preview --config vite.www.config.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\"",

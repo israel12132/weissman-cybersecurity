@@ -242,6 +242,10 @@ static PUBLIC_ROUTES: &[(Method, &str, RouteGate)] = &[
     ),
     (Method::POST, "/api/auth/signup", RouteGate::Always),
     (Method::GET, "/api/auth/verify", RouteGate::Always),
+    // Flagship site: live engine counts + slim catalog + demo-request intake. No tenant JWT.
+    (Method::GET, "/api/public/platform-pulse", RouteGate::Always),
+    (Method::GET, "/api/public/engine-catalog", RouteGate::Always),
+    (Method::POST, "/api/public/contact", RouteGate::Always),
     (Method::POST, "/api/v1/alerts/aws-canary", RouteGate::Always),
     // Public service status (SLA_AND_STATUS.md §4) — must be readable during an incident.
     (Method::GET, "/status", RouteGate::Always),
@@ -485,7 +489,7 @@ async fn command_center_served_elsewhere() -> impl IntoResponse {
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
-        r#"{"ok":true,"service":"weissman-server","ui":"served by the gateway at /command-center/, not by this process (no frontend/dist in this image)","api":"/api/health"}"#,
+        r#"{"ok":true,"service":"weissman-server","ui":"flagship site at / and Command Center at /command-center/ are served by the gateway, not by this process","api":"/api/health"}"#,
     )
 }
 
@@ -1935,6 +1939,9 @@ mod public_route_guard_tests {
             (Method::POST, "/api/integrations/slack/interactivity"),
             (Method::POST, "/api/auth/signup"),
             (Method::GET, "/api/auth/verify"),
+            (Method::GET, "/api/public/platform-pulse"),
+            (Method::GET, "/api/public/engine-catalog"),
+            (Method::POST, "/api/public/contact"),
             (Method::POST, "/api/v1/alerts/aws-canary"),
             (Method::GET, "/status"),
             (Method::POST, "/api/agents/enroll"),
@@ -1955,6 +1962,7 @@ mod public_route_guard_tests {
         // Correct public path but wrong method is not public.
         assert!(!is_public_route(&Method::GET, "/api/logout"));
         assert!(!is_public_route(&Method::POST, "/api/health"));
+        assert!(!is_public_route(&Method::GET, "/api/public/contact"));
     }
 }
 

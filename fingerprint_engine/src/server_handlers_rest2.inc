@@ -1179,7 +1179,7 @@ async fn api_openapi_spec() -> Response {
                     "security": [],
                     "parameters": [{ "name": "token", "in": "query", "required": true, "schema": { "type": "string" } }],
                     "responses": {
-                        "303": { "description": "Redirect to /command-center/login?verified=1" },
+                        "303": { "description": "Redirect to /login?verified=1" },
                         "410": { "description": "Token invalid / consumed / expired" }
                     }
                 }

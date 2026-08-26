@@ -30,6 +30,7 @@ export default [
   {
     ignores: [
       'dist/**',
+      'dist-www/**',
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
@@ -39,7 +40,7 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ['src/**/*.{js,jsx}'],
+    files: ['src/**/*.{js,jsx}', 'www/src/**/*.{js,jsx}'],
     languageOptions: {
       // 'latest' so the parser understands import attributes (`with { type: 'json' }`),
       // which some engine-manifest modules use; older ecmaVersions error on it.
@@ -115,7 +116,7 @@ export default [
   },
   // Build/tooling config files run in Node.
   {
-    files: ['*.config.{js,cjs,mjs}', 'vite.config.js', 'vitest.config.js'],
+    files: ['*.config.{js,cjs,mjs}', 'vite.config.js', 'vite.www.config.js', 'vitest.config.js'],
     languageOptions: { sourceType: 'module', globals: { ...globals.node } },
   },
   // Standalone scripts (e.g. qa-walkthrough.mjs) drive a real browser, so their code

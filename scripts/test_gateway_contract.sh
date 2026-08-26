@@ -49,11 +49,13 @@ docker run -d --name "$UPSTREAM" --network "$NET" --network-alias backend \
   nginxinc/nginx-unprivileged:1.29-alpine >/dev/null 2>&1
 
 # Serve the real gateway config with a minimal document root.
-mkdir -p "$WORK/conf" "$WORK/html/command-center" "$WORK/html/public/.well-known"
+mkdir -p "$WORK/conf" "$WORK/html/command-center" "$WORK/html/www" "$WORK/html/public/.well-known"
 cp "$ROOT/deploy/nginx-gateway.conf" "$WORK/conf/default.conf"
 cp "$ROOT/deploy/nginx-security-headers.inc" "$WORK/conf/security-headers.inc"
 printf 'SPA-SHELL\n'  > "$WORK/html/command-center/index.html"
-printf 'MARKETING\n'  > "$WORK/html/index.html"
+printf 'FLAGSHIP\n'   > "$WORK/html/www/index.html"
+printf 'MARKETING\n'  > "$WORK/html/public/index.html"
+printf 'LEGAL\n'      > "$WORK/html/public/terms.html"
 
 docker run -d --name "$GATEWAY" --network "$NET" -p 127.0.0.1:58089:8080 \
   -v "$WORK/conf:/etc/nginx/conf.d:ro" \
@@ -96,6 +98,14 @@ else
 fi
 body="$(curl -sL -m 5 "$B/command-center" | head -1)"
 [[ "$body" == "SPA-SHELL" ]] && ok "following the redirect reaches the SPA" || bad "redirect landed on '$body'"
+
+# ── Public marketing homepage at `/` (original static site) ─────────────────────
+body="$(curl -s -m 5 "$B/" | tr -d '\r' | head -1)"
+[[ "$body" == "MARKETING" ]] && ok "/ serves the public homepage" || bad "/ returned '$body'"
+body="$(curl -s -m 5 "$B/login" | tr -d '\r' | head -1)"
+[[ "$body" == "FLAGSHIP" ]] && ok "/login serves the flagship SPA" || bad "/login returned '$body'"
+body="$(curl -s -m 5 "$B/signup" | tr -d '\r' | head -1)"
+[[ "$body" == "FLAGSHIP" ]] && ok "/signup serves the flagship SPA" || bad "/signup returned '$body'"
 
 # ── Unknown paths must 404, not serve the homepage with 200 ─────────────────────
 code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$B/definitely-not-a-real-path-9f3a")"

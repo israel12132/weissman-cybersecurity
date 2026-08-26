@@ -28,6 +28,7 @@ use crate::timing_engine;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,6 +36,7 @@ use tokio::sync::broadcast;
 
 mod discovery_ui_snapshot;
 pub mod dispatch;
+pub mod scan_budget;
 
 pub(crate) use weissman_core::{
     finding_description, finding_title_and_severity, infer_poc_exploit,
@@ -418,6 +420,25 @@ fn broadcast_harvested_token(
             "message": format!("Harvested token: {role_name}"),
         }),
     );
+}
+
+/// Cap one orchestrator probe. Timeout becomes an error `EngineResult` so the
+/// cycle can skip to the next engine instead of burning the whole job budget.
+async fn orch_engine_or_error(
+    engine_id: &str,
+    fut: impl Future<Output = crate::engine_result::EngineResult>,
+    telemetry_tx: Option<&Arc<broadcast::Sender<String>>>,
+    cid: Option<&str>,
+    wr: Option<&WarRoomMirror>,
+) -> crate::engine_result::EngineResult {
+    match scan_budget::with_engine_budget(engine_id, scan_budget::ORCH_ENGINE_BUDGET, fut).await {
+        Ok(r) => r,
+        Err(msg) => {
+            eprintln!("[Weissman][Orchestrator] {msg}");
+            broadcast_engine_error(telemetry_tx, engine_id, &msg, cid, wr);
+            crate::engine_result::EngineResult::error(msg)
+        }
+    }
 }
 
 fn broadcast_engine_error(
@@ -1076,8 +1097,17 @@ pub async fn run_single_tenant_scan_cycle(
     tenant_id: i64,
     telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
     war_mirror: Option<WarRoomMirror>,
-) -> Result<(), sqlx::Error> {
-    run_cycle_for_tenant(app_pool, intel_pool, tenant_id, telemetry_tx, war_mirror).await
+    job_opts: Option<scan_budget::ScanJobOpts>,
+) -> Result<scan_budget::TenantScanOutcome, sqlx::Error> {
+    run_cycle_for_tenant(
+        app_pool,
+        intel_pool,
+        tenant_id,
+        telemetry_tx,
+        war_mirror,
+        job_opts,
+    )
+    .await
 }
 
 /// One full scan cycle for all active tenants (auth pool lists tenants; app pool + RLS per tenant).
@@ -1103,11 +1133,11 @@ pub async fn run_cycle_async(
         let intel = intel_pool.clone();
         let tt = telemetry_tx.clone();
         match crate::panic_shield::catch_unwind_future("orchestrator_tenant_cycle", async move {
-            run_cycle_for_tenant(app, intel, tenant_id, tt, None).await
+            run_cycle_for_tenant(app, intel, tenant_id, tt, None, None).await
         })
         .await
         {
-            crate::panic_shield::CatchOutcome::Completed(Ok(())) => {}
+            crate::panic_shield::CatchOutcome::Completed(Ok(_)) => {}
             crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
                 eprintln!(
                     "[Weissman][Orchestrator] Tenant {} cycle failed: {}",
@@ -1140,11 +1170,19 @@ async fn run_cycle_for_tenant(
     tenant_id: i64,
     telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
     war_mirror: Option<WarRoomMirror>,
-) -> Result<(), sqlx::Error> {
+    job_opts: Option<scan_budget::ScanJobOpts>,
+) -> Result<scan_budget::TenantScanOutcome, sqlx::Error> {
     CYCLE_TENANT
         .scope(
             tenant_id,
-            run_cycle_for_tenant_inner(app_pool, intel_pool, tenant_id, telemetry_tx, war_mirror),
+            run_cycle_for_tenant_inner(
+                app_pool,
+                intel_pool,
+                tenant_id,
+                telemetry_tx,
+                war_mirror,
+                job_opts,
+            ),
         )
         .await
 }
@@ -1156,9 +1194,18 @@ async fn run_cycle_for_tenant_inner(
     tenant_id: i64,
     telemetry_tx: Option<Arc<broadcast::Sender<String>>>,
     war_mirror: Option<WarRoomMirror>,
-) -> Result<(), sqlx::Error> {
+    job_opts: Option<scan_budget::ScanJobOpts>,
+) -> Result<scan_budget::TenantScanOutcome, sqlx::Error> {
     let wr = war_mirror.as_ref();
     let _tenant_depth = TenantScanCounterGuard::new();
+    let budget = scan_budget::ScanBudget::new(scan_budget::cycle_limit());
+    let incoming = job_opts
+        .as_ref()
+        .map(|o| scan_budget::ScanResume::from_payload(&o.payload))
+        .unwrap_or_default();
+    let mut outcome = scan_budget::TenantScanOutcome::default();
+    let mut finished_client_ids: Vec<i64> = incoming.skip_client_ids.clone();
+    let mut stop_resume: Option<scan_budget::ScanResume> = None;
     let mut tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
     let engines = active_engines_list(&mut tx, tenant_id).await;
     let asm_ports = asm_ports_from_config(&mut tx, tenant_id).await;
@@ -1222,7 +1269,7 @@ async fn run_cycle_for_tenant_inner(
             tenant_id
         );
         tx.commit().await?;
-        return Ok(());
+        return Ok(outcome);
     }
     eprintln!(
         "[Weissman][Orchestrator] Cycle start tenant={}: {} clients",
@@ -1296,12 +1343,18 @@ async fn run_cycle_for_tenant_inner(
                 radar_targets.len()
             );
             tx.commit().await?;
-            let radar_result = threat_intel_engine::run_zero_day_radar(
-                &radar_targets,
-                Some(&stealth_config),
-                &threat_intel_config,
+            let radar_result = orch_engine_or_error(
+                "zero_day_radar",
+                threat_intel_engine::run_zero_day_radar(
+                    &radar_targets,
+                    Some(&stealth_config),
+                    &threat_intel_config,
+                    None,
+                    Some(tenant_id),
+                ),
+                telemetry_tx.as_ref(),
                 None,
-                Some(tenant_id),
+                wr,
             )
             .await;
             tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -1362,7 +1415,29 @@ async fn run_cycle_for_tenant_inner(
 
     let mut run_max_targets = 0usize;
     let mut run_max_paths = 0usize;
-    for (db_client_id, name, domains_json, ip_ranges_json, client_configs) in clients.clone() {
+    'clients: for (db_client_id, name, domains_json, ip_ranges_json, client_configs) in
+        clients.clone()
+    {
+        if incoming.should_skip_client(db_client_id) {
+            eprintln!(
+                "[Weissman][Orchestrator] Client id={} already completed in a prior continuation; skipping.",
+                db_client_id
+            );
+            continue;
+        }
+        if !budget.can_start_engine() {
+            stop_resume = Some(scan_budget::ScanResume {
+                generation: incoming.generation.saturating_add(1),
+                skip_client_ids: finished_client_ids.clone(),
+                resume_client_id: None,
+                resume_skip_engines: Vec::new(),
+            });
+            eprintln!(
+                "[Weissman][Orchestrator] Cycle budget reached before client id={}; remaining clients continue on the next job.",
+                db_client_id
+            );
+            break 'clients;
+        }
         let client_targets = resolve_client_web_targets(
             &domains_json,
             &ip_ranges_json,
@@ -1370,6 +1445,7 @@ async fn run_cycle_for_tenant_inner(
             MAX_CLIENT_WEB_TARGETS,
         );
         if client_targets.is_empty() {
+            finished_client_ids.push(db_client_id);
             continue;
         }
         let target = client_targets[0].clone();
@@ -1381,6 +1457,7 @@ async fn run_cycle_for_tenant_inner(
                 "[Weissman][Orchestrator] Client id={} has no enabled engines; skipping.",
                 db_client_id
             );
+            finished_client_ids.push(db_client_id);
             continue;
         }
         eprintln!(
@@ -1462,17 +1539,42 @@ async fn run_cycle_for_tenant_inner(
                     "smart proximity edge assignment (orchestrator)"
                 );
             }
-            let archival_paths =
-                archival_engine::run_archival_discovery(scan_target, Some(&stealth_config)).await;
+            let archival_paths = match scan_budget::with_engine_budget(
+                "archival_discovery",
+                scan_budget::ORCH_ENGINE_BUDGET,
+                archival_engine::run_archival_discovery(scan_target, Some(&stealth_config)),
+            )
+            .await
+            {
+                Ok(p) => p,
+                Err(msg) => {
+                    eprintln!("[Weissman][Orchestrator] {msg}");
+                    Vec::new()
+                }
+            };
             discovery_ctx.merge_paths(archival_paths);
         }
-        discovery_engine::run_spider_crawl(
-            &target_list,
-            Some(&stealth_config),
-            &mut discovery_ctx.paths,
-            &mut discovery_ctx.paths_403,
+        if let Err(msg) = scan_budget::with_engine_budget(
+            "discovery_spider",
+            scan_budget::ORCH_ENGINE_BUDGET,
+            discovery_engine::run_spider_crawl(
+                &target_list,
+                Some(&stealth_config),
+                &mut discovery_ctx.paths,
+                &mut discovery_ctx.paths_403,
+            ),
         )
-        .await;
+        .await
+        {
+            eprintln!("[Weissman][Orchestrator] {msg}");
+            broadcast_engine_error(
+                telemetry_tx.as_ref(),
+                "discovery",
+                &msg,
+                Some(cid.as_str()),
+                wr,
+            );
+        }
         let predicted = discovery_engine::predict_paths_llm(
             &discovery_ctx.all_paths(),
             &llm_base,
@@ -1507,7 +1609,26 @@ async fn run_cycle_for_tenant_inner(
             let fps = if hosts.is_empty() {
                 Vec::new()
             } else {
-                crate::ot_ics_engine::scan_hosts_passive(&hosts).await
+                match scan_budget::with_engine_budget(
+                    "ot_ics",
+                    scan_budget::ORCH_ENGINE_BUDGET,
+                    crate::ot_ics_engine::scan_hosts_passive(&hosts),
+                )
+                .await
+                {
+                    Ok(v) => v,
+                    Err(msg) => {
+                        eprintln!("[Weissman][Orchestrator] {msg}");
+                        broadcast_engine_error(
+                            telemetry_tx.as_ref(),
+                            "ot_ics",
+                            &msg,
+                            Some(cid.as_str()),
+                            wr,
+                        );
+                        Vec::new()
+                    }
+                }
             };
             tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
             let _ = sqlx::query(
@@ -1548,7 +1669,32 @@ async fn run_cycle_for_tenant_inner(
         let mut client_findings_count = 0usize;
         let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
         let mut cross_job_params = serde_json::json!({});
-        for source in client_engines.clone() {
+        let mut completed_this_client: Vec<String> =
+            incoming.skip_engines_for(db_client_id).to_vec();
+        let mut client_stopped_early = false;
+        'engines: for source in client_engines.clone() {
+            if completed_this_client.iter().any(|e| e == &source) {
+                continue;
+            }
+            if !budget.can_start_engine() {
+                stop_resume = Some(scan_budget::ScanResume {
+                    generation: incoming.generation.saturating_add(1),
+                    skip_client_ids: finished_client_ids.clone(),
+                    resume_client_id: Some(db_client_id),
+                    resume_skip_engines: completed_this_client.clone(),
+                });
+                outcome.remaining_engines = client_engines
+                    .iter()
+                    .filter(|e| !completed_this_client.iter().any(|d| d == *e))
+                    .count();
+                eprintln!(
+                    "[Weissman][Orchestrator] Cycle budget reached on client id={} after {} engine(s); continuation will skip those.",
+                    db_client_id,
+                    completed_this_client.len()
+                );
+                client_stopped_early = true;
+                break 'engines;
+            }
             stealth_engine::apply_behavioral_jitter().await;
             let label = engine_display_label(source.as_str());
             broadcast_engine_progress(
@@ -1561,7 +1707,14 @@ async fn run_cycle_for_tenant_inner(
             let (result, semantic_log) = match source.as_str() {
                 "osint" => {
                     tx.commit().await?;
-                    let r = osint_engine::run_osint_result(&target, Some(&stealth_config)).await;
+                    let r = orch_engine_or_error(
+                        "osint",
+                        osint_engine::run_osint_result(&target, Some(&stealth_config)),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
+                    )
+                    .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
                     for sub in pipeline_context::subdomains_from_osint_findings(&r.findings) {
                         let u = format!("https://{}", sub);
@@ -1575,11 +1728,17 @@ async fn run_cycle_for_tenant_inner(
                 "asm" => {
                     tx.commit().await?;
                     let ports_slice = asm_ports.as_deref().unwrap_or(&[]);
-                    let r = asm_engine::run_asm_result_with_ports_and_subdomains(
-                        &target,
-                        ports_slice,
-                        recon_subdomains.clone(),
-                        Some(&stealth_config),
+                    let r = orch_engine_or_error(
+                        "asm",
+                        asm_engine::run_asm_result_with_ports_and_subdomains(
+                            &target,
+                            ports_slice,
+                            recon_subdomains.clone(),
+                            Some(&stealth_config),
+                        ),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
                     )
                     .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -1614,16 +1773,33 @@ async fn run_cycle_for_tenant_inner(
                         wr,
                     );
                     tx.commit().await?;
-                    discovery_engine::run_spider_crawl(
-                        &target_list,
-                        Some(&stealth_config),
-                        &mut discovery_ctx.paths,
-                        &mut discovery_ctx.paths_403,
+                    if let Err(msg) = scan_budget::with_engine_budget(
+                        "discovery_spider",
+                        scan_budget::ORCH_ENGINE_BUDGET,
+                        discovery_engine::run_spider_crawl(
+                            &target_list,
+                            Some(&stealth_config),
+                            &mut discovery_ctx.paths,
+                            &mut discovery_ctx.paths_403,
+                        ),
                     )
-                    .await;
-                    let archival_paths =
-                        archival_engine::run_archival_discovery(&target, Some(&stealth_config))
-                            .await;
+                    .await
+                    {
+                        eprintln!("[Weissman][Orchestrator] {msg}");
+                    }
+                    let archival_paths = match scan_budget::with_engine_budget(
+                        "archival_discovery",
+                        scan_budget::ORCH_ENGINE_BUDGET,
+                        archival_engine::run_archival_discovery(&target, Some(&stealth_config)),
+                    )
+                    .await
+                    {
+                        Ok(p) => p,
+                        Err(msg) => {
+                            eprintln!("[Weissman][Orchestrator] {msg}");
+                            Vec::new()
+                        }
+                    };
                     discovery_ctx.merge_paths(archival_paths);
                     let predicted = discovery_engine::predict_paths_llm(
                         &discovery_ctx.all_paths(),
@@ -1662,14 +1838,32 @@ async fn run_cycle_for_tenant_inner(
                         let llm_base_h = get_config_tx(&mut tx, tenant_id, "llm_base_url").await;
                         let llm_model_h = get_config_tx(&mut tx, tenant_id, "llm_model").await;
                         tx.commit().await?;
-                        let (harvested, harvest_findings) = engine_identity_autoharvest(
-                            target_list.clone(),
-                            discovered_paths.clone(),
-                            llm_base_h,
-                            llm_model_h,
-                            Some(tenant_id),
+                        let (harvested, harvest_findings) = match scan_budget::with_engine_budget(
+                            "identity_auto_harvest",
+                            scan_budget::ORCH_ENGINE_BUDGET,
+                            engine_identity_autoharvest(
+                                target_list.clone(),
+                                discovered_paths.clone(),
+                                llm_base_h,
+                                llm_model_h,
+                                Some(tenant_id),
+                            ),
                         )
-                        .await;
+                        .await
+                        {
+                            Ok(v) => v,
+                            Err(msg) => {
+                                eprintln!("[Weissman][Orchestrator] {msg}");
+                                broadcast_engine_error(
+                                    telemetry_tx.as_ref(),
+                                    "identity_auto_harvest",
+                                    &msg,
+                                    Some(cid.as_str()),
+                                    wr,
+                                );
+                                (Vec::new(), Vec::new())
+                            }
+                        };
                         tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
                         for h in harvested.clone() {
                             if let Ok(Some(ctx_id)) = sqlx::query_scalar::<_, i64>(
@@ -1719,9 +1913,15 @@ async fn run_cycle_for_tenant_inner(
                 }
                 "supply_chain" => {
                     tx.commit().await?;
-                    let r = supply_chain_engine::run_supply_chain_result(
-                        &target,
-                        Some(&stealth_config),
+                    let r = orch_engine_or_error(
+                        "supply_chain",
+                        supply_chain_engine::run_supply_chain_result(
+                            &target,
+                            Some(&stealth_config),
+                        ),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
                     )
                     .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -1732,7 +1932,14 @@ async fn run_cycle_for_tenant_inner(
                         .await
                         .unwrap_or_default();
                     tx.commit().await?;
-                    let r = engine_leak_hunter(target_list.clone(), stealth_config.clone()).await;
+                    let r = orch_engine_or_error(
+                        "leak_hunter",
+                        engine_leak_hunter(target_list.clone(), stealth_config.clone()),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
+                    )
+                    .await;
                     let mut all_findings = r.findings.clone();
                     if !github_token.is_empty() {
                         let domain = target.split('/').nth(2).unwrap_or(&target);
@@ -1747,16 +1954,22 @@ async fn run_cycle_for_tenant_inner(
                 }
                 "bola_idor" => {
                     tx.commit().await?;
-                    let mut r = engine_bola_multi(
-                        target_list.clone(),
-                        discovered_paths.clone(),
-                        stealth_config.clone(),
-                        if identity_contexts.len() >= 2 {
-                            Some(identity_contexts.to_vec())
-                        } else {
-                            None
-                        },
-                        Some(tenant_id),
+                    let mut r = orch_engine_or_error(
+                        "bola_idor",
+                        engine_bola_multi(
+                            target_list.clone(),
+                            discovered_paths.clone(),
+                            stealth_config.clone(),
+                            if identity_contexts.len() >= 2 {
+                                Some(identity_contexts.to_vec())
+                            } else {
+                                None
+                            },
+                            Some(tenant_id),
+                        ),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
                     )
                     .await;
                     let mut kill_chain: Vec<identity_engine::KillChainEvent> = Vec::new();
@@ -1841,29 +2054,57 @@ async fn run_cycle_for_tenant_inner(
                     } else {
                         llm_base_trim.to_string()
                     };
-                    let r = engine_llm_path_fuzz_multi(
-                        target_list.clone(),
-                        discovered_paths.clone(),
-                        stealth_config.clone(),
-                        llm_base_owned,
-                        semantic_config.llm_model.clone(),
-                        Some(tenant_id),
+                    let r = orch_engine_or_error(
+                        "llm_path_fuzz",
+                        engine_llm_path_fuzz_multi(
+                            target_list.clone(),
+                            discovered_paths.clone(),
+                            stealth_config.clone(),
+                            llm_base_owned,
+                            semantic_config.llm_model.clone(),
+                            Some(tenant_id),
+                        ),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
                     )
-                    .await
-                    .into();
+                    .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
                     (r, None)
                 }
                 "semantic_ai_fuzz" => {
                     tx.commit().await?;
-                    let sem = engine_semantic(
-                        target.clone(),
-                        stealth_config.clone(),
-                        semantic_config.clone(),
-                        discovered_paths.clone(),
-                        Some(tenant_id),
+                    let sem = match scan_budget::with_engine_budget(
+                        "semantic_ai_fuzz",
+                        scan_budget::ORCH_ENGINE_BUDGET,
+                        engine_semantic(
+                            target.clone(),
+                            stealth_config.clone(),
+                            semantic_config.clone(),
+                            discovered_paths.clone(),
+                            Some(tenant_id),
+                        ),
                     )
-                    .await;
+                    .await
+                    {
+                        Ok(s) => s,
+                        Err(msg) => {
+                            eprintln!("[Weissman][Orchestrator] {msg}");
+                            broadcast_engine_error(
+                                telemetry_tx.as_ref(),
+                                "semantic_ai_fuzz",
+                                &msg,
+                                Some(cid.as_str()),
+                                wr,
+                            );
+                            semantic_fuzzer::SemanticFuzzResult {
+                                result: crate::engine_result::EngineResult::error(msg),
+                                state_nodes: Vec::new(),
+                                state_edges: Vec::new(),
+                                reasoning_log: String::new(),
+                            }
+                        }
+                    };
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
                     let log = if sem.reasoning_log.is_empty() {
                         None
@@ -1897,11 +2138,17 @@ async fn run_cycle_for_tenant_inner(
                     } else {
                         timing_urls
                     };
-                    let r = timing_engine::run_timing_attack_urls(
-                        &urls_for_timing,
-                        Some(&stealth_config),
-                        &timing_config,
-                        None,
+                    let r = orch_engine_or_error(
+                        "microsecond_timing",
+                        timing_engine::run_timing_attack_urls(
+                            &urls_for_timing,
+                            Some(&stealth_config),
+                            &timing_config,
+                            None,
+                        ),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
                     )
                     .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -1909,12 +2156,18 @@ async fn run_cycle_for_tenant_inner(
                 }
                 "ai_adversarial_redteam" => {
                     tx.commit().await?;
-                    let r = ai_redteam_engine::run_ai_redteam_attack(
-                        &target,
-                        Some(&stealth_config),
-                        &ai_redteam_config,
-                        None,
-                        Some(tenant_id),
+                    let r = orch_engine_or_error(
+                        "ai_adversarial_redteam",
+                        ai_redteam_engine::run_ai_redteam_attack(
+                            &target,
+                            Some(&stealth_config),
+                            &ai_redteam_config,
+                            None,
+                            Some(tenant_id),
+                        ),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
                     )
                     .await;
                     tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -1948,7 +2201,14 @@ async fn run_cycle_for_tenant_inner(
                         intelligence_bus: Some(intelligence_bus.clone()),
                         ..Default::default()
                     };
-                    let r = crate::engine_dispatch::run_engine(other, &target, &ctx).await;
+                    let r = orch_engine_or_error(
+                        other,
+                        crate::engine_dispatch::run_engine(other, &target, &ctx),
+                        telemetry_tx.as_ref(),
+                        Some(cid.as_str()),
+                        wr,
+                    )
+                    .await;
                     crate::ws_intelligence_bus::merge_params_artifacts(
                         &mut cross_job_params,
                         &intelligence_bus,
@@ -2122,7 +2382,13 @@ async fn run_cycle_for_tenant_inner(
                 tokio::time::sleep(Duration::from_millis(2500)).await;
                 tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
             }
+            completed_this_client.push(source.clone());
+            outcome.engines_completed = outcome.engines_completed.saturating_add(1);
         }
+        if client_stopped_early {
+            break 'clients;
+        }
+        finished_client_ids.push(db_client_id);
         broadcast_pipeline_stage(
             telemetry_tx.as_ref(),
             run_id,
@@ -2233,13 +2499,19 @@ async fn run_cycle_for_tenant_inner(
                 wr,
             );
             tx.commit().await?;
-            let poe_result = exploit_synthesis_engine::run_exploit_synthesis_async(
-                &target,
-                &poe_config_for_client,
-                None,
-                poe_ctx_final.as_deref(),
-                Some(tenant_id),
-                None,
+            let poe_result = orch_engine_or_error(
+                "poe_synthesis",
+                exploit_synthesis_engine::run_exploit_synthesis_async(
+                    &target,
+                    &poe_config_for_client,
+                    None,
+                    poe_ctx_final.as_deref(),
+                    Some(tenant_id),
+                    None,
+                ),
+                telemetry_tx.as_ref(),
+                Some(cid.as_str()),
+                wr,
             )
             .await;
             tx = crate::db::begin_tenant_tx_arc(app_pool.clone(), tenant_id).await?;
@@ -2362,6 +2634,61 @@ async fn run_cycle_for_tenant_inner(
     );
     tx.commit().await?;
 
+    if let Some(resume) = stop_resume {
+        outcome.partial = true;
+        if outcome.remaining_engines == 0 {
+            outcome.remaining_engines = 1;
+        }
+        if resume.can_continue() && job_opts.is_some() {
+            let mut extra = resume.to_extra_json();
+            if let Some(opts) = job_opts.as_ref() {
+                if let Some(obj) = extra.as_object_mut() {
+                    obj.insert(
+                        "parent_job_id".into(),
+                        serde_json::json!(opts.job_id.to_string()),
+                    );
+                }
+            }
+            match dispatch::enqueue_tenant_full_scan(
+                app_pool.as_ref(),
+                tenant_id,
+                None,
+                "cycle_budget_continuation",
+                Some(extra),
+            )
+            .await
+            {
+                Ok(id) => {
+                    outcome.continuation_job_id = Some(id);
+                    eprintln!(
+                        "[Weissman][Orchestrator] Continuation job {id} enqueued (generation {})",
+                        resume.generation
+                    );
+                    if let Some(w) = wr {
+                        w.emit(
+                            "session",
+                            "info",
+                            serde_json::json!({
+                                "message": format!(
+                                    "Cycle budget reached after {} engine(s); continuation {}",
+                                    outcome.engines_completed, id
+                                )
+                            }),
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[Weissman][Orchestrator] Continuation enqueue failed: {e}");
+                }
+            }
+        } else if !resume.can_continue() {
+            eprintln!(
+                "[Weissman][Orchestrator] Resume generation cap ({}) reached; not enqueueing another continuation",
+                scan_budget::MAX_RESUME_GENERATION
+            );
+        }
+    }
+
     // Recompute attack-path snapshots from the freshly updated risk graph (fire-and-forget).
     let pool_paths = app_pool.clone();
     for (db_client_id, _, _, _, _) in &clients {
@@ -2388,7 +2715,7 @@ async fn run_cycle_for_tenant_inner(
         });
     }
 
-    Ok(())
+    Ok(outcome)
 }
 
 /// Spawn the orchestrator as a native Tokio task (no spawn_blocking). Pure async root.

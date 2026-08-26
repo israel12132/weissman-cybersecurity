@@ -63,7 +63,8 @@ WORKDIR /build/frontend
 RUN node ../scripts/generate_engine_param_defs.mjs \
  && node ../scripts/verify-import-cycles.mjs \
  && node ../scripts/verify-provider-wiring.mjs \
- && npx vite build
+ && npx vite build \
+ && npx vite build --config vite.www.config.js
 
 # Stage 3 — Nginx gateway (non-root, :8080 inside → :80 on host)
 FROM nginxinc/nginx-unprivileged:1.29-alpine
@@ -72,6 +73,7 @@ RUN apk add --no-cache curl
 COPY deploy/nginx-gateway.conf          /etc/nginx/conf.d/default.conf
 COPY deploy/nginx-security-headers.inc  /etc/nginx/conf.d/security-headers.inc
 COPY --from=vite-build /build/frontend/dist /usr/share/nginx/html/command-center
+COPY --from=vite-build /build/frontend/dist-www /usr/share/nginx/html/www
 COPY deploy/public                      /usr/share/nginx/html/public
 USER 101
 EXPOSE 8080

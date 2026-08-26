@@ -449,7 +449,7 @@ pub async fn api_verify(
     spawn_signup_welcome_email(email.clone(), workspace.clone(), final_slug.clone());
 
     // Redirect to the login page with a query flag so the UI can show a one-time toast.
-    let login_url = format!("/command-center/login?verified=1&tenant={}", final_slug);
+    let login_url = format!("/login?verified=1&tenant={}", final_slug);
     let mut resp = axum::response::Redirect::to(&login_url).into_response();
     *resp.status_mut() = StatusCode::SEE_OTHER;
     resp
@@ -518,11 +518,11 @@ fn spawn_signup_welcome_email(email: String, workspace: String, slug: String) {
             "Your Weissman workspace is live, {}!\n\n\
              Workspace name: {}\n\
              Tenant slug:    {}\n\n\
-             Sign in: {}/command-center/login\n\n\
+             Sign in: {}/login\n\n\
              Next steps:\n\
               1. Add a client (target) under Clients → New.\n\
               2. Approve scan scope (domains, IP ranges).\n\
-              3. Hit \"Run\" on any of the 545 production engines.\n\n\
+              3. Run production engines from the Command Center.\n\n\
              Reply to this email or write to support@weissman.io if you need help.\n\n\
              — The Weissman team",
             workspace_display_name(&workspace),
@@ -546,7 +546,7 @@ fn workspace_display_name(workspace: &str) -> String {
 
 /// Send a transactional email via SMTP. Returns Ok(()) when SMTP is not configured
 /// (so signup still succeeds on local-dev without an SMTP) but logs at debug level.
-async fn send_signup_email(to: &str, subject: &str, body: &str) -> Result<(), String> {
+pub(crate) async fn send_signup_email(to: &str, subject: &str, body: &str) -> Result<(), String> {
     let enabled = matches!(
         std::env::var("WEISSMAN_SMTP_ENABLED").as_deref(),
         Ok("true") | Ok("1") | Ok("yes")

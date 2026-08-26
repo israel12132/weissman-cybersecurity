@@ -21,7 +21,7 @@ export function getApiBase() {
   const runtime = window.__WEISSMAN_API_BASE__
   if (runtime && String(runtime).trim()) return String(runtime).trim().replace(/\/+$/, '')
   const port = window.location?.port
-  if (port === '5173' || port === '4173') return '' // Vite dev/preview → use proxy
+  if (port === '5173' || port === '4173' || port === '5174' || port === '4174') return '' // Vite dev/preview → use proxy
   return window.location?.origin || ''
 }
 

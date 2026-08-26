@@ -123,6 +123,15 @@ export function AuthProvider({ children }) {
             detail: data.detail || 'MFA enrollment required by tenant policy.',
           }
         }
+        if (r.status === 429 && data.code === 'login_locked') {
+          clearStoredAccessToken()
+          return {
+            ok: false,
+            code: 'login_locked',
+            retry_after_seconds: data.retry_after_seconds,
+            detail: data.detail,
+          }
+        }
         clearStoredAccessToken()
         return {
           ok: false,

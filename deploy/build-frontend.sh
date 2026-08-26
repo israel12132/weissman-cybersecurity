@@ -9,5 +9,5 @@ else
   npm install
 fi
 npm run build
-echo "[weissman] Built static UI: $ROOT/frontend/dist"
-echo "[weissman] Run weissman-server or 'fingerprint_engine serve' from repo root, or set WEISSMAN_STATIC=$ROOT/frontend/dist"
+echo "[weissman] Built Command Center: $ROOT/frontend/dist"
+echo "[weissman] Built flagship site: $ROOT/frontend/dist-www"

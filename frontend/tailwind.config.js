@@ -14,6 +14,8 @@ export default {
   content: [
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
+    './www/index.html',
+    './www/src/**/*.{js,jsx}',
   ],
   theme: {
     extend: {

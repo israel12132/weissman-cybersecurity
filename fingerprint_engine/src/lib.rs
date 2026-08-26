@@ -150,6 +150,7 @@ pub mod self_healing;
 pub mod semantic_fuzzer;
 pub mod server_db;
 pub mod signatures;
+pub mod public_site;
 pub mod signup;
 pub mod sla_forecast;
 pub mod soar;

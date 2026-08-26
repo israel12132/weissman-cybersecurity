@@ -16,6 +16,7 @@ frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
 frontend/dist/
+frontend/dist-www/
 target/
 node_modules/
 result/
