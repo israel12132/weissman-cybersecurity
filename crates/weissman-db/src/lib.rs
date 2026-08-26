@@ -15,6 +15,7 @@ pub mod no_tx_migrations;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -102,6 +103,20 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
         }
     };
 
+    // 20260826120000 was briefly `platform_keyring` on the classified-keys branch, then
+    // renamed to 20260826130100 when main landed `client_scope_isolation` at the same
+    // version. A volume that applied the old file fails sqlx with "previously applied
+    // but has been modified" and Compose reports backend unhealthy. Re-stamp the
+    // already-applied keyring row to 20260826130100 so isolation can apply as 20000.
+    if let Err(e) = repair_platform_keyring_version_collision(&pool, &migrations_dir).await {
+        tracing::error!(
+            target: "weissman_db",
+            error = %e,
+            "platform_keyring version restamp failed"
+        );
+        return Err(sqlx::migrate::MigrateError::from(e));
+    }
+
     // Phase 2 — standard transactional migrations (these create the tables that
     // any deferred no-tx index builds depend on).
     sqlx::migrate!("./migrations").run(&pool).await?;
@@ -115,6 +130,87 @@ pub async fn run_migrations(database_url: &str) -> Result<(), sqlx::migrate::Mig
             return Err(sqlx::migrate::MigrateError::Source(Box::new(e)));
         }
     }
+    Ok(())
+}
+
+const KEYRING_COLLISION_OLD_VERSION: i64 = 20_260_826_120_000;
+const KEYRING_COLLISION_NEW_VERSION: i64 = 20_260_826_130_100;
+const KEYRING_COLLISION_FILE: &str = "20260826130100_platform_keyring.sql";
+
+#[must_use]
+fn is_platform_keyring_description(desc: &str) -> bool {
+    desc.to_ascii_lowercase().replace('_', " ").trim() == "platform keyring"
+}
+
+/// Re-stamp `_sqlx_migrations` when 20260826120000 was applied as platform_keyring
+/// (keys-cockpit branch before the timestamp rename) so 20260826120000 can become
+/// client_scope_isolation without a checksum mismatch that kills production boot.
+async fn repair_platform_keyring_version_collision(
+    pool: &PgPool,
+    migrations_dir: &Path,
+) -> Result<(), sqlx::Error> {
+    let row: Option<(i64, String)> = sqlx::query_as(
+        "SELECT version, description FROM _sqlx_migrations WHERE version = $1 AND success = true",
+    )
+    .bind(KEYRING_COLLISION_OLD_VERSION)
+    .fetch_optional(pool)
+    .await?;
+    let Some((_, desc)) = row else {
+        return Ok(());
+    };
+    if !is_platform_keyring_description(&desc) {
+        return Ok(());
+    }
+
+    let already: Option<i64> =
+        sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE version = $1")
+            .bind(KEYRING_COLLISION_NEW_VERSION)
+            .fetch_optional(pool)
+            .await?;
+    if already.is_some() {
+        tracing::warn!(
+            target: "weissman_db",
+            "platform_keyring is recorded at both 20260826120000 and 20260826130100; leaving rows unchanged"
+        );
+        return Ok(());
+    }
+
+    let path = migrations_dir.join(KEYRING_COLLISION_FILE);
+    if !path.is_file() {
+        tracing::warn!(
+            target: "weissman_db",
+            path = %path.display(),
+            "platform_keyring version collision detected but restamp file is missing"
+        );
+        return Ok(());
+    }
+    let bytes = tokio::fs::read(&path).await?;
+    let checksum = {
+        use sha2::{Digest, Sha384};
+        Sha384::digest(&bytes).to_vec()
+    };
+
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = $1")
+        .bind(KEYRING_COLLISION_OLD_VERSION)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(
+        r#"INSERT INTO _sqlx_migrations
+              (version, description, installed_on, success, checksum, execution_time)
+           VALUES ($1, $2, now(), true, $3, $4)"#,
+    )
+    .bind(KEYRING_COLLISION_NEW_VERSION)
+    .bind("platform keyring")
+    .bind(&checksum)
+    .bind(0_i64)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    tracing::info!(
+        target: "weissman_db",
+        "re-stamped platform_keyring migration 20260826120000 → 20260826130100 so client_scope_isolation can apply"
+    );
     Ok(())
 }
 
@@ -700,8 +796,9 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
 #[cfg(test)]
 mod url_and_path_helper_tests {
     use super::{
-        acquire_retry_backoff, auth_database_url_from_env, database_url_from_env, migrations_dir,
-        resolve_auth_database_url, worker_pool_floor, worker_pool_warm_min,
+        acquire_retry_backoff, auth_database_url_from_env, database_url_from_env,
+        is_platform_keyring_description, migrations_dir, resolve_auth_database_url,
+        worker_pool_floor, worker_pool_warm_min,
     };
     use std::sync::{Mutex, OnceLock};
 
@@ -719,6 +816,15 @@ mod url_and_path_helper_tests {
         // can always attempt to read migrations from it.
         let dir = migrations_dir();
         assert!(!dir.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn platform_keyring_description_matches_sqlx_spacing() {
+        assert!(is_platform_keyring_description("platform keyring"));
+        assert!(is_platform_keyring_description("platform_keyring"));
+        assert!(is_platform_keyring_description(" Platform Keyring "));
+        assert!(!is_platform_keyring_description("client scope isolation"));
+        assert!(!is_platform_keyring_description("platform keyring v2"));
     }
 
     #[test]
