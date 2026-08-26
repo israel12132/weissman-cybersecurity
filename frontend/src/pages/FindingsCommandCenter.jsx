@@ -26,7 +26,7 @@ import FilterPills from '../components/ui/FilterPills'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable from '../components/ui/DataTable'
 import FindingDrawer from '../components/ui/FindingDrawer'
-import FindingVerifyButton, { LiveVerdictBadge } from '../components/findings/FindingLiveVerify'
+import FindingVerifyButton, { LiveVerdictBadge, findingVerifyId } from '../components/findings/FindingLiveVerify'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import SeverityBadge, {
   SEVERITY_META,
@@ -559,7 +559,7 @@ export default function FindingsCommandCenter() {
 
   const handleVerifyComplete = useCallback((rawId, verification) => {
     const patch = (f) => (
-      Number(f.raw_id) === Number(rawId) || Number(f.id) === Number(rawId)
+      findingVerifyId(f) === String(rawId)
         ? {
             ...f,
             live_verification: verification,
@@ -570,7 +570,7 @@ export default function FindingsCommandCenter() {
     setRawFindings((prev) => prev.map(patch))
     setSelectedFinding((prev) => {
       if (!prev) return prev
-      if (Number(prev.raw_id) !== Number(rawId) && Number(prev.id) !== Number(rawId)) return prev
+      if (findingVerifyId(prev) !== String(rawId)) return prev
       return { ...prev, live_verification: verification, live_verdict: verification?.verdict }
     })
   }, [])

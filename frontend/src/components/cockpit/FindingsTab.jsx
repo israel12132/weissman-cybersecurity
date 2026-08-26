@@ -6,7 +6,7 @@ import { useClient } from '../../context/ClientContext'
 import DigitalEvidenceHUD from '../warroom/DigitalEvidenceHUD'
 import { formatApiErrorResponse } from '../../lib/apiError.js'
 import { sanitizeFindingPlainText } from '../../lib/sanitizeFinding.js'
-import FindingVerifyButton, { LiveVerdictBadge } from '../findings/FindingLiveVerify'
+import FindingVerifyButton, { LiveVerdictBadge, findingVerifyId } from '../findings/FindingLiveVerify'
 import { apiFetch } from '../../utils/apiFetch'
 import SeverityBadge from '../ui/SeverityBadge'
 import DataTable from '../ui/DataTable'
@@ -35,14 +35,14 @@ export default function FindingsTab() {
 
   const handleVerifyComplete = useCallback((rawId, verification) => {
     const patch = (f) => (
-      Number(f.id) === Number(rawId) || Number(f.raw_id) === Number(rawId)
+      findingVerifyId(f) === String(rawId)
         ? { ...f, live_verification: verification, live_verdict: verification?.verdict }
         : f
     )
     setFindings((prev) => prev.map(patch))
     setEvidenceFinding((prev) => {
       if (!prev) return prev
-      if (Number(prev.id) !== Number(rawId) && Number(prev.raw_id) !== Number(rawId)) return prev
+      if (findingVerifyId(prev) !== String(rawId)) return prev
       return { ...prev, live_verification: verification, live_verdict: verification?.verdict }
     })
   }, [])

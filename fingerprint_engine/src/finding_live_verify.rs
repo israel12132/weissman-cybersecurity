@@ -3,12 +3,21 @@
 //! Separates confirmed, evidence-backed vulnerabilities from noise and false positives
 //! by combining: tamper-evident attestation, evidence gate, client scope alignment,
 //! target reachability, optional HTTP PoC replay, and optional engine re-scan.
+//!
+//! All DB reads/writes go through [`crate::db::begin_tenant_tx`]. Querying the pool
+//! without the tenant GUC hits FORCE RLS on `vulnerabilities` and returns "finding not
+//! found" for every row — which is exactly how the UI "אמת" / "סריקה מעמיקה" buttons
+//! failed in production.
 
 use crate::engine_dispatch::run_engine;
+use crate::engine_result::EngineResult;
 use crate::remediation_verify::finding_still_present;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::time::Duration;
+use weissman_core::models::engine::{dispatch_engine_id, is_production_engine_id};
+
+const DEEP_RESCAN_SECS: u64 = 75;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct VerifyCheck {
@@ -21,16 +30,20 @@ pub struct VerifyCheck {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct LiveVerifyResult {
+    pub row_id: i64,
     pub verdict: String,
     pub confidence: f64,
     pub checks: Vec<VerifyCheck>,
     pub verified_at: String,
     pub reproducible: bool,
     pub recommended_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rescan_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rescan_finding_count: Option<usize>,
 }
 
 struct FindingRow {
-    #[allow(dead_code)] // selected from DB row; not read after mapping
     id: i64,
     finding_id: String,
     title: String,
@@ -124,21 +137,99 @@ fn looks_like_url_or_host(s: &str) -> bool {
         || (t.contains('.') && !t.contains(' ') && t.len() >= 4)
 }
 
+/// Parse UI tokens: `123`, `VLN-123`, `vln-123`.
+#[must_use]
+pub fn parse_finding_row_id(token: &str) -> Option<i64> {
+    let t = token.trim();
+    if t.is_empty() {
+        return None;
+    }
+    let t = t
+        .strip_prefix("VLN-")
+        .or_else(|| t.strip_prefix("vln-"))
+        .or_else(|| t.strip_prefix("Vln-"))
+        .unwrap_or(t);
+    let t = t.trim_start_matches('+');
+    if t.is_empty() || !t.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    t.parse::<i64>().ok().filter(|n| *n > 0)
+}
+
+fn json_str<'a>(raw: &'a Value, key: &str) -> Option<&'a str> {
+    raw.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
+fn nested_str<'a>(raw: &'a Value, a: &str, b: &str) -> Option<&'a str> {
+    raw.get(a)
+        .and_then(|v| v.get(b))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
 fn extract_probe_url(target: &str, raw: &Value) -> Option<String> {
-    for key in ["url", "affected_url", "target_url", "asset_url"] {
-        if let Some(u) = raw.get(key).and_then(Value::as_str) {
-            let t = u.trim();
-            if t.starts_with("http") {
-                return Some(t.to_string());
+    // Prefer explicit URL fields over a generic host label.
+    for key in ["url", "affected_url", "target_url", "asset_url", "endpoint"] {
+        if let Some(u) = json_str(raw, key) {
+            if let Some(normalized) = normalize_probe_url(u) {
+                return Some(normalized);
             }
         }
     }
-    let t = target.trim();
+    for (a, b) in [
+        ("evidence", "url"),
+        ("evidence", "target"),
+        ("evidence", "host"),
+        ("request", "url"),
+        ("http", "url"),
+        ("http", "target"),
+    ] {
+        if let Some(u) = nested_str(raw, a, b) {
+            if let Some(normalized) = normalize_probe_url(u) {
+                return Some(normalized);
+            }
+        }
+    }
+    for key in ["host", "asset", "target"] {
+        if let Some(u) = json_str(raw, key) {
+            if let Some(normalized) = normalize_probe_url(u) {
+                return Some(normalized);
+            }
+        }
+    }
+    normalize_probe_url(target)
+}
+
+fn normalize_probe_url(s: &str) -> Option<String> {
+    let t = s.trim();
     if t.starts_with("http://") || t.starts_with("https://") {
         return Some(t.to_string());
     }
     if looks_like_url_or_host(t) {
-        return Some(format!("https://{}", t.trim_start_matches('/')));
+        let host = t.trim_start_matches('/').trim_end_matches('/');
+        if host.is_empty() {
+            return None;
+        }
+        return Some(format!("https://{host}"));
+    }
+    None
+}
+
+fn rescan_engine_id(source: &str) -> Option<String> {
+    let s = source.trim();
+    if s.is_empty() {
+        return None;
+    }
+    if is_production_engine_id(s) {
+        return Some(s.to_string());
+    }
+    let canonical = dispatch_engine_id(s);
+    if is_production_engine_id(canonical) {
+        return Some(canonical.to_string());
     }
     None
 }
@@ -226,58 +317,144 @@ async fn replay_curl_proof(proof: &str) -> (bool, String) {
     }
 }
 
-async fn load_finding(pool: &PgPool, tenant_id: i64, row_id: i64) -> Result<FindingRow, String> {
-    let row = sqlx::query(
-        r#"SELECT id, finding_id, title, severity, source,
+const LOAD_FINDING_SQL: &str = r#"SELECT id, finding_id, title, severity, source,
                   COALESCE(raw_data->>'target', '') AS target,
                   client_id, COALESCE(raw_data, '{}'::jsonb) AS raw_data,
                   COALESCE(to_char(discovered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS discovered_at
              FROM vulnerabilities
-            WHERE id = $1 AND tenant_id = $2"#,
-    )
-    .bind(row_id)
-    .bind(tenant_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("db: {e}"))?
-    .ok_or_else(|| "finding not found".to_string())?;
+            WHERE tenant_id = $1
+              AND (
+                    ($2::bigint IS NOT NULL AND id = $2)
+                 OR finding_id = $3
+              )
+            ORDER BY CASE WHEN $2::bigint IS NOT NULL AND id = $2 THEN 0 ELSE 1 END
+            LIMIT 1"#;
 
-    Ok(FindingRow {
+fn map_finding_row(row: sqlx::postgres::PgRow) -> FindingRow {
+    let raw_data = row
+        .try_get::<Value, _>("raw_data")
+        .unwrap_or_else(|_| json!({}));
+    let mut target: String = row.try_get("target").unwrap_or_default();
+    if target.trim().is_empty() {
+        if let Some(u) = extract_probe_url("", &raw_data) {
+            target = u;
+        }
+    }
+    FindingRow {
         id: row.try_get("id").unwrap_or(0),
         finding_id: row.try_get("finding_id").unwrap_or_default(),
         title: row.try_get("title").unwrap_or_default(),
         severity: row.try_get("severity").unwrap_or_default(),
         source: row.try_get("source").unwrap_or_default(),
-        target: row.try_get("target").unwrap_or_default(),
-        client_id: row.try_get("client_id").ok(),
-        raw_data: row
-            .try_get::<Value, _>("raw_data")
-            .unwrap_or_else(|_| json!({})),
+        target,
+        client_id: row
+            .try_get::<Option<i64>, _>("client_id")
+            .ok()
+            .flatten()
+            .or_else(|| row.try_get::<i64, _>("client_id").ok()),
+        raw_data,
         discovered_at: row.try_get("discovered_at").unwrap_or_default(),
-    })
+    }
+}
+
+async fn load_finding(pool: &PgPool, tenant_id: i64, id_token: &str) -> Result<FindingRow, String> {
+    let token = id_token.trim();
+    if token.is_empty() {
+        return Err("finding not found".to_string());
+    }
+    let parsed = parse_finding_row_id(token);
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("db: {e}"))?;
+    let row = sqlx::query(LOAD_FINDING_SQL)
+        .bind(tenant_id)
+        .bind(parsed)
+        .bind(token)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| format!("db: {e}"))?;
+    let _ = tx.commit().await;
+    let row = row.ok_or_else(|| "finding not found".to_string())?;
+    Ok(map_finding_row(row))
 }
 
 async fn load_client_domains(pool: &PgPool, tenant_id: i64, client_id: i64) -> Vec<String> {
+    let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
+        return Vec::new();
+    };
     let raw: Option<String> = sqlx::query_scalar(
         "SELECT COALESCE(domains::text, '[]') FROM clients WHERE id = $1 AND tenant_id = $2",
     )
     .bind(client_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
+    let _ = tx.commit().await;
     raw.map(|s| parse_client_domains(&s)).unwrap_or_default()
 }
 
-/// Run multi-tier live verification for a persisted finding row.
-pub async fn verify_finding_live(
+async fn persist_verification(
     pool: &PgPool,
     tenant_id: i64,
     row_id: i64,
+    payload: &Value,
+) -> Result<(), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("persist verification: {e}"))?;
+    sqlx::query(
+        r#"UPDATE vulnerabilities
+              SET raw_data = jsonb_set(
+                      COALESCE(raw_data, '{}'::jsonb),
+                      '{live_verification}',
+                      $1::jsonb,
+                      true
+                  ),
+                  updated_at = now()
+            WHERE id = $2 AND tenant_id = $3"#,
+    )
+    .bind(payload.to_string())
+    .bind(row_id)
+    .bind(tenant_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("persist verification: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("persist verification: {e}"))?;
+    Ok(())
+}
+
+async fn run_engine_rescan(
+    engine: String,
+    target: String,
+    ctx: crate::engine_dispatch::EngineRunContext,
+) -> EngineResult {
+    let handle = tokio::spawn(async move { run_engine(&engine, &target, &ctx).await });
+    let abort = handle.abort_handle();
+    match tokio::time::timeout(Duration::from_secs(DEEP_RESCAN_SECS), handle).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(join_err)) => EngineResult::error(format!("re-scan task failed: {join_err}")),
+        Err(_) => {
+            abort.abort();
+            EngineResult::error(format!("re-scan timed out after {DEEP_RESCAN_SECS}s"))
+        }
+    }
+}
+
+/// Run multi-tier live verification for a persisted finding row.
+///
+/// `id_token` may be the numeric `vulnerabilities.id`, a `VLN-{id}` display token,
+/// or the stable `finding_id` hash.
+pub async fn verify_finding_live(
+    pool: &PgPool,
+    tenant_id: i64,
+    id_token: &str,
     deep_rescan: bool,
 ) -> Result<LiveVerifyResult, String> {
-    let row = load_finding(pool, tenant_id, row_id).await?;
+    let row = load_finding(pool, tenant_id, id_token).await?;
     let mut checks = Vec::new();
 
     let att_receipt = row
@@ -352,15 +529,18 @@ pub async fn verify_finding_live(
         0.13,
     );
 
-    let url_shape_ok = looks_like_url_or_host(&row.target)
-        || extract_probe_url(&row.target, &row.raw_data).is_some();
+    let probe_url = extract_probe_url(&row.target, &row.raw_data);
+    let url_shape_ok = probe_url.is_some();
     push_check(
         &mut checks,
         "target_shape",
         "Target is a real asset URL/host",
         url_shape_ok,
         if url_shape_ok {
-            "target looks like a scannable asset".into()
+            format!(
+                "probe URL {}",
+                probe_url.as_deref().unwrap_or(row.target.as_str())
+            )
         } else {
             "target is a label/campaign name, not a URL — high noise risk".into()
         },
@@ -369,8 +549,8 @@ pub async fn verify_finding_live(
 
     let mut reachable = false;
     let mut reach_detail = "no probe URL".to_string();
-    if let Some(url) = extract_probe_url(&row.target, &row.raw_data) {
-        let (ok, detail, status) = http_probe(&url).await;
+    if let Some(url) = probe_url.as_deref() {
+        let (ok, detail, status) = http_probe(url).await;
         reachable = ok;
         reach_detail = detail;
         let markers = evidence_markers(&row.raw_data);
@@ -422,53 +602,83 @@ pub async fn verify_finding_live(
     }
 
     let mut reproducible = false;
-    if deep_rescan
-        && !row.source.is_empty()
-        && !row.target.is_empty()
-        && extract_probe_url(&row.target, &row.raw_data).is_some()
-    {
-        let target =
-            extract_probe_url(&row.target, &row.raw_data).unwrap_or_else(|| row.target.clone());
-        let ctx = crate::remediation_verify::verify_context(
-            std::sync::Arc::new(pool.clone()),
-            tenant_id,
-            row.client_id,
-        );
-        let engine = row.source.clone();
-        let fid = row.finding_id.clone();
-        let rescan =
-            tokio::time::timeout(Duration::from_secs(90), run_engine(&engine, &target, &ctx)).await;
-        match rescan {
-            Ok(result) => {
-                reproducible = finding_still_present(&fid, &engine, &target, &result.findings);
-                push_check(
-                    &mut checks,
-                    "engine_rescan",
-                    "Engine re-scan reproduction",
-                    reproducible,
-                    if reproducible {
-                        format!(
-                            "same finding_id reproduced ({} findings on re-scan)",
-                            result.findings.len()
-                        )
-                    } else {
-                        format!(
-                            "finding not reproduced on live re-scan ({} findings returned)",
-                            result.findings.len()
-                        )
-                    },
-                    0.25,
-                );
-            }
-            Err(_) => {
+    let mut rescan_message = None;
+    let mut rescan_finding_count = None;
+    if deep_rescan {
+        let engine = rescan_engine_id(&row.source);
+        match (engine, probe_url.clone()) {
+            (None, _) => {
                 push_check(
                     &mut checks,
                     "engine_rescan",
                     "Engine re-scan reproduction",
                     false,
-                    "re-scan timed out after 90s".into(),
+                    format!(
+                        "source '{}' is not a live production engine — cannot re-probe",
+                        row.source
+                    ),
                     0.25,
                 );
+                rescan_message = Some(format!(
+                    "engine '{}' is catalog-only or unknown",
+                    row.source
+                ));
+            }
+            (_, None) => {
+                push_check(
+                    &mut checks,
+                    "engine_rescan",
+                    "Engine re-scan reproduction",
+                    false,
+                    "no scannable URL/host on this finding — re-scan skipped".into(),
+                    0.25,
+                );
+                rescan_message = Some("no probe URL".into());
+            }
+            (Some(engine), Some(target)) => {
+                let ctx = crate::remediation_verify::verify_context(
+                    std::sync::Arc::new(pool.clone()),
+                    tenant_id,
+                    row.client_id,
+                );
+                let fid = row.finding_id.clone();
+                let result = run_engine_rescan(engine.clone(), target.clone(), ctx).await;
+                rescan_finding_count = Some(result.findings.len());
+                rescan_message = Some(result.message.clone());
+                let timed_out = result.message.contains("timed out");
+                let failed = !result.success || timed_out;
+                if failed && result.findings.is_empty() {
+                    push_check(
+                        &mut checks,
+                        "engine_rescan",
+                        "Engine re-scan reproduction",
+                        false,
+                        format!("live re-scan did not complete: {}", result.message),
+                        0.25,
+                    );
+                } else {
+                    reproducible = finding_still_present(&fid, &engine, &target, &result.findings);
+                    push_check(
+                        &mut checks,
+                        "engine_rescan",
+                        "Engine re-scan reproduction",
+                        reproducible,
+                        if reproducible {
+                            format!(
+                                "same finding_id reproduced ({} findings on re-scan) — {}",
+                                result.findings.len(),
+                                result.message
+                            )
+                        } else {
+                            format!(
+                                "finding not reproduced on live re-scan ({} findings) — {}",
+                                result.findings.len(),
+                                result.message
+                            )
+                        },
+                        0.25,
+                    );
+                }
             }
         }
     }
@@ -478,12 +688,15 @@ pub async fn verify_finding_live(
     let verified_at = chrono::Utc::now().to_rfc3339();
 
     let result = LiveVerifyResult {
+        row_id: row.id,
         verdict: verdict.to_string(),
         confidence,
         checks,
         verified_at: verified_at.clone(),
         reproducible,
         recommended_status: recommended.map(str::to_string),
+        rescan_message,
+        rescan_finding_count,
     };
 
     let payload = json!({
@@ -493,26 +706,13 @@ pub async fn verify_finding_live(
         "reproducible": result.reproducible,
         "checks": result.checks,
         "recommended_status": result.recommended_status,
+        "rescan_message": result.rescan_message,
+        "rescan_finding_count": result.rescan_finding_count,
+        "deep": deep_rescan,
         "method": "multi_tier_live",
     });
 
-    sqlx::query(
-        r#"UPDATE vulnerabilities
-              SET raw_data = jsonb_set(
-                      COALESCE(raw_data, '{}'::jsonb),
-                      '{live_verification}',
-                      $1::jsonb,
-                      true
-                  ),
-                  updated_at = now()
-            WHERE id = $2 AND tenant_id = $3"#,
-    )
-    .bind(payload.to_string())
-    .bind(row_id)
-    .bind(tenant_id)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("persist verification: {e}"))?;
+    persist_verification(pool, tenant_id, row.id, &payload).await?;
 
     Ok(result)
 }
@@ -535,5 +735,46 @@ mod tests {
     fn verdict_confirmed_when_high_confidence() {
         let (v, _) = verdict_from(0.9, false, true);
         assert_eq!(v, "CONFIRMED");
+    }
+
+    #[test]
+    fn parses_vln_and_numeric_ids() {
+        assert_eq!(parse_finding_row_id("42"), Some(42));
+        assert_eq!(parse_finding_row_id("VLN-42"), Some(42));
+        assert_eq!(parse_finding_row_id("vln-99"), Some(99));
+        assert_eq!(parse_finding_row_id("  VLN-7  "), Some(7));
+        assert_eq!(parse_finding_row_id("0"), None);
+        assert_eq!(parse_finding_row_id("VLN-"), None);
+        assert_eq!(parse_finding_row_id("abc-sha256"), None);
+        assert_eq!(parse_finding_row_id(""), None);
+    }
+
+    #[test]
+    fn extracts_probe_url_from_nested_evidence() {
+        let raw = json!({
+            "evidence": { "url": "www.example.com/login" },
+            "host": "ignored.example"
+        });
+        assert_eq!(
+            extract_probe_url("Campaign Name", &raw).as_deref(),
+            Some("https://www.example.com/login")
+        );
+        assert_eq!(
+            extract_probe_url("https://direct.example/x", &json!({})).as_deref(),
+            Some("https://direct.example/x")
+        );
+        assert!(extract_probe_url("Password Reset Campaign", &json!({})).is_none());
+    }
+
+    #[test]
+    fn rescan_engine_id_rejects_empty_and_catalog_labels() {
+        assert!(rescan_engine_id("").is_none());
+        assert!(rescan_engine_id("NVD").is_none());
+        let ids = weissman_core::models::engine::production_engine_ids();
+        assert!(
+            !ids.is_empty(),
+            "production engine registry must not be empty"
+        );
+        assert!(rescan_engine_id(ids[0]).is_some());
     }
 }
