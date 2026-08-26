@@ -796,9 +796,11 @@ async fn execute_job_unscoped(
                     json!({ "message": "Tenant scan cycle started (orchestrator)" }),
                 );
             }
-            // Passed through to the orchestrator as a raw Arc; that path stamps its own
-            // telemetry with `tid` (it already receives the tenant id).
             let telemetry = channels.telemetry.clone();
+            let scan_opts = Some(crate::orchestrator::scan_budget::ScanJobOpts {
+                job_id: job.id,
+                payload: p.clone(),
+            });
             let fut = async move {
                 crate::orchestrator::run_single_tenant_scan_cycle(
                     app_pool.clone(),
@@ -806,19 +808,35 @@ async fn execute_job_unscoped(
                     tid,
                     Some(telemetry),
                     war,
+                    scan_opts,
                 )
                 .await
             };
             match crate::panic_shield::catch_unwind_future("tenant_full_scan_job", fut).await {
-                crate::panic_shield::CatchOutcome::Completed(Ok(())) => {
+                crate::panic_shield::CatchOutcome::Completed(Ok(outcome)) => {
                     if let Some(w) = war_terminal.as_ref() {
-                        w.emit(
-                            "session",
-                            "info",
-                            json!({ "message": "Tenant scan cycle completed" }),
-                        );
+                        let msg = if outcome.partial {
+                            format!(
+                                "Tenant scan cycle checkpoint: {} engine(s) this slice",
+                                outcome.engines_completed
+                            )
+                        } else {
+                            "Tenant scan cycle completed".to_string()
+                        };
+                        w.emit("session", "info", json!({ "message": msg }));
                     }
-                    Ok(json!({"ok": true, "message": "tenant scan cycle completed"}))
+                    Ok(json!({
+                        "ok": true,
+                        "message": if outcome.partial {
+                            "tenant scan cycle checkpointed; continuation enqueued"
+                        } else {
+                            "tenant scan cycle completed"
+                        },
+                        "partial": outcome.partial,
+                        "engines_completed": outcome.engines_completed,
+                        "remaining_engines": outcome.remaining_engines,
+                        "continuation_job_id": outcome.continuation_job_id.map(|id| id.to_string()),
+                    }))
                 }
                 crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
                     Err(format!("scan cycle failed: {}", e))
