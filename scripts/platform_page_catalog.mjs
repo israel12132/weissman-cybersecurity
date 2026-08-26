@@ -205,7 +205,7 @@ export const PLATFORM_MODULES = [
     what: 'weissman-oast-server: HTTP/DNS interaction logging.',
     why: 'SSRF, fuzz, OOB verification.',
     when: 'web fuzz / OAST engines.',
-    where: 'profile oast, separate host prod',
+    where: 'core compose service oast',
     how: 'WEISSMAN_OAST_DOMAIN + LISTENER_URL',
     howMuch: 'wildcard DNS required prod',
     who: 'Red team infra',

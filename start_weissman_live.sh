@@ -4,7 +4,7 @@
 # =============================================================================
 # Starts EVERYTHING required for a real customer deployment:
 #   Postgres (pgvector) · Redis · weissman-server · weissman-worker ·
-#   Command Center (built React + Nginx gateway) · SQL migrations ·
+#   weissman-oast-server · Command Center (built React + Nginx gateway) · SQL migrations ·
 #   endpoint-agent binaries · Prometheus + Grafana + Alertmanager (default)
 #
 # Usage:
@@ -15,7 +15,7 @@
 #   ./start_weissman_live.sh logs [service]
 #
 # Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended,
-# ports 80 + 3000 + 9090 free (9090/3000 only when monitoring is enabled).
+# ports 80 + 9091 + 53/udp + 5353/udp free (plus 3000 + 9090 when monitoring is enabled).
 # =============================================================================
 set -euo pipefail
 
@@ -38,7 +38,7 @@ Flags (start only):
   -h, --help                  this message
 
 Prerequisites: Docker 24+ with Compose v2, 8 GB RAM recommended,
-ports 80 + 3000 + 9090 free (3000/9090 only with monitoring enabled).
+ports 80 + 9091 + 53/udp + 5353/udp free (3000/9090 only with monitoring enabled).
 USAGE
 }
 
@@ -52,18 +52,15 @@ PROFILES=()
 
 PUBLIC_URL="${WEISSMAN_PUBLIC_BASE_URL:-}"
 ADMIN_EMAIL="${WEISSMAN_ADMIN_EMAIL:-admin@localhost}"
-# Captured from the shell BEFORE .env is sourced. `source .env` would otherwise overwrite an
-# operator's `WEISSMAN_OAST_DOMAIN=... ./start_weissman_live.sh` with the template's blank
-# line, enabling the oast profile but starting the listener with an empty domain.
+# Captured from the shell BEFORE .env is sourced so an operator's
+# `WEISSMAN_OAST_DOMAIN=oast.example.com ./start_weissman_live.sh` is not overwritten by
+# a blank (or placeholder) line in the template.
 OAST_DOMAIN_CLI="${WEISSMAN_OAST_DOMAIN:-}"
 # Captured before `.env` is sourced so an operator can inject the platform-owner
 # identity without it being clobbered by blank template lines.
 MASTER_BOOTSTRAP_EMAIL_CLI="${WEISSMAN_MASTER_BOOTSTRAP_EMAIL:-}"
 MASTER_BOOTSTRAP_PASSWORD_CLI="${WEISSMAN_MASTER_BOOTSTRAP_PASSWORD:-}"
 WITH_MONITORING=1
-# OAST out-of-band listener: on automatically when WEISSMAN_OAST_DOMAIN is set (it needs a
-# DNS zone the operator delegates), off otherwise.
-WITH_OAST=0
 SKIP_BUILD=0
 
 if [[ $# -gt 0 && "$1" =~ ^(start|stop|status|logs|reset)$ ]]; then
@@ -84,7 +81,6 @@ resolve_profiles() {
   # returns 1, which under `set -e` would abort the caller.
   PROFILES=()
   if [[ "$WITH_MONITORING" -eq 1 ]]; then PROFILES+=(--profile monitoring); fi
-  if [[ "$WITH_OAST" -eq 1 ]]; then PROFILES+=(--profile oast); fi
   return 0
 }
 
@@ -158,19 +154,48 @@ port_in_use() {
   fi
 }
 
+udp_port_in_use() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    [[ -n "$(ss -H -uln "sport = :${port}" 2>/dev/null)" ]]
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -uln 2>/dev/null | awk '{print $4}' | grep -qE ":${port}$"
+  else
+    return 2
+  fi
+}
+
+docker_publishes_udp() {
+  local port="$1"
+  docker ps --format '{{.Ports}}' 2>/dev/null | grep -qE ":${port}->[^/]+/udp"
+}
+
+# systemd-resolved (127.0.0.53:53) and Avahi (0.0.0.0:5353) make the default host
+# publishes 0.0.0.0:53/udp and 0.0.0.0:5353/udp fail on many Linux workstations.
+# Remap only when the occupant is not already this stack, and never overwrite an
+# operator-set bind. Inside the container OAST still listens on :53 and :5353.
+adapt_oast_host_ports() {
+  if [[ -z "$(env_get WEISSMAN_OAST_DNS53_HOST)" ]] && udp_port_in_use 53; then
+    if ! docker_publishes_udp 53; then
+      env_set WEISSMAN_OAST_DNS53_HOST "127.0.0.1"
+      log "WARN: host UDP :53 is in use (typically systemd-resolved) — publishing OAST DNS on 127.0.0.1:53 (container still binds 0.0.0.0:53)"
+    fi
+  fi
+  if [[ -z "$(env_get WEISSMAN_OAST_DNS5353_HOST_PORT)" ]] && udp_port_in_use 5353; then
+    if ! docker_publishes_udp 5353; then
+      env_set WEISSMAN_OAST_DNS5353_HOST_PORT "15353"
+      log "WARN: host UDP :5353 is in use (typically Avahi mDNS) — publishing OAST DNS on host :15353 → container :5353"
+    fi
+  fi
+}
+
 check_ports_free() {
-  # Every port this stack PUBLISHES to the host. 9090 (Prometheus) was missing, so a
+  # Every TCP port this stack PUBLISHES to the host. 9090 (Prometheus) was missing, so a
   # conflict there only surfaced as a `compose up` failure after .env had been rewritten.
-  local ports=(80)
+  # UDP 53/5353 are remapped by adapt_oast_host_ports() instead of aborting compose up.
+  local ports=(80 9091)
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
     ports+=(3000 9090)
-  fi
-  # OAST may be enabled via the shell env OR a pre-existing .env; check_ports_free runs
-  # before .env is sourced, so consult both (not just the pre-source WITH_OAST latch).
-  if [[ "$WITH_OAST" -eq 1 || -n "$OAST_DOMAIN_CLI" || -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then
-    # OAST HTTP callback catcher (TCP). The DNS listener is UDP and not pre-checked here.
-    local ohp; ohp="$(env_get WEISSMAN_OAST_HTTP_PORT)"
-    ports+=("${WEISSMAN_OAST_HTTP_PORT:-${ohp:-9091}}")
   fi
 
   local unknown=0 port rc
@@ -276,8 +301,7 @@ ensure_env() {
     # Zero-trust job bus HMAC (security_startup.rs:146) — required by BOTH server and
     # worker in production, with no JWT fallback.
     WEISSMAN_JOB_ORCHESTRATOR_SECRET
-    # Bearer for the OAST correlation API, shared by the listener and the engines. Generated
-    # up front so enabling OAST later only needs WEISSMAN_OAST_DOMAIN; unused while OAST off.
+    # Bearer for the OAST correlation API, shared by the listener and the engines.
     WEISSMAN_OAST_API_KEY
     # Dedicated secrets-at-rest key for MFA seeds and SOAR provider credentials. Without it the
     # vault derives its key from WEISSMAN_JWT_SECRET — the token-signing key, which is shipped to
@@ -342,11 +366,19 @@ ensure_env() {
     log "WEISSMAN_PUBLIC_BASE_URL=https://localhost — pass --url https://your.domain for real deploys"
   fi
 
-  # Persist a shell-provided OAST domain so it survives `source .env` (the template ships a
-  # blank line that would otherwise clobber it) and actually reaches the oast container.
+  # Persist a shell-provided OAST domain so it survives `source .env`. If neither the
+  # shell nor .env has a zone, scaffold the local placeholder so production boot
+  # (WEISSMAN_ENV=production) still starts — live callbacks wait on a real NS delegation.
   if [[ -n "$OAST_DOMAIN_CLI" ]]; then
     env_set WEISSMAN_OAST_DOMAIN "$OAST_DOMAIN_CLI"
+  elif [[ -z "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then
+    env_set WEISSMAN_OAST_DOMAIN "oast.localhost"
+    log "WEISSMAN_OAST_DOMAIN=oast.localhost (placeholder — delegate a public zone for live OOB callbacks)"
   fi
+  if [[ -z "$(env_get WEISSMAN_OAST_LISTENER_URL)" ]]; then
+    env_set WEISSMAN_OAST_LISTENER_URL "http://oast:9091"
+  fi
+  adapt_oast_host_ports
 
   # shellcheck disable=SC1091
   set -a && source .env && set +a
@@ -417,8 +449,7 @@ compose_up() {
   fi
   local extras=""
   if [[ "$WITH_MONITORING" -eq 1 ]]; then extras+=" + monitoring"; fi
-  if [[ "$WITH_OAST" -eq 1 ]]; then extras+=" + OAST listener"; fi
-  log "Starting LIVE stack (Postgres, Redis, API, Worker, Gateway${extras})..."
+  log "Starting LIVE stack (Postgres, Redis, API, Worker, OAST, Gateway${extras})..."
   if dc "${up_args[@]}"; then
     return 0
   fi
@@ -430,6 +461,7 @@ compose_up() {
 # never start: "dependency failed to start: container ...-backend-1 is unhealthy").
 diagnose_compose_failure() {
   diagnose_service backend
+  diagnose_service oast
   local logs
   logs="$(dc logs backend --tail 120 2>/dev/null || true)"
   if grep -q "security policy refusal" <<<"$logs"; then
@@ -446,12 +478,9 @@ diagnose_compose_failure() {
 
 # Services this run expects to come up, in the order we report them.
 stack_services() {
-  printf '%s\n' postgres redis backend worker gateway
+  printf '%s\n' postgres redis backend worker oast gateway
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
     printf '%s\n' prometheus grafana alertmanager
-  fi
-  if [[ "$WITH_OAST" -eq 1 ]]; then
-    printf '%s\n' oast
   fi
 }
 
@@ -560,6 +589,9 @@ verify_live() {
   # (not in PUBLIC_ROUTES) and returns 401 unauthenticated, and its body leaks tenant_id.
   # The gateway->backend hop is already exercised by /api/health above.
 
+  curl -sf --connect-timeout 3 "http://127.0.0.1:9091/healthz" >/dev/null \
+    || die "OAST :9091/healthz did not answer — check: ./start_weissman_live.sh logs oast"
+
   if [[ "$WITH_MONITORING" -eq 1 ]]; then
     curl -sf "http://127.0.0.1:3000/login" >/dev/null || die "Grafana :3000 not reachable"
     # Prometheus is behind the basic-auth web config generated during preflight, so an
@@ -647,6 +679,11 @@ EOF
 EOF
   fi
   cat <<EOF
+  OAST HTTP      : http://127.0.0.1:9091  (callbacks + correlation API)
+  OAST DNS       : UDP :53 and :5353 (host bind may remap if occupied; see WEISSMAN_OAST_DNS*)
+  OAST domain    : ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
+EOF
+  cat <<EOF
 
   Services:
 $(dc ps --format '    - {{.Name}}: {{.Status}}' 2>/dev/null || dc ps)
@@ -683,16 +720,15 @@ preflight_monitoring() {
 
 cmd_start() {
   parse_args "$@"
-  # OAST needs a DNS zone the operator delegates, so it is opt-in via WEISSMAN_OAST_DOMAIN.
-  # Peek the shell env before .env exists so port checks line up on first boot.
-  if [[ -n "${WEISSMAN_OAST_DOMAIN:-}" ]]; then WITH_OAST=1; fi
   check_prereqs
   ensure_env
-  # ensure_env sources .env, which may itself define WEISSMAN_OAST_DOMAIN.
-  if [[ -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then WITH_OAST=1; fi
   resolve_profiles
-  if [[ "$WITH_OAST" -eq 0 ]]; then
-    log "OAST listener disabled (WEISSMAN_OAST_DOMAIN unset) — blind SSRF/XXE/Log4Shell callbacks will not be correlated. Set WEISSMAN_OAST_DOMAIN to a delegated zone to enable."
+  local oast_zone
+  oast_zone="$(env_get WEISSMAN_OAST_DOMAIN)"
+  if [[ "$oast_zone" == "oast.localhost" || -z "$oast_zone" ]]; then
+    log "OAST listener is ON (core stack). Public DNS zone is a placeholder — set WEISSMAN_OAST_DOMAIN to a delegated zone for live SSRF/XXE/Log4Shell callbacks."
+  else
+    log "OAST listener is ON with zone ${oast_zone}"
   fi
   validate_env
   preflight_monitoring
@@ -711,7 +747,6 @@ cmd_start() {
 # For non-start commands: infer which optional stacks are present from .env so
 # ps / logs / down operate on their containers too.
 resolve_optional_stacks_from_env() {
-  if [[ -n "$(env_get WEISSMAN_OAST_DOMAIN)" ]]; then WITH_OAST=1; fi
   resolve_profiles
 }
 

@@ -397,7 +397,7 @@ pub async fn run_oast_oob_result(target: &str) -> EngineResult {
             false,
             json!({
                 "remediation": "export WEISSMAN_OAST_DOMAIN=oast.your-domain.example",
-                "listener": std::env::var("WEISSMAN_OAST_LISTENER_URL").unwrap_or_else(|_| "http://127.0.0.1:9090".into()),
+                "listener": std::env::var("WEISSMAN_OAST_LISTENER_URL").unwrap_or_else(|_| "http://127.0.0.1:9091".into()),
             }),
         )];
         findings.push(posture_summary(target, &host, false, 0, 0, &domain));

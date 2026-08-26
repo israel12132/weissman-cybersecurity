@@ -27,7 +27,7 @@
 | **קטלוג Paddle חי** | ⚠️ per-deployment | חובה להגדיר `pri_*` |
 | **SMTP ל-signup** | ⚠️ אם self-serve | נדרש עם `WEISSMAN_SELF_SERVE_SIGNUP=1` |
 | **LLM / vLLM** | ⚠️ מודול אופציונלי | Council, General Mission |
-| **שרת OAST** | ⚠️ אופציונלי | `weissman-oast-server` נפרד |
+| **שרת OAST** | ✅ ליבת הסטאק | `weissman-oast-server` ב-Docker Compose (HTTP :9091, DNS UDP :53/:5353) |
 
 **מסקנה:** **100% מוכן בקוד ותיעוד.** Paddle live, SMTP, deploy, ח.פ., MSA חתום — מחוץ למאגר (ראו `docs/sales/COMPANY-READINESS-he.md`).
 

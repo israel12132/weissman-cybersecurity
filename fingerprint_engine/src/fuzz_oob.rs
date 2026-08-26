@@ -139,7 +139,7 @@ fn oast_listener_base_url() -> String {
         return u;
     }
     std::env::var("WEISSMAN_OAST_LISTENER_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:9090".to_string())
+        .unwrap_or_else(|_| "http://127.0.0.1:9091".to_string())
         .trim()
         .trim_end_matches('/')
         .to_string()

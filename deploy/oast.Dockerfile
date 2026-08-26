@@ -24,5 +24,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN useradd -r -s /bin/false -u 65533 oast
 COPY --from=build /build/target/release/weissman-oast-server /usr/local/bin/weissman-oast-server
 USER oast
-EXPOSE 9090
+EXPOSE 9091 53/udp 5353/udp
 ENTRYPOINT ["/usr/local/bin/weissman-oast-server"]

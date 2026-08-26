@@ -21,7 +21,7 @@ cp deploy/env.staging.example .env
 # מלאו סודות, pri_*, LLM URL לפי הצורך
 
 docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  --profile staging --profile oast up -d --build
+  --profile staging up -d --build
 
 ./scripts/staging-qa.sh --live http://localhost
 ```
@@ -105,27 +105,18 @@ Council debate / General Mission מחזירים תשובה ולא "LLM unavailab
 
 ## 4. OAST — out-of-band (ספר 13)
 
-מנועי fuzz/OAST משתמשים ב-`WEISSMAN_OAST_DOMAIN` + `WEISSMAN_OAST_LISTENER_URL`.
-
-### Staging (profile `oast`)
-
-```bash
-WEISSMAN_OAST_DOMAIN=oast.localhost
-WEISSMAN_OAST_LISTENER_URL=http://oast:9090
-# WEISSMAN_OAST_API_KEY=  # אופציונלי
-```
+שירות `oast` הוא **ליבה** (`docker-compose.yml`) ועולה עם `docker compose up -d`.
+HTTP ב-**9091:9091**; DNS ב-**53:53/udp** ו-**5353:5353/udp**.
+`WEISSMAN_OAST_DOMAIN` ברירת מחדל `oast.localhost` — אזור DNS ציבורי חסר לא מפיל את המאזין.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile oast up -d oast
+WEISSMAN_OAST_DOMAIN=oast.localhost   # להחליף באזור שתאצילו NS
+WEISSMAN_OAST_LISTENER_URL=http://oast:9091
 ```
 
-### Production
+לקריאות חיות: DNS wildcard `*.oast.your-domain.example` → המארח הזה, ו-`WEISSMAN_OAST_DOMAIN` לאותו אזור.
 
-- פריסת `weissman-oast-server` על host נפרד (`deploy/oast.Dockerfile`).
-- DNS wildcard: `*.oast.your-domain.example` → IP ה-listener.
-- Backend/worker: `WEISSMAN_OAST_LISTENER_URL=https://oast.your-domain.example`.
-
-**אימות:** סריקת מנוע OOB → hit ב-`oast_interaction_hits` / status API.
+**אימות:** `curl -sf http://127.0.0.1:9091/healthz` וסריקת מנוע OOB שכותבת ל-`oast_interaction_hits`.
 
 ---
 
@@ -149,10 +140,10 @@ Windows/macOS — cross-compile או CI נפרד; Linux מכוסה ב-image.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  --profile staging --profile oast build --no-cache backend worker oast
+  --profile staging build --no-cache backend worker oast
 
 docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  --profile staging --profile oast up -d
+  --profile staging up -d
 ```
 
 **Pass:** כל השירותים `healthy`; `curl -sf http://localhost/api/health`.
@@ -188,7 +179,7 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml \
 | Paddle `pri_*` | `WEISSMAN_PADDLE_PRICE_*`, SQL example | 08 |
 | SMTP signup | `WEISSMAN_SMTP_*`, Mailpit | 06 |
 | LLM | `WEISSMAN_LLM_BASE_URL` | 15 |
-| OAST | profile `oast`, `WEISSMAN_OAST_*` | 13 |
+| OAST | ליבת `oast`, `WEISSMAN_OAST_*` | 13 |
 | Agent binaries | Dockerfile + `package_agent_binaries.sh` | 12 |
 | Staging build | `docker-compose.staging.yml` | 02 |
 | QA | `scripts/staging-qa.sh` | 18 |

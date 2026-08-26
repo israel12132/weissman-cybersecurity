@@ -1,4 +1,4 @@
-# Weissman Phase 2: PostgreSQL + Rust API + Nginx (SPA + /api /ws proxy on :80).
+# Weissman Phase 2: PostgreSQL + Redis + Rust API + Worker + OAST + Nginx (SPA + /api /ws proxy on :80).
 # Run from repo root: docker compose up --build
 #
 # Prerequisites: copy `.env.example` → `.env` and set WEISSMAN_JWT_SECRET + WEISSMAN_ADMIN_PASSWORD.
@@ -165,6 +165,11 @@ services:
       # Production: set WEISSMAN_ENV=production + WEISSMAN_METRICS_TOKEN (≥32 chars) in `.env`
       WEISSMAN_ENV: ${WEISSMAN_ENV:-}
       WEISSMAN_METRICS_TOKEN: ${WEISSMAN_METRICS_TOKEN:-}
+      # Core OAST listener (same compose network). Placeholder domain boots without a
+      # delegated public zone; engines poll WEISSMAN_OAST_LISTENER_URL for callbacks.
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
+      WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
+      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9091}
       # Optional first-boot master admin. All THREE must reach the container or the feature
       # is inert: crates/weissman-db/src/lib.rs skips bootstrap unless WEISSMAN_MASTER_BOOTSTRAP_EMAIL
       # is set together with a password or bcrypt hash. (EMAIL was previously never plumbed.)
@@ -224,6 +229,9 @@ services:
       # Must be byte-identical to the backend's value — the worker verifies job envelopes the server signed.
       WEISSMAN_JOB_ORCHESTRATOR_SECRET: ${WEISSMAN_JOB_ORCHESTRATOR_SECRET:-}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
+      WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
+      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9091}
     depends_on:
       backend:
         condition: service_healthy
@@ -259,6 +267,57 @@ services:
           memory: 6G
         reservations:
           memory: 512M
+
+  # OAST out-of-band listener (blind SSRF/XXE/Log4Shell callback correlation).
+  # Core stack: always starts with postgres/redis/backend/worker/gateway. Writes hits
+  # to oast_interaction_hits. A placeholder WEISSMAN_OAST_DOMAIN (oast.localhost) lets
+  # the process boot before an operator delegates a public DNS zone.
+  oast:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # DNS :53 is a privileged port; grant only bind-below-1024, nothing else.
+    cap_add:
+      - NET_BIND_SERVICE
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: deploy/oast.Dockerfile
+    image: weissman-oast:stable
+    environment:
+      DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:-weissman_dev_secret}@postgres:5432/${POSTGRES_DB:-weissman}
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
+      WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
+      OAST_HTTP_LISTEN: 0.0.0.0:9091
+      OAST_DNS_LISTEN: 0.0.0.0:5353,0.0.0.0:53
+    ports:
+      # HTTP 9091:9091. DNS UDP 53:53/udp and 5353:5353/udp (inside the container always
+      # :53 and :5353). Host IP/port are overridable: systemd-resolved often owns 0.0.0.0:53
+      # and Avahi owns 0.0.0.0:5353 on Linux desktops. start_weissman_live.sh remaps those
+      # so `docker compose up -d` still boots; a dedicated VPS leaves the 0.0.0.0 defaults.
+      - "9091:9091"
+      - "${WEISSMAN_OAST_DNS53_HOST:-0.0.0.0}:53:53/udp"
+      - "${WEISSMAN_OAST_DNS5353_HOST:-0.0.0.0}:${WEISSMAN_OAST_DNS5353_HOST_PORT:-5353}:5353/udp"
+    expose:
+      - "9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --connect-timeout 2 http://127.0.0.1:9091/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 64M
 
   gateway:
     # Least privilege. The stack previously ran every container with the full default

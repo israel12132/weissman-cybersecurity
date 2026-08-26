@@ -2,7 +2,7 @@
 # =============================================================================
 # Weissman — one command that starts the FULL stack after a pull
 # =============================================================================
-# Postgres · Redis · weissman-server · weissman-worker · Command Center UI
+# Postgres · Redis · OAST · weissman-server · weissman-worker · Command Center UI
 #
 # Usage (from the repo root, e.g. ~/weissman-cybersecurity):
 #   ./start_weissman.sh --pull     # unstick git, pull THIS branch (or main if detached), then start
@@ -46,7 +46,7 @@ LIVE_ARGS=()
 
 usage() {
   cat <<'USAGE'
-Weissman — start the full stack (Postgres, Redis, weissman-server, weissman-worker, Command Center).
+Weissman — start the full stack (Postgres, Redis, OAST, weissman-server, weissman-worker, Command Center).
 
 Usage:
   ./start_weissman.sh [--pull] [start] [flags]  pull (optional) then start everything
@@ -276,7 +276,15 @@ WEISSMAN_JOB_ORCHESTRATOR_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 WEISSMAN_ADMIN_EMAIL=${WEISSMAN_ADMIN_EMAIL:-admin@localhost}
 WEISSMAN_ADMIN_PASSWORD=${WEISSMAN_ADMIN_PASSWORD:-weissman-local-admin}
 WEISSMAN_PUBLIC_BASE_URL=http://127.0.0.1:8000
+# OAST — core listener. Placeholder zone boots without a public NS delegation.
+WEISSMAN_OAST_DOMAIN=oast.localhost
+WEISSMAN_OAST_LISTENER_URL=http://127.0.0.1:9091
+WEISSMAN_OAST_API_KEY=$(openssl rand -base64 48 | tr -d '\n')
 EOF
+  fi
+  # Existing env files created before OAST was core still need the placeholder zone.
+  if [[ -f "$env_file" ]] && ! grep -qE '^WEISSMAN_OAST_DOMAIN=' "$env_file"; then
+    printf '\nWEISSMAN_OAST_DOMAIN=oast.localhost\nWEISSMAN_OAST_LISTENER_URL=http://127.0.0.1:9091\n' >>"$env_file"
   fi
   load_env_file "$env_file" || true
 
@@ -293,6 +301,9 @@ EOF
   export WEISSMAN_ENV="${WEISSMAN_ENV:-development}"
   export WEISSMAN_COOKIE_SECURE="${WEISSMAN_COOKIE_SECURE:-0}"
   export WEISSMAN_BILLING_STRICT="${WEISSMAN_BILLING_STRICT:-0}"
+  export WEISSMAN_OAST_DOMAIN="${WEISSMAN_OAST_DOMAIN:-oast.localhost}"
+  export WEISSMAN_OAST_LISTENER_URL="${WEISSMAN_OAST_LISTENER_URL:-http://127.0.0.1:9091}"
+  export WEISSMAN_OAST_API_KEY="${WEISSMAN_OAST_API_KEY:-}"
 }
 
 # ── local Docker datastores ──────────────────────────────────────────────────
@@ -489,7 +500,7 @@ cmd_start_systemd() {
 cmd_start_live() {
   ensure_docker
   [[ -x "$ROOT/start_weissman_live.sh" ]] || die "missing start_weissman_live.sh"
-  log "Starting full Docker stack (Postgres, Redis, API, worker, gateway)..."
+  log "Starting full Docker stack (Postgres, Redis, API, worker, OAST, gateway)..."
   exec "$ROOT/start_weissman_live.sh" start "${LIVE_ARGS[@]}"
 }
 

@@ -2,11 +2,13 @@
 //!
 //! Env:
 //! - `DATABASE_URL` — Postgres (same DB as app; table `oast_interaction_hits`).
-//! - `WEISSMAN_OAST_DOMAIN` — preferred; e.g. `weissmancyber.com` (parse `{uuid}.weissmancyber.com`).
+//! - `WEISSMAN_OAST_DOMAIN` — preferred; e.g. `oast.example.com` (parse `{uuid}.oast.example.com`).
+//!   Unset uses placeholder `oast.localhost` so the listener still boots.
 //! - `WEISSMAN_OAST_BASE_DOMAIN` — legacy alias for the same suffix.
-//! - `OAST_HTTP_LISTEN` — default `0.0.0.0:9090`.
-//! - `OAST_DNS_LISTEN` — default `0.0.0.0:5353` (set `OAST_DNS_ENABLE=0` to disable).
-//! - `WEISSMAN_OAST_API_KEY` — optional Bearer for `/api/oast/*`.
+//! - `OAST_HTTP_LISTEN` — default `0.0.0.0:9091`.
+//! - `OAST_DNS_LISTEN` — comma-separated UDP binds; default `0.0.0.0:5353,0.0.0.0:53`
+//!   (set `OAST_DNS_ENABLE=0` to disable). A failed bind is logged and skipped.
+//! - `WEISSMAN_OAST_API_KEY` — optional Bearer for `/api/oast/*` (required in production).
 
 use axum::body::Body;
 use axum::extract::{ConnectInfo, Path, State};
@@ -44,19 +46,32 @@ fn base_domain_from_env() -> String {
         .to_lowercase()
 }
 
-/// When unset, default to production suffix so a minimal deploy works (logged once).
+/// When unset, default to a local placeholder so a missing public DNS zone does not
+/// crash the core stack. Live callbacks need the operator to replace this with a
+/// delegated zone (never a third-party suffix).
 fn base_domain_effective() -> String {
     let b = base_domain_from_env();
     if !b.is_empty() {
         return b;
     }
-    let d = "weissmancyber.com".to_string();
+    const PLACEHOLDER: &str = "oast.localhost";
     info!(
         target: "oast",
-        "WEISSMAN_OAST_DOMAIN / WEISSMAN_OAST_BASE_DOMAIN unset; using default suffix {}",
-        d
+        "WEISSMAN_OAST_DOMAIN / WEISSMAN_OAST_BASE_DOMAIN unset; using placeholder {}",
+        PLACEHOLDER
     );
-    d
+    PLACEHOLDER.to_string()
+}
+
+/// UDP listen addresses from `OAST_DNS_LISTEN` (comma-separated). Default publishes both
+/// the unprivileged collector port and privileged :53 for NS-delegated zones.
+fn dns_listen_addrs() -> Vec<String> {
+    env::var("OAST_DNS_LISTEN")
+        .unwrap_or_else(|_| "0.0.0.0:5353,0.0.0.0:53".into())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 fn parse_interaction_token_label(label: &str) -> Option<Uuid> {
@@ -165,6 +180,10 @@ fn check_api_key(state: &AppState, headers: &HeaderMap) -> Result<(), StatusCode
     } else {
         Err(StatusCode::UNAUTHORIZED)
     }
+}
+
+async fn healthz() -> StatusCode {
+    StatusCode::OK
 }
 
 async fn insert_hit(
@@ -534,11 +553,13 @@ async fn run() -> Result<(), String> {
     if database_url.is_empty() {
         return Err("DATABASE_URL is empty".into());
     }
-    // Production startup gates — fail visibly rather than silently defaulting.
+    // Production: refuse a missing API key (read API would otherwise be open). A missing
+    // public DNS zone is NOT fatal — placeholder `oast.localhost` lets the core stack boot;
+    // engines still run, live callbacks wait until the operator delegates a real zone.
     if is_production_environment() && base_domain_from_env().is_empty() {
-        return Err(
-            "WEISSMAN_OAST_DOMAIN must be set in production (refusing to default to a shared public suffix)"
-                .into(),
+        warn!(
+            target: "oast",
+            "WEISSMAN_OAST_DOMAIN unset in production; using placeholder oast.localhost — live OOB callbacks will not resolve until a zone is delegated"
         );
     }
     let base = base_domain_effective();
@@ -567,11 +588,12 @@ async fn run() -> Result<(), String> {
     };
 
     let http_listen: SocketAddr = env::var("OAST_HTTP_LISTEN")
-        .unwrap_or_else(|_| "0.0.0.0:9090".into())
+        .unwrap_or_else(|_| "0.0.0.0:9091".into())
         .parse()
         .map_err(|e| format!("OAST_HTTP_LISTEN: invalid socket address: {e}"))?;
 
     let app = Router::new()
+        .route("/healthz", get(healthz))
         .route("/api/oast/status/:token", get(api_status_plain))
         .route("/api/oast/hits/:token", get(api_hits_json))
         .route("/i/:token", get(http_path_token).post(http_path_token))
@@ -588,15 +610,32 @@ async fn run() -> Result<(), String> {
         Ok("0") | Ok("false")
     );
     if dns_enable {
-        let dns_listen = env::var("OAST_DNS_LISTEN").unwrap_or_else(|_| "0.0.0.0:5353".into());
-        if let Ok(sock) = UdpSocket::bind(&dns_listen).await {
-            info!(target: "oast", %dns_listen, "OAST DNS UDP listening");
-            let s = Arc::new(sock);
-            let p = pool.clone();
-            let b = base.clone();
-            tokio::spawn(dns_server_loop(s, p, b));
-        } else {
-            warn!(target: "oast", "OAST DNS bind failed for {}", dns_listen);
+        let addrs = dns_listen_addrs();
+        if addrs.is_empty() {
+            warn!(target: "oast", "OAST_DNS_LISTEN is empty; DNS catcher disabled");
+        }
+        let mut bound = 0usize;
+        for dns_listen in addrs {
+            match UdpSocket::bind(&dns_listen).await {
+                Ok(sock) => {
+                    info!(target: "oast", %dns_listen, "OAST DNS UDP listening");
+                    let s = Arc::new(sock);
+                    let p = pool.clone();
+                    let b = base.clone();
+                    tokio::spawn(dns_server_loop(s, p, b));
+                    bound += 1;
+                }
+                Err(e) => {
+                    warn!(
+                        target: "oast",
+                        error = %e,
+                        "OAST DNS bind failed for {dns_listen} — continuing (HTTP catcher is up)"
+                    );
+                }
+            }
+        }
+        if bound == 0 {
+            warn!(target: "oast", "no OAST DNS socket bound; HTTP callbacks still recorded");
         }
     }
 
@@ -722,6 +761,41 @@ mod tests {
     }
 
     // ---- constant-time equality ------------------------------------------
+
+    #[test]
+    fn dns_listen_addrs_parses_comma_list_and_default() {
+        let prev = std::env::var("OAST_DNS_LISTEN").ok();
+        std::env::remove_var("OAST_DNS_LISTEN");
+        let def = dns_listen_addrs();
+        assert!(def.contains(&"0.0.0.0:5353".to_string()));
+        assert!(def.contains(&"0.0.0.0:53".to_string()));
+        std::env::set_var("OAST_DNS_LISTEN", " 127.0.0.1:5353 , 127.0.0.1:53 ");
+        assert_eq!(
+            dns_listen_addrs(),
+            vec!["127.0.0.1:5353".to_string(), "127.0.0.1:53".to_string()]
+        );
+        match prev {
+            Some(v) => std::env::set_var("OAST_DNS_LISTEN", v),
+            None => std::env::remove_var("OAST_DNS_LISTEN"),
+        }
+    }
+
+    #[test]
+    fn base_domain_effective_placeholder_when_unset() {
+        let prev_d = std::env::var("WEISSMAN_OAST_DOMAIN").ok();
+        let prev_b = std::env::var("WEISSMAN_OAST_BASE_DOMAIN").ok();
+        std::env::remove_var("WEISSMAN_OAST_DOMAIN");
+        std::env::remove_var("WEISSMAN_OAST_BASE_DOMAIN");
+        assert_eq!(base_domain_effective(), "oast.localhost");
+        match prev_d {
+            Some(v) => std::env::set_var("WEISSMAN_OAST_DOMAIN", v),
+            None => std::env::remove_var("WEISSMAN_OAST_DOMAIN"),
+        }
+        match prev_b {
+            Some(v) => std::env::set_var("WEISSMAN_OAST_BASE_DOMAIN", v),
+            None => std::env::remove_var("WEISSMAN_OAST_BASE_DOMAIN"),
+        }
+    }
 
     #[test]
     fn constant_time_eq_matches_and_rejects() {

@@ -23,7 +23,7 @@
 | **Paddle catalog live** | ⚠️ Customer-specific | Must set `pri_*` price IDs per deployment |
 | **SMTP for signup** | ⚠️ If self-serve | Required when `WEISSMAN_SELF_SERVE_SIGNUP=1` |
 | **LLM / vLLM** | ⚠️ Optional module | Council, General Mission need OpenAI-compatible endpoint |
-| **OAST server** | ⚠️ Optional module | Separate `weissman-oast-server` for out-of-band verification |
+| **OAST server** | ✅ Core stack | `weissman-oast-server` in Docker Compose (HTTP :9091, DNS UDP :53/:5353) |
 
 **Verdict:** Platform is **sales-ready for enterprise + MSP** when deployment checklist (manual 18) passes on customer infrastructure. Remaining items are **configuration**, not missing product capability.
 

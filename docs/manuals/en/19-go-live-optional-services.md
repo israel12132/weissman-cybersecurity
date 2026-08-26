@@ -21,7 +21,7 @@ cp deploy/env.staging.example .env
 # Fill secrets, pri_* IDs, LLM URL as needed
 
 docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  --profile staging --profile oast up -d --build
+  --profile staging up -d --build
 
 ./scripts/staging-qa.sh --live http://localhost
 ```
@@ -101,26 +101,18 @@ Council debate and General Mission return responses, not "LLM unavailable".
 
 ## 4. OAST — out-of-band (manual 13)
 
-Fuzz/OAST engines use `WEISSMAN_OAST_DOMAIN` + `WEISSMAN_OAST_LISTENER_URL`.
-
-### Staging (`oast` profile)
-
-```bash
-WEISSMAN_OAST_DOMAIN=oast.localhost
-WEISSMAN_OAST_LISTENER_URL=http://oast:9090
-```
+The `oast` service is **core** (`docker-compose.yml`). It always starts with `docker compose up -d`.
+HTTP is published at **9091:9091**; DNS at **53:53/udp** and **5353:5353/udp**.
+`WEISSMAN_OAST_DOMAIN` defaults to `oast.localhost` so a missing public NS zone does not crash the listener.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile oast up -d oast
+WEISSMAN_OAST_DOMAIN=oast.localhost   # replace with the zone you NS-delegate
+WEISSMAN_OAST_LISTENER_URL=http://oast:9091
 ```
 
-### Production
+For live callbacks: wildcard DNS `*.oast.your-domain.example` → this host, and set `WEISSMAN_OAST_DOMAIN` to that zone.
 
-- Deploy `weissman-oast-server` on a separate host (`deploy/oast.Dockerfile`).
-- Wildcard DNS: `*.oast.your-domain.example` → listener IP.
-- Backend/worker: `WEISSMAN_OAST_LISTENER_URL=https://oast.your-domain.example`.
-
-**Verify:** OOB engine scan → hit in `oast_interaction_hits` / status API.
+**Verify:** `curl -sf http://127.0.0.1:9091/healthz` and an OOB engine scan writing `oast_interaction_hits`.
 
 ---
 
@@ -143,10 +135,10 @@ Linux x64/aarch64 covered in the backend image; Windows/macOS need separate CI/c
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  --profile staging --profile oast build --no-cache backend worker oast
+  --profile staging build --no-cache backend worker oast
 
 docker compose -f docker-compose.yml -f docker-compose.staging.yml \
-  --profile staging --profile oast up -d
+  --profile staging up -d
 ```
 
 **Pass:** all services healthy; `curl -sf http://localhost/api/health`.
@@ -177,7 +169,7 @@ Not required for go-live. Recommended as a recorded workshop linked from manual 
 | Paddle `pri_*` | `WEISSMAN_PADDLE_PRICE_*`, SQL example | 08 |
 | SMTP signup | `WEISSMAN_SMTP_*`, Mailpit | 06 |
 | LLM | `WEISSMAN_LLM_BASE_URL` | 15 |
-| OAST | profile `oast`, `WEISSMAN_OAST_*` | 13 |
+| OAST | core `oast` service, `WEISSMAN_OAST_*` | 13 |
 | Agent binaries | Dockerfile + script | 12 |
 | Staging build | `docker-compose.staging.yml` | 02 |
 | QA | `scripts/staging-qa.sh` | 18 |

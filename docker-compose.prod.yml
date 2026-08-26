@@ -128,13 +128,11 @@ services:
       # so the app's default (trust loopback/private peers) is safe; pin
       # WEISSMAN_TRUST_PROXY_CIDRS in .env to narrow it further.
       WEISSMAN_TRUST_PROXY_HEADERS: ${WEISSMAN_TRUST_PROXY_HEADERS:-1}
-      # OAST out-of-band correlation (blind SSRF/XXE/Log4Shell). Optional: when
-      # WEISSMAN_OAST_DOMAIN is set the launcher also starts the `oast` service and the
-      # engines correlate callbacks via WEISSMAN_OAST_LISTENER_URL. Empty => the OAST engine
-      # emits an informational "not configured" finding instead of confirmed ones.
-      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}
+      # OAST is a core compose service. Placeholder oast.localhost boots without a
+      # delegated public zone; set WEISSMAN_OAST_DOMAIN to the zone you actually NS-delegate.
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
       WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
-      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
+      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9091}
 
   worker:
     logging: *default-logging
@@ -165,56 +163,20 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
       WEISSMAN_BILLING_STRICT: ${WEISSMAN_BILLING_STRICT:-0}
       # OAST correlation for engines running off the request thread (same as backend).
-      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
       WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
-      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9090}
+      WEISSMAN_OAST_LISTENER_URL: ${WEISSMAN_OAST_LISTENER_URL:-http://oast:9091}
 
-  # OAST out-of-band interaction listener (blind SSRF/XXE/Log4Shell callback correlation).
-  # Only started under the `oast` profile — the launcher enables it when WEISSMAN_OAST_DOMAIN
-  # is set, because it requires a DNS zone you delegate to this host. Records callbacks into
-  # the app DB (oast_interaction_hits); the engines poll it at WEISSMAN_OAST_LISTENER_URL.
+  # Production overlay for the core `oast` service (defined in docker-compose.yml).
+  # No profile gate — it always starts. Domain defaults to oast.localhost so a missing
+  # public NS delegation does not crash the listener; API key is required in production.
   oast:
     logging: *default-logging
-    build:
-      context: .
-      dockerfile: deploy/oast.Dockerfile
-    image: weissman-oast:stable
-    profiles: [oast]
     environment:
       DATABASE_URL: postgresql://${DB_APP_USER:-weissman_app}:${DB_APP_PASSWORD:?set DB_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-weissman}
       WEISSMAN_ENV: production
-      # The zone you delegate to this server (e.g. oast.yourcompany.com). NOT `${VAR:?}`:
-      # Compose interpolates EVERY service (even profile-gated ones) on `up`, so a `:?` here
-      # would abort the DEFAULT (OAST-off) launch. The launcher only enables this profile
-      # when WEISSMAN_OAST_DOMAIN is set, so it is always populated when this service runs.
-      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-}
-      WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:-}
-      OAST_HTTP_LISTEN: 0.0.0.0:9090
-      OAST_DNS_LISTEN: 0.0.0.0:5353
-    ports:
-      # HTTP callback catcher (also serves the correlation API). Default host 9091 so it does
-      # not clash with Prometheus on 9090. Route your public HTTP callbacks here.
-      - "${WEISSMAN_OAST_HTTP_PORT:-9091}:9090"
-      # DNS callback catcher (UDP). Delegate your zone's NS to this host:port; forward public
-      # :53/udp -> this if your host cannot bind 53 directly.
-      - "${WEISSMAN_OAST_DNS_PORT:-5353}:5353/udp"
-    expose:
-      - "9090"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf --connect-timeout 2 http://127.0.0.1:9090/ >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
+      WEISSMAN_OAST_DOMAIN: ${WEISSMAN_OAST_DOMAIN:-oast.localhost}
+      WEISSMAN_OAST_API_KEY: ${WEISSMAN_OAST_API_KEY:?set WEISSMAN_OAST_API_KEY}
 
   # Pin monitoring images (base uses floating :latest) for reproducible production.
   prometheus:

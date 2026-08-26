@@ -903,7 +903,7 @@
 | **מה** | weissman-oast-server: HTTP/DNS interaction logging. |
 | **למה** | SSRF, fuzz, OOB verification. |
 | **מתי** | web fuzz / OAST engines. |
-| **איפה** | profile oast, separate host prod |
+| **איפה** | core compose service `oast` |
 | **איך** | WEISSMAN_OAST_DOMAIN + LISTENER_URL |
 | **כמה** | wildcard DNS required prod |
 | **למי** | Red team infra |
