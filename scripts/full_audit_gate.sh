@@ -143,6 +143,12 @@ set -e
 
 echo ""
 echo "────────────────────────────────────────"
+echo "Advisory — AI / enrichment keys (does not fail the gate)"
+echo "────────────────────────────────────────"
+node scripts/verify_ai_keys.mjs || true
+
+echo ""
+echo "────────────────────────────────────────"
 echo "FULL AUDIT GATE SUMMARY"
 echo "  Passed : $pass"
 echo "  Failed : $fail"

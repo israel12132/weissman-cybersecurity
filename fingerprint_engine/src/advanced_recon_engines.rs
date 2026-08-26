@@ -654,7 +654,9 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
     }
     let host = extract_host(target);
     let client = http_client().await;
-    let key = std::env::var("WEISSMAN_SHODAN_API_KEY").unwrap_or_default();
+    let key =
+        weissman_engines::llm_providers::env_first(&["WEISSMAN_SHODAN_API_KEY", "SHODAN_API_KEY"])
+            .unwrap_or_default();
     let mut findings: Vec<Value> = Vec::new();
     if !key.is_empty() {
         let url = format!("https://api.shodan.io/shodan/host/{}?key={}", host, key);
@@ -683,7 +685,7 @@ pub async fn run_iot_shodan_scan_result(target: &str) -> EngineResult {
                 "medium",
                 "T1595.001",
                 &format!(
-                    "No Shodan API key configured — live TCP connect found open ports {:?} on {host}. Set WEISSMAN_SHODAN_API_KEY for full host metadata.",
+                    "No Shodan API key configured — live TCP connect found open ports {:?} on {host}. Set WEISSMAN_SHODAN_API_KEY (or SHODAN_API_KEY) for full host metadata.",
                     open
                 ),
                 target,

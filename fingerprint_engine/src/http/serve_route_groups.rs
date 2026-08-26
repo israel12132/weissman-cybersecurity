@@ -16,7 +16,14 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/findings", get(api_findings))
         .route("/api/findings/clusters", get(api_findings_clusters))
         .route("/api/findings/export/csv", get(api_findings_export_csv))
+        .route("/api/findings/export/xlsx", get(api_findings_export_xlsx))
         .route("/api/export/findings", get(api_findings_export_csv))
+        .route("/api/export/document", post(api_export_document))
+        .route("/api/export/workbook", post(api_export_workbook))
+        .route("/api/export/pdf", post(api_export_document))
+        .route("/api/export/excel", post(api_export_workbook))
+        .route("/api/ai/readiness", get(api_ai_readiness))
+        .route("/api/ai/readiness/probe", post(api_ai_readiness_probe))
         .route(
             "/api/findings/:id/status",
             patch(api_findings_update_status),
@@ -353,6 +360,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/clients/:id/findings", get(api_client_findings_all))
         .route("/api/clients/:id/export/csv", get(api_client_export_csv))
+        .route("/api/clients/:id/export/xlsx", get(api_client_export_xlsx))
         .route("/api/clients/:id/report/pdf", get(api_client_report_pdf))
         .route(
             "/api/clients/:id/report/crypto-proof",
@@ -765,6 +773,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route(
             "/api/ceo/vault/export/criticals",
             get(api_ceo_vault_export_criticals),
+        )
+        .route(
+            "/api/ceo/vault/export/criticals.xlsx",
+            get(api_ceo_vault_export_criticals_xlsx),
         )
         .route(
             "/api/ceo/vault/secrets",

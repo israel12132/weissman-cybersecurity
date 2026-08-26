@@ -90,6 +90,7 @@ export const NAV_GROUPS = [
       { to: '/kill-chain', labelKey: 'nav.kill_chain', icon: '⛓' },
       { to: '/attack-paths', labelKey: 'nav.attack_paths', icon: '🕸' },
       { to: '/ai-analysis', labelKey: 'nav.ai_analysis', icon: '🧠' },
+      { to: '/ai-readiness', labelKey: 'nav.ai_readiness', icon: '🔑' },
       { to: '/exploit-lab', labelKey: 'nav.exploit_lab', icon: '🧪' },
       { to: '/council-queue', labelKey: 'nav.council_queue', icon: '⚖' },
       { to: '/self-improve', labelKey: 'nav.self_improve', icon: '🧠' },

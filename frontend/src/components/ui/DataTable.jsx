@@ -13,7 +13,8 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, Download,
 import EmptyState from './EmptyState'
 import { SkeletonTable } from './Skeleton'
 import Button from './Button'
-import { escapeCsvCell } from '../../lib/exportFindingsCsv'
+import { downloadCsv } from '../../lib/exportFindingsCsv'
+import { exportWorkbook, tableToWorkbookSpec } from '../../lib/exportWorkbook'
 
 const MAX_VISIBLE_PAGES = 7
 const DEFAULT_PAGE_SIZES = [25, 50, 100]
@@ -45,16 +46,16 @@ function fuzzyGlobalFilter(row, _columnId, value) {
 }
 
 /** Serialize the currently-filtered rows × visible accessor columns to CSV. */
-function tableToCsv(table) {
+function tableMatrix(table) {
   const cols = table.getVisibleLeafColumns().filter((c) => typeof c.accessorFn === 'function')
   const header = cols.map((c) =>
     typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id,
   )
-  const lines = [
-    header.map(escapeCsvCell).join(','),
-    ...table.getFilteredRowModel().rows.map((r) => cols.map((c) => escapeCsvCell(r.getValue(c.id))).join(',')),
-  ]
-  return lines.join('\n')
+  const rows = table.getFilteredRowModel().rows.map((r) => cols.map((c) => {
+    const v = r.getValue(c.id)
+    return v == null ? '' : String(v)
+  }))
+  return { header, rows }
 }
 
 function SortIndicator({ sorted }) {
@@ -346,16 +347,16 @@ export default function DataTable({
   const hasToolbar = searchable || exportable || columnToggle || densityToggle || toolbarTitle
 
   const handleExport = () => {
-    const csv = tableToCsv(table)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${exportFilename}-${new Date().toISOString().slice(0, 10)}.csv`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 0)
+    const { header, rows } = tableMatrix(table)
+    downloadCsv(rows, header, exportFilename)
+  }
+
+  const handleExportXlsx = () => {
+    const { header, rows } = tableMatrix(table)
+    return exportWorkbook(
+      tableToWorkbookSpec({ title: exportFilename, header, rows }),
+      exportFilename,
+    )
   }
 
   const { rows } = table.getRowModel()
@@ -500,6 +501,7 @@ export default function DataTable({
             </div>
           )}
           {exportable && (
+            <>
             <Button variant="unstyled"
               type="button"
               onClick={handleExport}
@@ -509,6 +511,15 @@ export default function DataTable({
               <Download className="w-3.5 h-3.5" aria-hidden />
               CSV
             </Button>
+            <Button variant="unstyled"
+              type="button"
+              onClick={handleExportXlsx}
+              disabled={totalFiltered === 0}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Excel
+            </Button>
+            </>
           )}
         </div>
       )}

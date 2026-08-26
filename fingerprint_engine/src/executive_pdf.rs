@@ -1,14 +1,9 @@
 //! Board-level executive PDF.
 //!
 //! Renders via `pdf_report::build_executive_board_pdf`, which emits a self-contained
-//! `%PDF-1.4` document using the standard base-14 Helvetica font (no font embedding,
-//! no third-party PDF crate). This deliberately depends on **no** external PDF library:
-//! the previous `genpdf` path pulled in `printpdf → lopdf` and the unmaintained
-//! `time 0.2.x`, adding avoidable supply-chain surface — including the `lopdf`
-//! parse-DoS advisory (RUSTSEC-2026-0187), which is cleared by dropping genpdf.
-//! Since we only ever *generate* these reports and base-14 Helvetica is universally
-//! available in every conformant PDF viewer, the native writer covers the use case
-//! without any of that supply-chain surface.
+//! PDF through the Weissman document engine (embedded fonts, bilingual chrome, charts).
+//! This deliberately depends on **no** external PDF library: the previous `genpdf` path
+//! pulled in `printpdf → lopdf` and the unmaintained `time 0.2.x`.
 
 #[derive(Debug, Clone)]
 pub struct ExecutiveBoardParams {
@@ -58,8 +53,11 @@ mod tests {
             gdpr_pct: 84,
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
-        assert!(bytes.starts_with(b"%PDF-1.4"), "must be a PDF-1.4 document");
-        assert!(bytes.ends_with(b"%%EOF\n"), "must terminate with %%EOF");
+        assert!(bytes.starts_with(b"%PDF-1."), "must be a PDF document");
+        assert!(
+            bytes.windows(5).any(|w| w == b"%%EOF"),
+            "must terminate with %%EOF"
+        );
         assert!(bytes.len() > 500, "expected non-trivial PDF body");
     }
 
@@ -78,6 +76,6 @@ mod tests {
             gdpr_pct: 100,
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
-        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(bytes.starts_with(b"%PDF-1."));
     }
 }

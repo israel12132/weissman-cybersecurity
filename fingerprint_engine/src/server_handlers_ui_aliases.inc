@@ -658,6 +658,7 @@ async fn api_compliance_frameworks_report(
     Extension(auth): Extension<AuthContext>,
     Path(framework_id): Path<String>,
     Query(q): Query<std::collections::HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Response {
     if !framework_slug_known(&framework_id) {
         return (
@@ -740,12 +741,19 @@ async fn api_compliance_frameworks_report(
         })
         .collect();
     let framework_label = crate::compliance_engine::framework_display_name(&framework_id);
-    let pdf = match crate::pdf_report::build_compliance_framework_pdf(
+    let lang = report_lang(
+        &LangQuery {
+            lang: q.get("lang").cloned(),
+        },
+        &headers,
+    );
+    let pdf = match crate::pdf_report::build_compliance_framework_pdf_lang(
         &tenant_name,
         framework_label,
         compliance_pct,
         &pdf_controls,
         invalid_orphans.as_deref(),
+        lang,
     ) {
         Ok(b) => b,
         Err(e) => {

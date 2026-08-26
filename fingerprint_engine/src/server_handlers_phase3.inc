@@ -13,6 +13,7 @@ struct CompliancePostureQuery {
 #[derive(Deserialize)]
 struct ExecutiveReportQuery {
     client_id: Option<i64>,
+    lang: Option<String>,
 }
 
 async fn api_client_cloud_integration_patch(
@@ -646,6 +647,7 @@ async fn api_reports_executive(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<ExecutiveReportQuery>,
+    headers: HeaderMap,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
@@ -773,19 +775,25 @@ async fn api_reports_executive(
         .map(|p| p.compliance_percent)
         .unwrap_or(100);
 
-    let params = crate::executive_pdf::ExecutiveBoardParams {
-        org_label: tenant_name.clone(),
-        client_label: client_name.clone(),
+    let lang = report_lang(
+        &LangQuery {
+            lang: q.lang.clone(),
+        },
+        &headers,
+    );
+    let pdf = match crate::pdf_report::build_executive_board_pdf_lang(
+        &tenant_name,
+        client_name.as_deref(),
         critical,
         high,
         medium,
         low,
-        cloud_finding_count: cloud_n.max(0) as usize,
-        soc2_pct: soc2,
-        iso_pct: iso,
-        gdpr_pct: gdpr,
-    };
-    let pdf = match crate::executive_pdf::render_executive_board_pdf(&params) {
+        cloud_n.max(0) as usize,
+        soc2,
+        iso,
+        gdpr,
+        lang,
+    ) {
         Ok(b) => b,
         Err(e) => {
             return (

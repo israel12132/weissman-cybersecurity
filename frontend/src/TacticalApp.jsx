@@ -130,6 +130,7 @@ import {
   SamlSecurityCommandCenter,
   KillChainOrchestrator,
   AIAnalysisEngine,
+  AiReadiness,
   ExploitResearchLab,
   Clients,
   ClientNew,
@@ -314,6 +315,7 @@ export default function TacticalApp() {
           <Route path="identity-context" element={<IdentityContextManager />} />
           <Route path="kill-chain" element={<KillChainOrchestrator />} />
           <Route path="ai-analysis" element={<AIAnalysisEngine />} />
+          <Route path="ai-readiness" element={<AiReadiness />} />
           <Route path="exploit-lab" element={<ExploitResearchLab />} />
           <Route path="agents" element={<AgentManagement />} />
           <Route path="audit-log" element={<AuditLog />} />

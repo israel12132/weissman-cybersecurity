@@ -65,7 +65,7 @@ async fn api_client_export_csv(
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
     };
-    let rows = sqlx::query(
+    let db_rows = sqlx::query(
         "SELECT id, title, severity, source, status, discovered_at FROM vulnerabilities WHERE client_id = $1 ORDER BY discovered_at DESC",
     )
     .bind(id)
@@ -73,33 +73,32 @@ async fn api_client_export_csv(
     .await
     .unwrap_or_default();
     let _ = tx.commit().await;
-    let mut csv = String::from("ID,Title,Severity,Source,Status,Discovered\n");
-    for r in rows {
+    let mut rows: Vec<Vec<String>> = Vec::with_capacity(db_rows.len());
+    for r in db_rows {
         let idv = r.try_get::<i64, _>("id").unwrap_or(0);
-        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
-        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
-        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
-        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
+        let title = r.try_get::<String, _>("title").unwrap_or_default();
+        let sev = r.try_get::<String, _>("severity").unwrap_or_default();
+        let src = r.try_get::<String, _>("source").unwrap_or_default();
+        let st = r.try_get::<String, _>("status").unwrap_or_default();
         let disc = r
             .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
             .map(|d| d.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_default()
-            .replace('"', "\"\"");
-        // Quote every field (embedded quotes already doubled above) — RFC 4180, so a comma or
-        // newline in a title cannot shift subsequent columns.
-        csv.push_str(&format!(
-            "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
-            idv, title, sev, src, st, disc
-        ));
+            .unwrap_or_default();
+        rows.push(vec![
+            format!("VLN-{idv}"),
+            title,
+            sev,
+            src,
+            st,
+            disc,
+        ]);
     }
-    let filename = format!("Weissman_findings_client_{}.csv", id);
-    let mut res = Response::new(Body::from(csv));
-    res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/csv; charset=utf-8"));
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename)).unwrap_or(HeaderValue::from_static("attachment")),
+    let csv = crate::csv_safe::document(
+        &["ID", "Title", "Severity", "Source", "Status", "Discovered"],
+        rows,
     );
-    res
+    let filename = format!("Weissman_findings_client_{}.csv", id);
+    csv_response(csv, &filename)
 }
 
 async fn get_crypto_proof_for_client_tx(
@@ -141,6 +140,8 @@ async fn api_client_report_pdf(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<i64>,
+    Query(q): Query<LangQuery>,
+    headers: HeaderMap,
 ) -> Response {
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "DB unavailable"}))).into_response();
@@ -186,7 +187,13 @@ async fn api_client_report_pdf(
             )
         })
         .collect();
-    let pdf_bytes: Vec<u8> = match crate::pdf_report::build_client_report_pdf(&client_name, &findings, proof.as_ref()) {
+    let lang = report_lang(&q, &headers);
+    let pdf_bytes: Vec<u8> = match crate::pdf_report::build_client_report_pdf_lang(
+        &client_name,
+        &findings,
+        proof.as_ref(),
+        lang,
+    ) {
         Ok(b) => b,
         Err(e) => {
             return (
@@ -609,7 +616,7 @@ async fn api_findings_export_csv(
     // Bounded to avoid pinning a pool connection for the full statement_timeout and materialising
     // the entire tenant's findings (plus the ~2x CSV string) in memory — an unauthenticated-cost
     // DoS from any viewer. 50k mirrors the audit export cap.
-    let rows = sqlx::query(
+    let db_rows = sqlx::query(
         "SELECT id, finding_id, title, severity, source, status, client_id::text, \
          COALESCE(description,'') AS description, discovered_at, \
          COALESCE(poc_sealed, false) AS poc_sealed \
@@ -619,38 +626,48 @@ async fn api_findings_export_csv(
     .await
     .unwrap_or_default();
     let _ = tx.commit().await;
-    let mut csv = String::from("ID,Finding ID,Title,Severity,Source,Status,Client,Verified,Discovered,Description\n");
-    for r in rows {
+    let mut rows: Vec<Vec<String>> = Vec::with_capacity(db_rows.len());
+    for r in db_rows {
         let raw_id = r.try_get::<i64, _>("id").unwrap_or(0);
-        let finding_id = r.try_get::<String, _>("finding_id").unwrap_or_default().replace('"', "\"\"");
-        let title = r.try_get::<String, _>("title").unwrap_or_default().replace('"', "\"\"");
-        let sev = r.try_get::<String, _>("severity").unwrap_or_default().replace('"', "\"\"");
-        let src = r.try_get::<String, _>("source").unwrap_or_default().replace('"', "\"\"");
-        let st = r.try_get::<String, _>("status").unwrap_or_default().replace('"', "\"\"");
-        let client = r.try_get::<String, _>("client_id").unwrap_or_default().replace('"', "\"\"");
-        let verified = if r.try_get::<bool, _>("poc_sealed").unwrap_or(false) { "VERIFIED" } else { "POTENTIAL" };
+        let verified = if r.try_get::<bool, _>("poc_sealed").unwrap_or(false) {
+            "VERIFIED"
+        } else {
+            "POTENTIAL"
+        };
         let disc = r
             .try_get::<chrono::DateTime<Utc>, _>("discovered_at")
             .map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-            .unwrap_or_default()
-            .replace('"', "\"\"");
-        let desc = r.try_get::<String, _>("description").unwrap_or_default().replace('"', "\"\"");
-        // All fields quoted to handle commas and special characters safely
-        csv.push_str(&format!(
-            "\"VLN-{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
-            raw_id, finding_id, title, sev, src, st, client, verified, disc, desc
-        ));
+            .unwrap_or_default();
+        rows.push(vec![
+            format!("VLN-{raw_id}"),
+            r.try_get::<String, _>("finding_id").unwrap_or_default(),
+            r.try_get::<String, _>("title").unwrap_or_default(),
+            r.try_get::<String, _>("severity").unwrap_or_default(),
+            r.try_get::<String, _>("source").unwrap_or_default(),
+            r.try_get::<String, _>("status").unwrap_or_default(),
+            r.try_get::<String, _>("client_id").unwrap_or_default(),
+            verified.to_string(),
+            disc,
+            r.try_get::<String, _>("description").unwrap_or_default(),
+        ]);
     }
-    let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let filename = format!("Weissman_findings_{}.csv", now);
-    let mut res = Response::new(Body::from(csv));
-    res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/csv; charset=utf-8"));
-    res.headers_mut().insert(
-        CONTENT_DISPOSITION,
-        HeaderValue::try_from(format!("attachment; filename=\"{}\"", filename))
-            .unwrap_or(HeaderValue::from_static("attachment; filename=\"Weissman_findings.csv\"")),
+    let csv = crate::csv_safe::document(
+        &[
+            "ID",
+            "Finding ID",
+            "Title",
+            "Severity",
+            "Source",
+            "Status",
+            "Client",
+            "Verified",
+            "Discovered",
+            "Description",
+        ],
+        rows,
     );
-    res
+    let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    csv_response(csv, &format!("Weissman_findings_{}.csv", now))
 }
 
 /// GET /api/openapi.json — OpenAPI 3.1 spec documenting the public Weissman API.

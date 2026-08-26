@@ -49,6 +49,10 @@ idna = "1"
 uuid = { version = "1", features = ["v4"] }
 quick-xml = "0.41"
 flate2 = "1"
+# Board-grade XLSX (styled sheets, charts, conditional formats). MIT OR Apache-2.0.
+# default-features stays on so the zip crate gets a deflate backend; no extra optional
+# features (chrono/serde/wasm) are enabled.
+rust_xlsxwriter = "0.90"
 bcrypt = "0.16"
 chrono = "0.4"
 jsonwebtoken = "9"
@@ -174,3 +178,7 @@ unsafe_code = "deny"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+
+[[bin]]
+name = "weissman-docgen"
+path = "src/bin/weissman_docgen.rs"

@@ -18,6 +18,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import WeissmanListToolbar from '../components/engine/WeissmanListToolbar'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { usePageAutoRefresh } from '../hooks/usePageAutoRefresh'
+import { downloadCsv } from '../lib/exportFindingsCsv'
 import { computeSla, slaBand, SLA_BAND_COLOR, slaCountdownLabel } from '../lib/incidentSla'
 import Button from '../components/ui/Button'
 
@@ -157,22 +158,15 @@ function exportIncidentsCsv(incidents) {
   const header = ['id', 'title', 'severity', 'status', 'assignee', 'source', 'created', 'updated']
   const rows = incidents.map((inc) => [
     inc.id,
-    (inc.title || '').replace(/"/g, '""'),
+    inc.title || '',
     inc.severity,
     inc.status,
-    (inc.assignee || '').replace(/"/g, '""'),
+    inc.assignee || '',
     inc.source,
     inc.created,
     inc.updated,
   ])
-  const csv = [header.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `incidents-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(rows, header, 'incidents')
 }
 
 function normalizeIncident(raw, t) {
