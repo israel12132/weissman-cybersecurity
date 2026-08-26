@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Weissman Cybersecurity">
+  <rect width="1200" height="630" fill="#07090c"/>
+  <rect width="1200" height="630" fill="url(#g)" />
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#07090c"/>
+    </linearGradient>
+    <linearGradient id="sh" x1="0" y1="0" x2="64" y2="64">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <path d="M80 80 L132 96 V148 C132 188 80 220 80 220 C80 220 28 188 28 148 V96 Z" fill="url(#sh)" stroke="#0e7490"/>
+  <path d="M52 132 L68 164 L84 116 L100 164 L116 124" stroke="#020617" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <text x="160" y="150" fill="#f4efe6" font-family="Inter, sans-serif" font-size="56" font-weight="600">Weissman Cybersecurity</text>
+  <text x="160" y="210" fill="#b7b1a6" font-family="Inter, sans-serif" font-size="28">Live evidence. Clearer response.</text>
+  <text x="80" y="520" fill="#22d3ee" font-family="JetBrains Mono, monospace" font-size="22">563 engines · 303 live probes · 226 ATT&amp;CK techniques</text>
+  <text x="80" y="560" fill="#7d776c" font-family="Inter, sans-serif" font-size="20">Tel Aviv-Yafo · weissman.io</text>
+</svg>

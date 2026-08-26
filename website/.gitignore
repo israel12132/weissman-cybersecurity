@@ -1,0 +1,22 @@
+node_modules/
+dist/
+# Generated MPA shells at the package root (scripts/write-html-entries.mjs)
+/index.html
+/404.html
+/pricing.html
+/signup.html
+/terms.html
+/privacy.html
+/terms-he.html
+/privacy-he.html
+/dpa.html
+/subprocessors.html
+/security-policy.html
+/platform/
+/solutions/
+/technology/
+/resources/
+/about/
+/contact/
+/public/sitemap.xml
+/public/robots.txt
