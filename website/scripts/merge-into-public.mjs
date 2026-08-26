@@ -51,5 +51,10 @@ for (const name of replaceable) {
   cpSync(from, to, { recursive: true })
 }
 
+const obsolete = ['js/signup.js', 'js/cookie-banner.js', 'js/year.js']
+for (const name of obsolete) {
+  rmSync(join(dest, name), { force: true })
+}
+
 writeFileSync(join(dest, '.built-from-website'), `${new Date().toISOString()}\n`)
 console.log(`merged website/dist → deploy/public`)

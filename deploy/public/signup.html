@@ -1,69 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr" data-page="signup">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090c" />
   <title>Create your workspace — Weissman Cybersecurity</title>
-  <meta name="description" content="Create a Weissman Cybersecurity workspace. Free 14-day trial. No credit card required." />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="canonical" href="/signup.html" />
-  <link rel="stylesheet" href="/_shared.css" />
+  <meta name="description" content="Create a Weissman workspace. 14-day trial. No credit card required. Self-serve signup is deployment-gated." />
   <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://weissman.io/signup.html" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Weissman Cybersecurity" />
+  <meta property="og:title" content="Create your workspace — Weissman Cybersecurity" />
+  <meta property="og:description" content="Create a Weissman workspace. 14-day trial. No credit card required. Self-serve signup is deployment-gated." />
+  <meta property="og:image" content="https://weissman.io/og-cover.svg" />
+  <meta property="og:url" content="https://weissman.io/signup.html" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Create your workspace — Weissman Cybersecurity" />
+  <meta name="twitter:description" content="Create a Weissman workspace. 14-day trial. No credit card required. Self-serve signup is deployment-gated." />
+  <script type="module" crossorigin src="/assets/main-DUZB3F-0.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-B41gvb87.css">
 </head>
 <body>
-  <nav>
-    <div class="container nav-inner">
-      <a href="/"><strong style="font-family:Orbitron,sans-serif;letter-spacing:2px;color:#22d3ee">WEISSMAN</strong></a>
-      <div class="nav-links">
-        <a href="/pricing.html">Pricing</a>
-        <a href="/command-center/login" class="cta-ghost">Sign in</a>
-      </div>
-    </div>
-  </nav>
-
-  <main style="display:flex;align-items:center;justify-content:center;min-height:calc(100dvh - 4rem);padding:3rem 1rem">
-    <div style="width:100%;max-width:480px;background:linear-gradient(180deg,rgba(15,23,42,0.7),rgba(2,6,23,0.4));border:1px solid rgba(34,211,238,0.2);border-radius:1rem;padding:2.5rem">
-      <header style="margin-bottom:2rem;text-align:center">
-        <h1 style="font-family:Orbitron,sans-serif;font-size:1.5rem;color:#fff;margin:0 0 .5rem">Create your workspace</h1>
-        <p style="color:#94a3b8;font-size:.9rem;margin:0">14-day free trial · no credit card</p>
-      </header>
-
-      <form id="signup-form" novalidate>
-        <label style="display:block;font-size:.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.15em;margin-bottom:.4rem" for="workspace_name">Workspace name</label>
-        <input type="text" id="workspace_name" name="workspace_name" required minlength="2" maxlength="80" autocomplete="organization"
-               placeholder="Acme Security"
-               style="width:100%;padding:.7rem .9rem;background:#020617;border:1px solid rgba(255,255,255,0.12);border-radius:.5rem;color:#e2e8f0;font-family:JetBrains Mono,monospace;font-size:.9rem;margin-bottom:1.25rem" />
-
-        <label style="display:block;font-size:.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.15em;margin-bottom:.4rem" for="email">Work email</label>
-        <input type="email" id="email" name="email" required autocomplete="email"
-               placeholder="alice@acme.com"
-               style="width:100%;padding:.7rem .9rem;background:#020617;border:1px solid rgba(255,255,255,0.12);border-radius:.5rem;color:#e2e8f0;font-family:JetBrains Mono,monospace;font-size:.9rem;margin-bottom:1.25rem" />
-
-        <label style="display:block;font-size:.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.15em;margin-bottom:.4rem" for="password">Password</label>
-        <input type="password" id="password" name="password" required minlength="12" autocomplete="new-password"
-               placeholder="At least 12 characters"
-               style="width:100%;padding:.7rem .9rem;background:#020617;border:1px solid rgba(255,255,255,0.12);border-radius:.5rem;color:#e2e8f0;font-family:JetBrains Mono,monospace;font-size:.9rem;margin-bottom:.5rem" />
-        <p style="font-size:.7rem;color:#64748b;margin:0 0 1.25rem">Min 12 characters · mix letters and numbers/symbols</p>
-
-        <label style="display:flex;align-items:flex-start;gap:.6rem;font-size:.8rem;color:#cbd5e1;cursor:pointer;margin-bottom:1.5rem">
-          <input type="checkbox" id="accept_terms" name="accept_terms" required style="margin-top:.2rem" />
-          <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:#22d3ee">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener" style="color:#22d3ee">Privacy Policy</a>.</span>
-        </label>
-
-        <button type="submit" id="submit-btn"
-                style="width:100%;padding:.85rem;border:none;border-radius:.5rem;background:#22d3ee;color:#020617;font-family:JetBrains Mono,monospace;font-weight:700;font-size:.9rem;text-transform:uppercase;letter-spacing:.08em;cursor:pointer">
-          Create workspace
-        </button>
-
-        <p id="form-status" role="alert" aria-live="polite" style="margin:1.25rem 0 0;font-size:.8rem;text-align:center;min-height:1.2rem"></p>
-      </form>
-
-      <p style="text-align:center;color:#64748b;font-size:.75rem;margin-top:2rem">
-        Already have an account? <a href="/command-center/login" style="color:#22d3ee">Sign in</a>
-      </p>
-    </div>
-  </main>
-
-  <script src="/js/signup.js" defer></script>
+  <div id="root"></div>
 </body>
 </html>

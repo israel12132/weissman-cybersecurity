@@ -54,6 +54,10 @@ cp "$ROOT/deploy/nginx-gateway.conf" "$WORK/conf/default.conf"
 cp "$ROOT/deploy/nginx-security-headers.inc" "$WORK/conf/security-headers.inc"
 printf 'SPA-SHELL\n'  > "$WORK/html/command-center/index.html"
 printf 'MARKETING\n'  > "$WORK/html/index.html"
+# error_page 404 =404 /404.html; lands in the public alias. Keep a branded
+# document here so the unknown-path assertion still sees HTTP 404, not a
+# recursive missing-error-page failure.
+printf 'NOT-FOUND\n'  > "$WORK/html/public/404.html"
 
 docker run -d --name "$GATEWAY" --network "$NET" -p 127.0.0.1:58089:8080 \
   -v "$WORK/conf:/etc/nginx/conf.d:ro" \
