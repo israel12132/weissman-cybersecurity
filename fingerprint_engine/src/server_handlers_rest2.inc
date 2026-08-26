@@ -500,47 +500,99 @@ async fn api_findings_update_status(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct FindingLiveVerifyBody {
-    deep: Option<bool>,
+    #[serde(default)]
+    deep: Option<Value>,
+}
+
+#[derive(Deserialize, Default)]
+struct FindingLiveVerifyQuery {
+    #[serde(default)]
+    deep: Option<String>,
+}
+
+fn live_verify_flag_from_value(v: Option<&Value>) -> bool {
+    match v {
+        Some(Value::Bool(b)) => *b,
+        Some(Value::String(s)) => matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "deep"
+        ),
+        Some(Value::Number(n)) => n.as_i64() == Some(1) || n.as_u64() == Some(1),
+        _ => false,
+    }
+}
+
+fn live_verify_flag_from_query(s: Option<&str>) -> bool {
+    matches!(
+        s.map(|x| x.trim().to_ascii_lowercase()).as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("deep")
+    )
 }
 
 /// POST /api/findings/:id/verify — multi-tier live validity check (attestation, scope, evidence, HTTP replay, optional re-scan).
+/// `:id` accepts numeric row id, `VLN-{id}`, or the stable `finding_id` hash.
 async fn api_findings_verify_live(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
-    Path(id): Path<i64>,
-    Json(body): Json<FindingLiveVerifyBody>,
+    Path(id): Path<String>,
+    Query(query): Query<FindingLiveVerifyQuery>,
+    body: Option<Json<FindingLiveVerifyBody>>,
 ) -> Response {
     if let Err(r) = crate::rbac::require_analyst(&auth) {
         return r;
     }
-    let deep = body.deep.unwrap_or(false);
-    match crate::finding_live_verify::verify_finding_live(
+    let deep = live_verify_flag_from_value(body.as_ref().and_then(|b| b.0.deep.as_ref()))
+        || live_verify_flag_from_query(query.deep.as_deref());
+    let id_token = id.trim().to_string();
+    if id_token.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "finding id required"})),
+        )
+            .into_response();
+    }
+    let fut = crate::finding_live_verify::verify_finding_live(
         state.app_pool.as_ref(),
         auth.tenant_id,
-        id,
+        &id_token,
         deep,
-    )
-    .await
-    {
-        Ok(result) => (
+    );
+    match tokio::time::timeout(Duration::from_secs(100), fut).await {
+        Ok(Ok(result)) => (
             StatusCode::OK,
             Json(json!({
                 "ok": true,
-                "id": id,
+                "id": result.row_id,
                 "verdict": result.verdict,
                 "confidence": result.confidence,
                 "reproducible": result.reproducible,
                 "checks": result.checks,
                 "verified_at": result.verified_at,
                 "recommended_status": result.recommended_status,
+                "rescan_message": result.rescan_message,
+                "rescan_finding_count": result.rescan_finding_count,
+                "deep": deep,
             })),
         )
             .into_response(),
-        Err(e) => (
+        Ok(Err(e)) if e == "finding not found" => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
+        Ok(Err(e)) => (
             StatusCode::BAD_REQUEST,
             Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(json!({
+                "ok": false,
+                "detail": "live verification timed out — retry without deep re-scan, or wait for the target to respond"
+            })),
         )
             .into_response(),
     }
@@ -742,6 +794,32 @@ async fn api_openapi_spec() -> Response {
                         "200": { "description": "Status updated" },
                         "404": { "description": "Finding not found" },
                         "422": { "description": "Invalid status value" }
+                    }
+                }
+            },
+            "/api/findings/{id}/verify": {
+                "post": {
+                    "summary": "Live-verify a finding (attestation, scope, HTTP probe, optional engine re-scan)",
+                    "tags": ["Findings"],
+                    "parameters": [
+                        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Numeric row id, VLN-{id}, or finding_id hash" },
+                        { "name": "deep", "in": "query", "required": false, "schema": { "type": "boolean" }, "description": "Run a live engine re-scan against the finding target" }
+                    ],
+                    "requestBody": {
+                        "required": false,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": { "deep": { "type": "boolean" } }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": { "description": "Verification verdict and checks" },
+                        "404": { "description": "Finding not found in this tenant" },
+                        "504": { "description": "Verification timed out" }
                     }
                 }
             },
