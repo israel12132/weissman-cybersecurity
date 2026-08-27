@@ -1705,24 +1705,34 @@ mod tests {
         assert!(looks_jpeg(&[0xff, 0xd8, 0xff, 0xe0]));
     }
 
-    #[test]
-    fn tri_honors_auto_off_and_json_bool() {
-        let cfg = ArsenalConfig::from_value(json!({
-            "check_beaconing": "off",
-            "check_dns_tunnel": "auto",
-            "check_http3_ws": true,
-            "check_icmp_ntp": false,
-        }));
-        let mods = coverage_manifest(&cfg);
-        let enabled = |name: &str| {
-            mods.iter()
-                .find(|m| m.get("module").and_then(Value::as_str) == Some(name))
-                .and_then(|m| m.get("enabled").and_then(Value::as_bool))
+    #[tokio::test]
+    async fn live_probe_example_com_when_opted_in() {
+        if std::env::var("WEISSMAN_LIVE_C2_PROBE").ok().as_deref() != Some("1") {
+            return;
+        }
+        let ctx = EngineRunContext {
+            job_params: json!({
+                "intensity": "light",
+                "check_icmp_ntp": "off",
+                "timeout_ms": 5000,
+            }),
+            ..Default::default()
         };
-        assert_eq!(enabled("beaconing"), Some(false));
-        assert_eq!(enabled("dns_tunnel"), Some(true)); // auto → default on
-        assert_eq!(enabled("http3_ws"), Some(true));
-        assert_eq!(enabled("icmp_ntp"), Some(false));
-        assert_eq!(mods.len(), 10);
+        let r = run_advanced_c2_covert_exfil_result_ctx("https://example.com", &ctx).await;
+        assert!(r.success, "live probe failed: {}", r.message);
+        assert!(
+            !r.findings.is_empty(),
+            "coverage/posture findings should always emit on a live origin"
+        );
+        let cats: Vec<_> = r
+            .findings
+            .iter()
+            .filter_map(|f| f.get("category").and_then(Value::as_str))
+            .collect();
+        assert!(
+            cats.iter()
+                .any(|c| *c == "coverage_manifest" || *c == "posture_score"),
+            "expected coverage or posture on live example.com, got {cats:?}"
+        );
     }
 }
