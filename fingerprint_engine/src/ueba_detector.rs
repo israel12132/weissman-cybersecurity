@@ -44,6 +44,11 @@ pub struct UebaIngestPayload {
 
 /// Public entry point — called by the server when an agent posts a `ueba_baseline`
 /// finding (we route it here before it hits the generic findings_persist path).
+///
+/// High-volume callers should prefer [`crate::postgres_bulk_copy::submit_ueba_sample`],
+/// which enqueues onto the bounded binary COPY worker. A full channel returns
+/// backpressure (no INSERT). This INSERT path is the fallback only when the
+/// worker is absent or the channel is closed.
 pub async fn ingest_sample(
     pool: &PgPool,
     tenant_id: i64,
@@ -72,16 +77,29 @@ pub async fn ingest_sample(
     .await
     .map_err(|e| format!("insert sample: {e}"))?;
 
+    let summary = analyze_sample_in_tx(&mut tx, tenant_id, sample_id, &p).await?;
+    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+    Ok(summary)
+}
+
+/// Recompute baselines and fire anomalies for a sample that is already in
+/// `agent_metric_samples` (inserted either by INSERT or by binary COPY).
+pub(crate) async fn analyze_sample_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    sample_id: i64,
+    p: &UebaIngestPayload,
+) -> Result<UebaIngestSummary, String> {
     // Re-compute baselines for every numeric metric we saw in this sample.
     let mut summary = UebaIngestSummary::default();
     if let Value::Object(obj) = &p.metrics {
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
-                let upd = recompute_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
+                let upd = recompute_baseline(tx, tenant_id, &p.agent_id, k).await?;
                 summary.baselines_updated += 1;
                 if let Some(anom) =
-                    check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &upd).await?
+                    check_anomaly(tx, tenant_id, p, sample_id, k, num, &upd).await?
                 {
                     summary.anomalies.push(anom);
                 }
@@ -91,9 +109,9 @@ pub async fn ingest_sample(
         if let Some(ports) = obj.get("open_ports").and_then(Value::as_array) {
             let observed: HashSet<i64> = ports.iter().filter_map(|v| v.as_i64()).collect();
             if let Some(a) = check_new_categorical(
-                &mut tx,
+                tx,
                 tenant_id,
-                &p,
+                p,
                 sample_id,
                 "open_ports",
                 &observed.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
@@ -110,9 +128,9 @@ pub async fn ingest_sample(
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
             if let Some(a) = check_new_categorical(
-                &mut tx,
+                tx,
                 tenant_id,
-                &p,
+                p,
                 sample_id,
                 "top_processes",
                 &observed,
@@ -125,7 +143,6 @@ pub async fn ingest_sample(
         }
     }
 
-    tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(summary)
 }
 

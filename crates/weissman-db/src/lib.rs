@@ -12,11 +12,15 @@ pub mod env_bootstrap;
 pub mod job_queue;
 pub mod llm_usage;
 pub mod no_tx_migrations;
+pub mod pg_binary_copy;
+pub mod secret;
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
+
+pub use secret::SecretUrl;
 
 /// Primary application database URL (role `weissman_app`, RLS). Read from `DATABASE_URL` when the process starts each call.
 pub fn database_url_from_env() -> Result<String, std::env::VarError> {
@@ -330,11 +334,20 @@ pub async fn connect_control(database_url: &str) -> Result<PgPool, sqlx::Error> 
         .await
 }
 
+/// Load `DATABASE_URL` into a zeroizing wrapper. Prefer this over
+/// [`database_url_from_env`] on connect paths so the DSN is wiped after use.
+pub fn secret_database_url_from_env() -> Result<SecretUrl, std::env::VarError> {
+    Ok(SecretUrl::new(std::env::var("DATABASE_URL")?))
+}
+
 /// Connect app pool using `DATABASE_URL` from the environment.
+///
+/// The DSN is held in [`SecretUrl`] and zeroized when this function returns;
+/// it is not stored in a process-wide cache.
 pub async fn connect_app_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = database_url_from_env()
+    let secret = secret_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("DATABASE_URL: {}", e).into()))?;
-    let t = url.trim();
+    let t = secret.expose().trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
             "DATABASE_URL is set but empty".into(),
@@ -370,11 +383,21 @@ pub async fn connect_auth(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .await
 }
 
+/// Auth DSN in a zeroizing wrapper (`WEISSMAN_AUTH_DATABASE_URL` or `DATABASE_URL`).
+pub fn secret_auth_database_url_from_env() -> Result<SecretUrl, std::env::VarError> {
+    match std::env::var("WEISSMAN_AUTH_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => Ok(SecretUrl::new(s)),
+        _ => secret_database_url_from_env(),
+    }
+}
+
 /// Connect auth pool using `WEISSMAN_AUTH_DATABASE_URL` or `DATABASE_URL`.
+///
+/// The DSN is held in [`SecretUrl`] and zeroized when this function returns.
 pub async fn connect_auth_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = resolve_auth_database_url()
+    let secret = secret_auth_database_url_from_env()
         .map_err(|e| sqlx::Error::Configuration(format!("auth database URL: {}", e).into()))?;
-    let t = url.trim();
+    let t = secret.expose().trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
             "resolved auth database URL is empty".into(),
@@ -418,13 +441,22 @@ pub async fn connect_intel(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .await
 }
 
+/// Intel DSN in a zeroizing wrapper (`WEISSMAN_INTEL_DATABASE_URL` or `DATABASE_URL`).
+pub fn secret_intel_database_url_from_env() -> Result<SecretUrl, std::env::VarError> {
+    match std::env::var("WEISSMAN_INTEL_DATABASE_URL") {
+        Ok(s) if !s.trim().is_empty() => Ok(SecretUrl::new(s)),
+        _ => secret_database_url_from_env(),
+    }
+}
+
+/// Connect the intel pool. The DSN is held in [`SecretUrl`] and zeroized on return.
 pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
-    let url = intel_database_url_from_env().map_err(|e| {
+    let secret = secret_intel_database_url_from_env().map_err(|e| {
         sqlx::Error::Configuration(
             format!("WEISSMAN_INTEL_DATABASE_URL / DATABASE_URL: {}", e).into(),
         )
     })?;
-    let t = url.trim();
+    let t = secret.expose().trim();
     if t.is_empty() {
         return Err(sqlx::Error::Configuration(
             "intel database URL is empty".into(),

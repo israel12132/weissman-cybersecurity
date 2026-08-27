@@ -1190,10 +1190,50 @@ async fn api_ueba_ingest(
         )
             .into_response();
     }
-    match crate::ueba_detector::ingest_sample(&state.app_pool, auth.tenant_id, p).await {
+    match crate::postgres_bulk_copy::submit_ueba_sample(
+        &state.app_pool,
+        auth.tenant_id,
+        p,
+        Some(std::time::Duration::from_secs(5)),
+    )
+    .await
+    {
         Ok(s) => (StatusCode::OK, Json(json!({"ok": true, "summary": s}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response(),
+        Err(crate::postgres_bulk_copy::SubmitError::Backpressure(bp)) => {
+            let retry_secs = (bp.retry_after_ms.saturating_add(999) / 1000).max(1);
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(
+                    axum::http::header::RETRY_AFTER,
+                    retry_secs.to_string(),
+                )],
+                Json(json!({
+                    "ok": false,
+                    "error": "backpressure",
+                    "retry_after_ms": bp.retry_after_ms,
+                    "queued": bp.queued,
+                    "channel_cap": bp.channel_cap,
+                    "detail": "UEBA ingest channel is full; retain samples locally and retry",
+                })),
+            )
+                .into_response()
+        }
+        Err(crate::postgres_bulk_copy::SubmitError::Failed(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": e})),
+        )
+            .into_response(),
     }
+}
+
+async fn api_ueba_ingest_stats(
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    let stats = crate::postgres_bulk_copy::snapshot_stats();
+    (StatusCode::OK, Json(json!({"ok": true, "stats": stats}))).into_response()
 }
 
 async fn api_ueba_anomalies(

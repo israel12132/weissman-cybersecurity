@@ -1527,6 +1527,9 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         app_pool.clone(),
         state.endpoint_agents.clone(),
     );
+    // Binary COPY ingest runs on every replica: the replica that accepted the agent
+    // payload owns the mPSC buffer. Leader-only would drop samples on followers.
+    crate::postgres_bulk_copy::spawn(app_pool.clone());
     if is_leader {
         crate::endpoint_agents::spawn_ueba_baseline_scheduler(
             app_pool.clone(),

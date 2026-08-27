@@ -79,6 +79,17 @@ pub enum ServerToAgent {
     Ack { task_id: String },
     /// Asks the agent to shut down (revoked, deprovisioned, …).
     Shutdown { reason: String },
+    /// Server ingest is saturated. Retain the last `ueba_baseline` finding locally
+    /// and retry after `retry_after_ms` (or on the next session).
+    Backpressure {
+        retry_after_ms: u64,
+        #[serde(default)]
+        task_id: Option<String>,
+        #[serde(default)]
+        engine: Option<String>,
+        #[serde(default)]
+        reason: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,4 +106,49 @@ pub struct Enrollment {
     pub agent_secret: String,
     pub ws_path: String, // e.g. "/ws/agent"
     pub server_message: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn backpressure_round_trips() {
+        let msg = ServerToAgent::Backpressure {
+            retry_after_ms: 200,
+            task_id: Some("t-1".into()),
+            engine: Some("ueba_baseline".into()),
+            reason: Some("ueba_ingest_channel_full".into()),
+        };
+        let v = serde_json::to_value(&msg).unwrap();
+        assert_eq!(v["type"], "backpressure");
+        assert_eq!(v["retry_after_ms"], 200);
+        let back: ServerToAgent = serde_json::from_value(v).unwrap();
+        match back {
+            ServerToAgent::Backpressure {
+                retry_after_ms,
+                engine,
+                ..
+            } => {
+                assert_eq!(retry_after_ms, 200);
+                assert_eq!(engine.as_deref(), Some("ueba_baseline"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn finding_serializes_for_spill() {
+        let msg = AgentToServer::Finding {
+            agent_id: "a".into(),
+            task_id: "t".into(),
+            engine: "ueba_baseline".into(),
+            finding: json!({"metrics": {"n": 1}}),
+        };
+        let line = serde_json::to_string(&msg).unwrap();
+        assert!(line.contains("ueba_baseline"));
+        let back: AgentToServer = serde_json::from_str(&line).unwrap();
+        assert!(matches!(back, AgentToServer::Finding { .. }));
+    }
 }

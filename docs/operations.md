@@ -39,13 +39,24 @@
 
 MFA TOTP seeds, SOAR provider credentials, and CEO-vault secrets are encrypted at
 rest (AES-256-GCM). **Production fails closed at startup if no key material is set.**
+Working copies of keys and decrypted payloads are [`Zeroize`]/[`ZeroizeOnDrop`]
+(`fingerprint_engine/src/vault_config_crypto.rs`) so they are overwritten with zeros
+when they leave scope — there is no JWT fallback on the sovereign loader.
+Decrypted config fields and database DSNs are held in dedicated wrappers
+(`SecretString`, `weissman_db::SecretUrl`) that are **not** `Clone` and wipe on
+drop. They must not be copied into process-wide globals (`OnceLock`, sqlx DSN
+caches, `HashMap` clones). `connect_*_from_env` loads the DSN into `SecretUrl`,
+connects, then drops the wrapper.
 
 | Var | Default | Effect |
 |-----|---------|--------|
-| `WEISSMAN_INTEGRATIONS_VAULT_KEY` | unset → JWT-derived | Dedicated key (passphrase ≥32 chars). Recommended over the JWT-derived fallback |
-| `WEISSMAN_VAULT_KEY` | unset → JWT-derived | Alternative dedicated key (64 hex = 32 bytes); also keys the CEO genesis vault |
+| `WEISSMAN_INTEGRATIONS_VAULT_KEY` | unset → JWT-derived (legacy decrypt only) | Dedicated key: 64 hex = raw AES-256, or passphrase ≥32 chars (SHA-256 derived). Required in production. |
+| `WEISSMAN_VAULT_KEY` | unset → JWT-derived (legacy decrypt only) | Alternative dedicated key (64 hex = 32 bytes); also keys the CEO genesis vault. No JWT fallback when loading via `SovereignVault`. |
 | `WEISSMAN_VAULT_KEY_PREVIOUS` | unset | Comma-separated rotated-out hex keys kept in the decrypt keyring so rotation never orphans data |
 | `WEISSMAN_JWT_SECRET_PREVIOUS` | unset | Existing JWT rotation keyring; also derives previous vault keys when the JWT-derived fallback is in use |
+| `WEISSMAN_UEBA_COPY_BATCH_SIZE` | 512 | Binary COPY flush when this many UEBA samples are buffered |
+| `WEISSMAN_UEBA_COPY_FLUSH_MS` | 50 | Binary COPY flush interval (cockpit freshness vs write coalescing) |
+| `WEISSMAN_UEBA_COPY_CHANNEL` | 50000 | Bounded Tokio mPSC capacity. When full, ingest returns backpressure (HTTP 429 / agent `Backpressure`); agents wait or spill locally. INSERT fallback is **not** used on a full channel. |
 
 > **Rotation:** set the new key, move the old value into `*_PREVIOUS`, restart. Old
 > ciphertext still decrypts via the previous key; MFA seeds re-encrypt opportunistically.

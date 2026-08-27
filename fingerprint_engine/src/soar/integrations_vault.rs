@@ -4,7 +4,7 @@ use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
-use std::sync::OnceLock;
+use zeroize::Zeroize;
 
 const INT_PREFIX: &str = "wzi1:";
 
@@ -55,30 +55,26 @@ pub fn dedicated_key_configured() -> bool {
             .is_some()
 }
 
-/// Current (encryption) key. `None` only when no key material exists at all
-/// (dev without a JWT secret) — in production the startup guard requires one.
-fn vault_key() -> Option<[u8; 32]> {
-    static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
-    *KEY.get_or_init(|| {
-        if let Ok(raw) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
-            if raw.trim().len() >= 32 {
-                return Some(derive_key(b"weissman-integrations-vault-v1|", raw.trim()));
+/// Current (encryption) key, loaded per call so the 32-byte working copy can be
+/// zeroized when the caller is done. `None` only when no key material exists at
+/// all (dev without a JWT secret) — in production the startup guard requires a
+/// dedicated key. Does **not** cache in a `OnceLock` (that would pin the key in
+/// RAM for the process lifetime).
+fn vault_key() -> Option<crate::vault_config_crypto::VaultKey> {
+    match crate::vault_config_crypto::load_integrations_encryption_key() {
+        Ok(k) => Some(k),
+        Err(crate::vault_config_crypto::VaultCryptoError::Missing { .. }) => {
+            let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
+            if js.trim().len() < 16 {
+                return None;
             }
+            Some(crate::vault_config_crypto::VaultKey::from_bytes(derive_key(
+                b"weissman-integrations-vault-fallback|",
+                js.trim(),
+            )))
         }
-        if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            if let Some(k) = hex32(&raw) {
-                return Some(k);
-            }
-        }
-        let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
-        if js.trim().len() < 16 {
-            return None;
-        }
-        Some(derive_key(
-            b"weissman-integrations-vault-fallback|",
-            js.trim(),
-        ))
-    })
+        Err(_) => None,
+    }
 }
 
 /// True when a key is available to encrypt secrets at rest. The production
@@ -90,23 +86,46 @@ pub fn key_present() -> bool {
 
 /// Build the decrypt keyring from explicit inputs.
 ///
-/// Split out from [`decrypt_keyring`] so the migration guarantee is testable: the real function
-/// caches in a `OnceLock`, so a test that flips environment variables cannot observe the effect.
+/// Split out from [`decrypt_keyring`] so the migration guarantee is testable: keys are
+/// loaded per call (no `OnceLock`) so a test that flips environment variables can
+/// observe the effect, and working copies can be zeroized after decrypt.
 fn build_decrypt_keyring(
     current: Option<[u8; 32]>,
     jwt_secret: &str,
     prev_vault_hex_csv: &str,
     prev_integrations_csv: &str,
     prev_jwt_csv: &str,
+    integrations_raw: &str,
 ) -> Vec<[u8; 32]> {
     let mut v: Vec<[u8; 32]> = Vec::new();
     if let Some(k) = current {
         v.push(k);
     }
+    // 64-hex INTEGRATIONS keys are used raw for new writes. Rows encrypted under the
+    // historical SHA-256-derived form of the same string must still open.
+    if let Some(raw_hex) = hex32(integrations_raw) {
+        if !v.contains(&raw_hex) {
+            v.push(raw_hex);
+        }
+        if integrations_raw.trim().len() >= 32 {
+            let derived = derive_key(
+                b"weissman-integrations-vault-v1|",
+                integrations_raw.trim(),
+            );
+            if !v.contains(&derived) {
+                v.push(derived);
+            }
+        }
+    }
     v.extend(prev_vault_hex_csv.split(',').filter_map(hex32));
     for e in prev_integrations_csv.split(',') {
         if e.trim().len() >= 32 {
             v.push(derive_key(b"weissman-integrations-vault-v1|", e.trim()));
+        }
+        if let Some(k) = hex32(e) {
+            if !v.contains(&k) {
+                v.push(k);
+            }
         }
     }
     // Legacy rows: everything written before a dedicated key existed was encrypted with the key
@@ -135,19 +154,21 @@ fn build_decrypt_keyring(
 }
 
 /// Decrypt keyring: current key first, then rotated-out previous keys so a key rotation never
-/// orphans already-encrypted secrets.
-fn decrypt_keyring() -> &'static [[u8; 32]] {
-    static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
-    KEYS.get_or_init(|| {
-        build_decrypt_keyring(
-            vault_key(),
-            &std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default(),
-            &std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS").unwrap_or_default(),
-            &std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS").unwrap_or_default(),
-            &std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS").unwrap_or_default(),
-        )
-    })
-    .as_slice()
+/// orphans already-encrypted secrets. Loaded per call so working copies can be zeroized.
+fn decrypt_keyring() -> Vec<[u8; 32]> {
+    let mut current = vault_key();
+    let current_bytes = current.as_ref().map(|k| *k.as_bytes());
+    if let Some(k) = current.as_mut() {
+        k.zeroize();
+    }
+    build_decrypt_keyring(
+        current_bytes,
+        &std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default(),
+        &std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS").unwrap_or_default(),
+        &std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS").unwrap_or_default(),
+        &std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS").unwrap_or_default(),
+        &std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY").unwrap_or_default(),
+    )
 }
 
 fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Option<String> {
@@ -170,8 +191,10 @@ fn decrypt_with_key(key: &[u8; 32], stored: &str) -> Option<String> {
     }
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let nonce = Nonce::from_slice(&blob[..12]);
-    let pt = cipher.decrypt(nonce, &blob[12..]).ok()?;
-    String::from_utf8(pt).ok()
+    let mut pt = cipher.decrypt(nonce, &blob[12..]).ok()?;
+    let out = String::from_utf8(pt.clone()).ok();
+    pt.zeroize();
+    out
 }
 
 #[must_use]
@@ -180,7 +203,12 @@ pub fn encrypt_secret(plaintext: &str) -> String {
         return plaintext.to_string();
     }
     match vault_key() {
-        Some(k) => encrypt_with_key(&k, plaintext).unwrap_or_else(|| plaintext.to_string()),
+        Some(mut k) => {
+            let out =
+                encrypt_with_key(k.as_bytes(), plaintext).unwrap_or_else(|| plaintext.to_string());
+            k.zeroize();
+            out
+        }
         None => plaintext.to_string(),
     }
 }
@@ -190,13 +218,18 @@ pub fn decrypt_secret(stored: &str) -> String {
     if !stored.starts_with(INT_PREFIX) {
         return stored.to_string();
     }
-    for k in decrypt_keyring() {
+    let mut keys = decrypt_keyring();
+    let mut recovered = None;
+    for k in keys.iter() {
         if let Some(pt) = decrypt_with_key(k, stored) {
-            return pt;
+            recovered = Some(pt);
+            break;
         }
     }
-    // No key (current or rotated-out) matched — return as-is (fail-safe).
-    stored.to_string()
+    for k in keys.iter_mut() {
+        k.zeroize();
+    }
+    recovered.unwrap_or_else(|| stored.to_string())
 }
 
 /// True if `stored` is an encrypted envelope produced by [`encrypt_secret`]
@@ -313,8 +346,8 @@ mod tests {
 
     #[test]
     fn encrypt_config_hides_soar_provider_secrets() {
-        // Same key string as `roundtrip_when_key_available` so the process-wide
-        // vault-key OnceLock stays consistent regardless of test order.
+        // Same key string as `roundtrip_when_key_available`. Keys are loaded per call
+        // (no process-wide OnceLock), so this remains isolated from other tests.
         std::env::set_var(
             "WEISSMAN_INTEGRATIONS_VAULT_KEY",
             "test-vault-key-for-integrations-32b-minimum!!",
@@ -396,7 +429,7 @@ mod tests {
         let dedicated_key = derive_key(b"weissman-integrations-vault-v1|", DEDICATED);
         assert_ne!(dedicated_key, legacy_key, "test premise: the keys differ");
 
-        let keyring = build_decrypt_keyring(Some(dedicated_key), JWT, "", "", "");
+        let keyring = build_decrypt_keyring(Some(dedicated_key), JWT, "", "", "", "");
 
         let recovered = keyring
             .iter()

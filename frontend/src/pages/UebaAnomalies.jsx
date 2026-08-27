@@ -6,6 +6,10 @@
  * is a metric whose observed value deviated from its rolling baseline
  * (mean/stddev), scored by z-score and severity. Route: /ueba
  *
+ * Ingest pipeline counters come from GET /api/ueba/ingest-stats (PostgreSQL
+ * binary COPY worker — replica-local queued depth, rows flushed, last flush,
+ * backpressure rejects, schema version).
+ *
  * Optional query params the endpoint accepts: `limit` (1–500) and `agent_id`.
  * We fetch the default page and filter/search client-side over the result.
  */
@@ -57,6 +61,7 @@ export default function UebaAnomalies() {
   const { t } = useTranslation()
   const { clients } = useClient()
   const [anomalies, setAnomalies] = useState([])
+  const [ingest, setIngest] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
@@ -66,9 +71,13 @@ export default function UebaAnomalies() {
     setLoading(true)
     setError('')
     try {
-      const d = await apiFetch('/api/ueba/anomalies?limit=500')
+      const [d, statsResp] = await Promise.all([
+        apiFetch('/api/ueba/anomalies?limit=500'),
+        apiFetch('/api/ueba/ingest-stats').catch(() => null),
+      ])
       if (d?.ok === false) throw new Error(d.detail || 'load failed')
       setAnomalies(Array.isArray(d.anomalies) ? d.anomalies : [])
+      setIngest(statsResp?.ok && statsResp.stats ? statsResp.stats : null)
     } catch (e) {
       setError(e.message || t(`${NS}.load_failed`))
     } finally {
@@ -253,7 +262,7 @@ export default function UebaAnomalies() {
       <div className="space-y-6">
         <EvidenceNotice>{t(`${NS}.evidence_notice`)}</EvidenceNotice>
 
-        {loading && <SkeletonWidgetGrid count={4} />}
+        {loading && <SkeletonWidgetGrid count={8} />}
 
         {error && (
           <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-sm text-rose-300 font-mono">
@@ -269,6 +278,55 @@ export default function UebaAnomalies() {
               <ExecutiveWidget label={t(`${NS}.kpi_crit_high`)} value={stats.critHigh} accent="#f43f5e" />
               <ExecutiveWidget label={t(`${NS}.kpi_max_z`)} value={`${stats.maxZ.toFixed(1)}σ`} accent="#f97316" />
             </div>
+
+            {ingest && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <ExecutiveWidget
+                  label={t(`${NS}.kpi_copy_mode`)}
+                  value={
+                    ingest.copy_enabled
+                      ? t(`${NS}.copy_mode_live`)
+                      : ingest.copy_fallback_inserts > 0
+                        ? t(`${NS}.copy_mode_insert`)
+                        : t(`${NS}.copy_mode_idle`)
+                  }
+                  hint={ingest.copy_enabled ? 'PGCOPY binary' : 'INSERT'}
+                  accent={ingest.copy_enabled ? '#34d399' : '#94a3b8'}
+                />
+                <ExecutiveWidget
+                  label={t(`${NS}.kpi_copy_rows`)}
+                  value={Number(ingest.copy_rows_flushed || 0).toLocaleString()}
+                  hint={`${Number(ingest.copy_flushes || 0).toLocaleString()} flushes`}
+                  accent="#22d3ee"
+                />
+                <ExecutiveWidget
+                  label={t(`${NS}.kpi_copy_flush`)}
+                  value={`${Number(ingest.copy_last_flush_ms || 0)} ms`}
+                  hint={`batch ${ingest.copy_batch_size || '—'} · ${ingest.copy_flush_interval_ms || '—'} ms`}
+                  accent="#a78bfa"
+                />
+                <ExecutiveWidget
+                  label={t(`${NS}.kpi_copy_queued`)}
+                  value={Number(ingest.copy_channel_queued || 0).toLocaleString()}
+                  hint={
+                    Number(ingest.copy_fallback_inserts || 0) > 0
+                      ? `${Number(ingest.copy_fallback_inserts).toLocaleString()} INSERT fallback`
+                      : `cap ${ingest.copy_channel_cap || '—'}`
+                  }
+                  accent={Number(ingest.copy_channel_queued || 0) > 0 ? '#facc15' : '#64748b'}
+                />
+                <ExecutiveWidget
+                  label={t(`${NS}.kpi_copy_backpressure`)}
+                  value={Number(ingest.copy_backpressure_rejects || 0).toLocaleString()}
+                  hint={
+                    ingest.copy_schema_version
+                      ? t(`${NS}.kpi_copy_schema`, { version: ingest.copy_schema_version })
+                      : t(`${NS}.kpi_copy_backpressure_hint`)
+                  }
+                  accent={Number(ingest.copy_backpressure_rejects || 0) > 0 ? '#f43f5e' : '#64748b'}
+                />
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative flex-1 min-w-[220px] max-w-md">

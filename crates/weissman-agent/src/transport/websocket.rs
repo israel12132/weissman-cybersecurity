@@ -66,6 +66,13 @@ pub async fn run_session(
             .collect(),
     };
     out_tx.send(hello).await.ok();
+    if let Some(spilled) = crate::transport::ueba_spill::load_finding() {
+        info!(
+            target: "agent",
+            "resending spilled ueba_baseline finding after reconnect"
+        );
+        out_tx.send(spilled).await.ok();
+    }
 
     // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
@@ -291,6 +298,31 @@ async fn handle_text(
             });
         }
         ServerToAgent::Ack { .. } => {}
+        ServerToAgent::Backpressure {
+            retry_after_ms,
+            task_id,
+            engine,
+            reason,
+        } => {
+            warn!(
+                target: "agent",
+                retry_after_ms,
+                task_id = task_id.as_deref().unwrap_or("-"),
+                engine = engine.as_deref().unwrap_or("-"),
+                reason = reason.as_deref().unwrap_or("ueba_ingest_channel_full"),
+                "server backpressure; will resend spilled ueba finding"
+            );
+            if let Some(msg) = crate::transport::ueba_spill::load_finding() {
+                let delay = retry_after_ms.max(50);
+                let out_tx = out_tx.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
+                    if out_tx.send(msg).await.is_err() {
+                        warn!(target: "agent", "ueba spill resend dropped (session closing)");
+                    }
+                });
+            }
+        }
         ServerToAgent::Shutdown { reason } => {
             warn!(target: "agent", reason = %reason, "server requested shutdown");
             std::process::exit(0);
@@ -319,14 +351,18 @@ async fn run_task(
         Ok(Ok(findings)) => {
             let count = findings.len() as u32;
             for f in findings {
-                let _ = out_tx
-                    .send(AgentToServer::Finding {
-                        agent_id: agent_id.clone(),
-                        task_id: task_id.clone(),
-                        engine: engine.clone(),
-                        finding: f,
-                    })
-                    .await;
+                let msg = AgentToServer::Finding {
+                    agent_id: agent_id.clone(),
+                    task_id: task_id.clone(),
+                    engine: engine.clone(),
+                    finding: f,
+                };
+                if engine == "ueba_baseline" {
+                    if let Err(e) = crate::transport::ueba_spill::write_finding(&msg) {
+                        warn!(target: "agent", error = %e, "could not persist ueba spill");
+                    }
+                }
+                let _ = out_tx.send(msg).await;
             }
             (count, "ok".to_string(), None)
         }
