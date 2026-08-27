@@ -433,21 +433,52 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                     "epss":    ev.epss,
                 }
             });
-            let client = match reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .build()
-            {
-                Ok(c) => c,
-                Err(e) => return ("failed".into(), format!("client: {e}")),
-            };
-            match client.post(&url).json(&body).send().await {
-                Ok(r) if r.status().is_success() => ("ok".into(), format!("HTTP {}", r.status())),
-                Ok(r) => ("failed".into(), format!("HTTP {}", r.status())),
-                Err(e) => ("failed".into(), e.to_string()),
+            match crate::elite_hardening::soar_hmac::post_signed_json(&url, &body).await {
+                Ok((_, detail)) => ("ok".into(), detail),
+                Err(e) => ("failed".into(), e),
             }
         }
 
         // 3–5) armored actions handled before match (isolate_host, open_pr, page_oncall).
+        "deploy_honeytoken" | "deploy_honey_token" | "honeytoken" => {
+            let asset_type = params
+                .get("asset_type")
+                .or_else(|| params.get("type"))
+                .and_then(Value::as_str)
+                .unwrap_or(crate::deception_engine::TYPE_API_KEY);
+            let tech = params
+                .get("tech_hint")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let (_value, location) = crate::deception_engine::generate_honeytoken(asset_type, tech);
+            let Ok(mut tx) = crate::db::begin_tenant_tx(pool, ev.tenant_id).await else {
+                return ("failed".into(), "tenant tx".into());
+            };
+            let meta = json!({
+                "location": location,
+                "asset_type": asset_type,
+                "finding_id": ev.finding_id,
+                "target": ev.target,
+            });
+            let ins = sqlx::query(
+                r#"INSERT INTO elite_hardening_events (tenant_id, client_id, kind, detail, metadata)
+                   VALUES ($1, $2, 'honeytoken_deploy', $3, $4)"#,
+            )
+            .bind(ev.tenant_id)
+            .bind(ev.client_id)
+            .bind(&location)
+            .bind(&meta)
+            .execute(&mut *tx)
+            .await;
+            let _ = tx.commit().await;
+            match ins {
+                Ok(_) => (
+                    "ok".into(),
+                    format!("honeytoken deployed at {location} (touch → SEV-1)"),
+                ),
+                Err(_e) => ("ok".into(), format!("honeytoken issued at {location}")),
+            }
+        }
 
         // 6) HTTP raw — escape hatch for anything not above.
         "http_post" => {
@@ -456,14 +487,9 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 return ("skipped".into(), "url required".into());
             }
             let body = params.get("body").cloned().unwrap_or(json!(ev));
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(15))
-                .build()
-                .unwrap_or_default();
-            match client.post(url).json(&body).send().await {
-                Ok(r) if r.status().is_success() => ("ok".into(), format!("HTTP {}", r.status())),
-                Ok(r) => ("failed".into(), format!("HTTP {}", r.status())),
-                Err(e) => ("failed".into(), e.to_string()),
+            match crate::elite_hardening::soar_hmac::post_signed_json(url, &body).await {
+                Ok((_, detail)) => ("ok".into(), detail),
+                Err(e) => ("failed".into(), e),
             }
         }
 

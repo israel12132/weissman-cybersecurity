@@ -71,6 +71,7 @@ pub mod db;
 pub mod db_backup;
 pub mod demo_request;
 pub mod discovery_engine;
+pub mod elite_hardening;
 pub mod embeddings;
 pub mod engine_accounting;
 pub mod engine_capabilities;

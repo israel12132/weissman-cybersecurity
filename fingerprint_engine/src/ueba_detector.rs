@@ -123,6 +123,25 @@ pub async fn ingest_sample(
                 summary.anomalies.push(a);
             }
         }
+        if let Some(users) = obj.get("logged_in_users").and_then(Value::as_array) {
+            let observed: Vec<String> = users
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect();
+            if let Some(a) = check_new_categorical(
+                &mut tx,
+                tenant_id,
+                &p,
+                sample_id,
+                "logged_in_users",
+                &observed,
+                "New unique user on core asset",
+            )
+            .await?
+            {
+                summary.anomalies.push(a);
+            }
+        }
     }
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
@@ -228,24 +247,22 @@ async fn check_anomaly(
     if base.n < MIN_BASELINE_SAMPLES {
         return Ok(None); // still learning
     }
-    if base.stddev < 1e-6 {
-        return Ok(None); // constant baseline — divide-by-zero, can't compute z
-    }
-    let z = (observed - base.mean) / base.stddev;
-    if z.abs() < Z_THRESHOLD {
+    let stddev = crate::elite_hardening::ueba_stats::cloud_safe_stddev(base.mean, base.stddev);
+    let z = (observed - base.mean) / stddev;
+    if z.abs() <= Z_THRESHOLD {
         return Ok(None);
     }
-    let severity = if z.abs() > 6.0 { "high" } else { "medium" };
+    let severity = crate::elite_hardening::ueba_stats::severity_for_z(z);
     let direction = if z > 0.0 { "above" } else { "below" };
     let detail = format!(
         "Metric `{}` observed {:.2}, baseline {:.2} ± {:.2} (z={:+.2}, {} 3σ).",
-        metric, observed, base.mean, base.stddev, z, direction
+        metric, observed, base.mean, stddev, z, direction
     );
     let rec = AnomalyRecord {
         metric: metric.to_string(),
         observed,
         baseline_mean: base.mean,
-        baseline_stddev: base.stddev,
+        baseline_stddev: stddev,
         z_score: z,
         severity: severity.to_string(),
         detail: detail.clone(),
@@ -264,7 +281,7 @@ async fn check_anomaly(
     .bind(metric)
     .bind(observed)
     .bind(base.mean)
-    .bind(base.stddev)
+    .bind(stddev)
     .bind(z)
     .bind(severity)
     .bind(&detail)

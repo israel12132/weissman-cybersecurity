@@ -8,6 +8,7 @@
 pub mod errors;
 pub mod models;
 pub mod openapi;
+pub mod stealth_identity;
 pub mod tls_policy;
 
 pub use errors::{AppError, ErrorBody, ErrorCode};

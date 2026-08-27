@@ -568,6 +568,67 @@ pub async fn persist_engine_findings(
         }
         let effective_status = if suppressed { "FALSE_POSITIVE" } else { "OPEN" };
 
+        // Evidence-doubt: stage uncorroborated actionable findings; admit inventory, proof,
+        // KEV, OAST, dual-probe, or confidence ≥ 0.95.
+        {
+            let mut finding_for_doubt = f.clone();
+            if let Value::Object(obj) = &mut finding_for_doubt {
+                obj.insert("kev_listed".into(), json!(kev_listed));
+                obj.insert("poc_sealed".into(), json!(poc_sealed));
+                if !poc.is_empty() {
+                    obj.insert("poc".into(), json!(poc.clone()));
+                }
+            }
+            let ckey = crate::elite_hardening::evidence_doubt::corroboration_key(
+                &target_url,
+                &vuln_signature,
+                &poc,
+            );
+            let distinct =
+                distinct_engines_for_key(&mut tx, tenant_id, client_id, &ckey, engine).await;
+            let decision = crate::elite_hardening::evidence_doubt::decide(
+                engine,
+                &severity,
+                &finding_for_doubt,
+                distinct,
+            );
+            let _ = upsert_finding_candidate(
+                &mut tx,
+                tenant_id,
+                client_id,
+                engine,
+                &ckey,
+                &severity,
+                &title,
+                &finding_for_doubt,
+                &decision,
+            )
+            .await;
+            match decision {
+                crate::elite_hardening::evidence_doubt::AdmitDecision::Stage { reason, .. } => {
+                    tracing::info!(
+                        target: "findings_persist",
+                        engine = %engine,
+                        tenant_id,
+                        %reason,
+                        "staging finding pending corroboration"
+                    );
+                    continue;
+                }
+                crate::elite_hardening::evidence_doubt::AdmitDecision::Admit {
+                    reason,
+                    confidence,
+                } => {
+                    if let Value::Object(obj) = &mut raw_data_enriched {
+                        obj.insert(
+                            "evidence_doubt".into(),
+                            json!({ "reason": reason, "confidence": confidence }),
+                        );
+                    }
+                }
+            }
+        }
+
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
         // and *do not* reset status — analyst-set workflow states (ACKNOWLEDGED, FIXED,
@@ -960,4 +1021,73 @@ mod tests {
             "different vulnerability signature must yield a different finding_id"
         );
     }
+}
+
+async fn distinct_engines_for_key(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    client_id: i64,
+    key: &str,
+    current: &str,
+) -> usize {
+    let rows: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT engine_id FROM finding_candidates
+          WHERE tenant_id = $1 AND client_id = $2 AND corroboration_key = $3",
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(key)
+    .fetch_all(&mut **tx)
+    .await
+    .unwrap_or_default();
+    let mut set = std::collections::HashSet::new();
+    set.insert(current.to_string());
+    for e in rows {
+        set.insert(e);
+    }
+    set.len()
+}
+
+async fn upsert_finding_candidate(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    client_id: i64,
+    engine: &str,
+    key: &str,
+    severity: &str,
+    title: &str,
+    finding: &Value,
+    decision: &crate::elite_hardening::evidence_doubt::AdmitDecision,
+) -> Result<(), String> {
+    let (reason, confidence) = match decision {
+        crate::elite_hardening::evidence_doubt::AdmitDecision::Admit { reason, confidence } => {
+            (*reason, *confidence)
+        }
+        crate::elite_hardening::evidence_doubt::AdmitDecision::Stage { reason, confidence } => {
+            (*reason, *confidence)
+        }
+    };
+    sqlx::query(
+        r#"INSERT INTO finding_candidates
+             (tenant_id, client_id, engine_id, corroboration_key, severity, title,
+              finding_json, confidence, reason)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (tenant_id, client_id, corroboration_key, engine_id) DO UPDATE SET
+               finding_json = EXCLUDED.finding_json,
+               confidence = EXCLUDED.confidence,
+               reason = EXCLUDED.reason"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .bind(key)
+    .bind(severity)
+    .bind(title)
+    .bind(finding)
+    .bind(confidence)
+    .bind(reason)
+    .execute(&mut **tx)
+    .await
+    .map(|_| ())
+    .or(Ok(()))
 }

@@ -40,6 +40,8 @@ struct TableSpec {
     /// Currently only used to bring `clients.name` into vulnerabilities/etc.
     #[allow(dead_code)]
     joins: &'static [(&'static str, &'static str)],
+    /// Feed/intel tables have no tenant_id; RLS still applies via GRANTs + GUC.
+    has_tenant: bool,
 }
 
 static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
@@ -69,6 +71,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["discovered_at", "epss_score", "seen_count", "id"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -93,6 +96,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["last_seen_at", "max_cvss", "max_epss", "member_count"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -107,6 +111,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["id", "name"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -128,6 +133,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["risk_score", "business_value_usd", "id"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -149,6 +155,7 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["detected_at", "z_score"],
             joins: &[],
+            has_tenant: true,
         },
     );
     m.insert(
@@ -166,10 +173,117 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             ],
             order_by: &["computed_at", "max_risk"],
             joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "risk_graph_edges",
+        TableSpec {
+            table: "risk_graph_edges",
+            columns: &["id", "client_id", "from_node_id", "to_node_id", "edge_type"],
+            order_by: &["id", "edge_type"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "client_financial_risk_snapshots",
+        TableSpec {
+            table: "client_financial_risk_snapshots",
+            columns: &[
+                "id",
+                "client_id",
+                "computed_at",
+                "total_asset_value_usd",
+                "sle_worst_usd",
+                "ale_annualised_usd",
+                "crown_jewel_value_usd",
+                "currency_code",
+            ],
+            order_by: &["computed_at", "ale_annualised_usd", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "endpoint_agents",
+        TableSpec {
+            table: "endpoint_agents",
+            columns: &[
+                "id",
+                "client_id",
+                "hostname",
+                "os",
+                "agent_version",
+                "status",
+                "last_seen_at",
+            ],
+            order_by: &["last_seen_at", "id"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "weissman_async_jobs",
+        TableSpec {
+            table: "weissman_async_jobs",
+            columns: &["id", "kind", "status", "created_at", "updated_at"],
+            order_by: &["created_at", "updated_at"],
+            joins: &[],
+            has_tenant: true,
+        },
+    );
+    m.insert(
+        "epss_intel",
+        TableSpec {
+            table: "epss_intel",
+            columns: &["cve", "score", "percentile", "epss_date", "refreshed_at"],
+            order_by: &["score", "refreshed_at", "cve"],
+            joins: &[],
+            has_tenant: false,
+        },
+    );
+    m.insert(
+        "kev_intel",
+        TableSpec {
+            table: "kev_intel",
+            columns: &[
+                "cve",
+                "vendor_project",
+                "product",
+                "date_added",
+                "known_ransomware_use",
+                "due_date",
+            ],
+            order_by: &["date_added", "cve"],
+            joins: &[],
+            has_tenant: false,
+        },
+    );
+    m.insert(
+        "audit_logs",
+        TableSpec {
+            table: "audit_logs",
+            columns: &[
+                "id",
+                "created_at",
+                "user_label",
+                "action_type",
+                "details",
+                "ip_address",
+            ],
+            order_by: &["created_at", "id"],
+            joins: &[],
+            has_tenant: true,
         },
     );
     m
 });
+
+/// Spec §10: Ask Weissman allow-list is 13 tables.
+pub fn allowed_table_count() -> usize {
+    SCHEMA.len()
+}
 
 const ALLOWED_OPS: &[&str] = &[
     "=",
@@ -257,17 +371,17 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         None => None,
     };
 
-    // 4) Validate LIMIT (cap at MAX_LIMIT).
-    let limit = plan.limit.unwrap_or(50).clamp(1, MAX_LIMIT);
-
+    // 4) Validate LIMIT after filters so operator errors surface first.
     // 5) Build SQL fragments.
     let select_sql = select_cols.join(", ");
     let mut where_parts: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
 
-    // Tenant scope is FORCED — non-negotiable. $1 always = tenant_id.
-    where_parts.push("tenant_id = $1".to_string());
-    params.push(Value::from(tenant_id));
+    // Tenant scope is FORCED on tenant-keyed tables — non-negotiable.
+    if spec.has_tenant {
+        where_parts.push("tenant_id = $1".to_string());
+        params.push(Value::from(tenant_id));
+    }
 
     // Filters.
     for f in &plan.filters {
@@ -325,6 +439,8 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         }
     }
 
+    let limit = crate::elite_hardening::nl_guard::require_limit(plan.limit, MAX_LIMIT)?;
+
     let order_sql = match order {
         Some(c) => format!(
             " ORDER BY {} {}",
@@ -333,14 +449,16 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
         ),
         None => String::new(),
     };
+    let where_sql = if where_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_parts.join(" AND "))
+    };
     let sql = format!(
-        "SELECT {} FROM {} WHERE {}{} LIMIT {}",
-        select_sql,
-        spec.table,
-        where_parts.join(" AND "),
-        order_sql,
-        limit,
+        "SELECT {} FROM {}{}{} LIMIT {}",
+        select_sql, spec.table, where_sql, order_sql, limit,
     );
+    crate::elite_hardening::nl_guard::reject_unsafe_sql(&sql)?;
     Ok(Compiled { sql, params })
 }
 
@@ -427,6 +545,9 @@ pub async fn ask(
     let q = question.trim();
     if q.is_empty() {
         return bad("question is empty");
+    }
+    if crate::elite_hardening::ai_supply::prompt_contains_secret(q) {
+        return bad("fail-closed: question contains secret material");
     }
     if q.len() > 2000 {
         return bad("question too long (max 2000 chars)");
@@ -549,7 +670,7 @@ You MUST output a single JSON object — nothing else (no ```json fences, no pro
 
 Schema:
 {
-  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots>",
+  "table":     "<one of vulnerabilities|weissman_finding_clusters|clients|risk_graph_nodes|agent_anomalies|attack_path_snapshots|risk_graph_edges|client_financial_risk_snapshots|endpoint_agents|weissman_async_jobs|epss_intel|kev_intel|audit_logs>",
   "select":    ["col1","col2", ...]           // optional; default = all columns
   "filters":   [
      {"column":"severity","op":"in","value":["critical","high"]},
@@ -558,7 +679,7 @@ Schema:
   ],
   "order_by":  "discovered_at",                // optional
   "order_desc": true,                          // optional, default false
-  "limit":     50                              // optional, max 200
+  "limit":     50                              // REQUIRED integer 1-200 (fail-closed)
 }
 
 Operators allowed: =, !=, <, <=, >, >=, in, like, is_null, is_not_null.
@@ -571,6 +692,13 @@ Schema:
 - risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
 - agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
 - attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
+- risk_graph_edges(id, client_id, from_node_id, to_node_id, edge_type)
+- client_financial_risk_snapshots(id, client_id, computed_at, total_asset_value_usd, sle_worst_usd, ale_annualised_usd, crown_jewel_value_usd, currency_code)
+- endpoint_agents(id, client_id, hostname, os, agent_version, status, last_seen_at)
+- weissman_async_jobs(id, kind, status, created_at, updated_at)
+- epss_intel(cve, score, percentile, epss_date, refreshed_at)
+- kev_intel(cve, vendor_project, product, date_added, known_ransomware_use, due_date)
+- audit_logs(id, created_at, user_label, action_type, details, ip_address)
 
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.
 "#;
@@ -685,6 +813,44 @@ mod tests {
         };
         let err = compile_plan(&plan, 1).unwrap_err();
         assert!(err.contains("operator"));
+    }
+
+    #[test]
+    fn allowlist_is_thirteen_tables() {
+        assert_eq!(allowed_table_count(), 13);
+        assert_eq!(
+            allowed_table_count(),
+            crate::elite_hardening::nl_guard::ASK_WEISSMAN_TABLE_COUNT
+        );
+    }
+
+    #[test]
+    fn rejects_missing_limit() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+        };
+        let err = compile_plan(&plan, 1).unwrap_err();
+        assert!(err.contains("limit"));
+    }
+
+    #[test]
+    fn intel_tables_skip_tenant_predicate() {
+        let plan = QueryPlan {
+            table: "epss_intel".into(),
+            select: vec!["cve".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(10),
+        };
+        let c = compile_plan(&plan, 1).unwrap();
+        assert!(!c.sql.contains("tenant_id"));
+        assert!(c.sql.contains("LIMIT 10"));
     }
 
     #[test]

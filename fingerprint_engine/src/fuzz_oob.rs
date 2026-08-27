@@ -117,6 +117,15 @@ pub fn oast_hook_domain() -> Option<String> {
     let d = oast_base_domain();
     if d.is_empty() {
         None
+    } else if crate::elite_hardening::oast_reputation::looks_like_public_collaborator(&d)
+        && crate::elite_hardening::oast_reputation::assert_callback_host(&d).is_err()
+    {
+        tracing::error!(
+            target: "fuzz_oob",
+            domain = %d,
+            "OAST public collaborator host is not on the high-reputation allow-list; refusing callbacks"
+        );
+        None
     } else {
         Some(d)
     }
