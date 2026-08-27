@@ -38,8 +38,7 @@ pub fn is_client_role(role: &str) -> bool {
 #[inline]
 #[must_use]
 pub fn is_client_scoped(auth: &AuthContext) -> bool {
-    auth.agent_id.is_none()
-        && (auth.assigned_client_id.is_some() || is_client_role(&auth.role))
+    auth.agent_id.is_none() && (auth.assigned_client_id.is_some() || is_client_role(&auth.role))
 }
 
 #[inline]
@@ -265,10 +264,12 @@ pub fn is_client_create_path(method: &Method, path: &str) -> bool {
 #[must_use]
 pub fn is_client_delete_path(method: &Method, path: &str) -> bool {
     *method == Method::DELETE
-        && path
-            .strip_prefix("/api/clients/")
-            .is_some_and(|rest| rest.split('/').next().is_some_and(|t| t.parse::<i64>().is_ok())
-                && !rest.contains('/'))
+        && path.strip_prefix("/api/clients/").is_some_and(|rest| {
+            rest.split('/')
+                .next()
+                .is_some_and(|t| t.parse::<i64>().is_ok())
+                && !rest.contains('/')
+        })
 }
 
 fn denied(auth: &AuthContext, detail: &str, code: &str) -> Response {
@@ -403,9 +404,15 @@ mod tests {
     #[test]
     fn create_and_delete_path_detectors() {
         assert!(is_client_create_path(&Method::POST, "/api/clients"));
-        assert!(!is_client_create_path(&Method::POST, "/api/clients/1/scan/run-all"));
+        assert!(!is_client_create_path(
+            &Method::POST,
+            "/api/clients/1/scan/run-all"
+        ));
         assert!(is_client_delete_path(&Method::DELETE, "/api/clients/12"));
-        assert!(!is_client_delete_path(&Method::DELETE, "/api/clients/12/config"));
+        assert!(!is_client_delete_path(
+            &Method::DELETE,
+            "/api/clients/12/config"
+        ));
         assert!(!is_client_delete_path(&Method::POST, "/api/clients/12"));
     }
 
