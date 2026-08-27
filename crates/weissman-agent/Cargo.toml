@@ -10,6 +10,10 @@ publish = false
 name = "weissman-agent"
 path = "src/main.rs"
 
+[lib]
+name = "weissman_agent"
+path = "src/lib.rs"
+
 [dependencies]
 # Async runtime (multi-thread for parallel detections, signal handler).
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-util", "net", "fs", "process"] }

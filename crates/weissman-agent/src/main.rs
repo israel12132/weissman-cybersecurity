@@ -8,25 +8,29 @@
 //!   5. reconnect with exponential backoff on disconnect.
 //!
 //! No persistent storage; all state in memory.
-
-mod detections;
-mod protocol;
-mod transport;
+//!
+//! `--dry-run --probe <engine>` runs one local detection without enrolling (CI).
 
 use clap::Parser;
 use std::time::Duration;
 use tracing::{error, info, warn};
+use weissman_agent::probe;
+use weissman_agent::transport;
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "weissman-agent", version, about = "Weissman Endpoint Agent")]
 struct Cli {
     /// Full URL of the Weissman server (e.g. https://api.weissman.io).
-    #[arg(long, env = "WEISSMAN_SERVER_URL")]
-    server_url: String,
+    #[arg(long, env = "WEISSMAN_SERVER_URL", required_unless_present = "dry_run")]
+    server_url: Option<String>,
 
     /// One-time enrollment token issued by the dashboard.
-    #[arg(long, env = "WEISSMAN_ENROLLMENT_TOKEN")]
-    enrollment_token: String,
+    #[arg(
+        long,
+        env = "WEISSMAN_ENROLLMENT_TOKEN",
+        required_unless_present = "dry_run"
+    )]
+    enrollment_token: Option<String>,
 
     /// Optional: numeric client_id this agent belongs to.
     #[arg(long, env = "WEISSMAN_CLIENT_ID")]
@@ -47,6 +51,14 @@ struct Cli {
     /// Print enrollment info and exit (for systemd / setup automation).
     #[arg(long)]
     enroll_only: bool,
+
+    /// Run without enrolling (CI / operator). Combine with `--probe`.
+    #[arg(long)]
+    dry_run: bool,
+
+    /// Engine id to execute locally in `--dry-run` mode.
+    #[arg(long)]
+    probe: Option<String>,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -54,6 +66,19 @@ async fn main() -> anyhow::Result<()> {
     init_logging();
     let cli = Cli::parse();
     info!(target: "agent", "Weissman endpoint agent starting (version={})", env!("CARGO_PKG_VERSION"));
+
+    if cli.dry_run {
+        return run_dry_run(cli.probe.as_deref()).await;
+    }
+
+    let server_url = cli
+        .server_url
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("--server-url is required unless --dry-run"))?;
+    let enrollment_token = cli
+        .enrollment_token
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("--enrollment-token is required unless --dry-run"))?;
 
     let hostname = cli
         .hostname_override
@@ -73,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
                 "resuming persisted identity"
             );
             let jwt = transport::enrollment::renew_session(
-                &cli.server_url,
+                server_url,
                 &saved.agent_id,
                 &saved.agent_secret,
                 env!("CARGO_PKG_VERSION"),
@@ -83,8 +108,8 @@ async fn main() -> anyhow::Result<()> {
         }
         None => {
             let fresh = transport::enrollment::enroll(
-                &cli.server_url,
-                &cli.enrollment_token,
+                server_url,
+                enrollment_token,
                 cli.client_id,
                 &hostname,
                 whoami::devicename(),
@@ -127,9 +152,7 @@ async fn main() -> anyhow::Result<()> {
     // Reconnect loop with exponential back-off.
     let mut backoff = cli.backoff_ms_initial.max(250);
     loop {
-        match transport::websocket::run_session(&cli.server_url, &enrollment, cli.heartbeat_secs)
-            .await
-        {
+        match transport::websocket::run_session(server_url, &enrollment, cli.heartbeat_secs).await {
             Ok(()) => {
                 info!(target: "agent", "session ended cleanly; reconnecting in {}ms", backoff);
             }
@@ -147,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
         // because a transient server outage must not end the agent's life.
         if !enrollment.agent_secret.trim().is_empty() {
             match transport::enrollment::renew_session(
-                &cli.server_url,
+                server_url,
                 &enrollment.agent_id,
                 &enrollment.agent_secret,
                 env!("CARGO_PKG_VERSION"),
@@ -160,6 +183,30 @@ async fn main() -> anyhow::Result<()> {
                     "session renewal failed; reusing the current token for this attempt"
                 ),
             }
+        }
+    }
+}
+
+async fn run_dry_run(probe: Option<&str>) -> anyhow::Result<()> {
+    match probe {
+        Some(engine) => {
+            let report = probe::run_dry(engine).await?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            if report.fabrication_detected {
+                anyhow::bail!("fabrication_detected");
+            }
+            Ok(())
+        }
+        None => {
+            let caps: Vec<_> = weissman_agent::detections::all_capability_ids();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "dry_run": true,
+                    "capabilities": caps,
+                })
+            );
+            Ok(())
         }
     }
 }
