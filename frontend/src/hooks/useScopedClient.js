@@ -5,6 +5,7 @@ import {
   boundClientId,
   filterVisibleClients,
   shouldHideClientPicker,
+  canScopeSwitch,
 } from '../lib/clientScope'
 
 function normalizeId(value) {
@@ -42,9 +43,10 @@ export function useScopedClient(value, onChange, clientsProp) {
         if (bound != null) onChange?.(bound)
         return
       }
+      ctx.setSelectedClientId(next)
       onChange?.(next)
     },
-    [hidePicker, bound, onChange],
+    [hidePicker, bound, onChange, ctx],
   )
 
   const selected = visible.find((c) => String(c.id) === String(bound ?? value)) || null
@@ -56,5 +58,6 @@ export function useScopedClient(value, onChange, clientsProp) {
     hidePicker,
     setClientId,
     bound,
+    canExit: canScopeSwitch(session),
   }
 }

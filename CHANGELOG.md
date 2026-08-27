@@ -9,6 +9,16 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **TenantScopeGuard (architect merge blocker).** Authenticated API tree runs
+  Axum middleware `tenant_scope_guard` after `auth_guard`. JWT `cid` /
+  `assigned_client_id` is the sole customer-session anchor: spoofed
+  body/query/path `client_id` is overwritten. Every `begin_tenant_tx` stamps
+  `SET LOCAL app.current_tenant_id` **and** `app.current_client_id` so FORCE
+  RLS still holds when a handler forgets `bind_requested_client`. Impersonation
+  is `POST /api/auth/scope-switch` against `user_client_scope_grants` — it
+  mints a **new JWT** (never a client-side picker that keeps the old token).
+  Portal users with a bound customer receive 403 `portal_scope_locked`. Every
+  switch is appended to `user_scope_switch_audit`.
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
   `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to

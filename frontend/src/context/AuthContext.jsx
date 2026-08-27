@@ -3,6 +3,7 @@ import {
   apiUrl,
   setStoredAccessToken,
   clearStoredAccessToken,
+  authHeaders,
 } from '../lib/apiBase'
 import { apiFetch } from '../utils/apiFetch'
 import { effectiveRole, sessionRoleRank, sessionHasRole } from '../lib/roles'
@@ -182,6 +183,46 @@ export function AuthProvider({ children }) {
     [refreshSession],
   )
 
+  /** Mint a brand-new JWT whose `cid` is `clientId`. Never keep the old token and send another id. */
+  const switchScope = useCallback(
+    async (clientId) => {
+      const n = clientId == null || clientId === '' ? null : Number(clientId)
+      const body = {
+        client_id: Number.isFinite(n) && n > 0 ? n : null,
+      }
+      try {
+        const r = await fetch(apiUrl('/api/auth/scope-switch'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        })
+        const data = await r.json().catch(() => ({}))
+        if (r.status === 403) {
+          return {
+            ok: false,
+            status: 403,
+            detail: data.detail || 'Scope switch is not allowed for this account',
+            error_code: data.error_code,
+          }
+        }
+        if (!r.ok || data.ok !== true) {
+          return { ok: false, status: r.status, detail: data.detail || 'Scope switch failed' }
+        }
+        if (data.access_token) setStoredAccessToken(data.access_token)
+        await refreshSession()
+        return {
+          ok: true,
+          assigned_client_id: data.assigned_client_id ?? null,
+          impersonating: data.impersonating === true,
+        }
+      } catch (_) {
+        return { ok: false, detail: 'Network error' }
+      }
+    },
+    [refreshSession],
+  )
+
   const logout = useCallback(async () => {
     try {
       await fetch(apiUrl('/api/logout'), { method: 'POST', credentials: 'include' })
@@ -240,6 +281,7 @@ export function AuthProvider({ children }) {
     hasRole,
     login,
     verifyMfa,
+    switchScope,
     logout,
     checkAuth,
     refreshSession,

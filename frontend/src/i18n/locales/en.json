@@ -111,7 +111,10 @@
     "client_portal": "Customer portal",
     "signed_in": "Signed in",
     "bound_workspace": "bound workspace",
-    "tenant": "workspace"
+    "tenant": "workspace",
+    "impersonating": "Impersonating",
+    "all_customers": "All customers",
+    "scope_switch": "Switch customer"
   },
   "battlespace": {
     "title": "Hyper-Dimensional Cognitive Battlespace",
@@ -7237,7 +7240,9 @@
       "locked_hint": "This account is locked to one customer. Engines, reports, and jobs auto-bind — the server ignores any other client_id.",
       "bound_aria": "Bound customer: {{name}}",
       "locked": "Locked",
-      "select": "Select client"
+      "select": "Select client",
+      "all_customers": "All customers",
+      "impersonating": "Impersonating"
     }
   },
   "supremeNerveCenter": {

@@ -903,7 +903,10 @@
     "client_portal": "פורטל לקוח",
     "signed_in": "מחובר",
     "bound_workspace": "סביבת לקוח קשורה",
-    "tenant": "סביבת עבודה"
+    "tenant": "סביבת עבודה",
+    "impersonating": "התחזות",
+    "all_customers": "כל הלקוחות",
+    "scope_switch": "החלף לקוח"
   },
   "audit": {
     "title": "Audit Log",
@@ -7237,7 +7240,9 @@
       "locked_hint": "חשבון זה נעול ללקוח אחד. מנועים, דוחות ומשימות מקושרים אוטומטית — השרת מתעלם מכל client_id אחר.",
       "bound_aria": "לקוח משויך: {{name}}",
       "locked": "נעול",
-      "select": "בחר לקוח"
+      "select": "בחר לקוח",
+      "all_customers": "כל הלקוחות",
+      "impersonating": "התחזות"
     }
   },
   "supremeNerveCenter": {

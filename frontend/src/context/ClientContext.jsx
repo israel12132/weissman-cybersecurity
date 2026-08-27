@@ -3,7 +3,7 @@ import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useAuthOptional } from './AuthContext'
-import { assignedClientId, allowedClientIds, boundClientId, filterVisibleClients, shouldHideClientPicker } from '../lib/clientScope'
+import { assignedClientId, allowedClientIds, boundClientId, filterVisibleClients, shouldHideClientPicker, canScopeSwitch } from '../lib/clientScope'
 
 const defaultConfig = {
   enabled_engines: ['osint', 'asm', 'nexus_sovereign_swarm', 'bola_idor', 'llm_redteam', 'pki_tls', 'edr_evasion', 'saml_attack', 'zero_day_prediction'],
@@ -64,13 +64,23 @@ export function ClientProvider({ children }) {
         setSelectedClientIdState(boundClientId(session, clients, id))
         return
       }
+      if (canScopeSwitch(session) && auth?.switchScope) {
+        const n = id == null || id === '' ? null : Number(id)
+        const next = Number.isFinite(n) && n > 0 ? n : null
+        auth.switchScope(next).then((result) => {
+          if (result?.ok) {
+            setSelectedClientIdState(result.assigned_client_id ?? next)
+          }
+        })
+        return
+      }
       if (allowedIds.length) {
         const n = Number(id)
         if (!Number.isFinite(n) || !allowedIds.includes(n)) return
       }
       setSelectedClientIdState(id)
     },
-    [clientPickerHidden, session, clients, allowedIds],
+    [clientPickerHidden, session, clients, allowedIds, auth],
   )
 
   useEffect(() => {
@@ -97,7 +107,23 @@ export function ClientProvider({ children }) {
       setClients([])
       setClientsError(e?.response ? await formatApiErrorResponse(e.response) : (e?.message || 'Network error'))
     }
-  }, [])
+    if (canScopeSwitch(session)) {
+      try {
+        const targets = await apiFetch('/api/auth/scope-targets')
+        if (Array.isArray(targets?.clients) && targets.clients.length) {
+          setClients((prev) => {
+            const byId = new Map(prev.map((c) => [String(c.id), c]))
+            for (const c of targets.clients) {
+              if (c?.id != null && !byId.has(String(c.id))) byId.set(String(c.id), c)
+            }
+            return [...byId.values()]
+          })
+        }
+      } catch {
+        /* catalog from /api/clients still stands */
+      }
+    }
+  }, [session])
 
   const refreshConfig = useCallback(async (clientId) => {
     // Bump on every call — including the null branch — so switching away

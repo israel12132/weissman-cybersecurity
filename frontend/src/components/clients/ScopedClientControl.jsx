@@ -60,7 +60,7 @@ export default function ScopedClientControl({
       onChange={(e) => {
         const raw = e.target.value
         if (!raw) {
-          scoped.setClientId(allowEmpty ? null : '')
+          scoped.setClientId(null)
           return
         }
         const n = Number(raw)
@@ -72,8 +72,8 @@ export default function ScopedClientControl({
       }
       aria-label={placeholder || t('components.scopedClient.select')}
     >
-      {allowEmpty || scoped.clients.length === 0 ? (
-        <option value="">{placeholder || t('components.scopedClient.select')}</option>
+      {allowEmpty || scoped.clients.length === 0 || scoped.canExit ? (
+        <option value="">{placeholder || t('components.scopedClient.all_customers')}</option>
       ) : null}
       {scoped.clients.map((c) => (
         <option key={c.id} value={c.id}>
