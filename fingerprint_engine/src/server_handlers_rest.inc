@@ -620,39 +620,31 @@ async fn api_clients_scan_run_all(
         return r;
     }
 
-    // Resolve the client's authorized domains.
-    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"ok": false, "detail": "Database unavailable", "code": "db_unavailable"})),
-        )
-            .into_response();
-    };
-    let row = sqlx::query(
-        "SELECT domains FROM clients WHERE id = $1",
+    let scope = match crate::client_scan_target::load_client_scan_scope(
+        state.app_pool.as_ref(),
+        auth.tenant_id,
+        id,
     )
-    .bind(id)
-    .fetch_optional(&mut *tx)
     .await
-    .ok()
-    .flatten();
-    let _ = tx.commit().await;
-
-    let domains_raw: String = match row {
-        Some(r) => r.try_get::<String, _>("domains").unwrap_or_default(),
-        None => {
+    {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(error = %e, client_id = id, "load_client_scan_scope failed");
             return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"ok": false, "detail": "Client not found"})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"ok": false, "detail": "Database unavailable", "code": "db_unavailable"})),
             )
                 .into_response();
         }
     };
-    let domains: Vec<String> = crate::client_scan_target::parse_domain_entries(&domains_raw)
-        .into_iter()
-        .map(|e| e.as_target_url())
-        .collect();
-
+    if !scope.client_exists {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "Client not found"})),
+        )
+            .into_response();
+    }
+    let domains = scope.run_all_targets();
     if domains.is_empty() {
         return crate::client_scan_target::ScanTargetError::no_default().into_response();
     }

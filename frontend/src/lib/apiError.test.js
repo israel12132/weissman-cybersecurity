@@ -12,4 +12,9 @@ describe('apiError', () => {
     expect(scanIntakeErrorMessage(data, 400, (k) => k)).toBe('errors.no_default_scan_target')
     expect(scanIntakeErrorMessage(data, 400)).toBe('Add a domain')
   })
+  it('maps target_out_of_scope', () => {
+    const data = { ok: false, error_code: 'target_out_of_scope', detail: 'outside' }
+    expect(scanIntakeErrorMessage(data, 403, (k) => k)).toBe('errors.target_out_of_scope')
+    expect(scanIntakeErrorMessage(data, 403)).toBe('outside')
+  })
 })

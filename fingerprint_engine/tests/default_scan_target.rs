@@ -9,7 +9,9 @@
 
 use fingerprint_engine::auth_jwt::AuthContext;
 use fingerprint_engine::client_isolation;
-use fingerprint_engine::client_scan_target::{ERROR_CODE_NO_DEFAULT, ERROR_CODE_OUT_OF_SCOPE};
+use fingerprint_engine::client_scan_target::{
+    load_client_scan_scope, ERROR_CODE_NO_DEFAULT, ERROR_CODE_OUT_OF_SCOPE,
+};
 use fingerprint_engine::scan_routing::{route_scan_job, RouteError};
 use serde_json::{json, Value};
 use sqlx::postgres::PgPoolOptions;
@@ -290,6 +292,18 @@ async fn verified_asset_fills_when_domains_empty() {
         &pool,
     )
     .await;
+    let scope = load_client_scan_scope(&pool, tenant_id, client_id)
+        .await
+        .expect("load scope");
+    assert!(scope.client_exists);
+    assert!(
+        scope
+            .run_all_targets()
+            .iter()
+            .any(|t| t.contains("example.com")),
+        "run-all must use the verified asset when domains are empty: {:?}",
+        scope.run_all_targets()
+    );
 
     let _ = sqlx::query("DELETE FROM asm_graph_nodes WHERE run_id = $1")
         .bind(run_id)

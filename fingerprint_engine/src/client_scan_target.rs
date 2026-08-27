@@ -139,6 +139,20 @@ pub struct ClientScanScope {
     pub default_source: Option<TargetSource>,
     /// Normalized hosts (and CIDR/IP tokens) this customer is allowed to scan.
     pub approved_hosts: HashSet<String>,
+    /// Ordered scan URLs for run-all: configured domains, else the default asset.
+    pub configured_targets: Vec<String>,
+    pub client_exists: bool,
+}
+
+impl ClientScanScope {
+    /// Domains/assets to enqueue when the operator runs every authorized host.
+    #[must_use]
+    pub fn run_all_targets(&self) -> Vec<String> {
+        if !self.configured_targets.is_empty() {
+            return self.configured_targets.clone();
+        }
+        self.default_target.iter().cloned().collect()
+    }
 }
 
 /// Parse `clients.domains` / config blobs: string arrays, object arrays, CSV.
@@ -284,7 +298,10 @@ pub async fn load_client_scan_scope(
 
     let Some(row) = row else {
         let _ = tx.commit().await;
-        return Ok(ClientScanScope::default());
+        return Ok(ClientScanScope {
+            client_exists: false,
+            ..ClientScanScope::default()
+        });
     };
 
     let domains_raw: String = row.try_get("domains").unwrap_or_else(|_| "[]".into());
@@ -427,10 +444,26 @@ fn assemble_scope(
         (None, None)
     };
 
+    let mut configured_targets: Vec<String> = Vec::new();
+    let mut seen_targets = HashSet::new();
+    for e in domain_entries.iter().chain(config_entries.iter()) {
+        let url = e.as_target_url();
+        if seen_targets.insert(url.to_ascii_lowercase()) {
+            configured_targets.push(url);
+        }
+    }
+    if configured_targets.is_empty() {
+        if let Some(url) = default_target.clone() {
+            configured_targets.push(url);
+        }
+    }
+
     ClientScanScope {
         default_target,
         default_source,
         approved_hosts: approved,
+        configured_targets,
+        client_exists: true,
     }
 }
 
@@ -618,6 +651,7 @@ mod tests {
         assert_eq!(scope.default_target.as_deref(), Some("https://example.com"));
         assert_eq!(scope.default_source, Some(TargetSource::PrimaryDomain));
         assert!(scope.approved_hosts.contains("example.com"));
+        assert_eq!(scope.run_all_targets(), vec!["https://example.com".to_string()]);
     }
 
     #[test]
@@ -632,6 +666,14 @@ mod tests {
         let scope = assemble_scope("[]", "[]", "{}", &assets);
         assert_eq!(scope.default_target.as_deref(), Some("https://example.com"));
         assert_eq!(scope.default_source, Some(TargetSource::VerifiedAsset));
+        assert_eq!(scope.run_all_targets(), vec!["https://example.com".to_string()]);
+    }
+
+    #[test]
+    fn assemble_empty_has_no_run_all_targets() {
+        let scope = assemble_scope("[]", "[]", "{}", &[]);
+        assert!(scope.default_target.is_none());
+        assert!(scope.run_all_targets().is_empty());
     }
 
     #[test]

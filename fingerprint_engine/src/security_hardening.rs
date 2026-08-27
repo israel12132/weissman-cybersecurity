@@ -283,13 +283,7 @@ fn parse_approved_domains_blob(raw: &str) -> Vec<String> {
 }
 
 fn target_matches_approved(host: &str, approved: &HashSet<String>) -> bool {
-    approved.iter().any(|d| {
-        if host == d {
-            return true;
-        }
-        host.strip_suffix(d)
-            .is_some_and(|prefix| prefix.ends_with('.'))
-    })
+    crate::client_scan_target::host_matches_approved(host, approved)
 }
 
 async fn load_tenant_approved_domains(
