@@ -451,10 +451,16 @@ pub async fn ask(
         &guard_report,
     )
     .await;
-    if guard_report.blocked() {
-        let mut r = bad(
-            "blocked by Weissman prompt-injection brake (OWASP LLM01 / MITRE T1566). The question was not sent to the planner LLM.",
-        );
+    if guard_report.holds_from_generation() {
+        let msg = match guard_report.verdict {
+            crate::llm_ultra_guard::Verdict::Quarantine => {
+                "held in Weissman LLM Ultra-Guard quarantine (OWASP LLM01 / MITRE T1566). The question was not sent to the planner LLM pending Supreme Council review."
+            }
+            _ => {
+                "blocked by Weissman prompt-injection brake (OWASP LLM01 / MITRE T1566). The question was not sent to the planner LLM."
+            }
+        };
+        let mut r = bad(msg);
         r.guard = Some(guard_report.to_json());
         audit_query(app_pool, tenant_id, user_id, question, &r).await;
         return r;

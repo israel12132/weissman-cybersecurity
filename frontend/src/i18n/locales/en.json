@@ -305,7 +305,7 @@
     "sample_q5": "open findings on internet-exposed nodes",
     "guard_allow": "Guard allow",
     "guard_block": "Blocked by prompt-injection brake — not sent to the planner LLM",
-    "guard_quarantine": "Quarantine — logged for Supreme Council review",
+    "guard_quarantine": "Quarantine — not sent to the planner LLM; held for Supreme Council review",
     "guard_latency": "{{us}}μs edge",
     "open_ultra_guard": "LLM Ultra-Guard"
   },

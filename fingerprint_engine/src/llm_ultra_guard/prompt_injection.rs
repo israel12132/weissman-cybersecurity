@@ -88,7 +88,11 @@ pub fn score_layers(layers: &[String], entropy: f32, fast_path: bool) -> Injecti
     if !hits.is_empty() {
         flags |= flags::INJECTION;
     }
-    let early_exit = score >= SANITIZATION.block_threshold
+    // High-severity T1566 needles (instruction-override) stop the pipeline even
+    // when the blended score is still in the quarantine band — those prompts
+    // must never reach the planner LLM.
+    let early_exit = high_severity
+        || score >= SANITIZATION.block_threshold
         || (entropy >= SANITIZATION.entropy_block && unique_patterns >= 1);
     if early_exit {
         flags |= flags::EARLY_EXIT;
