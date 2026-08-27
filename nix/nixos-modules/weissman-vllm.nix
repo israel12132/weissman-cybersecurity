@@ -19,6 +19,28 @@ let
     # model_len * 4 — continuous batching cap for concurrent scan/fuzz prompts (tune down if KV OOM)
     "--max-num-batched-tokens"
     "65536"
+    "--block-size"
+    "16"
+    "--enable-prefix-caching"
+    "--disable-log-stats"
+  ];
+  # Dedicated sanitization SLM — DO NOT use these args on the scan/fuzz brain.
+  # --swap-space 0 belongs on GPU hosts; CPU vLLM rejects it.
+  sanitizeCpuVllmArgs = [
+    "--device"
+    "cpu"
+    "--quantization"
+    "int8"
+    "--max-num-seqs"
+    "256"
+    "--max-model-len"
+    "4096"
+    "--max-num-batched-tokens"
+    "2048"
+    "--block-size"
+    "16"
+    "--enable-prefix-caching"
+    "--disable-log-stats"
   ];
   startScript = pkgs.writeShellScript "weissman-vllm-start" ''
     set -euo pipefail
@@ -59,8 +81,20 @@ in
       default = defaultCpuVllmArgs;
       description = ''
         CLI flags after `vllm serve MODEL --host … --port …`.
-        Default enables CPU device, int8 quantization, max_num_seqs=32, max_model_len=16384,
-        max_num_batched_tokens=65536. Replace entirely if you use GPU or a model that rejects int8.
+        Default is the scan/fuzz brain: CPU device, int8 quantization, max_num_seqs=32, max_model_len=16384,
+        max_num_batched_tokens=65536, block-size 16, prefix caching, disable-log-stats.
+        Do not drop batched tokens to 2048 here — that starves engine fuzzing.
+        For a dedicated sanitization SLM, set extraArgs = config.services.weissman-vllm.sanitizeExtraArgs
+        on a second instance. Never pass --trust-remote-code. GPU hosts may add --swap-space 0.
+      '';
+    };
+
+    sanitizeExtraArgs = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = sanitizeCpuVllmArgs;
+      description = ''
+        CLI for a dedicated sanitization / Ask Weissman SLM (2048 batched tokens, 256 seqs).
+        Assign to extraArgs on a second vLLM instance. Never use on the scan/fuzz brain.
       '';
     };
 

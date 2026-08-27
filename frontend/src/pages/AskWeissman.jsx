@@ -120,6 +120,7 @@ export default function AskWeissman() {
           q: text,
           ok: !result.error,
           error: result.error || null,
+          guard: result.guard || null,
           plan: result.plan,
           sql: result.sql,
           rows: result.rows || [],
@@ -194,6 +195,9 @@ export default function AskWeissman() {
             <Trash2 className="w-3.5 h-3.5" />
             {t('pages.askWeissman.clear_history')}
           </Button>
+          <Link to="/llm-ultra-guard" className="text-[11px] font-mono text-cyan-400/80 hover:text-cyan-200">
+            {t('ask_weissman.open_ultra_guard')} →
+          </Link>
           <Link to="/" className="text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-secondary)] weissman-flip-x">
             {t('ask_weissman.back_cockpit')}
           </Link>
@@ -263,6 +267,29 @@ export default function AskWeissman() {
                   {turn.row_count != null && !turn.error && (
                     <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
                       {t('ask_weissman.rows', { count: turn.row_count })}
+                    </span>
+                  )}
+                  {turn.guard?.verdict && (
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                        turn.guard.verdict === 'block'
+                          ? 'border-rose-500/40 bg-rose-500/15 text-rose-200'
+                          : turn.guard.verdict === 'quarantine'
+                            ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
+                            : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+                      }`}
+                      title={turn.guard.fingerprint || ''}
+                    >
+                      {turn.guard.verdict === 'block'
+                        ? t('ask_weissman.guard_block')
+                        : turn.guard.verdict === 'quarantine'
+                          ? t('ask_weissman.guard_quarantine')
+                          : t('ask_weissman.guard_allow')}
+                      {turn.guard.latency_us != null && (
+                        <span className="ms-1 opacity-70">
+                          {t('ask_weissman.guard_latency', { us: turn.guard.latency_us })}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>

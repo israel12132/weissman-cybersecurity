@@ -100,8 +100,8 @@ const ENGINE_TYPE_MAP = {
     'adversarial_threat_emulation',
   ]),
   ai_probe: new Set([
-    'llm_jailbreak','prompt_injection_chain','model_inversion_attack','ai_supply_chain_attack',
-    'llm_agent_hijack','rag_poisoning_engine','adversarial_examples','data_poisoning_engine',
+    'llm_jailbreak','prompt_injection_chain','prompt_injection_brake','jailbreak_cognitive_engine','model_inversion_attack','ai_supply_chain_attack',
+    'llm_agent_hijack','rag_poisoning_engine','rag_poisoning_guard','adversarial_examples','data_poisoning_engine',
     'deepfake_synthesis','llm_dos_attack','multimodal_ai_attack','ai_bias_exploit',
     'gpt_plugin_attack','autonomous_ai_escape','llm_memory_extraction','neural_backdoor_detect',
     'ai_watermark_bypass',    'federated_learning_attack','llm_red_team_advanced','model_stealing_engine',

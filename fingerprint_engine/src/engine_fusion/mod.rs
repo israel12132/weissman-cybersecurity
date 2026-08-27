@@ -14,6 +14,9 @@
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
+//! | `prompt_injection_brake` | Edge Aho-Corasick + entropy + nested-decode vs live LLM01 probe |
+//! | `jailbreak_cognitive_engine` | DAN/role-play cognition vs live jailbreak probe |
+//! | `rag_poisoning_guard` | pgvector integrity vs live RAG poisoning probe |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -23,6 +26,9 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
+    "prompt_injection_brake",
+    "jailbreak_cognitive_engine",
+    "rag_poisoning_guard",
 ];
 
 pub use crate::external_exposure_supreme::{

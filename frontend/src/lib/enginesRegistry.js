@@ -1,5 +1,5 @@
 /**
- * Master registry of all 563 production attack engines.
+ * Master registry of all 566 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All 566 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -2469,6 +2469,30 @@ export const ENGINES_REGISTRY = [
     group: 'ai',
     mitre: 'T1565',
     description: 'Retrieval-Augmented Generation poisoning: vector database injection via adversarial documents, embedding space manipulation, context window flooding, retrieval relevance hijacking, knowledge base corruption for persistent misinformation',
+    requiresTarget: true,
+  },
+  {
+    id: 'prompt_injection_brake',
+    label: 'Prompt Injection Brake',
+    group: 'ai',
+    mitre: 'T1566',
+    description: 'Sub-millisecond edge brake: Aho-Corasick + entropy + nested Base64/Hex decode + early-exit. Blocks OWASP LLM01 before GPU spend; fused with a live instruction-override probe of the target LLM.',
+    requiresTarget: true,
+  },
+  {
+    id: 'jailbreak_cognitive_engine',
+    label: 'Jailbreak Cognitive Engine',
+    group: 'ai',
+    mitre: 'T1059.008',
+    description: 'Cognitive jailbreak thwarting: DAN/role-play graph, intent log-odds, sliding-window drift, SimHash near-duplicates, output exfil filter — fused with a live LLM jailbreak probe.',
+    requiresTarget: true,
+  },
+  {
+    id: 'rag_poisoning_guard',
+    label: 'RAG Poisoning Guard',
+    group: 'ai',
+    mitre: 'T1565',
+    description: 'pgvector verification layer: L2-norm, SHA-256 integrity, HNSW (m=32, ef_search=64), RLS isolation, outlier detection on supreme_council_memory — fused with a live RAG poisoning probe.',
     requiresTarget: true,
   },
   {

@@ -354,6 +354,8 @@ pub struct AskResult {
     pub row_count: usize,
     pub elapsed_ms: i64,
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guard: Option<Value>,
 }
 
 /// Execute a validated plan. We bind every parameter explicitly through sqlx;
@@ -397,6 +399,7 @@ pub async fn execute_plan(
         rows: json_rows,
         elapsed_ms,
         error: None,
+        guard: None,
     })
 }
 
@@ -423,6 +426,7 @@ pub async fn ask(
         row_count: 0,
         elapsed_ms: start.elapsed().as_millis() as i64,
         error: Some(err.to_string()),
+        guard: None,
     };
     let q = question.trim();
     if q.is_empty() {
@@ -432,32 +436,73 @@ pub async fn ask(
         return bad("question too long (max 2000 chars)");
     }
 
+    // Edge brake: block prompt-injection / jailbreak before any GPU/planner round-trip.
+    let gctx = crate::llm_ultra_guard::GuardContext {
+        tenant_id: Some(tenant_id),
+        user_id,
+        source: "ask_weissman",
+        ..crate::llm_ultra_guard::GuardContext::default()
+    };
+    let guard_report = crate::llm_ultra_guard::inspect_prompt(q, &gctx);
+    let _ = crate::llm_ultra_guard::persist_event(
+        app_pool,
+        &gctx,
+        "prompt_injection_brake",
+        &guard_report,
+    )
+    .await;
+    if guard_report.blocked() {
+        let mut r = bad(
+            "blocked by Weissman prompt-injection brake (OWASP LLM01 / MITRE T1566). The question was not sent to the planner LLM.",
+        );
+        r.guard = Some(guard_report.to_json());
+        audit_query(app_pool, tenant_id, user_id, question, &r).await;
+        return r;
+    }
+
     // 1) LLM → plan JSON.
     let plan_json = match llm_to_plan(q, tenant_id).await {
         Ok(v) => v,
         Err(e) => {
-            let r = bad(&format!("plan generation failed: {e}"));
+            let mut r = bad(&format!("plan generation failed: {e}"));
+            r.guard = Some(guard_report.to_json());
             audit_query(app_pool, tenant_id, user_id, question, &r).await;
             return r;
         }
     };
+    let (out_leak, _) = crate::llm_ultra_guard::inspect_output(&plan_json.to_string());
+    if out_leak >= 0.4 {
+        let mut r = bad(
+            "blocked by Weissman output guardrail (possible secret/system-prompt leak in planner completion).",
+        );
+        let mut g = guard_report.to_json();
+        if let Some(obj) = g.as_object_mut() {
+            obj.insert("output_leak_score".into(), serde_json::json!(out_leak));
+            obj.insert("verdict".into(), serde_json::json!("block"));
+        }
+        r.guard = Some(g);
+        audit_query(app_pool, tenant_id, user_id, question, &r).await;
+        return r;
+    }
     let plan: QueryPlan = match serde_json::from_value(plan_json.clone()) {
         Ok(p) => p,
         Err(e) => {
-            let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
+            let mut r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
+            r.guard = Some(guard_report.to_json());
             audit_query(app_pool, tenant_id, user_id, question, &r).await;
             return r;
         }
     };
 
     // 2) Validate + execute.
-    let res = match execute_plan(ro_pool, tenant_id, plan.clone()).await {
+    let mut res = match execute_plan(ro_pool, tenant_id, plan.clone()).await {
         Ok(mut r) => {
             r.elapsed_ms = start.elapsed().as_millis() as i64;
             r
         }
         Err(e) => bad(&e),
     };
+    res.guard = Some(guard_report.to_json());
 
     audit_query(app_pool, tenant_id, user_id, question, &res).await;
     res

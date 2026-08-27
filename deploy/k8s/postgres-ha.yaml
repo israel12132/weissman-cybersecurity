@@ -24,6 +24,12 @@ spec:
   postgresql:
     parameters:
       max_connections: "200"
+      idle_in_transaction_session_timeout: "30s"
+      log_min_duration_statement: "500"
+      default_statistics_target: "500"
+      tcp_keepalives_idle: "30"
+      tcp_keepalives_interval: "10"
+      tcp_keepalives_count: "3"
       wal_level: replica
       # Synchronous commit to at least one standby (durability over a single-node loss).
       synchronous_commit: "on"

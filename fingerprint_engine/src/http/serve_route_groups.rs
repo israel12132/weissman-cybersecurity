@@ -138,6 +138,10 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         // Ask Weissman (NL → safe SQL)
         .route("/api/ask", post(api_ask))
+        .route("/api/llm-ultra-guard/inspect", post(api_llm_ultra_guard_inspect))
+        .route("/api/llm-ultra-guard/status", get(api_llm_ultra_guard_status))
+        .route("/api/llm-ultra-guard/events", get(api_llm_ultra_guard_events))
+        .route("/api/llm-ultra-guard/rag-integrity", get(api_llm_ultra_guard_rag))
         // UEBA + baseline/drift dashboard
         .route("/api/ueba/ingest", post(api_ueba_ingest))
         // NDR / ITDR live data ingest (feeds network beaconing/exfil + identity-threat detectors).

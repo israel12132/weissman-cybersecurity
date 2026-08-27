@@ -52,6 +52,18 @@ services:
       - postgres
       - -c
       - max_connections=200
+      - -c
+      - idle_in_transaction_session_timeout=30s
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - default_statistics_target=500
+      - -c
+      - tcp_keepalives_idle=30
+      - -c
+      - tcp_keepalives_interval=10
+      - -c
+      - tcp_keepalives_count=3
     # pgvector/pgvector:pg16 = official Postgres 16 with pgvector pre-installed.
     # Drop-in replacement for postgres:16; same data files, same env vars.
     # Required for: supreme_council_memory.embedding (vector(1536)) RAG retrieval.

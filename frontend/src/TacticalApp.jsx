@@ -72,6 +72,7 @@ import {
   NexusSovereignSwarm,
   RiskSuperpositionCollapse,
   SovereignDefenseMatrix,
+  LlmUltraGuard,
   GraphqlSecurityCommandCenter,
   CicdPipelineSecurityCommandCenter,
   ServerlessSecurityCommandCenter,
@@ -256,6 +257,7 @@ export default function TacticalApp() {
           <Route path="nexus-swarm" element={<NexusSovereignSwarm />} />
           <Route path="superposition-collapse" element={<RiskSuperpositionCollapse />} />
           <Route path="sovereign-defense-matrix" element={<SovereignDefenseMatrix />} />
+          <Route path="llm-ultra-guard" element={<LlmUltraGuard />} />
           <Route path="graphql-security" element={<GraphqlSecurityCommandCenter />} />
           <Route path="cicd-security" element={<CicdPipelineSecurityCommandCenter />} />
           <Route path="serverless-security" element={<ServerlessSecurityCommandCenter />} />

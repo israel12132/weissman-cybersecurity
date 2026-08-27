@@ -116,6 +116,7 @@ pub mod job_orchestration;
 pub mod leak_hunter_engine;
 pub mod liminal_boundary_engine;
 pub mod liquid_matrix_engine;
+pub mod llm_ultra_guard;
 pub mod nl_query;
 pub mod notifications;
 pub mod nvd_cve;
