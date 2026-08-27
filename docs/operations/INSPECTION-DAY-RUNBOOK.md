@@ -10,7 +10,7 @@
 
 | Metric | Value | Verification command |
 |--------|-------|----------------------|
-| Production engines | **563** | `node scripts/verify_engine_wiring.mjs` |
+| Production engines | **564** | `node scripts/verify_engine_wiring.mjs` |
 | Command Center routes | **130** | `node scripts/weissman-ui-audit.mjs` |
 | UI pages audited | **111/111** | `node scripts/weissman-ui-audit.mjs` |
 | Real probes | **303** | `node scripts/engine_reality_audit.mjs` |
@@ -120,7 +120,7 @@ node scripts/engine_reality_audit.mjs      # 0 no_path
 node scripts/weissman-ui-audit.mjs         # 130 routes, 111 pages
 ```
 
-Explain taxonomy: **303 real_probe**, **212 alias**, **48 agent_required** — no fake findings.
+Explain taxonomy: **304 real_probe**, **212 alias**, **48 agent_required** — no fake findings.
 
 ### Minutes 20–26 — SDLC, CI, and audit gates
 
