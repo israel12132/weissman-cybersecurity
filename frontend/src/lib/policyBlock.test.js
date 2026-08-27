@@ -35,6 +35,17 @@ describe('policyBlock', () => {
     expect(isRoeDeniedJob({ status: 'completed', result: { findings: [] } })).toBe(false)
   })
 
+  it('recognizes list-API overlay fields without nested result', () => {
+    const job = {
+      status: 'blocked',
+      policy_block: true,
+      error_code: 'roe_denied',
+      reason: 'RoE DENIED (industrial_ot_disabled): OT probing not authorized',
+    }
+    expect(isRoeDeniedJob(job)).toBe(true)
+    expect(policyBlockReason(job, [])).toContain('industrial_ot_disabled')
+  })
+
   it('overlays blocked from result even if queue status is still completed', () => {
     expect(isRoeDeniedJob({
       status: 'completed',

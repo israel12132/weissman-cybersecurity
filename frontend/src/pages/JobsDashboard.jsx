@@ -12,6 +12,7 @@ import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton, { CopyableField } from '../components/ui/CopyButton'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeJobStatus } from '../lib/useJobPoll'
+import { isRoeDeniedJob, policyBlockReason } from '../lib/policyBlock'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
 import Button from '../components/ui/Button'
@@ -22,11 +23,12 @@ const STATUS_COLORS = {
   queued: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30',
   running: 'text-blue-400 bg-blue-900/20 border-blue-500/30',
   completed: 'text-green-400 bg-green-900/20 border-green-500/30',
+  blocked: 'text-amber-300 bg-amber-900/25 border-amber-500/40',
   failed: 'text-red-400 bg-red-900/20 border-red-500/30',
   cancelled: 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30',
 }
 
-const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
+const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'blocked', 'failed', 'cancelled']
 
 function exportJobsCsv(jobs, _t) {
   const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
@@ -122,13 +124,15 @@ export default function JobsDashboard() {
         j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
         j.client_id != null ? String(j.client_id) : '',
         j.last_error,
+        j.reason,
+        j.error_code,
       ].filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })
   }, [jobs, search, statusFilter])
 
   const statusCounts = useMemo(() => {
-    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
+    const counts = { queued: 0, running: 0, completed: 0, blocked: 0, failed: 0, cancelled: 0 }
     for (const j of jobs) {
       const s = normalizeJobStatus(j.status)
       if (counts[s] != null) counts[s] += 1
@@ -218,7 +222,9 @@ export default function JobsDashboard() {
         header: t('pages.jobsDashboard.col_status'),
         cell: (ctx) => (
           <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(ctx.row.original.status)}`}>
-            {ctx.getValue() || 'unknown'}
+            {t(`pages.jobsDashboard.status_${normalizeJobStatus(ctx.row.original.status)}`, {
+              defaultValue: normalizeJobStatus(ctx.row.original.status) || 'unknown',
+            })}
           </span>
         ),
       }),
@@ -301,8 +307,8 @@ export default function JobsDashboard() {
           </>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {['queued', 'running', 'completed', 'blocked', 'failed', 'cancelled'].map((status) => (
                 <Button variant="unstyled"
                   key={status}
                   type="button"
@@ -443,6 +449,18 @@ export default function JobsDashboard() {
                           </div>
                           <pre className="text-[11px] font-mono text-rose-200 whitespace-pre-wrap break-words">
                             {selectedJob.last_error}
+                          </pre>
+                        </div>
+                      )}
+                      {isRoeDeniedJob(selectedJob) && (
+                        <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-3">
+                          <div className="text-[10px] font-mono text-amber-300/80 uppercase mb-1">
+                            {t('pages.jobsDashboard.field_roe')}
+                          </div>
+                          <pre className="text-[11px] font-mono text-amber-100 whitespace-pre-wrap break-words">
+                            {policyBlockReason(selectedJob, [])
+                              || selectedJob.reason
+                              || t('pages.jobsDashboard.roe_denied_fallback')}
                           </pre>
                         </div>
                       )}

@@ -1541,6 +1541,7 @@
       "status_queued": "queued",
       "status_running": "running",
       "status_completed": "completed",
+      "status_blocked": "RoE blocked",
       "status_failed": "failed",
       "status_cancelled": "cancelled",
       "evidence_notice": "Live async job queue from GET /api/jobs (tenant-scoped). CEO fallback uses /api/ceo/jobs/live when the standard list is unavailable. No simulated job telemetry.",
@@ -1551,6 +1552,7 @@
       "filter_queued": "Queued",
       "filter_running": "Running",
       "filter_completed": "Completed",
+      "filter_blocked": "RoE blocked",
       "filter_failed": "Failed",
       "filter_cancelled": "Cancelled",
       "col_target": "Target",
@@ -1565,7 +1567,9 @@
       "field_created": "Created",
       "field_updated": "Updated",
       "field_heartbeat": "Heartbeat",
-      "field_error": "Last error"
+      "field_error": "Last error",
+      "field_roe": "Rules of Engagement",
+      "roe_denied_fallback": "OT/ICS probe denied by Rules of Engagement. This is a policy block, not a clean scan."
     },
     "billing": {
       "title": "Billing & Usage",

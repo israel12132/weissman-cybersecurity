@@ -167,6 +167,7 @@ function StatusDot({ status }) {
   const map = {
     running: '#22d3ee',
     completed: '#4ade80',
+    blocked: '#fbbf24',
     error: '#ef4444',
     idle: '#374151',
   }
@@ -448,7 +449,11 @@ export default function EngineClientCatalog() {
     const payload = job?.result ?? job?.result_json ?? {}
     const rows = Array.isArray(payload?.results) ? payload.results : []
     const jobStatus = normalizeJobStatus(job?.status)
-    const fallbackStatus = jobStatus === 'completed' ? 'completed' : jobStatus === 'failed' || jobStatus === 'dead' ? 'error' : 'running'
+    const fallbackStatus = jobStatus === 'completed'
+      ? 'completed'
+      : jobStatus === 'blocked'
+        ? 'blocked'
+        : jobStatus === 'failed' || jobStatus === 'dead' ? 'error' : 'running'
     const lastRun = terminal ? new Date().toLocaleString() : 'just now'
 
     setEngineStates((prev) => {
@@ -457,9 +462,10 @@ export default function EngineClientCatalog() {
         for (const row of rows) {
           const eid = row.engine
           if (!eid) continue
+          const blocked = row.policy_block === true || String(row.status || '').toLowerCase() === 'blocked'
           next[eid] = {
             ...next[eid],
-            status: row.success ? 'completed' : 'error',
+            status: blocked ? 'blocked' : row.success ? 'completed' : 'error',
             lastRun,
             findingsDelta: row.findings_count ?? 0,
           }

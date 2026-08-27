@@ -16,6 +16,8 @@ export function isRoeDeniedJob(job) {
   if (!job || typeof job !== 'object') return false
   const status = String(job.status || '').toLowerCase()
   if (status === 'blocked') return true
+  if (job.policy_block === true) return true
+  if (String(job.error_code || '').toLowerCase() === 'roe_denied') return true
   const result = job.result ?? job.result_json ?? {}
   if (result && typeof result === 'object') {
     if (String(result.status || '').toLowerCase() === 'blocked') return true
@@ -26,6 +28,7 @@ export function isRoeDeniedJob(job) {
 }
 
 export function policyBlockReason(job, findings = []) {
+  if (typeof job?.reason === 'string' && job.reason.trim()) return job.reason.trim()
   const result = job?.result ?? job?.result_json ?? {}
   const fromResult = result?.reason || result?.message
   if (typeof fromResult === 'string' && fromResult.trim()) return fromResult.trim()

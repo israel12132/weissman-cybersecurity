@@ -620,12 +620,33 @@ async fn execute_job_unscoped(
                 }
             }
 
-            Ok(engine_job_result_json(
+            let out = engine_job_result_json(
                 engine,
                 &result,
                 persisted,
                 last_engine_telemetry.as_ref().map(|t| t.to_json()),
-            ))
+            );
+            let telem_status = if result.is_policy_block() {
+                "blocked"
+            } else if result.success {
+                "completed"
+            } else {
+                "failed"
+            };
+            channels.emit_telemetry(
+                tid,
+                &json!({
+                    "job_id": job.id.to_string(),
+                    "engine": engine,
+                    "message": result.message,
+                    "status": telem_status,
+                    "policy_block": result.is_policy_block(),
+                    "error_code": result.error_code,
+                    "findings": result.findings,
+                })
+                .to_string(),
+            );
+            Ok(out)
         }
         "top_tier_health_probe" => {
             let target = p

@@ -27,6 +27,8 @@ import { useRegisterHubClient } from '../context/EngineHubContext'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
 import Button from '../components/ui/Button'
+import { isTerminalJobStatus } from '../lib/useJobPoll'
+import { isPolicyBlockFinding, isRoeDeniedJob, policyBlockReason } from '../lib/policyBlock'
 
 const columnHelper = createColumnHelper()
 
@@ -293,7 +295,11 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
       )}
       {history.map((r, i) => (
         <div key={i} className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-tertiary)] flex-wrap">
-          <span className={r.status === 'completed' ? 'text-[#4ade80]' : 'text-red-400'}>{r.status}</span>
+          <span className={
+            r.status === 'blocked' ? 'text-amber-300'
+              : r.status === 'completed' ? 'text-[#4ade80]'
+                : 'text-red-400'
+          }>{r.status}</span>
           <span className="text-[var(--text-disabled)]">{new Date(r.ts).toLocaleString()}</span>
           {r.target && <span className="text-cyan-400/60 truncate max-w-[200px]">{r.target}</span>}
           {r.findingsCount > 0 && <span className="text-amber-300">{r.findingsCount} finding{r.findingsCount !== 1 ? 's' : ''}</span>}
@@ -531,12 +537,18 @@ export default function EngineDetail() {
             if (line) setLines((prev) => [...prev.slice(-MAX_LINES_REAL), `> ${line}`])
             if (data.finding) addFinding(data.finding)
             if (data.findings && Array.isArray(data.findings)) data.findings.forEach(addFinding)
-            if (data.status === 'completed' || data.status === 'failed') {
-              const status = data.status
+            if (isTerminalJobStatus(data.status) || data.policy_block === true || isRoeDeniedJob(data)) {
+              const status = (data.policy_block || data.status === 'blocked' || isRoeDeniedJob(data))
+                ? 'blocked'
+                : data.status
               setLastRunStatus(status)
               setRunning(false)
               es.close()
-              setLines((prev) => [...prev, `> [${status.toUpperCase()}] Job ${jid} finished.`])
+              const reason = policyBlockReason(data, Array.isArray(data.findings) ? data.findings : [])
+              const suffix = status === 'blocked'
+                ? ` RoE denied — ${reason || 'policy block, not a clean scan'}`
+                : ''
+              setLines((prev) => [...prev, `> [${String(status).toUpperCase()}] Job ${jid} finished.${suffix}`])
             }
           } catch { /* best-effort; non-fatal */ }
         }
@@ -730,6 +742,7 @@ export default function EngineDetail() {
                 {lastRunStatus && !running && (
                   <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
                     lastRunStatus === 'completed' ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : lastRunStatus === 'blocked' ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
                     : lastRunStatus === 'stopped'  ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                     : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
                     {lastRunStatus.toUpperCase()}
@@ -934,11 +947,21 @@ export default function EngineDetail() {
                     onSeverityChange={setSeverityFilter}
                     accent={groupDef?.color ?? '#22d3ee'}
                     title={t('engines.findings_tab')}
-                    renderFinding={(f, i) => (
-                      <div key={i} className="rounded-lg bg-[var(--bg-2)] border border-[var(--border-default)] p-3 space-y-1">
+                    renderFinding={(f, i) => {
+                      const blocked = isPolicyBlockFinding(f)
+                      return (
+                      <div key={i} className={`rounded-lg border p-3 space-y-1 ${
+                        blocked ? 'bg-amber-500/10 border-amber-500/40' : 'bg-[var(--bg-2)] border-[var(--border-default)]'
+                      }`}>
                         <div className="flex items-start justify-between gap-2">
                           <span className="text-sm font-semibold text-[var(--text-primary)]">{f.title || f.type || 'Finding'}</span>
-                          <FindingBadge severity={f.severity} />
+                          {blocked
+                            ? (
+                              <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border text-amber-300 border-amber-500/40">
+                                RoE blocked
+                              </span>
+                            )
+                            : <FindingBadge severity={f.severity} />}
                         </div>
                         {f.description && <p className="text-[11px] text-[var(--text-tertiary)] font-mono leading-relaxed">{f.description}</p>}
                         {(f.mitre_attack || f.url || f.target) && (
@@ -958,10 +981,15 @@ export default function EngineDetail() {
                           </div>
                         )}
                       </div>
-                    )}
+                      )
+                    }}
                   />
                 )
-                : <p className="text-[11px] font-mono text-[var(--text-disabled)]">{t('engines.detail_no_findings')}</p>
+                : <p className="text-[11px] font-mono text-[var(--text-disabled)]">
+                    {lastRunStatus === 'blocked'
+                      ? (t('pages.otIcsSecurity.roe_denied_empty_guard'))
+                      : t('engines.detail_no_findings')}
+                  </p>
             )}
             {activeTab === 'history'  && <RunHistoryPanel engineId={engineId} emptyLabel={t('engines.detail_no_history')} />}
             {activeTab === 'contract' && <EngineContractPanel engineId={engineId} />}

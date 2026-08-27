@@ -1541,6 +1541,7 @@
       "status_queued": "בתור",
       "status_running": "רץ",
       "status_completed": "הושלם",
+      "status_blocked": "נחסם ב-RoE",
       "status_failed": "נכשל",
       "status_cancelled": "בוטל",
       "evidence_notice": "תור משימות אסינכרוני חי מ-GET /api/jobs (מוגבל לטננט). למנכ\"ל: נפילה ל-/api/ceo/jobs/live כשהרשימה הסטנדרטית לא זמינה. ללא טלמטריה מדומה.",
@@ -1551,6 +1552,7 @@
       "filter_queued": "בתור",
       "filter_running": "רץ",
       "filter_completed": "הושלם",
+      "filter_blocked": "נחסם ב-RoE",
       "filter_failed": "נכשל",
       "filter_cancelled": "בוטל",
       "col_target": "יעד",
@@ -1565,7 +1567,9 @@
       "field_created": "נוצר",
       "field_updated": "עודכן",
       "field_heartbeat": "Heartbeat",
-      "field_error": "שגיאה אחרונה"
+      "field_error": "שגיאה אחרונה",
+      "field_roe": "כללי מעורבות",
+      "roe_denied_fallback": "בדיקת OT/ICS נחסמה על ידי כללי המעורבות. זו חסימת מדיניות, לא סריקה נקייה."
     },
     "billing": {
       "title": "חיוב ושימוש",
