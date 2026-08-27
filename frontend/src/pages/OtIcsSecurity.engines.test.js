@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { isCriticalInfraEngine } from '../lib/criticalInfraEngines.js'
 
-const src = readFileSync(new URL('./OtIcsSecurity.jsx', import.meta.url), 'utf8')
+const src = readFileSync('src/pages/OtIcsSecurity.jsx', 'utf8')
 
 const ROE_GATED = [
   'building_automation_attack',
