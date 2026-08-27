@@ -2866,6 +2866,14 @@
         "scada_ics": {
           "title": "SCADA / ICS Operations Page",
           "mission": "OT environments require isolated UX and explicit safety context."
+        },
+        "web_http_intel": {
+          "title": "Web HTTP Intelligence Page",
+          "mission": "Burp-class HTTP/DNS/TLS evidence: header values, cookies, CORS preflight, auth-gated vs public content."
+        },
+        "web_identity_surface": {
+          "title": "Web Identity Surface Page",
+          "mission": "Live OIDC/SAML/OAuth and WWW-Authenticate identity surface with evidence, never treating 401/403 as public leaks."
         }
       }
     },
@@ -4840,7 +4848,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "ASM inventory and exposure scoring from POST /api/command-center/scan (asm / attack_surface engines). Asset rows derive from live discovery against authorized client scope — no pre-populated attack graphs.",
+      "evidence_notice": "ASM inventory and exposure scoring from POST /api/command-center/scan (asm / attack_surface / web_http_intel engines). Asset rows derive from live discovery against authorized client scope. HTTP 401/403 are auth-gated, not public leaks.",
       "severity_critical": "Critical",
       "severity_high": "High",
       "severity_medium": "Medium",
@@ -5468,7 +5476,7 @@
       "evidence_notice": "File upload filter bypass and polyglot tests via POST /api/command-center/scan (file_upload). Upload paths you configure receive live multipart probes — no simulated shell uploads."
     },
     "identitySecurityCenter": {
-      "evidence_notice": "Identity/OAuth/OIDC/SAML posture from POST /api/command-center/scan (identity / oauth_oidc / saml_attack engines). Token and federation misconfigs are validated with live protocol exchanges."
+      "evidence_notice": "Identity/OAuth/OIDC/SAML posture from POST /api/command-center/scan (identity / oauth_oidc / saml_attack / web_identity_surface engines). Token and federation misconfigs are validated with live protocol exchanges. HTTP 401/403 are auth-gated, not public leaks."
     },
     "kerberosSecurityCommandCenter": {
       "evidence_notice": "Kerberos/AD exposure checks via POST /api/command-center/scan where RoE permits. Results reflect live LDAP/Kerberos responses — empty when no domain controllers are in scope."
@@ -6585,6 +6593,14 @@
         "asm": {
           "label": "Attack Surface",
           "short": "ASM"
+        },
+        "web_http_intel": {
+          "label": "Web HTTP Intel",
+          "short": "HTTP"
+        },
+        "web_identity_surface": {
+          "label": "Identity Surface",
+          "short": "IDP"
         }
       }
     },
@@ -7192,7 +7208,7 @@
   "supremeNerveCenter": {
     "title": "Supreme Nerve Center",
     "ceoOnly": "CEO / superadmin only",
-    "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 563 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
+    "evidence_notice": "Live snapshot from GET /api/ceo/supreme/nerve-center — all 565 engines, subsystem modules, async jobs, and control parameters. No simulated telemetry.",
     "refresh": "Refresh",
     "pollInterval": "Auto-refresh every {{sec}}s",
     "stuckAlert": "{{count}} engine(s) appear stuck — investigate worker heartbeat and phase updates.",

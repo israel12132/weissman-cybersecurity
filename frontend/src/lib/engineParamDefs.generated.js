@@ -8284,52 +8284,6 @@ export const GENERATED_PARAM_DEFS = {
       "max": 5000
     }
   ],
-  "identity_attack_chain": [
-    {
-      "key": "domain",
-      "label": "Target Domain (AD/DNS)",
-      "type": "text",
-      "defaultVal": "",
-      "placeholder": "corp.example.com"
-    },
-    {
-      "key": "intensity",
-      "label": "Scan Intensity",
-      "type": "select",
-      "defaultVal": "normal",
-      "options": [
-        "light",
-        "normal",
-        "aggressive"
-      ]
-    },
-    {
-      "key": "ports",
-      "label": "Ports / Port Range",
-      "type": "text",
-      "defaultVal": "top",
-      "placeholder": "top | 80,443,8080"
-    },
-    {
-      "key": "stealth_mode",
-      "label": "Stealth Mode",
-      "type": "select",
-      "defaultVal": "low",
-      "options": [
-        "off",
-        "low",
-        "high"
-      ]
-    },
-    {
-      "key": "max_findings",
-      "label": "Max Findings",
-      "type": "number",
-      "defaultVal": "200",
-      "min": 1,
-      "max": 5000
-    }
-  ],
   "pipeline_to_runtime_risk": [
     {
       "key": "repo_url",

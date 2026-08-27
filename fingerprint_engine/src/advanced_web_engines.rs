@@ -5,9 +5,13 @@
 //! On no signal: returns ok with empty findings.
 
 use crate::engine_probes::{
-    empty_ok, extract_host, finding, finding_with_probe_depth, has_header, header_value,
-    http_client, http_get, http_get_with_headers, http_post_json, join_url, normalize_url,
-    HttpProbe,
+    dns_cname, empty_ok, extract_host, finding, finding_with_probe_depth, has_header, header_value,
+    http1_client, http2_client, http_client, http_get, http_get_with_headers,
+    http_method_with_headers, http_post_json, join_url, normalize_url, HttpProbe,
+};
+use crate::web_scan_intel::{
+    attach_http_evidence, classify_spec_document, clickjacking_unprotected, cname_takeover_vendor,
+    http_takeover_vendor, takeover_confidence, SpecExposure,
 };
 
 const WEB_PROBE_DEPTH: &str = "web_app_surface";
@@ -231,18 +235,58 @@ pub async fn run_cors_misconfiguration_result(target: &str) -> EngineResult {
         if let Some((title, severity, detail)) =
             cors_misconfiguration_signal(sent_origin, &acao, creds)
         {
-            findings.push(finding(
+            let mut f = finding(
                 "cors_misconfiguration",
                 title,
                 severity,
                 "T1185",
                 &format!(
-                    "{} on {} (ACAO='{}', credentials={}, Origin sent={:?}).",
-                    detail, p.final_url, acao, creds, sent_origin
+                    "{} on {} (ACAO='{}', credentials={}, Origin sent={:?}, HTTP {}).",
+                    detail, p.final_url, acao, creds, sent_origin, p.status
                 ),
                 target,
-            ));
+            );
+            attach_http_evidence(&mut f, &p, "GET");
+            findings.push(f);
             break;
+        }
+    }
+    if findings.is_empty() {
+        if let Some(opt) = http_method_with_headers(
+            &client,
+            "OPTIONS",
+            &url,
+            None,
+            &[
+                ("Origin", evil_origin.as_str()),
+                ("Access-Control-Request-Method", "PUT"),
+                ("Access-Control-Request-Headers", "authorization"),
+            ],
+        )
+        .await
+        {
+            if let Some(acao) = header_value(&opt.headers, "access-control-allow-origin") {
+                let creds = has_header(&opt.headers, "access-control-allow-credentials");
+                if let Some((title, severity, detail)) =
+                    cors_misconfiguration_signal(Some(evil_origin.as_str()), acao, creds)
+                {
+                    let acam =
+                        header_value(&opt.headers, "access-control-allow-methods").unwrap_or("");
+                    let mut f = finding(
+                        "cors_misconfiguration",
+                        title,
+                        severity,
+                        "T1185",
+                        &format!(
+                            "OPTIONS preflight {detail} on {} (ACAO='{}', credentials={}, Allow-Methods='{acam}').",
+                            opt.final_url, acao, creds
+                        ),
+                        target,
+                    );
+                    attach_http_evidence(&mut f, &opt, "OPTIONS");
+                    findings.push(f);
+                }
+            }
         }
     }
     if findings.is_empty() {
@@ -261,13 +305,13 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
-    let client = http_client().await;
     let url = normalize_url(target);
     let mut findings: Vec<Value> = Vec::new();
+    let client = http_client().await;
     if let Some(p) = http_get(&client, &url).await {
         let via = header_value(&p.headers, "alt-svc").unwrap_or("");
         if via.contains("h3") {
-            findings.push(finding(
+            let mut f = finding(
                 "http2_attack",
                 "HTTP/3 advertised via Alt-Svc",
                 "info",
@@ -277,20 +321,43 @@ pub async fn run_http2_attack_result(target: &str) -> EngineResult {
                     p.final_url, via
                 ),
                 target,
-            ));
+            );
+            attach_http_evidence(&mut f, &p, "GET");
+            findings.push(f);
         }
         if via.contains("h2") || via.contains("h2c") {
-            findings.push(finding(
+            let mut f = finding(
                 "http2_attack",
                 "HTTP/2 advertised via Alt-Svc",
                 "info",
                 "T1190",
                 &format!(
-                    "Alt-Svc on {} = '{}'. H2 surface present (test for h2c smuggling).",
+                    "Alt-Svc on {} = '{}'. H2 surface present.",
                     p.final_url, via
                 ),
                 target,
-            ));
+            );
+            attach_http_evidence(&mut f, &p, "GET");
+            findings.push(f);
+        }
+    }
+    let h1 = http_get(&http1_client().await, &url).await;
+    let h2 = http_get(&http2_client().await, &url).await;
+    if let (Some(a), Some(b)) = (h1, h2) {
+        if a.status != b.status {
+            let mut f = finding(
+                "http2_attack",
+                "HTTP/1.1 vs HTTP/2 status differential",
+                "medium",
+                "T1190",
+                &format!(
+                    "Forced HTTP/1.1 GET returned HTTP {} ({} bytes); HTTP/2-capable GET returned HTTP {} ({} bytes) on {}.",
+                    a.status, a.body.len(), b.status, b.body.len(), url
+                ),
+                target,
+            );
+            attach_http_evidence(&mut f, &b, "GET");
+            findings.push(f);
         }
     }
     if findings.is_empty() {
@@ -326,23 +393,38 @@ pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
     for path in paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            let body_low = p.body.to_ascii_lowercase();
-            if p.status == 200
-                && (body_low.contains("swagger")
-                    || body_low.contains("openapi")
-                    || body_low.contains("\"paths\""))
-            {
-                findings.push(finding(
-                    "swagger_abuse",
-                    "Exposed Swagger/OpenAPI spec",
-                    "medium",
-                    "T1190",
-                    &format!(
-                        "Public OpenAPI document at {} (HTTP {}) — leaks routes, params, auth schemes.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                ));
+            match classify_spec_document(p.status, &p.body, &["swagger", "openapi", "\"paths\""]) {
+                SpecExposure::Public => {
+                    let mut f = finding(
+                        "swagger_abuse",
+                        "Exposed Swagger/OpenAPI spec",
+                        "medium",
+                        "T1190",
+                        &format!(
+                            "Public OpenAPI document at {} (HTTP {}) — leaks routes, params, auth schemes.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    );
+                    attach_http_evidence(&mut f, &p, "GET");
+                    findings.push(f);
+                }
+                SpecExposure::AuthGated => {
+                    let mut f = finding(
+                        "swagger_abuse",
+                        "Auth-gated OpenAPI path (not public content)",
+                        "info",
+                        "T1190",
+                        &format!(
+                            "GET {} returned HTTP {} — spec path exists but is auth-gated, not a public leak.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    );
+                    attach_http_evidence(&mut f, &p, "GET");
+                    findings.push(f);
+                }
+                SpecExposure::Absent => {}
             }
         }
     }
@@ -375,18 +457,38 @@ pub async fn run_soap_injection_result(target: &str) -> EngineResult {
     for path in paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            if p.status == 200 && (p.body.contains("<wsdl:") || p.body.contains("<definitions")) {
-                findings.push(finding(
-                    "soap_injection",
-                    "Public SOAP/WSDL surface",
-                    "medium",
-                    "T1190",
-                    &format!(
-                        "WSDL document accessible at {} (HTTP {}) — review parameters for XML/SOAP injection.",
-                        p.final_url, p.status
-                    ),
-                    target,
-                ));
+            match classify_spec_document(p.status, &p.body, &["<wsdl:", "<definitions"]) {
+                SpecExposure::Public => {
+                    let mut f = finding(
+                        "soap_injection",
+                        "Public SOAP/WSDL surface",
+                        "medium",
+                        "T1190",
+                        &format!(
+                            "WSDL document accessible at {} (HTTP {}) — review parameters for XML/SOAP injection.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    );
+                    attach_http_evidence(&mut f, &p, "GET");
+                    findings.push(f);
+                }
+                SpecExposure::AuthGated => {
+                    let mut f = finding(
+                        "soap_injection",
+                        "Auth-gated WSDL path (not public content)",
+                        "info",
+                        "T1190",
+                        &format!(
+                            "GET {} returned HTTP {} — WSDL path exists but is auth-gated.",
+                            p.final_url, p.status
+                        ),
+                        target,
+                    );
+                    attach_http_evidence(&mut f, &p, "GET");
+                    findings.push(f);
+                }
+                SpecExposure::Absent => {}
             }
         }
     }
@@ -669,19 +771,20 @@ pub async fn run_clickjacking_engine_result(target: &str) -> EngineResult {
     if let Some(p) = http_get(&client, &url).await {
         let xfo = header_value(&p.headers, "x-frame-options").unwrap_or("");
         let csp = header_value(&p.headers, "content-security-policy").unwrap_or("");
-        let csp_frame = csp.contains("frame-ancestors");
-        if xfo.is_empty() && !csp_frame {
-            findings.push(finding(
+        if clickjacking_unprotected(xfo, csp) {
+            let mut f = finding(
                 "clickjacking_engine",
-                "No X-Frame-Options or frame-ancestors CSP",
+                "No X-Frame-Options or restrictive frame-ancestors CSP",
                 "medium",
                 "T1185",
                 &format!(
-                    "{} can be iframed (no XFO, no frame-ancestors).",
-                    p.final_url
+                    "{} can be iframed (XFO='{}', CSP frame-ancestors missing or wildcard).",
+                    p.final_url, xfo
                 ),
                 target,
-            ));
+            );
+            attach_http_evidence(&mut f, &p, "GET");
+            findings.push(f);
         }
     }
     if findings.is_empty() {
@@ -702,37 +805,51 @@ pub async fn run_subdomain_takeover_result(target: &str) -> EngineResult {
     }
     let client = http_client().await;
     let url = normalize_url(target);
+    let host = extract_host(target);
     let mut findings: Vec<Value> = Vec::new();
+    let cnames = dns_cname(&host).await;
+    let cname_vendor = cnames.iter().find_map(|c| cname_takeover_vendor(c));
+    let mut http_vendor = None;
     if let Some(p) = http_get(&client, &url).await {
-        let body_low = p.body.to_ascii_lowercase();
-        let signatures: &[(&str, &str)] = &[
-            ("there isn't a github pages site here", "GitHub Pages"),
-            ("nosuchbucket", "AWS S3"),
-            ("the specified bucket does not exist", "AWS S3"),
-            ("heroku | no such app", "Heroku"),
-            ("project not found", "Vercel"),
-            ("repository not found", "GitHub Pages"),
-            ("no such app", "Heroku"),
-            ("trying to access your account", "Tilda"),
-            ("fastly error: unknown domain", "Fastly"),
-            ("the request could not be satisfied", "CloudFront"),
-        ];
-        for (sig, vendor) in signatures {
-            if body_low.contains(sig) {
-                findings.push(finding(
-                    "subdomain_takeover",
-                    &format!("Dangling {} reference (possible takeover)", vendor),
-                    "critical",
-                    "T1584.001",
-                    &format!(
-                        "Response from {} contains takeover signature for {} ({}).",
-                        p.final_url, vendor, sig
-                    ),
-                    target,
-                ));
-            }
+        http_vendor = http_takeover_vendor(&p.body);
+        let conf = takeover_confidence(http_vendor, cname_vendor);
+        if let Some(vendor) = http_vendor {
+            let sev = if conf == "confirmed_http_and_dns" {
+                "critical"
+            } else {
+                "high"
+            };
+            let mut f = finding(
+                "subdomain_takeover",
+                &format!("Dangling {vendor} reference ({conf})"),
+                sev,
+                "T1584.001",
+                &format!(
+                    "HTTP response from {} matches {vendor} takeover signature. CNAME={:?} vendor={:?} confidence={conf}.",
+                    p.final_url, cnames, cname_vendor
+                ),
+                target,
+            );
+            attach_http_evidence(&mut f, &p, "GET");
+            findings.push(f);
         }
     }
+    if findings.is_empty() {
+        if let Some(vendor) = cname_vendor {
+            findings.push(finding(
+                "subdomain_takeover",
+                &format!("CNAME points at reclaimable {vendor} (candidate)"),
+                "medium",
+                "T1584.001",
+                &format!(
+                    "{host} CNAME {:?} maps to {vendor}. HTTP body did not match a vendor NX page — confirm the resource is claimed.",
+                    cnames
+                ),
+                target,
+            ));
+        }
+    }
+    let _ = http_vendor;
     if findings.is_empty() {
         empty_ok("subdomain_takeover", target)
     } else {
@@ -1328,6 +1445,33 @@ mod tests {
         assert!(css_injection_csp_weak(
             "style-src 'unsafe-inline'; default-src 'self'"
         ));
+    }
+
+    #[test]
+    fn clickjacking_uses_shared_intel() {
+        assert!(clickjacking_unprotected("", ""));
+        assert!(!clickjacking_unprotected("SAMEORIGIN", ""));
+        assert!(clickjacking_unprotected("", "frame-ancestors *"));
+    }
+
+    #[test]
+    fn swagger_spec_classifier_rejects_403_html_as_public() {
+        assert_eq!(
+            classify_spec_document(
+                200,
+                r#"{"swagger":"2.0","paths":{}}"#,
+                &["swagger", "openapi"]
+            ),
+            SpecExposure::Public
+        );
+        assert_eq!(
+            classify_spec_document(401, "denied", &["swagger"]),
+            SpecExposure::AuthGated
+        );
+        assert_eq!(
+            classify_spec_document(403, "<html>cloudflare</html>", &["swagger"]),
+            SpecExposure::Absent
+        );
     }
 
     #[test]

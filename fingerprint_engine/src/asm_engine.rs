@@ -43,9 +43,13 @@
 
 use crate::cloud_hunter;
 use crate::engine_dispatch::EngineRunContext;
+use crate::engine_probes::{status_indicates_auth_gated, status_indicates_public_content};
 use crate::engine_result::{print_result, EngineResult};
 use crate::fingerprint::scan_targets_concurrent_with_stealth;
 use crate::recon::{enum_subdomains, enum_subdomains_default, DEFAULT_SUBDOMAINS};
+use crate::web_scan_intel::{
+    classify_http_exposure, cookie_hardening_gaps, parse_set_cookie, HttpExposureClass,
+};
 use futures::future::join_all;
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
@@ -664,8 +668,8 @@ async fn http_posture(client: &reqwest::Client, url: &str) -> Option<HttpPosture
         .iter()
         .filter_map(|v| v.to_str().ok())
         .any(|c| {
-            let cl = c.to_lowercase();
-            url.starts_with("https://") && (!cl.contains("secure") || !cl.contains("httponly"))
+            let flags = parse_set_cookie(c);
+            !cookie_hardening_gaps(&flags, url.starts_with("https://")).is_empty()
         });
 
     // Cloud attribution from response headers.
@@ -708,12 +712,52 @@ async fn http_posture(client: &reqwest::Client, url: &str) -> Option<HttpPosture
     })
 }
 
+/// Verdict for a sensitive-path probe. 401/403 = auth-gated (not a public leak).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SensitivePathVerdict {
+    PublicLeak,
+    AuthGated,
+    Absent,
+}
+
+fn sensitive_path_looks_real(path: &str, body: &str) -> bool {
+    match path {
+        "/.env" => {
+            body.contains('=')
+                && (body.contains("KEY") || body.contains("SECRET") || body.contains("PASSWORD"))
+        }
+        "/.git/HEAD" => body.starts_with("ref:"),
+        "/.git/config" => body.contains("[core]") || body.contains("[remote"),
+        "/actuator/health" => body.contains("status") || body.contains("UP"),
+        "/actuator/env" => body.contains("propertySources") || body.contains("systemEnvironment"),
+        "/backup.sql" => body.contains("INSERT") || body.contains("CREATE TABLE"),
+        "/phpinfo.php" => body.contains("phpinfo") || body.contains("PHP Version"),
+        "/metrics" => body.contains("# HELP") || body.contains("# TYPE"),
+        "/debug/vars" => body.contains("\"cmdline\"") || body.contains("\"memstats\""),
+        "/.well-known/openid-configuration" => {
+            body.contains("\"issuer\"") && body.contains("jwks_uri")
+        }
+        _ => body.len() >= 16,
+    }
+}
+
+fn classify_sensitive_path(status: u16, path: &str, body: &str) -> SensitivePathVerdict {
+    if status_indicates_auth_gated(status) {
+        return SensitivePathVerdict::AuthGated;
+    }
+    if status_indicates_public_content(status) && sensitive_path_looks_real(path, body) {
+        return SensitivePathVerdict::PublicLeak;
+    }
+    SensitivePathVerdict::Absent
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TLS / certificate posture (openssl, blocking probe guarded by timeouts)
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct TlsInfo {
     protocol: String,
+    cipher: String,
     issuer: String,
     subject: String,
     days_to_expiry: i32,
@@ -750,6 +794,10 @@ fn tls_probe_blocking(host: &str, port: u16, timeout_ms: u64) -> Option<TlsInfo>
 
     let ssl = stream.ssl();
     let protocol = ssl.version_str().to_string();
+    let cipher = ssl
+        .current_cipher()
+        .map(|c| c.name().to_string())
+        .unwrap_or_default();
     let cert = ssl.peer_certificate()?;
     let subject = name_cn(cert.subject_name());
     let issuer = name_cn(cert.issuer_name());
@@ -769,6 +817,7 @@ fn tls_probe_blocking(host: &str, port: u16, timeout_ms: u64) -> Option<TlsInfo>
     drop(stream);
     Some(TlsInfo {
         protocol,
+        cipher,
         issuer,
         subject,
         days_to_expiry,
@@ -846,6 +895,34 @@ fn asm_finding(
         "description": description.into(),
         "remediation": remediation.into(),
     })
+}
+
+fn asm_finding_ev(
+    asset: &str,
+    severity: &str,
+    value: impl Into<String>,
+    title: impl Into<String>,
+    mitre: &str,
+    description: impl Into<String>,
+    remediation: impl Into<String>,
+    evidence: Value,
+) -> Value {
+    let mut f = asm_finding(
+        asset,
+        severity,
+        value,
+        title,
+        mitre,
+        description,
+        remediation,
+    );
+    if let Some(obj) = f.as_object_mut() {
+        if let Some(exp) = evidence.get("exposure_class") {
+            obj.insert("exposure_class".into(), exp.clone());
+        }
+        obj.insert("evidence".into(), evidence);
+    }
+    f
 }
 
 /// Prefixes on discovered subdomains that usually indicate shadow IT / high-value targets.
@@ -1198,35 +1275,23 @@ async fn probe_dkim_selectors(resolver: &TokioResolver, domain: &str) -> Vec<Val
     out
 }
 
-async fn probe_cors_misconfig(client: &reqwest::Client, host: &str) -> Option<Value> {
-    let url = format!("https://{host}/");
+fn cors_finding_from_acao(
+    host: &str,
+    url: String,
+    acao: &str,
+    creds: bool,
+    via: &str,
+) -> Option<Value> {
     let probe_origin = "https://weissman-cors-probe.invalid";
-    let resp = client
-        .get(&url)
-        .header("Origin", probe_origin)
-        .send()
-        .await
-        .ok()?;
-    let acao = resp
-        .headers()
-        .get("access-control-allow-origin")?
-        .to_str()
-        .ok()?;
-    let creds = resp
-        .headers()
-        .get("access-control-allow-credentials")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
     if acao == probe_origin {
-        return Some(asm_finding(
+        return Some(asm_finding_ev(
             "cors",
             if creds { "critical" } else { "high" },
-            url,
+            url.clone(),
             format!("CORS reflects arbitrary Origin on {host}"),
             "T1190",
             format!(
-                "Access-Control-Allow-Origin echoes attacker Origin '{probe_origin}'{}.",
+                "{via}: Access-Control-Allow-Origin echoes attacker Origin '{probe_origin}'{}.",
                 if creds {
                     " with Access-Control-Allow-Credentials: true"
                 } else {
@@ -1234,44 +1299,99 @@ async fn probe_cors_misconfig(client: &reqwest::Client, host: &str) -> Option<Va
                 }
             ),
             "Never reflect Origin; whitelist trusted origins explicitly.",
+            json!({
+                "url": url,
+                "acao": acao,
+                "credentials": creds,
+                "via": via,
+                "probe_origin": probe_origin,
+            }),
         ));
     }
     if acao == "*" && creds {
-        return Some(asm_finding(
+        return Some(asm_finding_ev(
             "cors",
             "high",
-            url,
+            url.clone(),
             format!("CORS wildcard with credentials on {host}"),
             "T1190",
-            "Access-Control-Allow-Origin: * combined with Allow-Credentials — browsers may leak session data.".to_string(),
+            format!("{via}: Access-Control-Allow-Origin: * combined with Allow-Credentials — browsers may leak session data."),
             "Remove Allow-Credentials or replace * with an explicit origin whitelist.",
+            json!({ "url": url, "acao": acao, "credentials": true, "via": via }),
         ));
     }
     if acao == "*" {
-        return Some(asm_finding(
+        return Some(asm_finding_ev(
             "cors",
             "low",
-            url,
+            url.clone(),
             format!("Permissive CORS wildcard on {host}"),
             "T1190",
-            "Access-Control-Allow-Origin: * permits any web origin to read responses.".to_string(),
+            format!(
+                "{via}: Access-Control-Allow-Origin: * permits any web origin to read responses."
+            ),
             "Restrict CORS to required origins only.",
+            json!({ "url": url, "acao": acao, "credentials": false, "via": via }),
         ));
     }
     None
 }
 
+async fn probe_cors_misconfig(client: &reqwest::Client, host: &str) -> Option<Value> {
+    let url = format!("https://{host}/");
+    let probe_origin = "https://weissman-cors-probe.invalid";
+    let read_acao_creds = |headers: &reqwest::header::HeaderMap| -> Option<(String, bool)> {
+        let acao = headers
+            .get("access-control-allow-origin")?
+            .to_str()
+            .ok()?
+            .to_string();
+        let creds = headers
+            .get("access-control-allow-credentials")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        Some((acao, creds))
+    };
+    if let Ok(resp) = client.get(&url).header("Origin", probe_origin).send().await {
+        if let Some((acao, creds)) = read_acao_creds(resp.headers()) {
+            if let Some(f) = cors_finding_from_acao(host, url.clone(), &acao, creds, "GET") {
+                return Some(f);
+            }
+        }
+    }
+    let opt = client
+        .request(reqwest::Method::OPTIONS, &url)
+        .header("Origin", probe_origin)
+        .header("Access-Control-Request-Method", "PUT")
+        .header("Access-Control-Request-Headers", "authorization")
+        .send()
+        .await
+        .ok()?;
+    let (acao, creds) = read_acao_creds(opt.headers())?;
+    cors_finding_from_acao(host, url, &acao, creds, "OPTIONS")
+}
+
 const SENSITIVE_PATHS: &[(&str, &str, &str)] = &[
     ("/.env", "critical", "Environment configuration file"),
     ("/.git/HEAD", "high", "Git repository metadata"),
+    ("/.git/config", "high", "Git repository config"),
     ("/actuator/health", "medium", "Spring Boot actuator"),
+    ("/actuator/env", "high", "Spring Boot env actuator"),
     ("/swagger-ui.html", "low", "Swagger UI"),
     ("/api/swagger.json", "medium", "OpenAPI specification"),
     ("/server-status", "medium", "Apache server-status"),
     ("/wp-config.php.bak", "high", "WordPress config backup"),
     ("/backup.sql", "critical", "SQL database backup"),
     ("/debug/pprof", "high", "Go pprof debug endpoint"),
+    ("/debug/vars", "medium", "Go expvar debug endpoint"),
     ("/phpinfo.php", "medium", "PHP info disclosure"),
+    ("/metrics", "low", "Prometheus metrics"),
+    (
+        "/.well-known/openid-configuration",
+        "medium",
+        "OIDC discovery document",
+    ),
 ];
 
 async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Value> {
@@ -1282,47 +1402,51 @@ async fn probe_sensitive_paths(client: &reqwest::Client, host: &str) -> Vec<Valu
             continue;
         };
         let status = resp.status().as_u16();
-        if !(200..300).contains(&status) {
-            continue;
-        }
-        let len = resp.content_length().unwrap_or(0);
-        let ct = resp
-            .headers()
-            .get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        if len == 0 && !ct.contains("text") && !ct.contains("json") && !ct.contains("xml") {
-            continue;
-        }
         let body_snip = resp.text().await.unwrap_or_default();
-        if body_snip.len() < 4 {
-            continue;
-        }
-        let looks_real = match *path {
-            "/.env" => {
-                body_snip.contains('=')
-                    && (body_snip.contains("KEY")
-                        || body_snip.contains("SECRET")
-                        || body_snip.contains("PASSWORD"))
+        let class = classify_http_exposure(status);
+        match classify_sensitive_path(status, path, &body_snip) {
+            SensitivePathVerdict::PublicLeak => {
+                out.push(asm_finding_ev(
+                    "sensitive_path",
+                    sev,
+                    url.clone(),
+                    format!("Sensitive {label} reachable on {host}"),
+                    "T1190",
+                    format!(
+                        "GET {url} returned HTTP {status} ({} bytes) — unauthenticated public content.",
+                        body_snip.len()
+                    ),
+                    "Remove public access; authenticate admin surfaces; delete backup artifacts from web roots.",
+                    json!({
+                        "url": url,
+                        "status": status,
+                        "exposure_class": class.as_str(),
+                        "public_content": true,
+                        "body_len": body_snip.len(),
+                    }),
+                ));
             }
-            "/.git/HEAD" => body_snip.starts_with("ref:"),
-            "/actuator/health" => body_snip.contains("status") || body_snip.contains("UP"),
-            "/backup.sql" => body_snip.contains("INSERT") || body_snip.contains("CREATE TABLE"),
-            "/phpinfo.php" => body_snip.contains("phpinfo") || body_snip.contains("PHP Version"),
-            _ => body_snip.len() >= 16,
-        };
-        if !looks_real {
-            continue;
+            SensitivePathVerdict::AuthGated => {
+                out.push(asm_finding_ev(
+                    "auth_gated_path",
+                    "info",
+                    url.clone(),
+                    format!("Auth-gated {label} on {host} (not public content)"),
+                    "T1190",
+                    format!(
+                        "GET {url} returned HTTP {status} — path exists but is auth-gated. This is not a public data leak."
+                    ),
+                    "Keep authentication; confirm the surface is intended and not over-exposed via weak auth.",
+                    json!({
+                        "url": url,
+                        "status": status,
+                        "exposure_class": "auth_gated",
+                        "public_content": false,
+                    }),
+                ));
+            }
+            SensitivePathVerdict::Absent => {}
         }
-        out.push(asm_finding(
-            "sensitive_path",
-            sev,
-            url.clone(),
-            format!("Sensitive {label} reachable on {host}"),
-            "T1190",
-            format!("GET {url} returned HTTP {status} ({} bytes) — potential data exposure.", body_snip.len()),
-            "Remove public access; authenticate admin surfaces; delete backup artifacts from web roots.",
-        ));
     }
     out
 }
@@ -1967,6 +2091,27 @@ pub async fn run_asm_result_ctx(
         if do_http {
             let url = format!("https://{ph}");
             if let Some(hp) = http_posture(&client, &url).await {
+                let exp = classify_http_exposure(hp.status);
+                if exp == HttpExposureClass::AuthGated {
+                    findings.push(asm_finding_ev(
+                        "http_posture",
+                        "info",
+                        hp.final_url.clone(),
+                        format!("HTTPS apex {ph} is auth-gated (not public content)"),
+                        "T1190",
+                        format!(
+                            "GET {} returned HTTP {} — the host is present but unauthenticated callers do not receive content.",
+                            hp.final_url, hp.status
+                        ),
+                        "Confirm the authentication challenge is intended; do not treat 401/403 as a public leak.",
+                        json!({
+                            "url": hp.final_url,
+                            "status": hp.status,
+                            "exposure_class": "auth_gated",
+                            "public_content": false,
+                        }),
+                    ));
+                }
                 if !hp.missing_headers.is_empty() {
                     let sev = if hp.missing_headers.contains(&"Strict-Transport-Security")
                         || hp.missing_headers.contains(&"Content-Security-Policy")
@@ -1975,7 +2120,7 @@ pub async fn run_asm_result_ctx(
                     } else {
                         "low"
                     };
-                    findings.push(asm_finding(
+                    findings.push(asm_finding_ev(
                         "http_posture",
                         sev,
                         hp.final_url.clone(),
@@ -1985,12 +2130,19 @@ pub async fn run_asm_result_ctx(
                         ),
                         "T1190",
                         format!(
-                            "{} returned HTTP {} and is missing: {}.",
+                            "{} returned HTTP {} (exposure={}) and is missing: {}.",
                             hp.final_url,
                             hp.status,
+                            exp.as_str(),
                             hp.missing_headers.join(", ")
                         ),
                         "Add the missing response security headers at the web/proxy layer.",
+                        json!({
+                            "url": hp.final_url,
+                            "status": hp.status,
+                            "exposure_class": exp.as_str(),
+                            "missing_headers": hp.missing_headers,
+                        }),
                     ));
                 }
                 if let Some(server) = hp.server.as_deref() {
@@ -2068,9 +2220,11 @@ pub async fn run_asm_result_ctx(
                         format!("Expired TLS certificate on {ph}"),
                         "T1190",
                         format!(
-                            "Certificate for {ph} (CN={}, issuer={}) expired {} day(s) ago.",
+                            "Certificate for {ph} (CN={}, issuer={}, protocol={}, cipher={}) expired {} day(s) ago.",
                             tls.subject,
                             tls.issuer,
+                            tls.protocol,
+                            tls.cipher,
                             tls.days_to_expiry.abs()
                         ),
                         "Renew and automate certificate rotation (e.g. ACME).",
@@ -2111,8 +2265,8 @@ pub async fn run_asm_result_ctx(
                         format!("Weak TLS protocol negotiated on {ph}"),
                         "T1040",
                         format!(
-                            "{ph} negotiated {} — a deprecated, attackable protocol.",
-                            tls.protocol
+                            "{ph} negotiated {} cipher={} — a deprecated, attackable protocol.",
+                            tls.protocol, tls.cipher
                         ),
                         "Disable TLS 1.0/1.1 and SSLv3; require TLS 1.2+ (prefer 1.3).",
                     ));
@@ -2450,5 +2604,60 @@ mod tests {
         let ctx = EngineRunContext::default();
         let r = run_asm_result_ctx("", &ctx, None).await;
         assert!(!r.success);
+    }
+
+    #[test]
+    fn sensitive_path_401_403_are_auth_gated_not_public() {
+        assert_eq!(
+            classify_sensitive_path(401, "/.env", "SECRET_KEY=x"),
+            SensitivePathVerdict::AuthGated
+        );
+        assert_eq!(
+            classify_sensitive_path(403, "/actuator/env", "forbidden"),
+            SensitivePathVerdict::AuthGated
+        );
+        assert_eq!(
+            classify_sensitive_path(200, "/.env", "AWS_SECRET_KEY=abc"),
+            SensitivePathVerdict::PublicLeak
+        );
+        assert_eq!(
+            classify_sensitive_path(200, "/.env", "<html>not env</html>"),
+            SensitivePathVerdict::Absent
+        );
+        assert_eq!(
+            classify_sensitive_path(404, "/.git/HEAD", "ref: refs/heads/main"),
+            SensitivePathVerdict::Absent
+        );
+    }
+
+    #[test]
+    fn cors_acao_classification() {
+        let f = cors_finding_from_acao(
+            "example.com",
+            "https://example.com/".into(),
+            "https://weissman-cors-probe.invalid",
+            true,
+            "GET",
+        )
+        .unwrap();
+        assert_eq!(f["severity"], json!("critical"));
+        assert_eq!(f["evidence"]["via"], json!("GET"));
+        let wild = cors_finding_from_acao(
+            "example.com",
+            "https://example.com/".into(),
+            "*",
+            false,
+            "OPTIONS",
+        )
+        .unwrap();
+        assert_eq!(wild["severity"], json!("low"));
+        assert!(cors_finding_from_acao(
+            "example.com",
+            "https://example.com/".into(),
+            "https://legit.example",
+            false,
+            "GET"
+        )
+        .is_none());
     }
 }

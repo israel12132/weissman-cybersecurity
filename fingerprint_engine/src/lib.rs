@@ -319,6 +319,7 @@ pub mod timing_sidechannel_engine;
 pub mod typosquatting_monitor_engine;
 pub mod verification_sandbox;
 pub mod waf_bypass_engine;
+pub mod web_scan_intel;
 pub mod websocket_attack_engine;
 pub mod ws_binary_protocol;
 pub mod ws_intelligence_bus;

@@ -1,7 +1,9 @@
-//! **Identity Attack Chain** — live fusion of Kerberos posture + password spray + ITDR auth events.
+//! **Identity Attack Chain** — live fusion of Kerberos posture + password spray + ITDR
+//! auth events + OIDC/OAuth + web identity surface.
 //!
-//! Correlates credential spray signals, Kerberos attack surface, and ingested identity telemetry
-//! into a unified identity kill-chain narrative. Evidence-only — no simulated findings.
+//! Correlates credential spray signals, Kerberos attack surface, federation metadata,
+//! and ingested identity telemetry into a unified identity kill-chain narrative.
+//! Evidence-only — no simulated findings. 401/403 identity paths are auth-gated, not public leaks.
 
 use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, extract_host, finding};
@@ -154,9 +156,11 @@ pub async fn run_identity_attack_chain_result(
     let include_spray = pbool(params, "include_password_spray", true);
     let include_kerberos = pbool(params, "include_kerberos", true);
     let include_itdr = pbool(params, "include_itdr", true);
+    let include_oauth = pbool(params, "include_oauth_oidc", true);
+    let include_web_identity = pbool(params, "include_web_identity_surface", true);
     let synthesis = pbool(params, "chain_synthesis", true);
 
-    let (spray_r, kerb_r) = tokio::join!(
+    let (spray_r, kerb_r, oauth_r, web_id_r) = tokio::join!(
         async {
             if include_spray {
                 crate::password_spray_engine::run_password_spray_result_ctx(target, ctx).await
@@ -171,6 +175,20 @@ pub async fn run_identity_attack_chain_result(
                 EngineResult::ok(vec![], "kerberos skipped")
             }
         },
+        async {
+            if include_oauth {
+                crate::oauth_oidc_engine::run_oauth_oidc_result(target, ctx).await
+            } else {
+                EngineResult::ok(vec![], "oauth_oidc skipped")
+            }
+        },
+        async {
+            if include_web_identity {
+                crate::web_scan_intel::run_web_identity_surface_result(target).await
+            } else {
+                EngineResult::ok(vec![], "web_identity_surface skipped")
+            }
+        },
     );
 
     let mut merged = Vec::new();
@@ -182,6 +200,12 @@ pub async fn run_identity_attack_chain_result(
     }
     if ingest_source(&mut merged, &mut penalty, "kerberos_attack_suite", &kerb_r) {
         sources.push("kerberos_attack_suite");
+    }
+    if ingest_source(&mut merged, &mut penalty, "oauth_oidc", &oauth_r) {
+        sources.push("oauth_oidc");
+    }
+    if ingest_source(&mut merged, &mut penalty, "web_identity_surface", &web_id_r) {
+        sources.push("web_identity_surface");
     }
     if include_itdr {
         let itdr = itdr_findings_from_db(ctx, &host).await;
@@ -204,6 +228,19 @@ pub async fn run_identity_attack_chain_result(
         let spray_hit = has_signal(&merged, &["spray", "lockout", "credential", "brute"]);
         let kerb_weak = has_signal(&merged, &["kerberos", "as-rep", "kerberoast", "delegation"]);
         let itdr_fail = has_signal(&merged, &["itdr", "failed", "impossible travel", "mfa"]);
+        let fed_weak = has_signal(
+            &merged,
+            &[
+                "oidc",
+                "oauth",
+                "saml",
+                "jwks",
+                "implicit",
+                "pkce",
+                "alg:none",
+                "discovery document",
+            ],
+        );
 
         if spray_hit && kerb_weak {
             merged.push(finding(
@@ -226,6 +263,17 @@ pub async fn run_identity_attack_chain_result(
                 &host,
             ));
             penalty += 18;
+        }
+        if fed_weak && (spray_hit || itdr_fail) {
+            merged.push(finding(
+                ENGINE_ID,
+                "Identity chain — federation weakness + credential pressure",
+                "critical",
+                "T1606.002",
+                "Live OIDC/SAML/OAuth surface findings correlate with spray or ITDR failures — token theft or IdP abuse is a plausible next hop.",
+                &host,
+            ));
+            penalty += 16;
         }
     }
 
@@ -280,5 +328,18 @@ mod tests {
             "severity": "high"
         })];
         assert!(has_signal(&findings, &["kerberos", "as-rep"]));
+    }
+
+    #[test]
+    fn federation_signal_matches_oidc_titles() {
+        let findings = vec![json!({
+            "title": "Public OIDC/OAuth discovery document",
+            "description": "issuer and jwks_uri advertised",
+            "severity": "medium"
+        })];
+        assert!(has_signal(
+            &findings,
+            &["oidc", "oauth", "discovery document"]
+        ));
     }
 }

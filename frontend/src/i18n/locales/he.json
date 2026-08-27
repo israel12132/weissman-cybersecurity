@@ -2935,6 +2935,14 @@
         "scada_ics": {
           "title": "דף תפעול SCADA / ICS",
           "mission": "סביבות OT דורשות UX מבודד והקשר בטיחות מפורש."
+        },
+        "web_http_intel": {
+          "title": "דף מודיעין HTTP לאינטרנט",
+          "mission": "ראיות HTTP/DNS/TLS ברמת Burp: ערכי כותרות, קוקיות, CORS preflight, והבחנה בין תוכן ציבורי למשטח מאובטח ב-401/403."
+        },
+        "web_identity_surface": {
+          "title": "דף משטח זהות באינטרנט",
+          "mission": "גילוי OIDC/SAML/OAuth ו-WWW-Authenticate חי עם ראיות, בלי לסווג 401/403 כדליפה ציבורית."
         }
       }
     },
@@ -4840,7 +4848,7 @@
       }
     },
     "attackSurfaceManagement": {
-      "evidence_notice": "מלאי ASM וציון חשיפה מ-POST /api/command-center/scan (מנועי asm / attack_surface). שורות נכסים נגזרות מגילוי חי על scope לקוח מורשה — ללא גרפי התקפה מוכנים מראש.",
+      "evidence_notice": "מלאי ASM וציון חשיפה מ-POST /api/command-center/scan (מנועי asm / attack_surface / web_http_intel). שורות נכסים נגזרות מגילוי חי על scope לקוח מורשה. HTTP 401/403 הם auth-gated, לא דליפה ציבורית.",
       "severity_critical": "קריטי",
       "severity_high": "גבוה",
       "severity_medium": "בינוני",
@@ -5468,7 +5476,7 @@
       "evidence_notice": "בדיקות עקיפת פילטר upload ו-polyglot ב-POST /api/command-center/scan (file_upload). נתיבי upload שתגדיר מקבלים probes multipart חיים — ללא upload מדומה."
     },
     "identitySecurityCenter": {
-      "evidence_notice": "posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים."
+      "evidence_notice": "posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack / web_identity_surface). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים. HTTP 401/403 הם auth-gated, לא דליפה ציבורית."
     },
     "kerberosSecurityCommandCenter": {
       "evidence_notice": "בדיקות חשיפת Kerberos/AD ב-POST /api/command-center/scan כש-RoE מאפשר. תוצאות משקפות תגובות LDAP/Kerberos חיות — ריק כשאין DC ב-scope."
@@ -6585,6 +6593,14 @@
         "asm": {
           "label": "Attack Surface",
           "short": "ASM"
+        },
+        "web_http_intel": {
+          "label": "מודיעין HTTP",
+          "short": "HTTP"
+        },
+        "web_identity_surface": {
+          "label": "משטח זהות",
+          "short": "IDP"
         }
       }
     },
@@ -7192,7 +7208,7 @@
   "supremeNerveCenter": {
     "title": "מרכז עצבים עליון",
     "ceoOnly": "מנכ\"ל / superadmin בלבד",
-    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 563 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
+    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 565 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
     "refresh": "רענון",
     "pollInterval": "רענון אוטומטי כל {{sec}} שניות",
     "stuckAlert": "{{count}} מנוע(ים) נראים תקועים — בדוק heartbeat של worker ועדכוני phase.",
