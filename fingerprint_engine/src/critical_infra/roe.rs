@@ -251,7 +251,7 @@ pub async fn log_violation(
     }
 }
 
-/// Structured fail-closed engine result: `roe_blocked=true`, no findings, never fake ICS hits.
+/// Structured fail-closed engine result: `roe_blocked=true`, no findings, never invented protocol hits.
 /// Dispatch must return this on RoE failure. The RoE agent can enrich the payload; the shape is locked.
 #[must_use]
 pub fn blocked_engine_result(
