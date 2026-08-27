@@ -61,7 +61,8 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
     ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_post_json(&client, &url, &intro).await {
-            if p.status < 500 && p.body.contains("__schema") && p.body.contains("types") {
+            let class = crate::api_cloud_intel::classify_graphql_response(p.status, &p.body);
+            if class.is_public_introspection() {
                 findings.push(web_finding(
                     "graphql_deep_attack",
                     "GraphQL introspection enabled",
@@ -76,7 +77,8 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
             }
         }
         if let Some(p) = http_post_json(&client, &url, &mutation_intro).await {
-            if p.status < 500 && p.body.contains("mutationType") {
+            let class = crate::api_cloud_intel::classify_graphql_response(p.status, &p.body);
+            if class.is_public_introspection() && p.body.contains("mutationType") {
                 findings.push(web_finding(
                     "graphql_deep_attack",
                     "GraphQL mutation schema enumerable",
@@ -91,7 +93,7 @@ pub async fn run_graphql_deep_attack_result(target: &str) -> EngineResult {
             }
         }
         if let Some(p) = http_post_json(&client, &url, &batch).await {
-            if p.status >= 200 && p.status < 300 && p.body.trim_start().starts_with('[') {
+            if (200..300).contains(&p.status) && p.body.trim_start().starts_with('[') {
                 findings.push(web_finding(
                     "graphql_deep_attack",
                     "GraphQL batching accepted",
@@ -326,19 +328,44 @@ pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
     for path in paths {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_get(&client, &url).await {
-            let body_low = p.body.to_ascii_lowercase();
-            if p.status == 200
-                && (body_low.contains("swagger")
-                    || body_low.contains("openapi")
-                    || body_low.contains("\"paths\""))
-            {
+            let class = crate::api_cloud_intel::classify_openapi(p.status, &p.body);
+            if class == crate::api_cloud_intel::OpenApiClass::PublicSpec {
+                let (path_count, version) =
+                    crate::api_cloud_intel::parse_openapi_inventory(&p.body)
+                        .unwrap_or((0, "?".into()));
+                if path_count == 0 {
+                    findings.push(finding(
+                        "swagger_abuse",
+                        "OpenAPI document reachable (0 paths — not an inventory leak)",
+                        "info",
+                        "T1190",
+                        &format!(
+                            "{} returned HTTP {} OpenAPI/Swagger {} with an empty paths object.",
+                            p.final_url, p.status, version
+                        ),
+                        target,
+                    ));
+                } else {
+                    findings.push(finding(
+                        "swagger_abuse",
+                        "Exposed Swagger/OpenAPI spec",
+                        "medium",
+                        "T1190",
+                        &format!(
+                            "Public OpenAPI {} document at {} (HTTP {}, {} paths) — leaks routes, params, auth schemes.",
+                            version, p.final_url, p.status, path_count
+                        ),
+                        target,
+                    ));
+                }
+            } else if class == crate::api_cloud_intel::OpenApiClass::AuthGated {
                 findings.push(finding(
                     "swagger_abuse",
-                    "Exposed Swagger/OpenAPI spec",
-                    "medium",
+                    &format!("API spec authentication-gated (HTTP {})", p.status),
+                    "info",
                     "T1190",
                     &format!(
-                        "Public OpenAPI document at {} (HTTP {}) — leaks routes, params, auth schemes.",
+                        "{} returned HTTP {} — a 401/403 is not a public OpenAPI document.",
                         p.final_url, p.status
                     ),
                     target,
@@ -1107,6 +1134,13 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
     ] {
         let url = format!("{}{}", base.trim_end_matches('/'), path);
         if let Some(p) = http_post_json(&client, &url, &sub_query).await {
+            let class = crate::api_cloud_intel::classify_graphql_response(p.status, &p.body);
+            if matches!(
+                class,
+                crate::api_cloud_intel::GraphqlResponseClass::AuthGated
+            ) {
+                continue;
+            }
             let body_low = p.body.to_ascii_lowercase();
             if body_low.contains("subscription")
                 && (body_low.contains("not supported")
@@ -1125,7 +1159,10 @@ pub async fn run_graphql_subscription_attack_result(target: &str) -> EngineResul
                     ),
                     target,
                 ));
-            } else if p.status >= 200 && p.status < 300 && p.body.contains("__typename") {
+            } else if (200..300).contains(&p.status)
+                && (class == crate::api_cloud_intel::GraphqlResponseClass::QueryPublic
+                    || p.body.contains("__typename"))
+            {
                 findings.push(web_finding(
                     "graphql_subscription_attack",
                     "GraphQL subscription query accepted over HTTP",

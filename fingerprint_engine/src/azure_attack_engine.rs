@@ -2132,7 +2132,7 @@ async fn run_posture_scan(
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn blob_listing_exposed(body: &str) -> bool {
-    body.contains("<EnumerationResults") && (body.contains("<Blob>") || body.contains("<Blobs"))
+    crate::api_cloud_intel::classify_object_storage(200, body).is_public_data()
 }
 
 async fn dns_cname(host: &str) -> Vec<String> {
@@ -2679,5 +2679,16 @@ mod tests {
     async fn empty_target_errors() {
         let r = run_azure_attack_result("").await;
         assert!(!r.success);
+    }
+
+    #[test]
+    fn blob_listing_empty_wrapper_is_not_public() {
+        let empty = r#"<EnumerationResults><Blobs></Blobs></EnumerationResults>"#;
+        assert!(!blob_listing_exposed(empty));
+        let with_blob = r#"<EnumerationResults><Blobs><Blob><Name>a</Name></Blob></Blobs></EnumerationResults>"#;
+        assert!(blob_listing_exposed(with_blob));
+        assert!(!blob_listing_exposed(
+            "<Error><Code>AuthenticationFailed</Code></Error>"
+        ));
     }
 }

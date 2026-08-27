@@ -513,7 +513,9 @@ pub async fn run_graphql_introspection(
         if status < 200 || status >= 300 {
             continue;
         }
-        if body.contains("__schema") || body.contains("data") {
+        // Require a parsed data.__schema — substring "__schema"/"data" matches request echoes.
+        let intro = crate::api_cloud_intel::classify_graphql_response(status, &body);
+        if intro.is_public_introspection() {
             out.insert(path.clone());
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
                 if let Some(types) = v

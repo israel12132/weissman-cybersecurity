@@ -657,6 +657,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "infostealer_emulation",
     "printer_mfp_attack",
     "radius_nac_bypass",
+    "api_cloud_intel",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -976,6 +977,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "fair_exposure_fusion",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
+    "api_cloud_intel",
     "risk_superposition_collapse",
     "chronos",
     "liquid_matrix",

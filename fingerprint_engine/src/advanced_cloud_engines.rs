@@ -135,39 +135,48 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
     ];
     for (provider, url) in &candidates {
         if let Some(p) = http_get(&client, url).await {
-            let public_list = p.status == 200
-                && (p.body.contains("<ListBucketResult")
-                    || p.body.contains("<EnumerationResults")
-                    || p.body.contains("<Contents>")
-                    || p.body.contains("<Blob>"));
-            let exists_denied = (p.status == 403 || p.status == 401)
-                && (p.body.contains("AccessDenied")
-                    || p.body.contains("AuthenticationFailed")
-                    || p.body.contains("InvalidSecurity"));
-            if public_list {
-                findings.push(cloud_finding(
-                    "s3_bucket_attack",
-                    &format!("Public {} object listing", provider),
-                    "high",
-                    "T1530",
-                    &format!(
-                        "{} object listing readable at {} (HTTP {}) — unauthenticated data exposure.",
-                        provider, url, p.status
-                    ),
-                    target,
-                ));
-            } else if exists_denied {
-                findings.push(cloud_finding(
-                    "s3_bucket_attack",
-                    &format!("{} bucket/container exists (access denied)", provider),
-                    "info",
-                    "T1530",
-                    &format!(
-                        "{} returned HTTP {} — the name resolves; review ACL / policy.",
-                        url, p.status
-                    ),
-                    target,
-                ));
+            let class = crate::api_cloud_intel::classify_object_storage(p.status, &p.body);
+            match class {
+                crate::api_cloud_intel::StorageListingClass::PublicObjects => {
+                    findings.push(cloud_finding(
+                        "s3_bucket_attack",
+                        &format!("Public {} objects listable", provider),
+                        "high",
+                        "T1530",
+                        &format!(
+                            "{} object listing readable at {} (HTTP {}) with object keys — unauthenticated data exposure.",
+                            provider, url, p.status
+                        ),
+                        target,
+                    ));
+                }
+                crate::api_cloud_intel::StorageListingClass::AnonymousListEmpty => {
+                    findings.push(cloud_finding(
+                        "s3_bucket_attack",
+                        &format!("{} anonymous LIST permitted (empty listing)", provider),
+                        "info",
+                        "T1530",
+                        &format!(
+                            "{} returned HTTP {} listing envelope with 0 object keys — not public data.",
+                            url, p.status
+                        ),
+                        target,
+                    ));
+                }
+                crate::api_cloud_intel::StorageListingClass::ExistsDenied => {
+                    findings.push(cloud_finding(
+                        "s3_bucket_attack",
+                        &format!("{} bucket/container exists (access denied — not public)", provider),
+                        "info",
+                        "T1530",
+                        &format!(
+                            "{} returned HTTP {} AccessDenied — the name resolves; this is not a public bucket.",
+                            url, p.status
+                        ),
+                        target,
+                    ));
+                }
+                _ => {}
             }
         }
     }
@@ -706,5 +715,28 @@ mod tests {
         assert!(obj.contains_key("remediation"));
         assert!(obj.contains_key("compliance"));
         assert!(obj.contains_key("probe_depth"));
+    }
+
+    #[test]
+    fn s3_classification_403_and_empty_listing_are_not_public() {
+        use crate::api_cloud_intel::{classify_object_storage, StorageListingClass};
+        assert_eq!(
+            classify_object_storage(403, "<Error><Code>AccessDenied</Code></Error>"),
+            StorageListingClass::ExistsDenied
+        );
+        assert_eq!(
+            classify_object_storage(
+                200,
+                "<ListBucketResult xmlns=\"s3\"><Name>x</Name></ListBucketResult>"
+            ),
+            StorageListingClass::AnonymousListEmpty
+        );
+        assert_eq!(
+            classify_object_storage(
+                200,
+                "<ListBucketResult><Contents><Key>a</Key></Contents></ListBucketResult>"
+            ),
+            StorageListingClass::PublicObjects
+        );
     }
 }

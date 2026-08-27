@@ -1186,7 +1186,9 @@ async fn scan_external_surface(target: &str, cfg: &AwsScanConfig) -> Vec<Value> 
     let probes = stream::iter(candidates.into_iter().map(|name| {
         let client = client.clone();
         async move {
-            let url = format!("https://{name}.s3.amazonaws.com/?max-keys=0");
+            // max-keys=5 so an empty listing can be distinguished from objects present.
+            // max-keys=0 always returns an empty ListBucketResult and must not be called "public".
+            let url = format!("https://{name}.s3.amazonaws.com/?max-keys=5");
             let probe = http_get(&client, &url).await;
             (name, probe)
         }
@@ -1197,40 +1199,65 @@ async fn scan_external_surface(target: &str, cfg: &AwsScanConfig) -> Vec<Value> 
 
     for (name, probe) in probes {
         let Some(p) = probe else { continue };
-        let body_l = p.body.to_ascii_lowercase();
-        if p.status == 200
-            && (body_l.contains("<listbucketresult") || body_l.contains("<contents>"))
-        {
-            f.push(aws_finding(
-                Domain::Exposure,
-                &format!("Public S3 bucket (anonymously listable): {name}"),
-                "critical",
-                "T1530",
-                "2.1.5",
-                target,
-                0.9,
-                &format!("S3 bucket '{name}' returns a public object listing to an anonymous request (HTTP 200 ListBucketResult). Its contents are exposed to the internet."),
-                Evidence::new()
-                    .with("bucket", name.clone())
-                    .with("url", format!("https://{name}.s3.amazonaws.com/"))
-                    .with("http_status", p.status)
-                    .check("anonymous_list", true, "ListBucketResult"),
-            ));
-        } else if p.status == 403 {
-            f.push(aws_finding(
-                Domain::Exposure,
-                &format!("S3 bucket exists (access denied): {name}"),
-                "low",
-                "T1580",
-                "",
-                target,
-                0.7,
-                &format!("S3 bucket '{name}' exists (HTTP 403 AccessDenied) but does not list anonymously. Confirms the namespace is in use; ensure it is not writable and not referenced by a dangling DNS record."),
-                Evidence::new()
-                    .with("bucket", name.clone())
-                    .with("http_status", p.status)
-                    .check("bucket_exists", true, "403 AccessDenied"),
-            ));
+        let class = crate::api_cloud_intel::classify_object_storage(p.status, &p.body);
+        let object_count = crate::api_cloud_intel::s3_listing_object_count(&p.body).unwrap_or(0);
+        match class {
+            crate::api_cloud_intel::StorageListingClass::PublicObjects => {
+                f.push(aws_finding(
+                    Domain::Exposure,
+                    &format!("Public S3 bucket (anonymously listable): {name}"),
+                    "critical",
+                    "T1530",
+                    "2.1.5",
+                    target,
+                    0.9,
+                    &format!("S3 bucket '{name}' returns a public object listing to an anonymous request (HTTP {} ListBucketResult, {object_count} object key(s)). Its contents are exposed to the internet.", p.status),
+                    Evidence::new()
+                        .with("bucket", name.clone())
+                        .with("url", format!("https://{name}.s3.amazonaws.com/"))
+                        .with("http_status", p.status)
+                        .with("classification", class.as_str())
+                        .with("object_count", object_count)
+                        .check("anonymous_list", true, "ListBucketResult with objects"),
+                ));
+            }
+            crate::api_cloud_intel::StorageListingClass::AnonymousListEmpty => {
+                f.push(aws_finding(
+                    Domain::Exposure,
+                    &format!("S3 anonymous LIST permitted but listing is empty: {name}"),
+                    "info",
+                    "T1530",
+                    "",
+                    target,
+                    0.5,
+                    &format!("S3 bucket '{name}' returned HTTP {} ListBucketResult with 0 object keys. LIST is unauthenticated; this is not evidence of public data.", p.status),
+                    Evidence::new()
+                        .with("bucket", name.clone())
+                        .with("http_status", p.status)
+                        .with("classification", class.as_str())
+                        .with("object_count", 0)
+                        .check("anonymous_list", false, "empty listing"),
+                ));
+            }
+            crate::api_cloud_intel::StorageListingClass::ExistsDenied => {
+                f.push(aws_finding(
+                    Domain::Exposure,
+                    &format!("S3 bucket exists (access denied — not public): {name}"),
+                    "low",
+                    "T1580",
+                    "",
+                    target,
+                    0.7,
+                    &format!("S3 bucket '{name}' exists (HTTP {} AccessDenied) but does not list anonymously. This is not a public bucket.", p.status),
+                    Evidence::new()
+                        .with("bucket", name.clone())
+                        .with("http_status", p.status)
+                        .with("classification", class.as_str())
+                        .check("bucket_exists", true, "403/401 AccessDenied")
+                        .check("public_data", false, "not public"),
+                ));
+            }
+            _ => {}
         }
     }
 

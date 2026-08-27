@@ -95,6 +95,19 @@ export default function WeissmanFindingsPanel({
         <span className="text-[12px] font-mono text-[var(--text-primary)] min-w-0">{f.title || f.type || 'Finding'}</span>
       </div>
       {f.description && <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">{f.description}</p>}
+      {(f.http_status != null || f.classification) && (
+        <div className="flex flex-wrap gap-1.5">
+          {f.http_status != null && (
+            <span className="text-[9px] font-mono text-cyan-300/80 rounded border border-cyan-500/25 px-1.5 py-0.5">HTTP {f.http_status}</span>
+          )}
+          {f.classification && (
+            <span className="text-[9px] font-mono text-amber-200/80 rounded border border-amber-500/25 px-1.5 py-0.5">{f.classification}</span>
+          )}
+          {f.evidence_matches_claim === true && (
+            <span className="text-[9px] font-mono text-emerald-300/80 rounded border border-emerald-500/25 px-1.5 py-0.5">evidence matches claim</span>
+          )}
+        </div>
+      )}
       {(f.confidence_multiplier != null || f.effective_risk_confidence != null) && (
         <p className="text-[9px] font-mono text-cyan-400/80">
           {t('weissmanFindings.confidence', {

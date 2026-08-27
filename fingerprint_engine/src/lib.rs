@@ -34,6 +34,7 @@ pub mod agent_remote_surface;
 pub mod ai_redteam_engine;
 pub mod alias_engine_runner;
 pub mod alias_specialized_probes;
+pub mod api_cloud_intel;
 pub mod api_docs;
 pub mod archival_engine;
 pub mod arsenal_catalog;

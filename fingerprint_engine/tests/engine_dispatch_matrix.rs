@@ -46,6 +46,7 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
         "chronos",
         "liquid_matrix",
         "cognitive_starvation",
+        "api_cloud_intel",
     ];
     for engine_id in required {
         assert!(
