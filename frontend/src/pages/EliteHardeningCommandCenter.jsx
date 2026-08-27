@@ -8,17 +8,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Search } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
-import EmptyState from '../components/ui/EmptyState'
 import EvidenceNotice from '../components/ui/EvidenceNotice'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import FilterPills from '../components/ui/FilterPills'
+import DataTable from '../components/ui/DataTable'
+import Button from '../components/ui/Button'
 import { SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch'
 import { exportRowsCsv, exportRowsPdf, rowMatchesQuery } from '../lib/pageExport'
 
 const NS = 'pages.eliteHardening'
+const columnHelper = createColumnHelper()
 
 export const ELITE_CSV_HEADER = ['id', 'section', 'title', 'enforced', 'detail']
 
@@ -90,6 +93,49 @@ export default function EliteHardeningCommandCenter() {
       })),
     ],
     [sectionFilter, sections, t],
+  )
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('id', {
+        header: '#',
+        cell: (ctx) => (
+          <span className="font-mono text-cyan-300 tabular-nums">{ctx.getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor('section_title', {
+        header: () => t(`${NS}.col_section`),
+        cell: (ctx) => (
+          <span className="text-[var(--text-muted)] whitespace-nowrap">{ctx.getValue()}</span>
+        ),
+      }),
+      columnHelper.accessor('title', {
+        header: () => t(`${NS}.col_control`),
+        cell: (ctx) => <span className="text-white">{ctx.getValue()}</span>,
+      }),
+      columnHelper.accessor('enforced', {
+        header: () => t(`${NS}.col_status`),
+        cell: (ctx) => {
+          const live = Boolean(ctx.getValue())
+          return (
+            <span
+              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
+                live ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+              }`}
+            >
+              {live ? t(`${NS}.live`) : t(`${NS}.gap`)}
+            </span>
+          )
+        },
+      }),
+      columnHelper.accessor('detail', {
+        header: () => t(`${NS}.col_detail`),
+        cell: (ctx) => (
+          <span className="text-[var(--text-muted)] font-mono text-[11px]">{ctx.getValue()}</span>
+        ),
+      }),
+    ],
+    [t],
   )
 
   const exportRows = () => eliteControlRows(filtered)
@@ -195,58 +241,23 @@ export default function EliteHardeningCommandCenter() {
                   className="w-full rounded-lg border border-white/10 bg-black/30 pl-9 pr-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)]"
                 />
               </label>
-              <button
-                type="button"
-                className="text-xs uppercase tracking-wider text-cyan-400 hover:text-cyan-300"
-                onClick={() => doExport('pdf')}
-              >
+              <Button type="button" variant="ghost" size="xs" onClick={() => doExport('pdf')}>
                 {t(`${NS}.export_pdf`)}
-              </button>
+              </Button>
             </div>
 
             <FilterPills pills={pills} />
 
-            {filtered.length === 0 ? (
-              <EmptyState
-                title={controls.length ? t(`${NS}.no_match_title`) : t(`${NS}.empty_title`)}
-                body={controls.length ? t(`${NS}.no_match_body`) : t(`${NS}.empty_body`)}
-              />
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-white/10">
-                <table className="w-full text-sm">
-                  <thead className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] bg-white/5">
-                    <tr>
-                      <th className="text-left px-3 py-2">#</th>
-                      <th className="text-left px-3 py-2">{t(`${NS}.col_section`)}</th>
-                      <th className="text-left px-3 py-2">{t(`${NS}.col_control`)}</th>
-                      <th className="text-left px-3 py-2">{t(`${NS}.col_status`)}</th>
-                      <th className="text-left px-3 py-2">{t(`${NS}.col_detail`)}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((c) => (
-                      <tr key={c.id} className="border-t border-white/5 hover:bg-white/[0.03]">
-                        <td className="px-3 py-2 font-mono text-cyan-300 tabular-nums">{c.id}</td>
-                        <td className="px-3 py-2 text-[var(--text-muted)] whitespace-nowrap">{c.section_title}</td>
-                        <td className="px-3 py-2 text-white">{c.title}</td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
-                              c.enforced
-                                ? 'bg-emerald-500/15 text-emerald-300'
-                                : 'bg-rose-500/15 text-rose-300'
-                            }`}
-                          >
-                            {c.enforced ? t(`${NS}.live`) : t(`${NS}.gap`)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-[var(--text-muted)] font-mono text-[11px]">{c.detail}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={columns}
+              data={filtered}
+              animateRows={false}
+              getRowId={(row) => String(row.id)}
+              emptyState={{
+                title: controls.length ? t(`${NS}.no_match_title`) : t(`${NS}.empty_title`),
+                body: controls.length ? t(`${NS}.no_match_body`) : t(`${NS}.empty_body`),
+              }}
+            />
           </>
         )}
       </div>
