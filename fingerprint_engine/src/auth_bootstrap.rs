@@ -23,10 +23,28 @@ use sqlx::{PgPool, Row};
 /// `auth_pool` is BYPASSRLS (`weissman_auth`). `app_pool` is RLS-subject
 /// (`weissman_app`) and is only written through a tenant-scoped transaction.
 pub async fn sync_admin_credentials(auth_pool: &PgPool, app_pool: &PgPool) {
-    let admin_email = env_nonempty("WEISSMAN_ADMIN_EMAIL");
-    let admin_password = env_nonempty("WEISSMAN_ADMIN_PASSWORD");
-    let master_email = env_nonempty("WEISSMAN_MASTER_BOOTSTRAP_EMAIL");
+    sync_admin_credentials_from(
+        auth_pool,
+        app_pool,
+        env_nonempty("WEISSMAN_ADMIN_EMAIL"),
+        env_nonempty("WEISSMAN_ADMIN_PASSWORD"),
+        env_nonempty("WEISSMAN_MASTER_BOOTSTRAP_EMAIL"),
+    )
+    .await
+}
 
+/// Same as [`sync_admin_credentials`], with operator emails injected.
+///
+/// Production reads process env. Tests pass emails in so they do not mutate
+/// process-global env or hold a `std::sync::Mutex` across `.await`
+/// (`clippy::await_holding_lock` is deny in CI).
+async fn sync_admin_credentials_from(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    admin_email: Option<String>,
+    admin_password: Option<String>,
+    master_email: Option<String>,
+) {
     if let Some(email) = admin_email.as_deref() {
         sync_one_operator(auth_pool, app_pool, email, admin_password.as_deref()).await;
     }
@@ -344,15 +362,11 @@ mod tests {
         }
     }
 
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-    }
-
-    /// CI smoke logs in as WEISSMAN_MASTER_BOOTSTRAP_EMAIL. That user must become
-    /// is_superadmin or POST /api/clients returns owner_required.
+    /// CI smoke logs in as `WEISSMAN_MASTER_BOOTSTRAP_EMAIL`. That user must
+    /// become `is_superadmin` or `POST /api/clients` returns `owner_required`.
+    ///
+    /// Operator emails are injected rather than written into process env so this
+    /// test does not race other env readers or hold a `MutexGuard` across await.
     #[tokio::test]
     async fn sync_promotes_master_bootstrap_user_to_owner() {
         let url = test_database_url();
@@ -360,7 +374,6 @@ mod tests {
             eprintln!("SKIP sync_promotes_master_bootstrap_user_to_owner: no TEST_DATABASE_URL");
             return;
         }
-        let _guard = env_lock();
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(2)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -392,40 +405,8 @@ mod tests {
         .await
         .expect("seed bootstrap staff admin");
 
-        let prev_admin = std::env::var("WEISSMAN_ADMIN_EMAIL").ok();
-        let prev_password = std::env::var("WEISSMAN_ADMIN_PASSWORD").ok();
-        let prev_master = std::env::var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL").ok();
-        struct RestoreEnv {
-            admin: Option<String>,
-            password: Option<String>,
-            master: Option<String>,
-        }
-        impl Drop for RestoreEnv {
-            fn drop(&mut self) {
-                match &self.admin {
-                    Some(v) => std::env::set_var("WEISSMAN_ADMIN_EMAIL", v),
-                    None => std::env::remove_var("WEISSMAN_ADMIN_EMAIL"),
-                }
-                match &self.password {
-                    Some(v) => std::env::set_var("WEISSMAN_ADMIN_PASSWORD", v),
-                    None => std::env::remove_var("WEISSMAN_ADMIN_PASSWORD"),
-                }
-                match &self.master {
-                    Some(v) => std::env::set_var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL", v),
-                    None => std::env::remove_var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL"),
-                }
-            }
-        }
-        let _restore = RestoreEnv {
-            admin: prev_admin,
-            password: prev_password,
-            master: prev_master,
-        };
-        std::env::remove_var("WEISSMAN_ADMIN_EMAIL");
-        std::env::remove_var("WEISSMAN_ADMIN_PASSWORD");
-        std::env::set_var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL", &email);
-
-        sync_admin_credentials(&pool, &pool).await;
+        // CI shape: only the master-bootstrap operator is present (admin env unset).
+        sync_admin_credentials_from(&pool, &pool, None, None, Some(email.clone())).await;
 
         let owner: bool = sqlx::query_scalar(
             "SELECT COALESCE(is_superadmin, false) FROM users WHERE tenant_id = $1 AND email = $2",
