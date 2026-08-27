@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db;
@@ -187,12 +186,23 @@ async fn drain_once(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, St
             .await
             .map_err(|e| format!("cluster ingest savepoint: {e}"))?;
 
-        let (k1, k2) = advisory_keys(tenant_id, &cluster_key);
-        let _ = sqlx::query("SELECT pg_advisory_xact_lock($1, $2)")
-            .bind(k1)
-            .bind(k2)
-            .execute(&mut *tx)
-            .await;
+        // Bounded helper — never call pg_advisory_xact_lock raw. On timeout the
+        // savepoint keeps this drain transaction usable and the row stays pending.
+        let lock_key = format!("{tenant_id}:{cluster_key}");
+        if let Err(e) =
+            weissman_db::advisory_lock::advisory_xact_lock_text(&mut *tx, &lock_key).await
+        {
+            tracing::warn!(
+                target: "cluster_ingest",
+                error = %e,
+                cluster_key = %cluster_key,
+                "cluster ingest lock not taken; row stays pending"
+            );
+            let _ = sqlx::query("ROLLBACK TO SAVEPOINT cluster_row")
+                .execute(&mut *tx)
+                .await;
+            continue;
+        }
 
         let finding = json!({ "signature": vuln_signature, "title": title, "cwe": cwe });
         let cve_ref = cve.as_deref();
@@ -261,30 +271,4 @@ async fn drain_once(pool: &PgPool, tenant_id: i64, limit: i64) -> Result<u64, St
         .await
         .map_err(|e| format!("cluster ingest commit: {e}"))?;
     Ok(n)
-}
-
-fn advisory_keys(tenant_id: i64, cluster_key: &str) -> (i32, i32) {
-    let mut h = Sha256::new();
-    h.update(tenant_id.to_le_bytes());
-    h.update(cluster_key.as_bytes());
-    let d = h.finalize();
-    let a = i32::from_le_bytes([d[0], d[1], d[2], d[3]]);
-    let b = i32::from_le_bytes([d[4], d[5], d[6], d[7]]);
-    (a, b)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::advisory_keys;
-
-    #[test]
-    fn advisory_keys_stable_per_tenant_and_cluster() {
-        let a = advisory_keys(2, "abc");
-        let b = advisory_keys(2, "abc");
-        let c = advisory_keys(3, "abc");
-        let d = advisory_keys(2, "abd");
-        assert_eq!(a, b);
-        assert_ne!(a, c);
-        assert_ne!(a, d);
-    }
 }
