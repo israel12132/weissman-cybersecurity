@@ -56,6 +56,7 @@ import {
   EmailDnsPosture,
   PqcRadar,
   EdDetectionSurface,
+  StealthyPersistenceEvasion,
   WafBypassLab,
   WebSocketSecurityCommandCenter,
   JwtAttackLab,
@@ -233,6 +234,7 @@ export default function TacticalApp() {
           <Route path="email-posture" element={<EmailDnsPosture />} />
           <Route path="pqc-radar" element={<PqcRadar />} />
           <Route path="detection-surface" element={<EdDetectionSurface />} />
+          <Route path="stealthy-persistence-evasion" element={<StealthyPersistenceEvasion />} />
           <Route path="waf-bypass" element={<WafBypassLab />} />
           <Route path="websocket-security" element={<WebSocketSecurityCommandCenter />} />
           <Route path="jwt-lab" element={<JwtAttackLab />} />

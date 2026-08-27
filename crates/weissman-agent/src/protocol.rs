@@ -77,6 +77,8 @@ pub enum ServerToAgent {
     },
     /// Server-side acknowledgement of a finding (mostly for flow control).
     Ack { task_id: String },
+    /// Asks the agent to wipe assessment canaries + encrypted ring buffer.
+    FailSafeWipe { reason: String },
     /// Asks the agent to shut down (revoked, deprovisioned, …).
     Shutdown { reason: String },
 }

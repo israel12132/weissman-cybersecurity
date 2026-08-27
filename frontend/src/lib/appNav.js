@@ -119,6 +119,7 @@ export const NAV_GROUPS = [
       { to: '/cache-posture', labelKey: 'nav.cache_posture', icon: '🗄' },
       { to: '/http-smuggling', labelKey: 'nav.http_smuggling', icon: '⇄' },
       { to: '/detection-surface', labelKey: 'nav.detection_surface', icon: '🛡' },
+      { to: '/stealthy-persistence-evasion', labelKey: 'nav.stealthy_persistence', icon: '👻' },
       { to: '/waf-bypass', labelKey: 'nav.waf_bypass', icon: '⚔' },
       { to: '/websocket-security', labelKey: 'nav.websocket_security', icon: '⟁' },
       { to: '/transport-security', labelKey: 'nav.transport_security', icon: '🛡' },

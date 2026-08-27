@@ -163,6 +163,7 @@ pub mod sso_management;
 pub mod stealth_engine;
 pub mod stealth_queue;
 pub mod stealth_scheduler;
+pub mod stealthy_persistence_evasion;
 pub mod strategic_analyzer;
 pub mod superposition_followup;
 pub mod supervised;

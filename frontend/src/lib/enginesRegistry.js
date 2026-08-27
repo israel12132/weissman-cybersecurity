@@ -1,5 +1,5 @@
 /**
- * Master registry of all 563 production attack engines.
+ * Master registry of all 564 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All 564 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -379,6 +379,14 @@ export const ENGINES_REGISTRY = [
     group: 'stealth',
     mitre: 'T1685',
     description: 'World-class remote detection resilience — WAF/bot UA matrix, rate limits, CSP/cookie gaps, RUM telemetry, debug surfaces, source maps, verbose errors, and an honest agent bridge for host EDR (AMSI/ETW/syscall)',
+    requiresTarget: true,
+  },
+  {
+    id: 'stealthy_persistence_evasion',
+    label: 'Stealthy Persistence & Defense Evasion',
+    group: 'stealth',
+    mitre: 'T1562.001',
+    description: 'Intelligence-grade assessment of 500 live checks across PEB/TEB integrity, syscall/HalosGate posture, hollow-routing artifacts, persistence enumeration, in-memory masking, telemetry posture, WSS ring-buffer, RLS, COPY/SKIP LOCKED, and CI/CD fail-safes — evidence-only, no evasion payloads',
     requiresTarget: true,
   },
   {

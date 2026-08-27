@@ -290,7 +290,14 @@ async fn handle_text(
                 .await;
             });
         }
-        ServerToAgent::Ack { .. } => {}
+        ServerToAgent::Ack { .. } => {
+            crate::transport::encrypted_ring::ack();
+        }
+        ServerToAgent::FailSafeWipe { reason } => {
+            warn!(target: "agent", reason = %reason, "fail-safe wipe");
+            crate::transport::encrypted_ring::fail_safe_wipe();
+            let _ = crate::detections::fail_safe_wipe_canaries();
+        }
         ServerToAgent::Shutdown { reason } => {
             warn!(target: "agent", reason = %reason, "server requested shutdown");
             std::process::exit(0);
@@ -319,6 +326,7 @@ async fn run_task(
         Ok(Ok(findings)) => {
             let count = findings.len() as u32;
             for f in findings {
+                crate::transport::encrypted_ring::push_json(&f);
                 let _ = out_tx
                     .send(AgentToServer::Finding {
                         agent_id: agent_id.clone(),

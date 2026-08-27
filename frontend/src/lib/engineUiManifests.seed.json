@@ -87,6 +87,23 @@
       }
     },
     {
+      "engine_id": "stealthy_persistence_evasion",
+      "route_paths": [
+        "/stealthy-persistence-evasion"
+      ],
+      "evidence_i18n_key": "pages.stealthyEvasion.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": false,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
       "engine_id": "digital_twin",
       "route_paths": [
         "/digital-twin"

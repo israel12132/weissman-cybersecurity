@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-18T03:34:38.169Z",
-  "production_engine_count": 563,
+  "generated_at": "2026-08-27T16:49:07.219Z",
+  "production_engine_count": 564,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 420
+      "engine_count": 421
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -799,6 +799,16 @@
       "group": "stealth",
       "kind": "real_probe",
       "label": "Detection Evasion Surface",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "stealthy_persistence_evasion": {
+      "id": "stealthy_persistence_evasion",
+      "group": "stealth",
+      "kind": "real_probe",
+      "label": "Stealthy Persistence & Defense Evasion",
       "requirements": [
         "contact_email",
         "scope_domains"

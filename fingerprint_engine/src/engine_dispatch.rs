@@ -437,6 +437,10 @@ async fn dispatch_engine_match(
         "iot_firmware" => crate::iot_firmware_engine::run_iot_firmware_result(target).await,
         "ble_rf" => crate::ble_rf_engine::run_ble_rf_result_ctx(target, ctx).await,
         "edr_evasion" => crate::edr_evasion_engine::run_edr_evasion_result_ctx(target, ctx).await,
+        "stealthy_persistence_evasion" => {
+            crate::stealthy_persistence_evasion::run_stealthy_persistence_evasion_result(target, ctx)
+                .await
+        }
         "waf_bypass" => crate::waf_bypass_engine::run_waf_bypass_result_ctx(target, ctx).await,
         "timing_sidechannel" => {
             crate::timing_sidechannel_engine::run_timing_sidechannel_result_ctx(target, ctx).await

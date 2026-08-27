@@ -36,6 +36,7 @@ whoami = "1"
 # File hashing.
 sha2 = "0.10"
 hex = "0.4"
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }

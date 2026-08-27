@@ -95,6 +95,9 @@ pub enum ServerToAgent {
     Ack {
         task_id: String,
     },
+    FailSafeWipe {
+        reason: String,
+    },
     Shutdown {
         reason: String,
     },

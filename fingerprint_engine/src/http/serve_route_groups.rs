@@ -165,6 +165,18 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/stealth/status", get(api_stealth_status))
         .route("/api/stealth/config", post(api_stealth_config))
         .route(
+            "/api/stealthy-persistence-evasion/catalog",
+            get(api_stealthy_persistence_catalog),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/status",
+            get(api_stealthy_persistence_status),
+        )
+        .route(
+            "/api/stealthy-persistence-evasion/fail-safe",
+            post(api_stealthy_persistence_fail_safe),
+        )
+        .route(
             "/api/onboarding/tenant-status",
             get(api_onboarding_tenant_status),
         )
