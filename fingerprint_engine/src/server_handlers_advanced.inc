@@ -1140,6 +1140,7 @@ async fn api_apply_asset_tag_rules(
 // ─── Ask Weissman (NL → safe SQL) ──────────────────────────────────────────
 
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct AskBody { question: String }
 
 async fn api_ask(

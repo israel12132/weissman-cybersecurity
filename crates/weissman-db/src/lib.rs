@@ -18,6 +18,13 @@ use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Postgres role that Ask Weissman (`/api/ask`) must connect as. SELECT-only, RLS-scoped.
+pub const READ_ONLY_ROLE: &str = "weissman_ro";
+/// Hard `statement_timeout` for Ask Weissman (milliseconds). Never raised.
+pub const READ_ONLY_STATEMENT_TIMEOUT_MS: u64 = 15_000;
+/// Hard row cap compiled into every Ask Weissman query and re-applied on execute.
+pub const READ_ONLY_MAX_ROWS: i64 = 200;
+
 /// Primary application database URL (role `weissman_app`, RLS). Read from `DATABASE_URL` when the process starts each call.
 pub fn database_url_from_env() -> Result<String, std::env::VarError> {
     std::env::var("DATABASE_URL")
@@ -436,6 +443,68 @@ pub async fn connect_intel_from_env() -> Result<PgPool, sqlx::Error> {
     connect_intel(t).await
 }
 
+/// Reject a read-only DSN that is empty, malformed, or not the `weissman_ro` role.
+pub fn validate_read_only_database_url(url: &str) -> Result<(), String> {
+    env_bootstrap::validate_database_url(url)
+        .map_err(|msg| format!("WEISSMAN_READ_ONLY_DATABASE_URL: {msg}"))?;
+    let user = env_bootstrap::postgres_url_user(url).ok_or_else(|| {
+        "WEISSMAN_READ_ONLY_DATABASE_URL must include an explicit username before @".to_string()
+    })?;
+    if user != READ_ONLY_ROLE {
+        return Err(format!(
+            "WEISSMAN_READ_ONLY_DATABASE_URL user must be {READ_ONLY_ROLE}, got '{user}'"
+        ));
+    }
+    Ok(())
+}
+
+/// Lazy pool for Ask Weissman. Every connection is `weissman_ro` with
+/// `statement_timeout = 15000`, lock/idle timeouts, and `default_transaction_read_only = on`.
+///
+/// Lazy so server boot does not fail when the role is briefly unreachable; `/api/ask` then
+/// errors on first acquire instead of taking down the API.
+pub fn connect_read_only_lazy(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    validate_read_only_database_url(database_url)
+        .map_err(|msg| sqlx::Error::Configuration(msg.into()))?;
+    let max = env_u32("WEISSMAN_RO_POOL_MAX", 5).clamp(1, 16);
+    PgPoolOptions::new()
+        .max_connections(max)
+        .acquire_timeout(Duration::from_secs(5))
+        .after_connect(|conn, _| {
+            Box::pin(async move {
+                let role: String = sqlx::query_scalar("SELECT current_user")
+                    .fetch_one(&mut *conn)
+                    .await?;
+                if role != READ_ONLY_ROLE {
+                    return Err(sqlx::Error::Configuration(
+                        format!("Ask Weissman pool must connect as {READ_ONLY_ROLE}, got '{role}'")
+                            .into(),
+                    ));
+                }
+                // Integer milliseconds — 15000 — matching the hermetic Ask Weissman contract.
+                sqlx::query(&format!(
+                    "SET statement_timeout = {READ_ONLY_STATEMENT_TIMEOUT_MS}"
+                ))
+                .execute(&mut *conn)
+                .await?;
+                sqlx::query("SET lock_timeout = '5s'")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET idle_in_transaction_session_timeout = '30s'")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET default_transaction_read_only = on")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("SET work_mem = '32MB'")
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_lazy(database_url)
+}
+
 /// Set the RLS GUC **and** the lock-wait bound for this transaction only (`true` =
 /// transaction-local, reverted automatically at commit/rollback — it cannot leak onto a pooled
 /// connection).
@@ -701,7 +770,8 @@ pub async fn ensure_master_bootstrap_user(auth_pool: &PgPool) -> Result<(), sqlx
 mod url_and_path_helper_tests {
     use super::{
         acquire_retry_backoff, auth_database_url_from_env, database_url_from_env, migrations_dir,
-        resolve_auth_database_url, worker_pool_floor, worker_pool_warm_min,
+        resolve_auth_database_url, validate_read_only_database_url, worker_pool_floor,
+        worker_pool_warm_min, READ_ONLY_MAX_ROWS, READ_ONLY_ROLE, READ_ONLY_STATEMENT_TIMEOUT_MS,
     };
     use std::sync::{Mutex, OnceLock};
 
@@ -754,6 +824,22 @@ mod url_and_path_helper_tests {
         assert_eq!(worker_pool_warm_min(6), 6);
         assert_eq!(worker_pool_warm_min(64), 8);
         std::env::remove_var("WEISSMAN_WORKER_HEAVY_CONCURRENCY");
+    }
+
+    #[test]
+    fn read_only_url_must_be_weissman_ro() {
+        assert!(validate_read_only_database_url(
+            "postgres://weissman_ro:secret@localhost/weissman"
+        )
+        .is_ok());
+        let app =
+            validate_read_only_database_url("postgres://weissman_app:secret@localhost/weissman")
+                .unwrap_err();
+        assert!(app.contains(READ_ONLY_ROLE), "{app}");
+        assert!(validate_read_only_database_url("postgres://localhost/weissman").is_err());
+        assert_eq!(READ_ONLY_STATEMENT_TIMEOUT_MS, 15_000);
+        assert_eq!(READ_ONLY_MAX_ROWS, 200);
+        assert_eq!(READ_ONLY_ROLE, "weissman_ro");
     }
 
     #[test]
