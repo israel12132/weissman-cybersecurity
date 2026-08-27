@@ -349,9 +349,14 @@ export default function AttackPaths() {
                 {whatIfBusy ? '…' : t(`${NS}.what_if_run`)}
               </Button>
               {whatIfSnapshot && (
-                <button type="button" className="text-[11px] font-mono text-[var(--text-muted)] underline" onClick={() => setWhatIfSnapshot(null)}>
+                <Button
+                  variant="unstyled"
+                  type="button"
+                  className="text-[11px] font-mono text-[var(--text-muted)] underline"
+                  onClick={() => setWhatIfSnapshot(null)}
+                >
                   {t(`${NS}.what_if_clear`)}
-                </button>
+                </Button>
               )}
             </div>
 

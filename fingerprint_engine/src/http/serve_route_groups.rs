@@ -42,10 +42,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/supreme-brain/:client_id",
             get(api_supreme_brain_for_client),
         )
-        .route(
-            "/api/pentest-memory/stats",
-            get(api_pentest_memory_stats),
-        )
+        .route("/api/pentest-memory/stats", get(api_pentest_memory_stats))
         .route(
             "/api/battlespace/topology/:client_id",
             get(api_battlespace_topology),

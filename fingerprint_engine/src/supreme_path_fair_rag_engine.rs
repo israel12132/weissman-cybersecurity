@@ -27,7 +27,10 @@ fn format_usd(n: i64) -> String {
     out.chars().rev().collect()
 }
 
-pub async fn run_supreme_path_fair_rag_result(target: &str, ctx: &EngineRunContext) -> EngineResult {
+pub async fn run_supreme_path_fair_rag_result(
+    target: &str,
+    ctx: &EngineRunContext,
+) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
@@ -68,7 +71,9 @@ pub async fn run_supreme_path_fair_rag_result(target: &str, ctx: &EngineRunConte
         } else {
             match attack_path::latest_snapshot(pool, tenant_id, client_id).await {
                 Ok(Some(s)) => Ok(s),
-                Ok(None) => attack_path::compute_and_store(pool, tenant_id, client_id, Some(top_k)).await,
+                Ok(None) => {
+                    attack_path::compute_and_store(pool, tenant_id, client_id, Some(top_k)).await
+                }
                 Err(e) => Err(e),
             }
         };
@@ -267,12 +272,13 @@ mod tests {
 
     #[tokio::test]
     async fn no_client_is_honest_info() {
-        let r = run_supreme_path_fair_rag_result("https://example.com", &EngineRunContext::default())
-            .await;
+        let r =
+            run_supreme_path_fair_rag_result("https://example.com", &EngineRunContext::default())
+                .await;
         assert!(r.success);
-        assert!(r.findings.iter().any(|f| f["title"]
-            .as_str()
-            .unwrap_or("")
-            .contains("client context")));
+        assert!(r
+            .findings
+            .iter()
+            .any(|f| f["title"].as_str().unwrap_or("").contains("client context")));
     }
 }
