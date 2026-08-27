@@ -99,7 +99,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     fingerprint_engine::db::ensure_admin_user(&pools.auth).await?;
     fingerprint_engine::db::ensure_master_bootstrap_user(&pools.auth).await?;
     // Must complete before we accept traffic: owner-only client create/delete
-    // requires is_superadmin (or CEO). Unscoped app-pool writes are a no-op under
+    // requires is_superadmin (or CEO). Promotes WEISSMAN_ADMIN_EMAIL and
+    // WEISSMAN_MASTER_BOOTSTRAP_EMAIL. Unscoped app-pool writes are a no-op under
     // FORCE RLS, so this uses auth lookup + a tenant-scoped app transaction.
     fingerprint_engine::auth_bootstrap::sync_admin_credentials(&pools.auth, &pools.app).await;
     let intel_pool = match weissman_db::connect_intel_from_env().await {

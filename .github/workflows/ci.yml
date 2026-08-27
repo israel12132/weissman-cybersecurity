@@ -780,6 +780,9 @@ jobs:
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
+          # Smoke / E2E log in as this master-bootstrap identity. Client create is
+          # owner-only; auth_bootstrap promotes both WEISSMAN_ADMIN_EMAIL and
+          # WEISSMAN_MASTER_BOOTSTRAP_EMAIL to is_superadmin before serving.
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
           # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,

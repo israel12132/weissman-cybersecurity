@@ -1,4 +1,4 @@
-//! Sync `WEISSMAN_ADMIN_EMAIL` / `WEISSMAN_ADMIN_PASSWORD` with the auth DB on boot.
+//! Sync env operator credentials and promote them to platform owner.
 //!
 //! Prevents password hash drift when env credentials change or a user row was
 //! deactivated during testing. Idempotent: only re-hashes when the row has no
@@ -9,23 +9,85 @@
 //! [`weissman_db::begin_tenant_tx`] on the app pool — an unscoped `UPDATE` is a
 //! silent no-op, which previously left the env operator as `role=admin` without
 //! `is_superadmin` and blocked owner-only client create/delete.
+//!
+//! Identities promoted: `WEISSMAN_ADMIN_EMAIL` and, when set,
+//! `WEISSMAN_MASTER_BOOTSTRAP_EMAIL`. CI live smoke logs in as the master
+//! bootstrap user (`ci-smoke@localhost`); that account must be owner or
+//! `POST /api/clients` returns `403 owner_required`.
 
 use sqlx::{PgPool, Row};
 
-/// Sync admin credentials and promote the configured operator to platform owner.
+/// Env operators that must be platform owners (`is_superadmin`).
+///
+/// Client create/delete is owner-only. Command Center admin **and** the
+/// optional first-boot master bootstrap user are both env-provisioned
+/// operators, so both get the flag. Duplicate emails (same identity on both
+/// vars) are collapsed case-insensitively.
+pub(crate) fn env_operator_emails_from(
+    admin: Option<&str>,
+    master_bootstrap: Option<&str>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for raw in [admin, master_bootstrap] {
+        let Some(s) = raw else {
+            continue;
+        };
+        let email = s.trim();
+        if email.is_empty() {
+            continue;
+        }
+        if out
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(email))
+        {
+            continue;
+        }
+        out.push(email.to_string());
+    }
+    out
+}
+
+fn env_operator_emails() -> Vec<String> {
+    env_operator_emails_from(
+        std::env::var("WEISSMAN_ADMIN_EMAIL").ok().as_deref(),
+        std::env::var("WEISSMAN_MASTER_BOOTSTRAP_EMAIL")
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// Sync admin credentials and promote configured operators to platform owner.
 ///
 /// `auth_pool` is BYPASSRLS (`weissman_auth`). `app_pool` is RLS-subject
 /// (`weissman_app`) and is only written through a tenant-scoped transaction.
 pub async fn sync_admin_credentials(auth_pool: &PgPool, app_pool: &PgPool) {
-    let email = match std::env::var("WEISSMAN_ADMIN_EMAIL") {
-        Ok(s) if !s.trim().is_empty() => s.trim().to_string(),
-        _ => return,
-    };
-    let password = match std::env::var("WEISSMAN_ADMIN_PASSWORD") {
-        Ok(s) if !s.trim().is_empty() => s,
-        _ => return,
-    };
+    let emails = env_operator_emails();
+    if emails.is_empty() {
+        return;
+    }
+    let admin_email = std::env::var("WEISSMAN_ADMIN_EMAIL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let admin_password = std::env::var("WEISSMAN_ADMIN_PASSWORD")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    for email in emails {
+        let seed_password = admin_email
+            .as_ref()
+            .filter(|a| a.eq_ignore_ascii_case(&email))
+            .and_then(|_| admin_password.as_deref());
+        sync_one_operator(auth_pool, app_pool, &email, seed_password).await;
+    }
+}
 
+async fn sync_one_operator(
+    auth_pool: &PgPool,
+    app_pool: &PgPool,
+    email: &str,
+    seed_password: Option<&str>,
+) {
     let row = match sqlx::query(
         r#"SELECT u.id,
                   u.tenant_id,
@@ -38,7 +100,7 @@ pub async fn sync_admin_credentials(auth_pool: &PgPool, app_pool: &PgPool) {
              AND t.slug = 'default'
            LIMIT 1"#,
     )
-    .bind(&email)
+    .bind(email)
     .fetch_optional(auth_pool)
     .await
     {
@@ -95,7 +157,7 @@ pub async fn sync_admin_credentials(auth_pool: &PgPool, app_pool: &PgPool) {
         }
     };
 
-    // Client create/delete is owner-only (CEO / superadmin). The env operator is
+    // Client create/delete is owner-only (CEO / superadmin). Env operators are
     // the platform owner; promote without touching a password they chose later.
     if !already_owner {
         if let Err(e) = sqlx::query(
@@ -169,8 +231,21 @@ pub async fn sync_admin_credentials(auth_pool: &PgPool, app_pool: &PgPool) {
         return;
     }
 
-    // First boot: no credential yet — seed it from WEISSMAN_ADMIN_PASSWORD.
-    let new_hash = match bcrypt::hash(&password, 12) {
+    // First boot: no credential yet — seed it from WEISSMAN_ADMIN_PASSWORD for
+    // the admin email only. Master bootstrap already hashed at insert time.
+    let Some(password) = seed_password else {
+        if let Err(e) = tx.commit().await {
+            tracing::warn!(
+                target: "auth_bootstrap",
+                user_id,
+                error = %e,
+                "admin credential sync commit failed"
+            );
+        }
+        return;
+    };
+
+    let new_hash = match bcrypt::hash(password, 12) {
         Ok(h) => h,
         Err(e) => {
             tracing::error!(target: "auth_bootstrap", error = %e, "bcrypt hash failed");
@@ -219,4 +294,53 @@ pub async fn sync_admin_credentials(auth_pool: &PgPool, app_pool: &PgPool) {
         email = %email,
         "Admin credential bootstrapped from WEISSMAN_ADMIN_* env (first boot)"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::env_operator_emails_from;
+
+    #[test]
+    fn env_operators_empty_when_neither_identity_is_set() {
+        assert!(env_operator_emails_from(None, None).is_empty());
+        assert!(env_operator_emails_from(Some("  "), Some("")).is_empty());
+    }
+
+    #[test]
+    fn env_operators_include_admin_and_master_bootstrap() {
+        assert_eq!(
+            env_operator_emails_from(Some("admin@localhost"), None),
+            vec!["admin@localhost".to_string()]
+        );
+        assert_eq!(
+            env_operator_emails_from(None, Some("ci-smoke@localhost")),
+            vec!["ci-smoke@localhost".to_string()]
+        );
+        assert_eq!(
+            env_operator_emails_from(Some("admin@localhost"), Some("ci-smoke@localhost")),
+            vec![
+                "admin@localhost".to_string(),
+                "ci-smoke@localhost".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn env_operators_collapse_duplicate_emails_case_insensitively() {
+        assert_eq!(
+            env_operator_emails_from(Some("Admin@LocalHost"), Some("admin@localhost")),
+            vec!["Admin@LocalHost".to_string()]
+        );
+    }
+
+    #[test]
+    fn env_operators_trim_whitespace() {
+        assert_eq!(
+            env_operator_emails_from(Some("  admin@localhost \n"), Some(" ci-smoke@localhost ")),
+            vec![
+                "admin@localhost".to_string(),
+                "ci-smoke@localhost".to_string()
+            ]
+        );
+    }
 }

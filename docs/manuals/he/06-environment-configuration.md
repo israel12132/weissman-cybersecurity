@@ -68,7 +68,7 @@ WEISSMAN_ADMIN_EMAIL=admin@company.com
 WEISSMAN_ADMIN_PASSWORD=<החלף-אחרי-login>
 ```
 
-Bootstrap חד-פעמי: `WEISSMAN_MASTER_BOOTSTRAP_EMAIL`, `WEISSMAN_MASTER_BOOTSTRAP_PASSWORD`.
+Bootstrap חד-פעמי: `WEISSMAN_MASTER_BOOTSTRAP_EMAIL`, `WEISSMAN_MASTER_BOOTSTRAP_PASSWORD`. באתחול המערכת החשבון מקודם ל-platform owner (`is_superadmin`), כמו `WEISSMAN_ADMIN_EMAIL`, כדי שיוכל ליצור ולמחוק לקוחות.
 
 ### 4. URL ציבורי
 
