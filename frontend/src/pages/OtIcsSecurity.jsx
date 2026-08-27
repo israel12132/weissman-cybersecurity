@@ -17,6 +17,7 @@ import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
 import { jobIsRoeBlocked, extractRoeDetails } from '../lib/roeBlocked'
+import { isCriticalInfraEngine } from '../lib/criticalInfraEngines'
 import RoeBlockedState from '../components/engine/RoeBlockedState'
 import Button from '../components/ui/Button'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
@@ -24,7 +25,7 @@ import ScopedClientControl from '../components/clients/ScopedClientControl'
 
 const FINDINGS_ACCENT = '#f97316';
 
-const OT_ENGINES = [
+export const OT_ENGINES = [
   {
     id: 'scada_ics',
     labelKey: 'pages.otIcsSecurity.engine_scada',
@@ -44,6 +45,26 @@ const OT_ENGINES = [
     id: 'opcua_attack',
     labelKey: 'pages.otIcsSecurity.engine_opcua',
     descKey: 'pages.otIcsSecurity.engine_opcua_desc',
+  },
+  {
+    id: 'building_automation_attack',
+    labelKey: 'pages.otIcsSecurity.engine_building',
+    descKey: 'pages.otIcsSecurity.engine_building_desc',
+  },
+  {
+    id: 'robotics_ros2_attack',
+    labelKey: 'pages.otIcsSecurity.engine_robotics',
+    descKey: 'pages.otIcsSecurity.engine_robotics_desc',
+  },
+  {
+    id: 'smart_grid_dlms_attack',
+    labelKey: 'pages.otIcsSecurity.engine_smart_grid',
+    descKey: 'pages.otIcsSecurity.engine_smart_grid_desc',
+  },
+  {
+    id: 'maritime_ais_attack',
+    labelKey: 'pages.otIcsSecurity.engine_maritime',
+    descKey: 'pages.otIcsSecurity.engine_maritime_desc',
   },
 ];
 
@@ -172,6 +193,9 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
         </Button>
       </div>
       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{t(engine.descKey)}</p>
+      {isCriticalInfraEngine(engine.id) && status === 'idle' && (
+        <p className="text-[10px] text-amber-200/80 leading-relaxed">{t('pages.otIcsSecurity.roe_gated_hint')}</p>
+      )}
       {lastRun && (
         <p className="text-[10px] font-mono text-[var(--text-disabled)]">
           {t('pages.otIcsSecurity.last_scan', { time: lastRun })}

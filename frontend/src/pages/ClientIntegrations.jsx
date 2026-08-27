@@ -14,6 +14,8 @@ import {
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
 import { apiFetch } from '../utils/apiFetch'
+import { confirmDialog } from '../utils/confirmDialog'
+import { destructiveHeaders } from '../utils/destructiveConfirm'
 import ClientReadinessBanner from '../components/clients/ClientReadinessBanner'
 import { useEngineRequirements, computeLocalReadiness } from '../hooks/useEngineRequirements'
 import Button from '../components/ui/Button'
@@ -58,6 +60,7 @@ export default function ClientIntegrations() {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [awsExtIdMask, setAwsExtIdMask] = useState('')
+  const [otEnabledOnLoad, setOtEnabledOnLoad] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState({
     aws_cross_account_role_arn: '',
@@ -110,6 +113,7 @@ export default function ClientIntegrations() {
         llm_endpoints: llm,
         engagement_modules: Array.isArray(d.engagement_modules) ? d.engagement_modules : [],
       })
+      setOtEnabledOnLoad(!!d.industrial_ot_enabled)
     } catch (e) {
       setError(e.message || 'Failed to load')
     } finally {
@@ -176,9 +180,11 @@ export default function ClientIntegrations() {
       if (extId && extId !== awsExtIdMask && !extId.startsWith('•')) {
         body.aws_external_id = extId
       }
+      const enablingOt = form.industrial_ot_enabled === true && !otEnabledOnLoad
       await apiFetch(`/api/clients/${id}/integrations`, {
         method: 'PATCH',
         body,
+        headers: enablingOt ? destructiveHeaders() : {},
       })
       setSaved(true)
       await load()
@@ -300,7 +306,19 @@ export default function ClientIntegrations() {
               </div>
               <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-3 cursor-pointer">
                 <input type="checkbox" checked={form.industrial_ot_enabled}
-                  onChange={(e) => patch({ industrial_ot_enabled: e.target.checked })} />
+                  onChange={async (e) => {
+                    const next = e.target.checked
+                    if (next) {
+                      const ok = await confirmDialog({
+                        title: t('pages.clientIntegrations.ot_confirm_title'),
+                        message: t('pages.clientIntegrations.ot_confirm_body'),
+                        confirmLabel: t('pages.clientIntegrations.ot_confirm_action'),
+                        variant: 'warning',
+                      })
+                      if (!ok) return
+                    }
+                    patch({ industrial_ot_enabled: next })
+                  }} />
                 {label(catalog?.requirements?.industrial_ot)}
               </label>
               <Field label={label(catalog?.requirements?.scope_ips)}>

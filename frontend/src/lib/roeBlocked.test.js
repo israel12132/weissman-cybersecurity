@@ -39,4 +39,25 @@ describe('roeBlocked helpers', () => {
     }
     expect(job.result.findings).toEqual([])
   })
+
+  it('maps a completed job with nested result to roe_blocked, not completed', () => {
+    const job = {
+      status: 'completed',
+      result: {
+        status: 'roe_blocked',
+        roe_blocked: true,
+        findings: [],
+        roe: {
+          control: 'industrial_ot_enabled',
+          client_id: 42,
+          blocked_at: '2026-08-27T15:00:00Z',
+          never_auto_enabled: true,
+        },
+      },
+    }
+    expect(displayJobStatus(job)).toBe('roe_blocked')
+    expect(extractRoeDetails(job).client_id).toBe(42)
+    expect(extractRoeDetails(job).blocked_at).toBe('2026-08-27T15:00:00Z')
+    expect(extractRoeDetails(job).never_auto_enabled).toBe(true)
+  })
 })

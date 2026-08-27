@@ -175,7 +175,20 @@ async fn api_async_job_status(
                 )
                     .into_response();
             }
-            return (StatusCode::OK, Json(json!(status))).into_response();
+            let (roe_blocked, roe) =
+                crate::engine_result::compact_job_roe(status.result.as_ref());
+            return match serde_json::to_value(&status) {
+                Ok(mut body) => {
+                    if let Some(obj) = body.as_object_mut() {
+                        obj.insert("roe_blocked".into(), json!(roe_blocked));
+                        if let Some(roe) = roe {
+                            obj.insert("roe".into(), roe);
+                        }
+                    }
+                    (StatusCode::OK, Json(body)).into_response()
+                }
+                Err(_) => (StatusCode::OK, Json(json!(status))).into_response(),
+            };
         }
         Err(e) => {
             tracing::error!(target: "async_jobs", error = %e, "get_job_for_tenant failed");

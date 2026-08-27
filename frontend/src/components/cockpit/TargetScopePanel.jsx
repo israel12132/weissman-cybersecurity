@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClient } from '../../context/ClientContext'
 import { apiFetch } from '../../utils/apiFetch'
+import { confirmDialog } from '../../utils/confirmDialog'
 import Button from '../ui/Button'
 
 const NS = 'components.cockpitWidgets.targetScopePanel'
@@ -99,9 +100,17 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
               disabled={configLoading}
               role="switch"
               aria-checked={!!clientConfig.industrial_ot_enabled}
-              onClick={() => {
+              onClick={async () => {
                 const next = !clientConfig.industrial_ot_enabled
-                if (next && !window.confirm(t(`${NS}.otEnableConfirm`))) return
+                if (next) {
+                  const ok = await confirmDialog({
+                    title: t(`${NS}.otTitle`),
+                    message: t(`${NS}.otEnableConfirm`),
+                    confirmLabel: t(`${NS}.otEnableAction`),
+                    variant: 'warning',
+                  })
+                  if (!ok) return
+                }
                 patchConfig(selectedClientId, { industrial_ot_enabled: next })
               }}
               className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${clientConfig.industrial_ot_enabled ? 'bg-amber-500/80' : 'bg-[var(--border-strong)]'} ${configLoading ? 'opacity-50' : ''}`}

@@ -26,6 +26,8 @@ import { useClient } from '../context/ClientContext'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import DataTable from '../components/ui/DataTable'
 import { createColumnHelper } from '@tanstack/react-table'
+import RoeBlockedState, { RoeBlockedBadge } from '../components/engine/RoeBlockedState'
+import { jobIsRoeBlocked, extractRoeDetails } from '../lib/roeBlocked'
 import Button from '../components/ui/Button'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 
@@ -246,10 +248,11 @@ function StatCard({ label, value, sub, accent = '#22d3ee', icon }) {
 }
 
 function mapServerHistoryJob(job) {
+  const blocked = jobIsRoeBlocked(job)
   return {
     target: job.target || '',
-    status: job.status || 'unknown',
-    findingsCount: job.findings_count ?? job.findingsCount ?? 0,
+    status: blocked ? 'roe_blocked' : (job.status || 'unknown'),
+    findingsCount: blocked ? 0 : (job.findings_count ?? job.findingsCount ?? 0),
     jobId: job.job_id ?? job.jobId ?? '',
     ts: job.created_at ?? job.ts ?? new Date().toISOString(),
     source: job.source || 'server',
@@ -295,7 +298,11 @@ function RunHistoryPanel({ engineId, emptyLabel }) {
       )}
       {history.map((r, i) => (
         <div key={i} className="flex items-center gap-3 text-[11px] font-mono text-[var(--text-tertiary)] flex-wrap">
-          <span className={r.status === 'completed' ? 'text-[#4ade80]' : 'text-red-400'}>{r.status}</span>
+          <span className={
+            r.status === 'roe_blocked' ? 'text-amber-300'
+              : r.status === 'completed' ? 'text-[#4ade80]'
+                : 'text-red-400'
+          }>{r.status}</span>
           <span className="text-[var(--text-disabled)]">{new Date(r.ts).toLocaleString()}</span>
           {r.target && <span className="text-cyan-400/60 truncate max-w-[200px]">{r.target}</span>}
           {r.findingsCount > 0 && <span className="text-amber-300">{r.findingsCount} finding{r.findingsCount !== 1 ? 's' : ''}</span>}
@@ -411,6 +418,7 @@ export default function EngineDetail() {
   const { findings, addFinding, reset: resetFindings } = useFindings()
   const [jobId, setJobId]                 = useState(null)
   const [lastRunStatus, setLastRunStatus] = useState(null)
+  const [roeBlock, setRoeBlock] = useState(null)
   const esRef = useRef(null)
   const { selectedClientId: cockpitClientId } = useClient()
   const [clients, setClients]             = useState([])
@@ -498,6 +506,7 @@ export default function EngineDetail() {
     resetFindings()
     setJobId(null)
     setLastRunStatus(null)
+    setRoeBlock(null)
 
     const body = buildScanPayload(engineId, {
       clientId: selectedClientId,
@@ -534,11 +543,30 @@ export default function EngineDetail() {
             if (data.finding) addFinding(data.finding)
             if (data.findings && Array.isArray(data.findings)) data.findings.forEach(addFinding)
             if (data.status === 'completed' || data.status === 'failed') {
-              const status = data.status
-              setLastRunStatus(status)
-              setRunning(false)
+              const queueStatus = data.status
               es.close()
-              setLines((prev) => [...prev, `> [${status.toUpperCase()}] Job ${jid} finished.`])
+              setRunning(false)
+              void (async () => {
+                let job = null
+                for (let attempt = 0; attempt < 10; attempt++) {
+                  try {
+                    job = await apiFetch(`/api/jobs/${encodeURIComponent(jid)}`)
+                    if (jobIsRoeBlocked(job) || job?.result) break
+                  } catch {
+                    /* result_json may not be visible yet */
+                  }
+                  await new Promise((r) => setTimeout(r, 300))
+                }
+                if (job && jobIsRoeBlocked(job)) {
+                  setLastRunStatus('roe_blocked')
+                  setRoeBlock(extractRoeDetails(job))
+                  resetFindings()
+                  setLines((prev) => [...prev, '> [ROE BLOCKED] Probe did not run. Not an empty scan.'])
+                  return
+                }
+                setLastRunStatus(queueStatus)
+                setLines((prev) => [...prev, `> [${queueStatus.toUpperCase()}] Job ${jid} finished.`])
+              })()
             }
           } catch { /* best-effort; non-fatal */ }
         }
@@ -730,12 +758,16 @@ export default function EngineDetail() {
                   </span>
                 )}
                 {lastRunStatus && !running && (
-                  <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
-                    lastRunStatus === 'completed' ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                    : lastRunStatus === 'stopped'  ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                    : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
-                    {lastRunStatus.toUpperCase()}
-                  </span>
+                  lastRunStatus === 'roe_blocked'
+                    ? <RoeBlockedBadge />
+                    : (
+                      <span className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
+                        lastRunStatus === 'completed' ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                        : lastRunStatus === 'stopped'  ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                        : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                        {lastRunStatus.toUpperCase()}
+                      </span>
+                    )
                 )}
               </div>
               <p className="text-sm md:text-base text-[var(--text-tertiary)] leading-relaxed max-w-3xl">{engine.description}</p>
@@ -885,13 +917,17 @@ export default function EngineDetail() {
               </Button>
             )}
             {lines.length > 0 && !running && (
-              <Button variant="unstyled" type="button" onClick={() => { setLines([]); resetFindings(); setLastRunStatus(null) }}
+              <Button variant="unstyled" type="button" onClick={() => { setLines([]); resetFindings(); setLastRunStatus(null); setRoeBlock(null) }}
                 className="px-3 py-2 rounded-xl font-mono text-xs border border-[var(--border-default)] text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-all">
                 {t('engines.detail_clear')}
               </Button>
             )}
           </div>
         </motion.section>
+
+        {lastRunStatus === 'roe_blocked' && (
+          <RoeBlockedState roe={roeBlock} />
+        )}
 
         {/* ── Output / Findings / History tabs ─────────────────────────── */}
         <motion.section
@@ -923,7 +959,9 @@ export default function EngineDetail() {
           <div className="p-5">
             {activeTab === 'output'   && <Terminal lines={lines} />}
             {activeTab === 'findings' && (
-              findings.length > 0
+              lastRunStatus === 'roe_blocked'
+                ? <RoeBlockedState roe={roeBlock} />
+                : findings.length > 0
                 ? (
                   <WeissmanFindingsPanel
                     findings={findings}
