@@ -158,7 +158,8 @@ pub async fn ingest_sample(
         });
     }
 
-    let _agent_serial = agent_ingest_gate(&p.agent_id).lock().await;
+    let agent_gate = agent_ingest_gate(&p.agent_id);
+    let _agent_serial = agent_gate.lock().await;
 
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
