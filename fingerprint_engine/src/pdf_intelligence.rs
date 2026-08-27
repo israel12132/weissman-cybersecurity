@@ -4,6 +4,7 @@
 //! Live-only. An empty corpus is a visible failure, never a fake PDF.
 
 use crate::compliance_engine::{self, FrameworkPosture};
+use crate::financial_risk::{self, FairHeadline};
 use crate::pdf_report::{self, IntelligencePackSection};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -31,6 +32,8 @@ pub struct PdfIntelligenceSnapshot {
     pub findings: FindingsRollup,
     pub frameworks: Vec<FrameworkPosture>,
     pub empty_reason: Option<String>,
+    /// FAIR USD blast-radius — the only executive dollar figure. Missing inputs fail visible.
+    pub fair: FairHeadline,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -264,6 +267,11 @@ pub async fn load_snapshot(
     let frameworks = compliance_engine::compute_posture(&mappings, &cloud_rules, &vuln_tuples);
     let _ = tx.commit().await;
 
+    let fair = match client_id {
+        Some(cid) => financial_risk::headline_for_client(pool, tenant_id, cid).await,
+        None => financial_risk::headline_for_tenant(pool, tenant_id).await,
+    };
+
     let empty = findings.total == 0 && corpus.iter().all(|c| c.kind != "report_run");
     Ok(PdfIntelligenceSnapshot {
         ok: true,
@@ -282,6 +290,7 @@ pub async fn load_snapshot(
         } else {
             None
         },
+        fair,
     })
 }
 
@@ -311,6 +320,11 @@ pub fn compose_bytes(snap: &PdfIntelligenceSnapshot, req: &ComposeRequest) -> Re
             id: "executive".into(),
             title: "Executive briefing".into(),
             lines: vec![
+                snap.fair.display_line(),
+                format!(
+                    "Scoring method: {} — Micro-Severity is SOC ranking only, never residual financial risk.",
+                    snap.fair.method
+                ),
                 format!(
                     "Live findings: {} (C {} / H {} / M {} / L {})",
                     snap.findings.total,
@@ -459,6 +473,7 @@ mod tests {
             findings: FindingsRollup::default(),
             frameworks: vec![],
             empty_reason: Some("No live report runs".into()),
+            fair: FairHeadline::cannot_price("Cannot price — test empty corpus"),
         };
         let err = compose_bytes(&snap, &ComposeRequest { client_id: Some(1), title: None, sections: vec![] })
             .unwrap_err();
@@ -491,6 +506,24 @@ mod tests {
             },
             frameworks: vec![],
             empty_reason: None,
+            fair: FairHeadline {
+                method: financial_risk::METHOD_FAIR.into(),
+                priced: true,
+                cannot_price_reason: None,
+                ale_annualised_usd: Some(180_000),
+                sle_worst_usd: Some(98_000),
+                total_asset_value_usd: Some(100_000),
+                crown_jewel_value_usd: Some(0),
+                client_id: Some(1),
+                computed_at_unix: Some(1),
+                expression: "FAIR SLE/ALE".into(),
+                inputs: financial_risk::FairInputsUsed {
+                    asset_value: true,
+                    epss: true,
+                    kev: true,
+                    risk_loss_discount: Some(0.3),
+                },
+            },
         };
         let bytes = compose_bytes(
             &snap,
@@ -506,6 +539,67 @@ mod tests {
         )
         .expect("compose");
         assert!(bytes.starts_with(b"%PDF-1.4"));
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text.contains("FAIR USD blast-radius") || text.contains("ALE"),
+            "executive PDF must cite FAIR blast-radius, got: {text}"
+        );
+        assert!(
+            !text.contains("severity_weight"),
+            "executive PDF must not use linear product as residual risk"
+        );
+    }
+
+    #[test]
+    fn compose_fail_visible_cannot_price_never_fakes_usd() {
+        let snap = PdfIntelligenceSnapshot {
+            ok: true,
+            live: true,
+            client_id: Some(1),
+            client_name: Some("Acme".into()),
+            org_name: "Weissman".into(),
+            corpus: vec![PdfCorpusItem {
+                id: "run:1".into(),
+                kind: "report_run".into(),
+                title: "Run 1".into(),
+                client_id: Some(1),
+                created_at: None,
+                pdf_path: None,
+                finding_count: 1,
+            }],
+            findings: FindingsRollup {
+                total: 1,
+                critical: 1,
+                high: 0,
+                medium: 0,
+                low: 0,
+            },
+            frameworks: vec![],
+            empty_reason: None,
+            fair: FairHeadline::cannot_price("Cannot price — FAIR inputs missing"),
+        };
+        let bytes = compose_bytes(
+            &snap,
+            &ComposeRequest {
+                client_id: Some(1),
+                title: Some("Board pack".into()),
+                sections: vec![ComposeSectionSpec {
+                    id: "executive".into(),
+                    enabled: true,
+                }],
+            },
+        )
+        .expect("compose");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("Cannot price"));
+        assert!(!text.contains("severity_weight × asset_criticality × exposure"));
+        let contract = financial_risk::executive_scoring_contract(&snap.fair, Some(25.0));
+        assert_eq!(contract["method"], financial_risk::METHOD_FAIR);
+        assert!(contract["fair"]["ale_annualised_usd"].is_null());
+        assert_eq!(
+            contract["micro_severity"]["method"],
+            crate::micro_severity::METHOD
+        );
     }
 
     #[test]
@@ -539,6 +633,7 @@ mod tests {
                 violated_controls: 6,
             }],
             empty_reason: None,
+            fair: FairHeadline::cannot_price("Cannot price — NIST pack fixture"),
         };
         let bytes = compose_bytes(
             &snap,

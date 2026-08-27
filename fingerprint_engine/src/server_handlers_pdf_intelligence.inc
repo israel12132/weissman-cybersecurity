@@ -25,6 +25,9 @@ async fn api_pdf_intelligence(
                     "findings": snap.findings,
                     "frameworks": snap.frameworks,
                     "empty_reason": snap.empty_reason,
+                    "fair": snap.fair,
+                    "headline_risk": snap.fair,
+                    "scoring": crate::financial_risk::executive_scoring_contract(&snap.fair, None),
                     "section_catalog": catalog,
                 })),
             )

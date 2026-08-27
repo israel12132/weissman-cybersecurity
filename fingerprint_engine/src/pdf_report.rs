@@ -918,6 +918,7 @@ pub fn build_executive_board_pdf(
     soc2_pct: u8,
     iso_pct: u8,
     gdpr_pct: u8,
+    fair_line: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     let date = israel_now();
     let mut b = PdfBuilder::new();
@@ -949,6 +950,16 @@ pub fn build_executive_board_pdf(
         &format!(
             "Agentless cloud misconfigurations (latest scan): {}",
             cloud_finding_count
+        ),
+    );
+    b.set_fill_rgb(0.95, 0.75, 0.2);
+    b.text(
+        11,
+        &truncate_ascii(
+            fair_line.unwrap_or(
+                "Cannot price — FAIR blast-radius not supplied. Weissman will not invent a dollar figure.",
+            ),
+            110,
         ),
     );
 

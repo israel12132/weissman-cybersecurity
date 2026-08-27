@@ -22,6 +22,8 @@ pub struct ExecutiveBoardParams {
     pub soc2_pct: u8,
     pub iso_pct: u8,
     pub gdpr_pct: u8,
+    /// FAIR USD blast-radius line (or cannot-price). Never a linear-product dollar.
+    pub fair_line: Option<String>,
 }
 
 pub fn render_executive_board_pdf(p: &ExecutiveBoardParams) -> Result<Vec<u8>, String> {
@@ -36,6 +38,7 @@ pub fn render_executive_board_pdf(p: &ExecutiveBoardParams) -> Result<Vec<u8>, S
         p.soc2_pct,
         p.iso_pct,
         p.gdpr_pct,
+        p.fair_line.as_deref(),
     )
 }
 
@@ -56,11 +59,15 @@ mod tests {
             soc2_pct: 88,
             iso_pct: 91,
             gdpr_pct: 84,
+            fair_line: Some("FAIR USD blast-radius  ALE $180,000  ·  worst-case SLE $98,000".into()),
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
         assert!(bytes.starts_with(b"%PDF-1.4"), "must be a PDF-1.4 document");
         assert!(bytes.ends_with(b"%%EOF\n"), "must terminate with %%EOF");
         assert!(bytes.len() > 500, "expected non-trivial PDF body");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("FAIR USD blast-radius") || text.contains("ALE"));
+        assert!(!text.contains("severity_weight"));
     }
 
     #[test]
@@ -76,6 +83,7 @@ mod tests {
             soc2_pct: 100,
             iso_pct: 100,
             gdpr_pct: 100,
+            fair_line: Some("Cannot price — FAIR inputs missing".into()),
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
         assert!(bytes.starts_with(b"%PDF-1.4"));

@@ -5,11 +5,14 @@
 //! events for one bound customer. Empty corpus is a visible failure — never a
 //! fabricated APT narrative.
 //!
-//! Business-risk pricing is a published formula, not a magic number:
-//! `severity_weight × asset_criticality × exposure`.
+//! **Executive dollars** come only from [`crate::financial_risk`] FAIR SLE/ALE
+//! blast-radius. The linear product `severity × criticality × exposure` is
+//! **Micro-Severity** — SOC analyst local ranking, never residual financial risk.
 
 use crate::attack_coverage;
 use crate::attack_exposure;
+use crate::financial_risk::{self, FairHeadline};
+use crate::micro_severity;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
@@ -21,15 +24,9 @@ pub const EMPTY_NO_CLIENT: &str = "Kill-chain composition requires a bound custo
 pub const EMPTY_NO_FINDINGS: &str = "No live findings for this customer. Run engines against the assigned domain, then return — Weissman will not fabricate a kill chain.";
 pub const EMPTY_ALL_CLOSED: &str = "All persisted findings are closed or false-positive — no live attack path remains. Weissman will not invent stages.";
 
-const SEV_CRITICAL: f64 = 5.0;
-const SEV_HIGH: f64 = 4.0;
-const SEV_MEDIUM: f64 = 3.0;
-const SEV_LOW: f64 = 2.0;
-const SEV_INFO: f64 = 1.0;
-const CRIT_CROWN: f64 = 2.5;
-const EXP_INTERNET: f64 = 2.0;
-const EXP_INTERNAL: f64 = 1.0;
-const USD_DIVISOR: f64 = 10.0;
+const CRIT_CROWN: f64 = micro_severity::CRIT_CROWN;
+const EXP_INTERNET: f64 = micro_severity::EXP_INTERNET;
+const EXP_INTERNAL: f64 = micro_severity::EXP_INTERNAL;
 const TOP_FIXES: usize = 3;
 const PROOF_SNIPPET_CHARS: usize = 280;
 
@@ -119,11 +116,15 @@ pub struct FormulaSpec {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Pricing {
+    /// FAIR USD blast-radius — the only CEO / board number.
+    pub fair: FairHeadline,
+    /// Micro-Severity spec (SOC local ranking). Not residual financial risk.
     pub formula: FormulaSpec,
     pub total_risk_points: f64,
     pub residual_if_top3_fixed: f64,
     pub residual_reduction_pct: f64,
     pub top3_fixes: Vec<TopFix>,
+    /// Copied from `fair.ale_annualised_usd` when priced — never from the linear product.
     pub total_priced_usd: Option<i64>,
     pub residual_priced_usd: Option<i64>,
 }
@@ -162,6 +163,8 @@ pub struct KillChainSnapshot {
     pub findings_considered: usize,
     pub empty_reason: Option<String>,
     pub honesty: Honesty,
+    /// Duplicate of `pricing.fair` so the UI can bind the CEO tile without walking formula.
+    pub headline_risk: FairHeadline,
 }
 
 #[derive(Debug, Clone)]
@@ -220,11 +223,11 @@ pub struct PrivEscEvent {
 #[must_use]
 pub fn formula_spec() -> FormulaSpec {
     let mut severity_weights = BTreeMap::new();
-    severity_weights.insert("critical".into(), SEV_CRITICAL);
-    severity_weights.insert("high".into(), SEV_HIGH);
-    severity_weights.insert("medium".into(), SEV_MEDIUM);
-    severity_weights.insert("low".into(), SEV_LOW);
-    severity_weights.insert("info".into(), SEV_INFO);
+    severity_weights.insert("critical".into(), micro_severity::SEV_CRITICAL);
+    severity_weights.insert("high".into(), micro_severity::SEV_HIGH);
+    severity_weights.insert("medium".into(), micro_severity::SEV_MEDIUM);
+    severity_weights.insert("low".into(), micro_severity::SEV_LOW);
+    severity_weights.insert("info".into(), micro_severity::SEV_INFO);
 
     let mut criticality = BTreeMap::new();
     criticality.insert("crown_jewel".into(), format!("{CRIT_CROWN}"));
@@ -238,16 +241,14 @@ pub fn formula_spec() -> FormulaSpec {
     exposure.insert("internal".into(), EXP_INTERNAL);
 
     FormulaSpec {
-        name: "Weissman live business-risk points".into(),
-        expression: "severity_weight × asset_criticality × exposure".into(),
+        name: micro_severity::LABEL.into(),
+        expression: micro_severity::EXPRESSION.into(),
         severity_weights,
         criticality,
         exposure,
-        usd_overlay: format!(
-            "priced_usd = round(risk_points × (business_value_usd OR client.default_asset_value_usd) / {USD_DIVISOR}) — omitted when no dollar valuation exists"
-        ),
+        usd_overlay: micro_severity::NOT_RESIDUAL.into(),
         residual: format!(
-            "Recompute total after removing the top {TOP_FIXES} findings by risk_points (the highest-leverage live fixes)."
+            "SOC local ranking: recompute Micro-Severity after removing the top {TOP_FIXES} findings. Executive USD is FAIR blast-radius only — never this product."
         ),
     }
 }
@@ -272,13 +273,7 @@ fn norm_sev(raw: &str) -> &'static str {
 }
 
 fn severity_weight(sev: &str) -> f64 {
-    match sev {
-        "critical" => SEV_CRITICAL,
-        "high" => SEV_HIGH,
-        "medium" => SEV_MEDIUM,
-        "low" => SEV_LOW,
-        _ => SEV_INFO,
-    }
+    micro_severity::severity_weight(sev)
 }
 
 fn is_active_status(status: &str) -> bool {
@@ -772,6 +767,7 @@ fn empty_snapshot(
     assets_considered: usize,
     findings_considered: usize,
 ) -> KillChainSnapshot {
+    let fair = FairHeadline::cannot_price(financial_risk::CANNOT_PRICE_NO_SNAPSHOT);
     KillChainSnapshot {
         ok: true,
         live: true,
@@ -792,6 +788,7 @@ fn empty_snapshot(
             .collect(),
         edges: vec![],
         pricing: Pricing {
+            fair: fair.clone(),
             formula: formula_spec(),
             total_risk_points: 0.0,
             residual_if_top3_fixed: 0.0,
@@ -811,6 +808,30 @@ fn empty_snapshot(
             client_bound: client_id.is_some(),
             formula_published: true,
         },
+        headline_risk: fair,
+    }
+}
+
+impl KillChainSnapshot {
+    /// Attach the existing FAIR blast-radius as the only executive USD source.
+    /// Strips any leftover linear-product dollars.
+    pub fn apply_fair_headline(&mut self, fair: FairHeadline) {
+        self.pricing.total_priced_usd = if fair.priced {
+            fair.ale_annualised_usd
+        } else {
+            None
+        };
+        self.pricing.residual_priced_usd = None;
+        self.pricing.fair = fair.clone();
+        self.headline_risk = fair;
+        for st in &mut self.stages {
+            for f in &mut st.findings {
+                f.priced_usd = None;
+            }
+        }
+        for t in &mut self.pricing.top3_fixes {
+            t.priced_usd = None;
+        }
     }
 }
 
@@ -905,16 +926,8 @@ pub fn compose_chain(
         let (crit, crown) = criticality_for(asset);
         let sev = norm_sev(&f.severity);
         let sw = severity_weight(sev);
-        let risk = round2(sw * crit * exp_w);
-        let usd_base =
-            asset
-                .and_then(|a| a.business_value_usd)
-                .or(if default_asset_value_usd > 0 {
-                    Some(default_asset_value_usd)
-                } else {
-                    None
-                });
-        let priced = usd_base.map(|v| ((risk * (v as f64) / USD_DIVISOR).round()) as i64);
+        // Micro-Severity — SOC local ranking. Never convert this product to USD.
+        let risk = micro_severity::score(sw, crit, exp_w);
         let proof = proof_of(f);
         let cited = CitedFinding {
             id: f.id,
@@ -928,7 +941,7 @@ pub fn compose_chain(
             confidence: confidence_of(f, proof.as_deref()),
             classification_basis: basis.into(),
             risk_points: risk,
-            priced_usd: priced,
+            priced_usd: None,
             formula_inputs: FormulaInputs {
                 severity: sev.into(),
                 severity_weight: sw,
@@ -950,7 +963,7 @@ pub fn compose_chain(
         )));
         let sev = norm_sev(&ev.severity);
         let sw = severity_weight(sev);
-        let risk = round2(sw * 1.0 * EXP_INTERNAL);
+        let risk = micro_severity::score(sw, 1.0, EXP_INTERNAL);
         by_stage.entry("privilege").or_default().push(CitedFinding {
             id: ev.id,
             finding_id: format!("priv-esc:{}", ev.id),
@@ -971,11 +984,7 @@ pub fn compose_chain(
             confidence: 0.88,
             classification_basis: "priv_esc_event".into(),
             risk_points: risk,
-            priced_usd: if default_asset_value_usd > 0 {
-                Some(((risk * (default_asset_value_usd as f64) / USD_DIVISOR).round()) as i64)
-            } else {
-                None
-            },
+            priced_usd: None,
             formula_inputs: FormulaInputs {
                 severity: sev.into(),
                 severity_weight: sw,
@@ -1077,14 +1086,6 @@ pub fn compose_chain(
             .then(a.1.id.cmp(&b.1.id))
     });
     let total_points = round2(ranked.iter().map(|(_, f)| f.risk_points).sum::<f64>());
-    let total_usd: Option<i64> = {
-        let sum: i64 = ranked.iter().filter_map(|(_, f)| f.priced_usd).sum();
-        if ranked.iter().any(|(_, f)| f.priced_usd.is_some()) {
-            Some(sum)
-        } else {
-            None
-        }
-    };
     let top3: Vec<TopFix> = ranked
         .iter()
         .take(TOP_FIXES)
@@ -1094,7 +1095,7 @@ pub fn compose_chain(
             title: f.title.clone(),
             stage: stage.clone(),
             risk_points: f.risk_points,
-            priced_usd: f.priced_usd,
+            priced_usd: None,
         })
         .collect();
     let top3_pts: f64 = top3.iter().map(|t| t.risk_points).sum();
@@ -1104,10 +1105,9 @@ pub fn compose_chain(
     } else {
         0.0
     };
-    let residual_usd = total_usd.map(|t| {
-        let drop: i64 = top3.iter().filter_map(|x| x.priced_usd).sum();
-        (t - drop).max(0)
-    });
+
+    let fair = FairHeadline::cannot_price(financial_risk::CANNOT_PRICE_NO_SNAPSHOT);
+    let _ = default_asset_value_usd; // FAIR dollars are attached via apply_fair_headline, never this default.
 
     KillChainSnapshot {
         ok: true,
@@ -1118,13 +1118,14 @@ pub fn compose_chain(
         stages,
         edges,
         pricing: Pricing {
+            fair: fair.clone(),
             formula: formula_spec(),
             total_risk_points: total_points,
             residual_if_top3_fixed: residual,
             residual_reduction_pct: reduction,
             top3_fixes: top3,
-            total_priced_usd: total_usd,
-            residual_priced_usd: residual_usd,
+            total_priced_usd: None,
+            residual_priced_usd: None,
         },
         jobs: jobs_out,
         assets_considered,
@@ -1137,6 +1138,7 @@ pub fn compose_chain(
             client_bound: true,
             formula_published: true,
         },
+        headline_risk: fair,
     }
 }
 
@@ -1162,6 +1164,11 @@ pub fn snapshot_json(snap: &KillChainSnapshot) -> Value {
         "findings_considered": snap.findings_considered,
         "empty_reason": snap.empty_reason,
         "honesty": snap.honesty,
+        "headline_risk": snap.headline_risk,
+        "scoring": financial_risk::executive_scoring_contract(
+            &snap.headline_risk,
+            Some(snap.pricing.total_risk_points),
+        ),
         "stage_order": STAGES,
     })
 }
@@ -1375,7 +1382,7 @@ pub async fn load_snapshot(
         .collect();
 
     let _ = tx.commit().await;
-    Ok(compose_chain(
+    let mut snap = compose_chain(
         client_id,
         client_name,
         primary_domain,
@@ -1384,7 +1391,14 @@ pub async fn load_snapshot(
         assets,
         jobs,
         priv_esc,
-    ))
+    );
+    let fair = if let Some(cid) = client_id {
+        financial_risk::headline_for_client(pool, tenant_id, cid).await
+    } else {
+        FairHeadline::cannot_price(financial_risk::CANNOT_PRICE_NO_SCOPE)
+    };
+    snap.apply_fair_headline(fair);
+    Ok(snap)
 }
 
 #[cfg(test)]
@@ -1574,8 +1588,17 @@ mod tests {
         assert_eq!(sqli.formula_inputs.exposure_weight, EXP_INTERNET);
         assert_eq!(
             snap.pricing.formula.expression,
-            "severity_weight × asset_criticality × exposure"
+            micro_severity::EXPRESSION
         );
+        assert_eq!(snap.pricing.formula.name, micro_severity::LABEL);
+        assert!(
+            snap.pricing
+                .formula
+                .usd_overlay
+                .contains("Not residual financial risk")
+        );
+        assert!(!snap.headline_risk.priced);
+        assert!(snap.pricing.total_priced_usd.is_none());
         assert!(snap.pricing.total_risk_points > 0.0);
         assert!(snap.pricing.residual_if_top3_fixed < snap.pricing.total_risk_points);
         assert_eq!(snap.pricing.top3_fixes.len(), 3);
@@ -1657,6 +1680,72 @@ mod tests {
         let drop: f64 = snap.pricing.top3_fixes.iter().map(|t| t.risk_points).sum();
         assert!((snap.pricing.total_risk_points - round2(all)).abs() < 0.05);
         assert!((snap.pricing.residual_if_top3_fixed - round2((all - drop).max(0.0))).abs() < 0.05);
+    }
+
+    #[test]
+    fn ceo_headline_uses_fair_not_linear_product() {
+        let (findings, assets) = live_shaped_corpus(1);
+        let mut snap = compose_chain(
+            Some(1),
+            Some("Example".into()),
+            Some("example.com".into()),
+            10_000,
+            findings,
+            assets,
+            vec![],
+            vec![],
+        );
+        assert_eq!(snap.headline_risk.method, financial_risk::METHOD_FAIR);
+        assert!(
+            !snap.headline_risk.priced,
+            "composer must not invent USD from Micro-Severity"
+        );
+        assert!(snap.pricing.total_priced_usd.is_none());
+        for f in snap.stages.iter().flat_map(|s| s.findings.iter()) {
+            assert!(
+                f.priced_usd.is_none(),
+                "linear product must not emit priced_usd"
+            );
+        }
+        let fair = financial_risk::headline_from_risk(&financial_risk::ClientFinancialRisk {
+            client_id: 1,
+            total_asset_value_usd: 300_000,
+            crown_jewel_value_usd: 250_000,
+            sle_worst_usd: 245_000,
+            ale_annualised_usd: 88_200,
+            top_contributors: vec![],
+            default_asset_value_usd: 10_000,
+            risk_loss_discount: 0.30,
+            computed_at_unix: 1,
+        });
+        assert!(fair.priced);
+        snap.apply_fair_headline(fair.clone());
+        assert_eq!(snap.pricing.fair.method, financial_risk::METHOD_FAIR);
+        assert_eq!(snap.pricing.total_priced_usd, Some(88_200));
+        assert_eq!(snap.headline_risk.ale_annualised_usd, Some(88_200));
+        assert_ne!(
+            snap.pricing.total_risk_points as i64,
+            snap.pricing.total_priced_usd.unwrap(),
+            "CEO USD must not equal Micro-Severity product"
+        );
+        let contract = financial_risk::executive_scoring_contract(&snap.headline_risk, Some(snap.pricing.total_risk_points));
+        assert_eq!(contract["method"], financial_risk::METHOD_FAIR);
+        assert_eq!(
+            contract["micro_severity"]["method"],
+            crate::micro_severity::METHOD
+        );
+        let v = snapshot_json(&snap);
+        assert_eq!(v["scoring"]["method"], financial_risk::METHOD_FAIR);
+        assert_eq!(v["headline_risk"]["ale_annualised_usd"], 88_200);
+        assert_eq!(v["pricing"]["total_priced_usd"], 88_200);
+        assert_eq!(
+            v["scoring"]["micro_severity"]["not_residual_financial_risk"],
+            true
+        );
+        assert_ne!(
+            v["headline_risk"]["ale_annualised_usd"].as_i64(),
+            v["pricing"]["total_risk_points"].as_i64()
+        );
     }
 
     #[test]

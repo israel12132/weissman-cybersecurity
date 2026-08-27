@@ -90,6 +90,7 @@ pub mod exploit_synthesis_engine;
 pub mod external_exposure_supreme;
 pub mod fair_exposure_fusion_engine;
 pub mod financial_risk;
+pub mod micro_severity;
 pub mod finding_aging;
 pub mod finding_attestation;
 pub mod finding_live_verify;
