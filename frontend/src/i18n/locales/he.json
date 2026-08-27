@@ -70,6 +70,22 @@
     "reset": "איפוס",
     "running": "רץ…"
   },
+  "roeBlocked": {
+    "badge": "חסום לפי RoE",
+    "title": "כללי המעורבות חסמו את הבדיקה",
+    "notEmpty": "זו אינה סריקה ריקה. מנועי תשתית קריטית לא רצו.",
+    "control": "בקרה: {{control}}",
+    "wouldRun": "אם היה מורשה, המנוע היה מריץ: {{detail}}",
+    "whoMustEnable": "מנהל טננט חייב להפעיל OT תעשייתי במפורש. Weissman לעולם לא מפעיל דגל זה אוטומטית.",
+    "enableTitle": "איך מנהל מפעיל OT (כשל-סגור)",
+    "enableStepOt": "הגדרות לקוח → הפעל industrial_ot_enabled עם כותרת X-Weissman-Destructive-Confirm התואמת את WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET.",
+    "enableStepRoe": "לאחר מכן הגדר roe_mode ל-weaponized_god_mode (אישור שני מנהלים או destructive-confirm) או צרף critical_infra_contract חתום.",
+    "enableStepAuth": "הגדר critical_infra_probe_authorized=true ורשום יעדים ב-whitelist. בדיקות OT עדיין לא ירוצו עד שכל השערים יעברו.",
+    "clientId": "לקוח #{{id}}",
+    "timestamp": "נחסם ב-{{time}}",
+    "neverAuto": "לעולם לא מופעל אוטומטית",
+    "statusLabel": "חסום לפי RoE"
+  },
   "a11y": {
     "skip_to_content": "דלג לתוכן הראשי",
     "close": "סגור",
@@ -1536,6 +1552,7 @@
       "status_completed": "הושלם",
       "status_failed": "נכשל",
       "status_cancelled": "בוטל",
+      "status_roe_blocked": "חסום לפי RoE",
       "evidence_notice": "תור משימות אסינכרוני חי מ-GET /api/jobs (מוגבל לטננט). למנכ\"ל: נפילה ל-/api/ceo/jobs/live כשהרשימה הסטנדרטית לא זמינה. ללא טלמטריה מדומה.",
       "last_updated": "סנכרון אחרון {{time}}",
       "export_csv": "ייצוא CSV",
@@ -1546,6 +1563,7 @@
       "filter_completed": "הושלם",
       "filter_failed": "נכשל",
       "filter_cancelled": "בוטל",
+      "filter_roe_blocked": "חסום לפי RoE",
       "col_target": "יעד",
       "copy_id": "העתק מזהה משימה",
       "detail_title": "פרטי משימה",
@@ -5914,13 +5932,17 @@
         "terminalError": "[שגיאה] {{error}}",
         "terminalLive": "חי: {{bytes}} בתים, {{chunks}} מקטעים",
         "terminalCompleted": "הושלם. {{message}}",
-        "terminalFailed": "נכשל."
+        "terminalFailed": "נכשל.",
+        "terminalRoeBlocked": "חסום לפי RoE — הבדיקה לא רצה. {{message}}",
+        "toastRoeBlocked": "כללי המעורבות חסמו מנוע OT/ICS זה. זו אינה סריקה ריקה."
       },
       "targetScopePanel": {
         "selectClient": "בחר לקוח לצפייה בהיקף היעד.",
         "title": "היקף יעד",
         "otTitle": "רשת תעשייתית (OT)",
         "otDescription": "מאפשר זיהוי Modbus / EtherNet-IP / S7 פסיבי על דומיינים וטווחי IP בלבד. כבוי כברירת מחדל לבקרים רגישים.",
+        "otEnableConfirm": "הפעלת OT תעשייתי מאשרת בדיקות ICS ללקוח זה אחרי שערי RoE נוספים. Weissman לעולם לא מפעיל דגל זה אוטומטית. להמשיך?",
+        "otNeedsConfirm": "הגדר את אסימון ה-destructive-confirm בהגדרות ונסה שוב. הפעלת OT דורשת X-Weissman-Destructive-Confirm.",
         "domainsIps": "דומיינים ו-IP",
         "noneConfigured": "לא הוגדר",
         "copy": "העתק",

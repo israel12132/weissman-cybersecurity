@@ -16,6 +16,8 @@ import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
+import { jobIsRoeBlocked, extractRoeDetails } from '../lib/roeBlocked'
+import RoeBlockedState from '../components/engine/RoeBlockedState'
 import Button from '../components/ui/Button'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 
@@ -66,6 +68,7 @@ function StatusBadge({ status, t }) {
   const map = {
     running: { label: t('pages.otIcsSecurity.status_running'), cls: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
     completed: { label: t('pages.otIcsSecurity.status_done'), cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
+    roe_blocked: { label: t('roeBlocked.badge'), cls: 'text-amber-200 border-amber-500/45 bg-amber-950/40' },
     error: { label: t('pages.otIcsSecurity.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
     idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-[var(--text-tertiary)] border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   };
@@ -84,18 +87,26 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
   const [findings, setFindings] = useState([]);
   const [lastRun, setLastRun] = useState(null);
   const [pendingJobId, setPendingJobId] = useState(null);
+  const [roe, setRoe] = useState(null);
 
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
     onComplete: async (job) => {
-      const terminal = uiJobStatus(job.status);
-      setStatus(terminal);
-      setLastRun(new Date().toLocaleTimeString());
-      const resolved = await resolveJobFindings(job, engine.id, clientId);
-      setFindings(resolved);
-      onFindingsUpdate?.(engine.id, resolved);
-      setPendingJobId(null);
-      if (terminal === 'completed') onScanComplete?.();
+      const terminal = uiJobStatus(job.status, job)
+      setStatus(terminal)
+      setLastRun(new Date().toLocaleTimeString())
+      if (jobIsRoeBlocked(job)) {
+        setRoe(extractRoeDetails(job))
+        setFindings([])
+        onFindingsUpdate?.(engine.id, [])
+      } else {
+        setRoe(null)
+        const resolved = await resolveJobFindings(job, engine.id, clientId)
+        setFindings(resolved)
+        onFindingsUpdate?.(engine.id, resolved)
+      }
+      setPendingJobId(null)
+      if (terminal === 'completed') onScanComplete?.()
     },
   });
 
@@ -112,6 +123,7 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
     }
     setStatus('running');
     setFindings([]);
+    setRoe(null);
     try {
       const { ok, data: d } = await postScan({ engine: engine.id, client_id: Number(clientId), target });
       if (!ok) {
@@ -164,6 +176,9 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
         <p className="text-[10px] font-mono text-[var(--text-disabled)]">
           {t('pages.otIcsSecurity.last_scan', { time: lastRun })}
         </p>
+      )}
+      {status === 'roe_blocked' && (
+        <RoeBlockedState roe={roe} compact />
       )}
       {findings.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">

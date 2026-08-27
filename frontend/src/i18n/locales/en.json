@@ -70,6 +70,22 @@
     "reset": "Reset",
     "running": "Running…"
   },
+  "roeBlocked": {
+    "badge": "RoE blocked",
+    "title": "Rules of Engagement blocked this probe",
+    "notEmpty": "This is not an empty scan. Critical-infrastructure engines did not run.",
+    "control": "Control: {{control}}",
+    "wouldRun": "If authorized, this engine would: {{detail}}",
+    "whoMustEnable": "A tenant administrator must explicitly enable industrial OT. Weissman never auto-enables this flag.",
+    "enableTitle": "How an admin enables OT (fail-closed)",
+    "enableStepOt": "Client settings → enable industrial_ot_enabled with header X-Weissman-Destructive-Confirm matching WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET.",
+    "enableStepRoe": "Then set roe_mode to weaponized_god_mode (two-admin /roe-approvals or destructive-confirm) or attach a signed critical_infra_contract.",
+    "enableStepAuth": "Set critical_infra_probe_authorized=true and whitelist targets. OT probes still will not run until every gate passes.",
+    "clientId": "Client #{{id}}",
+    "timestamp": "Blocked at {{time}}",
+    "neverAuto": "Never auto-enabled",
+    "statusLabel": "RoE blocked"
+  },
   "a11y": {
     "skip_to_content": "Skip to main content",
     "close": "Close",
@@ -1536,6 +1552,7 @@
       "status_completed": "completed",
       "status_failed": "failed",
       "status_cancelled": "cancelled",
+      "status_roe_blocked": "RoE blocked",
       "evidence_notice": "Live async job queue from GET /api/jobs (tenant-scoped). CEO fallback uses /api/ceo/jobs/live when the standard list is unavailable. No simulated job telemetry.",
       "last_updated": "Last sync {{time}}",
       "export_csv": "Export CSV",
@@ -1546,6 +1563,7 @@
       "filter_completed": "Completed",
       "filter_failed": "Failed",
       "filter_cancelled": "Cancelled",
+      "filter_roe_blocked": "RoE blocked",
       "col_target": "Target",
       "copy_id": "Copy job ID",
       "detail_title": "Job detail",
@@ -5914,13 +5932,17 @@
         "terminalError": "[ERROR] {{error}}",
         "terminalLive": "Live: {{bytes}} bytes, {{chunks}} chunks",
         "terminalCompleted": "Completed. {{message}}",
-        "terminalFailed": "Failed."
+        "terminalFailed": "Failed.",
+        "terminalRoeBlocked": "RoE blocked — probe did not run. {{message}}",
+        "toastRoeBlocked": "RoE blocked this OT/ICS engine. Not an empty scan."
       },
       "targetScopePanel": {
         "selectClient": "Select a client to view target scope.",
         "title": "Target Scope",
         "otTitle": "Industrial network (OT)",
         "otDescription": "Enables passive Modbus / EtherNet-IP / S7 fingerprinting on domains + IP ranges only. Off by default for fragile controllers.",
+        "otEnableConfirm": "Enabling industrial OT authorizes ICS probes for this client after remaining RoE gates. Weissman never auto-enables this flag. Continue?",
+        "otNeedsConfirm": "Set the destructive-confirm token in Settings, then retry. Enabling OT requires X-Weissman-Destructive-Confirm.",
         "domainsIps": "Domains & IPs",
         "noneConfigured": "None configured",
         "copy": "Copy",

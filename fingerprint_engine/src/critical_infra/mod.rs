@@ -35,6 +35,38 @@ pub fn is_critical_infra_engine(engine_id: &str) -> bool {
         || ENGINE_IDS.contains(&weissman_core::models::engine::dispatch_engine_id(id))
 }
 
+/// What the engine would do if every RoE gate passed — live read-only probes only, never invented findings.
+#[must_use]
+pub fn would_run_if_authorized(engine_id: &str) -> &'static str {
+    match weissman_core::models::engine::dispatch_engine_id(engine_id.trim()) {
+        "avionics_adsb_attack" => {
+            "Live ADS-B feeder, Beast input, SBS BaseStation, and ACARS port identification (read-only)"
+        }
+        "maritime_ais_attack" => {
+            "AIS/NMEA TCP feed and gpsd socket identification on maritime navigation hosts (read-only)"
+        }
+        "ev_charging_ocpp_attack" => {
+            "OCPP WebSocket upgrade and SteVe management UI fingerprinting on EV charging central systems (read-only)"
+        }
+        "smart_grid_dlms_attack" => {
+            "IEC 60870-5-104 STARTDT handshake and DLMS/COSEM meter-port reachability (read-only)"
+        }
+        "rail_signaling_attack" => {
+            "Rail SCADA telecontrol surface mapping — IEC-104, Modbus, DNP3, OPC-UA (read-only)"
+        }
+        "building_automation_attack" => {
+            "KNXnet/IP SEARCH_REQUEST, Niagara Fox banner, and LonWorks/IP discovery (read-only)"
+        }
+        "robotics_ros2_attack" => {
+            "ROS XML-RPC getSystemState and Universal Robots dashboard port reachability (read-only)"
+        }
+        "ot_sis_triton_attack" => {
+            "Triconex TriStation safety-instrumented-system reachability mapping (read-only)"
+        }
+        _ => "Authorized critical-infrastructure protocol identification (read-only; no ICS findings are invented)",
+    }
+}
+
 /// Tag a finding for immediate, unbatched Command Center alerting.
 #[must_use]
 pub fn tag_critical_risk(mut finding: Value) -> Value {

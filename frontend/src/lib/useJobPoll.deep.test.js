@@ -13,9 +13,9 @@ describe('useJobPoll deep', () => {
     expect(normalizeJobStatus(null)).toBe('')
   })
 
-  it('uiJobStatus maps terminal states', () => {
-    expect(uiJobStatus('completed')).toMatch(/complete|done|success/i)
-    expect(uiJobStatus('failed')).toMatch(/fail|error/i)
+  it('uiJobStatus maps RoE-blocked jobs distinctly from completed', () => {
+    expect(uiJobStatus('completed')).toBe('completed')
+    expect(uiJobStatus('completed', { status: 'completed', roe_blocked: true })).toBe('roe_blocked')
   })
 
   it('extractFindingsFromJob nested arrays', () => {

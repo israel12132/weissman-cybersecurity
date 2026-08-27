@@ -37,6 +37,39 @@ pub enum RoeViolation {
     NoActiveEngagement,
 }
 
+impl RoeViolation {
+    /// Stable machine code for UI / audit JSON.
+    #[must_use]
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::CompileTimeDisabled => "compile_time_disabled",
+            Self::MissingTenantContext => "missing_tenant_context",
+            Self::IndustrialOtDisabled => "industrial_ot_disabled",
+            Self::ProbeNotAuthorized => "probe_not_authorized",
+            Self::RoeModeInsufficient => "roe_mode_insufficient",
+            Self::TargetNotInScope => "target_not_in_scope",
+            Self::ContractExpired => "contract_expired",
+            Self::ContractSignatureInvalid => "contract_signature_invalid",
+            Self::NoActiveEngagement => "no_active_engagement",
+        }
+    }
+
+    /// Client/config control an admin must change. Never auto-flipped by the engine.
+    #[must_use]
+    pub fn control(self) -> &'static str {
+        match self {
+            Self::CompileTimeDisabled => "high_risk_engines",
+            Self::MissingTenantContext => "tenant_id/client_id",
+            Self::IndustrialOtDisabled => "industrial_ot_enabled",
+            Self::ProbeNotAuthorized => "critical_infra_probe_authorized",
+            Self::RoeModeInsufficient => "roe_mode",
+            Self::TargetNotInScope => "critical_infra_targets",
+            Self::ContractExpired | Self::ContractSignatureInvalid => "critical_infra_contract",
+            Self::NoActiveEngagement => "engagement.critical_infra_authorized",
+        }
+    }
+}
+
 impl fmt::Display for RoeViolation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -175,6 +208,78 @@ async fn preflight_live(input: &RoePreflightInput<'_>) -> Result<RoeAuthority, R
     Err(RoeViolation::NoActiveEngagement)
 }
 
+/// Client-config gates only (no DB, no whitelist, no contract crypto).
+///
+/// `industrial_ot_enabled=true` is **not** sufficient: weaponized RoE **and**
+/// `critical_infra_probe_authorized` are still required. This helper never flips flags.
+#[must_use]
+pub fn explicit_client_gates(config: &Value) -> Result<RoeAuthority, RoeViolation> {
+    let ot = config
+        .get("industrial_ot_enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if !ot {
+        return Err(RoeViolation::IndustrialOtDisabled);
+    }
+    let weaponized = config
+        .get("roe_mode")
+        .and_then(Value::as_str)
+        .is_some_and(|m| m.eq_ignore_ascii_case("weaponized_god_mode"));
+    let probe_authorized = config
+        .get("critical_infra_probe_authorized")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if probe_authorized && weaponized {
+        return Ok(RoeAuthority::ExplicitClientFlag);
+    }
+    if !weaponized {
+        return Err(RoeViolation::RoeModeInsufficient);
+    }
+    if !probe_authorized {
+        return Err(RoeViolation::ProbeNotAuthorized);
+    }
+    Err(RoeViolation::NoActiveEngagement)
+}
+
+/// Structured fail-closed engine result: `roe_blocked=true`, no findings, enable path for admins.
+#[must_use]
+pub fn blocked_engine_result(
+    engine_id: &str,
+    target: &str,
+    client_id: Option<i64>,
+    violation: RoeViolation,
+) -> crate::engine_result::EngineResult {
+    let blocked_at = chrono::Utc::now().to_rfc3339();
+    let would_run = crate::critical_infra::would_run_if_authorized(engine_id);
+    let roe = json!({
+        "control": violation.control(),
+        "violation": violation.to_string(),
+        "violation_code": violation.code(),
+        "engine_id": engine_id,
+        "target": target,
+        "client_id": client_id,
+        "who_must_enable": "tenant_admin",
+        "never_auto_enabled": true,
+        "blocked_at": blocked_at,
+        "would_run_if_authorized": would_run,
+        "enable_path": {
+            "destructive_confirm_header": "X-Weissman-Destructive-Confirm",
+            "destructive_confirm_secret_env": "WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET",
+            "steps": [
+                "PATCH /api/clients/{id}/config with industrial_ot_enabled=true and header X-Weissman-Destructive-Confirm matching WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET",
+                "Complete remaining RoE gates: roe_mode=weaponized_god_mode (two-admin /roe-approvals or destructive-confirm) OR a signed critical_infra_contract; set critical_infra_probe_authorized=true; whitelist critical_infra_targets",
+                "Re-run the engine. Weissman never auto-enables OT and does not invent ICS findings."
+            ]
+        }
+    });
+    crate::engine_result::EngineResult::roe_blocked(
+        format!(
+            "RoE blocked: {violation} — critical infrastructure engine '{engine_id}' did not run against '{target}'. Not an empty scan."
+        ),
+        roe,
+    )
+}
+
 /// Forensic violation log — always emitted; audit row when DB is available.
 pub async fn log_violation(
     pool: Option<&PgPool>,
@@ -184,14 +289,19 @@ pub async fn log_violation(
     target: &str,
     violation: RoeViolation,
 ) {
+    let blocked_at = chrono::Utc::now().to_rfc3339();
     tracing::error!(
         target: "critical_infra_roe",
         violation = %violation,
+        control = violation.control(),
         engine_id = %engine_id,
         probe_target = %target,
         tenant_id = ?tenant_id,
         client_id = ?client_id,
-        "RoE VIOLATION — critical infrastructure engine execution blocked"
+        who_must_enable = "tenant_admin",
+        never_auto_enabled = true,
+        blocked_at = %blocked_at,
+        "RoE VIOLATION — critical infrastructure engine execution blocked; never auto-enable OT"
     );
 
     let Some(pool) = pool else { return };
@@ -199,10 +309,19 @@ pub async fn log_violation(
         return;
     };
 
-    let details = format!(
-        "engine={} target={} violation={} client_id={:?}",
-        engine_id, target, violation, client_id
-    );
+    let details = json!({
+        "engine": engine_id,
+        "target": target,
+        "violation": violation.to_string(),
+        "violation_code": violation.code(),
+        "control": violation.control(),
+        "client_id": client_id,
+        "tenant_id": tenant_id,
+        "who_must_enable": "tenant_admin",
+        "never_auto_enabled": true,
+        "blocked_at": blocked_at,
+    })
+    .to_string();
     if let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tid).await {
         let _ = crate::audit_log::insert_audit(
             &mut tx,
@@ -687,5 +806,98 @@ mod tests {
     #[test]
     fn empty_whitelist_denies() {
         assert!(!target_in_whitelist("10.0.0.1", &[]));
+    }
+
+    #[test]
+    fn ot_flag_off_blocked_payload_is_structured() {
+        let r = blocked_engine_result(
+            "building_automation_attack",
+            "10.0.0.5",
+            Some(42),
+            RoeViolation::IndustrialOtDisabled,
+        );
+        assert!(r.roe_blocked);
+        assert_eq!(r.status, "roe_blocked");
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        let roe = r.roe.expect("roe object");
+        assert_eq!(roe["control"], "industrial_ot_enabled");
+        assert_eq!(roe["never_auto_enabled"], true);
+        assert_eq!(roe["who_must_enable"], "tenant_admin");
+        assert_eq!(roe["client_id"], 42);
+        assert!(roe["blocked_at"].as_str().unwrap().contains('T'));
+        assert!(roe["would_run_if_authorized"]
+            .as_str()
+            .unwrap()
+            .contains("KNXnet"));
+        assert_eq!(
+            roe["enable_path"]["destructive_confirm_header"],
+            "X-Weissman-Destructive-Confirm"
+        );
+        assert_eq!(
+            roe["enable_path"]["destructive_confirm_secret_env"],
+            "WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET"
+        );
+        assert!(r.message.contains("Not an empty scan"));
+    }
+
+    #[test]
+    fn industrial_ot_enabled_true_still_requires_authorized_path() {
+        let off = json!({"industrial_ot_enabled": false});
+        assert_eq!(
+            explicit_client_gates(&off),
+            Err(RoeViolation::IndustrialOtDisabled)
+        );
+
+        let ot_only = json!({
+            "industrial_ot_enabled": true,
+            "roe_mode": "safe_proofs",
+            "critical_infra_probe_authorized": true
+        });
+        assert_eq!(
+            explicit_client_gates(&ot_only),
+            Err(RoeViolation::RoeModeInsufficient)
+        );
+
+        let weaponized_only = json!({
+            "industrial_ot_enabled": true,
+            "roe_mode": "weaponized_god_mode",
+            "critical_infra_probe_authorized": false
+        });
+        assert_eq!(
+            explicit_client_gates(&weaponized_only),
+            Err(RoeViolation::ProbeNotAuthorized)
+        );
+
+        let authorized = json!({
+            "industrial_ot_enabled": true,
+            "roe_mode": "weaponized_god_mode",
+            "critical_infra_probe_authorized": true
+        });
+        assert_eq!(
+            explicit_client_gates(&authorized),
+            Ok(RoeAuthority::ExplicitClientFlag)
+        );
+        // Remaining live gates (signed contract OR whitelist + engagement) still apply in
+        // preflight_live. This helper never auto-enables OT and does not authorize probes.
+    }
+
+    #[tokio::test]
+    async fn preflight_without_ot_flag_is_fail_closed() {
+        let params = json!({});
+        let input = RoePreflightInput {
+            pool: None,
+            tenant_id: Some(1),
+            client_id: Some(42),
+            engine_id: "smart_grid_dlms_attack",
+            target: "10.0.0.1",
+            job_params: &params,
+        };
+        let err = preflight(&input).await.unwrap_err();
+        #[cfg(feature = "high_risk_engines")]
+        assert_eq!(err, RoeViolation::IndustrialOtDisabled);
+        #[cfg(not(feature = "high_risk_engines"))]
+        assert_eq!(err, RoeViolation::CompileTimeDisabled);
+        assert_ne!(err, RoeViolation::ProbeNotAuthorized);
     }
 }

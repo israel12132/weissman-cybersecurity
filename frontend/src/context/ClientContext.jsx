@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { formatApiErrorResponse } from '../lib/apiError.js'
 import { apiFetch } from '../utils/apiFetch'
+import { destructiveHeaders } from '../utils/destructiveConfirm'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { useAuthOptional } from './AuthContext'
 import { assignedClientId, allowedClientIds, boundClientId, filterVisibleClients, shouldHideClientPicker } from '../lib/clientScope'
@@ -170,6 +171,7 @@ export function ClientProvider({ children }) {
       const data = await apiFetch(`/api/clients/${clientId}/config`, {
         method: 'PATCH',
         body: patch,
+        headers: patch?.industrial_ot_enabled === true ? destructiveHeaders() : {},
       })
       if (data.config && selectedClientIdRef.current === clientId) {
         setClientConfigState(parseConfigFromResponse(data.config))
@@ -181,6 +183,13 @@ export function ClientProvider({ children }) {
         if (data?.error_code === 'roe_approval_required') {
           const reqId = data.request_id ? `Request #${data.request_id}` : 'Request created'
           setConfigError(`Weaponized ROE requires 2 admin approvals. ${reqId}. Go to /roe-approvals to approve.`)
+          return false
+        }
+      }
+      if (e?.status === 403) {
+        const data = e?.response ? await e.response.json().catch(() => null) : null
+        if (data?.code === 'destructive_approval_required') {
+          setConfigError(data.detail || 'Enabling industrial OT requires X-Weissman-Destructive-Confirm. Weissman never auto-enables OT.')
           return false
         }
       }

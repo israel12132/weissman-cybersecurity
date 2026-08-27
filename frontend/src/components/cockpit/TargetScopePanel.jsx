@@ -99,7 +99,11 @@ export default function TargetScopePanel({ ceoIntegrated = false }) {
               disabled={configLoading}
               role="switch"
               aria-checked={!!clientConfig.industrial_ot_enabled}
-              onClick={() => patchConfig(selectedClientId, { industrial_ot_enabled: !clientConfig.industrial_ot_enabled })}
+              onClick={() => {
+                const next = !clientConfig.industrial_ot_enabled
+                if (next && !window.confirm(t(`${NS}.otEnableConfirm`))) return
+                patchConfig(selectedClientId, { industrial_ot_enabled: next })
+              }}
               className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${clientConfig.industrial_ot_enabled ? 'bg-amber-500/80' : 'bg-[var(--border-strong)]'} ${configLoading ? 'opacity-50' : ''}`}
             >
               <span

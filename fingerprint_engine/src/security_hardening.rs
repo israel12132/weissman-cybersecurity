@@ -85,7 +85,7 @@ pub fn destructive_admin_dual_authorized(
     Ok(())
 }
 
-fn destructive_denied_response(detail: &str) -> Response {
+pub(crate) fn destructive_denied_response(detail: &str) -> Response {
     (
         axum::http::StatusCode::FORBIDDEN,
         axum::Json(serde_json::json!({

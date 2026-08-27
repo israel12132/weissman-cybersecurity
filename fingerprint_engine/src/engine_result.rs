@@ -20,6 +20,12 @@ pub struct EngineResult {
     /// Module 3: edges for Attack Surface Graph.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph_edges: Option<Vec<super::cloud_hunter::GraphEdge>>,
+    /// Distinct RoE fail-closed outcome (not success, not a fake empty scan).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub roe_blocked: bool,
+    /// Structured RoE details: control, would-run, enable path, client_id, timestamp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roe: Option<serde_json::Value>,
 }
 
 impl EngineResult {
@@ -33,6 +39,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
     pub fn ok_with_graph(
@@ -50,6 +58,8 @@ impl EngineResult {
             summary: msg,
             graph_nodes: Some(graph_nodes),
             graph_edges: Some(graph_edges),
+            roe_blocked: false,
+            roe: None,
         }
     }
     pub fn error(message: impl Into<String>) -> Self {
@@ -62,8 +72,72 @@ impl EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
+    /// Fail-closed RoE block: probe did not run; payload explains why and how an admin enables OT.
+    pub fn roe_blocked(message: impl Into<String>, roe: serde_json::Value) -> Self {
+        let msg = message.into();
+        Self {
+            status: "roe_blocked".to_string(),
+            findings: vec![],
+            message: msg.clone(),
+            success: false,
+            summary: msg,
+            graph_nodes: None,
+            graph_edges: None,
+            roe_blocked: true,
+            roe: Some(roe),
+        }
+    }
+}
+
+/// Copy RoE fields onto a job/result JSON object so the UI can distinguish a blocked probe
+/// from a green empty scan. Does not invent findings.
+pub fn attach_roe_fields(out: &mut serde_json::Value, result: &EngineResult) {
+    if !result.roe_blocked {
+        return;
+    }
+    let Some(obj) = out.as_object_mut() else {
+        return;
+    };
+    obj.insert("roe_blocked".into(), serde_json::json!(true));
+    if let Some(roe) = result.roe.clone() {
+        obj.insert("roe".into(), roe);
+    }
+}
+
+/// Compact RoE-blocked fields for the jobs list (not a dump of result_json).
+pub fn compact_job_roe(
+    result_json: Option<&serde_json::Value>,
+) -> (bool, Option<serde_json::Value>) {
+    let Some(v) = result_json else {
+        return (false, None);
+    };
+    let blocked = v
+        .get("roe_blocked")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        || v.get("status").and_then(serde_json::Value::as_str) == Some("roe_blocked");
+    if !blocked {
+        return (false, None);
+    }
+    let compact = v.get("roe").map(|roe| {
+        serde_json::json!({
+            "control": roe.get("control"),
+            "violation": roe.get("violation"),
+            "violation_code": roe.get("violation_code"),
+            "would_run_if_authorized": roe.get("would_run_if_authorized"),
+            "who_must_enable": roe.get("who_must_enable"),
+            "never_auto_enabled": roe.get("never_auto_enabled"),
+            "blocked_at": roe.get("blocked_at"),
+            "client_id": roe.get("client_id"),
+            "enable_path": roe.get("enable_path"),
+            "engine_id": roe.get("engine_id"),
+        })
+    });
+    (true, compact)
 }
 
 impl From<weissman_engines::EngineResult> for EngineResult {
@@ -77,6 +151,8 @@ impl From<weissman_engines::EngineResult> for EngineResult {
             summary: r.message,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
 }
@@ -92,6 +168,8 @@ impl From<Vec<serde_json::Value>> for EngineResult {
             summary: msg,
             graph_nodes: None,
             graph_edges: None,
+            roe_blocked: false,
+            roe: None,
         }
     }
 }
@@ -161,5 +239,54 @@ mod tests {
         assert!(!obj.contains_key("summary"));
         assert!(!obj.contains_key("graph_nodes"));
         assert!(!obj.contains_key("graph_edges"));
+        assert!(!obj.contains_key("roe_blocked"));
+        assert!(!obj.contains_key("roe"));
+    }
+
+    #[test]
+    fn roe_blocked_serializes_control_payload_and_no_findings() {
+        let r = EngineResult::roe_blocked(
+            "blocked",
+            serde_json::json!({
+                "control": "industrial_ot_enabled",
+                "never_auto_enabled": true
+            }),
+        );
+        assert_eq!(r.status, "roe_blocked");
+        assert!(r.roe_blocked);
+        assert!(!r.success);
+        assert!(r.findings.is_empty());
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert_eq!(v["status"], "roe_blocked");
+        assert_eq!(v["roe_blocked"], true);
+        assert_eq!(v["roe"]["control"], "industrial_ot_enabled");
+        assert_eq!(v["findings"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn compact_job_roe_lists_blocked_jobs_without_dumping_findings() {
+        let (blocked, compact) = compact_job_roe(Some(&serde_json::json!({
+            "status": "roe_blocked",
+            "roe_blocked": true,
+            "findings": [],
+            "roe": {
+                "control": "industrial_ot_enabled",
+                "who_must_enable": "tenant_admin",
+                "never_auto_enabled": true,
+                "client_id": 42
+            }
+        })));
+        assert!(blocked);
+        let compact = compact.expect("compact roe");
+        assert_eq!(compact["control"], "industrial_ot_enabled");
+        assert_eq!(compact["client_id"], 42);
+        assert_eq!(compact["never_auto_enabled"], true);
+        let (open, none) = compact_job_roe(Some(&serde_json::json!({
+            "status": "ok",
+            "findings": []
+        })));
+        assert!(!open);
+        assert!(none.is_none());
     }
 }

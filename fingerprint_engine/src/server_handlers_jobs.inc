@@ -110,6 +110,11 @@ async fn api_async_jobs_list(
                 .flatten();
             let last_error = r.try_get::<Option<String>, _>("last_error").ok().flatten();
             let worker_id = r.try_get::<Option<String>, _>("worker_id").ok().flatten();
+            let result_json: Option<Value> = r
+                .try_get::<Option<serde_json::Value>, _>("result_json")
+                .ok()
+                .flatten();
+            let (roe_blocked, roe) = crate::engine_result::compact_job_roe(result_json.as_ref());
             let stuck = crate::job_diagnostics::job_stuck_reason(
                 &status,
                 &payload,
@@ -135,6 +140,8 @@ async fn api_async_jobs_list(
                 "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
                 "updated_at": updated_at,
                 "completed_at": completed_at,
+                "roe_blocked": roe_blocked,
+                "roe": roe,
             })
         })
         .collect();
@@ -232,7 +239,6 @@ async fn api_async_job_status(
     }
 }
 
-
 /// GET /api/jobs/diagnostics — why the queue is not moving. Live Redis swarm + Postgres.
 async fn api_async_jobs_diagnostics(
     State(state): State<Arc<AppState>>,
@@ -292,7 +298,10 @@ async fn api_async_jobs_diagnostics(
         .unwrap_or(0);
     let oldest = counts
         .as_ref()
-        .and_then(|r| r.try_get::<Option<chrono::DateTime<Utc>>, _>("oldest_pending").ok())
+        .and_then(|r| {
+            r.try_get::<Option<chrono::DateTime<Utc>>, _>("oldest_pending")
+                .ok()
+        })
         .flatten()
         .map(|d| d.to_rfc3339());
 
@@ -369,7 +378,10 @@ async fn swarm_liveness_snapshot() -> (bool, usize) {
         return (false, 0);
     };
     let ping: Result<String, _> = redis::cmd("PING").query_async(&mut conn).await;
-    if !ping.map(|s| s.eq_ignore_ascii_case("PONG")).unwrap_or(false) {
+    if !ping
+        .map(|s| s.eq_ignore_ascii_case("PONG"))
+        .unwrap_or(false)
+    {
         return (false, 0);
     }
     let keys: Result<Vec<String>, _> = redis::cmd("KEYS")
