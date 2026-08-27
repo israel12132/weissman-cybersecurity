@@ -174,6 +174,7 @@ pub fn init_tracing_from_env() {
 pub fn register_llm_tenant_metering(app_pool: Arc<sqlx::PgPool>) {
     weissman_engines::openai_chat::set_llm_usage_reporter(Arc::new(
         move |tenant_id, prompt_tokens, completion_tokens, model, operation| {
+            crate::http::ai_quota_mem::add_usage(tenant_id, prompt_tokens, completion_tokens);
             let pool = app_pool.clone();
             crate::findings_persist::spawn_bounded_db_task(async move {
                 if let Err(e) = weissman_db::llm_usage::log_tenant_llm_usage(

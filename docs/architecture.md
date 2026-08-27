@@ -14,7 +14,9 @@
                                   ┌───────────▼─────────────┐
                                   │  Nginx gateway (`:80`)  │
                                   │  Strict CSP / HSTS,     │
-                                  │  brotli + gzip,         │
+                                  │  gzip (static) +          │
+                                  │  brotli-4 (Axum API/SSE), │
+                                  │  proxy → backend:8000     │
                                   │  proxy → backend:8000   │
                                   └───────────┬─────────────┘
                                               │
@@ -79,6 +81,22 @@ In-process background loops (`weissman-server`):
   • Sovereign self-scan (LLM audit-log review) opt-in via env
   • SOAR playbook dispatch                    fire-and-forget on finding persist
 ```
+
+---
+
+## API server performance (weissman-server / Axum)
+
+Sub-millisecond request path for Command Center and agent ingest:
+
+| Control | Where | Notes |
+|---------|--------|--------|
+| SIMD JSON | `fingerprint_engine::http::simd_json` (sonic-rs) | Parse/serialize for ingest + tenant SSE stamps; `#[serde(borrow)]` on `POST /api/ueba/ingest` |
+| Tokio workers | `hpc_runtime::build_scan_runtime` | Sized to **physical** cores; LIFO slot on; `WEISSMAN_TOKIO_WORKER_THREADS` override |
+| TCP | `http::tcp_socket` + `Serve::tcp_nodelay(true)` | Nagle off + keepalive (idle 45s / interval 10s) |
+| Brotli-4 | `weissman-server` `middleware::compression` | Quality 4 for JSON + SSE; skips `101 Switching Protocols`. Nginx gzip remains for static assets; VPS can `include deploy/nginx-brotli.inc` |
+| `spawn_blocking` | `/api/health` RSS, CEO telemetry, report writes | Filesystem I/O never sits on the event-loop worker |
+| Stream caps | `http::bounded_codec` | `LengthDelimitedCodec` max frame + WS `max_message_size` / `max_frame_size` |
+| DashMap | login lockout, agent registry, LLM circuit, AI daily tokens, engine telemetry | Sharded maps instead of `Mutex<HashMap>` |
 
 ---
 

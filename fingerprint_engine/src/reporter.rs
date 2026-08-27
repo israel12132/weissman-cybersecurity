@@ -566,23 +566,38 @@ async fn generate_bug_report_worker(
     );
 
     let reports_dir_path = reports_dir();
-    if !reports_dir_path.exists() {
-        let _ = std::fs::create_dir_all(&reports_dir_path);
-    }
     let name = report_filename();
     let path = reports_dir_path.join(&name);
-    if std::fs::write(&path, report_md).is_err() {
-        tracing::warn!(target: "reporter", path = %path.display(), "failed to write bug report");
+    let dir_create = reports_dir_path.clone();
+    let write_ok = tokio::task::spawn_blocking(move || {
+        if !dir_create.exists() {
+            let _ = std::fs::create_dir_all(&dir_create);
+        }
+        std::fs::write(&path, report_md)
+    })
+    .await
+    .unwrap_or(Err(std::io::Error::other("spawn_blocking join")));
+    if write_ok.is_err() {
+        tracing::warn!(target: "reporter", "failed to write bug report");
         return;
     }
-    write_anomaly_pdf_sidecar(
-        &reports_dir_path,
-        &name,
-        &target_url,
-        &anomaly_type,
-        &baseline_vs_anomaly,
-        triage.as_ref(),
-    );
+    let dir_pdf = reports_dir_path.clone();
+    let name_pdf = name.clone();
+    let target_pdf = target_url.clone();
+    let anomaly_pdf = anomaly_type.clone();
+    let baseline_pdf = baseline_vs_anomaly.clone();
+    let triage_pdf = triage.clone();
+    let _ = tokio::task::spawn_blocking(move || {
+        write_anomaly_pdf_sidecar(
+            &dir_pdf,
+            &name_pdf,
+            &target_pdf,
+            &anomaly_pdf,
+            &baseline_pdf,
+            triage_pdf.as_ref(),
+        );
+    })
+    .await;
 
     notify_webhook(&name).await;
 }

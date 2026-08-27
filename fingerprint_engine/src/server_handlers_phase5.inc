@@ -6,7 +6,7 @@ async fn ws_swarm(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.swarm_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() {

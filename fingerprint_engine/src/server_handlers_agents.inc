@@ -594,7 +594,7 @@ async fn ws_agent(
     let app_pool = state.app_pool.clone();
     let registry = state.endpoint_agents.clone();
     let tenant_id = auth.tenant_id;
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         let (tx_to_agent, mut rx_to_agent) =
             tokio::sync::mpsc::channel::<crate::endpoint_agents::ServerToAgent>(256);
         let mut agent_uuid: Option<String> = None;
@@ -605,7 +605,7 @@ async fn ws_agent(
             tokio::select! {
                 outbound = rx_to_agent.recv() => {
                     let Some(msg) = outbound else { break; };
-                    let line = serde_json::to_string(&msg).unwrap_or_default();
+                    let line = crate::http::simd_json::to_string(&msg).unwrap_or_default();
                     if socket.send(axum::extract::ws::Message::Text(line)).await.is_err() {
                         break;
                     }
@@ -616,7 +616,7 @@ async fn ws_agent(
                     use axum::extract::ws::Message;
                     match frame {
                         Message::Text(s) => {
-                            let v: serde_json::Value = match serde_json::from_str(&s) {
+                            let v: serde_json::Value = match crate::http::simd_json::from_slice(s.as_bytes()) {
                                 Ok(v) => v,
                                 Err(_) => continue,
                             };
@@ -667,7 +667,7 @@ async fn ws_agent(
                                         scan_concurrency: Some(8),
                                         heartbeat_secs: Some(20),
                                     };
-                                    let line = serde_json::to_string(&welcome).unwrap_or_default();
+                                    let line = crate::http::simd_json::to_string(&welcome).unwrap_or_default();
                                     let _ = socket.send(Message::Text(line)).await;
                                     if let Ok(pending) = crate::endpoint_agents::pending_tasks_for_client(
                                         app_pool.as_ref(),

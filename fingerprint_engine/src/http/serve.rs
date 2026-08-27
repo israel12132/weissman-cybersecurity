@@ -908,7 +908,7 @@ async fn ws_command_center(
     let last_event_id = crate::http::event_replay::parse_last_event_id(query.as_deref());
     let tenant_id = auth.tenant_id;
     let assigned_client_id = auth.assigned_client_id;
-    ws.on_upgrade(move |socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |socket| async move {
         handle_ws_command_center(
             socket,
             pool,
@@ -1837,7 +1837,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))
@@ -1884,7 +1886,7 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
 
 pub async fn run_http_tcp_listener(app: Router, port: u16) {
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = match tokio::net::TcpListener::bind(addr).await {
+    let listener = match crate::http::tcp_socket::bind_http_listener(addr) {
         Ok(l) => l,
         Err(e) if e.raw_os_error() == Some(98) => {
             eprintln!(
@@ -1899,13 +1901,14 @@ pub async fn run_http_tcp_listener(app: Router, port: u16) {
         }
     };
     eprintln!(
-        "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port)",
+        "[Weissman] Listening on http://0.0.0.0:{} (set PORT in .env to change; Nginx must proxy the same port); tcp_nodelay + keepalive on",
         port
     );
     if let Err(e) = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .tcp_nodelay(true)
     .with_graceful_shutdown(shutdown_signal())
     .await
     {

@@ -21,6 +21,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,6 +41,36 @@ pub struct UebaIngestPayload {
     pub client_id: i64,
     pub hour_of_week: i16,
     pub metrics: Value,
+}
+
+/// Zero-copy view of an ingest body. `agent_id` borrows the request buffer
+/// (`#[serde(borrow)]` / `Cow`) so unescaped strings never hit the heap until
+/// we persist to Postgres.
+#[derive(Debug, Deserialize)]
+struct UebaIngestBorrowed<'a> {
+    #[serde(borrow)]
+    agent_id: Cow<'a, str>,
+    client_id: i64,
+    hour_of_week: i16,
+    metrics: Value,
+}
+
+/// SIMD + borrowed parse of `POST /api/ueba/ingest` (and agent finding bodies).
+pub fn parse_ingest_bytes(buf: &[u8]) -> Result<UebaIngestPayload, String> {
+    let borrowed: UebaIngestBorrowed<'_> = crate::http::simd_json::from_slice(buf)?;
+    let agent_id = borrowed.agent_id.trim();
+    if agent_id.is_empty() {
+        return Err("agent_id is required".into());
+    }
+    if borrowed.metrics.is_null() {
+        return Err("metrics is required".into());
+    }
+    Ok(UebaIngestPayload {
+        agent_id: agent_id.to_string(),
+        client_id: borrowed.client_id,
+        hour_of_week: borrowed.hour_of_week,
+        metrics: borrowed.metrics,
+    })
 }
 
 /// Public entry point — called by the server when an agent posts a `ueba_baseline`
@@ -420,5 +451,22 @@ mod tests {
         // Regression guard: baselines must be stored per (agent, metric) so training
         // can accumulate. Per-hour-of-week bucketing made the detector never fire.
         assert_eq!(GLOBAL_BUCKET, 0);
+    }
+
+    #[test]
+    fn parse_ingest_bytes_borrows_then_owns_agent_id() {
+        let raw =
+            br#"{"agent_id":"host-aabb","client_id":7,"hour_of_week":13,"metrics":{"load":1.5}}"#;
+        let p = parse_ingest_bytes(raw).expect("parse");
+        assert_eq!(p.agent_id, "host-aabb");
+        assert_eq!(p.client_id, 7);
+        assert_eq!(p.hour_of_week, 13);
+        assert_eq!(p.metrics["load"], 1.5);
+    }
+
+    #[test]
+    fn parse_ingest_bytes_rejects_empty_agent() {
+        let raw = br#"{"agent_id":"  ","client_id":1,"hour_of_week":0,"metrics":{"x":1}}"#;
+        assert!(parse_ingest_bytes(raw).is_err());
     }
 }

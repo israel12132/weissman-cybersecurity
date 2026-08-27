@@ -26,12 +26,15 @@ pub const SYSTEM_TENANT: i64 = 0;
 /// is wrapped as `{"_tid":N,"_raw":"<original>"}` and unwrapped on delivery.
 #[must_use]
 pub fn stamp(tenant_id: i64, raw: &str) -> String {
-    match serde_json::from_str::<Value>(raw) {
+    match crate::http::simd_json::from_slice::<Value>(raw.as_bytes()) {
         Ok(Value::Object(mut m)) => {
             m.insert("_tid".to_string(), Value::from(tenant_id));
-            Value::Object(m).to_string()
+            crate::http::simd_json::to_string(&Value::Object(m)).unwrap_or_else(|_| raw.to_string())
         }
-        _ => serde_json::json!({ "_tid": tenant_id, "_raw": raw }).to_string(),
+        _ => crate::http::simd_json::to_string(
+            &serde_json::json!({ "_tid": tenant_id, "_raw": raw }),
+        )
+        .unwrap_or_else(|_| raw.to_string()),
     }
 }
 
@@ -40,7 +43,7 @@ pub fn stamp(tenant_id: i64, raw: &str) -> String {
 pub fn stamp_value(tenant_id: i64, mut value: Value) -> String {
     if let Value::Object(ref mut m) = value {
         m.insert("_tid".to_string(), Value::from(tenant_id));
-        return value.to_string();
+        return crate::http::simd_json::to_string(&value).unwrap_or_else(|_| value.to_string());
     }
     serde_json::json!({ "_tid": tenant_id, "_raw": value.to_string() }).to_string()
 }
@@ -59,21 +62,18 @@ pub fn visible_to(raw: &str, viewer_tid: i64) -> Option<String> {
 /// dropped — fail-closed so another customer's scan progress cannot leak.
 #[must_use]
 pub fn visible_to_scoped(raw: &str, viewer_tid: i64, viewer_cid: Option<i64>) -> Option<String> {
-    let v: Value = serde_json::from_str(raw).ok()?;
+    let v: Value = crate::http::simd_json::from_slice(raw.as_bytes()).ok()?;
     let tid = v.get("_tid").and_then(Value::as_i64)?;
     if tid != SYSTEM_TENANT && tid != viewer_tid {
         return None;
     }
     if let Some(cid) = viewer_cid {
         if tid != SYSTEM_TENANT {
-            let event_cid = v
-                .get("client_id")
-                .or_else(|| v.get("_cid"))
-                .and_then(|x| {
-                    x.as_i64()
-                        .or_else(|| x.as_u64().and_then(|n| i64::try_from(n).ok()))
-                        .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
-                });
+            let event_cid = v.get("client_id").or_else(|| v.get("_cid")).and_then(|x| {
+                x.as_i64()
+                    .or_else(|| x.as_u64().and_then(|n| i64::try_from(n).ok()))
+                    .or_else(|| x.as_str().and_then(|s| s.trim().parse::<i64>().ok()))
+            });
             match event_cid {
                 Some(id) if id == cid => {}
                 _ => return None,

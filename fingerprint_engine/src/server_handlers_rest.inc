@@ -154,7 +154,7 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
             }
         }
     }
-    let rss_kb = resident_set_kb();
+    let rss_kb = crate::http::blocking_io::resident_set_kb().await;
     // `ok` used to be the literal `true` — it stayed green with postgres_ok:false, and it
     // reported ok:true for the whole four-day pipeline outage. A top-level verdict that is a
     // constant is worse than no verdict: it is the field every dashboard, uptime monitor and
@@ -183,45 +183,6 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         "telemetry_broadcast_capacity": 128,
         "ws_note": "Clients should reconnect with exponential backoff; server uses bounded broadcast channels.",
     }))).into_response()
-}
-
-#[cfg(target_os = "linux")]
-fn resident_set_kb() -> Option<u64> {
-    // Cache the last sampled value for 5 seconds. /proc/self/statm is tiny, but /api/health
-    // is hammered by Docker / k8s probes (every 5–15s) plus uptime monitors. A blocking
-    // sync read on every request adds avoidable jitter to the async runtime's poll loop
-    // and shows up as latency on the rest of the request handlers sharing that worker.
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{Instant, Duration};
-    use std::sync::OnceLock;
-
-    static CACHE_VAL: AtomicU64 = AtomicU64::new(0);
-    static CACHE_AT:  OnceLock<std::sync::Mutex<Option<Instant>>> = OnceLock::new();
-    let lock = CACHE_AT.get_or_init(|| std::sync::Mutex::new(None));
-
-    if let Ok(guard) = lock.lock() {
-        if let Some(when) = *guard {
-            if when.elapsed() < Duration::from_secs(5) {
-                let v = CACHE_VAL.load(Ordering::Relaxed);
-                if v > 0 { return Some(v); }
-            }
-        }
-    }
-    let s = std::fs::read_to_string("/proc/self/statm").ok()?;
-    let mut it = s.split_whitespace();
-    let _vsize = it.next()?;
-    let resident_pages: u64 = it.next()?.parse().ok()?;
-    let kb = resident_pages.saturating_mul(4096) / 1024;
-    CACHE_VAL.store(kb, Ordering::Relaxed);
-    if let Ok(mut guard) = lock.lock() {
-        *guard = Some(Instant::now());
-    }
-    Some(kb)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn resident_set_kb() -> Option<u64> {
-    None
 }
 
 async fn api_audit_logs(
@@ -1633,7 +1594,7 @@ async fn ws_timing(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.timing_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
@@ -1650,7 +1611,7 @@ async fn ws_ai_redteam(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.redteam_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }
@@ -1667,7 +1628,7 @@ async fn ws_threat_intel(
     let tenant_id = auth.tenant_id;
     let viewer_cid = auth.assigned_client_id;
     let mut rx = state.radar_broadcast_tx.subscribe();
-    ws.on_upgrade(move |mut socket| async move {
+    crate::http::bounded_codec::constrain_ws(ws).on_upgrade(move |mut socket| async move {
         while let Ok(msg) = rx.recv().await {
             if let Some(scoped) = crate::http::tenant_stream::visible_to_scoped(&msg, tenant_id, viewer_cid) {
                 if socket.send(Message::Text(scoped)).await.is_err() { break; }

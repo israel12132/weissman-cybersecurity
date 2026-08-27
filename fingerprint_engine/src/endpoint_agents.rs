@@ -9,16 +9,15 @@
 //!   * When an agent comes online, the server replays any non-expired pending tasks for that
 //!     client.
 
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Remote presence entries older than this are treated as offline (replica crash / network loss).
@@ -133,8 +132,8 @@ struct RemotePresence {
 }
 
 pub struct AgentRegistry {
-    inner: RwLock<HashMap<String, LocalSession>>,
-    remote: RwLock<HashMap<String, RemotePresence>>,
+    inner: DashMap<String, LocalSession>,
+    remote: DashMap<String, RemotePresence>,
     dispatch_cursor: AtomicUsize,
     sync: OnceLock<Arc<crate::agent_registry_sync::AgentRegistrySync>>,
 }
@@ -142,8 +141,8 @@ pub struct AgentRegistry {
 impl Default for AgentRegistry {
     fn default() -> Self {
         Self {
-            inner: RwLock::new(HashMap::new()),
-            remote: RwLock::new(HashMap::new()),
+            inner: DashMap::new(),
+            remote: DashMap::new(),
             dispatch_cursor: AtomicUsize::new(0),
             sync: OnceLock::new(),
         }
@@ -192,11 +191,10 @@ impl AgentRegistry {
                 if replica_id == sync.replica_id {
                     return;
                 }
-                if self.inner.read().await.contains_key(&agent_uuid) {
+                if self.inner.contains_key(&agent_uuid) {
                     return;
                 }
-                let mut remote = self.remote.write().await;
-                remote.insert(
+                self.remote.insert(
                     agent_uuid,
                     RemotePresence {
                         replica_id,
@@ -214,13 +212,8 @@ impl AgentRegistry {
                 if replica_id == sync.replica_id {
                     return;
                 }
-                let mut remote = self.remote.write().await;
-                if remote
-                    .get(&agent_uuid)
-                    .is_some_and(|p| p.replica_id == replica_id)
-                {
-                    remote.remove(&agent_uuid);
-                }
+                self.remote
+                    .remove_if(&agent_uuid, |_, p| p.replica_id == replica_id);
             }
             crate::agent_registry_sync::AgentSyncEvent::Status {
                 replica_id,
@@ -232,19 +225,14 @@ impl AgentRegistry {
                 if replica_id == sync.replica_id {
                     return;
                 }
-                if self.inner.read().await.contains_key(&agent_uuid) {
+                if self.inner.contains_key(&agent_uuid) {
                     return;
                 }
-                let mut remote = self.remote.write().await;
                 if status == "offline" {
-                    if remote
-                        .get(&agent_uuid)
-                        .is_some_and(|p| p.replica_id == replica_id)
-                    {
-                        remote.remove(&agent_uuid);
-                    }
+                    self.remote
+                        .remove_if(&agent_uuid, |_, p| p.replica_id == replica_id);
                 } else {
-                    remote.insert(
+                    self.remote.insert(
                         agent_uuid,
                         RemotePresence {
                             replica_id,
@@ -265,8 +253,7 @@ impl AgentRegistry {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let mut remote = registry.remote.write().await;
-                remote.retain(|_, p| Self::remote_is_live(p));
+                registry.remote.retain(|_, p| Self::remote_is_live(p));
             }
         });
     }
@@ -274,14 +261,9 @@ impl AgentRegistry {
     /// Register a live WebSocket session. Returns a session id the caller must pass to [`Self::detach`].
     pub async fn attach(&self, agent_uuid: &str, tenant_id: i64, tx: Sender<ServerToAgent>) -> u64 {
         let session = NEXT_LOCAL_SESSION.fetch_add(1, Ordering::Relaxed);
-        {
-            let mut g = self.inner.write().await;
-            g.insert(agent_uuid.to_string(), LocalSession { tx, session });
-        }
-        {
-            let mut remote = self.remote.write().await;
-            remote.remove(agent_uuid);
-        }
+        self.inner
+            .insert(agent_uuid.to_string(), LocalSession { tx, session });
+        self.remote.remove(agent_uuid);
         if let Some(sync) = self.sync() {
             let event = crate::agent_registry_sync::AgentSyncEvent::attach(
                 &sync.replica_id,
@@ -295,16 +277,10 @@ impl AgentRegistry {
 
     /// Remove a session only when it still owns the registry slot (latest-connection-wins).
     pub async fn detach(&self, agent_uuid: &str, session: u64) -> bool {
-        let removed = {
-            let mut g = self.inner.write().await;
-            match g.get(agent_uuid) {
-                Some(entry) if entry.session == session => {
-                    g.remove(agent_uuid);
-                    true
-                }
-                _ => false,
-            }
-        };
+        let removed = self
+            .inner
+            .remove_if(agent_uuid, |_, entry| entry.session == session)
+            .is_some();
         if removed {
             if let Some(sync) = self.sync() {
                 let event = crate::agent_registry_sync::AgentSyncEvent::detach(
@@ -331,37 +307,31 @@ impl AgentRegistry {
     }
 
     pub async fn send(&self, agent_uuid: &str, msg: ServerToAgent) -> Result<(), String> {
-        // Clone the sender out and DROP the RwLock read guard before the awaited send.
-        // Holding the read guard across `tx.send(..).await` would let one stalled agent
-        // (full bounded channel) block every writer and deadlock the whole registry.
-        let tx = {
-            let g = self.inner.read().await;
-            let Some(entry) = g.get(agent_uuid) else {
-                return Err("agent not connected".into());
-            };
-            entry.tx.clone()
-        };
+        // Clone the sender out of the DashMap shard before the awaited send so a
+        // stalled agent (full bounded channel) cannot pin a shard lock.
+        let tx = self
+            .inner
+            .get(agent_uuid)
+            .map(|entry| entry.tx.clone())
+            .ok_or_else(|| "agent not connected".to_string())?;
         tx.send(msg).await.map_err(|e| e.to_string())
     }
 
     pub async fn is_online(&self, agent_uuid: &str) -> bool {
-        if self.inner.read().await.contains_key(agent_uuid) {
+        if self.inner.contains_key(agent_uuid) {
             return true;
         }
         self.remote
-            .read()
-            .await
             .get(agent_uuid)
-            .is_some_and(Self::remote_is_live)
+            .is_some_and(|p| Self::remote_is_live(p.value()))
     }
 
     pub async fn online_agents(&self) -> Vec<String> {
-        let local = self.inner.read().await;
-        let remote = self.remote.read().await;
-        let mut out: std::collections::HashSet<String> = local.keys().cloned().collect();
-        for (uuid, presence) in remote.iter() {
-            if Self::remote_is_live(presence) {
-                out.insert(uuid.clone());
+        let mut out: std::collections::HashSet<String> =
+            self.inner.iter().map(|e| e.key().clone()).collect();
+        for entry in self.remote.iter() {
+            if Self::remote_is_live(entry.value()) {
+                out.insert(entry.key().clone());
             }
         }
         out.into_iter().collect()

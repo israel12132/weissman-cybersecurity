@@ -38,21 +38,115 @@ fn tokio_cpu_affinity_cpus() -> Vec<usize> {
         .unwrap_or_default()
 }
 
-/// Build multi-threaded runtime; optionally pins each worker thread to successive PUs.
-pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
-    let threads = std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
+/// Count physical cores from `/proc/cpuinfo` (`physical id` + `core id` pairs).
+/// Falls back to `available_parallelism` (logical CPUs) when the file is missing.
+#[must_use]
+pub fn physical_cpu_count() -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(text) = std::fs::read_to_string("/proc/cpuinfo") {
+            if let Some(n) = parse_physical_cpus_from_cpuinfo(&text) {
+                if n > 0 {
+                    return n;
+                }
+            }
+        }
+    }
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1)
+}
+
+/// Parse unique `(physical id, core id)` pairs from a `/proc/cpuinfo` dump.
+#[must_use]
+pub fn parse_physical_cpus_from_cpuinfo(text: &str) -> Option<usize> {
+    use std::collections::BTreeSet;
+    let mut phys: Option<u32> = None;
+    let mut core: Option<u32> = None;
+    let mut set = BTreeSet::new();
+    let mut flush = |phys: &mut Option<u32>, core: &mut Option<u32>| {
+        if let (Some(p), Some(c)) = (*phys, *core) {
+            set.insert((p, c));
+        }
+        *phys = None;
+        *core = None;
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            flush(&mut phys, &mut core);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("physical id") {
+            phys = rest
+                .rsplit_once(':')
+                .and_then(|(_, v)| v.trim().parse().ok());
+        } else if let Some(rest) = line.strip_prefix("core id") {
+            core = rest
+                .rsplit_once(':')
+                .and_then(|(_, v)| v.trim().parse().ok());
+        }
+    }
+    flush(&mut phys, &mut core);
+    if set.is_empty() {
+        None
+    } else {
+        Some(set.len())
+    }
+}
+
+/// Worker-thread count: `WEISSMAN_TOKIO_WORKER_THREADS` or physical cores.
+#[must_use]
+pub fn tokio_worker_threads() -> usize {
+    std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
         .ok()
         .and_then(|s| s.trim().parse::<usize>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                .max(1)
-        });
+        .unwrap_or_else(physical_cpu_count)
+        .max(1)
+}
+
+/// Tokio LIFO slot stays on unless `WEISSMAN_TOKIO_DISABLE_LIFO_SLOT=1`.
+/// The slot reuses the current worker for wakeups and avoids extra context switches
+/// on short HTTP handlers.
+#[must_use]
+pub fn tokio_lifo_slot_enabled() -> bool {
+    !std::env::var("WEISSMAN_TOKIO_DISABLE_LIFO_SLOT")
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+/// Build multi-threaded runtime; optionally pins each worker thread to successive PUs.
+pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
+    let threads = tokio_worker_threads();
+    let blocking = (threads.saturating_mul(4)).clamp(16, 512);
 
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-    builder.enable_all().worker_threads(threads);
+    builder
+        .enable_all()
+        .worker_threads(threads)
+        .max_blocking_threads(blocking);
+    // Tokio's LIFO slot is enabled by default (avoids extra worker hand-offs on short
+    // HTTP handlers). `disable_lifo_slot` is tokio_unstable-only; we keep the default.
+    if !tokio_lifo_slot_enabled() {
+        tracing::warn!(
+            target: "hpc_runtime",
+            "WEISSMAN_TOKIO_DISABLE_LIFO_SLOT is set but tokio requires tokio_unstable to disable the LIFO slot; leaving it enabled"
+        );
+    }
+    tracing::info!(
+        target: "hpc_runtime",
+        worker_threads = threads,
+        max_blocking_threads = blocking,
+        lifo_slot = tokio_lifo_slot_enabled(),
+        "tokio runtime sized to physical cores"
+    );
 
     #[cfg(target_os = "linux")]
     {
@@ -260,5 +354,34 @@ mod tests {
     fn parse_tolerates_internal_whitespace() {
         assert_eq!(parse_cpu_affinity_list(" 0 - 2 "), vec![0, 1, 2]);
         assert_eq!(parse_cpu_affinity_list(" 1 , 3 "), vec![1, 3]);
+    }
+
+    #[test]
+    fn cpuinfo_counts_unique_physical_cores() {
+        let sample = "\
+processor\t: 0
+physical id\t: 0
+core id\t: 0
+
+processor\t: 1
+physical id\t: 0
+core id\t: 0
+
+processor\t: 2
+physical id\t: 0
+core id\t: 1
+
+processor\t: 3
+physical id\t: 0
+core id\t: 1
+";
+        assert_eq!(parse_physical_cpus_from_cpuinfo(sample), Some(2));
+    }
+
+    #[test]
+    fn worker_threads_at_least_one() {
+        assert!(tokio_worker_threads() >= 1);
+        assert!(physical_cpu_count() >= 1);
+        assert!(tokio_lifo_slot_enabled());
     }
 }
