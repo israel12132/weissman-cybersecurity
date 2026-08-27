@@ -43,6 +43,9 @@ fn finding(title: &str, signature: &str, target: &str, severity: &str) -> serde_
 #[ignore = "requires live Postgres (TEST_DATABASE_URL)"]
 async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     let url = db_url().expect("TEST_DATABASE_URL / DATABASE_URL");
+    fingerprint_engine::db::run_migrations(url.trim())
+        .await
+        .expect("migrations");
     let pool = PgPoolOptions::new()
         .max_connections(8)
         .acquire_timeout(Duration::from_secs(10))
@@ -51,6 +54,7 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
         .expect("connect");
 
     let (tenant_id, client_id, seeded) = seed_scope(&pool).await;
+    reset_scope(&pool, tenant_id, client_id).await;
     eprintln!("alert-fatigue live: tenant={tenant_id} client={client_id} seeded={seeded}");
 
     // 1) Network engine, volatile URL (ephemeral port + query).
@@ -110,7 +114,10 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     .fetch_one(&pool)
     .await
     .expect("count asm");
-    assert_eq!(asm_count, 1, "ephemeral-port rescan must not create a duplicate");
+    assert_eq!(
+        asm_count, 1,
+        "ephemeral-port rescan must not create a duplicate"
+    );
 
     let seen: i32 = sqlx::query_scalar(
         r#"SELECT seen_count FROM vulnerabilities
@@ -143,7 +150,8 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     assert!(n3 >= 1);
 
     let cluster = sqlx::query(
-        r#"SELECT max_severity, native_severity, corroboration_boost, engine_planes, member_count
+        r#"SELECT max_severity, native_severity, watermark_severity, corroboration_boost,
+                  engine_planes, member_count
              FROM weissman_finding_clusters
             WHERE tenant_id = $1 AND client_id = $2
               AND cluster_key = $3"#,
@@ -156,10 +164,14 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     .expect("cluster row");
     let max_sev: String = cluster.get("max_severity");
     let native: String = cluster.get("native_severity");
+    let watermark: String = cluster.get("watermark_severity");
     let boost: String = cluster.get("corroboration_boost");
     let planes: Vec<String> = cluster.get("engine_planes");
-    eprintln!("cluster max={max_sev} native={native} boost={boost} planes={planes:?}");
+    eprintln!(
+        "cluster max={max_sev} native={native} watermark={watermark} boost={boost} planes={planes:?}"
+    );
     assert_eq!(max_sev, "critical", "network+agent must jump to critical");
+    assert_eq!(watermark, "critical", "watermark must capture the peak");
     assert_eq!(boost, "cross_plane");
     assert!(planes.iter().any(|p| p == "network"));
     assert!(planes.iter().any(|p| p == "agent"));
@@ -200,8 +212,95 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
     let status_fp: String = suppressed.get("status");
     let raw: serde_json::Value = suppressed.get("raw_data");
     assert_eq!(status_fp, "FALSE_POSITIVE");
-    assert_eq!(raw.get("auto_suppressed").and_then(|v| v.as_bool()), Some(true));
-    assert_eq!(raw.get("soar_skipped").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(
+        raw.get("auto_suppressed").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        raw.get("soar_skipped").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+
+    let after_fp = sqlx::query(
+        r#"SELECT max_severity, watermark_severity, native_severity
+             FROM weissman_finding_clusters
+            WHERE tenant_id = $1 AND client_id = $2 AND cluster_key = $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(&sig_hash)
+    .fetch_one(&pool)
+    .await
+    .expect("cluster after FP");
+    let max_after: String = after_fp.get("max_severity");
+    let water_after: String = after_fp.get("watermark_severity");
+    assert_eq!(
+        max_after, "critical",
+        "inbox severity must not yo-yo after auto-suppression"
+    );
+    assert_eq!(water_after, "critical");
+
+    // 5) Route-template: public image vs admin billing must never share a cluster.
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "asm",
+        "https://api.corp/api/v1/public/image/6c084089-0aec",
+        &[finding(
+            "XSS in public image",
+            "xss",
+            "https://api.corp/api/v1/public/image/6c084089-0aec",
+            "low",
+        )],
+    )
+    .await
+    .expect("persist public image");
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "asm",
+        "https://api.corp/api/v1/admin/billing/6c084089-0aec",
+        &[finding(
+            "XSS in admin billing",
+            "xss",
+            "https://api.corp/api/v1/admin/billing/6c084089-0aec",
+            "critical",
+        )],
+    )
+    .await
+    .expect("persist admin billing");
+
+    let public_key = fingerprint_engine::finding_identity::build_cluster_key(
+        "https://api.corp/api/v1/public/image/6c084089-0aec",
+        "xss",
+        "CWE-89",
+    );
+    let admin_key = fingerprint_engine::finding_identity::build_cluster_key(
+        "https://api.corp/api/v1/admin/billing/6c084089-0aec",
+        "xss",
+        "CWE-89",
+    );
+    assert_ne!(public_key, admin_key);
+    let keys: Vec<String> = sqlx::query_scalar(
+        r#"SELECT cluster_key FROM weissman_finding_clusters
+            WHERE tenant_id = $1 AND client_id = $2
+              AND cluster_key IN ($3, $4)
+            ORDER BY cluster_key"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(&public_key)
+    .bind(&admin_key)
+    .fetch_all(&pool)
+    .await
+    .expect("route-template clusters");
+    assert_eq!(
+        keys.len(),
+        2,
+        "public image and admin billing must be distinct clusters, got {keys:?}"
+    );
 
     eprintln!("alert-fatigue live contract OK finding_id={finding_id}");
 }
@@ -256,6 +355,38 @@ async fn seed_scope(pool: &sqlx::PgPool) -> (i64, i64, bool) {
             .await
             .expect("seed client");
     (tenant_id, client_id, true)
+}
+
+async fn reset_scope(pool: &sqlx::PgPool, tenant_id: i64, client_id: i64) {
+    let _ =
+        sqlx::query("DELETE FROM weissman_cluster_ingest WHERE tenant_id = $1 AND client_id = $2")
+            .bind(tenant_id)
+            .bind(client_id)
+            .execute(pool)
+            .await;
+    let _ = sqlx::query("DELETE FROM vulnerabilities WHERE tenant_id = $1 AND client_id = $2")
+        .bind(tenant_id)
+        .bind(client_id)
+        .execute(pool)
+        .await;
+    let _ = sqlx::query(
+        "DELETE FROM weissman_finding_clusters WHERE tenant_id = $1 AND client_id = $2",
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .execute(pool)
+    .await;
+    let _ = sqlx::query("DELETE FROM finding_suppressions WHERE tenant_id = $1")
+        .bind(tenant_id)
+        .execute(pool)
+        .await;
+    crate::fp_feedback_invalidate(tenant_id);
+}
+
+// Test binary cannot call fingerprint_engine cache helper without a thin wrap.
+fn fp_feedback_invalidate(tenant_id: i64) {
+    fingerprint_engine::fp_feedback::invalidate_suppression_cache(tenant_id, "asm");
+    fingerprint_engine::fp_feedback::invalidate_suppression_cache(tenant_id, "process_inventory");
 }
 
 async fn fetch_vuln(

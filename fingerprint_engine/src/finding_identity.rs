@@ -17,9 +17,38 @@ use regex::Regex;
 use weissman_core::models::engine::resolve_engine_id;
 use weissman_core::models::engine_agent::is_agent_required_engine;
 
-/// IANA / Linux ephemeral port range. Service ports below this (8080, 8443, 3000)
-/// identify a real listener and MUST stay in the identity.
-const EPHEMERAL_PORT_MIN: u16 = 32768;
+/// IANA Dynamic/Private Ports (RFC 6335) and Windows Vista+ default.
+/// Used when the OS is unknown so we do **not** merge Kubernetes NodePorts
+/// (30000–32767) or Linux high-but-static listeners (32768–49151) into one id.
+pub const IANA_DYNAMIC_PORT_MIN: u16 = 49152;
+pub const LINUX_EPHEMERAL_PORT_MIN: u16 = 32768;
+pub const WINDOWS_EPHEMERAL_PORT_MIN: u16 = 49152;
+pub const K8S_NODEPORT_MIN: u16 = 30000;
+pub const K8S_NODEPORT_MAX: u16 = 32767;
+
+/// Host OS family for ephemeral-port classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OsFamily {
+    Linux,
+    Windows,
+    #[default]
+    Unknown,
+}
+
+/// Extra identity context from the engine — service fingerprint / NodePort /
+/// declared listener must never be treated as an ephemeral client port.
+#[derive(Debug, Clone, Default)]
+pub struct IdentityHint {
+    pub os: OsFamily,
+    pub keep_port: bool,
+}
+
+impl IdentityHint {
+    #[must_use]
+    pub fn from_finding(finding: &Value) -> Self {
+        identity_hint_from_finding(finding)
+    }
+}
 
 static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").expect("uuid")
@@ -39,16 +68,129 @@ static SESSION_KV_RE: LazyLock<Regex> = LazyLock::new(|| {
 static PORT_WORD_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\bport\s+(\d{4,5})\b").expect("port-word"));
 
-/// True when `port` is an OS-allocated ephemeral / dynamic port, not a service port.
+/// Conservative default (OS unknown): only IANA dynamic ports (≥49152).
 #[must_use]
 pub fn is_ephemeral_port(port: u16) -> bool {
-    port >= EPHEMERAL_PORT_MIN
+    is_ephemeral_port_hinted(port, &IdentityHint::default())
+}
+
+/// OS-aware / fingerprint-aware ephemeral check.
+///
+/// * Kubernetes NodePort range is **never** ephemeral (service ports).
+/// * Engine-declared listener / banner / `service` / `node_port` keeps the port.
+/// * Windows → 49152+; Linux → 32768+; unknown → 49152+ (false-dedup safe).
+#[must_use]
+pub fn is_ephemeral_port_hinted(port: u16, hint: &IdentityHint) -> bool {
+    if hint.keep_port {
+        return false;
+    }
+    if (K8S_NODEPORT_MIN..=K8S_NODEPORT_MAX).contains(&port) {
+        return false;
+    }
+    let min = match hint.os {
+        OsFamily::Linux => LINUX_EPHEMERAL_PORT_MIN,
+        OsFamily::Windows | OsFamily::Unknown => IANA_DYNAMIC_PORT_MIN,
+    };
+    port >= min
+}
+
+#[must_use]
+pub fn identity_hint_from_finding(finding: &Value) -> IdentityHint {
+    let os = detect_os_family(finding);
+    let keep_port = service_fingerprint_keep_port(finding);
+    IdentityHint { os, keep_port }
+}
+
+fn detect_os_family(finding: &Value) -> OsFamily {
+    for key in ["os", "os_family", "platform", "host_os", "guest_os"] {
+        if let Some(s) = finding.get(key).and_then(Value::as_str) {
+            if let Some(os) = parse_os_family(s) {
+                return os;
+            }
+        }
+    }
+    if let Some(agent) = finding.get("agent") {
+        for key in ["os", "os_family", "platform"] {
+            if let Some(s) = agent.get(key).and_then(Value::as_str) {
+                if let Some(os) = parse_os_family(s) {
+                    return os;
+                }
+            }
+        }
+    }
+    OsFamily::Unknown
+}
+
+fn parse_os_family(raw: &str) -> Option<OsFamily> {
+    let s = raw.trim().to_ascii_lowercase();
+    if s.contains("win") {
+        return Some(OsFamily::Windows);
+    }
+    if s.contains("linux")
+        || s.contains("ubuntu")
+        || s.contains("debian")
+        || s.contains("rhel")
+        || s.contains("centos")
+        || s.contains("alpine")
+    {
+        return Some(OsFamily::Linux);
+    }
+    None
+}
+
+fn service_fingerprint_keep_port(finding: &Value) -> bool {
+    if finding
+        .get("node_port")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || finding
+            .get("k8s_node_port")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        || finding
+            .get("listener")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
+        return true;
+    }
+    if finding
+        .get("port_role")
+        .and_then(Value::as_str)
+        .is_some_and(|s| s.eq_ignore_ascii_case("service") || s.eq_ignore_ascii_case("listener"))
+    {
+        return true;
+    }
+    for key in [
+        "service",
+        "service_name",
+        "banner",
+        "product",
+        "fingerprint",
+        "detected_service",
+    ] {
+        if finding
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.trim().is_empty())
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Lower-case host, strip query / fragment / userinfo / default + ephemeral ports,
-/// replace UUID / long-hex / numeric id path segments with `{id}`.
+/// replace **variable** path segments only (UUID / hex id / numeric id) with `{id}`.
+/// Static route tokens (`admin`, `billing`, `public`, `image`, `v1`) are kept so
+/// `/api/v1/public/image/{id}` never collides with `/api/v1/admin/billing/{id}`.
 #[must_use]
 pub fn normalize_target(raw: &str) -> String {
+    normalize_target_hinted(raw, &IdentityHint::default())
+}
+
+#[must_use]
+pub fn normalize_target_hinted(raw: &str, hint: &IdentityHint) -> String {
     let mut s = raw.trim().to_ascii_lowercase();
     if s.is_empty() {
         return s;
@@ -64,8 +206,8 @@ pub fn normalize_target(raw: &str) -> String {
     let (scheme, rest) = split_scheme(&s);
     let rest = strip_userinfo(rest);
     let (authority, path) = split_authority_path(rest);
-    let authority = strip_target_port(authority, scheme);
-    let path = normalize_path_ids(path);
+    let authority = strip_target_port(authority, scheme, hint);
+    let path = normalize_route_template(path);
     let path = path.trim_end_matches('/');
 
     let mut out = String::new();
@@ -124,7 +266,7 @@ fn split_authority_path(rest: &str) -> (&str, &str) {
     }
 }
 
-fn strip_target_port(authority: &str, scheme: &str) -> String {
+fn strip_target_port(authority: &str, scheme: &str, hint: &IdentityHint) -> String {
     let (host, port) = split_host_port(authority);
     let Some(p) = port else {
         return host.to_string();
@@ -133,7 +275,7 @@ fn strip_target_port(authority: &str, scheme: &str) -> String {
         (scheme, p),
         ("https", 443) | ("http", 80) | ("wss", 443) | ("ws", 80)
     );
-    if default || is_ephemeral_port(p) {
+    if default || is_ephemeral_port_hinted(p, hint) {
         host.to_string()
     } else {
         format!("{host}:{p}")
@@ -162,20 +304,21 @@ fn split_host_port(authority: &str) -> (&str, Option<u16>) {
     (authority, None)
 }
 
-fn normalize_path_ids(path: &str) -> String {
+/// Preserve the full application route template. Only **variable edge values**
+/// (a whole path segment that is a UUID, hex id, or numeric id) become `{id}`.
+/// Static tokens — `admin`, `billing`, `public`, `image`, `v1`, years — stay.
+fn normalize_route_template(path: &str) -> String {
     if path.is_empty() {
         return String::new();
     }
-    let s = UUID_RE.replace_all(path, "{id}");
-    let s = LONG_HEX_RE.replace_all(&s, "{id}");
-    // Replace numeric path segments of 4+ digits (`/orders/12345` → `/orders/{id}`).
-    // The `regex` crate has no look-around, so we split on `/` instead of a lookahead.
-    let mut out = String::with_capacity(s.len());
-    for (i, seg) in s.split('/').enumerate() {
+    let segs: Vec<&str> = path.split('/').collect();
+    let last = segs.len().saturating_sub(1);
+    let mut out = String::with_capacity(path.len());
+    for (i, seg) in segs.iter().enumerate() {
         if i > 0 {
             out.push('/');
         }
-        if seg.len() >= 4 && seg.bytes().all(|b| b.is_ascii_digit()) {
+        if is_variable_path_segment(seg, i == last) {
             out.push_str("{id}");
         } else {
             out.push_str(seg);
@@ -184,11 +327,55 @@ fn normalize_path_ids(path: &str) -> String {
     out
 }
 
+/// True when `seg` is a variable identifier, never a static route token.
+fn is_variable_path_segment(seg: &str, is_last: bool) -> bool {
+    if seg.is_empty() || seg == "{id}" {
+        return false;
+    }
+    let s = seg;
+    if UUID_RE.is_match(s) && s.len() >= 36 {
+        return true;
+    }
+    if s.len() >= 16 && s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return true;
+    }
+    if is_hyphenated_hex_id(s) {
+        return true;
+    }
+    if s.bytes().all(|b| b.is_ascii_digit()) {
+        // Intermediate 4-digit tokens are often years / versions — keep them.
+        // Leaf 4+ digits (`/orders/1234`) and any 5+ digit token are ids.
+        if s.len() >= 5 {
+            return true;
+        }
+        if is_last && s.len() >= 4 {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_hyphenated_hex_id(seg: &str) -> bool {
+    if !seg.contains('-') {
+        return false;
+    }
+    if !seg.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-') {
+        return false;
+    }
+    let hex_len = seg.bytes().filter(|b| b.is_ascii_hexdigit()).count();
+    hex_len >= 12
+}
+
 /// Uniform, filtered signature: lowercase, strip query/fragment, ephemeral ports,
 /// session tokens, UUIDs, timestamps. Two probes of the same vuln with different
 /// `?sid=` or `:54321` must hash identically.
 #[must_use]
 pub fn normalize_signature(raw: &str) -> String {
+    normalize_signature_hinted(raw, &IdentityHint::default())
+}
+
+#[must_use]
+pub fn normalize_signature_hinted(raw: &str, hint: &IdentityHint) -> String {
     let mut s = raw.trim().to_ascii_lowercase();
     if s.is_empty() {
         return s;
@@ -210,7 +397,7 @@ pub fn normalize_signature(raw: &str) -> String {
                 .get(1)
                 .and_then(|m| m.as_str().parse().ok())
                 .unwrap_or(0);
-            if is_ephemeral_port(p) {
+            if is_ephemeral_port_hinted(p, hint) {
                 "port {ephemeral}".to_string()
             } else {
                 caps.get(0)
@@ -219,11 +406,11 @@ pub fn normalize_signature(raw: &str) -> String {
             }
         })
         .into_owned();
-    s = strip_colon_ephemeral_ports(&s);
+    s = strip_colon_ephemeral_ports(&s, hint);
     collapse_ws(&s)
 }
 
-fn strip_colon_ephemeral_ports(s: &str) -> String {
+fn strip_colon_ephemeral_ports(s: &str, hint: &IdentityHint) -> String {
     let mut out = String::with_capacity(s.len());
     let bytes = s.as_bytes();
     let mut i = 0;
@@ -235,7 +422,7 @@ fn strip_colon_ephemeral_ports(s: &str) -> String {
             }
             let num = &s[i + 1..j];
             if let Ok(p) = num.parse::<u16>() {
-                if is_ephemeral_port(p) {
+                if is_ephemeral_port_hinted(p, hint) {
                     i = j;
                     continue;
                 }
@@ -319,8 +506,18 @@ pub fn derive_vuln_signature(finding: &Value, fallback_title: &str) -> String {
 /// Engine is excluded so independent detectors of the same vuln share one cluster.
 #[must_use]
 pub fn build_cluster_key(target: &str, vuln_signature: &str, cwe: &str) -> String {
-    let target_norm = normalize_target(target);
-    let sig_norm = normalize_signature(vuln_signature);
+    build_cluster_key_hinted(target, vuln_signature, cwe, &IdentityHint::default())
+}
+
+#[must_use]
+pub fn build_cluster_key_hinted(
+    target: &str,
+    vuln_signature: &str,
+    cwe: &str,
+    hint: &IdentityHint,
+) -> String {
+    let target_norm = normalize_target_hinted(target, hint);
+    let sig_norm = normalize_signature_hinted(vuln_signature, hint);
     let cwe_norm = normalize_cwe(cwe);
     let mut h = Sha256::new();
     h.update(target_norm.as_bytes());
@@ -348,12 +545,13 @@ pub fn build_stable_finding_id(engine: &str, target: &str, finding: &Value) -> S
         .and_then(Value::as_str)
         .unwrap_or("");
     let title = extract_title(finding, engine);
+    let hint = identity_hint_from_finding(finding);
     let signature = derive_vuln_signature(finding, &title);
 
     let mut hasher = Sha256::new();
     hasher.update(engine.trim().as_bytes());
     hasher.update(b"|");
-    hasher.update(normalize_target(target).as_bytes());
+    hasher.update(normalize_target_hinted(target, &hint).as_bytes());
     hasher.update(b"|");
     hasher.update(normalize_cve(&cve).as_bytes());
     hasher.update(b"|");
@@ -364,7 +562,7 @@ pub fn build_stable_finding_id(engine: &str, target: &str, finding: &Value) -> S
     hasher.update(signature.as_bytes());
     if signature.is_empty() {
         hasher.update(b"|");
-        hasher.update(normalize_signature(&title).as_bytes());
+        hasher.update(normalize_signature_hinted(&title, &hint).as_bytes());
     }
     let digest = hasher.finalize();
     let short: String = digest.iter().take(12).map(|b| format!("{b:02x}")).collect();
@@ -448,6 +646,37 @@ pub fn corroborate_cluster_severity(native: &str, engines: &[String]) -> Corrobo
         native_severity: canonical_sev(native).to_string(),
         boost: boost.to_string(),
         engine_planes: planes.into_iter().map(|p| p.to_string()).collect(),
+    }
+}
+
+/// High-watermark: cluster severity used for inbox / SOAR / audit never drops.
+#[must_use]
+pub fn monotonic_severity(watermark: &str, computed: &str) -> String {
+    if sev_weight(computed) > sev_weight(watermark) {
+        canonical_sev(computed).to_string()
+    } else {
+        canonical_sev(watermark).to_string()
+    }
+}
+
+/// `cross_plane` > `multi_engine` > `none` — boost reason is also monotonic.
+#[must_use]
+pub fn monotonic_boost(watermark: &str, computed: &str) -> String {
+    if boost_rank(computed) > boost_rank(watermark) {
+        computed.to_string()
+    } else if watermark.trim().is_empty() {
+        "none".to_string()
+    } else {
+        watermark.to_string()
+    }
+}
+
+#[must_use]
+pub fn boost_rank(boost: &str) -> i32 {
+    match boost.trim() {
+        "cross_plane" => 2,
+        "multi_engine" => 1,
+        _ => 0,
     }
 }
 
@@ -545,6 +774,60 @@ mod tests {
         assert!(a.contains("/users/{id}/profile"));
         let n = normalize_target("https://app.example.com/orders/12345");
         assert_eq!(n, "https://app.example.com/orders/{id}");
+    }
+
+    #[test]
+    fn route_template_keeps_static_tokens_public_vs_admin() {
+        let public = normalize_target("https://api.corp/api/v1/public/image/6c084089-0aec");
+        let admin = normalize_target("https://api.corp/api/v1/admin/billing/6c084089-0aec");
+        assert_eq!(public, "https://api.corp/api/v1/public/image/{id}");
+        assert_eq!(admin, "https://api.corp/api/v1/admin/billing/{id}");
+        assert_ne!(
+            build_cluster_key(&public, "xss", "CWE-79"),
+            build_cluster_key(&admin, "xss", "CWE-79"),
+            "public image and admin billing must never share a cluster_key"
+        );
+        // Year-like intermediate 4-digit tokens stay (not collapsed to /api/{id}/...).
+        assert_eq!(
+            normalize_target("https://api.corp/reports/2024/q1"),
+            "https://api.corp/reports/2024/q1"
+        );
+    }
+
+    #[test]
+    fn conservative_ephemeral_keeps_nodeport_and_linux_high_static() {
+        assert_eq!(
+            normalize_target("https://svc.internal:30000/health"),
+            "https://svc.internal:30000/health"
+        );
+        assert_eq!(
+            normalize_target("https://cache.internal:33791/"),
+            "https://cache.internal:33791"
+        );
+        let linux = IdentityHint {
+            os: OsFamily::Linux,
+            keep_port: false,
+        };
+        assert_eq!(
+            normalize_target_hinted("https://cache.internal:33791/", &linux),
+            "https://cache.internal"
+        );
+        let fingerprinted = IdentityHint {
+            os: OsFamily::Unknown,
+            keep_port: true,
+        };
+        assert_eq!(
+            normalize_target_hinted("https://redis.internal:50100/", &fingerprinted),
+            "https://redis.internal:50100"
+        );
+    }
+
+    #[test]
+    fn watermark_severity_never_drops() {
+        assert_eq!(monotonic_severity("critical", "medium"), "critical");
+        assert_eq!(monotonic_severity("medium", "critical"), "critical");
+        assert_eq!(monotonic_boost("cross_plane", "none"), "cross_plane");
+        assert_eq!(monotonic_boost("none", "multi_engine"), "multi_engine");
     }
 
     #[test]

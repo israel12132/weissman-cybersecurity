@@ -57,6 +57,7 @@ pub mod chronos_engine;
 pub mod client_isolation;
 pub mod cloud_hunter;
 pub mod cloud_integration_engine;
+pub mod cluster_ingest;
 pub mod cognitive_starvation_engine;
 pub mod compliance_engine;
 pub mod compliance_posture;

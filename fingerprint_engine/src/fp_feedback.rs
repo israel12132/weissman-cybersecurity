@@ -16,10 +16,30 @@
 //!     preloads suppression rules once per `(tenant, engine)` and bumps hit-counts in one batch
 //!   * [`confidence_multiplier`] — called from `findings_persist` and the read API
 
+use dashmap::DashMap;
+use globset::Glob;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::time::{Duration, Instant};
 
 const AUTO_SUPPRESS_FP_THRESHOLD: i32 = 3;
+const SUPPRESSION_CACHE_TTL: Duration = Duration::from_secs(30);
+
+struct CachedRules {
+    loaded_at: Instant,
+    rules: Vec<SuppressionRule>,
+}
+
+static SUPPRESSION_CACHE: LazyLock<DashMap<(i64, String), CachedRules>> =
+    LazyLock::new(DashMap::new);
+static GLOB_MATCHERS: LazyLock<DashMap<String, Option<globset::GlobMatcher>>> =
+    LazyLock::new(DashMap::new);
+
+/// Drop the in-memory glob cache for `(tenant, engine)` after a new rule is written.
+pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
+    SUPPRESSION_CACHE.remove(&(tenant_id, engine.to_ascii_lowercase()));
+}
 
 #[inline]
 fn multiplier_from_counts(tp: i32, fp: i32) -> f64 {
@@ -82,6 +102,7 @@ pub async fn record_fp(
     .execute(&mut **tx)
     .await
     .map_err(|e| format!("insert suppression: {e}"))?;
+    invalidate_suppression_cache(tenant_id, engine);
     Ok(inserted.rows_affected() > 0)
 }
 
@@ -239,6 +260,12 @@ pub async fn active_suppressions_for_engine(
     if engine.is_empty() {
         return Vec::new();
     }
+    let cache_key = (tenant_id, engine.to_ascii_lowercase());
+    if let Some(hit) = SUPPRESSION_CACHE.get(&cache_key) {
+        if hit.loaded_at.elapsed() < SUPPRESSION_CACHE_TTL {
+            return hit.rules.clone();
+        }
+    }
     let Ok(mut tx) = crate::db::begin_tenant_tx(pool, tenant_id).await else {
         return Vec::new();
     };
@@ -254,12 +281,21 @@ pub async fn active_suppressions_for_engine(
     .await
     .unwrap_or_default();
     let _ = tx.commit().await;
-    rows.into_iter()
+    let rules: Vec<SuppressionRule> = rows
+        .into_iter()
         .map(|(signature_hash, target_glob)| SuppressionRule {
             signature_hash,
             target_glob,
         })
-        .collect()
+        .collect();
+    SUPPRESSION_CACHE.insert(
+        cache_key,
+        CachedRules {
+            loaded_at: Instant::now(),
+            rules: rules.clone(),
+        },
+    );
+    rules
 }
 
 /// One active `finding_suppressions` row. `target_glob == None` (or empty) suppresses the
@@ -284,14 +320,31 @@ pub fn is_suppressed_by(rules: &[SuppressionRule], signature_hash: &str, target_
                 None | Some("") => true,
                 Some(glob) => {
                     let glob_norm = crate::finding_identity::normalize_target(glob);
-                    glob_matches(glob, target_url)
-                        || (!target_norm.is_empty() && glob_matches(glob, &target_norm))
+                    glob_matches_fast(glob, target_url)
+                        || (!target_norm.is_empty() && glob_matches_fast(glob, &target_norm))
                         || (!glob_norm.is_empty()
                             && !target_norm.is_empty()
-                            && glob_matches(&glob_norm, &target_norm))
+                            && glob_matches_fast(&glob_norm, &target_norm))
                 }
             }
     })
+}
+
+/// In-memory glob match via a process-wide `globset` automaton cache.
+/// Exact strings skip the automaton. Invalid patterns fall back to two-pointer.
+fn glob_matches_fast(pattern: &str, text: &str) -> bool {
+    let pat = pattern.to_ascii_lowercase();
+    let txt = text.to_ascii_lowercase();
+    if !pat.contains('*') && !pat.contains('?') && !pat.contains('[') {
+        return pat == txt;
+    }
+    let entry = GLOB_MATCHERS
+        .entry(pat.clone())
+        .or_insert_with(|| Glob::new(&pat).ok().map(|g| g.compile_matcher()));
+    match entry.as_ref() {
+        Some(m) => m.is_match(&txt),
+        None => glob_matches(&pat, &txt),
+    }
 }
 
 /// Case-insensitive `*`/`?` glob match (standard two-pointer wildcard algorithm). A pattern with
@@ -398,6 +451,18 @@ mod tests {
 
         // Different signature never suppressed regardless of glob.
         assert!(!is_suppressed_by(&any, "other", "https://prod.example.com"));
+    }
+
+    #[test]
+    fn public_vs_admin_route_templates_do_not_share_suppression() {
+        let public = "https://api.corp/api/v1/public/image/6c084089-0aec";
+        let admin = "https://api.corp/api/v1/admin/billing/6c084089-0aec";
+        let public_key = crate::finding_identity::build_cluster_key(public, "xss", "CWE-79");
+        let admin_key = crate::finding_identity::build_cluster_key(admin, "xss", "CWE-79");
+        assert_ne!(public_key, admin_key);
+        let public_rule = [rule(&public_key, Some(public))];
+        assert!(is_suppressed_by(&public_rule, &public_key, public));
+        assert!(!is_suppressed_by(&public_rule, &admin_key, admin));
     }
 
     #[test]

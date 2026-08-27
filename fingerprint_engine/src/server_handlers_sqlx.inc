@@ -662,7 +662,7 @@ async fn api_findings_clusters(
     let rows = sqlx::query(
         r#"SELECT id, client_id, target, cwe, vuln_signature, title,
                   member_count, engines, sources, cves,
-                  max_severity, native_severity, corroboration_boost, engine_planes,
+                  max_severity, native_severity, watermark_severity, corroboration_boost, engine_planes,
                   max_cvss, max_epss, kev_listed,
                   status, first_seen_at, last_seen_at
              FROM weissman_finding_clusters
@@ -704,6 +704,7 @@ async fn api_findings_clusters(
     let clusters: Vec<Value> = rows.into_iter().map(|r| {
         let max_severity: String = r.try_get("max_severity").unwrap_or_else(|_| "info".to_string());
         let native_severity: String = r.try_get("native_severity").unwrap_or_else(|_| max_severity.clone());
+        let watermark_severity: String = r.try_get("watermark_severity").unwrap_or_else(|_| max_severity.clone());
         let corroboration_boost: String = r.try_get("corroboration_boost").unwrap_or_else(|_| "none".to_string());
         let engine_planes: Vec<String> = r.try_get("engine_planes").unwrap_or_default();
         let max_cvss: Option<f32> = r.try_get("max_cvss").ok();
@@ -724,6 +725,7 @@ async fn api_findings_clusters(
             "cves":           cves,
             "max_severity":   max_severity,
             "native_severity": native_severity,
+            "watermark_severity": watermark_severity,
             "corroboration_boost": corroboration_boost,
             "engine_planes":  engine_planes,
             "corroborated":   corroboration_boost != "none",

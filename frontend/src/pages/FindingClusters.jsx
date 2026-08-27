@@ -113,6 +113,11 @@ export default function FindingClusters() {
                   {t(`${NS}.boosted_from`, { native: r.native_severity })}
                 </span>
               )}
+              {r.watermark_severity && r.watermark_severity === r.max_severity && r.native_severity && r.native_severity !== r.watermark_severity && (
+                <span className="text-[9px] font-mono uppercase tracking-wider text-rose-300/80">
+                  {t(`${NS}.watermark_held`)}
+                </span>
+              )}
             </span>
           )
         },

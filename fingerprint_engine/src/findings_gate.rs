@@ -293,7 +293,9 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
         }
     }
 
-    let target_url = crate::finding_identity::normalize_target(&extract_target(&raw, target));
+    let hint = crate::finding_identity::identity_hint_from_finding(&raw);
+    let target_url =
+        crate::finding_identity::normalize_target_hinted(&extract_target(&raw, target), &hint);
     let vuln_type = extract_vuln_type(&raw);
     let payload = extract_payload(&raw);
     let dedup_hash = build_dedup_hash(&target_url, &vuln_type, &payload, engine);

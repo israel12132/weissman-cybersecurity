@@ -21,7 +21,6 @@ use std::sync::LazyLock;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
-use crate::findings_correlator::{self, ClusterAttrs};
 use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
@@ -257,6 +256,11 @@ fn extract_array(f: &Value, keys: &[&str]) -> Value {
     Value::Array(vec![])
 }
 
+struct PendingSoarDispatch {
+    vuln_id: i64,
+    event: crate::soar_playbook::PlaybookEvent,
+}
+
 /// Authorized writer — only this type may execute vulnerability INSERT/UPSERT.
 struct FindingsPersistWriter;
 
@@ -351,6 +355,7 @@ pub async fn persist_engine_findings(
     let active_suppressions =
         fp_feedback::active_suppressions_for_engine(pool, tenant_id, engine).await;
     let mut suppression_hits: Vec<String> = Vec::new();
+    let mut pending_soar: Vec<PendingSoarDispatch> = Vec::new();
 
     let mut inserted: u64 = 0;
     for (finding_index, raw) in findings.iter().cloned().enumerate() {
@@ -507,8 +512,13 @@ pub async fn persist_engine_findings(
         // suppression rules transfer naturally across engines hitting the
         // exact same vulnerability. We also need it for record_fp()/record_tp().
         let vuln_signature = crate::finding_identity::derive_vuln_signature(f, &title);
-        let signature_hash =
-            findings_correlator::build_cluster_key(&target_url, &vuln_signature, &cwe);
+        let identity_hint = crate::finding_identity::identity_hint_from_finding(f);
+        let signature_hash = crate::finding_identity::build_cluster_key_hinted(
+            &target_url,
+            &vuln_signature,
+            &cwe,
+            &identity_hint,
+        );
         // Prefer cryptographic dedup hash when correlator signature is empty.
         let signature_hash = if signature_hash.trim().is_empty() {
             dedup_hash.clone()
@@ -553,7 +563,10 @@ pub async fn persist_engine_findings(
             obj.insert(
                 "identity".to_string(),
                 json!({
-                    "target_normalized": crate::finding_identity::normalize_target(&target_url),
+                    "target_normalized": crate::finding_identity::normalize_target_hinted(
+                        &target_url,
+                        &identity_hint,
+                    ),
                     "signature_normalized": vuln_signature,
                     "cwe_normalized": crate::finding_identity::normalize_cwe(&cwe),
                     "engine_plane": crate::finding_identity::engine_plane(engine),
@@ -573,7 +586,7 @@ pub async fn persist_engine_findings(
         let suppressed = fp_feedback::is_suppressed_by(
             &active_suppressions,
             &signature_hash,
-            &crate::finding_identity::normalize_target(&target_url),
+            &crate::finding_identity::normalize_target_hinted(&target_url, &identity_hint),
         );
         if suppressed {
             suppression_hits.push(signature_hash.clone());
@@ -677,41 +690,41 @@ pub async fn persist_engine_findings(
             }
         }
 
-        // ── Correlate into a finding_cluster ─────────────────────────────────
-        let source_label = engine;
-        let cluster = findings_correlator::upsert_cluster_for_finding(
+        // Cluster assignment is *not* in this TX — enqueue only (append-only, no
+        // weissman_finding_clusters row lock). A serial ingest drain after commit
+        // upserts the cluster under a per-key advisory lock. Enqueue errors must
+        // fail this persist: a swallowed SQL error aborts the TX while COMMIT
+        // still returns success (it becomes ROLLBACK).
+        let target_norm =
+            crate::finding_identity::normalize_target_hinted(&target_url, &identity_hint);
+        crate::cluster_ingest::enqueue(
             &mut tx,
             tenant_id,
             client_id,
-            &f,
-            ClusterAttrs {
-                target: &target_url,
-                engine,
-                source: source_label,
-                title: &title,
-                severity: &severity,
-                cwe: &cwe,
-                cve: if cve.is_empty() { None } else { Some(&cve) },
+            &crate::cluster_ingest::ClusterIngestRow {
+                vuln_id: upserted_id,
+                cluster_key: signature_hash.clone(),
+                target: target_norm,
+                engine: engine.to_string(),
+                source: engine.to_string(),
+                title: title.clone(),
+                severity: severity.clone(),
+                cwe: cwe.clone(),
+                vuln_signature: vuln_signature.clone(),
+                cve: if cve.is_empty() {
+                    None
+                } else {
+                    Some(cve.clone())
+                },
                 cvss: Some(cvss),
-                epss_score,
+                epss: epss_score,
                 kev_listed,
                 is_new_member: vuln_is_new,
             },
         )
-        .await
-        .ok();
-
-        // Stamp the new cluster_id onto the vulnerability row.
-        if let Some((cid, ref _key)) = cluster {
-            let _ = sqlx::query("UPDATE vulnerabilities SET cluster_id = $1 WHERE id = $2")
-                .bind(cid)
-                .bind(upserted_id)
-                .execute(&mut *tx)
-                .await;
-        }
+        .await?;
 
         inserted += 1;
-        let _ = upserted_id; // silence unused warning when not building tests
 
         // Auto-suppression loop: persist as FALSE_POSITIVE at the worker persist
         // gate and skip SOAR / pentest-memory / critical-infra fan-out so a known
@@ -828,7 +841,7 @@ pub async fn persist_engine_findings(
                 tenant_id,
                 client_id: Some(client_id),
                 finding_id: Some(upserted_id),
-                cluster_id: cluster.map(|(cid, _)| cid),
+                cluster_id: None,
                 title: title.clone(),
                 severity: severity.clone(),
                 source: engine.to_string(),
@@ -846,16 +859,9 @@ pub async fn persist_engine_findings(
                 signature_hash: Some(signature_hash.clone()),
                 internet_exposed,
             };
-            let pool_for_dispatch: PgPool = (*pool).clone();
-            tokio::spawn(async move {
-                let _permit = post_persist_db_permit().await;
-                crate::soar::dispatch_record::record_post_persist_dispatch(
-                    &pool_for_dispatch,
-                    tenant_id,
-                    upserted_id,
-                    event,
-                )
-                .await;
+            pending_soar.push(PendingSoarDispatch {
+                vuln_id: upserted_id,
+                event,
             });
         } else {
             tracing::info!(
@@ -873,6 +879,33 @@ pub async fn persist_engine_findings(
     fp_feedback::bump_suppression_hits(&mut tx, tenant_id, engine, &suppression_hits).await;
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
+
+    // Cluster upsert + watermark corroboration — separate TXes, advisory-locked per key.
+    if inserted > 0 {
+        if let Err(e) = crate::cluster_ingest::drain_for_tenant(pool, tenant_id, 500).await {
+            tracing::warn!(target: "findings_persist", error = %e, "cluster ingest drain failed");
+        }
+    }
+
+    if !pending_soar.is_empty() {
+        let ids: Vec<i64> = pending_soar.iter().map(|p| p.vuln_id).collect();
+        let cluster_map = crate::cluster_ingest::vuln_cluster_ids(pool, tenant_id, &ids).await;
+        for mut pending in pending_soar {
+            pending.event.cluster_id = cluster_map.get(&pending.vuln_id).copied().flatten();
+            let pool_for_dispatch: PgPool = (*pool).clone();
+            let vuln_id = pending.vuln_id;
+            tokio::spawn(async move {
+                let _permit = post_persist_db_permit().await;
+                crate::soar::dispatch_record::record_post_persist_dispatch(
+                    &pool_for_dispatch,
+                    tenant_id,
+                    vuln_id,
+                    pending.event,
+                )
+                .await;
+            });
+        }
+    }
 
     if inserted > 0 {
         let pool_arc = std::sync::Arc::new((*pool).clone());

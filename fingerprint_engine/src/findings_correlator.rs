@@ -13,8 +13,8 @@
 //! first/last seen) plus a **corroboration boost**: when network and agent
 //! planes both fire on the same identity, severity jumps to Critical.
 //!
-//! `upsert_cluster_for_finding` is called from `findings_persist::persist_engine_findings`
-//! immediately AFTER the vulnerability row exists, inside the same transaction.
+//! `upsert_cluster_for_finding` runs from the **cluster ingest worker** after the
+//! persist transaction commits — never inside the hot findings write TX.
 
 use serde_json::Value;
 use sqlx::{Postgres, Row, Transaction};
@@ -53,6 +53,11 @@ pub struct ClusterAttrs<'a> {
     /// re-detection). Controls whether `member_count` is incremented, so the corroboration
     /// count reflects distinct members rather than how many times the cluster was rescanned.
     pub is_new_member: bool,
+    /// Pre-computed signature from persist (avoids re-deriving from a stub finding).
+    pub vuln_signature: Option<&'a str>,
+    /// Persist-time cluster key (hinted route template). When set, upsert must
+    /// not re-hash from a hint-less target or public vs admin paths collide.
+    pub cluster_key: Option<&'a str>,
 }
 
 /// Upsert a cluster row for a single finding. Returns the cluster `id` so the
@@ -64,8 +69,18 @@ pub async fn upsert_cluster_for_finding(
     finding: &Value,
     attrs: ClusterAttrs<'_>,
 ) -> Result<(i64, String), String> {
-    let signature = derive_vuln_signature(finding, attrs.title);
-    let key = build_cluster_key(attrs.target, &signature, attrs.cwe);
+    let signature = attrs
+        .vuln_signature
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| derive_vuln_signature(finding, attrs.title));
+    let key = attrs
+        .cluster_key
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| build_cluster_key(attrs.target, &signature, attrs.cwe));
     let target_norm = normalize_target(attrs.target);
     let cwe_norm = normalize_cwe(attrs.cwe);
     let plane = engine_plane(attrs.engine);
@@ -91,13 +106,13 @@ pub async fn upsert_cluster_for_finding(
         INSERT INTO weissman_finding_clusters (
             tenant_id, client_id, cluster_key, target, cwe, vuln_signature, title,
             member_count, engines, sources, cves,
-            max_severity, native_severity, max_cvss, max_epss, kev_listed,
+            max_severity, native_severity, watermark_severity, max_cvss, max_epss, kev_listed,
             engine_planes, corroboration_boost,
             status, first_seen_at, last_seen_at, updated_at
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7,
             1, ARRAY[$8]::text[], ARRAY[$9]::text[], $10::text[],
-            $11, $11, $12, $13, $14,
+            $11, $11, $11, $12, $13, $14,
             ARRAY[$17]::text[], 'none',
             'OPEN', now(), now(), now()
         )
@@ -134,7 +149,7 @@ pub async fn upsert_cluster_for_finding(
                                   ELSE weissman_finding_clusters.title END,
             last_seen_at   = now(),
             updated_at     = now()
-        RETURNING id, engines, native_severity
+        RETURNING id, engines, native_severity, watermark_severity, corroboration_boost
         "#,
     )
     .bind(tenant_id)
@@ -165,8 +180,18 @@ pub async fn upsert_cluster_for_finding(
         .ok()
         .flatten()
         .unwrap_or_else(|| attrs.severity.to_string());
+    let watermark: String = row
+        .try_get::<Option<String>, _>("watermark_severity")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| native.clone());
+    let prev_boost: String = row
+        .try_get::<Option<String>, _>("corroboration_boost")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "none".to_string());
 
-    apply_corroboration_boost(tx, id, &native, &engines).await?;
+    apply_corroboration_boost(tx, id, &native, &watermark, &prev_boost, &engines).await?;
     Ok((id, key))
 }
 
@@ -176,13 +201,18 @@ async fn apply_corroboration_boost(
     tx: &mut Transaction<'_, Postgres>,
     cluster_id: i64,
     native: &str,
+    watermark: &str,
+    prev_boost: &str,
     engines: &[String],
 ) -> Result<(), String> {
     let outcome = corroborate_cluster_severity(native, engines);
-    let cvss_floor = corroboration_cvss_floor(&outcome.boost, &outcome.severity);
+    let max_severity = finding_identity::monotonic_severity(watermark, &outcome.severity);
+    let boost = finding_identity::monotonic_boost(prev_boost, &outcome.boost);
+    let cvss_floor = corroboration_cvss_floor(&boost, &max_severity);
     sqlx::query(
         r#"UPDATE weissman_finding_clusters SET
                 max_severity = $2,
+                watermark_severity = $2,
                 native_severity = $3,
                 corroboration_boost = $4,
                 engine_planes = $5,
@@ -191,9 +221,9 @@ async fn apply_corroboration_boost(
               WHERE id = $1"#,
     )
     .bind(cluster_id)
-    .bind(&outcome.severity)
+    .bind(&max_severity)
     .bind(&outcome.native_severity)
-    .bind(&outcome.boost)
+    .bind(&boost)
     .bind(&outcome.engine_planes)
     .bind(cvss_floor)
     .execute(&mut **tx)
@@ -238,8 +268,28 @@ pub async fn recompute_cluster(
         r#"
         UPDATE weissman_finding_clusters c SET
             member_count = sub.cnt,
-            max_severity = COALESCE(sub.max_sev, 'info'),
-            max_cvss     = sub.max_cvss,
+            native_severity = COALESCE(sub.max_sev, 'info'),
+            max_severity = CASE
+                WHEN (CASE COALESCE(sub.max_sev, 'info')
+                    WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 2 ELSE 1 END)
+                  > (CASE COALESCE(c.watermark_severity, c.max_severity)
+                    WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 2 ELSE 1 END)
+                THEN COALESCE(sub.max_sev, 'info')
+                ELSE COALESCE(c.watermark_severity, c.max_severity)
+            END,
+            watermark_severity = CASE
+                WHEN (CASE COALESCE(sub.max_sev, 'info')
+                    WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 2 ELSE 1 END)
+                  > (CASE COALESCE(c.watermark_severity, c.max_severity)
+                    WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 2 ELSE 1 END)
+                THEN COALESCE(sub.max_sev, 'info')
+                ELSE COALESCE(c.watermark_severity, c.max_severity)
+            END,
+            max_cvss     = GREATEST(COALESCE(c.max_cvss, 0), COALESCE(sub.max_cvss, 0)),
             engines      = COALESCE(sub.engines, ARRAY[]::text[]),
             sources      = COALESCE(sub.sources, ARRAY[]::text[]),
             kev_listed   = COALESCE(sub.kev, FALSE),
@@ -295,6 +345,17 @@ mod tests {
         let a = build_cluster_key("https://x.com/foo", "xss_reflected", "CWE-79");
         let b = build_cluster_key("https://y.com/foo", "xss_reflected", "CWE-79");
         assert_ne!(a, b);
+        let public = build_cluster_key(
+            "https://api.corp/api/v1/public/image/6c084089-0aec",
+            "xss",
+            "CWE-79",
+        );
+        let admin = build_cluster_key(
+            "https://api.corp/api/v1/admin/billing/6c084089-0aec",
+            "xss",
+            "CWE-79",
+        );
+        assert_ne!(public, admin);
     }
     #[test]
     fn severity_max_picks_critical() {

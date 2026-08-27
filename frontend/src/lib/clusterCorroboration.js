@@ -44,6 +44,7 @@ export function clustersCsv(rows) {
   return rows.map((r) => [
     r.id,
     r.max_severity,
+    r.watermark_severity || r.max_severity,
     r.native_severity,
     r.corroboration_boost,
     (r.engine_planes || []).join('|'),
@@ -61,6 +62,7 @@ export function clustersCsv(rows) {
 export const CLUSTERS_CSV_HEADER = [
   'id',
   'max_severity',
+  'watermark_severity',
   'native_severity',
   'corroboration_boost',
   'engine_planes',

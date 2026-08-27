@@ -35,6 +35,7 @@ describe('clusterCorroboration', () => {
       {
         id: 7,
         max_severity: 'critical',
+        watermark_severity: 'critical',
         native_severity: 'medium',
         corroboration_boost: BOOST_CROSS,
         engine_planes: ['network', 'agent'],
@@ -50,8 +51,10 @@ describe('clusterCorroboration', () => {
     ])
     expect(rows).toHaveLength(1)
     expect(rows[0][0]).toBe(7)
-    expect(rows[0][3]).toBe(BOOST_CROSS)
-    expect(rows[0][4]).toBe('network|agent')
-    expect(rows[0][11]).toBe('1')
+    expect(rows[0][1]).toBe('critical')
+    expect(rows[0][2]).toBe('critical')
+    expect(rows[0][4]).toBe(BOOST_CROSS)
+    expect(rows[0][5]).toBe('network|agent')
+    expect(rows[0][12]).toBe('1')
   })
 })
