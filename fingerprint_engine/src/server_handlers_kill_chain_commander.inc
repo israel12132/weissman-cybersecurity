@@ -51,7 +51,11 @@ async fn api_kill_chain_commander_compose(
         }
     };
     match crate::kill_chain_commander::compose_or_conflict(&snap) {
-        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(crate::kill_chain_commander::snapshot_json(&snap)),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::CONFLICT,
             Json(json!({

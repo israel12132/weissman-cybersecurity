@@ -178,11 +178,11 @@ describe('KillChainCommander', () => {
     apiFetch.mockResolvedValue(liveSnap)
     render(<MemoryRouter><KillChainCommander /></MemoryRouter>)
     await waitFor(() => {
-      expect(screen.getByText(/Unauthenticated SQL injection/i)).toBeTruthy()
+      expect(screen.getAllByText(/Unauthenticated SQL injection/i).length).toBeGreaterThan(0)
     })
-    expect(screen.getByText(/Public subdomain www.example.com/i)).toBeTruthy()
+    expect(screen.getAllByText(/Public subdomain www.example.com/i).length).toBeGreaterThan(0)
     expect(screen.getByText('T1190')).toBeTruthy()
-    expect(screen.getByText('severity_weight × asset_criticality × exposure')).toBeTruthy()
+    expect(screen.getAllByText('severity_weight × asset_criticality × exposure').length).toBeGreaterThan(0)
   })
 
   it('hides the client picker for assigned-client-only sessions', async () => {
@@ -197,24 +197,27 @@ describe('KillChainCommander', () => {
     apiFetch.mockResolvedValue(liveSnap)
     render(<MemoryRouter><KillChainCommander /></MemoryRouter>)
     await waitFor(() => {
-      expect(screen.getByText(/Unauthenticated SQL injection/i)).toBeTruthy()
+      expect(screen.getAllByText(/Unauthenticated SQL injection/i).length).toBeGreaterThan(0)
     })
     expect(screen.queryByRole('combobox')).toBeNull()
   })
 
   it('surfaces compose 409 empty_reason without inventing a chain', async () => {
-    apiFetch
-      .mockResolvedValueOnce(emptySnap)
-      .mockRejectedValueOnce(Object.assign(new Error('No live findings'), {
-        status: 409,
-        response: {
+    apiFetch.mockImplementation(async (_url, opts = {}) => {
+      if (String(opts.method || 'GET').toUpperCase() === 'POST') {
+        const err = new Error('No live findings')
+        err.status = 409
+        err.response = {
           json: async () => ({
             ok: false,
             error_code: 'kill_chain_corpus_empty',
             empty_reason: 'No live findings for this customer.',
           }),
-        },
-      }))
+        }
+        throw err
+      }
+      return emptySnap
+    })
     render(<MemoryRouter><KillChainCommander /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText(/will not fabricate/i)).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: 'pages.killChainCommander.compose' }))

@@ -160,7 +160,7 @@ export default function KillChainCommander() {
     } catch (e) {
       if (e?.response) {
         const body = await e.response.json().catch(() => ({}))
-        setComposeError(body.empty_reason || body.detail || body.error || t(`${NS}.compose_failed`))
+        setComposeError(body.empty_reason || body.detail || body.error || e.message || t(`${NS}.compose_failed`))
       } else {
         setComposeError(e.message || t(`${NS}.compose_failed`))
       }
