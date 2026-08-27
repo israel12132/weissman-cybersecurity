@@ -22,15 +22,30 @@ pub fn is_high_reputation_callback(host: &str) -> bool {
         .any(|sfx| h == *sfx || h.ends_with(&format!(".{sfx}")))
 }
 
-/// True when the host looks like a public collaborator brand (interact.sh / oast.* / burp).
-/// Operator-owned domains (e.g. weissmancyber.com) are not public brands.
+/// True when the host is a *public SaaS* collaborator brand (interact.sh,
+/// ProjectDiscovery `oast.{live,pro,…}`, Burp, webhook.site).
+///
+/// An operator-owned collector such as `oast.acme.com` or the RFC lab host
+/// `oast.example.test` is **not** a public brand — the mere label `oast` is not
+/// enough. Blocking those was a false-positive that refused tenant OAST.
 pub fn looks_like_public_collaborator(host: &str) -> bool {
     let h = host.trim().trim_end_matches('.').to_ascii_lowercase();
-    let labels: Vec<&str> = h.split('.').collect();
-    labels.windows(2).any(|w| w == ["interact", "sh"])
-        || h.ends_with("burpcollaborator.net")
-        || h.ends_with("webhook.site")
-        || labels.iter().any(|p| *p == "oast")
+    if h.is_empty() {
+        return false;
+    }
+    const PUBLIC: &[&str] = &[
+        "interact.sh",
+        "burpcollaborator.net",
+        "webhook.site",
+        "oast.live",
+        "oast.pro",
+        "oast.fun",
+        "oast.site",
+        "oast.online",
+    ];
+    PUBLIC
+        .iter()
+        .any(|sfx| h == *sfx || h.ends_with(&format!(".{sfx}")))
 }
 
 pub fn assert_callback_host(host: &str) -> Result<(), String> {
@@ -66,5 +81,8 @@ mod tests {
         assert!(looks_like_public_collaborator("xyz.interact.sh"));
         assert!(!looks_like_public_collaborator("weissmancyber.com"));
         assert!(!looks_like_public_collaborator("notinteract.sh.example"));
+        // Operator / RFC-lab collectors are not public SaaS brands.
+        assert!(!looks_like_public_collaborator("oast.example.test"));
+        assert!(!looks_like_public_collaborator("oast.acme.com"));
     }
 }
