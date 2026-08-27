@@ -9,11 +9,14 @@
 pub mod ai_supply;
 pub mod catalog;
 pub mod council_acl;
+pub mod dns_cascade;
 pub mod evidence_doubt;
 pub mod fair_ext;
 pub mod hack_fix_verify;
+pub mod host_liveness;
 pub mod moat;
 pub mod nl_guard;
+pub mod nlqa_chain;
 pub mod oast_reputation;
 pub mod ot_fsm;
 pub mod probe_io;
@@ -97,7 +100,7 @@ fn live_status(id: u16) -> ControlStatus {
         14 => ControlStatus::ok("WSS inner AES-256-GCM after Welcome"),
         15 => ControlStatus::ok("Scan source IP / proxy rotation via stealth proxy swarm"),
         16 => ControlStatus::ok(
-            "DoH JSON (Cloudflare/Google) is the default DNS probe path; UDP only if WEISSMAN_DNS_ALLOW_UDP=1",
+            "DNS cascade DoH → DoT → WEISSMAN_DNS_INTERNAL_RESOLVERS; public UDP off unless WEISSMAN_DNS_ALLOW_UDP=1",
         ),
         17 => ControlStatus::ok("Scanner header strip on active payloads"),
         18 => ControlStatus::ok("Asset-class adaptive tenant_scan_limit"),
@@ -126,7 +129,9 @@ fn live_status(id: u16) -> ControlStatus {
         41 => ControlStatus::ok("Z-score medium>3 high>6 with no operator override"),
         42 => ControlStatus::ok("Sample ingest batched; retention 14d"),
         43 => ControlStatus::ok("7-day learning window before alerts"),
-        44 => ControlStatus::ok("Hour-of-week overlay + global baseline hybrid"),
+        44 => ControlStatus::ok(
+            "Hour-of-week hybrid: learn n<24; global 24–167; hour bucket n≥3 after 168 else global cascade",
+        ),
         45 => ControlStatus::ok("First-seen process/port → medium after learning"),
         46 => ControlStatus::ok("ueba_detector::spawn_retention_loop 14-day purge"),
         47 => ControlStatus::ok("CPU/memory anomalies as cryptojack/ransomware precursors"),
@@ -139,7 +144,7 @@ fn live_status(id: u16) -> ControlStatus {
         54 => ControlStatus::ok("Audit logs feed cluster → targeted isolate"),
         55 => ControlStatus::ok("SOAR honey-token deploy action"),
         56 => ControlStatus::ok(
-            "Hack-Fix-Verify: VERIFIED_FIXED only after a later successful live scan does not reproduce the key; FAIR still prices FIXED",
+            "Hack-Fix-Verify: VERIFIED_FIXED only after successful live scan of a proven-live host does not reproduce the key; FAIR still prices FIXED",
         ),
         57 => ControlStatus::ok("HMAC-SHA256 on every SOAR webhook"),
         58 => ControlStatus::ok("Finding clusters bind to one SOAR incident"),
@@ -174,7 +179,7 @@ fn live_status(id: u16) -> ControlStatus {
         87 => ControlStatus::ok("Embedding dim pad/truncate on model upgrade"),
         88 => ControlStatus::ok("Winning paths require analyst or OAST confirmation"),
         89 => ControlStatus::ok(
-            "Vector table writes app-role only; council_write_allowed trusted sources (oast_success)",
+            "Council ACL: Rust allow-list + PG BEFORE INSERT trigger + SECURITY DEFINER insert_supreme_council_memory (INSERT revoked from weissman_app)",
         ),
         90 => ControlStatus::ok("Hybrid SQL + vector query helpers"),
         91 => ControlStatus::ok("LLM emits QueryPlan JSON only"),
@@ -182,7 +187,9 @@ fn live_status(id: u16) -> ControlStatus {
         93 => ControlStatus::ok("weissman_ro SELECT-only, statement_timeout 15s"),
         94 => ControlStatus::ok("FORCE RLS on tenant tables"),
         95 => ControlStatus::ok("DDL/DML keywords rejected at compile"),
-        96 => ControlStatus::ok("nl_query_audit every ask"),
+        96 => ControlStatus::ok(
+            "nl_query_audit every ask via async nlqa1 SHA-256 chain (Tokio mPSC worker; Ask path never locks)",
+        ),
         97 => ControlStatus::ok("LIMIT required, cap 200"),
         98 => ControlStatus::ok("GUC app.current_tenant_id in same TX"),
         99 => ControlStatus::ok("Parameterized SQL only"),
@@ -223,5 +230,9 @@ mod tests {
         assert_eq!(snap["moat"]["lanes_covered"], snap["moat"]["lanes_total"]);
         assert_eq!(snap["hfv"]["live"], true);
         assert_eq!(snap["hfv"]["rules"]["failed_scan_cannot_close"], true);
+        assert_eq!(
+            snap["hfv"]["rules"]["host_liveness_required_to_close"],
+            true
+        );
     }
 }

@@ -18,10 +18,16 @@ const modRs = join(ROOT, 'fingerprint_engine/src/elite_hardening/mod.rs')
 const page = join(ROOT, 'frontend/src/pages/EliteHardeningCommandCenter.jsx')
 const routes = join(ROOT, 'fingerprint_engine/src/http/serve_route_groups.rs')
 const mig = join(ROOT, 'crates/weissman-db/migrations/20260827170000_elite_hardening_part2.sql')
+const migAcl = join(
+  ROOT,
+  'crates/weissman-db/migrations/20260827194500_elite_hardening_architect_acl.sql',
+)
 const moat = join(ROOT, 'fingerprint_engine/src/elite_hardening/moat.rs')
 const hfv = join(ROOT, 'fingerprint_engine/src/elite_hardening/hack_fix_verify.rs')
+const liveness = join(ROOT, 'fingerprint_engine/src/elite_hardening/host_liveness.rs')
+const cascade = join(ROOT, 'fingerprint_engine/src/elite_hardening/dns_cascade.rs')
 
-for (const p of [catalog, modRs, page, routes, mig, moat, hfv]) {
+for (const p of [catalog, modRs, page, routes, mig, migAcl, moat, hfv, liveness, cascade]) {
   if (!existsSync(p)) fail(`missing ${p}`)
 }
 
@@ -44,6 +50,11 @@ if (!pageSrc.includes('moat')) fail('page missing sovereign moat lanes')
 if (!pageSrc.includes('hfv')) fail('page missing Hack-Fix-Verify loop')
 if (!readFileSync(moat, 'utf8').includes('PRODUCTION_ENGINE_IDS')) fail('moat.rs not live-wired to production engines')
 if (!readFileSync(hfv, 'utf8').includes('failed_scan_cannot_close')) fail('hack_fix_verify missing fail-closed rule')
+if (!readFileSync(hfv, 'utf8').includes('host_liveness_required_to_close')) {
+  fail('hack_fix_verify missing host liveness rule')
+}
+if (!readFileSync(liveness, 'utf8').includes('weissman_agent')) fail('host_liveness missing agent proof')
+if (!readFileSync(cascade, 'utf8').includes('udp_internal')) fail('dns_cascade missing internal UDP stage')
 
 const routeSrc = readFileSync(routes, 'utf8')
 if (!routeSrc.includes('/api/elite-hardening/status')) fail('API route not registered')
@@ -51,5 +62,10 @@ if (!routeSrc.includes('/api/elite-hardening/status')) fail('API route not regis
 const sql = readFileSync(mig, 'utf8')
 if (!sql.includes('finding_candidates')) fail('migration missing finding_candidates')
 if (!sql.includes('weissman_ro')) fail('migration missing weissman_ro GRANT')
+
+const sqlAcl = readFileSync(migAcl, 'utf8')
+if (!sqlAcl.includes('insert_supreme_council_memory')) fail('ACL migration missing definer insert')
+if (!sqlAcl.includes('nl_query_audit')) fail('ACL migration missing nlqa hash columns')
+if (!sqlAcl.includes('supreme_council_memory_acl')) fail('ACL migration missing council trigger')
 
 console.log('elite_hardening_gate: 100 controls, live API, page, migration — ok')

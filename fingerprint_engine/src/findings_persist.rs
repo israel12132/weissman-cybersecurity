@@ -950,8 +950,10 @@ pub async fn persist_engine_findings(
 
 /// After a *successful* live scan of `engine` against `target`, promote
 /// analyst-claimed FIXED rows whose finding_id was **not** reproduced to
-/// `VERIFIED_FIXED`. Failed scans must not call this. OPEN rows are left
-/// alone so a flaky engine cannot empty the inbox (חוק 2).
+/// `VERIFIED_FIXED` **only if** the host was proven live in this scan window.
+/// Failed scans must not call this. Offline / firewalled hosts must not close
+/// anything. OPEN rows are left alone so a flaky engine cannot empty the inbox
+/// (חוק 2).
 pub async fn apply_hack_fix_verify_after_ok_scan(
     pool: &PgPool,
     tenant_id: i64,
@@ -966,6 +968,26 @@ pub async fn apply_hack_fix_verify_after_ok_scan(
     if engine.trim().is_empty() || target.trim().is_empty() {
         return Ok(0);
     }
+    let scan_had_findings = present_finding_ids.iter().any(|id| !id.trim().is_empty());
+    let liveness = crate::elite_hardening::host_liveness::prove_host_live(
+        pool,
+        tenant_id,
+        Some(client_id),
+        target,
+        scan_had_findings,
+    )
+    .await;
+    if !liveness.live {
+        tracing::warn!(
+            target: "hack_fix_verify",
+            tenant_id,
+            engine = %engine,
+            target = %target,
+            method = liveness.method,
+            "refusing VERIFIED_FIXED: host liveness unproven (offline/firewalled host cannot close findings)"
+        );
+        return Ok(0);
+    }
     let proof = json!({
         "phase": "verified_closed",
         "reason": "successful_scan_did_not_reproduce_key",
@@ -973,6 +995,7 @@ pub async fn apply_hack_fix_verify_after_ok_scan(
         "target": target,
         "scan_ok": true,
         "method": "live_rescan_absence",
+        "host_liveness": liveness.to_json(),
     });
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await

@@ -419,6 +419,7 @@ pub fn snapshot() -> Value {
             "ot_fsm_protocols": ["modbus", "dnp3", "s7", "iec61850"],
             "wss_inner": "AES-256-GCM",
             "doh_only_default": !stealth_ops::allow_udp_dns_fallback(),
+            "dns_cascade": "doh_dot_internal_udp",
             "ot_fsm_modbus_min_len": 8,
             "hack_fix_verify": crate::elite_hardening::hack_fix_verify::LIVE,
             "fair_prices_fixed_until_verified": true,

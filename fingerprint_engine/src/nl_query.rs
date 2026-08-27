@@ -24,8 +24,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sqlx::{Column, PgPool, Row};
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Instant;
+use tokio::sync::mpsc;
 
 // ─── Allow-list schema ───────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -558,7 +559,7 @@ pub async fn ask(
         Ok(v) => v,
         Err(e) => {
             let r = bad(&format!("plan generation failed: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            audit_query(app_pool, tenant_id, user_id, question, &r);
             return r;
         }
     };
@@ -566,7 +567,7 @@ pub async fn ask(
         Ok(p) => p,
         Err(e) => {
             let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            audit_query(app_pool, tenant_id, user_id, question, &r);
             return r;
         }
     };
@@ -580,36 +581,139 @@ pub async fn ask(
         Err(e) => bad(&e),
     };
 
-    audit_query(app_pool, tenant_id, user_id, question, &res).await;
+    audit_query(app_pool, tenant_id, user_id, question, &res);
     res
 }
 
-async fn audit_query(
+struct NlqaEvent {
+    tenant_id: i64,
+    user_id: Option<i64>,
+    question: String,
+    plan_json: Value,
+    compiled_sql: String,
+    rows_returned: i32,
+    elapsed_ms: i32,
+    error: String,
+}
+
+const NLQA_CHANNEL_CAP: usize = 1024;
+static NLQA_TX: OnceLock<mpsc::Sender<NlqaEvent>> = OnceLock::new();
+
+/// Start the per-process nlqa1 hash-chain worker. Ask never waits on this lock.
+pub fn spawn_audit_worker(pool: Arc<PgPool>) {
+    let (tx, rx) = mpsc::channel::<NlqaEvent>(NLQA_CHANNEL_CAP);
+    if NLQA_TX.set(tx).is_ok() {
+        tokio::spawn(nlqa_worker_loop(pool, rx));
+        tracing::info!(target: "nlqa1", "Ask audit hash-chain worker started");
+    }
+}
+
+fn audit_query(
     app_pool: &PgPool,
     tenant_id: i64,
     user_id: Option<i64>,
     question: &str,
     res: &AskResult,
 ) {
-    if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
-        let _ = sqlx::query(
-            "INSERT INTO nl_query_audit
-                (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
-                 rows_returned, elapsed_ms, error)
-             VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8)",
-        )
-        .bind(tenant_id)
-        .bind(user_id)
-        .bind(question.chars().take(2000).collect::<String>())
-        .bind(serde_json::to_value(&res.plan).unwrap_or(json!({})))
-        .bind(&res.sql)
-        .bind(res.row_count as i32)
-        .bind(res.elapsed_ms as i32)
-        .bind(res.error.clone().unwrap_or_default())
-        .execute(&mut *tx)
-        .await;
-        let _ = tx.commit().await;
+    if NLQA_TX.get().is_none() {
+        spawn_audit_worker(Arc::new(app_pool.clone()));
     }
+    let ev = NlqaEvent {
+        tenant_id,
+        user_id,
+        question: question.chars().take(2000).collect(),
+        plan_json: serde_json::to_value(&res.plan).unwrap_or(json!({})),
+        compiled_sql: res.sql.clone(),
+        rows_returned: res.row_count as i32,
+        elapsed_ms: res.elapsed_ms as i32,
+        error: res.error.clone().unwrap_or_default(),
+    };
+    match NLQA_TX.get() {
+        Some(tx) => {
+            if let Err(e) = tx.try_send(ev) {
+                tracing::error!(
+                    target: "nlqa1",
+                    error = %e,
+                    "Ask audit channel full or closed — request not blocked, event dropped"
+                );
+            }
+        }
+        None => {
+            tracing::error!(
+                target: "nlqa1",
+                "Ask audit worker not running — request not blocked, event dropped"
+            );
+        }
+    }
+}
+
+async fn nlqa_worker_loop(pool: Arc<PgPool>, mut rx: mpsc::Receiver<NlqaEvent>) {
+    while let Some(ev) = rx.recv().await {
+        if let Err(e) = persist_nlqa_chained(&pool, ev).await {
+            tracing::error!(target: "nlqa1", error = %e, "Ask audit chain append failed");
+        }
+    }
+}
+
+async fn persist_nlqa_chained(pool: &PgPool, ev: NlqaEvent) -> Result<(), String> {
+    let mut tx = crate::db::begin_tenant_tx(pool, ev.tenant_id)
+        .await
+        .map_err(|e| format!("nlqa1 tenant tx: {e}"))?;
+    weissman_db::advisory_lock::advisory_xact_lock_text(
+        &mut tx,
+        &format!("nlqa1:{}", ev.tenant_id),
+    )
+    .await
+    .map_err(|e| format!("nlqa1 lock: {e}"))?;
+    let prev_hash: String = sqlx::query_scalar(
+        r#"SELECT COALESCE(event_hash, '') FROM nl_query_audit
+           WHERE tenant_id = $1 AND event_hash IS NOT NULL AND event_hash <> ''
+           ORDER BY id DESC LIMIT 1"#,
+    )
+    .bind(ev.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("nlqa1 prev: {e}"))?
+    .unwrap_or_default();
+    let asked_at = chrono::Utc::now();
+    let plan_txt = ev.plan_json.to_string();
+    let canonical = crate::elite_hardening::nlqa_chain::canonical_nlqa_payload(
+        &prev_hash,
+        ev.tenant_id,
+        ev.user_id,
+        &ev.question,
+        &plan_txt,
+        &ev.compiled_sql,
+        ev.rows_returned,
+        ev.elapsed_ms,
+        &ev.error,
+        &asked_at.to_rfc3339(),
+    );
+    let event_hash = crate::elite_hardening::nlqa_chain::event_hash(&canonical);
+    sqlx::query(
+        "INSERT INTO nl_query_audit
+            (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
+             rows_returned, elapsed_ms, error, prev_hash, event_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+    )
+    .bind(ev.tenant_id)
+    .bind(ev.user_id)
+    .bind(asked_at)
+    .bind(&ev.question)
+    .bind(&ev.plan_json)
+    .bind(&ev.compiled_sql)
+    .bind(ev.rows_returned)
+    .bind(ev.elapsed_ms)
+    .bind(&ev.error)
+    .bind(&prev_hash)
+    .bind(&event_hash)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("nlqa1 insert: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("nlqa1 commit: {e}"))?;
+    Ok(())
 }
 
 fn bind_json<'a>(

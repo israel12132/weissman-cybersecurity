@@ -19,6 +19,19 @@ pub fn council_write_allowed(source: &str) -> bool {
     TRUSTED_SOURCES.iter().any(|t| *t == s)
 }
 
+/// `oast_success` requires a real OAST token (≥8 chars). Probe-confirmed wins
+/// without a token persist as `winning_path` — still a trusted source, but the
+/// DB trigger will reject a forged `oast_success` with an empty token.
+pub const OAST_TOKEN_MIN_LEN: usize = 8;
+
+pub fn council_persist_source(oast_token: &str) -> &'static str {
+    if oast_token.trim().len() >= OAST_TOKEN_MIN_LEN {
+        "oast_success"
+    } else {
+        "winning_path"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -35,5 +48,12 @@ mod tests {
         assert!(!council_write_allowed("untrusted_rag"));
         assert!(!council_write_allowed(""));
         assert!(!council_write_allowed("llm_raw"));
+    }
+
+    #[test]
+    fn oast_success_requires_token() {
+        assert_eq!(council_persist_source(""), "winning_path");
+        assert_eq!(council_persist_source("short"), "winning_path");
+        assert_eq!(council_persist_source("oob-token-ok"), "oast_success");
     }
 }

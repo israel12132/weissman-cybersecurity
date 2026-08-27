@@ -11,12 +11,14 @@
 //!      up in the learned set) — those are fired at severity `medium` too, once
 //!      the metric has accumulated ≥ 24 observations.
 //!
-//! The detector NEVER fires while a metric is still learning (`n < 24`). Baselines
-//! are keyed per (agent, metric) — NOT per hour-of-week: with a 7-day sample
-//! window, any given hour-of-week bucket only ever holds ~1 sample, so per-bucket
-//! baselines could never reach the sample threshold and the detector never fired.
-//! Training over the whole rolling window makes both paths reachable while still
-//! honouring the "don't fire until trained" contract.
+//! The detector NEVER fires while a metric is still learning (`n < 24`). After that:
+//!   * Phase B (`24 ≤ n < 168`): Z-score against the global baseline only.
+//!   * Phase C (`n ≥ 168`): Z-score against the current hour-of-week bucket when
+//!     that hour has ≥ 3 samples (view `agent_metric_hour_baselines`); otherwise
+//!     fall back to the global baseline.
+//! Baselines are still *stored* per (agent, metric) under GLOBAL_BUCKET — not 168
+//! upsert rows — so the learning floor stays reachable. Hour overlays are read
+//! from samples at scoring time.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -245,23 +247,48 @@ async fn check_anomaly(
     base: &BaselineUpdate,
 ) -> Result<Option<AnomalyRecord>, String> {
     if base.n < MIN_BASELINE_SAMPLES {
-        return Ok(None); // still learning
+        return Ok(None); // still learning (Phase A)
     }
-    let stddev = crate::elite_hardening::ueba_stats::cloud_safe_stddev(base.mean, base.stddev);
-    let z = (observed - base.mean) / stddev;
+    let global = crate::elite_hardening::ueba_stats::BaselineStats {
+        n: base.n,
+        mean: base.mean,
+        stddev: base.stddev,
+        hour_of_week: crate::elite_hardening::ueba_stats::GLOBAL_HOUR_SENTINEL,
+    };
+    let hour_stats = if matches!(
+        crate::elite_hardening::ueba_stats::hybrid_phase(base.n),
+        crate::elite_hardening::ueba_stats::HybridPhase::HourThenGlobal
+    ) {
+        fetch_hour_baseline(tx, tenant_id, &p.agent_id, metric, p.hour_of_week).await
+    } else {
+        None
+    };
+    let Some(scoring) =
+        crate::elite_hardening::ueba_stats::pick_scoring_baseline(global, hour_stats)
+    else {
+        return Ok(None);
+    };
+    let stddev =
+        crate::elite_hardening::ueba_stats::cloud_safe_stddev(scoring.mean, scoring.stddev);
+    let z = (observed - scoring.mean) / stddev;
     if z.abs() <= Z_THRESHOLD {
         return Ok(None);
     }
     let severity = crate::elite_hardening::ueba_stats::severity_for_z(z);
     let direction = if z > 0.0 { "above" } else { "below" };
+    let bucket = if scoring.hour_of_week < 0 {
+        "global".to_string()
+    } else {
+        format!("hour_of_week={}", scoring.hour_of_week)
+    };
     let detail = format!(
-        "Metric `{}` observed {:.2}, baseline {:.2} ± {:.2} (z={:+.2}, {} 3σ).",
-        metric, observed, base.mean, stddev, z, direction
+        "Metric `{}` observed {:.2}, baseline {:.2} ± {:.2} (z={:+.2}, {} 3σ, {bucket}).",
+        metric, observed, scoring.mean, stddev, z, direction
     );
     let rec = AnomalyRecord {
         metric: metric.to_string(),
         observed,
-        baseline_mean: base.mean,
+        baseline_mean: scoring.mean,
         baseline_stddev: stddev,
         z_score: z,
         severity: severity.to_string(),
@@ -280,7 +307,7 @@ async fn check_anomaly(
     .bind(sample_id)
     .bind(metric)
     .bind(observed)
-    .bind(base.mean)
+    .bind(scoring.mean)
     .bind(stddev)
     .bind(z)
     .bind(severity)
@@ -289,6 +316,36 @@ async fn check_anomaly(
     .await
     .map_err(|e| format!("insert anomaly: {e}"))?;
     Ok(Some(rec))
+}
+
+async fn fetch_hour_baseline(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+    hour_of_week: i16,
+) -> Option<crate::elite_hardening::ueba_stats::BaselineStats> {
+    let row: Option<(i64, Option<f64>, Option<f64>)> = sqlx::query_as(
+        r#"SELECT n, mean, stddev
+             FROM agent_metric_hour_baselines
+            WHERE tenant_id = $1 AND agent_id = $2
+              AND metric_name = $3 AND hour_of_week = $4"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .bind(metric)
+    .bind(hour_of_week)
+    .fetch_optional(&mut **tx)
+    .await
+    .ok()
+    .flatten();
+    let (n, mean, stddev) = row?;
+    Some(crate::elite_hardening::ueba_stats::BaselineStats {
+        n: n as i32,
+        mean: mean.unwrap_or(0.0),
+        stddev: stddev.unwrap_or(0.0),
+        hour_of_week,
+    })
 }
 
 /// Categorical anomaly check — fires when an item appears that's not in the
@@ -433,9 +490,15 @@ mod tests {
         assert!(MIN_BASELINE_SAMPLES >= 24);
     }
     #[test]
-    fn baselines_use_the_global_bucket_not_hour_of_week() {
-        // Regression guard: baselines must be stored per (agent, metric) so training
-        // can accumulate. Per-hour-of-week bucketing made the detector never fire.
+    fn hybrid_scoring_kicks_in_after_a_full_week() {
+        assert_eq!(
+            crate::elite_hardening::ueba_stats::hybrid_phase(MIN_BASELINE_SAMPLES),
+            crate::elite_hardening::ueba_stats::HybridPhase::GlobalOnly
+        );
+        assert_eq!(
+            crate::elite_hardening::ueba_stats::hybrid_phase(168),
+            crate::elite_hardening::ueba_stats::HybridPhase::HourThenGlobal
+        );
         assert_eq!(GLOBAL_BUCKET, 0);
     }
 }

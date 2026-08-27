@@ -1523,6 +1523,7 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
     // provider, not by us — so a localhost or non-TLS value makes login impossible in a way that
     // only ever surfaces as an opaque redirect-mismatch at the IdP.
     crate::oidc_auth::warn_if_sso_base_url_unusable();
+    crate::nl_query::spawn_audit_worker(app_pool.clone());
     crate::endpoint_agents::spawn_pending_task_pusher(
         app_pool.clone(),
         state.endpoint_agents.clone(),
@@ -1837,7 +1838,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))

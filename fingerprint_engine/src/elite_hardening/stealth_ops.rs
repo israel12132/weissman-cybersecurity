@@ -94,9 +94,21 @@ pub fn parse_doh_answer_data(body: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Result of a single DoH query. `definitive` is true when the resolver returned
+/// NOERROR (0) or NXDOMAIN (3) — empty answers in that case are authoritative.
+#[derive(Debug, Clone)]
+pub struct DohLookup {
+    pub answers: Vec<String>,
+    pub definitive: bool,
+}
+
 /// Live DoH lookup (TLS 1.2+). Empty vec on transport/JSON failure — callers must not
 /// silently fall back to UDP unless `allow_udp_dns_fallback()` is set.
 pub async fn doh_lookup(name: &str, record_type: &str) -> Result<Vec<String>, String> {
+    Ok(doh_lookup_detailed(name, record_type).await?.answers)
+}
+
+pub async fn doh_lookup_detailed(name: &str, record_type: &str) -> Result<DohLookup, String> {
     let host = name.trim();
     if host.is_empty() {
         return Err("empty DNS name".into());
@@ -117,7 +129,17 @@ pub async fn doh_lookup(name: &str, record_type: &str) -> Result<Vec<String>, St
     if record_type.eq_ignore_ascii_case("TXT") {
         answers = answers.into_iter().map(|s| strip_doh_txt(&s)).collect();
     }
-    Ok(answers)
+    let dns_status = body.get("Status").and_then(|s| s.as_u64());
+    let definitive = matches!(dns_status, Some(0) | Some(3));
+    Ok(DohLookup {
+        answers,
+        definitive,
+    })
+}
+
+/// Production DNS: DoH → DoT → organisation-internal UDP. Public UDP stays off.
+pub async fn dns_lookup_cascade(name: &str, record_type: &str) -> Vec<String> {
+    crate::elite_hardening::dns_cascade::lookup(name, record_type).await
 }
 
 /// Asset-class scan governor: production/ICS is slower than lab/dev.

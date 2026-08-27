@@ -71,8 +71,25 @@ pub async fn run_verification(
     .flatten()
     .unwrap_or_else(|| "OPEN".to_string());
     let was_verified_fixed = current_status == "VERIFIED_FIXED";
-    let transition =
-        crate::elite_hardening::hack_fix_verify::after_rescan(scan_ok, still, &current_status);
+    let liveness = if still {
+        crate::elite_hardening::host_liveness::HostLiveness::proven("scan_findings")
+    } else {
+        crate::elite_hardening::host_liveness::prove_host_live(
+            pool,
+            tenant_id,
+            client_id,
+            target,
+            !result.findings.is_empty(),
+        )
+        .await
+    };
+    let host_live = liveness.live;
+    let transition = crate::elite_hardening::hack_fix_verify::after_rescan(
+        scan_ok,
+        still,
+        host_live,
+        &current_status,
+    );
     let status = match &transition {
         crate::elite_hardening::hack_fix_verify::Transition::Apply(s) => (*s).to_string(),
         crate::elite_hardening::hack_fix_verify::Transition::Hold { reason } => {
@@ -102,6 +119,7 @@ pub async fn run_verification(
         "rescan_findings": outcome.rescan_finding_count,
         "method": "live_rescan",
         "scan_ok": scan_ok,
+        "host_liveness": liveness.to_json(),
         "result_status": status,
         "hack_fix_verify": crate::elite_hardening::hack_fix_verify::snapshot(),
     });
@@ -237,13 +255,19 @@ mod tests {
         // VERIFIED_FIXED unless the row was already marked FIXED and the scan succeeded.
         assert!(!finding_still_present(&original, engine, target, &[]));
         assert_eq!(
-            crate::elite_hardening::hack_fix_verify::after_rescan(false, false, "FIXED"),
+            crate::elite_hardening::hack_fix_verify::after_rescan(false, false, true, "FIXED"),
             crate::elite_hardening::hack_fix_verify::Transition::Hold {
                 reason: "scan_did_not_succeed"
             }
         );
         assert_eq!(
-            crate::elite_hardening::hack_fix_verify::after_rescan(true, false, "FIXED"),
+            crate::elite_hardening::hack_fix_verify::after_rescan(true, false, false, "FIXED"),
+            crate::elite_hardening::hack_fix_verify::Transition::Hold {
+                reason: "host_liveness_unproven"
+            }
+        );
+        assert_eq!(
+            crate::elite_hardening::hack_fix_verify::after_rescan(true, false, true, "FIXED"),
             crate::elite_hardening::hack_fix_verify::Transition::Apply("VERIFIED_FIXED")
         );
     }

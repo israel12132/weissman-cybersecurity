@@ -343,9 +343,7 @@ fn doh_rr_name(rt: RecordType) -> Option<&'static str> {
 }
 
 async fn doh_answers(name: &str, rtype: &str) -> Vec<String> {
-    crate::elite_hardening::stealth_ops::doh_lookup(name, rtype)
-        .await
-        .unwrap_or_default()
+    crate::elite_hardening::stealth_ops::dns_lookup_cascade(name, rtype).await
 }
 
 async fn txt_records(resolver: &TokioResolver, name: &str) -> Vec<String> {

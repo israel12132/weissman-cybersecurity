@@ -106,13 +106,19 @@ pub fn on_reappearance(current_status: &str) -> Transition {
     }
 }
 
-/// Close only when the scan *succeeded* and the key is absent, and only if the
-/// row was already marked remediated. OPEN findings that a flaky engine missed
-/// stay OPEN (חוק 2 — do not empty the inbox).
-pub fn on_successful_absence(scan_ok: bool, current_status: &str) -> Transition {
+/// Close only when the scan *succeeded*, the host was proven live, and the key
+/// is absent, and only if the row was already marked remediated. OPEN findings
+/// that a flaky engine missed stay OPEN (חוק 2 — do not empty the inbox).
+/// An `ok` scan against a dead/firewalled host must not mint `VERIFIED_FIXED`.
+pub fn on_successful_absence(scan_ok: bool, host_live: bool, current_status: &str) -> Transition {
     if !scan_ok {
         return Transition::Hold {
             reason: "scan_did_not_succeed",
+        };
+    }
+    if !host_live {
+        return Transition::Hold {
+            reason: "host_liveness_unproven",
         };
     }
     if is_remediation_marked(current_status) {
@@ -124,7 +130,13 @@ pub fn on_successful_absence(scan_ok: bool, current_status: &str) -> Transition 
 }
 
 /// Combined rescan decision used by `remediation_verify` and persist.
-pub fn after_rescan(scan_ok: bool, still_present: bool, current_status: &str) -> Transition {
+/// `still_present` is itself liveness (the engine reproduced the finding).
+pub fn after_rescan(
+    scan_ok: bool,
+    still_present: bool,
+    host_live: bool,
+    current_status: &str,
+) -> Transition {
     if !scan_ok {
         return Transition::Hold {
             reason: "scan_did_not_succeed",
@@ -133,7 +145,7 @@ pub fn after_rescan(scan_ok: bool, still_present: bool, current_status: &str) ->
     if still_present {
         return on_reappearance(current_status);
     }
-    on_successful_absence(true, current_status)
+    on_successful_absence(true, host_live, current_status)
 }
 
 pub fn engine_scan_ok(status: &str, success_flag: bool) -> bool {
@@ -143,12 +155,12 @@ pub fn engine_scan_ok(status: &str, success_flag: bool) -> bool {
 pub fn snapshot() -> Value {
     json!({
         "live": LIVE,
-        "beats": "Horizon3 NodeZero + Strix: operator/PR 'fixed' is not verified-closed; FAIR ALE stays priced until a later successful live scan does not reproduce the key. Failed/empty error scans cannot close.",
+        "beats": "Horizon3 NodeZero + Strix: operator/PR 'fixed' is not verified-closed; FAIR ALE stays priced until a later successful live scan of a proven-live host does not reproduce the key. Failed/empty error scans and offline hosts cannot close.",
         "phases": [
             "OPEN",
             "FIXED (claim only — still priced in FAIR)",
             "REOPENED (key reproduced after claim or verified-close)",
-            "VERIFIED_FIXED (only after successful absence scan)"
+            "VERIFIED_FIXED (successful absence scan + active host liveness proof)"
         ],
         "rules": {
             "analyst_cannot_set_verified_fixed": true,
@@ -156,6 +168,7 @@ pub fn snapshot() -> Value {
             "failed_scan_cannot_close": true,
             "open_absence_does_not_auto_close": true,
             "fair_prices_fixed_until_verified": true,
+            "host_liveness_required_to_close": true,
         },
         "fair_closed_sql": FAIR_CLOSED_STATUSES_SQL,
     })
@@ -175,13 +188,13 @@ mod tests {
     #[test]
     fn failed_scan_never_closes() {
         assert_eq!(
-            after_rescan(false, false, STATUS_FIXED),
+            after_rescan(false, false, true, STATUS_FIXED),
             Transition::Hold {
                 reason: "scan_did_not_succeed"
             }
         );
         assert_eq!(
-            after_rescan(false, true, STATUS_FIXED),
+            after_rescan(false, true, true, STATUS_FIXED),
             Transition::Hold {
                 reason: "scan_did_not_succeed"
             }
@@ -189,17 +202,27 @@ mod tests {
     }
 
     #[test]
+    fn offline_host_never_closes_even_on_ok_empty_scan() {
+        assert_eq!(
+            after_rescan(true, false, false, STATUS_FIXED),
+            Transition::Hold {
+                reason: "host_liveness_unproven"
+            }
+        );
+    }
+
+    #[test]
     fn successful_absence_closes_only_marked_rows() {
         assert_eq!(
-            after_rescan(true, false, STATUS_FIXED),
+            after_rescan(true, false, true, STATUS_FIXED),
             Transition::Apply(STATUS_VERIFIED_FIXED)
         );
         assert_eq!(
-            after_rescan(true, false, STATUS_RESCAN_PENDING),
+            after_rescan(true, false, true, STATUS_RESCAN_PENDING),
             Transition::Apply(STATUS_VERIFIED_FIXED)
         );
         assert_eq!(
-            after_rescan(true, false, STATUS_OPEN),
+            after_rescan(true, false, true, STATUS_OPEN),
             Transition::Hold {
                 reason: "not_marked_fixed"
             }
@@ -209,21 +232,21 @@ mod tests {
     #[test]
     fn reproduced_key_reopens_claim_and_verified() {
         assert_eq!(
-            after_rescan(true, true, STATUS_FIXED),
+            after_rescan(true, true, false, STATUS_FIXED),
             Transition::Apply(STATUS_REOPENED)
         );
         assert_eq!(
-            after_rescan(true, true, STATUS_VERIFIED_FIXED),
+            after_rescan(true, true, true, STATUS_VERIFIED_FIXED),
             Transition::Apply(STATUS_REOPENED)
         );
         assert_eq!(
-            after_rescan(true, true, STATUS_OPEN),
+            after_rescan(true, true, true, STATUS_OPEN),
             Transition::Hold {
                 reason: "not_a_remediation_claim"
             }
         );
         assert_eq!(
-            after_rescan(true, true, STATUS_FALSE_POSITIVE),
+            after_rescan(true, true, true, STATUS_FALSE_POSITIVE),
             Transition::Hold {
                 reason: "not_a_remediation_claim"
             }
@@ -256,5 +279,6 @@ mod tests {
         assert_eq!(s["live"], true);
         assert_eq!(s["rules"]["failed_scan_cannot_close"], true);
         assert_eq!(s["rules"]["fair_prices_fixed_until_verified"], true);
+        assert_eq!(s["rules"]["host_liveness_required_to_close"], true);
     }
 }
