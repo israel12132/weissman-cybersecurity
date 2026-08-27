@@ -58,6 +58,7 @@ describe('route evidence registry', () => {
     expect(ROUTE_EVIDENCE['/iac-security']).toBe('pages.iacSecurityCenter.evidence_notice')
     expect(ROUTE_EVIDENCE['/graphql-security']).toBe('pages.graphqlSecurityCommandCenter.evidence_notice')
     expect(ROUTE_EVIDENCE['/websocket-security']).toBe('pages.websocketSecurity.evidence_notice')
+    expect(ROUTE_EVIDENCE['/c2-covert-exfil']).toBe('pages.c2CovertExfilCommandCenter.evidence_notice')
     expect(ROUTE_EVIDENCE['/attack-surface']).toBe('pages.attackSurfaceManagement.evidence_notice')
   })
 

@@ -839,6 +839,14 @@ pub fn default_remediation(engine_id: &str, severity: &str) -> &'static str {
     {
         return "Lock dependencies (lockfiles + hash verification), enable Sigstore / cosign signature verification, and scan via OSV / pip-audit / npm audit on every build.";
     }
+    if engine_id.contains("c2")
+        || engine_id.contains("covert")
+        || engine_id.contains("exfil")
+        || engine_id.contains("stego")
+        || engine_id.contains("dns_tunnel")
+    {
+        return "Instrument NDR/UEBA for beacon jitter (CV + Z-score), inspect DNS TXT entropy and near-zero TTLs, terminate unexpected DoH/WSS, close non-web C2 fallback ports (53/123/4443/9001), and DLP-scan public media for LSB/EXIF stego. Keep assessments in-scope — do not implant a C2 channel.";
+    }
     if engine_id.contains("pki") || engine_id.contains("tls") {
         return "Issue certificates with at least 2048-bit RSA / 256-bit ECC, enable HSTS with `max-age=31536000; includeSubDomains; preload`, and disable TLS 1.0 / 1.1.";
     }
@@ -881,6 +889,18 @@ pub fn default_compliance(engine_id: &str) -> Vec<&'static str> {
     }
     if engine_id.contains("supply_chain") || engine_id.contains("sbom") {
         tags.extend_from_slice(&["NIS2:Art.21(2)(d)", "SOC2:CC7.1"]);
+    }
+    if engine_id.contains("c2")
+        || engine_id.contains("covert")
+        || engine_id.contains("exfil")
+        || engine_id.contains("dns_tunnel")
+    {
+        tags.extend_from_slice(&[
+            "ISO27001:A.13",
+            "SOC2:CC6.6",
+            "NIS2:Art.21(2)(e)",
+            "Directive361",
+        ]);
     }
     if engine_id.contains("gdpr") || engine_id.contains("personal") || engine_id.contains("pii") {
         tags.push("GDPR:Art.32");

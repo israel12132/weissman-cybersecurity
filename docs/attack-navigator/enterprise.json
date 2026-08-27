@@ -346,8 +346,8 @@
     },
     {
       "techniqueID": "T1071",
-      "score": 8,
-      "comment": "apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, network_covert_channel, oast_oob, obfuscated_c2",
+      "score": 9,
+      "comment": "advanced_c2_covert_exfil, apt_c2_infra, botnet_c2_engine, c2_emulation, c2_rotation_engine, icmp_covert_channel, network_covert_channel, oast_oob, obfuscated_c2",
       "enabled": true
     },
     {

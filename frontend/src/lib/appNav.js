@@ -122,6 +122,7 @@ export const NAV_GROUPS = [
       { to: '/waf-bypass', labelKey: 'nav.waf_bypass', icon: '⚔' },
       { to: '/websocket-security', labelKey: 'nav.websocket_security', icon: '⟁' },
       { to: '/transport-security', labelKey: 'nav.transport_security', icon: '🛡' },
+      { to: '/c2-covert-exfil', labelKey: 'nav.c2_covert_exfil', icon: '📡' },
       { to: '/tls-posture', labelKey: 'nav.tls_posture', icon: '🔒' },
       { to: '/email-posture', labelKey: 'nav.email_posture', icon: '✉' },
       { to: '/identity-security', labelKey: 'nav.identity_security', icon: '🔐' },

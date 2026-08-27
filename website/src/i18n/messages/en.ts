@@ -7,7 +7,7 @@ export const en = {
     home: {
       title: 'Weissman Cybersecurity — Live evidence. Clearer response.',
       description:
-        'Weissman continuously probes authorised attack surfaces with 563 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
+        'Weissman continuously probes authorised attack surfaces with 564 production engines, verifies findings with live evidence, and helps SOC teams prioritise and respond.',
     },
     platform: {
       title: 'Platform — Weissman Cybersecurity',
@@ -22,7 +22,7 @@ export const en = {
     'vulnerability-research': {
       title: 'Vulnerability Research — Weissman Cybersecurity',
       description:
-        '303 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
+        '304 live probes across web, cloud, OT, identity, and supply chain — every finding from a real network or host check.',
     },
     'detection-response': {
       title: 'Detection and Response — Weissman Cybersecurity',
@@ -42,7 +42,7 @@ export const en = {
     'security-operations': {
       title: 'Security Operations — Weissman Cybersecurity',
       description:
-        'Command Center for live events, findings, playbooks, agents, and Ask Weissman — 130 operational routes for SOC teams.',
+        'Command Center for live events, findings, playbooks, agents, and Ask Weissman — 131 operational routes for SOC teams.',
     },
     'oast-validation': {
       title: 'OAST Validation — Weissman Cybersecurity',
@@ -544,10 +544,10 @@ export const en = {
       eyebrow: 'Research',
       title: 'Vulnerability research with a live-probe bar',
       summary:
-        '303 live probes — web, API, cloud, OT/ICS, identity, supply chain, AI/LLM, and more. Aliases resolve to a real implementation. CI fails if they do not.',
+        '304 live probes — web, API, cloud, OT/ICS, identity, supply chain, AI/LLM, and more. Aliases resolve to a real implementation. CI fails if they do not.',
       ctaLabel: 'Explore research engines',
       outcomes: [
-        '563 production IDs, every one wired to a runner',
+        '564 production IDs, every one wired to a runner',
         '226 MITRE ATT&CK techniques against the current v19.1 Enterprise, Mobile, and ICS set',
         'No fabricated or randomised findings in the persist path',
       ],
@@ -644,7 +644,7 @@ export const en = {
       eyebrow: 'Operations',
       title: 'A Command Center built for the people on shift',
       summary:
-        '130 routes, live KPI strips, findings drawers, playbook builder, agent fleet, and Ask Weissman — English and Hebrew, including RTL.',
+        '131 routes, live KPI strips, findings drawers, playbook builder, agent fleet, and Ask Weissman — English and Hebrew, including RTL.',
       ctaLabel: 'See security operations',
       outcomes: [
         'One console for scans, evidence, and response',
@@ -725,7 +725,7 @@ export const en = {
       },
       'engine-integrity': {
         title: 'Engine integrity accounting',
-        summary: '563 IDs classified as live probe, alias, or agent-required — CI-gated, no silent catalog entries.',
+        summary: '564 IDs classified as live probe, alias, or agent-required — CI-gated, no silent catalog entries.',
       },
       'platform-overview': {
         title: 'Platform technical overview',

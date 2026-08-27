@@ -111,6 +111,26 @@ pub fn coefficient_of_variation(xs: &[f64]) -> f64 {
     stddev(xs) / m
 }
 
+/// Standard score of `x` against a learned window (`mean`, `std`).
+///
+/// Used by the fused C2 engine to decide whether a beacon/RTT sample has drifted
+/// more than 3σ from the 7-day UEBA-style baseline — at which point the scan
+/// adapts jitter rather than repeating a blocked cadence.
+#[must_use]
+pub fn zscore(x: f64, mean: f64, std: f64) -> f64 {
+    if !std.is_finite() || std.abs() < f64::EPSILON {
+        return 0.0;
+    }
+    (x - mean) / std
+}
+
+/// `|z| > threshold` (default 3.0) means the firewall/NDR response has shifted
+/// enough that repeating the previous cadence is a detection risk.
+#[must_use]
+pub fn jitter_should_adapt(z: f64, threshold: f64) -> bool {
+    z.is_finite() && z.abs() > threshold
+}
+
 fn group_by_dst(samples: &[FlowSample]) -> std::collections::BTreeMap<String, Vec<&FlowSample>> {
     let mut map: std::collections::BTreeMap<String, Vec<&FlowSample>> =
         std::collections::BTreeMap::new();
@@ -208,6 +228,15 @@ mod tests {
     #[test]
     fn cv_of_constant_intervals_is_zero() {
         assert_eq!(coefficient_of_variation(&[10.0, 10.0, 10.0, 10.0]), 0.0);
+    }
+
+    #[test]
+    fn zscore_three_sigma_triggers_adapt() {
+        let z = zscore(13.0, 10.0, 1.0);
+        assert!((z - 3.0).abs() < 1e-9);
+        assert!(jitter_should_adapt(3.1, 3.0));
+        assert!(!jitter_should_adapt(2.9, 3.0));
+        assert_eq!(zscore(10.0, 10.0, 0.0), 0.0);
     }
 
     #[test]

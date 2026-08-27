@@ -17,5 +17,6 @@ describe('forensic route compliance plugin', () => {
   it('requires websocket-security evidence registry entry', async () => {
     const { ROUTE_EVIDENCE } = await import('../src/lib/routeEvidence.js')
     expect(ROUTE_EVIDENCE['/websocket-security']).toBe('pages.websocketSecurity.evidence_notice')
+    expect(ROUTE_EVIDENCE['/c2-covert-exfil']).toBe('pages.c2CovertExfilCommandCenter.evidence_notice')
   })
 })

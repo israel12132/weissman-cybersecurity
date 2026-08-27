@@ -15,6 +15,6 @@
   <path d="M52 132 L68 164 L84 116 L100 164 L116 124" stroke="#020617" stroke-width="6" fill="none" stroke-linecap="round"/>
   <text x="160" y="150" fill="#f4efe6" font-family="Inter, sans-serif" font-size="56" font-weight="600">Weissman Cybersecurity</text>
   <text x="160" y="210" fill="#b7b1a6" font-family="Inter, sans-serif" font-size="28">Live evidence. Clearer response.</text>
-  <text x="80" y="520" fill="#22d3ee" font-family="JetBrains Mono, monospace" font-size="22">563 engines · 303 live probes · 226 ATT&amp;CK techniques</text>
+  <text x="80" y="520" fill="#22d3ee" font-family="JetBrains Mono, monospace" font-size="22">564 engines · 304 live probes · 226 ATT&amp;CK techniques</text>
   <text x="80" y="560" fill="#7d776c" font-family="Inter, sans-serif" font-size="20">Tel Aviv-Yafo · weissman.io</text>
 </svg>

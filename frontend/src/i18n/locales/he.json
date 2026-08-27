@@ -212,6 +212,7 @@
     "cache_posture": "מצב אבטחת Cache",
     "http_smuggling": "HTTP Smuggling & Desync",
     "transport_security": "מרכז פיקוד אבטחת Transport",
+    "c2_covert_exfil": "C2 ודליפה סמויה",
     "tls_posture": "TLS Posture",
     "detection_surface": "משטח זיהוי והתחמקות",
     "waf_bypass": "מעבדת WAF Bypass",
@@ -5246,6 +5247,32 @@
     },
     "transportSecurityCommandCenter": {
       "evidence_notice": "posture transport-security ברמה עולמית (mtls_grpc): 38+ מודולי probe חיים — מטריצת TLS/crypto, gRPC/mTLS/gRPC-Web, CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, scorecard מנהלי ב-8 ממדים. כל ממצא מ-handshakes ו-HTTP probes אמיתיים ב-POST /api/command-center/scan (mtls_grpc). מרכז פיקוד: /transport-security."
+    },
+    "c2CovertExfilCommandCenter": {
+      "evidence_notice": "הערכת C2 ודליפה סמויה (advanced_c2_covert_exfil): 10 שכבות חיות — ג'יטר ביקון + Z-score, אנטרופיית DNS TXT/TTL/DoH, הסוואת HTTP/3+WSS, היתכנות NTP/ICMP, LSB/EXIF, CDN/Tor, צווארי בקבוק בכניסה, FAIR SLE, מניפסט כיסוי. כל ממצא מפרובים חיים ב-POST /api/command-center/scan. מרכז פיקוד: /c2-covert-exfil. הערכה בלבד — ללא השתלת C2."
+    },
+    "c2CovertExfil": {
+      "title": "מרכז פיקוד C2 ודליפה סמויה",
+      "badge": "ביקון · DNS · HTTP/3 · סטגו · צוואר בקבוק",
+      "subtitle": "הערכה חיה ממוזגת של משטח ערוצים סמויים: ג'יטר ביקון, אנטרופיית DNS, HTTP/3/WSS, NTP/ICMP, LSB, CDN/Tor וצווארי בקבוק בכניסה. אפס ממצאים מפוברקים. Directive 361 / RLS.",
+      "client": "לקוח",
+      "select_client": "יש לבחור לקוח תחילה",
+      "select_client_opt": "— בחירה —",
+      "target": "יעד",
+      "target_required": "נדרש יעד",
+      "intensity": "עוצמה",
+      "scanning": "סורק…",
+      "run": "הרץ הערכת C2",
+      "hide_params": "▾ פרמטרים",
+      "show_params": "▸ פרמטרים",
+      "extra_ports": "פורטי TCP נוספים",
+      "asset_value": "שווי נכס FAIR",
+      "timeout": "Timeout (ms)",
+      "last_run": "אחרון: {{time}}",
+      "queued": "סריקת C2 סמויה בתור ({{id}})",
+      "scan_failed": "הסריקה נכשלה",
+      "empty_ready_title": "הרץ סריקה להערכת ביקון, מנהור DNS, HTTP/3/WSS, NTP/ICMP, סטגו ומשטח C2 בכניסה.",
+      "empty_ready_body": "לא נצפתה חשיפת ערוץ סמוי בהרצה החיה האחרונה."
     },
     "pkiTlsCommandCenter": {
       "evidence_notice": "posture PKI/TLS, mTLS וממצאי מחזור תעודות מ-POST /api/command-center/scan (pki_tls). revocation ואמון שרשרת נבדקים מול trust stores חיים."

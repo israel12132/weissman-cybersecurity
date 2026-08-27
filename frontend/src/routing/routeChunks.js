@@ -45,6 +45,7 @@ export const AttackSurfaceManagement = React$lazy(() => import('../pages/AttackS
 export const DnsDomainPosture = React$lazy(() => import('../pages/DnsDomainPosture'))
 export const WebCachePosture = React$lazy(() => import('../pages/WebCachePosture'))
 export const TransportSecurityCommandCenter = React$lazy(() => import('../pages/TransportSecurityCommandCenter'))
+export const C2CovertExfilCommandCenter = React$lazy(() => import('../pages/C2CovertExfilCommandCenter'))
 export const HttpSmugglingPosture = React$lazy(() => import('../pages/HttpSmugglingPosture'))
 export const PkiTlsCommandCenter = React$lazy(() => import('../pages/PkiTlsCommandCenter'))
 export const EmailDnsPosture = React$lazy(() => import('../pages/EmailDnsPosture'))

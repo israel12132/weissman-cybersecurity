@@ -30,6 +30,13 @@ const OTHER_ENGINES = [
     commandCenter: '/transport-security',
   },
   {
+    id: 'advanced_c2_covert_exfil',
+    label: 'Advanced C2 & Covert Exfiltration',
+    description: 'Fused live C2/covert-channel assessment — beacon Z-score, DNS entropy, HTTP/3/WSS, NTP/ICMP, LSB stego, CDN/Tor, ingress choke-points',
+    mitre: 'T1071',
+    commandCenter: '/c2-covert-exfil',
+  },
+  {
     id: 'smb_netbios',
     label: 'SMB / NetBIOS',
     description: 'Live SMB2/3 protocol assessment: signing, encryption, SMBv1/EternalBlue, SMBGhost, anonymous IPC$/RPC pipes, NTLM/SPNEGO fingerprint, NetBIOS DC role',

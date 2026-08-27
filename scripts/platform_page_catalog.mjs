@@ -655,6 +655,7 @@ export const ROUTE_TITLES = {
   'cicd-security': 'CI/CD Pipeline Security',
   'serverless-security': 'Serverless Security',
   'transport-security': 'Transport Security Command Center',
+  'c2-covert-exfil': 'C2 & Covert Exfiltration Command Center',
   'websocket-security': 'WebSocket Security',
   'file-upload-lab': 'File Upload Security Lab',
   'jwt-lab': 'JWT Attack Lab',

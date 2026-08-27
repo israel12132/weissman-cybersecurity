@@ -51,6 +51,7 @@ import {
   DnsDomainPosture,
   WebCachePosture,
   TransportSecurityCommandCenter,
+  C2CovertExfilCommandCenter,
   HttpSmugglingPosture,
   PkiTlsCommandCenter,
   EmailDnsPosture,
@@ -229,6 +230,7 @@ export default function TacticalApp() {
           <Route path="cache-posture" element={<WebCachePosture />} />
           <Route path="http-smuggling" element={<HttpSmugglingPosture />} />
           <Route path="transport-security" element={<TransportSecurityCommandCenter />} />
+          <Route path="c2-covert-exfil" element={<C2CovertExfilCommandCenter />} />
           <Route path="tls-posture" element={<PkiTlsCommandCenter />} />
           <Route path="email-posture" element={<EmailDnsPosture />} />
           <Route path="pqc-radar" element={<PqcRadar />} />

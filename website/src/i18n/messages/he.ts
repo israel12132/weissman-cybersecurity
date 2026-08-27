@@ -7,7 +7,7 @@ export const he = {
     home: {
       title: 'Weissman Cybersecurity — ראיות חיות. תגובה חדה יותר.',
       description:
-        'Weissman בודק ברציפות משטחי תקיפה מאושרים עם 563 מנועי ייצור, מאמת ממצאים בראיות חיות, ומסייע לצוותי SOC לתעדף ולהגיב.',
+        'Weissman בודק ברציפות משטחי תקיפה מאושרים עם 564 מנועי ייצור, מאמת ממצאים בראיות חיות, ומסייע לצוותי SOC לתעדף ולהגיב.',
     },
     platform: {
       title: 'הפלטפורמה — Weissman Cybersecurity',
@@ -22,7 +22,7 @@ export const he = {
     'vulnerability-research': {
       title: 'מחקר חולשות אבטחה — Weissman Cybersecurity',
       description:
-        '303 בדיקות חיות ב-web, ענן, OT, זהות ושרשרת אספקה — כל ממצא מגיע מבדיקת רשת או מארח אמיתית.',
+        '304 בדיקות חיות ב-web, ענן, OT, זהות ושרשרת אספקה — כל ממצא מגיע מבדיקת רשת או מארח אמיתית.',
     },
     'detection-response': {
       title: 'זיהוי ותגובה — Weissman Cybersecurity',
@@ -42,7 +42,7 @@ export const he = {
     'security-operations': {
       title: 'תפעול אבטחה — Weissman Cybersecurity',
       description:
-        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 130 מסלולים תפעוליים לצוותי SOC.',
+        'Command Center לאירועים חיים, ממצאים, פלייבוקים, סוכנים ו-Ask Weissman — 131 מסלולים תפעוליים לצוותי SOC.',
     },
     'oast-validation': {
       title: 'אימות OAST — Weissman Cybersecurity',
@@ -544,10 +544,10 @@ export const he = {
       eyebrow: 'מחקר',
       title: 'מחקר חולשות אבטחה עם רף של בדיקה חיה',
       summary:
-        '303 בדיקות חיות — web, API, ענן, OT/ICS, זהות, שרשרת אספקה, AI/LLM ועוד. כינויים מגיעים למימוש אמיתי. CI נכשל אם לא.',
+        '304 בדיקות חיות — web, API, ענן, OT/ICS, זהות, שרשרת אספקה, AI/LLM ועוד. כינויים מגיעים למימוש אמיתי. CI נכשל אם לא.',
       ctaLabel: 'למנועי המחקר',
       outcomes: [
-        '563 מזהי ייצור, כל אחד מחובר לראנר',
+        '564 מזהי ייצור, כל אחד מחובר לראנר',
         '226 טכניקות MITRE ATT&CK מול סט Enterprise, Mobile ו-ICS של v19.1',
         'אין ממצאים מומצאים או אקראיים בנתיב השמירה',
       ],
@@ -644,7 +644,7 @@ export const he = {
       eyebrow: 'תפעול',
       title: 'Command Center שנבנה למי שבמשמרת',
       summary:
-        '130 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
+        '131 מסלולים, פסי KPI חיים, מגירות ממצאים, בונה פלייבוקים, צי סוכנים ו-Ask Weissman — אנגלית ועברית, כולל RTL.',
       ctaLabel: 'לתפעול אבטחה',
       outcomes: [
         'קונסול אחד לסריקות, ראיות ותגובה',
@@ -725,7 +725,7 @@ export const he = {
       },
       'engine-integrity': {
         title: 'חשבונאות שלמות מנועים',
-        summary: '563 מזהים מסווגים כבדיקה חיה, כינוי או דורש-סוכן — תחת שערי CI, בלי רשומות קטלוג שקטות.',
+        summary: '564 מזהים מסווגים כבדיקה חיה, כינוי או דורש-סוכן — תחת שערי CI, בלי רשומות קטלוג שקטות.',
       },
       'platform-overview': {
         title: 'סקירה טכנית של הפלטפורמה',

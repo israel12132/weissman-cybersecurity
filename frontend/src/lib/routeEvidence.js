@@ -55,6 +55,7 @@ export const ROUTE_EVIDENCE = {
   '/http-smuggling': 'pages.httpSmugglingPosture.evidence_notice',
   '/email-posture': 'pages.emailDnsPosture.evidence_notice',
   '/transport-security': 'pages.transportSecurityCommandCenter.evidence_notice',
+  '/c2-covert-exfil': 'pages.c2CovertExfilCommandCenter.evidence_notice',
   '/tls-posture': 'pages.pkiTlsCommandCenter.evidence_notice',
   '/cloud-posture': 'pages.cloudPostureCommandCenter.evidence_notice',
   '/detection-surface': 'pages.edDetectionSurface.evidence_notice',
