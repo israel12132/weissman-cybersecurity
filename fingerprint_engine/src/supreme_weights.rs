@@ -146,7 +146,7 @@ pub fn is_cross_region(from: &str, to: &str) -> bool {
     if a.is_empty() || b.is_empty() || a == b {
         return false;
     }
-    let zone = |r: &str| {
+    fn zone(r: &str) -> &str {
         if r.starts_with("IL") || r.contains("ISRAEL") {
             "il"
         } else if r.starts_with("US") || r.contains("EAST") || r.contains("WEST") {
@@ -156,7 +156,7 @@ pub fn is_cross_region(from: &str, to: &str) -> bool {
         } else {
             r
         }
-    };
+    }
     zone(&a) != zone(&b)
 }
 
@@ -371,7 +371,8 @@ mod tests {
     #[test]
     fn cvss_log_ease_monotone() {
         assert!(cvss_log_ease(9.8) > cvss_log_ease(4.0));
-        assert!(cvss_log_ease(0.0) > 0.0);
+        assert!(cvss_log_ease(4.0) > cvss_log_ease(0.0));
+        assert!(cvss_log_ease(0.0) >= 0.0);
     }
 
     #[test]

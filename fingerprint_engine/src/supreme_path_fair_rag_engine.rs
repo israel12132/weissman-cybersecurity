@@ -6,7 +6,7 @@ use crate::engine_dispatch::EngineRunContext;
 use crate::engine_probes::{empty_ok, extract_host, finding};
 use crate::engine_result::{print_result, EngineResult};
 use crate::{attack_path, financial_risk, pentest_memory};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 const ENGINE_ID: &str = "supreme_path_fair_rag";
 const MITRE: &str = "T1595";

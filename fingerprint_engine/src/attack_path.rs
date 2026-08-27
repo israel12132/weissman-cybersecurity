@@ -165,6 +165,7 @@ pub struct WhatIfSpec {
 struct LoadedGraph {
     nodes: HashMap<i64, GraphNode>,
     adjacency: HashMap<i64, Vec<(i64, String)>>,
+    mitre: HashMap<(i64, i64), String>,
 }
 
 struct CachedGraph {
@@ -181,6 +182,38 @@ fn graph_cache() -> &'static DashMap<(i64, i64), Arc<RwLock<CachedGraph>>> {
 fn path_counter() -> &'static AtomicU64 {
     static C: OnceLock<AtomicU64> = OnceLock::new();
     C.get_or_init(|| AtomicU64::new(0))
+}
+
+const GRAPH_CACHE_TTL: Duration = Duration::from_secs(30);
+
+async fn cached_graph(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: i64,
+) -> Result<Arc<LoadedGraph>, String> {
+    let key = (tenant_id, client_id);
+    if let Some(entry) = graph_cache().get(&key) {
+        if let Ok(g) = entry.read() {
+            if !g.dirty.load(Ordering::Relaxed) && g.loaded_at.elapsed() < GRAPH_CACHE_TTL {
+                return Ok(g.loaded.clone());
+            }
+        }
+    }
+    let (nodes, adjacency, mitre) = load_graph(pool, tenant_id, client_id).await?;
+    let loaded = Arc::new(LoadedGraph {
+        nodes,
+        adjacency,
+        mitre,
+    });
+    graph_cache().insert(
+        key,
+        Arc::new(RwLock::new(CachedGraph {
+            loaded: loaded.clone(),
+            loaded_at: Instant::now(),
+            dirty: AtomicBool::new(false),
+        })),
+    );
+    Ok(loaded)
 }
 
 /// Mark the in-memory graph dirty so the next inference reloads from Postgres.
@@ -773,25 +806,9 @@ pub async fn compute_and_store(
     top_k: Option<usize>,
 ) -> Result<AttackPathSnapshot, String> {
     let top_k = top_k.unwrap_or(DEFAULT_TOP_K).clamp(1, TENANT_PATH_QUOTA);
-    let (nodes, adjacency, mitre) = load_graph(pool, tenant_id, client_id).await?;
-    let loaded = Arc::new(LoadedGraph {
-        nodes,
-        adjacency,
-    });
-    graph_cache().insert(
-        (tenant_id, client_id),
-        Arc::new(RwLock::new(CachedGraph {
-            loaded: loaded.clone(),
-            loaded_at: Instant::now(),
-            dirty: AtomicBool::new(false),
-        })),
-    );
-
-    let graph = loaded.clone();
-    let mitre = Arc::new(mitre);
-    let mitre2 = mitre.clone();
+    let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
-        infer_paths(&graph.nodes, &graph.adjacency, &mitre2, top_k, None)
+        infer_paths(&graph.nodes, &graph.adjacency, &graph.mitre, top_k, None)
     });
     let (paths, choke, entries, jewels) = tokio::time::timeout(INFER_TIMEOUT, infer)
         .await
@@ -812,9 +829,15 @@ pub async fn compute_what_if(
     top_k: Option<usize>,
 ) -> Result<AttackPathSnapshot, String> {
     let top_k = top_k.unwrap_or(DEFAULT_TOP_K).clamp(1, TENANT_PATH_QUOTA);
-    let (nodes, adjacency, mitre) = load_graph(pool, tenant_id, client_id).await?;
+    let graph = cached_graph(pool, tenant_id, client_id).await?;
     let infer = tokio::task::spawn_blocking(move || {
-        infer_paths(&nodes, &adjacency, &mitre, top_k, Some(&spec))
+        infer_paths(
+            &graph.nodes,
+            &graph.adjacency,
+            &graph.mitre,
+            top_k,
+            Some(&spec),
+        )
     });
     let (paths, choke, entries, jewels) = tokio::time::timeout(INFER_TIMEOUT, infer)
         .await
@@ -924,7 +947,7 @@ mod tests {
 
     #[test]
     fn agent_makes_pivot_harder() {
-        let mut open = n(1, false, false, 7.0);
+        let open = n(1, false, false, 7.0);
         let mut guarded = open.clone();
         guarded.agent_present = true;
         let a = supreme_weights::edge_weight_milli(&node_inputs(None, &open, "connects"));
