@@ -44,6 +44,57 @@ impl ExecutionStatus {
             Self::Resolved | Self::Failed | Self::BlockedBlastRadius | Self::DuplicateSkipped
         )
     }
+
+    /// Parse a list-API `status` query. Empty / `pending_hitl` defaults to HITL inbox.
+    /// `all` means no filter. Unknown values are rejected (never interpolated into SQL).
+    pub fn parse_list_filter(raw: &str) -> Result<Option<Self>, String> {
+        let s = raw.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("pending_hitl") {
+            return Ok(Some(Self::PendingHitl));
+        }
+        if s.eq_ignore_ascii_case("all") {
+            return Ok(None);
+        }
+        match s {
+            "queued" => Ok(Some(Self::Queued)),
+            "acquired" => Ok(Some(Self::Acquired)),
+            "executing" => Ok(Some(Self::Executing)),
+            "verifying" => Ok(Some(Self::Verifying)),
+            "resolved" => Ok(Some(Self::Resolved)),
+            "failed" => Ok(Some(Self::Failed)),
+            "blocked_blast_radius" => Ok(Some(Self::BlockedBlastRadius)),
+            "duplicate_skipped" => Ok(Some(Self::DuplicateSkipped)),
+            other => Err(format!("unknown status '{other}'")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod execution_status_tests {
+    use super::ExecutionStatus;
+
+    #[test]
+    fn list_filter_defaults_to_pending_hitl() {
+        assert_eq!(
+            ExecutionStatus::parse_list_filter("").unwrap(),
+            Some(ExecutionStatus::PendingHitl)
+        );
+        assert_eq!(
+            ExecutionStatus::parse_list_filter("pending_hitl").unwrap(),
+            Some(ExecutionStatus::PendingHitl)
+        );
+    }
+
+    #[test]
+    fn list_filter_all_is_unfiltered() {
+        assert_eq!(ExecutionStatus::parse_list_filter("all").unwrap(), None);
+    }
+
+    #[test]
+    fn list_filter_rejects_injection() {
+        assert!(ExecutionStatus::parse_list_filter("pending_hitl; drop table").is_err());
+        assert!(ExecutionStatus::parse_list_filter("' OR 1=1").is_err());
+    }
 }
 
 /// Mathematical proof bundle attached to every autonomous decision.

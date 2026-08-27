@@ -1041,6 +1041,120 @@ async fn api_playbooks_fire(
     }))).into_response()
 }
 
+async fn api_soar_executions_list(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let raw_status = q.get("status").map(String::as_str).unwrap_or("");
+    let status_filter = match crate::soar::ExecutionStatus::parse_list_filter(raw_status) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "detail": e})),
+            )
+                .into_response();
+        }
+    };
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(100)
+        .clamp(1, 200);
+    let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response();
+    };
+    let pending_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM soar_action_executions
+         WHERE tenant_id = $1 AND status = 'pending_hitl'",
+    )
+    .bind(auth.tenant_id)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap_or(0);
+    let rows = if let Some(st) = status_filter {
+        sqlx::query(
+            r#"SELECT e.id, e.action_kind, e.status, e.target_id, e.provider, e.result_detail,
+                      e.blast_radius, e.created_at, e.hitl_required, e.hitl_approved_by,
+                      e.hitl_approved_at, e.client_id, e.playbook_id
+               FROM soar_action_executions e
+               WHERE e.tenant_id = $1 AND e.status = $2
+               ORDER BY e.created_at DESC
+               LIMIT $3"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(st.as_str())
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await
+    } else {
+        sqlx::query(
+            r#"SELECT e.id, e.action_kind, e.status, e.target_id, e.provider, e.result_detail,
+                      e.blast_radius, e.created_at, e.hitl_required, e.hitl_approved_by,
+                      e.hitl_approved_at, e.client_id, e.playbook_id
+               FROM soar_action_executions e
+               WHERE e.tenant_id = $1
+               ORDER BY e.created_at DESC
+               LIMIT $2"#,
+        )
+        .bind(auth.tenant_id)
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await
+    };
+    let _ = tx.commit().await;
+    match rows {
+        Ok(rows) => {
+            let items: Vec<Value> = rows
+                .into_iter()
+                .map(|r| {
+                    let blast = r
+                        .try_get::<serde_json::Value, _>("blast_radius")
+                        .unwrap_or(json!({}));
+                    let crown = blast
+                        .get("crown_jewel_touched")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    json!({
+                        "id": r.try_get::<uuid::Uuid,_>("id").ok(),
+                        "action_kind": r.try_get::<String,_>("action_kind").ok(),
+                        "status": r.try_get::<String,_>("status").ok(),
+                        "target_id": r.try_get::<String,_>("target_id").ok(),
+                        "provider": r.try_get::<String,_>("provider").ok(),
+                        "result_detail": r.try_get::<String,_>("result_detail").ok(),
+                        "blast_radius": blast,
+                        "crown_jewel_touched": crown,
+                        "created_at": r.try_get::<chrono::DateTime<chrono::Utc>,_>("created_at").ok(),
+                        "hitl_required": r.try_get::<bool,_>("hitl_required").unwrap_or(false),
+                        "hitl_approved_by": r.try_get::<Option<i64>,_>("hitl_approved_by").ok().flatten(),
+                        "hitl_approved_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>,_>("hitl_approved_at").ok().flatten(),
+                        "client_id": r.try_get::<Option<i64>,_>("client_id").ok().flatten(),
+                        "playbook_id": r.try_get::<Option<i64>,_>("playbook_id").ok().flatten(),
+                    })
+                })
+                .collect();
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": true,
+                    "items": items,
+                    "pending_count": pending_count,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "detail": scrub_internal_error(&e)})),
+        )
+            .into_response(),
+    }
+}
+
 async fn api_soar_execution_get(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
@@ -1258,7 +1372,15 @@ async fn api_ask(
         Some(auth.user_id),
         &body.question,
     ).await;
-    (StatusCode::OK, Json(json!({"ok": result.error.is_none(), "result": result}))).into_response()
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": result.error.is_none(),
+            "result": result,
+            "quota": quota,
+        })),
+    )
+        .into_response()
 }
 
 // ─── UEBA ingest (called by /ws/agent when ueba_baseline finding arrives) ──

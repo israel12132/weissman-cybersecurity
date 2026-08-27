@@ -551,24 +551,52 @@ async fn audit_query(
     res: &AskResult,
 ) {
     if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
+        let sealed_q = crate::nl_audit_crypto::seal_text(
+            &question.chars().take(2000).collect::<String>(),
+        );
+        let sealed_sql = crate::nl_audit_crypto::seal_text(&res.sql);
+        let error = res.error.clone().unwrap_or_default();
+        let rows_returned = res.row_count as i32;
+        let elapsed_ms = res.elapsed_ms as i32;
+        let prev_hash: String = sqlx::query_scalar(
+            "SELECT COALESCE(event_hash, '') FROM nl_query_audit
+             WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1 FOR UPDATE",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+        let canonical = crate::nl_audit_crypto::canonical_nl_audit_payload(
+            &prev_hash,
+            tenant_id,
+            user_id,
+            &sealed_q,
+            &sealed_sql,
+            rows_returned,
+            elapsed_ms,
+            &error,
+        );
+        let event_hash = crate::nl_audit_crypto::event_hash(&canonical);
         let _ = sqlx::query(
             "INSERT INTO nl_query_audit
                 (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
-                 rows_returned, elapsed_ms, error)
-             VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8)",
+                 rows_returned, elapsed_ms, error, prev_hash, event_hash)
+             VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(tenant_id)
         .bind(user_id)
-        .bind(crate::nl_audit_crypto::seal_text(
-            &question.chars().take(2000).collect::<String>(),
-        ))
+        .bind(&sealed_q)
         .bind(crate::nl_audit_crypto::seal_plan(
             &serde_json::to_value(&res.plan).unwrap_or(json!({})),
         ))
-        .bind(crate::nl_audit_crypto::seal_text(&res.sql))
-        .bind(res.row_count as i32)
-        .bind(res.elapsed_ms as i32)
-        .bind(res.error.clone().unwrap_or_default())
+        .bind(&sealed_sql)
+        .bind(rows_returned)
+        .bind(elapsed_ms)
+        .bind(&error)
+        .bind(&prev_hash)
+        .bind(&event_hash)
         .execute(&mut *tx)
         .await;
         let _ = tx.commit().await;

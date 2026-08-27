@@ -122,6 +122,7 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         )
         .route("/api/playbooks/fire", post(api_playbooks_fire))
         .route("/api/playbooks/:id/runs", get(api_playbook_runs))
+        .route("/api/soar/executions", get(api_soar_executions_list))
         .route("/api/soar/executions/:id", get(api_soar_execution_get))
         .route(
             "/api/soar/executions/:id/revert",

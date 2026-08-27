@@ -80,6 +80,9 @@ const ROW_LOCK_ALLOWED: &[&str] = &[
     // HITL approve takes FOR UPDATE on the execution row; the tx starts with
     // `begin_tenant_tx` so `lock_timeout` is set.
     "fingerprint_engine/src/soar/engine.rs",
+    // Ask Weissman audit hash-chain locks the latest tenant row (`ORDER BY id DESC
+    // LIMIT 1 FOR UPDATE`) inside `begin_tenant_tx`.
+    "fingerprint_engine/src/nl_query.rs",
     // Runs on the AUTH pool with no tenant GUC, so it cannot inherit the bound from
     // `set_tenant_tx`; it calls `advisory_lock::bound_lock_wait` explicitly right after `begin()`.
     "fingerprint_engine/src/auth_refresh.rs",
