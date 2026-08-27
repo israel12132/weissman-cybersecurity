@@ -115,7 +115,13 @@ struct JobClass {
 fn job_class(kind: &str) -> JobClass {
     let (heavy, timeout_secs) = match kind {
         // ── Full-estate scans ────────────────────────────────────────────────
-        "tenant_full_scan" | "onboarding_tenant_scan" => (true, 60 * 60),
+        // 90m covers two worst-case default-engine clients. Larger estates finish via
+        // orchestrator continuation jobs (per-engine 180s cap + resume cursor) rather than
+        // dying at 3600s and retrying the same prefix.
+        "tenant_full_scan" | "onboarding_tenant_scan" => (
+            true,
+            fingerprint_engine::orchestrator::scan_budget::TENANT_FULL_SCAN_TIMEOUT_SECS,
+        ),
         // Fans out to ~22 top-tier engines sequentially (each with its own 180s ceiling), so the
         // worst case is ~22x180 = 3960s. The previous 3600s budget was BELOW that, so when several
         // engines hang — exactly what a health probe exists to detect — the probe was killed with
@@ -1026,11 +1032,15 @@ mod tests {
     fn heavy_jobs_get_long_timeouts() {
         assert_eq!(
             job_kind_timeout("tenant_full_scan"),
-            Duration::from_secs(3600)
+            Duration::from_secs(
+                fingerprint_engine::orchestrator::scan_budget::TENANT_FULL_SCAN_TIMEOUT_SECS
+            )
         );
         assert_eq!(
             job_kind_timeout("onboarding_tenant_scan"),
-            Duration::from_secs(3600)
+            Duration::from_secs(
+                fingerprint_engine::orchestrator::scan_budget::TENANT_FULL_SCAN_TIMEOUT_SECS
+            )
         );
         assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
         assert_eq!(
@@ -1038,6 +1048,10 @@ mod tests {
             Duration::from_secs(2700)
         );
         assert_eq!(job_kind_timeout("pipeline_scan"), Duration::from_secs(1200));
+        assert!(
+            job_kind_timeout("tenant_full_scan") > Duration::from_secs(3600),
+            "3600s was below two worst-case default-engine clients and retried from scratch"
+        );
     }
 
     #[test]
