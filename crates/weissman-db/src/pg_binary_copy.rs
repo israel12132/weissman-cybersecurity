@@ -378,9 +378,7 @@ pub async fn assert_agent_metric_samples_schema(
     Ok(())
 }
 
-async fn verify_agent_metric_samples_catalog(
-    conn: &mut sqlx::PgConnection,
-) -> Result<(), String> {
+async fn verify_agent_metric_samples_catalog(conn: &mut sqlx::PgConnection) -> Result<(), String> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         r#"SELECT a.attname::text, t.typname::text
              FROM pg_attribute a
@@ -602,7 +600,8 @@ mod tests {
 
     #[test]
     fn copy_schema_v1_migration_records_the_same_version() {
-        let sql = include_str!("../migrations/20260827180000_agent_metric_samples_copy_schema_v1.sql");
+        let sql =
+            include_str!("../migrations/20260827180000_agent_metric_samples_copy_schema_v1.sql");
         assert!(sql.contains(&format!(
             "weissman:copy-schema-version={AGENT_METRIC_SAMPLES_SCHEMA_VERSION}"
         )));

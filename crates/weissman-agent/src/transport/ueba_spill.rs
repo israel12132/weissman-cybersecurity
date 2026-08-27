@@ -279,7 +279,9 @@ mod tests {
         write_finding_at(&path, &sample()).expect("write");
         let loaded = load_finding_at(&path).expect("load");
         match loaded {
-            AgentToServer::Finding { engine, finding, .. } => {
+            AgentToServer::Finding {
+                engine, finding, ..
+            } => {
                 assert_eq!(engine, "ueba_baseline");
                 assert_eq!(finding["metrics"]["open_port_count"], 1);
             }
@@ -315,11 +317,14 @@ mod tests {
     fn fifo_drops_oldest_when_sample_cap_is_hit() {
         let (dir, path) = temp_path("fifo-count");
         for n in 1..=5 {
-            write_finding_at_capped(&path, &sample_n(n), DEFAULT_MAX_SPILL_BYTES, 3).expect("write");
+            write_finding_at_capped(&path, &sample_n(n), DEFAULT_MAX_SPILL_BYTES, 3)
+                .expect("write");
         }
         assert_eq!(spill_len_at(&path), 3);
         match load_finding_at(&path).expect("oldest") {
-            AgentToServer::Finding { task_id, finding, .. } => {
+            AgentToServer::Finding {
+                task_id, finding, ..
+            } => {
                 assert_eq!(task_id, "task-3");
                 assert_eq!(finding["metrics"]["open_port_count"], 3);
             }
@@ -363,7 +368,11 @@ mod tests {
         write_finding_at_capped(&path, &bulky, 2_048, 10_000).expect("w1");
         write_finding_at_capped(&path, &bulky2, 2_048, 10_000).expect("w2");
         write_finding_at_capped(&path, &bulky3, 2_048, 10_000).expect("w3");
-        assert!(spill_bytes_at(&path) <= 2_048, "file grew to {}", spill_bytes_at(&path));
+        assert!(
+            spill_bytes_at(&path) <= 2_048,
+            "file grew to {}",
+            spill_bytes_at(&path)
+        );
         assert!(spill_len_at(&path) <= 2);
         match load_finding_at(&path).expect("oldest after byte trim") {
             AgentToServer::Finding { task_id, .. } => {

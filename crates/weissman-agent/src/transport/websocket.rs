@@ -72,10 +72,10 @@ pub async fn run_session(
             let Some(spilled) = crate::transport::ueba_spill::load_finding() else {
                 break;
             };
-            if out_tx.send(spilled.clone()).await.is_err() {
+            if out_tx.send(spilled).await.is_err() {
                 break;
             }
-            let _ = crate::transport::ueba_spill::pop_oldest_if(&spilled);
+            let _ = crate::transport::ueba_spill::pop_oldest();
             resent += 1;
         }
         if resent > 0 {

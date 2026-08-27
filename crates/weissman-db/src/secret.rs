@@ -72,7 +72,10 @@ mod tests {
     fn expose_and_with_exposed_see_the_same_bytes() {
         let secret = SecretUrl::new("postgres://local/db".into());
         assert_eq!(secret.expose(), "postgres://local/db");
-        assert_eq!(secret.with_exposed(|s| s.len()), "postgres://local/db".len());
+        assert_eq!(
+            secret.with_exposed(|s| s.len()),
+            "postgres://local/db".len()
+        );
         assert!(!secret.is_empty());
     }
 }

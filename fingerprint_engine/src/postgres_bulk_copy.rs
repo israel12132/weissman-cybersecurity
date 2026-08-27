@@ -286,10 +286,7 @@ fn try_enqueue(req: UebaCopyRequest) -> Enqueue {
     }
 }
 
-async fn fallback_insert(
-    pool: &PgPool,
-    req: UebaCopyRequest,
-) -> Result<UebaIngestSummary, String> {
+async fn fallback_insert(pool: &PgPool, req: UebaCopyRequest) -> Result<UebaIngestSummary, String> {
     FALLBACK_INSERTS.fetch_add(1, Ordering::Relaxed);
     let result = crate::ueba_detector::ingest_sample(pool, req.tenant_id, req.payload).await;
     if let Some(tx) = req.reply {
@@ -383,11 +380,7 @@ impl BulkIngestManager {
         );
     }
 
-    async fn flush_tenant(
-        &self,
-        tenant_id: i64,
-        reqs: Vec<UebaCopyRequest>,
-    ) -> Result<(), String> {
+    async fn flush_tenant(&self, tenant_id: i64, reqs: Vec<UebaCopyRequest>) -> Result<(), String> {
         match self.copy_then_analyze(tenant_id, &reqs).await {
             Ok(summaries) => {
                 for (req, summary) in reqs.into_iter().zip(summaries.into_iter()) {
@@ -605,7 +598,10 @@ mod tests {
         assert!(s.copy_batch_size >= 1);
         assert_eq!(s.copy_schema_version, AGENT_METRIC_SAMPLES_SCHEMA_VERSION);
         assert_eq!(s.copy_schema_warmed, agent_metric_samples_schema_is_ok());
-        assert_eq!(s.copy_backpressure_rejects, BACKPRESSURE_REJECTS.load(Ordering::Relaxed));
+        assert_eq!(
+            s.copy_backpressure_rejects,
+            BACKPRESSURE_REJECTS.load(Ordering::Relaxed)
+        );
     }
 
     #[test]
