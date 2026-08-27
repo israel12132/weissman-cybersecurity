@@ -51,8 +51,8 @@ const ENTRIES = [
   },
   {
     key: 'pages.attackSurfaceManagement.evidence_notice',
-    en: 'ASM inventory and exposure scoring from POST /api/command-center/scan (asm / attack_surface engines). Asset rows derive from live discovery against authorized client scope — no pre-populated attack graphs.',
-    he: 'מלאי ASM וציון חשיפה מ-POST /api/command-center/scan (מנועי asm / attack_surface). שורות נכסים נגזרות מגילוי חי על scope לקוח מורשה — ללא גרפי התקפה מוכנים מראש.',
+    en: 'ASM inventory and exposure scoring from POST /api/command-center/scan (asm / attack_surface / web_http_intel engines). Asset rows derive from live discovery against authorized client scope. HTTP 401/403 are auth-gated, not public leaks.',
+    he: 'מלאי ASM וציון חשיפה מ-POST /api/command-center/scan (מנועי asm / attack_surface / web_http_intel). שורות נכסים נגזרות מגילוי חי על scope לקוח מורשה. HTTP 401/403 הם auth-gated, לא דליפה ציבורית.',
   },
   {
     key: 'pages.dnsDomainPosture.evidence_notice',
@@ -106,8 +106,8 @@ const ENTRIES = [
   },
   {
     key: 'pages.identitySecurityCenter.evidence_notice',
-    en: 'Identity/OAuth/OIDC/SAML posture from POST /api/command-center/scan (identity / oauth_oidc / saml_attack engines). Token and federation misconfigs are validated with live protocol exchanges.',
-    he: 'posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים.',
+    en: 'Identity/OAuth/OIDC/SAML posture from POST /api/command-center/scan (identity / oauth_oidc / saml_attack / web_identity_surface engines). Token and federation misconfigs are validated with live protocol exchanges. HTTP 401/403 are auth-gated, not public leaks.',
+    he: 'posture Identity/OAuth/OIDC/SAML מ-POST /api/command-center/scan (מנועי identity / oauth_oidc / saml_attack / web_identity_surface). misconfig בטoken ובפדרציה מאומתים עם exchanges פרוטוקול חיים. HTTP 401/403 הם auth-gated, לא דליפה ציבורית.',
   },
   {
     key: 'pages.kerberosSecurityCommandCenter.evidence_notice',

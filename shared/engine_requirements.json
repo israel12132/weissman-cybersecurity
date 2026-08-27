@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-18T03:34:38.169Z",
-  "production_engine_count": 563,
+  "generated_at": "2026-08-27T16:40:05.430Z",
+  "production_engine_count": 565,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 420
+      "engine_count": 422
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -245,7 +245,7 @@
         "ad_domain",
         "scope_domains"
       ],
-      "engine_count": 50
+      "engine_count": 51
     },
     "endpoint_agent": {
       "id": "endpoint_agent",
@@ -2685,6 +2685,27 @@
       "group": "crypto",
       "kind": "real_probe",
       "label": "Identity Attack Chain",
+      "requirements": [
+        "ad_domain",
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_http_intel": {
+      "id": "web_http_intel",
+      "group": "web",
+      "kind": "real_probe",
+      "label": "Web HTTP Intelligence",
+      "requirements": [
+        "contact_email",
+        "scope_domains"
+      ]
+    },
+    "web_identity_surface": {
+      "id": "web_identity_surface",
+      "group": "crypto",
+      "kind": "real_probe",
+      "label": "Web Identity Surface",
       "requirements": [
         "ad_domain",
         "contact_email",

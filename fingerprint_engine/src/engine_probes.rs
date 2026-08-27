@@ -465,6 +465,27 @@ pub async fn dns_mx(host: &str) -> Vec<String> {
     out
 }
 
+/// CNAME chain targets for `host` (each exchange, trailing-dot stripped).
+pub async fn dns_cname(host: &str) -> Vec<String> {
+    use hickory_resolver::proto::rr::RecordType;
+    use hickory_resolver::TokioResolver;
+    let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
+        Ok(r) => r,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    if let Ok(lookup) = resolver.lookup(host, RecordType::CNAME).await {
+        for record in lookup.answers() {
+            let hickory_resolver::proto::rr::RData::CNAME(name) = &record.data else {
+                continue;
+            };
+            let s = name.to_string();
+            out.push(s.trim_end_matches('.').to_string());
+        }
+    }
+    out
+}
+
 pub async fn dns_a(host: &str) -> Vec<String> {
     use hickory_resolver::TokioResolver;
     let resolver = match TokioResolver::builder_tokio().and_then(|b| b.build()) {
@@ -1010,12 +1031,29 @@ pub fn probe_matched_token(probe: &HttpProbe, tokens: &[&str]) -> Option<String>
 
 /// True when an HTTP status indicates the path *exists / is gated* (worth
 /// reporting as exposed surface) rather than a hard 404/410.
+///
+/// 401/403 mean the resource is present but **auth-gated**. Use
+/// [`status_indicates_public_content`] when the question is "did we receive
+/// unauthenticated public data?" — never treat 401/403 as a public leak.
 #[must_use]
 pub fn status_indicates_presence(status: u16) -> bool {
     matches!(
         status,
         200 | 201 | 204 | 301 | 302 | 307 | 308 | 401 | 403 | 405 | 500
     )
+}
+
+/// True when the status is a successful unauthenticated content response (2xx).
+/// 401/403 are auth-gated and must not be classified as public data exposure.
+#[must_use]
+pub fn status_indicates_public_content(status: u16) -> bool {
+    (200..300).contains(&status)
+}
+
+/// True when the status is an authentication/authorization challenge.
+#[must_use]
+pub fn status_indicates_auth_gated(status: u16) -> bool {
+    matches!(status, 401 | 403)
 }
 
 /// A product/version observation parsed from a real HTTP response.
@@ -1142,6 +1180,23 @@ mod tests {
         assert!(status_indicates_presence(200));
         assert!(!status_indicates_presence(404));
         assert!(!status_indicates_presence(410));
+    }
+
+    #[test]
+    fn public_content_excludes_auth_gated_401_403() {
+        assert!(status_indicates_public_content(200));
+        assert!(status_indicates_public_content(204));
+        assert!(!status_indicates_public_content(401));
+        assert!(!status_indicates_public_content(403));
+        assert!(!status_indicates_public_content(404));
+        assert!(!status_indicates_public_content(302));
+        assert!(status_indicates_auth_gated(401));
+        assert!(status_indicates_auth_gated(403));
+        assert!(!status_indicates_auth_gated(200));
+        // Presence and public-content must stay distinct: gated paths exist
+        // but are not public leaks (sibling API/cloud classification contract).
+        assert!(status_indicates_presence(401) && !status_indicates_public_content(401));
+        assert!(status_indicates_presence(403) && !status_indicates_public_content(403));
     }
 
     #[test]

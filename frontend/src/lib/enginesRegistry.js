@@ -1,5 +1,5 @@
 /**
- * Master registry of all 563 production attack engines.
+ * Master registry of all production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -1537,6 +1537,14 @@ export const ENGINES_REGISTRY = [
     group: 'web',
     mitre: 'T1185',
     description: 'CORS misconfiguration exploitation: null origin bypass, trusted subdomain pivot, wildcard with credentials, Vary header cache poisoning via CORS, pre-flight bypass',
+    requiresTarget: true,
+  },
+  {
+    id: 'web_http_intel',
+    label: 'Web HTTP Intelligence',
+    group: 'web',
+    mitre: 'T1190',
+    description: 'Burp-class live HTTP/DNS/TLS evidence: security-header values, cookie flags, CORS preflight, HSTS/CSP, HTTP/1 vs HTTP/2 differential, CAA, cert posture. 401/403 classified as auth-gated, never public content.',
     requiresTarget: true,
   },
   {
@@ -4593,7 +4601,15 @@ export const ENGINES_REGISTRY = [
     label: 'Identity Attack Chain',
     group: 'crypto',
     mitre: 'T1078',
-    description: 'Fusion: password spray + Kerberos + ITDR auth telemetry',
+    description: 'Fusion: password spray + Kerberos + ITDR + live OIDC/SAML/OAuth identity surface. 401/403 are auth-gated, not public leaks.',
+    requiresTarget: true,
+  },
+  {
+    id: 'web_identity_surface',
+    label: 'Web Identity Surface',
+    group: 'crypto',
+    mitre: 'T1550.001',
+    description: 'Live OIDC discovery, SAML metadata, WWW-Authenticate (NTLM/Negotiate/Bearer), login forms, JWT-shaped cookies (name only), SPF/DMARC identity perimeter. Evidence-backed HTTP/DNS only.',
     requiresTarget: true,
   },
   {

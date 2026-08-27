@@ -749,6 +749,10 @@ async fn dispatch_engine_match(
         "identity_attack_chain" => {
             crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
         }
+        "web_http_intel" => crate::web_scan_intel::run_web_http_intel_result(target).await,
+        "web_identity_surface" => {
+            crate::web_scan_intel::run_web_identity_surface_result(target).await
+        }
         "pipeline_to_runtime_risk" => {
             crate::pipeline_to_runtime_risk_engine::run_pipeline_to_runtime_risk_result(target, ctx)
                 .await

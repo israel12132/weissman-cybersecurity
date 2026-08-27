@@ -30,6 +30,8 @@ export const TOP_TIER_ENGINE_IDS = [
   'waf_bypass',
   'cicd_pipeline',
   'oauth_oidc',
+  'web_http_intel',
+  'web_identity_surface',
   'password_spray',
 ]
 
@@ -325,6 +327,28 @@ const PROFILES = {
       probe_implicit: true,
       probe_token_endpoint: true,
       attack_paths: true,
+    },
+  },
+  web_http_intel: {
+    mission: 'Burp-class live HTTP/DNS/TLS intelligence — header values, cookie flags, CORS preflight, HSTS/CSP, HTTP/1 vs HTTP/2 differential, CAA, and certificate posture. 401/403 are auth-gated, never public content.',
+    intelligenceFocus: 'Exposure classification, security-header values (not just presence), cookie Secure/HttpOnly/SameSite, CORS OPTIONS, TLS key size, dangling CNAME correlation.',
+    expectedOutputs: [...BASE_EXPECTED_OUTPUTS, 'exposure_class on every HTTP finding', 'Cookie hardening gaps without storing token values', 'DNS CAA + TLS evidence trail'],
+    samplePayload: {
+      engine: 'web_http_intel',
+      target: 'https://www.example.com',
+      intensity: 'normal',
+      evidence_mode: 'forensic',
+    },
+  },
+  web_identity_surface: {
+    mission: 'Map internet-facing identity: OIDC discovery, SAML metadata, WWW-Authenticate (NTLM/Negotiate/Bearer), login forms, JWT-shaped cookies (name only), SPF/DMARC perimeter.',
+    intelligenceFocus: 'Well-known identity paths, IdP fingerprinting, auth-gated vs public metadata, email-identity DNS.',
+    expectedOutputs: [...BASE_EXPECTED_OUTPUTS, 'Public vs auth-gated identity endpoints', 'IdP fingerprint + WWW-Authenticate scheme', 'SPF/DMARC identity perimeter'],
+    samplePayload: {
+      engine: 'web_identity_surface',
+      target: 'https://login.example.com',
+      intensity: 'normal',
+      evidence_mode: 'forensic',
     },
   },
   password_spray: {

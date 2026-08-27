@@ -9,7 +9,7 @@
 //! | Engine ID | Domains fused |
 //! |-----------|---------------|
 //! | `external_exposure_supreme` | ASM + email/DNS + cloud posture |
-//! | `identity_attack_chain` | Kerberos + spray + ITDR auth events |
+//! | `identity_attack_chain` | Kerberos + spray + ITDR + OIDC/OAuth + web identity surface |
 //! | `pipeline_to_runtime_risk` | IaC + supply chain + CI/CD |
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |

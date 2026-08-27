@@ -41,6 +41,8 @@ fn synthesis_and_sovereign_engines_wired_in_dispatch() {
     let required = [
         "external_exposure_supreme",
         "identity_attack_chain",
+        "web_http_intel",
+        "web_identity_surface",
         "pipeline_to_runtime_risk",
         "risk_superposition_collapse",
         "chronos",
