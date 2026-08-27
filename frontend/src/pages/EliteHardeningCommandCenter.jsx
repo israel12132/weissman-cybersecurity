@@ -132,12 +132,57 @@ export default function EliteHardeningCommandCenter() {
 
         {!loading && !error && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${total || 100}`} accent="#22d3ee" />
               <ExecutiveWidget label={t(`${NS}.kpi_gaps`)} value={gaps} accent={gaps ? '#f43f5e' : '#34d399'} />
               <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack || 'v19.1'} accent="#a78bfa" />
               <ExecutiveWidget label={t(`${NS}.kpi_probes`)} value={data?.live_probes_target || 303} accent="#f97316" />
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_engines`)}
+                value={data?.moat?.engines_total ?? '—'}
+                accent="#38bdf8"
+              />
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_lanes`)}
+                value={
+                  data?.moat
+                    ? `${data.moat.lanes_covered}/${data.moat.lanes_total}`
+                    : '—'
+                }
+                accent={data?.moat?.unmatched_stack ? '#34d399' : '#f59e0b'}
+              />
             </div>
+
+            {Array.isArray(data?.moat?.lanes) && data.moat.lanes.length > 0 && (
+              <section className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4 space-y-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-cyan-200">
+                    {t(`${NS}.moat_title`)}
+                  </h2>
+                  <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                    {data.moat.unmatched_stack ? t(`${NS}.moat_unmatched`) : t(`${NS}.moat_partial`)}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.moat_notice`)}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+                  {data.moat.lanes.map((lane) => (
+                    <article
+                      key={lane.id}
+                      data-testid="moat-lane"
+                      className="rounded-lg border border-white/10 bg-black/30 px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-xs text-white font-medium leading-snug">{lane.title}</h3>
+                        <span className="font-mono text-cyan-300 text-sm tabular-nums">
+                          {lane.live_engine_count}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] leading-snug text-[var(--text-muted)]">{lane.beats}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <label className="relative flex-1">

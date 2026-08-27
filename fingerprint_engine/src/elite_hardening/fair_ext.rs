@@ -48,9 +48,42 @@ pub fn data_sources_json() -> serde_json::Value {
         "formula": {
             "sle": "asset_value × max(CVSS/10, 0.5)",
             "ale": "SLE × min(EPSS×12, 12) × discount",
-            "kev_aro_floor": 1.0
+            "kev_aro_floor": 1.0,
+            "ot_process_disruption": "high OT findings × hours_to_recover × daily_process_revenue / 24, capped at 8 findings"
         }
     })
+}
+
+/// OT/ICS asset heuristic from graph node type / label / key.
+pub fn is_ot_asset(node_type: &str, label: &str, graph_key: &str) -> bool {
+    let blob = format!("{node_type} {label} {graph_key}").to_ascii_lowercase();
+    const TOKENS: &[&str] = &["ot", "ics", "scada", "plc", "rtu", "ied", "hmi"];
+    const NEEDLES: &[&str] = &[
+        "modbus", "dnp3", "iec61850", "opcua", "profinet", "bacnet", "siemens", "triton",
+    ];
+    let toks = blob.split(|c: char| !c.is_ascii_alphanumeric());
+    if toks.clone().any(|t| TOKENS.contains(&t)) {
+        return true;
+    }
+    NEEDLES.iter().any(|n| blob.contains(n)) || blob.contains("s7comm")
+}
+
+/// Process-disruption loss used when live OT findings exist (DeNexus gap-closer,
+/// priced from *our* graph, not a vendor import).
+pub fn ot_process_disruption_usd(
+    ot_high_findings: u32,
+    daily_process_revenue_usd: i64,
+    hours_to_recover: f64,
+) -> i64 {
+    if ot_high_findings == 0 || daily_process_revenue_usd <= 0 {
+        return 0;
+    }
+    if !hours_to_recover.is_finite() || hours_to_recover <= 0.0 {
+        return 0;
+    }
+    let n = ot_high_findings.min(8) as f64;
+    let days = (hours_to_recover * n) / 24.0;
+    business_interruption_usd(daily_process_revenue_usd, days)
 }
 
 #[cfg(test)]
@@ -80,5 +113,15 @@ mod tests {
     fn bi_zero_on_bad_inputs() {
         assert_eq!(business_interruption_usd(0, 3.0), 0);
         assert_eq!(business_interruption_usd(1000, f64::NAN), 0);
+    }
+
+    #[test]
+    fn ot_disruption_scales_with_findings() {
+        assert_eq!(ot_process_disruption_usd(0, 24_000, 8.0), 0);
+        let one = ot_process_disruption_usd(1, 24_000, 8.0);
+        let two = ot_process_disruption_usd(2, 24_000, 8.0);
+        assert!(one > 0 && two > one);
+        assert!(is_ot_asset("plc", "Siemens S7", "site/modbus"));
+        assert!(!is_ot_asset("web", "www", "app/frontend"));
     }
 }

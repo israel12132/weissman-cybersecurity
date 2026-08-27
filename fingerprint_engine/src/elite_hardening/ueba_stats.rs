@@ -43,6 +43,14 @@ pub fn hour_of_week_utc(hour: u32, weekday_sun0: u32) -> i16 {
     (d * 24 + h) as i16
 }
 
+/// Unix epoch → hour-of-week. 1970-01-01 was Thursday (4 if Sunday = 0).
+pub fn hour_of_week_from_unix(unix: i64) -> i16 {
+    let days = unix.div_euclid(86_400);
+    let hour = unix.div_euclid(3_600).rem_euclid(24) as u32;
+    let weekday_sun0 = ((days + 4).rem_euclid(7)) as u32;
+    hour_of_week_utc(hour, weekday_sun0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,5 +74,7 @@ mod tests {
     fn hour_bucket_sunday_midnight() {
         assert_eq!(hour_of_week_utc(0, 0), 0);
         assert_eq!(hour_of_week_utc(23, 6), 167);
+        // 1970-01-01 00:00 UTC = Thursday → weekday 4, hour 0 → bucket 96
+        assert_eq!(hour_of_week_from_unix(0), 96);
     }
 }

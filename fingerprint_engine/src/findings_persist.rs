@@ -620,9 +620,19 @@ pub async fn persist_engine_findings(
                     confidence,
                 } => {
                     if let Value::Object(obj) = &mut raw_data_enriched {
+                        let pack = crate::elite_hardening::evidence_doubt::proof_pack_hash(
+                            engine,
+                            &ckey,
+                            &finding_for_doubt,
+                            distinct,
+                        );
                         obj.insert(
                             "evidence_doubt".into(),
-                            json!({ "reason": reason, "confidence": confidence }),
+                            json!({
+                                "reason": reason,
+                                "confidence": confidence,
+                                "proof_pack": pack,
+                            }),
                         );
                     }
                 }

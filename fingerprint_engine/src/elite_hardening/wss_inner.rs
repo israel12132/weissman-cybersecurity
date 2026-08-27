@@ -8,6 +8,9 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use serde_json::{json, Value};
 
+pub const ALGO: &str = "AES-256-GCM";
+pub const KEY_BYTES: usize = 32;
+pub const NONCE_BYTES: usize = 12;
 const VERSION: u8 = 1;
 
 pub fn generate_key() -> [u8; 32] {

@@ -324,7 +324,38 @@ fn build_resolver(choice: &str) -> Option<TokioResolver> {
     }
 }
 
+fn doh_rr_name(rt: RecordType) -> Option<&'static str> {
+    Some(match rt {
+        RecordType::A => "A",
+        RecordType::AAAA => "AAAA",
+        RecordType::TXT => "TXT",
+        RecordType::MX => "MX",
+        RecordType::CAA => "CAA",
+        RecordType::CNAME => "CNAME",
+        RecordType::NS => "NS",
+        RecordType::SOA => "SOA",
+        RecordType::SRV => "SRV",
+        RecordType::PTR => "PTR",
+        RecordType::TLSA => "TLSA",
+        RecordType::DNSKEY => "DNSKEY",
+        _ => return None,
+    })
+}
+
+async fn doh_answers(name: &str, rtype: &str) -> Vec<String> {
+    crate::elite_hardening::stealth_ops::doh_lookup(name, rtype)
+        .await
+        .unwrap_or_default()
+}
+
 async fn txt_records(resolver: &TokioResolver, name: &str) -> Vec<String> {
+    let doh = doh_answers(name, "TXT").await;
+    if !doh.is_empty() {
+        return doh;
+    }
+    if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if let Ok(txt) = resolver.txt_lookup(name).await {
         for record in txt.answers() {
@@ -341,6 +372,27 @@ async fn txt_records(resolver: &TokioResolver, name: &str) -> Vec<String> {
 }
 
 async fn mx_records(resolver: &TokioResolver, name: &str) -> Vec<(u16, String)> {
+    let doh = doh_answers(name, "MX").await;
+    if !doh.is_empty() {
+        let mut out: Vec<(u16, String)> = doh
+            .into_iter()
+            .filter_map(|s| {
+                let mut parts = s.split_whitespace();
+                let pref = parts.next()?.parse::<u16>().ok()?;
+                let host = parts.next()?.trim_end_matches('.').to_string();
+                if host.is_empty() {
+                    None
+                } else {
+                    Some((pref, host))
+                }
+            })
+            .collect();
+        out.sort_by_key(|(pref, _)| *pref);
+        return out;
+    }
+    if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if let Ok(mx) = resolver.mx_lookup(name).await {
         for record in mx.answers() {
@@ -355,6 +407,13 @@ async fn mx_records(resolver: &TokioResolver, name: &str) -> Vec<(u16, String)> 
 }
 
 async fn caa_records(resolver: &TokioResolver, name: &str) -> Vec<String> {
+    let doh = doh_answers(name, "CAA").await;
+    if !doh.is_empty() {
+        return doh;
+    }
+    if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if let Ok(caa) = resolver.lookup(name, RecordType::CAA).await {
         for record in caa.answers() {
@@ -369,6 +428,15 @@ async fn caa_records(resolver: &TokioResolver, name: &str) -> Vec<String> {
 /// Best-effort answer count for a record type (used for DNSSEC / DANE signals). Returns the number
 /// of answer records the configured resolver returns for `(name, rtype)`.
 async fn answer_count(resolver: &TokioResolver, name: &str, rtype: RecordType) -> usize {
+    if let Some(rr) = doh_rr_name(rtype) {
+        let n = doh_answers(name, rr).await.len();
+        if n > 0 {
+            return n;
+        }
+        if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+            return 0;
+        }
+    }
     match resolver.lookup(name, rtype).await {
         Ok(l) => l.answers().len(),
         Err(_) => 0,
@@ -376,6 +444,13 @@ async fn answer_count(resolver: &TokioResolver, name: &str, rtype: RecordType) -
 }
 
 async fn cname_target(resolver: &TokioResolver, name: &str) -> Option<String> {
+    let doh = doh_answers(name, "CNAME").await;
+    if let Some(first) = doh.into_iter().next() {
+        return Some(first);
+    }
+    if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        return None;
+    }
     if let Ok(c) = resolver.lookup(name, RecordType::CNAME).await {
         for record in c.answers() {
             if let RData::CNAME(cn) = &record.data {
@@ -387,6 +462,26 @@ async fn cname_target(resolver: &TokioResolver, name: &str) -> Option<String> {
 }
 
 async fn srv_targets(resolver: &TokioResolver, name: &str) -> Vec<(u16, String)> {
+    let doh = doh_answers(name, "SRV").await;
+    if !doh.is_empty() {
+        return doh
+            .into_iter()
+            .filter_map(|s| {
+                let parts: Vec<&str> = s.split_whitespace().collect();
+                // priority weight port target
+                let port = parts.get(2)?.parse::<u16>().ok()?;
+                let host = parts.get(3)?.trim_end_matches('.').to_string();
+                if host.is_empty() {
+                    None
+                } else {
+                    Some((port, host))
+                }
+            })
+            .collect();
+    }
+    if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if let Ok(lookup) = resolver.lookup(name, RecordType::SRV).await {
         for record in lookup.answers() {
@@ -1040,6 +1135,14 @@ async fn flatten_spf_ip_inventory(
 }
 
 async fn lookup_a_aaaa(resolver: &TokioResolver, host: &str) -> Vec<String> {
+    let mut out = doh_answers(host, "A").await;
+    out.extend(doh_answers(host, "AAAA").await);
+    if !out.is_empty() {
+        return out;
+    }
+    if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     if let Ok(a) = resolver.lookup(host, RecordType::A).await {
         for record in a.answers() {
@@ -1061,6 +1164,15 @@ async fn lookup_a_aaaa(resolver: &TokioResolver, host: &str) -> Vec<String> {
 }
 
 async fn lookup_strings(resolver: &TokioResolver, host: &str, rt: RecordType) -> Vec<String> {
+    if let Some(rr) = doh_rr_name(rt) {
+        let doh = doh_answers(host, rr).await;
+        if !doh.is_empty() {
+            return doh;
+        }
+        if !crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+            return Vec::new();
+        }
+    }
     let mut out = Vec::new();
     if let Ok(lookup) = resolver.lookup(host, rt).await {
         for record in lookup.answers() {
@@ -2843,15 +2955,24 @@ async fn analyze_soa_posture(
     }
     let mut minimum_ttl: Option<u32> = None;
     let mut raw = String::new();
-    if let Ok(lookup) = resolver.lookup(domain, RecordType::SOA).await {
-        for record in lookup.answers() {
-            if let RData::SOA(soa) = &record.data {
-                minimum_ttl = Some(soa.minimum);
-                raw = format!(
-                    "mname={}; serial={}; refresh={}; retry={}; expire={}; minimum={}",
-                    soa.mname, soa.serial, soa.refresh, soa.retry, soa.expire, soa.minimum
-                );
-                break;
+    let soa_doh = doh_answers(domain, "SOA").await;
+    if let Some(data) = soa_doh.first() {
+        raw = data.clone();
+        // SOA wire text: mname rname serial refresh retry expire minimum
+        if let Some(min) = data.split_whitespace().nth(6).and_then(|s| s.parse().ok()) {
+            minimum_ttl = Some(min);
+        }
+    } else if crate::elite_hardening::stealth_ops::allow_udp_dns_fallback() {
+        if let Ok(lookup) = resolver.lookup(domain, RecordType::SOA).await {
+            for record in lookup.answers() {
+                if let RData::SOA(soa) = &record.data {
+                    minimum_ttl = Some(soa.minimum);
+                    raw = format!(
+                        "mname={}; serial={}; refresh={}; retry={}; expire={}; minimum={}",
+                        soa.mname, soa.serial, soa.refresh, soa.retry, soa.expire, soa.minimum
+                    );
+                    break;
+                }
             }
         }
     }
@@ -3283,24 +3404,7 @@ async fn analyze_mx_ptr(
 ) -> Value {
     let mut rows: Vec<Value> = Vec::new();
     for (_, host) in mx.iter().take(3) {
-        let ips: Vec<String> = {
-            let mut v = Vec::new();
-            if let Ok(a) = resolver.lookup(host, RecordType::A).await {
-                for rec in a.answers() {
-                    if let RData::A(ip) = rec.data {
-                        v.push(ip.to_string());
-                    }
-                }
-            }
-            if let Ok(aaaa) = resolver.lookup(host, RecordType::AAAA).await {
-                for rec in aaaa.answers() {
-                    if let RData::AAAA(ip) = rec.data {
-                        v.push(ip.to_string());
-                    }
-                }
-            }
-            v
-        };
+        let ips: Vec<String> = lookup_a_aaaa(resolver, host).await;
         let mut ptrs: Vec<String> = Vec::new();
         for ip_str in &ips {
             if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
@@ -3319,13 +3423,7 @@ async fn analyze_mx_ptr(
                         format!("{}.ip6.arpa", segs.join("."))
                     }
                 };
-                if let Ok(ptr_lookup) = resolver.lookup(&rev_name, RecordType::PTR).await {
-                    for rec in ptr_lookup.answers() {
-                        if let RData::PTR(p) = &rec.data {
-                            ptrs.push(p.to_string().trim_end_matches('.').to_string());
-                        }
-                    }
-                }
+                ptrs.extend(lookup_strings(resolver, &rev_name, RecordType::PTR).await);
             }
         }
         let forward_match = ptrs.iter().any(|p| {

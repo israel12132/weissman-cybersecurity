@@ -37,12 +37,87 @@ pub fn doh_endpoint() -> &'static str {
 
 /// RFC 8484 JSON DoH query URL for an A record.
 pub fn doh_json_url(name: &str) -> String {
+    doh_json_url_typed(name, "A")
+}
+
+/// RFC 8484 JSON DoH query URL for an arbitrary RR type (TXT, MX, AAAA, …).
+pub fn doh_json_url_typed(name: &str, record_type: &str) -> String {
     let host = name.trim().trim_end_matches('.');
+    let rr = record_type.trim().to_ascii_uppercase();
     format!(
-        "{}?name={}&type=A",
+        "{}?name={}&type={}",
         doh_endpoint(),
-        urlencoding::encode(host)
+        urlencoding::encode(host),
+        urlencoding::encode(&rr)
     )
+}
+
+/// Lab override: allow Hickory UDP/TCP when DoH is empty. Production default is DoH-only.
+pub fn allow_udp_dns_fallback() -> bool {
+    matches!(
+        std::env::var("WEISSMAN_DNS_ALLOW_UDP")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    )
+}
+
+/// Strip DoH JSON TXT quoting (`"v=spf1 …"` or split `"ab" "cd"`).
+pub fn strip_doh_txt(raw: &str) -> String {
+    let mut out = String::new();
+    for part in raw.split('"') {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        out.push_str(p);
+    }
+    if out.is_empty() {
+        raw.trim().to_string()
+    } else {
+        out
+    }
+}
+
+/// Parse Cloudflare/Google `application/dns-json` Answer[].data values.
+pub fn parse_doh_answer_data(body: &serde_json::Value) -> Vec<String> {
+    body.get("Answer")
+        .and_then(|a| a.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|rr| rr.get("data").and_then(|d| d.as_str()))
+                .map(|s| s.trim().trim_end_matches('.').to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Live DoH lookup (TLS 1.2+). Empty vec on transport/JSON failure — callers must not
+/// silently fall back to UDP unless `allow_udp_dns_fallback()` is set.
+pub async fn doh_lookup(name: &str, record_type: &str) -> Result<Vec<String>, String> {
+    let host = name.trim();
+    if host.is_empty() {
+        return Err("empty DNS name".into());
+    }
+    let url = doh_json_url_typed(host, record_type);
+    let client = crate::scan_http_client::internal_json_client(std::time::Duration::from_secs(8));
+    let resp = client
+        .get(&url)
+        .header("Accept", "application/dns-json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("DoH HTTP {}", resp.status()));
+    }
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let mut answers = parse_doh_answer_data(&body);
+    if record_type.eq_ignore_ascii_case("TXT") {
+        answers = answers.into_iter().map(|s| strip_doh_txt(&s)).collect();
+    }
+    Ok(answers)
 }
 
 /// Asset-class scan governor: production/ICS is slower than lab/dev.
@@ -109,5 +184,21 @@ mod tests {
         let u = doh_json_url("example.com");
         assert!(u.starts_with("https://"));
         assert!(u.contains("example.com"));
+        let txt = doh_json_url_typed("example.com", "TXT");
+        assert!(txt.contains("type=TXT"));
+    }
+
+    #[test]
+    fn doh_json_parses_answers() {
+        let body = serde_json::json!({
+            "Status": 0,
+            "Answer": [
+                {"name": "example.com.", "type": 1, "data": "93.184.216.34"}
+            ]
+        });
+        let a = parse_doh_answer_data(&body);
+        assert_eq!(a, vec!["93.184.216.34"]);
+        assert_eq!(strip_doh_txt("\"v=spf1 -all\""), "v=spf1 -all");
+        assert!(!allow_udp_dns_fallback());
     }
 }

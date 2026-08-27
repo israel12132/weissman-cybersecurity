@@ -148,6 +148,7 @@ pub async fn compute_and_store(
     let mut crown_value: i64 = 0;
     let mut sle_worst: i64 = 0;
     let mut ale_total: i64 = 0;
+    let mut ot_high: u32 = 0;
     let mut contributors: Vec<TopContributor> = Vec::with_capacity(rows.len());
 
     for r in rows {
@@ -164,6 +165,11 @@ pub async fn compute_and_store(
         total_value += value;
         if crown {
             crown_value += value;
+        }
+        if crate::elite_hardening::fair_ext::is_ot_asset(&node_type, &label, &graph_key)
+            && (cvss >= 7.0 || crown || kev)
+        {
+            ot_high = ot_high.saturating_add(1);
         }
 
         let sle = single_loss_expectancy(value, cvss);
@@ -209,7 +215,21 @@ pub async fn compute_and_store(
         },
         1.0,
     );
-    let sources = crate::elite_hardening::fair_ext::data_sources_json();
+    let ot_loss = crate::elite_hardening::fair_ext::ot_process_disruption_usd(
+        ot_high,
+        if total_value > 0 {
+            total_value / 365
+        } else {
+            0
+        },
+        8.0,
+    );
+    let bi = bi.saturating_add(ot_loss);
+    let mut sources = crate::elite_hardening::fair_ext::data_sources_json();
+    if let Some(obj) = sources.as_object_mut() {
+        obj.insert("ot_high_findings".into(), json!(ot_high));
+        obj.insert("ot_process_disruption_usd".into(), json!(ot_loss));
+    }
     let ale_with_bi = ale_total.saturating_add(bi);
 
     // Persist a snapshot for fast UI loads. Elite columns land with the Part-2

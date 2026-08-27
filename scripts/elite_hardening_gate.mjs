@@ -18,8 +18,9 @@ const modRs = join(ROOT, 'fingerprint_engine/src/elite_hardening/mod.rs')
 const page = join(ROOT, 'frontend/src/pages/EliteHardeningCommandCenter.jsx')
 const routes = join(ROOT, 'fingerprint_engine/src/http/serve_route_groups.rs')
 const mig = join(ROOT, 'crates/weissman-db/migrations/20260827170000_elite_hardening_part2.sql')
+const moat = join(ROOT, 'fingerprint_engine/src/elite_hardening/moat.rs')
 
-for (const p of [catalog, modRs, page, routes, mig]) {
+for (const p of [catalog, modRs, page, routes, mig, moat]) {
   if (!existsSync(p)) fail(`missing ${p}`)
 }
 
@@ -38,6 +39,8 @@ const pageSrc = readFileSync(page, 'utf8')
 if (!pageSrc.includes('/api/elite-hardening/status')) fail('page does not fetch live status API')
 if (!pageSrc.includes('EvidenceNotice')) fail('page missing EvidenceNotice')
 if (!pageSrc.includes('searchQuery')) fail('page missing search')
+if (!pageSrc.includes('moat')) fail('page missing sovereign moat lanes')
+if (!readFileSync(moat, 'utf8').includes('PRODUCTION_ENGINE_IDS')) fail('moat.rs not live-wired to production engines')
 
 const routeSrc = readFileSync(routes, 'utf8')
 if (!routeSrc.includes('/api/elite-hardening/status')) fail('API route not registered')

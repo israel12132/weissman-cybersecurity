@@ -10,6 +10,7 @@ pub mod ai_supply;
 pub mod catalog;
 pub mod evidence_doubt;
 pub mod fair_ext;
+pub mod moat;
 pub mod nl_guard;
 pub mod oast_reputation;
 pub mod ot_fsm;
@@ -63,6 +64,7 @@ pub fn status_snapshot() -> Value {
         "ueba_z_high": 6.0,
         "ueba_learn_days": 7,
         "controls": controls,
+        "moat": moat::snapshot(),
     })
 }
 
@@ -91,7 +93,9 @@ fn live_status(id: u16) -> ControlStatus {
         13 => ControlStatus::ok("Unified browser UA pool (weissman_core::stealth_identity)"),
         14 => ControlStatus::ok("WSS inner AES-256-GCM after Welcome"),
         15 => ControlStatus::ok("Scan source IP / proxy rotation via stealth proxy swarm"),
-        16 => ControlStatus::ok("DoH resolver for DNS-layer probes"),
+        16 => ControlStatus::ok(
+            "DoH JSON (Cloudflare/Google) is the default DNS probe path; UDP only if WEISSMAN_DNS_ALLOW_UDP=1",
+        ),
         17 => ControlStatus::ok("Scanner header strip on active payloads"),
         18 => ControlStatus::ok("Asset-class adaptive tenant_scan_limit"),
         19 => ControlStatus::ok("Timeout ratio >20% pauses host 300s and rotates evasion"),
@@ -208,5 +212,7 @@ mod tests {
             crate::nl_query::allowed_table_count(),
             nl_guard::ASK_WEISSMAN_TABLE_COUNT
         );
+        assert_eq!(snap["moat"]["unmatched_stack"], true);
+        assert_eq!(snap["moat"]["lanes_covered"], snap["moat"]["lanes_total"]);
     }
 }

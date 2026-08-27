@@ -42,6 +42,44 @@ pub fn corroboration_key(target: &str, vuln_type: &str, payload: &str) -> String
     format!("{:x}", hasher.finalize())
 }
 
+/// NodeZero/XBOW/Strix sell "proof of exploit". We seal dual-probe + OAST +
+/// confidence into a hash that is stored on admit — not a marketing screenshot.
+pub fn proof_pack_hash(
+    engine: &str,
+    corroboration_key: &str,
+    finding: &Value,
+    distinct_engines: usize,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(engine.trim().to_lowercase().as_bytes());
+    hasher.update(b"|");
+    hasher.update(corroboration_key.as_bytes());
+    hasher.update(b"|");
+    hasher.update(distinct_engines.to_string().as_bytes());
+    hasher.update(b"|");
+    hasher.update(extract_confidence(finding).to_string().as_bytes());
+    hasher.update(b"|");
+    hasher.update(if oast_confirmed(finding) {
+        b"oast1"
+    } else {
+        b"oast0"
+    });
+    hasher.update(b"|");
+    hasher.update(if kev_listed(finding) {
+        b"kev1"
+    } else {
+        b"kev0"
+    });
+    if let Some(p) = finding
+        .get("evidence")
+        .and_then(|e| e.get("proof"))
+        .and_then(Value::as_str)
+    {
+        hasher.update(p.as_bytes());
+    }
+    format!("{:x}", hasher.finalize())
+}
+
 pub fn extract_confidence(finding: &Value) -> f64 {
     let raw = finding
         .get("confidence")
@@ -255,5 +293,16 @@ mod tests {
         let a = corroboration_key("https://t", "sqli", "x");
         let b = corroboration_key("HTTPS://T", "SQLi", "x");
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn proof_pack_is_stable_for_same_inputs() {
+        let f = json!({"oast_confirmed": true, "confidence": 0.9, "evidence": {"proof": "x"}});
+        let a = proof_pack_hash("ssrf", "abc", &f, 2);
+        let b = proof_pack_hash("ssrf", "abc", &f, 2);
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+        let c = proof_pack_hash("ssrf", "abc", &f, 1);
+        assert_ne!(a, c);
     }
 }
