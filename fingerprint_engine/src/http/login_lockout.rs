@@ -168,6 +168,9 @@ mod tests {
         let retry = check_lockout_mem(tenant, email);
         assert!(retry.is_some());
         assert!(retry.unwrap() > 0);
+        let locked = locked_response(retry.unwrap());
+        assert_eq!(locked.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(locked.headers().get("Retry-After").is_some());
         clear_failures_mem(tenant, email);
         assert!(check_lockout_mem(tenant, email).is_none());
         // Public async API routes to the same in-memory store when Redis is off.

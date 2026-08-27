@@ -122,14 +122,34 @@ pub async fn current_tenant_scan(tenant_id: i64) -> Option<(u64, u64)> {
     get_count_and_ttl(&format!("weissman:rl:scan:{tenant_id}")).await
 }
 
-/// Current login count per IP (read-only).
+/// Current login **failure** count per IP (read-only).
 pub async fn current_login_ip(client_ip: &str) -> Option<(u64, u64)> {
-    get_count_and_ttl(&format!("weissman:rl:login:{client_ip}")).await
+    current_bucket_used(
+        &format!("weissman:rl:login:fail:{client_ip}"),
+        super::rate_limit_metrics::login_burst(),
+        &format!("weissman:rl:login:{client_ip}"),
+    )
+    .await
+}
+
+/// Current login **success** count per IP (read-only).
+pub async fn current_login_success_ip(client_ip: &str) -> Option<(u64, u64)> {
+    current_bucket_used(
+        &format!("weissman:rl:login:ok:{client_ip}"),
+        super::rate_limit_metrics::login_success_burst(),
+        "",
+    )
+    .await
 }
 
 /// Current API count per IP (read-only).
 pub async fn current_api_ip(client_ip: &str) -> Option<(u64, u64)> {
-    get_count_and_ttl(&format!("weissman:rl:api:{client_ip}")).await
+    current_bucket_used(
+        &format!("weissman:rl:api:tb:{client_ip}"),
+        super::rate_limit_metrics::api_burst(),
+        &format!("weissman:rl:api:{client_ip}"),
+    )
+    .await
 }
 
 /// Record violation JSON line in tenant-scoped Redis list (trimmed).
@@ -391,6 +411,220 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     incr_window_strict(
         &format!("weissman:rl:api:{client_ip}"),
         Duration::from_secs(1),
+    )
+    .await
+}
+
+/// Token-bucket admit result (peek or consume).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BucketAdmit {
+    pub allowed: bool,
+    pub retry_after_secs: u64,
+}
+
+const TOKEN_BUCKET_LUA: &str = r#"
+local key = KEYS[1]
+local now_ms = tonumber(ARGV[1])
+local need = tonumber(ARGV[2])
+local capacity = tonumber(ARGV[3])
+local rate = tonumber(ARGV[4])
+local ttl = tonumber(ARGV[5])
+
+local tokens = tonumber(redis.call('HGET', key, 'tokens'))
+local last_ms = tonumber(redis.call('HGET', key, 'last_ms'))
+
+if tokens == nil then
+  tokens = capacity
+  last_ms = now_ms
+end
+
+local elapsed = math.max(0, (now_ms - last_ms) / 1000.0)
+tokens = math.min(capacity, tokens + elapsed * rate)
+
+local function wait_ms(deficit)
+  local w = math.ceil((deficit / rate) * 1000.0)
+  if w < 1 then w = 1 end
+  return w
+end
+
+-- need < 0: refund |need| tokens (failure reservation returned after success/neutral)
+if need < 0 then
+  tokens = math.min(capacity, tokens + (-need))
+  redis.call('HSET', key, 'tokens', tokens, 'last_ms', now_ms)
+  redis.call('EXPIRE', key, ttl)
+  return {1, 0}
+end
+
+-- need == 0: peek (persist refill, do not consume)
+if need == 0 then
+  redis.call('HSET', key, 'tokens', tokens, 'last_ms', now_ms)
+  redis.call('EXPIRE', key, ttl)
+  if tokens >= 1.0 then
+    return {1, 0}
+  end
+  return {0, wait_ms(1.0 - tokens)}
+end
+
+if tokens >= need then
+  tokens = tokens - need
+  redis.call('HSET', key, 'tokens', tokens, 'last_ms', now_ms)
+  redis.call('EXPIRE', key, ttl)
+  return {1, 0}
+end
+
+redis.call('HSET', key, 'tokens', tokens, 'last_ms', now_ms)
+redis.call('EXPIRE', key, ttl)
+return {0, wait_ms(need - tokens)}
+"#;
+
+fn token_script() -> &'static redis::Script {
+    static S: OnceLock<redis::Script> = OnceLock::new();
+    S.get_or_init(|| redis::Script::new(TOKEN_BUCKET_LUA))
+}
+
+async fn token_bucket_op(
+    key: &str,
+    need: f64,
+    capacity: f64,
+    rate_per_sec: f64,
+    ttl_secs: i64,
+) -> StrictOp<BucketAdmit> {
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(BucketAdmit {
+                allowed: true,
+                retry_after_secs: 0,
+            })
+        };
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return StrictOp::Unavailable;
+    };
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let result: Result<(i32, i64), _> = token_script()
+        .key(key)
+        .arg(now_ms)
+        .arg(need)
+        .arg(capacity.max(1.0))
+        .arg(rate_per_sec.max(0.0001))
+        .arg(ttl_secs.max(2))
+        .invoke_async(&mut conn)
+        .await;
+    match result {
+        Ok((granted, wait_ms)) => StrictOp::Ok(BucketAdmit {
+            allowed: granted == 1,
+            retry_after_secs: ((wait_ms.max(0) as u64) + 999) / 1000,
+        }),
+        Err(_) => StrictOp::Unavailable,
+    }
+}
+
+async fn current_bucket_used(
+    hash_key: &str,
+    burst: u32,
+    legacy_incr_key: &str,
+) -> Option<(u64, u64)> {
+    let rl = shared()?;
+    let mut conn = rl.conn().await.ok()?;
+    let tokens: Option<f64> = conn.hget(hash_key, "tokens").await.ok()?;
+    let ttl: i64 = conn.ttl(hash_key).await.ok()?;
+    let reset_in = if ttl > 0 { ttl as u64 } else { 0 };
+    if let Some(t) = tokens {
+        let used = (f64::from(burst) - t).max(0.0).floor() as u64;
+        return Some((used, reset_in));
+    }
+    if legacy_incr_key.is_empty() {
+        return Some((0, 0));
+    }
+    get_count_and_ttl(legacy_incr_key).await
+}
+
+pub async fn login_failure_peek(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::login_burst());
+    let rate = f64::from(super::rate_limit_metrics::login_limit_per_minute()) / 60.0;
+    token_bucket_op(
+        &format!("weissman:rl:login:fail:{client_ip}"),
+        0.0,
+        burst,
+        rate,
+        180,
+    )
+    .await
+}
+
+pub async fn login_failure_consume(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::login_burst());
+    let rate = f64::from(super::rate_limit_metrics::login_limit_per_minute()) / 60.0;
+    token_bucket_op(
+        &format!("weissman:rl:login:fail:{client_ip}"),
+        1.0,
+        burst,
+        rate,
+        180,
+    )
+    .await
+}
+
+/// Refund one failure token (success / neutral after a reserved admit).
+pub async fn login_failure_refund(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::login_burst());
+    let rate = f64::from(super::rate_limit_metrics::login_limit_per_minute()) / 60.0;
+    token_bucket_op(
+        &format!("weissman:rl:login:fail:{client_ip}"),
+        -1.0,
+        burst,
+        rate,
+        180,
+    )
+    .await
+}
+
+/// Peek success budget then **reserve** a failure token. Matches local `OutcomeAwareGate::admit`.
+pub async fn login_attempt_admit(client_ip: &str) -> StrictOp<BucketAdmit> {
+    match login_success_peek(client_ip).await {
+        StrictOp::Unavailable => StrictOp::Unavailable,
+        StrictOp::Ok(success) if !success.allowed => StrictOp::Ok(success),
+        StrictOp::Ok(_) => login_failure_consume(client_ip).await,
+    }
+}
+
+pub async fn login_success_peek(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::login_success_burst());
+    let rate = f64::from(super::rate_limit_metrics::login_success_per_minute()) / 60.0;
+    token_bucket_op(
+        &format!("weissman:rl:login:ok:{client_ip}"),
+        0.0,
+        burst,
+        rate,
+        180,
+    )
+    .await
+}
+
+pub async fn login_success_consume(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::login_success_burst());
+    let rate = f64::from(super::rate_limit_metrics::login_success_per_minute()) / 60.0;
+    token_bucket_op(
+        &format!("weissman:rl:login:ok:{client_ip}"),
+        1.0,
+        burst,
+        rate,
+        180,
+    )
+    .await
+}
+
+pub async fn api_token_consume(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::api_burst());
+    let rate = f64::from(super::rate_limit_metrics::api_limit_per_sec());
+    token_bucket_op(
+        &format!("weissman:rl:api:tb:{client_ip}"),
+        1.0,
+        burst,
+        rate,
+        5,
     )
     .await
 }

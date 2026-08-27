@@ -144,7 +144,7 @@ thiserror = "1"
 # Sovereign Shield: OpenSSH-format Ed25519 for phantom SSH canaries
 ssh-key = { version = "0.6", default-features = false, features = ["std", "ed25519", "rand_core"] }
 rand_core = "0.6"
-redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager"] }
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager", "script"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls", "connect"] }
 native-tls = "0.2"
 # The OTel family must move together with tracing-opentelemetry: 0.33 is built against

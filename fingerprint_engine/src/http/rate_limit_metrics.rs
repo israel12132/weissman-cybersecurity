@@ -85,6 +85,7 @@ pub fn scan_burst() -> u32 {
     nz_env("WEISSMAN_TENANT_SCAN_BURST", 12, 2, 120)
 }
 
+/// Strict per-IP budget for **failed** password attempts (credential stuffing).
 #[must_use]
 pub fn login_limit_per_minute() -> u32 {
     nz_env("WEISSMAN_LOGIN_PER_MINUTE", 8, 2, 60)
@@ -93,6 +94,19 @@ pub fn login_limit_per_minute() -> u32 {
 #[must_use]
 pub fn login_burst() -> u32 {
     nz_env("WEISSMAN_LOGIN_BURST", 12, 2, 120)
+}
+
+/// Lighter per-IP budget for **successful** authentications (shared NAT / parallel tools).
+#[must_use]
+pub fn login_success_per_minute() -> u32 {
+    nz_env("WEISSMAN_LOGIN_SUCCESS_PER_MINUTE", 40, 8, 120).max(login_limit_per_minute())
+}
+
+#[must_use]
+pub fn login_success_burst() -> u32 {
+    nz_env("WEISSMAN_LOGIN_SUCCESS_BURST", 48, 12, 240)
+        .max(login_burst())
+        .max(login_success_per_minute())
 }
 
 #[must_use]
@@ -334,6 +348,7 @@ pub fn status_for(tenant_id: i64, client_ip: &str) -> Value {
     json!({
         "scans": limit_block(scan_cur, scan_max, scan_reset),
         "logins": limit_block(login_cur, login_max, login_reset),
+        "login_success": limit_block(0, login_success_per_minute(), 0),
         "api": limit_block(api_cur, api_max, api_reset),
     })
 }
@@ -359,6 +374,11 @@ pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Value {
         .unwrap_or_else(|| {
             window_count(&store().login_windows, client_ip, Duration::from_secs(60))
         });
+    let (login_ok_cur, login_ok_reset) =
+        super::rate_limit_redis::current_login_success_ip(client_ip)
+            .await
+            .map(|(c, r)| (c as usize, r))
+            .unwrap_or((0, 0));
     let (api_cur, api_reset) = super::rate_limit_redis::current_api_ip(client_ip)
         .await
         .map(|(c, r)| (c as usize, r))
@@ -367,6 +387,7 @@ pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Value {
     json!({
         "scans": limit_block(scan_cur, scan_max, scan_reset),
         "logins": limit_block(login_cur, login_max, login_reset),
+        "login_success": limit_block(login_ok_cur, login_success_per_minute(), login_ok_reset),
         "api": limit_block(api_cur, api_max, api_reset),
     })
 }
@@ -504,6 +525,10 @@ pub async fn analytics_for(tenant_id: i64, client_ip: &str, range: &str) -> Valu
         "current": {
             "scans": { "current": scan_cur, "max": scan_limit_per_minute() },
             "logins": { "current": login_cur, "max": login_limit_per_minute() },
+            "login_success": {
+                "current": status["login_success"]["current"].as_u64().unwrap_or(0),
+                "max": login_success_per_minute()
+            },
             "api": { "current": api_cur, "max": api_limit_per_sec() },
         },
         "history": history,
@@ -563,4 +588,26 @@ pub async fn api_rate_limits_analytics(
     let ip = extract_client_ip(&headers, peer);
     let body = analytics_for(auth.tenant_id, &ip, q.range.trim()).await;
     (StatusCode::OK, Json(body)).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn success_budget_is_never_stricter_than_failure_budget() {
+        assert!(login_success_per_minute() >= login_limit_per_minute());
+        assert!(login_success_burst() >= login_burst());
+        assert!(login_success_burst() >= login_success_per_minute());
+    }
+
+    #[test]
+    fn budgets_are_bounded_not_unlimited() {
+        assert!(login_limit_per_minute() >= 2);
+        assert!(login_burst() >= 2);
+        assert!(login_success_per_minute() <= 120);
+        assert!(login_success_burst() <= 240);
+        assert!(api_limit_per_sec() >= 5);
+        assert!(api_burst() >= 10);
+    }
 }
