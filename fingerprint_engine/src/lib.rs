@@ -180,6 +180,7 @@ pub mod admin_users;
 pub mod advanced_ai_engines;
 // ── Next-Gen Arsenal (20 world-class additions) ──
 pub mod advanced_apt_engines;
+pub mod advanced_c2_covert_exfil_engine;
 pub mod advanced_cloud_engines;
 pub mod advanced_crypto_engines;
 pub mod advanced_data_engines;

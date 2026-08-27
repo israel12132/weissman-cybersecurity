@@ -244,26 +244,62 @@ pub const COVERAGE: &[Technique] = &[
         id: "T1071",
         name: "Application Layer Protocol",
         tactic: "Command and Control",
-        engines: &["network_covert_channel", "https_c2_masquerade"],
+        engines: &[
+            "network_covert_channel",
+            "https_c2_masquerade",
+            "advanced_c2_covert_exfil",
+        ],
     },
     Technique {
         id: "T1071.004",
         name: "Application Layer Protocol: DNS",
         tactic: "Command and Control",
-        engines: &["botnet_c2_engine", "dns_tunneling_c2"],
+        engines: &[
+            "botnet_c2_engine",
+            "dns_tunneling_c2",
+            "advanced_c2_covert_exfil",
+        ],
     },
     Technique {
         id: "T1090.003",
         name: "Proxy: Multi-hop Proxy (Tor)",
         tactic: "Command and Control",
-        engines: &["tor_exit_attack"],
+        engines: &["tor_exit_attack", "advanced_c2_covert_exfil"],
+    },
+    Technique {
+        id: "T1095",
+        name: "Non-Application Layer Protocol",
+        tactic: "Command and Control",
+        engines: &["icmp_covert", "advanced_c2_covert_exfil"],
+    },
+    Technique {
+        id: "T1572",
+        name: "Protocol Tunneling",
+        tactic: "Command and Control",
+        engines: &["dns_tunneling_c2", "advanced_c2_covert_exfil"],
+    },
+    Technique {
+        id: "T1571",
+        name: "Non-Standard Port",
+        tactic: "Command and Control",
+        engines: &["advanced_c2_covert_exfil"],
+    },
+    Technique {
+        id: "T1027.003",
+        name: "Obfuscated Files or Information: Steganography",
+        tactic: "Defense Evasion",
+        engines: &["steganography_c2", "advanced_c2_covert_exfil"],
     },
     // ── Exfiltration ────────────────────────────────────────────────────────
     Technique {
         id: "T1041",
         name: "Exfiltration Over C2 Channel",
         tactic: "Exfiltration",
-        engines: &["http_covert_exfil", "cloud_exfil_engine"],
+        engines: &[
+            "http_covert_exfil",
+            "cloud_exfil_engine",
+            "advanced_c2_covert_exfil",
+        ],
     },
     Technique {
         id: "T1567",

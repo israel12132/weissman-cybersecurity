@@ -1,5 +1,5 @@
 /**
- * Master registry of all 563 production attack engines.
+ * Master registry of all 564 production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All 564 production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -2869,6 +2869,14 @@ export const ENGINES_REGISTRY = [
     group: 'stealth',
     mitre: 'T1095',
     description: 'ICMP-based covert communication: ICMP tunnel data exfiltration, LOKI-style ICMP shell, ICMPv6 covert channel, ping payload encoding, timestamp option abuse, ICMP redirect-based routing manipulation',
+    requiresTarget: true,
+  },
+  {
+    id: 'advanced_c2_covert_exfil',
+    label: 'Advanced C2 & Covert Exfiltration',
+    group: 'stealth',
+    mitre: 'T1071',
+    description: 'Fused live C2/covert-channel assessment — beacon jitter + Z-score, DNS entropy/TTL/DoH, HTTP/3+WSS masquerade, NTP/ICMP feasibility, LSB/EXIF stego, CDN/Tor fronting, ingress choke-points, FAIR SLE & 0–100 posture. Command Center: /c2-covert-exfil',
     requiresTarget: true,
   },
   {

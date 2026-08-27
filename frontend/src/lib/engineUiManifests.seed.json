@@ -2,6 +2,23 @@
   "version": 1,
   "manifests": [
     {
+      "engine_id": "advanced_c2_covert_exfil",
+      "route_paths": [
+        "/c2-covert-exfil"
+      ],
+      "evidence_i18n_key": "pages.c2CovertExfilCommandCenter.evidence_notice",
+      "capabilities": {
+        "requires_target_input": true,
+        "requires_scan_dispatch": true,
+        "requires_agent_gate": true,
+        "requires_kill_switch": true,
+        "needs_live_telemetry": true
+      },
+      "chrome": {
+        "badge_color": "#22d3ee"
+      }
+    },
+    {
       "engine_id": "asm",
       "route_paths": [
         "/attack-surface"

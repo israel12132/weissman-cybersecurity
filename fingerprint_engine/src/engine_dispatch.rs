@@ -887,6 +887,9 @@ async fn dispatch_engine_match(
         "steganography_c2" => crate::advanced_stealth_engines::run_steganography_c2_result(target).await,
         "https_c2_masquerade" => crate::advanced_stealth_engines::run_https_c2_masquerade_result(target).await,
         "icmp_covert" => crate::advanced_stealth_engines::run_icmp_covert_result(target).await,
+        "advanced_c2_covert_exfil" => {
+            crate::advanced_c2_covert_exfil_engine::run_advanced_c2_covert_exfil_result_ctx(target, ctx).await
+        }
         "rop_chain_engine" => crate::advanced_stealth_engines::run_rop_chain_engine_result(target).await,
         "timing_evasion_engine" => crate::advanced_stealth_engines::run_timing_evasion_engine_result(target).await,
         "log_tampering_engine" => crate::advanced_stealth_engines::run_log_tampering_engine_result(target).await,

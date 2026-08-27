@@ -219,6 +219,7 @@
     "cache_posture": "Web Cache Posture",
     "http_smuggling": "HTTP Smuggling & Desync",
     "transport_security": "Transport Security Command Center",
+    "c2_covert_exfil": "C2 & Covert Exfiltration",
     "tls_posture": "TLS Posture",
     "email_posture": "Email & Domain Trust",
     "identity_security": "Identity & SSO Security",
@@ -5246,6 +5247,32 @@
     },
     "transportSecurityCommandCenter": {
       "evidence_notice": "World-class transport-security posture (mtls_grpc): 38+ live probe modules — TLS/crypto matrix, gRPC/mTLS/gRPC-Web, weak-cipher CRIME, Must-Staple, chain trust, HSTS/CSP, attack-path synthesis, 8-dimension executive scorecard. Every finding from real handshakes and HTTP probes via POST /api/command-center/scan (mtls_grpc). Command Center: /transport-security."
+    },
+    "c2CovertExfilCommandCenter": {
+      "evidence_notice": "Advanced C2 & Covert Exfiltration assessment (advanced_c2_covert_exfil): 10 live layers — beacon jitter + Z-score, DNS TXT entropy/TTL/DoH, HTTP/3+WSS masquerade, NTP/ICMP feasibility, LSB/EXIF stego, CDN/Tor fronting, ingress choke-points, FAIR SLE, coverage manifest. Every finding from real probes via POST /api/command-center/scan. Command Center: /c2-covert-exfil. Assessment only — no C2 implant."
+    },
+    "c2CovertExfil": {
+      "title": "C2 & Covert Exfiltration Command Center",
+      "badge": "BEACON · DNS · HTTP/3 · STEGO · CHOKE-POINT",
+      "subtitle": "Fused live assessment of covert-channel surface: beacon jitter, DNS entropy, HTTP/3/WSS, NTP/ICMP, LSB stego, CDN/Tor fronting and ingress choke-points. Zero fabricated findings. Directive 361 / RLS audit trail.",
+      "client": "Client",
+      "select_client": "Select a client first",
+      "select_client_opt": "— Select —",
+      "target": "Target",
+      "target_required": "Target required",
+      "intensity": "Intensity",
+      "scanning": "Scanning…",
+      "run": "Run C2 assessment",
+      "hide_params": "▾ Params",
+      "show_params": "▸ Params",
+      "extra_ports": "Extra TCP ports",
+      "asset_value": "FAIR asset value",
+      "timeout": "Timeout (ms)",
+      "last_run": "Last: {{time}}",
+      "queued": "C2 covert-exfil scan queued ({{id}})",
+      "scan_failed": "Scan failed",
+      "empty_ready_title": "Run a scan to assess beacon, DNS tunnel, HTTP/3/WSS, NTP/ICMP, stego and ingress C2 surface.",
+      "empty_ready_body": "No covert-channel exposure observed on the last live run."
     },
     "pkiTlsCommandCenter": {
       "evidence_notice": "PKI/TLS posture, mTLS, and certificate lifecycle findings from POST /api/command-center/scan (pki_tls). Revocation and chain trust are evaluated against live trust stores."
