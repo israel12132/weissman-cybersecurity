@@ -168,15 +168,66 @@ fn count_xml_open(body: &str, tag: &str) -> usize {
     body.matches(&a).count() + body.matches(&b).count()
 }
 
-/// A title may use the word "public" only for [`StorageListingClass::PublicObjects`].
+/// True when the title **asserts** `token` (negations such as "not public" do not count).
+#[must_use]
+pub fn title_asserts_token(title: &str, token: &str, negations: &[&str]) -> bool {
+    let mut t = title.to_ascii_lowercase();
+    for n in negations {
+        t = t.replace(n, " ");
+    }
+    t.contains(token)
+}
+
+/// True when the title claims the asset is public. "not public" / "never public" do not.
+#[must_use]
+pub fn title_asserts_public(title: &str) -> bool {
+    title_asserts_token(
+        title,
+        "public",
+        &[
+            "not public",
+            "never public",
+            "non-public",
+            "nonpublic",
+            "isn't public",
+            "isnt public",
+            "not a public",
+        ],
+    )
+}
+
+#[must_use]
+pub fn title_asserts_exposed(title: &str) -> bool {
+    title_asserts_token(
+        title,
+        "exposed",
+        &["not exposed", "never exposed", "unexposed"],
+    )
+}
+
+#[must_use]
+pub fn title_asserts_leak(title: &str) -> bool {
+    title_asserts_token(
+        title,
+        "leak",
+        &[
+            "not an inventory leak",
+            "not a leak",
+            "not leaked",
+            "no leak",
+            "never a leak",
+        ],
+    )
+}
+
+/// A title may claim "public" only for [`StorageListingClass::PublicObjects`].
 #[must_use]
 pub fn storage_claim_matches_evidence(
     title: &str,
     status: u16,
     class: StorageListingClass,
 ) -> bool {
-    let t = title.to_ascii_lowercase();
-    let says_public = t.contains("public");
+    let says_public = title_asserts_public(title);
     if matches!(status, 401 | 403) && says_public {
         return false;
     }
@@ -252,8 +303,15 @@ pub fn graphql_body_shape(body: &str) -> bool {
 #[must_use]
 pub fn classify_graphql_response(status: u16, body: &str) -> GraphqlResponseClass {
     // 401/403 is never public — even if the body echoes `__schema` from the request.
+    // Only label AuthGated when the body is actually a GraphQL engine shape.
     if matches!(status, 401 | 403) {
-        return GraphqlResponseClass::AuthGated;
+        if graphql_body_shape(body) {
+            return GraphqlResponseClass::AuthGated;
+        }
+        if body.contains("__schema") || body.contains("\"query\"") {
+            return GraphqlResponseClass::EchoOrUnrelated;
+        }
+        return GraphqlResponseClass::NotGraphQL;
     }
 
     if let Ok(v) = serde_json::from_str::<Value>(body) {
@@ -299,14 +357,14 @@ pub fn graphql_claim_matches_evidence(
 ) -> bool {
     let t = title.to_ascii_lowercase();
     if matches!(status, 401 | 403) {
-        if t.contains("public") || t.contains("introspection enabled") {
+        if title_asserts_public(title) || t.contains("introspection enabled") {
             return false;
         }
     }
     if t.contains("introspection enabled") && !class.is_public_introspection() {
         return false;
     }
-    if t.contains("public")
+    if title_asserts_public(title)
         && !matches!(
             class,
             GraphqlResponseClass::IntrospectionPublic | GraphqlResponseClass::QueryPublic
@@ -392,7 +450,12 @@ pub fn parse_openapi_inventory(body: &str) -> Option<(usize, String)> {
 #[must_use]
 pub fn classify_openapi(status: u16, body: &str) -> OpenApiClass {
     if matches!(status, 401 | 403) {
-        return OpenApiClass::AuthGated;
+        // A 401/403 is never a public spec. Only call it auth-gated when the
+        // body is actually an OpenAPI document (still not public).
+        if parse_openapi_inventory(body).is_some() {
+            return OpenApiClass::AuthGated;
+        }
+        return OpenApiClass::NotOpenApi;
     }
     if status != 200 {
         return OpenApiClass::NotOpenApi;
@@ -413,11 +476,16 @@ pub fn classify_openapi(status: u16, body: &str) -> OpenApiClass {
 
 #[must_use]
 pub fn openapi_claim_matches_evidence(title: &str, status: u16, class: OpenApiClass) -> bool {
-    let t = title.to_ascii_lowercase();
-    if matches!(status, 401 | 403) && (t.contains("public") || t.contains("exposed")) {
+    if matches!(status, 401 | 403)
+        && (title_asserts_public(title)
+            || title_asserts_exposed(title)
+            || title_asserts_leak(title))
+    {
         return false;
     }
-    if (t.contains("exposed") || t.contains("public")) && class != OpenApiClass::PublicSpec {
+    if (title_asserts_exposed(title) || title_asserts_public(title) || title_asserts_leak(title))
+        && class != OpenApiClass::PublicSpec
+    {
         return false;
     }
     true
@@ -457,7 +525,7 @@ fn storage_finding(
             0.55,
         ),
         StorageListingClass::ExistsDenied => (
-            format!("{provider} exists (access denied — not public)"),
+            format!("{provider} exists (access denied — listing forbidden)"),
             "info",
             format!(
                 "{url} returned HTTP {status} AccessDenied. The namespace exists but anonymous listing failed. Do not treat this as a public bucket."
@@ -486,8 +554,7 @@ fn storage_finding(
         )
         .check(
             "empty_listing_is_not_public",
-            class != StorageListingClass::AnonymousListEmpty
-                || !title.to_ascii_lowercase().contains("public"),
+            class != StorageListingClass::AnonymousListEmpty || !title_asserts_public(&title),
             object_count,
         );
     let mut f = finding_rich(
@@ -546,7 +613,7 @@ fn graphql_finding(
             0.75,
         ),
         GraphqlResponseClass::GraphQLErrors => (
-            "GraphQL endpoint discovered (errors, not public schema)".into(),
+            "GraphQL endpoint discovered (errors, schema not confirmed)".into(),
             "info",
             format!(
                 "{url} returned GraphQL errors (HTTP {status}). Inventory the endpoint; this is not evidence that introspection is public."
@@ -579,7 +646,7 @@ fn graphql_finding(
         .check(
             "http_401_403_is_not_public",
             !matches!(status, 401 | 403)
-                || (!title.to_ascii_lowercase().contains("public")
+                || (!title_asserts_public(&title)
                     && !title.to_ascii_lowercase().contains("introspection enabled")),
             status,
         );
@@ -618,7 +685,7 @@ fn openapi_finding(
             let (path_count, version) = parse_openapi_inventory(body)?;
             let (title, severity, description, confidence) = if path_count == 0 {
                 (
-                    "OpenAPI document reachable (0 paths — not an inventory leak)".to_string(),
+                    "OpenAPI document reachable (0 paths — empty inventory)".to_string(),
                     "info",
                     format!(
                         "{url} returned HTTP {status} OpenAPI/Swagger {version} with an empty paths object. Evidence does not show leaked routes."
@@ -645,7 +712,7 @@ fn openapi_finding(
                 .check("parseable_spec", true, version)
                 .check(
                     "empty_paths_not_inventory_leak",
-                    path_count > 0 || !title.to_ascii_lowercase().contains("leak"),
+                    path_count > 0 || !title_asserts_leak(&title),
                     path_count,
                 );
             let mut f = finding_rich(
@@ -936,6 +1003,11 @@ mod tests {
         assert_eq!(class, StorageListingClass::ExistsDenied);
         assert!(!class.is_public_data());
         assert!(storage_claim_matches_evidence(
+            "AWS S3 exists (access denied — listing forbidden)",
+            403,
+            class
+        ));
+        assert!(storage_claim_matches_evidence(
             "AWS S3 exists (access denied — not public)",
             403,
             class
@@ -1025,7 +1097,7 @@ mod tests {
     fn graphql_403_echoing_schema_is_not_introspection() {
         let echo = r#"{"query":"{__schema{types{name fields{name}}}}"}"#;
         let class = classify_graphql_response(403, echo);
-        assert_eq!(class, GraphqlResponseClass::AuthGated);
+        assert_eq!(class, GraphqlResponseClass::EchoOrUnrelated);
         assert!(!class.is_public_introspection());
         assert!(!graphql_claim_matches_evidence(
             "GraphQL introspection enabled",
@@ -1034,8 +1106,40 @@ mod tests {
         ));
         let html_echo = "<html>blocked __schema types</html>";
         let class = classify_graphql_response(403, html_echo);
-        assert_eq!(class, GraphqlResponseClass::AuthGated);
+        assert_eq!(class, GraphqlResponseClass::EchoOrUnrelated);
         assert!(!class.is_public_introspection());
+        assert!(graphql_finding(ENGINE_ID, "u", 403, echo, "t", class).is_none());
+    }
+
+    #[test]
+    fn graphql_403_generic_html_is_not_graphql() {
+        let class = classify_graphql_response(403, "<html>403 Forbidden</html>");
+        assert_eq!(class, GraphqlResponseClass::NotGraphQL);
+        assert!(graphql_finding(
+            ENGINE_ID,
+            "u",
+            403,
+            "<html>403 Forbidden</html>",
+            "t",
+            class
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn title_negation_does_not_assert_public_or_leak() {
+        assert!(!title_asserts_public(
+            "AWS S3 exists (access denied — not public)"
+        ));
+        assert!(!title_asserts_public(
+            "S3 anonymous LIST empty (not public data)"
+        ));
+        assert!(title_asserts_public("Public S3 objects listable"));
+        assert!(!title_asserts_leak(
+            "OpenAPI document reachable (0 paths — not an inventory leak)"
+        ));
+        assert!(title_asserts_leak("OpenAPI inventory leak"));
+        assert!(!title_asserts_exposed("API spec authentication-gated"));
     }
 
     #[test]
@@ -1096,6 +1200,28 @@ mod tests {
             403,
             class
         ));
+        let f = openapi_finding(
+            ENGINE_ID,
+            "u",
+            403,
+            r#"{"openapi":"3.0.0","paths":{"/users":{}}}"#,
+            "t",
+            class,
+        )
+        .unwrap();
+        let title = f["title"].as_str().unwrap().to_ascii_lowercase();
+        assert!(!title.contains("public"));
+        assert!(!title.contains("exposed"));
+        assert_eq!(f["http_status"], 403);
+    }
+
+    #[test]
+    fn openapi_403_html_is_not_spec() {
+        let class = classify_openapi(403, "<html>forbidden</html>");
+        assert_eq!(class, OpenApiClass::NotOpenApi);
+        assert!(
+            openapi_finding(ENGINE_ID, "u", 403, "<html>forbidden</html>", "t", class).is_none()
+        );
     }
 
     #[test]

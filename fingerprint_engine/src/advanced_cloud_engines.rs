@@ -166,7 +166,7 @@ pub async fn run_s3_bucket_attack_result(target: &str) -> EngineResult {
                 crate::api_cloud_intel::StorageListingClass::ExistsDenied => {
                     findings.push(cloud_finding(
                         "s3_bucket_attack",
-                        &format!("{} bucket/container exists (access denied — not public)", provider),
+                        &format!("{} bucket/container exists (access denied — listing forbidden)", provider),
                         "info",
                         "T1530",
                         &format!(

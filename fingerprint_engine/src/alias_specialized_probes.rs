@@ -868,7 +868,7 @@ async fn probe_aws_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
                 crate::api_cloud_intel::StorageListingClass::AnonymousListEmpty => {
                     findings.push(alias_finding(
                         engine_id,
-                        &format!("S3 anonymous LIST empty (not public data): {}", bucket),
+                        &format!("S3 anonymous LIST empty (no objects listed): {}", bucket),
                         "info",
                         "T1530",
                         &format!(
@@ -883,7 +883,10 @@ async fn probe_aws_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
                 crate::api_cloud_intel::StorageListingClass::ExistsDenied => {
                     findings.push(alias_finding(
                         engine_id,
-                        &format!("S3 bucket exists (access denied — not public): {}", bucket),
+                        &format!(
+                            "S3 bucket exists (access denied — listing forbidden): {}",
+                            bucket
+                        ),
                         "info",
                         "T1530",
                         &format!(

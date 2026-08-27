@@ -1242,7 +1242,7 @@ async fn scan_external_surface(target: &str, cfg: &AwsScanConfig) -> Vec<Value> 
             crate::api_cloud_intel::StorageListingClass::ExistsDenied => {
                 f.push(aws_finding(
                     Domain::Exposure,
-                    &format!("S3 bucket exists (access denied — not public): {name}"),
+                    &format!("S3 bucket exists (access denied — listing forbidden): {name}"),
                     "low",
                     "T1580",
                     "",

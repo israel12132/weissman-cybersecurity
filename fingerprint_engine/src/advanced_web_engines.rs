@@ -336,7 +336,7 @@ pub async fn run_swagger_abuse_result(target: &str) -> EngineResult {
                 if path_count == 0 {
                     findings.push(finding(
                         "swagger_abuse",
-                        "OpenAPI document reachable (0 paths — not an inventory leak)",
+                        "OpenAPI document reachable (0 paths — empty inventory)",
                         "info",
                         "T1190",
                         &format!(
