@@ -1,9 +1,9 @@
 /**
  * Attack-Path Inference — choke-points + ranked internet→crown-jewel paths.
  *
- * Wired to the live GET /api/attack-paths/:client_id endpoint (BFS over the
- * risk graph weighted by CVSS+EPSS+KEV, server-side). `?recompute=1&top_k=N`
- * regenerates the snapshot. Route: /attack-paths
+ * Wired to the live GET /api/attack-paths/:client_id endpoint (Dijkstra over the
+ * risk graph weighted by CVSS+EPSS+KEV+agent, server-side). `?recompute=1&top_k=N`
+ * regenerates the snapshot. POST …/what-if recomputes in-memory. Route: /attack-paths
  */
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -43,8 +43,16 @@ function chokeCsv(rows) {
 
 function PathCard({ path, t }) {
   const color = riskColor(path.risk)
+  const score = Number(path.path_score) || 0
+  const critical = score >= 80
   return (
-    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4">
+    <div
+      className="rounded-xl border bg-[var(--table-surface)] p-4"
+      style={{
+        borderColor: critical ? '#ef444466' : 'var(--border-subtle)',
+        boxShadow: critical ? '0 0 24px #ef444422' : undefined,
+      }}
+    >
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span
@@ -53,10 +61,24 @@ function PathCard({ path, t }) {
           >
             {t(`${NS}.risk`)} {(Number(path.risk) || 0).toFixed(1)}
           </span>
+          <span
+            className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider"
+            style={{
+              color: score >= 80 ? '#ef4444' : score >= 50 ? '#f59e0b' : '#22d3ee',
+              borderColor: '#ffffff22',
+            }}
+          >
+            {t(`${NS}.score`)} {score}
+          </span>
           <span className="text-[10px] font-mono text-[var(--text-muted)]">{t(`${NS}.hops`, { count: path.hops })}</span>
           {path.kev_hops > 0 && (
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-rose-500/40 bg-rose-500/10 text-rose-300">
               {t(`${NS}.kev_hops`, { count: path.kev_hops })}
+            </span>
+          )}
+          {Number(path.ale_usd) > 0 && (
+            <span className="text-[10px] font-mono text-amber-200">
+              {t(`${NS}.path_ale`, { value: `$${(Number(path.ale_usd) || 0).toLocaleString()}` })}
             </span>
           )}
         </div>
@@ -77,6 +99,11 @@ function PathCard({ path, t }) {
           </React.Fragment>
         ))}
       </div>
+      {path.root_cause && (
+        <p className="mt-2 text-[10px] font-mono text-[var(--text-muted)]">
+          {t(`${NS}.root_cause`)}: {path.root_cause}
+        </p>
+      )}
     </div>
   )
 }
@@ -91,6 +118,9 @@ export default function AttackPaths() {
   const [recomputing, setRecomputing] = useState(false)
   const [error, setError] = useState('')
   const [hasSnapshot, setHasSnapshot] = useState(true)
+  const [blockSmb, setBlockSmb] = useState(false)
+  const [whatIfBusy, setWhatIfBusy] = useState(false)
+  const [whatIfSnapshot, setWhatIfSnapshot] = useState(null)
 
   const load = useCallback(
     async (recompute = false) => {
@@ -115,21 +145,50 @@ export default function AttackPaths() {
     [selectedClientId, t, toast],
   )
 
+  const runWhatIf = useCallback(async () => {
+    if (selectedClientId == null) return
+    setWhatIfBusy(true)
+    setError('')
+    try {
+      const data = await apiFetch(`/api/attack-paths/${encodeURIComponent(selectedClientId)}/what-if`, {
+        method: 'POST',
+        body: {
+          block_ports: blockSmb ? [445] : [],
+          block_edge_types: blockSmb ? ['smb'] : [],
+          top_k: 15,
+        },
+      })
+      if (data?.ok === false) throw new Error(data.detail || 'what-if failed')
+      setWhatIfSnapshot(data.snapshot || null)
+      toast.success(t(`${NS}.what_if_done`))
+    } catch (e) {
+      setError(e.message || t(`${NS}.load_failed`))
+    } finally {
+      setWhatIfBusy(false)
+    }
+  }, [selectedClientId, blockSmb, t, toast])
+
   useEffect(() => {
     setSnapshot(null)
+    setWhatIfSnapshot(null)
     if (selectedClientId != null) load(false)
   }, [selectedClientId, load])
 
+  const display = whatIfSnapshot || snapshot
   const chokePoints = useMemo(
-    () => (Array.isArray(snapshot?.choke_points) ? snapshot.choke_points : []),
-    [snapshot],
+    () => (Array.isArray(display?.choke_points) ? display.choke_points : []),
+    [display],
   )
   const paths = useMemo(
-    () => (Array.isArray(snapshot?.paths) ? snapshot.paths : []),
-    [snapshot],
+    () => (Array.isArray(display?.paths) ? display.paths : []),
+    [display],
   )
   const topRisk = useMemo(
     () => (paths.length ? Math.max(...paths.map((p) => Number(p.risk) || 0)) : 0),
+    [paths],
+  )
+  const topScore = useMemo(
+    () => (paths.length ? Math.max(...paths.map((p) => Number(p.path_score) || 0)) : 0),
     [paths],
   )
 
@@ -185,8 +244,8 @@ export default function AttackPaths() {
     [t],
   )
 
-  const computedAt = snapshot?.computed_at_unix
-    ? new Date(snapshot.computed_at_unix * 1000).toLocaleString()
+  const computedAt = display?.computed_at_unix
+    ? new Date(display.computed_at_unix * 1000).toLocaleString()
     : null
 
   return (
@@ -266,10 +325,34 @@ export default function AttackPaths() {
         {selectedClientId != null && !loading && !error && hasSnapshot && snapshot && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <ExecutiveWidget label={t(`${NS}.kpi_entries`)} value={snapshot.entry_count ?? 0} hint={t(`${NS}.kpi_entries_hint`)} accent="#22d3ee" />
-              <ExecutiveWidget label={t(`${NS}.kpi_jewels`)} value={snapshot.jewel_count ?? 0} hint={t(`${NS}.kpi_jewels_hint`)} accent="#a78bfa" />
+              <ExecutiveWidget label={t(`${NS}.kpi_entries`)} value={display?.entry_count ?? 0} hint={t(`${NS}.kpi_entries_hint`)} accent="#22d3ee" />
+              <ExecutiveWidget label={t(`${NS}.kpi_jewels`)} value={display?.jewel_count ?? 0} hint={t(`${NS}.kpi_jewels_hint`)} accent="#a78bfa" />
               <ExecutiveWidget label={t(`${NS}.kpi_paths`)} value={paths.length} hint={t(`${NS}.kpi_paths_hint`)} accent="#f97316" />
+              <ExecutiveWidget label={t(`${NS}.kpi_top_score`)} value={topScore} hint={t(`${NS}.kpi_top_score_hint`)} accent={riskColor(topRisk)} />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <ExecutiveWidget label={t(`${NS}.kpi_path_ale`)} value={`$${(Number(display?.total_path_ale_usd) || 0).toLocaleString()}`} hint={t(`${NS}.kpi_path_ale_hint`)} accent="#f59e0b" />
               <ExecutiveWidget label={t(`${NS}.kpi_top_risk`)} value={topRisk.toFixed(1)} hint={t(`${NS}.kpi_top_risk_hint`)} accent={riskColor(topRisk)} />
+            </div>
+
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--table-surface)] p-4 flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+                <input type="checkbox" checked={blockSmb} onChange={(e) => setBlockSmb(e.target.checked)} />
+                {t(`${NS}.what_if_smb`)}
+              </label>
+              <Button variant="unstyled"
+                type="button"
+                onClick={runWhatIf}
+                disabled={whatIfBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 text-xs font-medium hover:bg-cyan-500/20 disabled:opacity-40"
+              >
+                {whatIfBusy ? '…' : t(`${NS}.what_if_run`)}
+              </Button>
+              {whatIfSnapshot && (
+                <button type="button" className="text-[11px] font-mono text-[var(--text-muted)] underline" onClick={() => setWhatIfSnapshot(null)}>
+                  {t(`${NS}.what_if_clear`)}
+                </button>
+              )}
             </div>
 
             {computedAt && (
