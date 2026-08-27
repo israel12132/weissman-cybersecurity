@@ -34,40 +34,20 @@ pub fn portal_may_not_switch(auth: &AuthContext) -> bool {
 }
 
 /// True when `to_cid` is allowed by the grant table (wildcard or explicit).
+///
+/// Always stamps `SET LOCAL app.current_tenant_id` with an empty customer GUC so
+/// this works on `weissman_app` (FORCE RLS) as well as `weissman_auth` (BYPASSRLS).
+/// A forgotten handler that inherited a scoped client GUC cannot read grants.
 pub async fn grant_allows(
     pool: &PgPool,
     tenant_id: i64,
     user_id: i64,
     to_cid: Option<i64>,
 ) -> Result<bool, sqlx::Error> {
-    match to_cid {
-        None => {
-            // Exit impersonation: any staff/owner row (wildcard or specific) may return home.
-            let n: i64 = sqlx::query_scalar(
-                r#"SELECT COUNT(*)::bigint FROM user_client_scope_grants
-                   WHERE tenant_id = $1 AND user_id = $2"#,
-            )
-            .bind(tenant_id)
-            .bind(user_id)
-            .fetch_one(pool)
-            .await?;
-            Ok(n > 0)
-        }
-        Some(cid) if cid > 0 => {
-            let n: i64 = sqlx::query_scalar(
-                r#"SELECT COUNT(*)::bigint FROM user_client_scope_grants
-                   WHERE tenant_id = $1 AND user_id = $2
-                     AND (client_id IS NULL OR client_id = $3)"#,
-            )
-            .bind(tenant_id)
-            .bind(user_id)
-            .bind(cid)
-            .fetch_one(pool)
-            .await?;
-            Ok(n > 0)
-        }
-        Some(_) => Ok(false),
-    }
+    let mut tx = weissman_db::begin_tenant_tx_scoped(pool, tenant_id, None).await?;
+    let allowed = grant_allows_tx(&mut tx, tenant_id, user_id, to_cid).await?;
+    tx.commit().await?;
+    Ok(allowed)
 }
 
 /// Insert a wildcard grant for a staff/owner user (idempotent).
