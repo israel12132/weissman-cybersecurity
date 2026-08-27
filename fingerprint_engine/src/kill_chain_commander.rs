@@ -298,6 +298,46 @@ fn snippet(raw: Option<&str>) -> Option<String> {
     }
 }
 
+fn json_str_snippet(v: &Value) -> Option<String> {
+    match v {
+        Value::String(s) => snippet(Some(s)),
+        Value::Object(o) => {
+            for k in [
+                "proof",
+                "evidence",
+                "raw",
+                "snippet",
+                "detail",
+                "details",
+                "whois",
+                "body",
+                "value",
+            ] {
+                if let Some(found) = o.get(k).and_then(json_str_snippet) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        Value::Array(arr) => arr.iter().find_map(json_str_snippet),
+        _ => None,
+    }
+}
+
+/// Proof from the finding row, then engine-stamped `raw_data` evidence. Never invented.
+fn proof_of(f: &LiveFinding) -> Option<String> {
+    snippet(f.proof.as_deref())
+        .or_else(|| snippet(f.poc_exploit.as_deref()))
+        .or_else(|| json_str_snippet(&f.raw_data))
+        .or_else(|| {
+            if f.description.trim().eq_ignore_ascii_case(f.title.trim()) {
+                None
+            } else {
+                snippet(Some(f.description.as_str()))
+            }
+        })
+}
+
 fn is_private_host(host: &str) -> bool {
     let h = host.trim().trim_matches(['[', ']']).to_ascii_lowercase();
     let h = h.split('%').next().unwrap_or(&h);
@@ -875,7 +915,7 @@ pub fn compose_chain(
                     None
                 });
         let priced = usd_base.map(|v| ((risk * (v as f64) / USD_DIVISOR).round()) as i64);
-        let proof = snippet(f.proof.as_deref()).or_else(|| snippet(f.poc_exploit.as_deref()));
+        let proof = proof_of(f);
         let cited = CitedFinding {
             id: f.id,
             finding_id: f.finding_id.clone(),
@@ -1633,6 +1673,55 @@ mod tests {
             parse_primary_domain(r#"{"domains":["portal.acme.test"]}"#).as_deref(),
             Some("portal.acme.test")
         );
+    }
+
+    #[test]
+    fn live_osint_raw_data_proof_is_cited() {
+        let f = finding(
+            7,
+            1,
+            "osint",
+            "Subdomain discovered via WHOIS: www.example.com",
+            "medium",
+            None,
+            json!({
+                "raw": {
+                    "type": "osint",
+                    "value": "www.example.com",
+                    "source": "whois",
+                    "evidence": {
+                        "proof": "WHOIS registry line references host www.example.com",
+                        "engine_id": "osint"
+                    }
+                }
+            }),
+        );
+        let snap = compose_chain(
+            Some(1),
+            Some("Acme".into()),
+            Some("example.com".into()),
+            10_000,
+            vec![f],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let cited = snap
+            .stages
+            .iter()
+            .flat_map(|s| s.findings.iter())
+            .next()
+            .expect("osint node");
+        assert!(
+            cited
+                .proof_snippet
+                .as_deref()
+                .unwrap()
+                .contains("WHOIS registry line"),
+            "{:?}",
+            cited.proof_snippet
+        );
+        assert!(cited.confidence >= 0.79);
     }
 
     #[test]
