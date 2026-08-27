@@ -147,6 +147,7 @@ pub mod safe_probe;
 pub mod saml_auth;
 pub mod scan_concurrency;
 pub mod scan_http_client;
+pub mod scope_switch;
 pub mod self_heal_recovery;
 pub mod self_heal_shared;
 pub mod self_healing;

@@ -357,15 +357,14 @@ pub async fn api_admin_users_create(
 
     if crate::client_isolation::is_client_role(&role) {
         let cid = assigned_client_id.unwrap();
-        let exists_client: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
-        )
-        .bind(cid)
-        .bind(auth.tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
+        let exists_client: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1")
+                .bind(cid)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
         if exists_client.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -418,6 +417,24 @@ pub async fn api_admin_users_create(
         .await
     {
         Ok(user_id) => {
+            let is_portal = crate::client_isolation::is_client_role(&role);
+            if let Err(e) = crate::scope_switch::sync_grants_for_role(
+                &mut tx,
+                auth.tenant_id,
+                user_id,
+                is_portal,
+                Some(auth.user_id),
+            )
+            .await
+            {
+                tracing::error!(target: "admin", error = %e, "scope grant sync failed on user create");
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "detail": "Failed to create user"})),
+                )
+                    .into_response();
+            }
             let _ = tx.commit().await;
             tracing::info!(target: "admin", user_id = user_id, email = %email, "User created by admin");
             (
@@ -607,15 +624,14 @@ pub async fn api_admin_users_update(
             )
                 .into_response();
         };
-        let exists_client: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1",
-        )
-        .bind(cid)
-        .bind(auth.tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten();
+        let exists_client: Option<i64> =
+            sqlx::query_scalar("SELECT id FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1")
+                .bind(cid)
+                .bind(auth.tenant_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .ok()
+                .flatten();
         if exists_client.is_none() {
             let _ = tx.rollback().await;
             return (
@@ -641,6 +657,24 @@ pub async fn api_admin_users_update(
     .await
     {
         Ok(_) => {
+            let is_portal = crate::client_isolation::is_client_role(&new_role);
+            if let Err(e) = crate::scope_switch::sync_grants_for_role(
+                &mut tx,
+                auth.tenant_id,
+                user_id,
+                is_portal,
+                Some(auth.user_id),
+            )
+            .await
+            {
+                tracing::error!(target: "admin", error = %e, "scope grant sync failed on user update");
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "detail": "Failed to update user"})),
+                )
+                    .into_response();
+            }
             if let Err(e) = tx.commit().await {
                 tracing::error!(target: "admin", error = %e, "Failed to commit user update");
                 return (

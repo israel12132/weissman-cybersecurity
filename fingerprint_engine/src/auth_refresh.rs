@@ -62,17 +62,39 @@ pub async fn build_session_cookie_headers(
         binding,
         assigned_client_id,
     )?;
+    if !crate::client_isolation::is_client_role(&role) && assigned_client_id.is_none() {
+        // Staff/owner login: ensure a wildcard grant exists so scope-switch
+        // authenticates against the management table even for users created
+        // outside admin_users (bootstrap admin, JIT). Stamp tenant GUC with
+        // empty client GUC so FORCE RLS on the grants table allows the insert
+        // on weissman_app (NOBYPASSRLS).
+        let mut tx = weissman_db::begin_tenant_tx_scoped(pool, tenant_id, None).await?;
+        crate::scope_switch::ensure_wildcard_grant(&mut tx, tenant_id, user_id, None).await?;
+        tx.commit().await?;
+    }
     let access_line = crate::auth_jwt::session_cookie_value(&minted.token);
-    let refresh = issue_refresh_token(pool, user_id, tenant_id, Some(&minted.jti)).await?;
+    let refresh = issue_refresh_token(
+        pool,
+        user_id,
+        tenant_id,
+        Some(&minted.jti),
+        assigned_client_id,
+    )
+    .await?;
     Ok((minted.token, access_line, refresh_cookie_value(&refresh)))
 }
 
 /// Re-read live RBAC from DB; returns `None` when user inactive or missing.
+///
+/// JWT `cid` is the sole session customer anchor for staff impersonation.
+/// Portal users (`role=client` / DB `assigned_client_id`) are always locked to
+/// the database value. Staff JWT `cid` is preserved when the grant table still
+/// allows that customer — never overwritten with NULL from `users.assigned_client_id`.
 pub async fn revalidate_auth_context(
     pool: &PgPool,
     auth: &crate::auth_jwt::AuthContext,
 ) -> Result<Option<crate::auth_jwt::AuthContext>, sqlx::Error> {
-    let Some((role, is_superadmin, assigned_client_id)) =
+    let Some((role, is_superadmin, db_assigned_client_id)) =
         user_rbac_snapshot(pool, auth.user_id).await?
     else {
         return Ok(None);
@@ -101,6 +123,31 @@ pub async fn revalidate_auth_context(
         }
         None => return Ok(None),
     }
+
+    let assigned_client_id = if crate::client_isolation::is_client_role(&role)
+        || db_assigned_client_id.is_some()
+    {
+        db_assigned_client_id
+    } else if let Some(jwt_cid) = auth.assigned_client_id.filter(|id| *id > 0) {
+        match crate::scope_switch::grant_allows(pool, auth.tenant_id, auth.user_id, Some(jwt_cid))
+            .await
+        {
+            Ok(true) => Some(jwt_cid),
+            Ok(false) => {
+                tracing::warn!(
+                    target: "auth",
+                    user_id = auth.user_id,
+                    jwt_cid,
+                    "impersonation cid no longer granted; rejecting"
+                );
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
+        }
+    } else {
+        None
+    };
+
     Ok(Some(crate::auth_jwt::AuthContext {
         user_id: auth.user_id,
         tenant_id: auth.tenant_id,
@@ -210,29 +257,54 @@ pub async fn issue_refresh_token(
     user_id: i64,
     tenant_id: i64,
     access_jti: Option<&str>,
+    scope_client_id: Option<i64>,
 ) -> Result<String, sqlx::Error> {
     let raw = generate_opaque_token();
     let th = hash_token(&raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
     sqlx::query(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
-           VALUES ($1, $2, $3, $4, $5)"#,
+        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti, scope_client_id)
+           VALUES ($1, $2, $3, $4, $5, $6)"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&th)
     .bind(exp)
     .bind(access_jti)
+    .bind(scope_client_id)
     .execute(pool)
     .await?;
     Ok(raw)
 }
 
+/// Stamp the live JWT cid onto the current refresh row (scope-switch).
+pub async fn update_refresh_scope(
+    pool: &PgPool,
+    raw: &str,
+    scope_client_id: Option<i64>,
+    access_jti: &str,
+) -> Result<(), sqlx::Error> {
+    let th = hash_token(raw);
+    sqlx::query(
+        r#"UPDATE user_refresh_tokens
+           SET scope_client_id = $2, access_jti = $3
+           WHERE token_hash = $1 AND revoked_at IS NULL"#,
+    )
+    .bind(&th)
+    .bind(scope_client_id)
+    .bind(access_jti)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Validates `raw`, revokes that row, inserts a new token, returns the new raw secret and session ids.
+/// Validates `raw`, revokes that row, inserts a new token, returns the new raw secret,
+/// session ids, and the persisted impersonation `cid` (if any).
 pub async fn rotate_refresh_token(
     pool: &PgPool,
     raw: &str,
-) -> Result<(i64, i64, String), RefreshTokenError> {
+) -> Result<(i64, i64, String, Option<i64>), RefreshTokenError> {
     let th = hash_token(raw);
     let mut tx = pool.begin().await?;
     // Bound the `FOR UPDATE` below. This runs on the AUTH pool with no tenant GUC, so it does
@@ -249,7 +321,7 @@ pub async fn rotate_refresh_token(
     )
     .await?;
     let row = sqlx::query(
-        r#"SELECT id, user_id, tenant_id FROM user_refresh_tokens
+        r#"SELECT id, user_id, tenant_id, scope_client_id FROM user_refresh_tokens
            WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
            FOR UPDATE"#,
     )
@@ -310,19 +382,25 @@ pub async fn rotate_refresh_token(
     let old_id: i64 = row.try_get("id")?;
     let user_id: i64 = row.try_get("user_id")?;
     let tenant_id: i64 = row.try_get("tenant_id")?;
+    let scope_client_id: Option<i64> = row
+        .try_get::<Option<i64>, _>("scope_client_id")
+        .ok()
+        .flatten()
+        .filter(|id| *id > 0);
 
     let new_raw = generate_opaque_token();
     let new_hash = hash_token(&new_raw);
     let exp = chrono::Utc::now() + chrono::Duration::days(refresh_ttl_days());
 
     let new_id: i64 = sqlx::query_scalar(
-        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti)
-           VALUES ($1, $2, $3, $4, NULL) RETURNING id"#,
+        r#"INSERT INTO user_refresh_tokens (user_id, tenant_id, token_hash, expires_at, access_jti, scope_client_id)
+           VALUES ($1, $2, $3, $4, NULL, $5) RETURNING id"#,
     )
     .bind(user_id)
     .bind(tenant_id)
     .bind(&new_hash)
     .bind(exp)
+    .bind(scope_client_id)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -335,7 +413,7 @@ pub async fn rotate_refresh_token(
     .await?;
 
     tx.commit().await?;
-    Ok((user_id, tenant_id, new_raw))
+    Ok((user_id, tenant_id, new_raw, scope_client_id))
 }
 
 fn refresh_secure_suffix() -> &'static str {

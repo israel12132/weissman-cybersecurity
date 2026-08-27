@@ -13,20 +13,14 @@ fn append_set_cookie(headers: &mut HeaderMap, line: &str) {
     }
 }
 
-async fn api_logout(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-) -> Response {
+async fn api_logout(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
     if let Some(access_raw) = extract_access_cookie(&headers) {
         if let Some((jti, exp)) = crate::auth_jwt::access_token_revocation_info(&access_raw) {
             let expires_at = chrono::DateTime::<chrono::Utc>::from_timestamp(exp, 0)
                 .unwrap_or_else(chrono::Utc::now);
-            if let Err(e) = crate::auth_refresh::revoke_access_jti(
-                state.auth_pool.as_ref(),
-                &jti,
-                expires_at,
-            )
-            .await
+            if let Err(e) =
+                crate::auth_refresh::revoke_access_jti(state.auth_pool.as_ref(), &jti, expires_at)
+                    .await
             {
                 tracing::warn!(target: "auth", error = %e, "access jti revocation failed on logout");
             }
@@ -45,11 +39,9 @@ async fn api_logout(
         }
     }
     if let Some(refresh_raw) = extract_refresh_cookie(&headers) {
-        if let Err(e) = crate::auth_refresh::revoke_refresh_token_by_raw(
-            state.auth_pool.as_ref(),
-            &refresh_raw,
-        )
-        .await
+        if let Err(e) =
+            crate::auth_refresh::revoke_refresh_token_by_raw(state.auth_pool.as_ref(), &refresh_raw)
+                .await
         {
             tracing::warn!(target: "auth", error = %e, "refresh token revocation failed on logout");
         }
@@ -59,7 +51,10 @@ async fn api_logout(
         Json(json!({"ok": true, "detail": "session cleared"})),
     )
         .into_response();
-    append_set_cookie(res.headers_mut(), &crate::auth_jwt::session_cookie_clear_value());
+    append_set_cookie(
+        res.headers_mut(),
+        &crate::auth_jwt::session_cookie_clear_value(),
+    );
     append_set_cookie(
         res.headers_mut(),
         &crate::auth_refresh::refresh_cookie_clear_value(),
@@ -81,9 +76,10 @@ async fn api_auth_refresh(
             .into_response();
     };
     match crate::auth_refresh::rotate_refresh_token(state.auth_pool.as_ref(), &raw).await {
-        Ok((user_id, tenant_id, new_refresh)) => {
-            let (role, is_superadmin, assigned_client_id) =
-                match crate::auth_refresh::user_rbac_snapshot(state.auth_pool.as_ref(), user_id).await
+        Ok((user_id, tenant_id, new_refresh, refresh_scope_cid)) => {
+            let (role, is_superadmin, db_assigned_client_id) =
+                match crate::auth_refresh::user_rbac_snapshot(state.auth_pool.as_ref(), user_id)
+                    .await
                 {
                     Ok(Some(p)) => p,
                     Ok(None) => {
@@ -102,6 +98,13 @@ async fn api_auth_refresh(
                             .into_response();
                     }
                 };
+            let assigned_client_id = if crate::client_isolation::is_client_role(&role)
+                || db_assigned_client_id.is_some()
+            {
+                db_assigned_client_id
+            } else {
+                refresh_scope_cid
+            };
             let binding = crate::auth_jwt::StreamBinding::from_http(&headers, addr);
             let minted = match crate::auth_jwt::create_access_token(
                 user_id,
@@ -160,7 +163,10 @@ async fn api_auth_refresh(
                 Json(json!({"ok": false, "detail": "invalid refresh token"})),
             )
                 .into_response();
-            append_set_cookie(res.headers_mut(), &crate::auth_refresh::refresh_cookie_clear_value());
+            append_set_cookie(
+                res.headers_mut(),
+                &crate::auth_refresh::refresh_cookie_clear_value(),
+            );
             res
         }
         Err(crate::auth_refresh::RefreshTokenError::Db(e)) => {

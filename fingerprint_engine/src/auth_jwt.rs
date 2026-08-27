@@ -692,4 +692,45 @@ mod agent_token_tests {
         .expect("mint");
         assert!(verify_access_token(&token).is_none());
     }
+
+    #[test]
+    fn access_token_cid_is_sole_session_anchor() {
+        let secret = b"unit-test-secret-at-least-32-chars-long";
+        let _ = JWT_SECRET.set(secret.to_vec());
+        let minted = create_access_token(
+            11,
+            3,
+            "operator",
+            false,
+            &StreamBinding::default(),
+            Some(42),
+        )
+        .expect("mint scoped");
+        let ctx = verify_access_token(&minted.token).expect("verify");
+        assert_eq!(ctx.user_id, 11);
+        assert_eq!(ctx.tenant_id, 3);
+        assert_eq!(ctx.assigned_client_id, Some(42));
+        assert_eq!(ctx.role, "operator");
+        let unscoped =
+            create_access_token(11, 3, "operator", false, &StreamBinding::default(), None)
+                .expect("mint unscoped");
+        let ctx2 = verify_access_token(&unscoped.token).expect("verify");
+        assert_eq!(ctx2.assigned_client_id, None);
+        let switched = create_access_token(
+            11,
+            3,
+            "operator",
+            false,
+            &StreamBinding::default(),
+            Some(99),
+        )
+        .expect("mint switched");
+        let ctx3 = verify_access_token(&switched.token).expect("verify switched");
+        assert_eq!(ctx3.assigned_client_id, Some(99));
+        assert_ne!(
+            minted.token, switched.token,
+            "scope-switch must issue a brand-new JWT, not reuse the prior token"
+        );
+        assert_ne!(minted.jti, switched.jti);
+    }
 }

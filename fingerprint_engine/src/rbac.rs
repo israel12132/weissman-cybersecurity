@@ -117,6 +117,8 @@ const SELF_SERVICE_PREFIXES: &[&str] = &[
     "/api/auth/logout",
     "/api/auth/refresh",
     "/api/auth/me",
+    "/api/auth/scope-switch",
+    "/api/auth/scope-targets",
     "/api/auth/mfa",
     "/api/auth/change-password",
     "/api/auth/password",
@@ -281,6 +283,10 @@ mod tests {
     fn mutation_matrix_roles() {
         // Self-service is open to any authenticated user.
         assert_eq!(required_min_role(&Method::POST, "/api/auth/refresh"), None);
+        assert_eq!(
+            required_min_role(&Method::POST, "/api/auth/scope-switch"),
+            None
+        );
         assert_eq!(required_min_role(&Method::POST, "/api/ask"), None);
         assert_eq!(required_min_role(&Method::POST, "/api/logout"), None);
         // Privileged prefixes.
