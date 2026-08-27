@@ -311,6 +311,8 @@ pub mod ssti_engine;
 pub mod strategy_engine;
 pub mod supply_chain_engine;
 pub mod supreme_nerve_center;
+pub mod supreme_path_fair_rag_engine;
+pub mod supreme_weights;
 pub mod swarm_orchestrator;
 pub mod threat_analysis;
 pub mod threat_emulation_engine;

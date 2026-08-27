@@ -17,6 +17,7 @@
 //! Apply tag rules: every node with a tag matching `client_asset_value_rules.tag`
 //! gets that rule's value (rule with the highest value wins on conflict).
 
+use crate::supreme_weights;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
@@ -32,6 +33,16 @@ pub struct ClientFinancialRisk {
     pub default_asset_value_usd: i64,
     pub risk_loss_discount: f32,
     pub computed_at_unix: i64,
+    #[serde(default)]
+    pub concentration_pct: u8,
+    #[serde(default)]
+    pub delay_cost_usd_per_day: i64,
+    #[serde(default)]
+    pub agent_protected_ale_usd: i64,
+    #[serde(default)]
+    pub path_ale_usd: i64,
+    #[serde(default)]
+    pub currency: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +58,12 @@ pub struct TopContributor {
     pub max_epss: f32,
     pub sle_usd: i64,
     pub ale_usd: i64,
+    #[serde(default)]
+    pub agent_present: bool,
+    #[serde(default)]
+    pub roi_if_patched_usd: i64,
+    #[serde(default)]
+    pub delay_cost_usd_per_day: i64,
 }
 
 /// Apply per-client tag → value rules to risk_graph_nodes. Idempotent. Returns
@@ -93,9 +110,22 @@ pub async fn compute_and_store(
     tenant_id: i64,
     client_id: i64,
 ) -> Result<ClientFinancialRisk, String> {
+    let path_ale = crate::attack_path::latest_snapshot(pool, tenant_id, client_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.total_path_ale_usd)
+        .unwrap_or(0);
+
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
+    let _ = sqlx::query("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await;
+    let _ = sqlx::query("SET LOCAL lock_timeout = '5s'")
+        .execute(&mut *tx)
+        .await;
 
     // Pull client-level defaults first.
     let (default_value, discount): (i64, f32) = sqlx::query_as(
@@ -113,6 +143,14 @@ pub async fn compute_and_store(
     let rows = sqlx::query(
         r#"SELECT n.id, n.label, n.graph_key, n.node_type, n.crown_jewel,
                   COALESCE(n.business_value_usd, $3)               AS value,
+                  COALESCE(n.agent_present, FALSE)
+                    OR EXISTS (
+                        SELECT 1 FROM endpoint_agents a
+                         WHERE a.tenant_id = n.tenant_id AND a.client_id = n.client_id
+                           AND a.status IN ('online','enrolled') AND a.revoked_at IS NULL
+                           AND (lower(a.hostname) = lower(n.label)
+                                OR a.hostname = COALESCE(n.external_id, ''))
+                    ) AS agent_present,
                   COALESCE(MAX((v.raw_data->>'cvss_score')::real), 0)::real AS max_cvss,
                   COALESCE(MAX(v.epss_score), 0)::real             AS max_epss,
                   BOOL_OR(COALESCE(v.kev_listed, FALSE))           AS kev
@@ -134,6 +172,7 @@ pub async fn compute_and_store(
     let mut crown_value: i64 = 0;
     let mut sle_worst: i64 = 0;
     let mut ale_total: i64 = 0;
+    let mut agent_protected_ale: i64 = 0;
     let mut contributors: Vec<TopContributor> = Vec::with_capacity(rows.len());
 
     for r in rows {
@@ -146,19 +185,24 @@ pub async fn compute_and_store(
         let cvss: f32 = r.try_get("max_cvss").unwrap_or(0.0);
         let epss: f32 = r.try_get("max_epss").unwrap_or(0.0);
         let kev: bool = r.try_get("kev").unwrap_or(false);
+        let agent: bool = r.try_get("agent_present").unwrap_or(false);
 
         total_value += value;
         if crown {
             crown_value += value;
         }
 
-        let sle = single_loss_expectancy(value, cvss);
-        let ale = annual_loss_expectancy(sle, epss, kev, discount);
+        let sle = supreme_weights::single_loss_expectancy(value, cvss);
+        let zero_day = supreme_weights::is_zero_day(cvss, epss, kev);
+        let ale = supreme_weights::annual_loss_expectancy(sle, epss, kev, discount, agent, zero_day);
 
         if sle > sle_worst {
             sle_worst = sle;
         }
         ale_total = ale_total.saturating_add(ale);
+        if agent {
+            agent_protected_ale = agent_protected_ale.saturating_add(ale);
+        }
 
         contributors.push(TopContributor {
             node_id: id,
@@ -172,11 +216,33 @@ pub async fn compute_and_store(
             max_epss: epss,
             sle_usd: sle,
             ale_usd: ale,
+            agent_present: agent,
+            roi_if_patched_usd: supreme_weights::countermeasure_roi_usd(ale),
+            delay_cost_usd_per_day: supreme_weights::cost_of_delay_per_day(ale),
         });
     }
     // Top-N contributors by ALE for the UI roll-up.
     contributors.sort_by(|a, b| b.ale_usd.cmp(&a.ale_usd));
+    let concentration = supreme_weights::concentration_pct(
+        contributors.first().map(|c| c.ale_usd).unwrap_or(0),
+        ale_total,
+    );
+    let delay_cost = supreme_weights::cost_of_delay_per_day(ale_total);
     contributors.truncate(15);
+
+    let _ = sqlx::query(
+        r#"DELETE FROM client_financial_risk_snapshots
+            WHERE id IN (
+                SELECT id FROM client_financial_risk_snapshots
+                 WHERE tenant_id = $1 AND client_id = $2
+                   AND computed_at < now() - interval '3 years'
+                 FOR UPDATE SKIP LOCKED
+            )"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .execute(&mut *tx)
+    .await;
 
     // Persist a snapshot for fast UI loads.
     let contributors_json: Value = serde_json::to_value(&contributors).unwrap_or(json!([]));
@@ -184,8 +250,10 @@ pub async fn compute_and_store(
         r#"INSERT INTO client_financial_risk_snapshots
                  (tenant_id, client_id, computed_at,
                   total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
-                  crown_jewel_value_usd, top_contributors)
-           VALUES ($1, $2, now(), $3, $4, $5, $6, $7)"#,
+                  crown_jewel_value_usd, top_contributors,
+                  concentration_pct, delay_cost_usd_per_day,
+                  agent_protected_ale_usd, path_ale_usd, currency)
+           VALUES ($1, $2, now(), $3, $4, $5, $6, $7, $8, $9, $10, $11, 'USD')"#,
     )
     .bind(tenant_id)
     .bind(client_id)
@@ -194,6 +262,10 @@ pub async fn compute_and_store(
     .bind(ale_total)
     .bind(crown_value)
     .bind(&contributors_json)
+    .bind(f32::from(concentration))
+    .bind(delay_cost)
+    .bind(agent_protected_ale)
+    .bind(path_ale)
     .execute(&mut *tx)
     .await;
     tx.commit().await.map_err(|e| e.to_string())?;
@@ -208,6 +280,11 @@ pub async fn compute_and_store(
         default_asset_value_usd: default_value,
         risk_loss_discount: discount,
         computed_at_unix: chrono::Utc::now().timestamp(),
+        concentration_pct: concentration,
+        delay_cost_usd_per_day: delay_cost,
+        agent_protected_ale_usd: agent_protected_ale,
+        path_ale_usd: path_ale,
+        currency: "USD".into(),
     })
 }
 
@@ -223,6 +300,11 @@ pub async fn latest_snapshot(
     let row = sqlx::query(
         r#"SELECT total_asset_value_usd, sle_worst_usd, ale_annualised_usd,
                   crown_jewel_value_usd, top_contributors, computed_at,
+                  COALESCE(concentration_pct, 0) AS concentration_pct,
+                  COALESCE(delay_cost_usd_per_day, 0) AS delay_cost_usd_per_day,
+                  COALESCE(agent_protected_ale_usd, 0) AS agent_protected_ale_usd,
+                  COALESCE(path_ale_usd, 0) AS path_ale_usd,
+                  COALESCE(currency, 'USD') AS currency,
                   (SELECT default_asset_value_usd FROM clients WHERE id = $2) AS dv,
                   (SELECT risk_loss_discount     FROM clients WHERE id = $2) AS rd
              FROM client_financial_risk_snapshots
@@ -255,35 +337,25 @@ pub async fn latest_snapshot(
         default_asset_value_usd: r.try_get("dv").unwrap_or(10_000),
         risk_loss_discount: r.try_get("rd").unwrap_or(0.30),
         computed_at_unix: computed_at.timestamp(),
+        concentration_pct: r
+            .try_get::<f32, _>("concentration_pct")
+            .unwrap_or(0.0)
+            .round() as u8,
+        delay_cost_usd_per_day: r.try_get("delay_cost_usd_per_day").unwrap_or(0),
+        agent_protected_ale_usd: r.try_get("agent_protected_ale_usd").unwrap_or(0),
+        path_ale_usd: r.try_get("path_ale_usd").unwrap_or(0),
+        currency: r.try_get("currency").unwrap_or_else(|_| "USD".into()),
     }))
 }
 
-// ── Math helpers ────────────────────────────────────────────────────────────
+// ── Math helpers (delegate to supreme_weights so FAIR math lives in one place)
 
-/// Single Loss Expectancy = asset value × loss magnitude.
-/// Loss magnitude derived from CVSS (0..10): floor at 50%, scale to 100% at CVSS 10.
 fn single_loss_expectancy(asset_value_usd: i64, cvss: f32) -> i64 {
-    if asset_value_usd <= 0 {
-        return 0;
-    }
-    let lm = ((cvss as f64) / 10.0).clamp(0.5, 1.0);
-    ((asset_value_usd as f64) * lm) as i64
+    supreme_weights::single_loss_expectancy(asset_value_usd, cvss)
 }
 
-/// Annual Loss Expectancy = SLE × annualised exploit probability × discount factor.
-/// EPSS reports 30-day probability — multiply by 12 to get annualised. KEV-listed
-/// floors annualised probability at 1.0 (assumed at least one attempt/year).
 fn annual_loss_expectancy(sle_usd: i64, epss: f32, kev: bool, discount: f32) -> i64 {
-    if sle_usd <= 0 {
-        return 0;
-    }
-    let mut aro = (epss as f64) * 12.0; // annualised rate of occurrence
-    if kev {
-        aro = aro.max(1.0);
-    }
-    aro = aro.clamp(0.0, 12.0); // can't fire more than once per month on average
-    let disc = (discount as f64).clamp(0.0, 1.0);
-    ((sle_usd as f64) * aro * disc) as i64
+    supreme_weights::annual_loss_expectancy(sle_usd, epss, kev, discount, false, false)
 }
 
 #[cfg(test)]

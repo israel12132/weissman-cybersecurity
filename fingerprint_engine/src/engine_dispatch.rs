@@ -746,6 +746,10 @@ async fn dispatch_engine_match(
         "fair_exposure_fusion" => {
             crate::fair_exposure_fusion_engine::run_fair_exposure_fusion_result(target, ctx).await
         }
+        "supreme_path_fair_rag" => {
+            crate::supreme_path_fair_rag_engine::run_supreme_path_fair_rag_result(target, ctx)
+                .await
+        }
         "identity_attack_chain" => {
             crate::identity_attack_chain_engine::run_identity_attack_chain_result(target, ctx).await
         }

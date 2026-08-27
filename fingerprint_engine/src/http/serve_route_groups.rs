@@ -29,10 +29,22 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
             "/api/intel/suppressions/:id",
             delete(api_intel_suppression_delete),
         )
-        // Attack-path inference (BFS over risk_graph weighted by CVSS+EPSS+KEV).
+        // Attack-path inference (Dijkstra over risk_graph weighted by CVSS+EPSS+KEV).
         .route(
             "/api/attack-paths/:client_id",
             get(api_attack_paths_for_client),
+        )
+        .route(
+            "/api/attack-paths/:client_id/what-if",
+            post(api_attack_paths_what_if),
+        )
+        .route(
+            "/api/supreme-brain/:client_id",
+            get(api_supreme_brain_for_client),
+        )
+        .route(
+            "/api/pentest-memory/stats",
+            get(api_pentest_memory_stats),
         )
         .route(
             "/api/battlespace/topology/:client_id",

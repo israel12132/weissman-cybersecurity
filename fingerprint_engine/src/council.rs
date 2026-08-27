@@ -787,14 +787,19 @@ async fn fetch_supreme_memory_context(
         };
         let rows = sqlx::query(
             r#"SELECT id, brief_excerpt, strategy_summary, orchestrator_instruction,
-                      (embedding_vec <=> $1::vector) AS distance
+                      target_fingerprint,
+                      (embedding_vec <=> $1::vector) AS distance,
+                      EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0 AS age_days,
+                      COALESCE(reinforcement, 1.0) AS reinforcement
                  FROM supreme_council_memory
                 WHERE embedding_vec IS NOT NULL
-                ORDER BY embedding_vec <=> $1::vector
+                  AND created_at > now() - interval '12 months'
+                ORDER BY (embedding_vec <=> $1::vector)
+                       + CASE WHEN created_at < now() - interval '2 years' THEN 0.15 ELSE 0 END
                 LIMIT $2"#,
         )
         .bind(&qtext)
-        .bind(k)
+        .bind(k * 3)
         .fetch_all(&mut *tx)
         .await;
         if let Ok(rows) = rows {
@@ -816,25 +821,52 @@ async fn fetch_supreme_memory_context(
                 .execute(&mut *tx)
                 .await;
             }
+            let ids: Vec<i64> = rows
+                .iter()
+                .map(|r| r.try_get::<i64, _>("id").unwrap_or(0))
+                .filter(|id| *id > 0)
+                .collect();
+            if !ids.is_empty() {
+                let _ = sqlx::query(
+                    "UPDATE supreme_council_memory SET last_retrieved_at = now() WHERE id = ANY($1)",
+                )
+                .bind(&ids)
+                .execute(&mut *tx)
+                .await;
+            }
             let _ = tx.commit().await;
 
             if rows.is_empty() {
                 return String::new();
             }
-            let mut lines = Vec::with_capacity(rows.len());
+            let mut scored: Vec<(f64, String, String, String, Value)> = Vec::new();
+            let mut seen_fp = std::collections::HashSet::new();
             for r in &rows {
+                let fp: String = r.try_get("target_fingerprint").unwrap_or_default();
+                if !fp.is_empty() && !seen_fp.insert(fp.clone()) {
+                    continue;
+                }
                 let excerpt: String = r.try_get("brief_excerpt").unwrap_or_default();
                 let summary: String = r.try_get("strategy_summary").unwrap_or_default();
                 let orch: Value = r.try_get("orchestrator_instruction").unwrap_or(json!({}));
                 let dist: f64 = r.try_get("distance").unwrap_or(1.0);
-                let sim = (1.0 - dist).clamp(0.0, 1.0);
+                let age: f64 = r.try_get("age_days").unwrap_or(0.0);
+                let reinf: f64 = r.try_get::<f32, _>("reinforcement").unwrap_or(1.0) as f64;
+                let decay = crate::supreme_weights::memory_decay(age);
+                let sim = ((1.0 - dist) * decay * reinf).clamp(0.0, 1.0);
+                scored.push((sim, excerpt, summary, fp, orch));
+            }
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.truncate(k as usize);
+            let mut lines = Vec::with_capacity(scored.len());
+            for (sim, excerpt, summary, fp, orch) in scored {
                 lines.push(format!(
-                    "- prior_win (sim={:.3}): brief={} summary={} orchestrator={}",
-                    sim, excerpt, summary, orch
+                    "- prior_win (sim={:.3} fp={}): brief={} summary={} orchestrator={}",
+                    sim, fp, excerpt, summary, orch
                 ));
             }
             return format!(
-                "Semantic memory (pgvector ANN-ranked prior wins):\n{}",
+                "Semantic memory (pgvector ANN-ranked prior wins, time-aware + decay):\n{}",
                 lines.join("\n")
             );
         }

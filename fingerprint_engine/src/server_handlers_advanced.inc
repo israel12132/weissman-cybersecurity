@@ -46,6 +46,112 @@ async fn api_attack_paths_for_client(
 }
 
 #[derive(serde::Deserialize)]
+struct AttackPathWhatIfBody {
+    #[serde(default)]
+    block_node_ids: Vec<i64>,
+    #[serde(default)]
+    block_edge_types: Vec<String>,
+    #[serde(default)]
+    block_ports: Vec<u16>,
+    #[serde(default)]
+    top_k: Option<usize>,
+}
+
+async fn api_attack_paths_what_if(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Json(body): Json<AttackPathWhatIfBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_operator(&auth) {
+        return r;
+    }
+    let spec = crate::attack_path::WhatIfSpec {
+        block_node_ids: body.block_node_ids,
+        block_edge_types: body.block_edge_types,
+        block_ports: body.block_ports,
+    };
+    match crate::attack_path::compute_what_if(
+        &state.app_pool,
+        auth.tenant_id,
+        client_id,
+        spec,
+        body.top_k,
+    )
+    .await
+    {
+        Ok(s) => (StatusCode::OK, Json(json!({ "ok": true, "snapshot": s, "what_if": true }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_supreme_brain_for_client(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(client_id): Path<i64>,
+    Query(q): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let recompute = q.get("recompute").map(|v| v == "1" || v == "true").unwrap_or(false);
+    if recompute {
+        if let Err(r) = crate::rbac::require_operator(&auth) {
+            return r;
+        }
+    }
+    let paths = if recompute {
+        crate::attack_path::compute_and_store(&state.app_pool, auth.tenant_id, client_id, Some(15))
+            .await
+            .ok()
+    } else {
+        crate::attack_path::latest_snapshot(&state.app_pool, auth.tenant_id, client_id)
+            .await
+            .ok()
+            .flatten()
+    };
+    let fair = if recompute {
+        crate::financial_risk::compute_and_store(&state.app_pool, auth.tenant_id, client_id)
+            .await
+            .ok()
+    } else {
+        crate::financial_risk::latest_snapshot(&state.app_pool, auth.tenant_id, client_id)
+            .await
+            .ok()
+            .flatten()
+    };
+    let memory = crate::pentest_memory::memory_stats(&state.app_pool, auth.tenant_id)
+        .await
+        .ok();
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "paths": paths,
+            "financial": fair,
+            "pentest_memory": memory,
+            "graph_dirty": crate::attack_path::is_graph_dirty(auth.tenant_id, client_id),
+        })),
+    )
+        .into_response()
+}
+
+async fn api_pentest_memory_stats(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    match crate::pentest_memory::memory_stats(&state.app_pool, auth.tenant_id).await {
+        Ok(s) => (StatusCode::OK, Json(json!({ "ok": true, "stats": s }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "detail": scrub_internal_error(&e) })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(serde::Deserialize)]
 struct RiskNodeFlagsBody {
     #[serde(default)]
     internet_exposed: Option<bool>,

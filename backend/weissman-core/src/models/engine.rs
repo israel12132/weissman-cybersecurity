@@ -304,6 +304,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "attack_surface_quantify",
     "external_exposure_supreme",
     "fair_exposure_fusion",
+    "supreme_path_fair_rag",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
@@ -974,6 +975,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "attack_surface_quantify",
     "external_exposure_supreme",
     "fair_exposure_fusion",
+    "supreme_path_fair_rag",
     "identity_attack_chain",
     "pipeline_to_runtime_risk",
     "risk_superposition_collapse",
@@ -1466,6 +1468,10 @@ pub fn resolve_engine_id(id: &str) -> &str {
         "fair-exposure-fusion" | "business_risk_exposure" | "fair_blast_radius" => {
             "fair_exposure_fusion"
         }
+        "supreme-path-fair-rag"
+        | "attack_path_inference"
+        | "path_fair_rag"
+        | "supreme_attack_path" => "supreme_path_fair_rag",
         other => other,
     }
 }

@@ -139,6 +139,7 @@ fn job_class(kind: &str) -> JobClass {
         // ── Light / control-plane ────────────────────────────────────────────
         // Not heavy (no deep engine dispatch) but genuinely slow, so it keeps its own budget.
         "council_debate" => (false, 20 * 60),
+        "path_inference" => (false, 60),
         "noop" | "ping" => (false, 30),
         _ => (false, 5 * 60),
     };
@@ -1127,6 +1128,7 @@ mod tests {
             "noop",
             "ping",
             "council_debate",
+            "path_inference",
             "definitely_not_a_real_kind",
         ] {
             assert!(!job_class(k).heavy, "{k} must not be heavy");

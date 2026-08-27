@@ -2230,6 +2230,42 @@ async fn execute_job_unscoped(
                 "message": "feedback fuzz completed; findings persisted via findings_persist",
             }))
         }
+        "path_inference" => {
+            let client_id = p
+                .get("client_id")
+                .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+                .ok_or_else(|| "payload.client_id required".to_string())?;
+            let top_k = p
+                .get("top_k")
+                .and_then(Value::as_u64)
+                .unwrap_or(25)
+                .clamp(1, 200) as usize;
+            let include_fair = p.get("include_fair").and_then(Value::as_bool).unwrap_or(true);
+            crate::attack_path::mark_graph_dirty(tid, client_id);
+            let paths = crate::attack_path::compute_and_store(
+                app_pool.as_ref(),
+                tid,
+                client_id,
+                Some(top_k),
+            )
+            .await?;
+            let fair = if include_fair {
+                crate::financial_risk::compute_and_store(app_pool.as_ref(), tid, client_id)
+                    .await
+                    .ok()
+            } else {
+                None
+            };
+            Ok(json!({
+                "ok": true,
+                "client_id": client_id,
+                "path_count": paths.paths.len(),
+                "max_path_score": paths.max_path_score,
+                "total_path_ale_usd": paths.total_path_ale_usd,
+                "choke_points": paths.choke_points.len(),
+                "fair_ale_usd": fair.as_ref().map(|f| f.ale_annualised_usd),
+            }))
+        }
         "self_improvement_apply" => {
             // An approved self-improvement proposal. Opening the pull request is performed
             // out-of-process by an external PR bot (which has git/GitHub credentials); the
