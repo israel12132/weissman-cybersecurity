@@ -88,13 +88,13 @@ pub async fn run_session(
         interval.tick().await;
         loop {
             interval.tick().await;
-            let msg = AgentToServer::Heartbeat {
-                agent_id: agent_id_hb.clone(),
-                running_tasks: hb_running.load(Ordering::Relaxed),
-                completed_tasks: hb_completed.load(Ordering::Relaxed),
-                uptime_secs: started_at.elapsed().as_secs(),
-            };
-            if hb_tx.send(msg).await.is_err() {
+            let msg = heartbeat_msg(
+                agent_id_hb.clone(),
+                hb_running.load(Ordering::Relaxed),
+                hb_completed.load(Ordering::Relaxed),
+                started_at.elapsed().as_secs(),
+            );
+            if emit(&hb_tx, msg).await.is_err() {
                 break;
             }
             // Pair every heartbeat with a Ping. The heartbeat proves the agent is alive TO the
@@ -132,6 +132,7 @@ pub async fn run_session(
             };
             if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed");
+                crate::ringbuf::push(&msg);
                 break;
             }
         }
@@ -245,12 +246,26 @@ async fn handle_text(
     };
     match msg {
         ServerToAgent::Welcome {
-            scan_concurrency, ..
+            scan_concurrency,
+            ueba_baseline,
+            ..
         } => {
             if let Some(n) = scan_concurrency {
                 max_parallel.store(n.max(1), Ordering::Relaxed);
             }
+            if let Some(snap) = ueba_baseline {
+                crate::ueba_edge::install(snap);
+            }
             info!(target: "agent", "server welcomed agent");
+            if crate::ringbuf::pending() {
+                let flush_tx = out_tx.clone();
+                tokio::spawn(async move {
+                    flush_ring(flush_tx).await;
+                });
+            }
+        }
+        ServerToAgent::UebaBaseline { snapshot } => {
+            crate::ueba_edge::install(snapshot);
         }
         ServerToAgent::Task {
             task_id,
@@ -319,14 +334,16 @@ async fn run_task(
         Ok(Ok(findings)) => {
             let count = findings.len() as u32;
             for f in findings {
-                let _ = out_tx
-                    .send(AgentToServer::Finding {
+                let _ = emit(
+                    &out_tx,
+                    AgentToServer::Finding {
                         agent_id: agent_id.clone(),
                         task_id: task_id.clone(),
                         engine: engine.clone(),
                         finding: f,
-                    })
-                    .await;
+                    },
+                )
+                .await;
             }
             (count, "ok".to_string(), None)
         }
@@ -355,9 +372,60 @@ async fn run_task(
             error: message.unwrap_or_else(|| "unknown".into()),
         }
     };
-    let _ = out_tx.send(done).await;
+    let _ = emit(&out_tx, done).await;
     running.fetch_sub(1, Ordering::SeqCst);
     completed.fetch_add(1, Ordering::SeqCst);
+}
+
+async fn emit(
+    tx: &mpsc::Sender<AgentToServer>,
+    msg: AgentToServer,
+) -> Result<(), mpsc::error::SendError<AgentToServer>> {
+    match tx.send(msg).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            crate::ringbuf::push(&e.0);
+            Err(e)
+        }
+    }
+}
+
+fn heartbeat_msg(
+    agent_id: String,
+    running_tasks: u32,
+    completed_tasks: u64,
+    uptime_secs: u64,
+) -> AgentToServer {
+    let rs = crate::ringbuf::stats();
+    tracing::debug!(
+        target: "agent",
+        ring_pushed = rs.pushed,
+        ring_flushed = rs.flushed,
+        ring_dropped = rs.dropped,
+        "ring buffer stats"
+    );
+    AgentToServer::Heartbeat {
+        agent_id,
+        running_tasks,
+        completed_tasks,
+        uptime_secs,
+        ring_buffer_bytes: rs.bytes,
+        ring_buffer_frames: rs.frames,
+        ueba_suppressed: crate::ringbuf::ueba_suppressed(),
+        ueba_uploaded: crate::ringbuf::ueba_uploaded(),
+    }
+}
+
+/// Drain the encrypted ring onto the live session, 64 KiB/s / 20 ms paced.
+async fn flush_ring(out_tx: mpsc::Sender<AgentToServer>) {
+    let mut window = crate::ringbuf::FlushWindow::new();
+    while let Some(msg) = crate::ringbuf::pop_msg() {
+        let len = serde_json::to_vec(&msg).map(|v| v.len()).unwrap_or(64);
+        crate::ringbuf::throttle_wait(&mut window, len).await;
+        if emit(&out_tx, msg).await.is_err() {
+            break;
+        }
+    }
 }
 
 fn build_ws_url(server_url: &str, path: &str) -> anyhow::Result<Url> {

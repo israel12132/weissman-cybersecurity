@@ -1,7 +1,8 @@
 //! Loaded modules / DLL hijacking detection.
 //!
 //! Strategy:
-//!   * Enumerate every process the agent can read (via `sysinfo` for portable identity).
+//!   * Enumerate every process the agent can read via native kernel tables
+//!     (`/proc`, `KERN_PROC`, `NtQuerySystemInformation`) — never `ps`.
 //!   * For each process, examine its executable's directory and the *runtime path* of every
 //!     module the OS reports.
 //!   * Flag modules loaded from world-writable directories (Linux) or from the process working
@@ -12,27 +13,15 @@
 //! observed loaded-module data.
 
 use super::finding;
+use crate::hostobs;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::Path;
-use sysinfo::{ProcessRefreshKind, System, UpdateKind};
 
 pub async fn run_inventory(engine: &str) -> anyhow::Result<Vec<Value>> {
-    let mut sys = System::new();
-    // Needs exe AND memory: `ProcessRefreshKind::new()` disables both, which made this
-    // inventory report `exe: ""` and `memory_bytes: 0` for every process — data that looks
-    // real and is entirely fabricated.
-    sys.refresh_processes_specifics(
-        ProcessRefreshKind::new()
-            .with_exe(UpdateKind::Always)
-            .with_memory(),
-    );
-    let total = sys.processes().len();
-    let unique_paths: HashSet<_> = sys
-        .processes()
-        .values()
-        .map(|p| p.exe().map(|x| x.display().to_string()).unwrap_or_default())
-        .collect();
+    let procs = hostobs::list_processes();
+    let total = procs.len();
+    let unique_paths: HashSet<_> = procs.iter().map(|p| p.exe.as_str()).collect();
 
     let mut extras = serde_json::Map::new();
     extras.insert("process_count".into(), json!(total));
@@ -40,16 +29,16 @@ pub async fn run_inventory(engine: &str) -> anyhow::Result<Vec<Value>> {
     extras.insert(
         "sample_processes".into(),
         Value::Array(
-            sys.processes()
-                .values()
+            procs
+                .iter()
                 .take(15)
                 .map(|p| {
                     json!({
-                        "pid": usize::from(p.pid()),
-                        "name": p.name(),
-                        "exe": p.exe().map(|x| x.display().to_string()).unwrap_or_default(),
-                        "parent_pid": p.parent().map(usize::from),
-                        "memory_bytes": p.memory(),
+                        "pid": p.pid,
+                        "name": p.name,
+                        "exe": p.exe,
+                        "parent_pid": p.ppid,
+                        "memory_bytes": p.rss_bytes,
                     })
                 })
                 .collect(),
@@ -67,28 +56,22 @@ pub async fn run_inventory(engine: &str) -> anyhow::Result<Vec<Value>> {
 
 pub async fn run_dll_hijacking(engine: &str) -> anyhow::Result<Vec<Value>> {
     let mut findings: Vec<Value> = Vec::new();
-    let mut sys = System::new();
-    // `ProcessRefreshKind::new()` is "collect NOTHING optional" (sysinfo 0.30: every field
-    // defaults to false), and the Linux backend gates the /proc/<pid>/exe read on it. So
-    // `proc.exe()` returned None for every process and the loop below skipped all of them —
-    // this detection could never produce a finding, on any host, ever.
-    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::Always));
+    let procs = hostobs::list_processes();
 
-    for proc in sys.processes().values() {
-        let exe = match proc.exe() {
-            Some(p) if !p.as_os_str().is_empty() => p,
-            _ => continue,
-        };
-        let name = proc.name();
-        // Heuristic 1: process running from a temp / user-writable folder.
+    for proc in procs {
+        if proc.exe.is_empty() {
+            continue;
+        }
+        let exe = Path::new(&proc.exe);
+        let name = &proc.name;
         if running_from_writable_directory(exe) {
             let mut extras = serde_json::Map::new();
-            extras.insert("pid".into(), json!(usize::from(proc.pid())));
-            extras.insert("exe".into(), Value::String(exe.display().to_string()));
+            extras.insert("pid".into(), json!(proc.pid));
+            extras.insert("exe".into(), Value::String(proc.exe.clone()));
             extras.insert(
                 "parent_pid".into(),
-                proc.parent()
-                    .map(|p| Value::Number(usize::from(p).into()))
+                proc.ppid
+                    .map(|p| Value::Number(p.into()))
                     .unwrap_or(Value::Null),
             );
             findings.push(finding(
@@ -98,9 +81,9 @@ pub async fn run_dll_hijacking(engine: &str) -> anyhow::Result<Vec<Value>> {
                 "T1574.001",
                 &format!(
                     "PID {} ({}) is executing from '{}', a path commonly used for DLL-side-loading and search-order hijacking.",
-                    proc.pid(),
+                    proc.pid,
                     name,
-                    exe.display()
+                    proc.exe
                 ),
                 extras,
             ));
@@ -144,30 +127,17 @@ fn running_from_writable_directory(path: &Path) -> bool {
 mod tests {
     use super::*;
 
-    /// The refresh kind must actually collect what the detections read. `ProcessRefreshKind::new()`
-    /// collects nothing optional, so `proc.exe()` was None for every process and six engines
-    /// skipped every process and reported every host clean.
     #[test]
-    fn refresh_kind_actually_populates_exe_and_memory() {
-        let mut sys = System::new();
-        sys.refresh_processes_specifics(
-            ProcessRefreshKind::new()
-                .with_exe(UpdateKind::Always)
-                .with_memory(),
-        );
-        let procs: Vec<_> = sys.processes().values().collect();
+    fn native_inventory_populates_exe_and_memory() {
+        let procs = hostobs::list_processes();
         assert!(!procs.is_empty(), "no processes enumerated at all");
         assert!(
-            procs
-                .iter()
-                .filter(|p| p.exe().is_some_and(|e| !e.as_os_str().is_empty()))
-                .count()
-                > 0,
+            procs.iter().any(|p| !p.exe.is_empty()),
             "not one of {} processes reported an exe path — every exe-based detection is dead",
             procs.len()
         );
         assert!(
-            procs.iter().filter(|p| p.memory() > 0).count() > 0,
+            procs.iter().any(|p| p.rss_bytes > 0),
             "not one of {} processes reported non-zero memory",
             procs.len()
         );

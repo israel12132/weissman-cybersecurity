@@ -28,11 +28,67 @@ use std::time::Duration;
 const LEARN_WINDOW_DAYS: i64 = 7;
 const Z_THRESHOLD: f64 = 3.0;
 const MIN_BASELINE_SAMPLES: i32 = 24;
-/// Canonical `hour_of_week` value baselines are stored under. Baselines are kept
-/// per (agent, metric) — the raw samples still record their real hour-of-week —
-/// so a single row accumulates the full rolling window instead of being scattered
-/// across 168 buckets that can never individually reach `MIN_BASELINE_SAMPLES`.
-const GLOBAL_BUCKET: i16 = 0;
+/// Sentinel `hour_of_week` for the rolling 7-day (agent, metric) fire-path row.
+/// Must sit **outside** 0..=167 — bucket 0 is Monday 00:00 UTC, and writing the
+/// global mean/stddev there would overwrite the true hour-0 row (and vice versa)
+/// every Monday midnight.
+const GLOBAL_BUCKET: i16 = -1;
+
+/// Agent-side upload gate. Server still fires anomalies at `|z| > 3`.
+pub const EDGE_Z_UPLOAD: f64 = 2.0;
+const EDGE_MIN_N: i32 = 7;
+/// Hour-of-week row is used only when it has at least this many samples; otherwise
+/// the compact snapshot falls back to the rolling 7-day global row.
+const EDGE_HOUR_MIN_N: i32 = 3;
+
+const COMPACT_METRICS: &[&str] = &[
+    "open_port_count",
+    "process_count",
+    "unique_users",
+    "load_1m",
+    "memory_used_pct",
+    "failed_logins",
+];
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct UebaCompactSnapshot {
+    pub hour_of_week: i16,
+    #[serde(default = "default_z_upload")]
+    pub z_upload_threshold: f64,
+    #[serde(default = "default_min_n")]
+    pub min_n: i32,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub metrics: Vec<UebaCompactMetric>,
+    #[serde(default)]
+    pub learned_processes: Vec<String>,
+}
+
+fn default_z_upload() -> f64 {
+    EDGE_Z_UPLOAD
+}
+fn default_min_n() -> i32 {
+    EDGE_MIN_N
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UebaCompactMetric {
+    pub name: String,
+    pub mean: f64,
+    pub stddev: f64,
+    pub n: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BaselineRow {
+    pub metric_name: String,
+    pub hour_of_week: i16,
+    pub n: i32,
+    pub mean: f64,
+    pub stddev: f64,
+    pub learned_set: Value,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UebaIngestPayload {
@@ -78,7 +134,8 @@ pub async fn ingest_sample(
         // Numeric metrics → baseline + z-score check.
         for (k, v) in obj {
             if let Some(num) = v.as_f64() {
-                let upd = recompute_baseline(&mut tx, tenant_id, &p.agent_id, k).await?;
+                let upd =
+                    recompute_baseline(&mut tx, tenant_id, &p.agent_id, k, p.hour_of_week).await?;
                 summary.baselines_updated += 1;
                 if let Some(anom) =
                     check_anomaly(&mut tx, tenant_id, &p, sample_id, k, num, &upd).await?
@@ -160,10 +217,28 @@ async fn recompute_baseline(
     tenant_id: i64,
     agent_id: &str,
     metric: &str,
+    hour_of_week: i16,
 ) -> Result<BaselineUpdate, String> {
     // Pull n, mean, stddev directly from the JSONB samples. We deliberately do NOT
-    // filter by hour-of-week: with a 7-day sample window each hour-of-week value
-    // recurs only once, so a per-bucket count could never reach MIN_BASELINE_SAMPLES.
+    // filter by hour-of-week for the *server* fire path: with a 7-day sample
+    // window each hour-of-week value recurs only once, so a per-bucket count could
+    // never reach MIN_BASELINE_SAMPLES. The hour-specific row is written alongside
+    // so the agent can hold a compact local copy of the current hour.
+    let global = aggregate_metric(tx, tenant_id, agent_id, metric, None).await?;
+    upsert_numeric_baseline(tx, tenant_id, agent_id, metric, GLOBAL_BUCKET, &global).await?;
+    let hour = hour_of_week.clamp(0, 167);
+    let hourly = aggregate_metric(tx, tenant_id, agent_id, metric, Some(hour)).await?;
+    upsert_numeric_baseline(tx, tenant_id, agent_id, metric, hour, &hourly).await?;
+    Ok(global)
+}
+
+async fn aggregate_metric(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+    hour: Option<i16>,
+) -> Result<BaselineUpdate, String> {
     let row: Option<(Option<i64>, Option<f64>, Option<f64>)> = sqlx::query_as(
         r#"SELECT COUNT(*)::bigint                                              AS n,
                   AVG((metrics->>$3)::double precision)                          AS mean,
@@ -172,12 +247,14 @@ async fn recompute_baseline(
             WHERE tenant_id = $1 AND agent_id = $2
               AND sampled_at > now() - ($4 || ' days')::interval
               AND metrics ? $3
-              AND jsonb_typeof(metrics->$3) = 'number'"#,
+              AND jsonb_typeof(metrics->$3) = 'number'
+              AND ($5::smallint IS NULL OR hour_of_week = $5)"#,
     )
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
     .bind(LEARN_WINDOW_DAYS)
+    .bind(hour)
     .fetch_optional(&mut **tx)
     .await
     .map_err(|e| format!("aggregate: {e}"))?;
@@ -186,7 +263,21 @@ async fn recompute_baseline(
         Some((n, m, s)) => (n.unwrap_or(0), m.unwrap_or(0.0), s.unwrap_or(0.0)),
         None => (0, 0.0, 0.0),
     };
+    Ok(BaselineUpdate {
+        n: n as i32,
+        mean,
+        stddev,
+    })
+}
 
+async fn upsert_numeric_baseline(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+    hour_of_week: i16,
+    upd: &BaselineUpdate,
+) -> Result<(), String> {
     sqlx::query(
         r#"INSERT INTO agent_metric_baselines
                  (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
@@ -201,19 +292,110 @@ async fn recompute_baseline(
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
-    .bind(n as i32)
-    .bind(mean)
-    .bind(stddev)
+    .bind(hour_of_week)
+    .bind(upd.n)
+    .bind(upd.mean)
+    .bind(upd.stddev)
     .execute(&mut **tx)
     .await
     .map_err(|e| format!("upsert baseline: {e}"))?;
+    Ok(())
+}
 
-    Ok(BaselineUpdate {
-        n: n as i32,
-        mean,
-        stddev,
-    })
+/// Current UTC hour-of-week (Mon 00:00 = 0 … Sun 23:00 = 167).
+#[must_use]
+pub fn hour_of_week_utc() -> i16 {
+    use chrono::{Datelike, Timelike};
+    let n = chrono::Utc::now();
+    let dow = (n.weekday().num_days_from_monday() as i16).clamp(0, 6);
+    let hour = (n.hour() as i16).clamp(0, 23);
+    dow * 24 + hour
+}
+
+/// Build the compact snapshot the agent caches locally. Prefer the current
+/// hour-of-week row when it has ≥ `EDGE_HOUR_MIN_N` samples, else the rolling
+/// 7-day global row (bucket -1).
+#[must_use]
+pub fn assemble_compact_snapshot(hour: i16, rows: &[BaselineRow]) -> UebaCompactSnapshot {
+    let mut metrics = Vec::new();
+    let mut used_hour = false;
+    for name in COMPACT_METRICS {
+        let hour_row = rows
+            .iter()
+            .find(|r| r.metric_name == *name && r.hour_of_week == hour && r.n >= EDGE_HOUR_MIN_N);
+        let global_row = rows
+            .iter()
+            .find(|r| r.metric_name == *name && r.hour_of_week == GLOBAL_BUCKET);
+        if let Some(r) = hour_row.or(global_row) {
+            if hour_row.is_some() {
+                used_hour = true;
+            }
+            metrics.push(UebaCompactMetric {
+                name: (*name).to_string(),
+                mean: r.mean,
+                stddev: r.stddev,
+                n: r.n,
+            });
+        }
+    }
+    let learned_processes = rows
+        .iter()
+        .find(|r| r.metric_name == "top_processes" && r.hour_of_week == GLOBAL_BUCKET)
+        .and_then(|r| serde_json::from_value::<Vec<String>>(r.learned_set.clone()).ok())
+        .unwrap_or_default();
+    UebaCompactSnapshot {
+        hour_of_week: hour.clamp(0, 167),
+        z_upload_threshold: EDGE_Z_UPLOAD,
+        min_n: EDGE_MIN_N,
+        source: if used_hour {
+            "hour_of_week".into()
+        } else {
+            "rolling_7d".into()
+        },
+        metrics,
+        learned_processes,
+    }
+}
+
+/// Load + assemble the compact snapshot for one agent. Empty `metrics` means
+/// the agent should keep uploading (still training).
+pub async fn compact_snapshot_for_agent(
+    pool: &PgPool,
+    tenant_id: i64,
+    agent_id: &str,
+) -> Result<UebaCompactSnapshot, String> {
+    let hour = hour_of_week_utc();
+    let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("tenant tx: {e}"))?;
+    let rows = sqlx::query_as::<_, (String, i16, i32, f64, f64, Value)>(
+        r#"SELECT metric_name, hour_of_week, n, mean, stddev, learned_set
+             FROM agent_metric_baselines
+            WHERE tenant_id = $1 AND agent_id = $2
+              AND hour_of_week IN ($3, $4)"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .bind(hour)
+    .bind(GLOBAL_BUCKET)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| format!("load baselines: {e}"))?;
+    let _ = tx.commit().await;
+    let mapped: Vec<BaselineRow> = rows
+        .into_iter()
+        .map(
+            |(metric_name, hour_of_week, n, mean, stddev, learned_set)| BaselineRow {
+                metric_name,
+                hour_of_week,
+                n,
+                mean,
+                stddev,
+                learned_set,
+            },
+        )
+        .collect();
+    Ok(assemble_compact_snapshot(hour, &mapped))
 }
 
 async fn check_anomaly(
@@ -417,8 +599,102 @@ mod tests {
     }
     #[test]
     fn baselines_use_the_global_bucket_not_hour_of_week() {
-        // Regression guard: baselines must be stored per (agent, metric) so training
-        // can accumulate. Per-hour-of-week bucketing made the detector never fire.
-        assert_eq!(GLOBAL_BUCKET, 0);
+        // Regression guard: server-side fire path must accumulate per (agent, metric)
+        // so training can reach MIN_BASELINE_SAMPLES. Hour-of-week rows are extra
+        // copies for the agent's compact snapshot, not the fire path.
+        assert_eq!(GLOBAL_BUCKET, -1);
+        assert!(
+            GLOBAL_BUCKET < 0 || GLOBAL_BUCKET > 167,
+            "GLOBAL_BUCKET must not collide with a real hour_of_week"
+        );
+    }
+
+    #[test]
+    fn compact_snapshot_hour_zero_does_not_collide_with_global() {
+        let rows = vec![
+            BaselineRow {
+                metric_name: "process_count".into(),
+                hour_of_week: GLOBAL_BUCKET,
+                n: 40,
+                mean: 100.0,
+                stddev: 5.0,
+                learned_set: Value::Array(vec![]),
+            },
+            BaselineRow {
+                metric_name: "process_count".into(),
+                hour_of_week: 0,
+                n: 4,
+                mean: 50.0,
+                stddev: 1.0,
+                learned_set: Value::Array(vec![]),
+            },
+        ];
+        let monday_midnight = assemble_compact_snapshot(0, &rows);
+        assert_eq!(monday_midnight.source, "hour_of_week");
+        assert_eq!(monday_midnight.metrics[0].mean, 50.0);
+        let tuesday = assemble_compact_snapshot(12, &rows);
+        assert_eq!(tuesday.source, "rolling_7d");
+        assert_eq!(tuesday.metrics[0].mean, 100.0);
+    }
+
+    #[test]
+    fn compact_snapshot_prefers_hour_when_trained() {
+        let rows = vec![
+            BaselineRow {
+                metric_name: "process_count".into(),
+                hour_of_week: GLOBAL_BUCKET,
+                n: 40,
+                mean: 100.0,
+                stddev: 5.0,
+                learned_set: Value::Array(vec![]),
+            },
+            BaselineRow {
+                metric_name: "process_count".into(),
+                hour_of_week: 12,
+                n: 4,
+                mean: 80.0,
+                stddev: 2.0,
+                learned_set: Value::Array(vec![]),
+            },
+            BaselineRow {
+                metric_name: "top_processes".into(),
+                hour_of_week: GLOBAL_BUCKET,
+                n: 40,
+                mean: 0.0,
+                stddev: 0.0,
+                learned_set: serde_json::json!(["sshd", "systemd"]),
+            },
+        ];
+        let snap = assemble_compact_snapshot(12, &rows);
+        assert_eq!(snap.source, "hour_of_week");
+        assert_eq!(snap.z_upload_threshold, EDGE_Z_UPLOAD);
+        let pc = snap
+            .metrics
+            .iter()
+            .find(|m| m.name == "process_count")
+            .unwrap();
+        assert_eq!(pc.mean, 80.0);
+        assert_eq!(snap.learned_processes, vec!["sshd", "systemd"]);
+    }
+
+    #[test]
+    fn compact_snapshot_falls_back_to_rolling_7d() {
+        let rows = vec![BaselineRow {
+            metric_name: "process_count".into(),
+            hour_of_week: GLOBAL_BUCKET,
+            n: 40,
+            mean: 100.0,
+            stddev: 5.0,
+            learned_set: Value::Array(vec![]),
+        }];
+        let snap = assemble_compact_snapshot(12, &rows);
+        assert_eq!(snap.source, "rolling_7d");
+        assert_eq!(snap.metrics[0].mean, 100.0);
+    }
+
+    #[test]
+    fn hour_of_week_in_range() {
+        let h = hour_of_week_utc();
+        assert!(h >= 0 && h < 168);
     }
 }

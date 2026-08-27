@@ -101,6 +101,36 @@ describe('AgentManagement', () => {
     expect(await screen.findByText('backend exploded')).toBeInTheDocument()
   })
 
+  it('renders edge stealth telemetry from live heartbeats', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url === '/api/agents/status') {
+        return Promise.resolve(resp({
+          text: async () => JSON.stringify({
+            agents: [{
+              agent_id: 'a1',
+              hostname: 'edge-1',
+              online: true,
+              client_id: 1,
+              os: 'linux',
+              arch: 'x86_64',
+              capabilities: ['ueba_baseline'],
+              ring_buffer_bytes: 2048,
+              ring_buffer_frames: 3,
+              ueba_suppressed: 40,
+              ueba_uploaded: 2,
+            }],
+            online_count: 1,
+          }),
+        }))
+      }
+      if (url === '/api/clients') return Promise.resolve(resp({ text: async () => '[]' }))
+      return Promise.resolve(resp())
+    })
+    renderPage()
+    expect(await screen.findByText('agents.stealth_title')).toBeInTheDocument()
+    expect(screen.getByText('agents.stealth_body')).toBeInTheDocument()
+  })
+
   it('treats a 404 status endpoint as an empty fleet, not an error', async () => {
     apiFetch.mockImplementation((url) => {
       if (url === '/api/agents/status') return Promise.resolve(resp({ status: 404 }))

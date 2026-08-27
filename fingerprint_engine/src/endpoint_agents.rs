@@ -85,6 +85,9 @@ pub enum ServerToAgent {
     Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        /// Compact hour-of-week mean/stddev so the agent can gate ueba_baseline locally.
+        #[serde(default)]
+        ueba_baseline: Option<crate::ueba_detector::UebaCompactSnapshot>,
     },
     Task {
         task_id: String,
@@ -95,9 +98,22 @@ pub enum ServerToAgent {
     Ack {
         task_id: String,
     },
+    UebaBaseline {
+        #[serde(flatten)]
+        snapshot: crate::ueba_detector::UebaCompactSnapshot,
+    },
     Shutdown {
         reason: String,
     },
+}
+
+/// Last heartbeat extras from a live agent (in-memory; not durable).
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct AgentLiveTelemetry {
+    pub ring_buffer_bytes: u32,
+    pub ring_buffer_frames: u32,
+    pub ueba_suppressed: u64,
+    pub ueba_uploaded: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -135,6 +151,7 @@ struct RemotePresence {
 pub struct AgentRegistry {
     inner: RwLock<HashMap<String, LocalSession>>,
     remote: RwLock<HashMap<String, RemotePresence>>,
+    telemetry: RwLock<HashMap<String, AgentLiveTelemetry>>,
     dispatch_cursor: AtomicUsize,
     sync: OnceLock<Arc<crate::agent_registry_sync::AgentRegistrySync>>,
 }
@@ -144,6 +161,7 @@ impl Default for AgentRegistry {
         Self {
             inner: RwLock::new(HashMap::new()),
             remote: RwLock::new(HashMap::new()),
+            telemetry: RwLock::new(HashMap::new()),
             dispatch_cursor: AtomicUsize::new(0),
             sync: OnceLock::new(),
         }
@@ -328,6 +346,24 @@ impl AgentRegistry {
             );
             sync.publish(&event).await;
         }
+    }
+
+    pub async fn record_telemetry(&self, agent_uuid: &str, telem: AgentLiveTelemetry) {
+        let mut g = self.telemetry.write().await;
+        g.insert(agent_uuid.to_string(), telem);
+    }
+
+    pub async fn telemetry(&self, agent_uuid: &str) -> AgentLiveTelemetry {
+        self.telemetry
+            .read()
+            .await
+            .get(agent_uuid)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub async fn telemetry_snapshot(&self) -> HashMap<String, AgentLiveTelemetry> {
+        self.telemetry.read().await.clone()
     }
 
     pub async fn send(&self, agent_uuid: &str, msg: ServerToAgent) -> Result<(), String> {
@@ -1358,6 +1394,7 @@ mod tests {
         let v = serde_json::to_value(ServerToAgent::Welcome {
             scan_concurrency: Some(4),
             heartbeat_secs: None,
+            ueba_baseline: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");

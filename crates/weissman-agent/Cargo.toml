@@ -15,8 +15,9 @@ path = "src/main.rs"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-util", "net", "fs", "process"] }
 # UEBA baseline uses chrono::Utc + Datelike for hour-of-week computation.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-# Streaming WebSocket + TLS.
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots", "connect"] }
+# Streaming WebSocket + TLS. webpki-roots so a fully-static musl binary does not
+# need a host ca-certificates bundle.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 url = "2"
 
@@ -28,14 +29,15 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Local detections — system inventory.
-sysinfo = { version = "0.30", default-features = false }
 hostname = "0.4"
 whoami = "1"
 
-# File hashing.
+# File hashing + ring-buffer key derivation.
 sha2 = "0.10"
 hex = "0.4"
+
+# Encrypted in-memory ring (ChaCha20-Poly1305, no heap beyond the 10 MiB cap).
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }
@@ -44,7 +46,7 @@ uuid = { version = "1", features = ["v4"] }
 jsonwebtoken = { version = "9", default-features = false }
 
 # HTTP fetch for enrollment (request a session token).
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json"] }
 
 # CLI parsing.
 clap = { version = "4", features = ["derive", "env"] }
@@ -52,6 +54,9 @@ clap = { version = "4", features = ["derive", "env"] }
 # Errors.
 thiserror = "1"
 anyhow = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # Platform-specific extras pulled in only on Windows so musl builds stay small.
 [target.'cfg(windows)'.dependencies]
@@ -61,6 +66,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",
     "Win32_System_LibraryLoader",
+    "Win32_System_Diagnostics_ToolHelp",
 ] }
 
 # Release profile is defined at workspace root Cargo.toml.

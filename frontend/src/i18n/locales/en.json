@@ -945,7 +945,12 @@
     "time_hours": "{{count}}h ago",
     "time_days": "{{count}}d ago",
     "no_filter_title": "No agents match filter",
-    "no_filter_body": "Try a different status filter."
+    "no_filter_body": "Try a different status filter.",
+    "stealth_title": "Edge stealth",
+    "stealth_body": "{{suppressed}} UEBA samples kept local · {{uploaded}} uploaded (|z|>2) · ring {{ring}} / 10 MB",
+    "detail_ring": "Encrypted ring",
+    "detail_ueba": "UEBA edge gate",
+    "detail_ueba_value": "{{uploaded}} uploaded / {{suppressed}} kept local"
   },
   "system_config": {
     "title": "System Configuration",
@@ -1461,7 +1466,7 @@
       "title": "UEBA Anomalies",
       "subtitle": "Behavioral anomalies scored against per-agent baselines",
       "badge": "UEBA",
-      "evidence_notice": "Anomalies come from GET /api/ueba/anomalies — each row is an agent metric whose observed value deviated from its rolling baseline (mean ± stddev), scored by z-score and severity. Nothing here is synthetic; every anomaly is a live detection.",
+      "evidence_notice": "Anomalies come from GET /api/ueba/anomalies — each row is an agent metric whose observed value deviated from its rolling 7-day baseline (mean ± stddev), scored by z-score and severity. Endpoint agents hold a compact hour-of-week mean/stddev and only upload a raw sample when |z| > 2 or a new process appears; the server fires anomalies at |z| > 3. Nothing here is synthetic; every anomaly is a live detection.",
       "load_failed": "Failed to load UEBA anomalies.",
       "kpi_total": "Total Anomalies",
       "kpi_agents": "Agents Affected",

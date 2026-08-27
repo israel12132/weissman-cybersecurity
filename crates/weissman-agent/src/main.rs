@@ -7,11 +7,14 @@
 //!   4. for each task: spawn local detection, stream `finding` messages, then `task_done`.
 //!   5. reconnect with exponential backoff on disconnect.
 //!
-//! No persistent storage; all state in memory.
+//! Identity is persisted; telemetry ring and UEBA snapshot live in memory only.
 
 mod detections;
+mod hostobs;
 mod protocol;
+mod ringbuf;
 mod transport;
+mod ueba_edge;
 
 use clap::Parser;
 use std::time::Duration;
@@ -115,6 +118,10 @@ async fn main() -> anyhow::Result<()> {
             fresh
         }
     };
+
+    // Encrypted 10 MiB ring is keyed from the renewal secret so a memory dump of
+    // a disconnected agent does not yield plaintext findings.
+    ringbuf::init(&enrollment.agent_secret);
 
     if cli.enroll_only {
         // The installer runs this to validate the token. It used to throw the result away and

@@ -9,6 +9,19 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Endpoint agent Core stealth + precision.** Native host observation via
+  `/proc` (Linux), `KERN_PROC` (macOS) and `NtQuerySystemInformation` /
+  `GetExtendedTcpTable` (Windows) — no `ps`/`lsof`/sysinfo. Encrypted 10 MiB
+  in-memory ring buffer drains over WSS at 64 KiB/s after reconnect. Edge UEBA
+  holds a compact hour-of-week mean/stddev and uploads raw samples only when
+  `|z| > 2` or a new process appears. The rolling 7-day fire-path row lives in
+  `hour_of_week = -1` so it never collides with Monday 00:00 UTC (bucket 0).
+  Linux musl builds are fully statically linked (`crt-static`); the installer
+  prefers `linux-<arch>-musl`.
+
+
+### Added
+
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
   `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to

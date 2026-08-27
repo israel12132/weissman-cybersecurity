@@ -1,10 +1,10 @@
 //! CHRONOS endpoint monitor — 5ms process-delta ring buffer with autonomous SIGSTOP on shell spawn.
 
 use super::finding;
+use crate::hostobs;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use sysinfo::{ProcessRefreshKind, System};
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct ProcessSnap {
@@ -33,7 +33,7 @@ const SHELL_CHILDREN: &[&str] = &["sh", "bash", "dash", "zsh", "cmd", "powershel
 /// without inventing it out of unrelated names.
 fn name_matches(name: &str, list: &[&str]) -> bool {
     let n = name.trim().to_ascii_lowercase();
-    // Compare the basename: sysinfo may report a path on some platforms.
+    // Compare the basename: native tables may report a path on some platforms.
     let base = n.rsplit(['/', '\\']).next().unwrap_or(&n);
     // Tolerate a Windows .exe suffix, which is part of the name rather than a different program.
     let base = base.strip_suffix(".exe").unwrap_or(base);
@@ -49,22 +49,15 @@ fn is_shell_child(name: &str) -> bool {
 }
 
 fn capture_snapshot() -> HashMap<u32, ProcessSnap> {
-    let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
     let mut map = HashMap::new();
-    for (pid, proc) in sys.processes() {
-        let pid_u = usize::from(*pid) as u32;
-        let parent = proc.parent().map(|p| usize::from(p) as u32);
+    for p in hostobs::list_processes_light() {
         map.insert(
-            pid_u,
+            p.pid,
             ProcessSnap {
-                pid: pid_u,
-                name: proc.name().to_string(),
-                parent_pid: parent,
-                exe: proc
-                    .exe()
-                    .map(|x| x.display().to_string())
-                    .unwrap_or_default(),
+                pid: p.pid,
+                name: p.name,
+                parent_pid: p.ppid,
+                exe: p.exe,
             },
         );
     }
@@ -124,17 +117,17 @@ async fn attempt_sigstop(pid: u32, expected_name: &str) -> String {
                 "SIGSTOP skipped pid {pid}: no longer running as '{expected_name}' (pid reused or exited)"
             );
         }
-        let out = tokio::process::Command::new("kill")
-            .args(["-STOP", &pid.to_string()])
-            .output()
-            .await;
-        match out {
-            Ok(o) if o.status.success() => format!("SIGSTOP pid {pid}"),
-            Ok(o) => format!(
-                "SIGSTOP failed pid {pid}: {}",
-                String::from_utf8_lossy(&o.stderr)
-            ),
-            Err(e) => format!("SIGSTOP error pid {pid}: {e}"),
+        if pid == 0 || pid > i32::MAX as u32 {
+            return format!("SIGSTOP skipped pid {pid}: out of range");
+        }
+        let rc = unsafe { libc::kill(pid as i32, libc::SIGSTOP) };
+        if rc == 0 {
+            format!("SIGSTOP pid {pid}")
+        } else {
+            format!(
+                "SIGSTOP failed pid {pid}: errno {}",
+                std::io::Error::last_os_error()
+            )
         }
     }
     #[cfg(not(unix))]

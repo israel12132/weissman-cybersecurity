@@ -1,31 +1,14 @@
 //! UEBA baseline sampler.
 //!
-//! Once per task dispatch the agent collects a snapshot of host metrics that
-//! UEBA can baseline + anomaly-detect server-side. Cheap to sample (no shelling
-//! out to heavy tools); no PII (top processes by name only, no command lines).
-//!
-//! Output shape — single finding of type `ueba_sample` whose `metrics` JSON
-//! object is what `weissman-worker::ueba_detector` ingests:
-//!
-//! ```json
-//! {
-//!   "open_ports":      [22, 80, 443],
-//!   "open_port_count": 3,
-//!   "process_count":   142,
-//!   "top_processes":   ["nginx", "postgres", "weissman-agent"],
-//!   "unique_users":    1,
-//!   "uptime_seconds":  872315,
-//!   "load_1m":         0.42,
-//!   "memory_used_pct": 38.5,
-//!   "outbound_bytes":  0,
-//!   "failed_logins":   0
-//! }
-//! ```
-//!
-//! On unsupported platforms or when `/proc` is unreadable the sample degrades
-//! gracefully — counters stay zero, the server treats this as "no signal" and
-//! does not throw a false anomaly.
+//! Once per task dispatch the agent collects a snapshot of host metrics via
+//! native kernel tables (`/proc`, `KERN_PROC`, `NtQuerySystemInformation`) —
+//! never `ps`/`lsof`. The sample is gated locally against the compact
+//! hour-of-week mean/stddev the server pushed on Welcome: raw metrics go
+//! upstream only on `|z| > 2`, a new process, or while the baseline is still
+//! training. Quiet ticks complete the task with zero findings.
 
+use crate::hostobs;
+use crate::ueba_edge::{self, Gate};
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -34,39 +17,57 @@ const TOP_PROCESSES_LIMIT: usize = 12;
 
 pub async fn run(engine: &str) -> Result<Vec<Value>> {
     let metrics = collect_metrics();
-    let mut extras: Map<String, Value> = Map::new();
-    extras.insert("metrics".to_string(), metrics.clone());
-    extras.insert("kind".to_string(), Value::String("ueba_sample".to_string()));
-    // The server-side UEBA detector keys its baselines off this hour bucket.
-    extras.insert(
-        "hour_of_week".to_string(),
-        Value::from(hour_of_week_utc() as i32),
-    );
+    let hour = hour_of_week_utc();
+    match ueba_edge::decide(&metrics, hour) {
+        Gate::Suppress { z_max } => {
+            crate::ringbuf::note_ueba_suppressed();
+            tracing::debug!(
+                target: "agent",
+                z_max,
+                hour,
+                "ueba sample suppressed at the edge"
+            );
+            Ok(Vec::new())
+        }
+        Gate::Upload { reason, z_max } => {
+            crate::ringbuf::note_ueba_uploaded();
+            let mut extras: Map<String, Value> = Map::new();
+            extras.insert("metrics".to_string(), metrics.clone());
+            extras.insert("kind".to_string(), Value::String("ueba_sample".to_string()));
+            extras.insert("hour_of_week".to_string(), Value::from(hour as i32));
+            extras.insert("edge_gate".to_string(), json!(reason));
+            extras.insert("edge_z_max".to_string(), json!(z_max));
 
-    let summary = format!(
-        "Host UEBA sample: ports={} processes={} users={}",
-        metrics
-            .get("open_port_count")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        metrics
-            .get("process_count")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        metrics
-            .get("unique_users")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-    );
+            let summary = format!(
+                "Host UEBA sample: ports={} processes={} users={} gate={}",
+                metrics
+                    .get("open_port_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                metrics
+                    .get("process_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                metrics
+                    .get("unique_users")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                extras
+                    .get("edge_gate")
+                    .and_then(Value::as_str)
+                    .unwrap_or("upload"),
+            );
 
-    Ok(vec![super::finding(
-        engine,
-        "Host UEBA baseline sample",
-        "info",  // raw samples are informational; anomalies become medium on the server
-        "T1057", // ATT&CK Process Discovery (closest match for self-observation)
-        &summary,
-        extras,
-    )])
+            Ok(vec![super::finding(
+                engine,
+                "Host UEBA baseline sample",
+                "info", // raw samples are informational; anomalies become medium on the server
+                "T1057", // ATT&CK Process Discovery (closest match for self-observation)
+                &summary,
+                extras,
+            )])
+        }
+    }
 }
 
 fn hour_of_week_utc() -> u8 {
@@ -82,8 +83,7 @@ fn hour_of_week_utc() -> u8 {
 fn collect_metrics() -> Value {
     let mut m = Map::new();
 
-    // ── Open ports (Linux /proc/net/tcp parser) ─────────────────────────────
-    let ports = read_listening_tcp_ports();
+    let ports = hostobs::list_listen_ports();
     m.insert("open_port_count".into(), Value::from(ports.len() as u64));
     m.insert(
         "open_ports".into(),
@@ -96,12 +96,15 @@ fn collect_metrics() -> Value {
         ),
     );
 
-    // ── Processes (Linux /proc/*/comm + uid)  ───────────────────────────────
-    let (procs_by_name, unique_users) = read_process_table();
-    m.insert(
-        "process_count".into(),
-        Value::from(procs_by_name.values().sum::<u64>()),
-    );
+    let procs = hostobs::list_processes();
+    let mut procs_by_name: HashMap<String, u64> = HashMap::new();
+    for p in &procs {
+        let name = p.basename_lower();
+        if !name.is_empty() {
+            *procs_by_name.entry(name).or_insert(0) += 1;
+        }
+    }
+    m.insert("process_count".into(), Value::from(procs.len() as u64));
     let mut top: Vec<(String, u64)> = procs_by_name.into_iter().collect();
     top.sort_by(|a, b| b.1.cmp(&a.1));
     top.truncate(TOP_PROCESSES_LIMIT);
@@ -113,9 +116,11 @@ fn collect_metrics() -> Value {
                 .collect(),
         ),
     );
-    m.insert("unique_users".into(), Value::from(unique_users as u64));
+    m.insert(
+        "unique_users".into(),
+        Value::from(hostobs::unique_user_count(&procs) as u64),
+    );
 
-    // ── Uptime + load + memory (Linux /proc/uptime, /proc/loadavg, /proc/meminfo)
     if let Some(uptime) = read_uptime_seconds() {
         m.insert("uptime_seconds".into(), Value::from(uptime));
     }
@@ -126,88 +131,10 @@ fn collect_metrics() -> Value {
         m.insert("memory_used_pct".into(), json!(mem_pct));
     }
 
-    // ── Failed logins (Linux /var/log/btmp via lastb — best-effort, may fail
-    //    silently in unprivileged contexts; that's fine — UEBA still works on
-    //    the rest of the signal).
     let failed = read_failed_logins_24h();
     m.insert("failed_logins".into(), Value::from(failed as u64));
 
     Value::Object(m)
-}
-
-// ─── Linux-only platform readers (no-op on other targets) ─────────────────────
-
-#[cfg(target_os = "linux")]
-fn read_listening_tcp_ports() -> Vec<u16> {
-    let mut out: std::collections::BTreeSet<u16> = Default::default();
-    for path in ["/proc/net/tcp", "/proc/net/tcp6"] {
-        if let Ok(s) = std::fs::read_to_string(path) {
-            for line in s.lines().skip(1) {
-                // local_address rem_address st …
-                let mut it = line.split_whitespace();
-                let _ = it.next();
-                let Some(local) = it.next() else { continue };
-                let Some(_) = it.next() else { continue };
-                let Some(st) = it.next() else { continue };
-                if st != "0A" {
-                    continue; // not LISTEN
-                }
-                let Some((_, port_hex)) = local.rsplit_once(':') else {
-                    continue;
-                };
-                if let Ok(p) = u16::from_str_radix(port_hex, 16) {
-                    out.insert(p);
-                }
-            }
-        }
-    }
-    out.into_iter().collect()
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_listening_tcp_ports() -> Vec<u16> {
-    Vec::new()
-}
-
-#[cfg(target_os = "linux")]
-fn read_process_table() -> (HashMap<String, u64>, usize) {
-    let Ok(read) = std::fs::read_dir("/proc") else {
-        return (HashMap::new(), 0);
-    };
-    let mut counts: HashMap<String, u64> = HashMap::new();
-    let mut users: std::collections::HashSet<u32> = std::collections::HashSet::new();
-    for entry in read.flatten() {
-        let Some(name) = entry.file_name().to_str().map(|s| s.to_string()) else {
-            continue;
-        };
-        if !name.chars().all(|c| c.is_ascii_digit()) {
-            continue;
-        }
-        if let Ok(comm) = std::fs::read_to_string(entry.path().join("comm")) {
-            let comm = comm.trim();
-            if !comm.is_empty() {
-                *counts.entry(comm.to_string()).or_insert(0) += 1;
-            }
-        }
-        if let Ok(status) = std::fs::read_to_string(entry.path().join("status")) {
-            for line in status.lines() {
-                if let Some(rest) = line.strip_prefix("Uid:") {
-                    if let Some(uid_str) = rest.split_whitespace().next() {
-                        if let Ok(uid) = uid_str.parse::<u32>() {
-                            users.insert(uid);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    (counts, users.len())
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_process_table() -> (HashMap<String, u64>, usize) {
-    (HashMap::new(), 0)
 }
 
 #[cfg(target_os = "linux")]
@@ -264,10 +191,6 @@ fn read_memory_used_pct() -> Option<f64> {
 }
 
 fn read_failed_logins_24h() -> u32 {
-    // Best-effort: grep last 1000 lines of journald for "Failed password".
-    // We deliberately avoid invoking external binaries — journalctl may not be
-    // available and `lastb` requires root. Keep this honest and zero when
-    // the file isn't readable.
     #[cfg(target_os = "linux")]
     {
         if let Ok(s) = std::fs::read_to_string("/var/log/auth.log") {
@@ -298,5 +221,7 @@ mod tests {
         assert!(v.get("open_port_count").is_some());
         assert!(v.get("process_count").is_some());
         assert!(v.get("top_processes").is_some());
+        let n = v.get("process_count").and_then(Value::as_u64).unwrap_or(0);
+        assert!(n > 0, "native process table returned zero processes");
     }
 }

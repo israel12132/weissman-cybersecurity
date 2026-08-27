@@ -52,6 +52,13 @@ function StatusBadge({ online, last_seen_at, t }) {
   )
 }
 
+function fmtBytes(n) {
+  const v = Number(n) || 0
+  if (v < 1024) return `${v} B`
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`
+  return `${(v / (1024 * 1024)).toFixed(2)} MB`
+}
+
 export default function AgentManagement() {
   const { t } = useTranslation()
   const [agents, setAgents] = useState([])
@@ -159,7 +166,19 @@ export default function AgentManagement() {
     const online = agents.filter((a) => a.online).length
     const clientsSeen = new Set(agents.map((a) => a.client_id)).size
     const capsTotal = agents.reduce((s, a) => s + (a.capabilities?.length || 0), 0)
-    return { total: agents.length, online, offline: agents.length - online, clientsSeen, capsTotal }
+    const uebaSuppressed = agents.reduce((s, a) => s + (Number(a.ueba_suppressed) || 0), 0)
+    const uebaUploaded = agents.reduce((s, a) => s + (Number(a.ueba_uploaded) || 0), 0)
+    const ringBytes = agents.reduce((s, a) => s + (Number(a.ring_buffer_bytes) || 0), 0)
+    return {
+      total: agents.length,
+      online,
+      offline: agents.length - online,
+      clientsSeen,
+      capsTotal,
+      uebaSuppressed,
+      uebaUploaded,
+      ringBytes,
+    }
   }, [agents])
 
   const filteredAgents = useMemo(() => {
@@ -277,6 +296,17 @@ export default function AgentManagement() {
             <Kpi label={t('agents.kpi_capabilities')} value={metrics.capsTotal} color="#a78bfa" sub={t('agents.kpi_clients', { count: metrics.clientsSeen })} />
           </div>
         )}
+
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-300/80">{t('agents.stealth_title')}</span>
+          <span className="text-xs font-mono text-[var(--text-secondary)]">
+            {t('agents.stealth_body', {
+              suppressed: metrics.uebaSuppressed,
+              uploaded: metrics.uebaUploaded,
+              ring: fmtBytes(metrics.ringBytes),
+            })}
+          </span>
+        </div>
 
         <section className="rounded-2xl bg-[var(--bg-2)] border border-[var(--border-default)] backdrop-blur-md p-5 space-y-4">
           <h2 className="text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">{t('agents.issue_token')}</h2>
@@ -404,6 +434,18 @@ export default function AgentManagement() {
                 <DetailRow label={t('agents.col_os')} value={`${selectedAgent.os} / ${selectedAgent.arch}`} />
                 <DetailRow label={t('agents.version')} value={selectedAgent.agent_version || '—'} />
                 <DetailRow label={t('agents.last_seen')} value={timeAgo(selectedAgent.last_seen_at, t)} />
+                <DetailRow
+                  label={t('agents.detail_ring')}
+                  value={`${fmtBytes(selectedAgent.ring_buffer_bytes)} / 10 MB (${selectedAgent.ring_buffer_frames || 0})`}
+                  mono
+                />
+                <DetailRow
+                  label={t('agents.detail_ueba')}
+                  value={t('agents.detail_ueba_value', {
+                    uploaded: selectedAgent.ueba_uploaded || 0,
+                    suppressed: selectedAgent.ueba_suppressed || 0,
+                  })}
+                />
                 <div>
                   <div className="text-[10px] font-mono uppercase text-[var(--text-muted)] mb-2">{t('agents.capabilities_heading')}</div>
                   {(selectedAgent.capabilities || []).length === 0 ? (
