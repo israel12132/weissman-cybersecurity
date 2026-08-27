@@ -32,6 +32,7 @@ pub fn enforce_worker_production_security_policy() -> Result<(), String> {
 }
 
 fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<(), String> {
+    enforce_rate_limits_cannot_be_disabled()?;
     if !is_production_environment() {
         return Ok(());
     }
@@ -217,6 +218,28 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
     Ok(())
 }
 
+const RATE_LIMIT_DISABLE_FLAGS: &[&str] = &[
+    "WEISSMAN_DISABLE_RATE_LIMIT",
+    "WEISSMAN_DISABLE_LOGIN_RATE_LIMIT",
+    "WEISSMAN_UNLIMITED_LOGIN",
+    "WEISSMAN_RATE_LIMIT_OFF",
+    "WEISSMAN_SKIP_RATE_LIMIT",
+];
+
+/// Login / API rate limits cannot be disabled in any environment.
+pub fn enforce_rate_limits_cannot_be_disabled() -> Result<(), String> {
+    reject_truthy_env(RATE_LIMIT_DISABLE_FLAGS, "login and API rate limits cannot be disabled")
+}
+
+fn reject_truthy_env(vars: &[&str], reason: &str) -> Result<(), String> {
+    for var in vars {
+        if env_truthy_pub(var) {
+            return Err(format!("{var} is not supported in any environment; {reason}"));
+        }
+    }
+    Ok(())
+}
+
 /// True when production expects Redis-backed distributed lockout, rate limits, and agent registry.
 #[must_use]
 pub fn production_distributed_state_required() -> bool {
@@ -267,6 +290,20 @@ mod tests {
         }
         std::env::remove_var(key);
         assert!(!env_truthy(key), "unset must be falsy");
+    }
+
+    #[test]
+    fn rate_limit_disable_flags_are_rejected_in_every_environment() {
+        assert!(RATE_LIMIT_DISABLE_FLAGS.contains(&"WEISSMAN_DISABLE_RATE_LIMIT"));
+        assert!(RATE_LIMIT_DISABLE_FLAGS.contains(&"WEISSMAN_UNLIMITED_LOGIN"));
+        let key = "WEISSMAN_TEST_RL_DISABLE_FLAG";
+        std::env::remove_var(key);
+        assert!(reject_truthy_env(&[key], "cannot be disabled").is_ok());
+        std::env::set_var(key, "1");
+        let err = reject_truthy_env(&[key], "cannot be disabled").expect_err("truthy must fail");
+        assert!(err.contains("cannot be disabled"));
+        std::env::remove_var(key);
+        assert!(enforce_rate_limits_cannot_be_disabled().is_ok());
     }
 
     #[test]

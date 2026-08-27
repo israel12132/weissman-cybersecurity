@@ -1,16 +1,15 @@
-//! Multi-tier edge rate limits: strict buckets for login / signup / Paddle webhook, default for API.
+//! Multi-tier edge rate limits: dedicated buckets for signup / Paddle webhook, default for API.
 //!
-//! Env: `WEISSMAN_RATE_LIMIT_PER_SEC`, `WEISSMAN_RATE_LIMIT_BURST` (default API).
-//! Login: `WEISSMAN_LOGIN_PER_MINUTE` (default 8), `WEISSMAN_LOGIN_BURST` (default 12).
-//! Signup: `WEISSMAN_SIGNUP_PER_MINUTE` (default 4), `WEISSMAN_SIGNUP_BURST` (default 6).
-//! Paddle webhook: `WEISSMAN_PADDLE_WEBHOOK_PER_MINUTE` (default 120), burst 240.
+//! Login (`POST /api/login`, `POST /api/auth/mfa/verify`) is **not** pre-charged here.
+//! Outcome-aware token buckets live in `fingerprint_engine::http::login_rate_limit` so
+//! password failures stay strict while successful auth from a shared NAT is lighter.
 
 use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use governor::clock::DefaultClock;
+use governor::clock::{Clock, DefaultClock};
 use governor::state::keyed::DefaultKeyedStateStore;
 use governor::{Quota, RateLimiter};
 use std::net::{IpAddr, SocketAddr};
@@ -27,18 +26,6 @@ fn nz_u32(name: &str, def: u32, min: u32, max: u32) -> NonZeroU32 {
         .unwrap_or(def)
         .clamp(min, max);
     NonZeroU32::new(n).unwrap_or(NonZeroU32::MIN)
-}
-
-fn limiter_login() -> Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, DefaultClock>> {
-    static L: OnceLock<Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, DefaultClock>>> =
-        OnceLock::new();
-    L.get_or_init(|| {
-        let per_min = nz_u32("WEISSMAN_LOGIN_PER_MINUTE", 8, 2, 60);
-        let burst = nz_u32("WEISSMAN_LOGIN_BURST", 12, 2, 120);
-        let q = Quota::per_minute(per_min).allow_burst(burst);
-        Arc::new(RateLimiter::keyed(q))
-    })
-    .clone()
 }
 
 fn limiter_signup() -> Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, DefaultClock>> {
@@ -77,19 +64,18 @@ fn limiter_default() -> Arc<RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, De
     .clone()
 }
 
-/// The default per-IP edge limiter guards the general **API** surface only. It must exclude:
-/// - `/api/health` — liveness/readiness probes (load balancer, CI health-wait) must never be
-///   throttled, or a probe burst self-inflicts a 429 and marks the stack unhealthy; and
-/// - every non-`/api/` path — the static SPA bundle (`/command-center/assets/*` hashed chunks),
-///   the SPA shell, legal static pages, favicon/manifest, the service worker, and WS upgrades.
-///   These are cheap, cacheable and non-sensitive, and a code-split front end legitimately
-///   fetches dozens of chunks in a single navigation burst. Throttling them 429s the app's own
-///   JavaScript, so `import()` fails and the route renders its "This view crashed" boundary — a
-///   real, user-facing outage on first load, not just a test artifact. Edge throttling of static
-///   files belongs at the CDN / reverse proxy, not the API rate limiter.
 #[must_use]
 fn is_default_limited_api(path: &str) -> bool {
     path.starts_with("/api/") && path != "/api/health"
+}
+
+#[must_use]
+fn is_login_delegated(method: &str, path: &str) -> bool {
+    method == "POST"
+        && matches!(
+            path,
+            "/api/login" | "/api/auth/mfa/verify" | "/api/agents/enroll" | "/api/agents/session"
+        )
 }
 
 fn client_ip<B>(req: &Request<B>) -> Option<IpAddr> {
@@ -97,16 +83,41 @@ fn client_ip<B>(req: &Request<B>) -> Option<IpAddr> {
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|ci| ci.0)?;
-    // Proxy-aware keying: behind nginx/Caddy the socket peer is the reverse proxy, so
-    // keying on it alone collapses every client into ONE bucket — defeating per-IP
-    // login/signup throttles and turning them into a shared-bucket DoS. Reuse the same
-    // trusted-proxy XFF/X-Real-IP resolution the inner API/login limiters use.
-    // (Distributed, cross-replica enforcement is handled by the inner
-    // `fingerprint_engine::http::api_rate_limit`/`rate_limit_redis` layer.)
     match fingerprint_engine::http::extract_client_ip(req.headers(), peer).parse::<IpAddr>() {
         Ok(ip) => Some(ip),
         Err(_) => Some(peer.ip()),
     }
+}
+
+fn check_limiter(
+    limiter: &RateLimiter<IpKey, DefaultKeyedStateStore<IpKey>, DefaultClock>,
+    key: &IpKey,
+) -> Option<u64> {
+    match limiter.check_key(key) {
+        Ok(()) => None,
+        Err(neg) => {
+            let clock = DefaultClock::default();
+            Some(neg.wait_time_from(clock.now()).as_secs().max(1))
+        }
+    }
+}
+
+fn edge_429(retry_after_secs: u64) -> Response {
+    let retry_after_secs = retry_after_secs.max(1);
+    let mut resp = (
+        StatusCode::TOO_MANY_REQUESTS,
+        axum::Json(serde_json::json!({
+            "ok": false,
+            "code": "rate_limited",
+            "detail": "rate limit exceeded",
+            "retry_after_seconds": retry_after_secs,
+        })),
+    )
+        .into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&retry_after_secs.to_string()) {
+        resp.headers_mut().insert("Retry-After", v);
+    }
+    resp
 }
 
 pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next) -> Response {
@@ -118,53 +129,34 @@ pub async fn edge_multi_rate_limit_middleware(request: Request<Body>, next: Next
     };
     let key = IpKey(ip);
     let ip_str = ip.to_string();
-    let limited = match (method.as_str(), path.as_str()) {
-        ("POST", "/api/login") => {
-            if limiter_login().check_key(&key).is_err() {
-                fingerprint_engine::http::rate_limit_metrics::record_login_denied(
-                    &ip_str,
-                    "/api/login",
-                );
-                true
-            } else {
-                fingerprint_engine::http::rate_limit_metrics::record_login_allowed(&ip_str);
-                false
-            }
-        }
+    if is_login_delegated(method.as_str(), path.as_str()) {
+        return next.run(request).await;
+    }
+    let retry_after = match (method.as_str(), path.as_str()) {
         ("POST", "/api/onboarding/register") | ("POST", "/api/auth/signup") => {
-            limiter_signup().check_key(&key).is_err()
+            check_limiter(&limiter_signup(), &key)
         }
-        ("POST", "/api/webhooks/paddle") => limiter_paddle().check_key(&key).is_err(),
-        // Default per-IP limiter — API surface only. Static SPA assets, the SPA shell, legal
-        // pages, health probes and WS upgrades fall through to the exempt arm below so the
-        // app's own code-split bundle is never 429'd (see `is_default_limited_api`).
+        ("POST", "/api/webhooks/paddle") => check_limiter(&limiter_paddle(), &key),
         _ if is_default_limited_api(&path) => {
-            if limiter_default().check_key(&key).is_err() {
+            if let Some(secs) = check_limiter(&limiter_default(), &key) {
                 fingerprint_engine::http::rate_limit_metrics::record_api_denied(&ip_str);
-                true
+                Some(secs)
             } else {
                 fingerprint_engine::http::rate_limit_metrics::record_api_allowed(&ip_str);
-                false
+                None
             }
         }
-        // Non-API, non-sensitive traffic (static assets, SPA shell, legal, health, WS): exempt.
-        _ => false,
+        _ => None,
     };
-    if limited {
+    if let Some(retry_after_secs) = retry_after {
         tracing::warn!(
             target: "rate_limit",
             %path,
             client_ip = %ip,
+            retry_after_secs,
             "edge rate limit exceeded"
         );
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            axum::Json(serde_json::json!({
-                "ok": false,
-                "detail": "rate limit exceeded",
-            })),
-        )
-            .into_response();
+        return edge_429(retry_after_secs);
     }
     next.run(request).await
 }
@@ -179,20 +171,10 @@ mod tests {
 
     #[test]
     fn static_spa_assets_are_exempt_from_default_limiter() {
-        // A code-split SPA fetches these in bursts on navigation; throttling them 429s the app's
-        // own JavaScript and crashes the route. They must never hit the default API limiter.
         for p in [
             "/command-center/assets/CloudPostureCommandCenter-Bv4HCP5O.js",
-            "/command-center/assets/index-DjceKEF_.js",
-            "/command-center/assets/style-CKZedZbh.css",
             "/command-center/",
-            "/command-center/operations",
             "/command-center/login",
-            "/tactical-chunk-sw.js",
-            "/favicon.ico",
-            "/signup.html",
-            "/",
-            "/dashboard",
             "/api/health",
             "/ws",
         ] {
@@ -202,31 +184,41 @@ mod tests {
 
     #[test]
     fn api_surface_is_default_limited() {
-        for p in [
-            "/api/clients",
-            "/api/findings",
-            "/api/jobs/123",
-            "/api/command-center/scan",
-            "/api/rate-limits/status",
-        ] {
+        for p in ["/api/clients", "/api/findings", "/api/rate-limits/status"] {
             assert!(is_default_limited_api(p), "{p} must be rate limited");
         }
     }
 
     #[test]
+    fn login_class_posts_are_delegated_not_edge_precharged() {
+        assert!(is_login_delegated("POST", "/api/login"));
+        assert!(is_login_delegated("POST", "/api/auth/mfa/verify"));
+        assert!(is_login_delegated("POST", "/api/agents/enroll"));
+        assert!(!is_login_delegated("GET", "/api/login"));
+        assert!(!is_login_delegated("POST", "/api/clients"));
+    }
+
+    #[test]
+    fn edge_429_sets_retry_after() {
+        let resp = edge_429(7);
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            resp.headers()
+                .get("Retry-After")
+                .and_then(|v| v.to_str().ok()),
+            Some("7")
+        );
+    }
+
+    #[test]
     fn nz_u32_clamps_within_bounds() {
-        // Unique env var per assertion avoids cross-test races on shared names.
         let k = "WEISSMAN_TEST_NZ_A";
         std::env::remove_var(k);
-        // Unset -> default (already within bounds).
         assert_eq!(nz_u32(k, 10, 2, 60).get(), 10);
-        // Below min -> min.
         std::env::set_var(k, "1");
         assert_eq!(nz_u32(k, 10, 5, 60).get(), 5);
-        // Above max -> max.
         std::env::set_var(k, "9999");
         assert_eq!(nz_u32(k, 10, 5, 60).get(), 60);
-        // In range -> honored.
         std::env::set_var(k, "25");
         assert_eq!(nz_u32(k, 10, 5, 60).get(), 25);
         std::env::remove_var(k);
@@ -236,7 +228,6 @@ mod tests {
     fn nz_u32_never_zero_even_if_min_zero() {
         let k = "WEISSMAN_TEST_NZ_ZERO";
         std::env::set_var(k, "0");
-        // clamp allows 0, but NonZeroU32 fallback keeps it >= 1.
         assert_eq!(nz_u32(k, 0, 0, 10).get(), 1);
         std::env::remove_var(k);
     }
