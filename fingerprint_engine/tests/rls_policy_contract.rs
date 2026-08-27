@@ -241,6 +241,7 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120300_soar_hitl_and_stale_alerts.sql",
         "20260827120400_nl_query_audit_hash_chain.sql",
         "20260827120500_nl_query_audit_chain_update.sql",
+        "20260827120600_cicd_scan_events_rls_cast_safe.sql",
     ];
     for name in names {
         let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -257,4 +258,93 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         );
         assert_eq!(a, b, "{name} must be byte-identical in both migration dirs");
     }
+}
+
+/// Migrations after the 2026-08-11 GUC cast-safety rewrite must not reintroduce
+/// `current_setting(...)::bigint` on CREATE/ALTER POLICY. 20260827120000 did
+/// exactly that for cicd_scan_events and is superseded by 20260827120600.
+#[test]
+fn post_cast_safety_policies_use_app_current_tenant_id() {
+    let dirs = [
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations"),
+    ];
+    let unsafe_needles = [
+        "current_setting('app.current_tenant_id', true)::bigint",
+        "current_setting('app.current_tenant_id'::text, true)::bigint",
+    ];
+    let mut offenders = Vec::new();
+    let mut saw_cast_safe_followon = false;
+    for dir in dirs {
+        let rd = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
+        for ent in rd.flatten() {
+            let name = ent.file_name();
+            let name = name.to_string_lossy();
+            if !name.ends_with(".sql") {
+                continue;
+            }
+            if name.starts_with("20260827120600_") {
+                saw_cast_safe_followon = true;
+            }
+            let Some(ver) = name.split('_').next() else {
+                continue;
+            };
+            if ver <= "20260811000000" {
+                continue;
+            }
+            // Already-applied; the 20600 follow-on restates the policy.
+            if name.starts_with("20260827120000_") {
+                continue;
+            }
+            let text = std::fs::read_to_string(ent.path()).unwrap_or_default();
+            let executable = strip_sql_comments(&text);
+            for needle in unsafe_needles {
+                if executable.contains(needle) {
+                    offenders.push(format!("{name}: {needle}"));
+                }
+            }
+        }
+    }
+    assert!(
+        saw_cast_safe_followon,
+        "20260827120600_cicd_scan_events_rls_cast_safe.sql must exist in both trees"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these post-20260811 migrations reintroduce a raw tenant GUC cast (use \
+         public.app_current_tenant_id(); empty GUC + ::bigint took production down \
+         for four days): {offenders:?}"
+    );
+}
+
+fn strip_sql_comments(sql: &str) -> String {
+    let b = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0;
+    let mut in_block = false;
+    while i < b.len() {
+        if in_block {
+            if b[i] == b'*' && i + 1 < b.len() && b[i + 1] == b'/' {
+                in_block = false;
+                i += 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+        if b[i] == b'-' && i + 1 < b.len() && b[i + 1] == b'-' {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
+            in_block = true;
+            i += 2;
+            continue;
+        }
+        out.push(b[i] as char);
+        i += 1;
+    }
+    out
 }
