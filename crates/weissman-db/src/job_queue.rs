@@ -571,7 +571,7 @@ pub async fn fail_job_stuck(
 pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
-        "UPDATE weissman_async_jobs SET status = 'completed', locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1",
+        "UPDATE weissman_async_jobs SET status = 'completed', last_error = NULL, stuck_reason = NULL, locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1",
     )
     .bind(job_id)
     .execute(&mut *tx)
@@ -601,6 +601,7 @@ pub async fn complete_job_with_result_owned(
     let mut tx = begin_worker_tx(pool).await?;
     let r = sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $3,
+           last_error = NULL, stuck_reason = NULL,
            locked_until = NULL, worker_id = NULL, updated_at = now()
            WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
     )
@@ -623,6 +624,7 @@ pub async fn complete_job_with_result(
     let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $2,
+           last_error = NULL, stuck_reason = NULL,
            locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1"#,
     )
     .bind(job_id)

@@ -89,6 +89,7 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'completed', result_json = $2,
+                       last_error = NULL, stuck_reason = NULL,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
                    WHERE id = $1 AND status = 'running'
                      AND ($3::text IS NULL OR worker_id = $3)"#,
