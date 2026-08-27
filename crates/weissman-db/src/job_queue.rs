@@ -463,17 +463,51 @@ pub async fn claim_next_excluding_with_role(
     }))
 }
 
+/// Seconds after which a living job with no heartbeat is `heartbeat_stale`.
+/// The worker extends every 15s; six missed beats is a dead worker, not a pause.
+pub const HEARTBEAT_STALE_SECS: i64 = 90;
+
+/// Extend the Postgres lock only if THIS worker still owns the row.
+///
+/// Returns `Ok(true)` when the lock was pushed forward. `Ok(false)` means the row was
+/// reclaimed or stolen — the caller must stop executing and must not write a terminal
+/// result. Covers `pending` (zero-trust reserve, waiting on a concurrency permit) as well
+/// as `running`, so a `tenant_full_scan` sitting behind a saturated heavy pool does not
+/// drop its reservation after `LOCK_SECS`.
+pub async fn heartbeat_owned(
+    pool: &PgPool,
+    job_id: Uuid,
+    worker_id: &str,
+    lock_secs: i64,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = begin_worker_tx(pool).await?;
+    let r = sqlx::query(
+        "UPDATE weissman_async_jobs
+            SET heartbeat_at = now(),
+                locked_until = now() + ($2::bigint * interval '1 second'),
+                updated_at = now()
+          WHERE id = $1
+            AND worker_id = $3
+            AND status IN ('pending', 'running')",
+    )
+    .bind(job_id)
+    .bind(lock_secs)
+    .bind(worker_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(r.rows_affected() == 1)
+}
+
 pub async fn heartbeat(pool: &PgPool, job_id: Uuid, lock_secs: i64) -> Result<(), sqlx::Error> {
-    // Extend `locked_until` alongside `heartbeat_at`: the reclaim sweep fails any running
-    // job whose `locked_until < now()`, so a long job (> lock window) that is still beating
-    // must keep pushing the lock forward or it gets falsely marked failed mid-flight.
+    // Unfenced path kept for callers that have no worker identity. Prefer [`heartbeat_owned`].
     let mut tx = begin_worker_tx(pool).await?;
     sqlx::query(
         "UPDATE weissman_async_jobs
             SET heartbeat_at = now(),
                 locked_until = now() + ($2::bigint * interval '1 second'),
                 updated_at = now()
-          WHERE id = $1 AND status = 'running'",
+          WHERE id = $1 AND status IN ('pending', 'running')",
     )
     .bind(job_id)
     .bind(lock_secs)
@@ -566,8 +600,111 @@ pub struct JobStatusView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worker_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heartbeat_stale_secs: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_remaining_secs: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stuck_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
     pub source: &'static str,
+}
+
+/// Redis TTL view used to overlay lease diagnostics on a job row. `ttl_secs` follows Redis:
+/// `-2` missing, `-1` immortal (no expiry), `>= 0` remaining.
+#[derive(Debug, Clone)]
+pub struct RedisLeaseView {
+    pub configured: bool,
+    pub error: bool,
+    pub exists: bool,
+    pub ttl_secs: i64,
+    pub holder: Option<String>,
+}
+
+fn job_holds_lock(
+    status: &str,
+    worker_id: Option<&str>,
+    locked_until: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    let has_worker = worker_id.map(|s| !s.trim().is_empty()).unwrap_or(false);
+    match status {
+        "running" => true,
+        "pending" => has_worker && locked_until.is_some(),
+        _ => false,
+    }
+}
+
+/// Live-only stuck diagnostic. Never invents a reason for terminal jobs.
+///
+/// Stable codes (UI i18n keys): `redis_lease_immortal`, `redis_lease_blocks_claim`,
+/// `lease_backend_unavailable`, `db_lease_expired`, `heartbeat_stale`, `worker_missing`,
+/// `awaiting_resume`.
+#[must_use]
+pub fn compute_stuck_reason(
+    status: &str,
+    locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
+    worker_id: Option<&str>,
+    last_error: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+    redis: Option<&RedisLeaseView>,
+) -> Option<String> {
+    let active = job_holds_lock(status, worker_id, locked_until) || status == "running";
+    let lock_expired = locked_until.map(|t| t < now).unwrap_or(false);
+    let hb_stale_secs = heartbeat_at
+        .map(|t| now.signed_duration_since(t).num_seconds())
+        .unwrap_or(i64::MAX);
+    let has_worker = worker_id.map(|s| !s.trim().is_empty()).unwrap_or(false);
+
+    if let Some(r) = redis {
+        if r.configured && r.error && active {
+            return Some("lease_backend_unavailable".into());
+        }
+        if r.exists && r.ttl_secs == -1 {
+            return Some("redis_lease_immortal".into());
+        }
+        if r.exists && r.ttl_secs >= 0 && (lock_expired || (status == "pending" && !has_worker)) {
+            return Some("redis_lease_blocks_claim".into());
+        }
+    }
+
+    if active && lock_expired {
+        return Some("db_lease_expired".into());
+    }
+    if status == "running" && !has_worker {
+        return Some("worker_missing".into());
+    }
+    if active && hb_stale_secs > HEARTBEAT_STALE_SECS {
+        return Some("heartbeat_stale".into());
+    }
+    if status == "pending" {
+        if let Some(err) = last_error {
+            if err.contains("stale lock reclaimed") || err.contains("orphaned:") {
+                return Some("awaiting_resume".into());
+            }
+        }
+    }
+    None
+}
+
+#[must_use]
+pub fn heartbeat_stale_secs(
+    heartbeat_at: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<i64> {
+    heartbeat_at.map(|t| now.signed_duration_since(t).num_seconds())
+}
+
+#[must_use]
+pub fn lock_remaining_secs(
+    locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<i64> {
+    locked_until.map(|t| t.signed_duration_since(now).num_seconds())
 }
 
 /// Strict tenant scoping. Application enforces `tenant_id` in the query; RLS on
@@ -580,7 +717,7 @@ pub async fn get_job_for_tenant(
 ) -> Result<Option<JobStatusView>, sqlx::Error> {
     let mut tx = crate::begin_tenant_tx(pool, tenant_id).await?;
     let row = sqlx::query(
-        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, trace_id
+        r#"SELECT id, kind, status, payload, result_json, last_error, attempt_count, created_at, updated_at, heartbeat_at, locked_until, worker_id, trace_id
            FROM weissman_async_jobs WHERE id = $1 AND tenant_id = $2"#,
     )
     .bind(job_id)
@@ -605,7 +742,19 @@ pub async fn get_job_for_tenant(
     let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
     let updated_at: chrono::DateTime<chrono::Utc> = row.try_get("updated_at")?;
     let heartbeat_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("heartbeat_at").ok();
+    let locked_until: Option<chrono::DateTime<chrono::Utc>> = row.try_get("locked_until").ok();
+    let worker_id: Option<String> = row.try_get("worker_id").ok();
     let trace_id: Option<String> = row.try_get("trace_id").ok();
+    let now = chrono::Utc::now();
+    let stuck_reason = compute_stuck_reason(
+        &status,
+        locked_until,
+        heartbeat_at,
+        worker_id.as_deref(),
+        last_error.as_deref(),
+        now,
+        None,
+    );
     Ok(Some(JobStatusView {
         id,
         kind,
@@ -617,6 +766,11 @@ pub async fn get_job_for_tenant(
         created_at,
         updated_at,
         heartbeat_at,
+        locked_until,
+        worker_id,
+        heartbeat_stale_secs: heartbeat_stale_secs(heartbeat_at, now),
+        lock_remaining_secs: lock_remaining_secs(locked_until, now),
+        stuck_reason,
         trace_id,
         source: "async_job",
     }))
@@ -693,54 +847,105 @@ pub async fn fail_job(
 
 /// Mark `running` rows with expired locks or stale heartbeats as retryable pending (worker crash / hung job).
 ///
+/// Also clears **reserved-but-still-`pending`** rows whose `locked_until` has lapsed. Zero-trust
+/// `reserve_next` leaves status=`pending` until the cryptographic claim promotes it; a crash in
+/// that window used to keep `worker_id` set until another worker overwrote it, with the Redis
+/// lease (if acquired) left behind.
+///
 /// Rows that have already exhausted `max_attempts` are dead-lettered instead of requeued. This is
 /// the only path that can retire a job whose worker died before it could report an outcome, and
 /// without it such a job is immortal: nothing else re-checks the cap once the row is back in
 /// `pending`. One `tenant_full_scan` in this deployment reached **53,620,122** attempts against
 /// `max_attempts = 5`.
-pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
+#[derive(Debug, Clone)]
+pub struct ReclaimedLock {
+    pub id: Uuid,
+    pub worker_id: Option<String>,
+    pub new_status: String,
+}
+
+pub async fn reclaim_stale_locks(pool: &PgPool) -> Result<Vec<ReclaimedLock>, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
-    // Retire the exhausted ones first, so the requeue below cannot pick them up.
-    sqlx::query(
-        r#"UPDATE weissman_async_jobs
-              SET status = 'dead',
-                  last_error = COALESCE(NULLIF(last_error, ''), 'worker died before reporting an outcome')
-                               || ' [dead-lettered by stale-lock reclaim: attempts exhausted]',
-                  locked_until = NULL,
-                  worker_id = NULL,
-                  updated_at = now()
-            WHERE status = 'running'
-              AND attempt_count >= max_attempts
-              AND (heartbeat_at < now() - interval '30 minutes' OR locked_until < now())"#,
+    let dead_rows = sqlx::query(
+        r#"
+        WITH doomed AS (
+            SELECT id, worker_id
+              FROM weissman_async_jobs
+             WHERE attempt_count >= max_attempts
+               AND (
+                    (status = 'running'
+                     AND (heartbeat_at < now() - interval '30 minutes' OR locked_until < now()))
+                 OR (status = 'pending'
+                     AND worker_id IS NOT NULL
+                     AND locked_until IS NOT NULL
+                     AND locked_until < now())
+               )
+             FOR UPDATE SKIP LOCKED
+        )
+        UPDATE weissman_async_jobs j
+           SET status = 'dead',
+               last_error = COALESCE(NULLIF(last_error, ''), 'worker died before reporting an outcome')
+                            || ' [dead-lettered by stale-lock reclaim: attempts exhausted]',
+               locked_until = NULL,
+               worker_id = NULL,
+               updated_at = now()
+          FROM doomed
+         WHERE j.id = doomed.id
+        RETURNING j.id, doomed.worker_id AS prev_worker, j.status
+        "#,
     )
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
 
-    let r = sqlx::query(
-        r#"UPDATE weissman_async_jobs
+    let pending_rows = sqlx::query(
+        r#"
+        WITH doomed AS (
+            SELECT id, worker_id
+              FROM weissman_async_jobs
+             WHERE attempt_count < max_attempts
+               AND (
+                    (status = 'running'
+                     AND (heartbeat_at < now() - interval '30 minutes' OR locked_until < now()))
+                 OR (status = 'pending'
+                     AND worker_id IS NOT NULL
+                     AND locked_until IS NOT NULL
+                     AND locked_until < now())
+               )
+             FOR UPDATE SKIP LOCKED
+        )
+        UPDATE weissman_async_jobs j
            SET status = 'pending',
-               -- Append rather than overwrite: the previous value is the only record of WHY the
-               -- job was running when its worker vanished, and clobbering it with a fixed string
-               -- destroyed the diagnostic on exactly the rows that most needed one.
                last_error = CASE
                    WHEN COALESCE(last_error, '') = '' THEN 'stale lock reclaimed'
+                   WHEN last_error LIKE '%[stale lock reclaimed]%' THEN last_error
                    ELSE last_error || ' [stale lock reclaimed]'
                END,
                locked_until = NULL,
                worker_id = NULL,
                run_after = now() + interval '2 seconds',
                updated_at = now()
-           WHERE status = 'running'
-             AND attempt_count < max_attempts
-             AND (
-               heartbeat_at < now() - interval '30 minutes'
-               OR locked_until < now()
-             )"#,
+          FROM doomed
+         WHERE j.id = doomed.id
+        RETURNING j.id, doomed.worker_id AS prev_worker, j.status
+        "#,
     )
-    .execute(&mut *tx)
+    .fetch_all(&mut *tx)
     .await?;
     tx.commit().await?;
-    Ok(r.rows_affected())
+
+    let mut out = Vec::with_capacity(dead_rows.len() + pending_rows.len());
+    for row in dead_rows.into_iter().chain(pending_rows.into_iter()) {
+        out.push(ReclaimedLock {
+            id: row.try_get("id")?,
+            worker_id: row.try_get("prev_worker")?,
+            new_status: row.try_get("status")?,
+        });
+    }
+    Ok(out)
+}
+
+pub async fn reclaim_stale_running_locks(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    Ok(reclaim_stale_locks(pool).await?.len() as u64)
 }
 
 /// Immediately move a job to dead-letter — no retry (HMAC mismatch, expired envelope, etc.).
@@ -895,5 +1100,149 @@ mod worker_pool_role_tests {
             WorkerPoolRole::Mixed | WorkerPoolRole::Research | WorkerPoolRole::Client
         ));
         assert!((0..=2).contains(&role.sql_mode()));
+    }
+}
+
+#[cfg(test)]
+mod stuck_reason_tests {
+    use super::{compute_stuck_reason, RedisLeaseView, HEARTBEAT_STALE_SECS};
+    use chrono::{Duration, Utc};
+
+    fn redis_ok(ttl: i64, exists: bool) -> RedisLeaseView {
+        RedisLeaseView {
+            configured: true,
+            error: false,
+            exists,
+            ttl_secs: ttl,
+            holder: Some("host:1".into()),
+        }
+    }
+
+    #[test]
+    fn live_heartbeat_is_not_stuck() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "running",
+            Some(now + Duration::seconds(280)),
+            Some(now - Duration::seconds(10)),
+            Some("host:1"),
+            None,
+            now,
+            Some(&redis_ok(280, true)),
+        );
+        assert_eq!(reason, None);
+    }
+
+    #[test]
+    fn immortal_redis_lease_wins() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "pending",
+            None,
+            None,
+            None,
+            None,
+            now,
+            Some(&redis_ok(-1, true)),
+        );
+        assert_eq!(reason.as_deref(), Some("redis_lease_immortal"));
+    }
+
+    #[test]
+    fn redis_lease_blocks_resume_after_db_unlock() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "pending",
+            None,
+            None,
+            None,
+            Some("stale lock reclaimed"),
+            now,
+            Some(&redis_ok(200, true)),
+        );
+        assert_eq!(reason.as_deref(), Some("redis_lease_blocks_claim"));
+    }
+
+    #[test]
+    fn expired_db_lock_on_running_job() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "running",
+            Some(now - Duration::seconds(5)),
+            Some(now - Duration::seconds(10)),
+            Some("host:1"),
+            None,
+            now,
+            Some(&redis_ok(-2, false)),
+        );
+        assert_eq!(reason.as_deref(), Some("db_lease_expired"));
+    }
+
+    #[test]
+    fn heartbeat_stale_after_threshold() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "running",
+            Some(now + Duration::seconds(200)),
+            Some(now - Duration::seconds(HEARTBEAT_STALE_SECS + 1)),
+            Some("host:1"),
+            None,
+            now,
+            Some(&redis_ok(200, true)),
+        );
+        assert_eq!(reason.as_deref(), Some("heartbeat_stale"));
+    }
+
+    #[test]
+    fn awaiting_resume_after_reclaim() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "pending",
+            None,
+            None,
+            None,
+            Some("engine timeout [stale lock reclaimed]"),
+            now,
+            Some(&redis_ok(-2, false)),
+        );
+        assert_eq!(reason.as_deref(), Some("awaiting_resume"));
+    }
+
+    #[test]
+    fn lease_backend_down_is_visible() {
+        let now = Utc::now();
+        let redis = RedisLeaseView {
+            configured: true,
+            error: true,
+            exists: false,
+            ttl_secs: -2,
+            holder: None,
+        };
+        let reason = compute_stuck_reason(
+            "running",
+            Some(now + Duration::seconds(200)),
+            Some(now),
+            Some("host:1"),
+            None,
+            now,
+            Some(&redis),
+        );
+        assert_eq!(reason.as_deref(), Some("lease_backend_unavailable"));
+    }
+
+    #[test]
+    fn completed_jobs_are_never_stuck() {
+        let now = Utc::now();
+        let reason = compute_stuck_reason(
+            "completed",
+            None,
+            None,
+            None,
+            None,
+            now,
+            Some(&redis_ok(-1, true)),
+        );
+        // Immortal Redis on a completed job is still a leak — report it.
+        assert_eq!(reason.as_deref(), Some("redis_lease_immortal"));
     }
 }

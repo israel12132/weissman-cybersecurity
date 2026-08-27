@@ -178,14 +178,27 @@ pub fn spawn_stale_lock_reclaim_loop(pool: Arc<PgPool>) {
                     if let Some(ref h) = hb {
                         h.beat();
                     }
-                    match weissman_db::job_queue::reclaim_stale_running_locks(pool.as_ref()).await {
-                        Ok(n) if n > 0 => tracing::info!(
-                            target: "async_jobs",
-                            reclaimed = n,
-                            "legacy stale lock reclaim (fallback)"
-                        ),
-                        Ok(_) => {}
-                        Err(e) => tracing::warn!(
+                    match weissman_db::job_queue::reclaim_stale_locks(pool.as_ref()).await {
+                        Ok(locks) => {
+                            if !locks.is_empty() {
+                                tracing::info!(
+                                    target: "async_jobs",
+                                    reclaimed = locks.len(),
+                                    "legacy stale lock reclaim (fallback)"
+                                );
+                            }
+                            let bus = weissman_job_bus::JobBus::from_env((*pool).clone()).await;
+                            let pairs: Vec<_> =
+                                locks.iter().map(|l| (l.id, l.worker_id.clone())).collect();
+                            if let Err(e) = bus.release_reclaimed_leases(&pairs).await {
+                                tracing::error!(
+                                    target: "async_jobs",
+                                    error = %e,
+                                    "Redis lease release after stale-lock reclaim failed"
+                                );
+                            }
+                        }
+                        Err(e) => tracing::error!(
                             target: "async_jobs",
                             error = %e,
                             "stale lock reclaim failed"

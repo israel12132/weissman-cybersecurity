@@ -29,12 +29,56 @@ const SWARM_GOSSIP_MAXLEN: i64 = 10_000;
 const LIVENESS_TTL_SECS: u64 = 2;
 const LIVENESS_REFRESH_MS: u64 = 400;
 
+/// Connect to Redis from `REDIS_URL`. Distinguishes "unset" (`Ok(None)`) from "set but down"
+/// (`Err`), so callers can fail visibly instead of silently disabling leases.
+pub async fn redis_manager_from_env_result() -> Result<Option<redis::aio::ConnectionManager>, String>
+{
+    let url = match std::env::var("REDIS_URL") {
+        Ok(s) if !s.trim().is_empty() => s,
+        _ => return Ok(None),
+    };
+    let client = redis::Client::open(url.as_str())
+        .map_err(|e| format!("REDIS_URL is set but is not a valid Redis URL: {e}"))?;
+    let mgr = redis::aio::ConnectionManager::new(client)
+        .await
+        .map_err(|e| format!("REDIS_URL is set but Redis is unreachable: {e}"))?;
+    Ok(Some(mgr))
+}
+
+/// Cached successful connection. A failed connect is NOT cached, so a recovered Redis is retried.
+pub async fn redis_manager_cached() -> Result<Option<redis::aio::ConnectionManager>, String> {
+    static REDIS: tokio::sync::OnceCell<redis::aio::ConnectionManager> =
+        tokio::sync::OnceCell::const_new();
+    match std::env::var("REDIS_URL") {
+        Ok(s) if !s.trim().is_empty() => {}
+        _ => return Ok(None),
+    }
+    if let Some(mgr) = REDIS.get() {
+        return Ok(Some(mgr.clone()));
+    }
+    match redis_manager_from_env_result().await {
+        Ok(Some(mgr)) => {
+            let _ = REDIS.set(mgr.clone());
+            Ok(Some(mgr))
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 pub async fn redis_manager_from_env() -> Option<redis::aio::ConnectionManager> {
-    let url = std::env::var("REDIS_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())?;
-    let client = redis::Client::open(url.as_str()).ok()?;
-    redis::aio::ConnectionManager::new(client).await.ok()
+    match redis_manager_from_env_result().await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(
+                target: "job_bus_swarm",
+                error = %e,
+                "Redis job-lease backend is configured but down — leases will not be acquired; \
+                 jobs must not fake success"
+            );
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
