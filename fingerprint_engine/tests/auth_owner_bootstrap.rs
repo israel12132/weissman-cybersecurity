@@ -51,13 +51,14 @@ async fn master_bootstrap_staff_admin_is_promoted_to_owner() {
         return;
     };
 
-    let tenant_id: i64 = sqlx::query_scalar(
-        "SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1",
-    )
-    .fetch_optional(&pool)
-    .await
-    .expect("lookup default tenant")
-    .expect("default tenant exists");
+    // Do not `SELECT id FROM tenants WHERE active` — that enumerating shape is
+    // silent-wrong on an RLS-subject pool and is banned by
+    // weissman-db's tenant_enumeration_discipline guard. Default tenant is
+    // the first active id (seeded as slug=default).
+    let tenant_ids = weissman_db::active_tenant_ids(&pool)
+        .await
+        .expect("active_tenant_ids");
+    let tenant_id = *tenant_ids.iter().min().expect("default tenant exists");
 
     let email = format!(
         "owner-promote-{}@ci.localhost",
