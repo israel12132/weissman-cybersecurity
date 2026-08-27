@@ -45,21 +45,23 @@ pub fn load_finding() -> Option<AgentToServer> {
 #[must_use]
 pub fn load_finding_at(path: &Path) -> Option<AgentToServer> {
     let raw = std::fs::read(path).ok()?;
-    match serde_json::from_slice::<AgentToServer>(&raw) {
-        Ok(msg @ AgentToServer::Finding { ref engine, .. }) if engine == "ueba_baseline" => {
-            Some(msg)
-        }
-        Ok(_) => None,
+    let parsed: AgentToServer = match serde_json::from_slice(&raw) {
+        Ok(msg) => msg,
         Err(e) => {
             tracing::warn!(
                 target: "agent", path = %path.display(), error = %e,
                 "ueba spill file is unreadable; dropping"
             );
-            None
+            return None;
         }
+    };
+    match &parsed {
+        AgentToServer::Finding { engine, .. } if engine == "ueba_baseline" => Some(parsed),
+        _ => None,
     }
 }
 
+#[allow(dead_code)]
 pub fn clear() {
     let _ = std::fs::remove_file(spill_path());
 }

@@ -444,26 +444,22 @@ impl BulkIngestManager {
         let encoded = buf.tuple_count() as u64;
         let binary_data = buf.finish();
 
-        let mut writer = match tx.copy_in_raw(agent_metric_samples_copy_sql()).await {
-            Ok(w) => w,
-            Err(e) => {
-                let _ = tx.rollback().await;
-                return Err(format!("copy_in_raw: {e}"));
+        // The COPY writer borrows `tx`. Keep that borrow inside this block (or
+        // consume the writer via abort/finish) so COMMIT/ROLLBACK can take `tx`.
+        // Dropping `tx` on any `return Err` also rolls the batch back.
+        let rows = {
+            let mut writer = tx
+                .copy_in_raw(agent_metric_samples_copy_sql())
+                .await
+                .map_err(|e| format!("copy_in_raw: {e}"))?;
+            if let Err(e) = writer.send(binary_data.as_slice()).await {
+                let abort = writer.abort(format!("copy send failed: {e}")).await;
+                return Err(format!("copy send: {e}; abort={abort:?}"));
             }
-        };
-
-        if let Err(e) = writer.send(&binary_data).await {
-            let abort = writer.abort(format!("copy send failed: {e}")).await;
-            let _ = tx.rollback().await;
-            return Err(format!("copy send: {e}; abort={abort:?}"));
-        }
-
-        let rows = match writer.finish().await {
-            Ok(n) => n,
-            Err(e) => {
-                let _ = tx.rollback().await;
-                return Err(format!("copy finish: {e}"));
-            }
+            writer
+                .finish()
+                .await
+                .map_err(|e| format!("copy finish: {e}"))?
         };
 
         if rows != encoded {

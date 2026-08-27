@@ -98,7 +98,7 @@ async fn binary_copy_roundtrips_one_agent_metric_sample() {
         .copy_in_raw(agent_metric_samples_copy_sql())
         .await
         .expect("copy_in_raw");
-    writer.send(&binary).await.expect("copy send");
+    writer.send(binary.as_slice()).await.expect("copy send");
     let copied = writer.finish().await.expect("copy finish");
     assert_eq!(copied, 1, "COPY should insert exactly one row");
 
@@ -171,7 +171,7 @@ async fn binary_copy_rollback_drops_the_batch() {
         .copy_in_raw(agent_metric_samples_copy_sql())
         .await
         .expect("copy_in_raw");
-    writer.send(&binary).await.expect("copy send");
+    writer.send(binary.as_slice()).await.expect("copy send");
     let copied = writer.finish().await.expect("copy finish");
     assert_eq!(copied, 1);
 
@@ -253,7 +253,7 @@ async fn binary_copy_abort_leaves_no_row() {
         .copy_in_raw(agent_metric_samples_copy_sql())
         .await
         .expect("copy_in_raw");
-    writer.send(&binary).await.expect("copy send");
+    writer.send(binary.as_slice()).await.expect("copy send");
     let _ = writer.abort("integration-test abort").await;
     tx.rollback().await.expect("rollback after abort");
 

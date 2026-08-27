@@ -33,6 +33,12 @@ pub struct VaultKey {
     key_bytes: [u8; AES_KEY_LEN],
 }
 
+impl std::fmt::Debug for VaultKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("VaultKey([redacted])")
+    }
+}
+
 impl VaultKey {
     /// Wrap an already-decoded 32-byte key. Caller is responsible for wiping the source.
     #[must_use]
@@ -464,7 +470,6 @@ mod tests {
         std::env::remove_var(INTEGRATIONS_VAULT_KEY_ENV);
     }
 
-    #[test]
     #[test]
     fn secret_string_debug_is_redacted_and_not_clone() {
         let s = SecretString::from_string("super-secret-dsn".into());
