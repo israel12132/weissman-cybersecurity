@@ -70,6 +70,22 @@ pub fn decide(metrics: &Value, hour_of_week: u8) -> Gate {
 
 #[must_use]
 pub fn decide_with(metrics: &Value, hour_of_week: u8, snap: Option<&UebaCompactSnapshot>) -> Gate {
+    // A failed kernel-table read is not a z-score event. Upload the flag so
+    // the server can drop the tick; never compare a missing/zero count to baseline.
+    if metrics
+        .get("sampling_failed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || metrics
+            .get("process_count")
+            .and_then(Value::as_f64)
+            .is_some_and(|n| n <= 0.0)
+    {
+        return Gate::Upload {
+            reason: "sampling_failed".into(),
+            z_max: 0.0,
+        };
+    }
     let Some(snap) = snap else {
         return Gate::Upload {
             reason: "no_local_baseline".into(),
@@ -257,6 +273,36 @@ mod tests {
     #[test]
     fn z_upload_constant_is_two() {
         assert_eq!(Z_UPLOAD, 2.0);
+    }
+
+    #[test]
+    fn sampling_failed_uploads_and_skips_z_score() {
+        let m = json!({
+            "sampling_failed": true,
+            "sample_error": "syscall:NtQuerySystemInformation",
+            "open_port_count": 0
+        });
+        let s = snap(24, 80.0, 4.0, &["sshd"]);
+        match decide_with(&m, 10, Some(&s)) {
+            Gate::Upload { reason, z_max } => {
+                assert_eq!(reason, "sampling_failed");
+                assert_eq!(z_max, 0.0);
+            }
+            Gate::Suppress { .. } => panic!("failed sample must not be suppressed as quiet"),
+        }
+    }
+
+    #[test]
+    fn zero_process_count_is_treated_as_sampling_failure() {
+        let m = json!({"process_count": 0.0, "open_port_count": 0.0});
+        let s = snap(24, 80.0, 4.0, &["sshd"]);
+        match decide_with(&m, 10, Some(&s)) {
+            Gate::Upload { reason, z_max } => {
+                assert_eq!(reason, "sampling_failed");
+                assert_eq!(z_max, 0.0);
+            }
+            Gate::Suppress { .. } => panic!("process_count=0 must not score against baseline"),
+        }
     }
 
     #[test]

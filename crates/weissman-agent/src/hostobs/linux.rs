@@ -4,15 +4,21 @@
 //! `open`/`read`/`getdents` syscalls against procfs, which is why this is an
 //! order of magnitude faster than spawning a CLI per tick.
 
-use super::{ListenPort, ProcessRecord};
+use super::{ListenPort, ProcessRecord, SampleError};
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
-    let Ok(dir) = fs::read_dir("/proc") else {
-        return Vec::new();
-    };
+    sample_process_table(full).unwrap_or_default()
+}
+
+pub fn sample_process_table(full: bool) -> Result<Vec<ProcessRecord>, SampleError> {
+    if !Path::new("/proc").is_dir() {
+        return Err(SampleError::syscall("proc_missing"));
+    }
+    let dir =
+        fs::read_dir("/proc").map_err(|e| SampleError::syscall(format!("proc_readdir:{e}")))?;
     let page = page_size_bytes();
     let mut out = Vec::with_capacity(256);
     for ent in dir.flatten() {
@@ -48,7 +54,11 @@ pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
         }
         out.push(rec);
     }
-    out
+    if out.is_empty() {
+        Err(SampleError::empty_table())
+    } else {
+        Ok(out)
+    }
 }
 
 pub fn list_listen_ports() -> Vec<ListenPort> {

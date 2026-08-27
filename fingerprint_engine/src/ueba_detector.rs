@@ -1,6 +1,9 @@
 //! UEBA detector — runs as a background loop in the backend.
 //!
 //! For every ingested `ueba_baseline` sample from an endpoint agent:
+//!   0. Drop the tick (no INSERT, no z-score) when `sampling_failed` is set or
+//!      `process_count` is missing/zero — a blocked syscall is not mass process
+//!      death and must not page isolate_host.
 //!   1. Insert the raw sample into `agent_metric_samples`.
 //!   2. Re-compute a baseline per (agent, metric) from the last 7 days of
 //!      samples — running mean + sample standard deviation.
@@ -98,6 +101,25 @@ pub struct UebaIngestPayload {
     pub metrics: Value,
 }
 
+/// Why this sample must not enter z-score or `agent_metric_samples`.
+///
+/// `process_count = 0` from a blocked `NtQuerySystemInformation` looks like
+/// mass process death (`Z < -6` vs a live baseline) and can page isolate_host.
+#[must_use]
+pub fn ueba_sample_skip_reason(metrics: &Value) -> Option<&'static str> {
+    let Some(obj) = metrics.as_object() else {
+        return Some("invalid_metrics");
+    };
+    if obj.get("sampling_failed").and_then(Value::as_bool) == Some(true) {
+        return Some("sampling_failed");
+    }
+    match obj.get("process_count").and_then(Value::as_f64) {
+        Some(n) if n <= 0.0 => Some("empty_process_count"),
+        None => Some("missing_process_count"),
+        Some(_) => None,
+    }
+}
+
 /// Public entry point — called by the server when an agent posts a `ueba_baseline`
 /// finding (we route it here before it hits the generic findings_persist path).
 pub async fn ingest_sample(
@@ -105,6 +127,19 @@ pub async fn ingest_sample(
     tenant_id: i64,
     p: UebaIngestPayload,
 ) -> Result<UebaIngestSummary, String> {
+    if let Some(reason) = ueba_sample_skip_reason(&p.metrics) {
+        tracing::warn!(
+            target: "ueba",
+            agent_id = %p.agent_id,
+            reason,
+            "UEBA sample skipped — syscall/empty table is not a z-score event"
+        );
+        return Ok(UebaIngestSummary {
+            skipped: true,
+            skip_reason: Some(reason.to_string()),
+            ..Default::default()
+        });
+    }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -190,6 +225,10 @@ pub async fn ingest_sample(
 pub struct UebaIngestSummary {
     pub baselines_updated: usize,
     pub anomalies: Vec<AnomalyRecord>,
+    #[serde(default)]
+    pub skipped: bool,
+    #[serde(default)]
+    pub skip_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -765,5 +804,36 @@ mod tests {
     fn hour_of_week_in_range() {
         let h = hour_of_week_utc();
         assert!(h >= 0 && h < 168);
+    }
+
+    #[test]
+    fn sampling_failed_flag_skips_z_score() {
+        let metrics = serde_json::json!({
+            "sampling_failed": true,
+            "sample_error": "syscall:NtQuerySystemInformation",
+            "open_port_count": 0
+        });
+        assert_eq!(ueba_sample_skip_reason(&metrics), Some("sampling_failed"));
+    }
+
+    #[test]
+    fn empty_process_count_is_not_mass_deletion() {
+        let metrics = serde_json::json!({"process_count": 0, "open_port_count": 0});
+        assert_eq!(
+            ueba_sample_skip_reason(&metrics),
+            Some("empty_process_count")
+        );
+        // (0 - 80) / 5 = -16 would have been a high anomaly and isolate_host.
+        let z = (0.0_f64 - 80.0) / 5.0;
+        assert!(
+            z < -6.0,
+            "zero-count vs live baseline is Z < -6; skip must fire first"
+        );
+    }
+
+    #[test]
+    fn healthy_inventory_is_ingested() {
+        let metrics = serde_json::json!({"process_count": 87, "open_port_count": 12});
+        assert_eq!(ueba_sample_skip_reason(&metrics), None);
     }
 }

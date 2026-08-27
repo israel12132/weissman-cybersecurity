@@ -15,6 +15,52 @@
 
 use std::fmt;
 
+/// Kernel-table read failed. Never coerce this into `process_count = 0` —
+/// an empty numeric sample looks like mass process death to the server UEBA
+/// detector (`Z < -6`) and can fire isolate_host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SampleError {
+    pub kind: SampleErrorKind,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SampleErrorKind {
+    /// NtQuerySystemInformation / sysctl / /proc readdir failed or was blocked.
+    Syscall,
+    /// The table came back with zero live processes. A running agent is itself
+    /// a process, so this is a parse/permission failure, not a quiet host.
+    EmptyTable,
+}
+
+impl SampleError {
+    #[must_use]
+    pub fn syscall(detail: impl Into<String>) -> Self {
+        Self {
+            kind: SampleErrorKind::Syscall,
+            detail: detail.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn empty_table() -> Self {
+        Self {
+            kind: SampleErrorKind::EmptyTable,
+            detail: "process_table_empty".into(),
+        }
+    }
+}
+
+impl fmt::Display for SampleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self.kind {
+            SampleErrorKind::Syscall => "syscall",
+            SampleErrorKind::EmptyTable => "empty_table",
+        };
+        write!(f, "{kind}:{}", self.detail)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessRecord {
     pub pid: u32,
@@ -63,9 +109,12 @@ use windows as platform;
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 mod platform {
-    use super::{ListenPort, ProcessRecord};
+    use super::{ListenPort, ProcessRecord, SampleError};
     pub fn list_processes(_full: bool) -> Vec<ProcessRecord> {
         Vec::new()
+    }
+    pub fn sample_process_table(_full: bool) -> Result<Vec<ProcessRecord>, SampleError> {
+        Err(SampleError::syscall("unsupported_os"))
     }
     pub fn list_listen_ports() -> Vec<ListenPort> {
         Vec::new()
@@ -73,9 +122,17 @@ mod platform {
 }
 
 /// Full process table (name, parent, exe, memory). Used by inventory / hollowing.
+/// On syscall failure this is empty — callers other than UEBA treat that as
+/// "no observations this tick", not as a numeric zero for z-score.
 #[must_use]
 pub fn list_processes() -> Vec<ProcessRecord> {
     platform::list_processes(true)
+}
+
+/// Process table for UEBA. Distinguishes "syscall failed" from a real inventory
+/// so the agent can set `sampling_failed` instead of emitting `process_count = 0`.
+pub fn sample_process_table() -> Result<Vec<ProcessRecord>, SampleError> {
+    platform::sample_process_table(true)
 }
 
 /// Fast process table (pid / name / parent only). Used by CHRONOS 5 ms deltas.
@@ -178,5 +235,32 @@ mod tests {
                 && !src.contains("Diagnostics::ToolHelp"),
             "ToolHelp APIs must stay out of the Windows hostobs path"
         );
+    }
+
+    #[test]
+    fn windows_ntapi_failure_is_sample_error_not_zero_count() {
+        let src = include_str!("windows.rs");
+        assert!(
+            src.contains("sample_process_table"),
+            "Windows must expose sample_process_table"
+        );
+        assert!(
+            src.contains("SampleError"),
+            "NTAPI failure must surface SampleError, not an empty Vec for UEBA"
+        );
+        assert!(
+            !src.contains("report an empty sample"),
+            "empty-sample path was the Alert Storm bug"
+        );
+    }
+
+    #[test]
+    fn sample_process_table_succeeds_on_this_host() {
+        let procs = sample_process_table().expect("live process table must be readable");
+        assert!(
+            !procs.is_empty(),
+            "a running agent cannot observe an empty process table"
+        );
+        assert!(procs.iter().any(|p| p.pid == std::process::id()));
     }
 }

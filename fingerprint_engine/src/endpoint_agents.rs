@@ -1383,6 +1383,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_ueba_ingest_preserves_sampling_failed_flag() {
+        let finding = json!({
+            "agent_id": "a",
+            "metrics": {
+                "sampling_failed": true,
+                "sample_error": "syscall:NtQuerySystemInformation"
+            }
+        });
+        let p = parse_ueba_ingest(&finding, 1).unwrap();
+        assert_eq!(
+            crate::ueba_detector::ueba_sample_skip_reason(&p.metrics),
+            Some("sampling_failed")
+        );
+    }
+
+    #[test]
     fn server_to_agent_ack_serializes() {
         let v = serde_json::to_value(ServerToAgent::Ack {
             task_id: "t-1".to_string(),

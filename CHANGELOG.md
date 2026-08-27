@@ -20,7 +20,8 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
   snapshots are **HMAC-signed** with a tenant-derived key. Rolling 7-day
   fire-path rows live in `agent_metric_baselines_global` (hour_of_week stays
   a physical 0..167 clock). TLS trusts webpki public roots ∪ the host native
-  store, plus optional `WEISSMAN_SERVER_CERT_SHA256` pin / TOFU. Linux musl
+  store (fault-tolerant parse — junk CAs are skipped, they do not fail the
+  bundle), plus optional `WEISSMAN_SERVER_CERT_SHA256` pin / TOFU. Linux musl
   builds are fully statically linked (`crt-static`); the installer prefers
   `linux-<arch>-musl`.
 
@@ -67,6 +68,18 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Fixed
 
+- **UEBA empty-sample Alert Storm.** A blocked `NtQuerySystemInformation` (or
+  empty `/proc` / `KERN_PROC` table) no longer uploads `process_count = 0`.
+  The agent sets `sampling_failed` + `sample_error`; `ueba_detector` skips the
+  tick (no `agent_metric_samples` INSERT, no z-score). Belt-and-suspenders:
+  `process_count <= 0` from older agents is also dropped, so a live baseline
+  cannot produce `Z < -6` / isolate_host from a syscall blip.
+- **XChaCha20 nonce entropy starvation.** Ring nonces are mixed from CPU RDRAND
+  / AArch64 RNDR, Linux `getrandom(GRND_NONBLOCK)`, and SHA-256(seq ‖ nanos ‖
+  pid). The agent no longer blocks on a cold `/dev/urandom` pool.
+- **rustls native CA fault tolerance.** Host trust-store load uses
+  `RootCertStore::add_parsable_certificates`; malformed / rustls-rejected CAs
+  (expired internals, SHA-1) are skipped and webpki public roots still connect.
 - **SOAR playbook E2E verifier is hermetic.** `scripts/verify_soar_playbook_e2e.mjs`
   fired against a hard-coded `tenant_id: 1` / `client_id: 1`, violating the
   `soar_action_executions.client_id → clients(id)` foreign key on any stack where

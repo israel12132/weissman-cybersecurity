@@ -2,7 +2,7 @@
 //!
 //! Never shells out to `ps`, `lsof`, or `netstat`.
 
-use super::{ListenPort, ProcessRecord};
+use super::{ListenPort, ProcessRecord, SampleError};
 use libc::{c_int, c_void, kinfo_proc, sysctl, CTL_KERN, KERN_PROC, KERN_PROC_ALL};
 use std::mem;
 use std::ptr;
@@ -42,6 +42,10 @@ extern "C" {
 }
 
 pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
+    sample_process_table(full).unwrap_or_default()
+}
+
+pub fn sample_process_table(full: bool) -> Result<Vec<ProcessRecord>, SampleError> {
     let mut mib: [c_int; 4] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0];
     let mut size: usize = 0;
     let rc = unsafe {
@@ -55,7 +59,7 @@ pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
         )
     };
     if rc != 0 || size == 0 {
-        return Vec::new();
+        return Err(SampleError::syscall("sysctl_KERN_PROC"));
     }
     let mut buf = vec![0u8; size];
     let rc = unsafe {
@@ -69,7 +73,7 @@ pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
         )
     };
     if rc != 0 {
-        return Vec::new();
+        return Err(SampleError::syscall("sysctl_KERN_PROC_read"));
     }
     let n = size / mem::size_of::<kinfo_proc>();
     let slice = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const kinfo_proc, n) };
@@ -98,7 +102,11 @@ pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
         }
         out.push(rec);
     }
-    out
+    if out.is_empty() {
+        Err(SampleError::empty_table())
+    } else {
+        Ok(out)
+    }
 }
 
 pub fn list_listen_ports() -> Vec<ListenPort> {

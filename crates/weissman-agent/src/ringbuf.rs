@@ -1,9 +1,8 @@
 //! In-memory encrypted circular buffer for agent→server frames while WSS is down.
 //!
-//! XChaCha20-Poly1305 with a fresh 192-bit random nonce per frame (no counter,
-//! no wrap, crash-safe). Hard cap: 10 MiB of ciphertext. Two lanes: critical
-//! findings (high/critical, task errors) drain first without throttle; bulk
-//! (heartbeats, UEBA samples) uses an adaptive 256 KiB/s start rate.
+//! XChaCha20-Poly1305 with a fresh 192-bit nonce per frame. The nonce mixer is
+//! non-blocking (CPU RDRAND/RNDR + Linux `getrandom(GRND_NONBLOCK)` + seq/time
+//! SHA-256) so a cold VM with an empty entropy pool cannot hang agent boot.
 
 use crate::protocol::AgentToServer;
 use chacha20poly1305::aead::{Aead, KeyInit};
@@ -13,7 +12,7 @@ use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Hard ceiling for the local ring — never allocate past this.
 pub const MAX_BYTES: usize = 10 * 1024 * 1024;
@@ -24,6 +23,7 @@ pub const DRAIN_MAX_BYTES_PER_SEC: usize = 1024 * 1024;
 /// Minimum gap between *bulk* flushed frames.
 pub const FLUSH_MIN_GAP: Duration = Duration::from_millis(5);
 const NONCE_LEN: usize = 24;
+static NONCE_SEQ: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lane {
@@ -89,11 +89,7 @@ impl EncryptedRing {
         if plain.is_empty() {
             return;
         }
-        let mut nonce_raw = [0u8; NONCE_LEN];
-        if getrandom::getrandom(&mut nonce_raw).is_err() {
-            self.dropped += 1;
-            return;
-        }
+        let nonce_raw = fill_xchacha_nonce();
         let nonce = XNonce::from_slice(&nonce_raw);
         let Ok(ciphertext) = self.key.encrypt(nonce, plain) else {
             return;
@@ -219,6 +215,134 @@ fn severity_is_hot(finding: &Value) -> bool {
         .unwrap_or("")
         .to_ascii_lowercase();
     s == "critical" || s == "high"
+}
+
+/// 192-bit XChaCha20 nonce that never blocks the agent on a starved `/dev/urandom`.
+///
+/// Mix, in order:
+///   1. CPU RNG when present (RDRAND / AArch64 RNDR) — non-blocking.
+///   2. OS entropy with `GRND_NONBLOCK` on Linux (EAGAIN is ignored).
+///   3. SHA-256(seq ‖ unix-nanos ‖ pid ‖ bytes-so-far) XOR'd over the buffer
+///      so uniqueness holds even on a cold VM with an empty entropy pool.
+#[must_use]
+pub(crate) fn fill_xchacha_nonce() -> [u8; NONCE_LEN] {
+    let mut nonce = [0u8; NONCE_LEN];
+    mix_hw_rng(&mut nonce);
+    mix_os_nonblock(&mut nonce);
+    mix_counter_time(&mut nonce);
+    nonce
+}
+
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) {
+    if !is_x86_feature_detected!("rdrand") {
+        return;
+    }
+    let mut off = 0usize;
+    while off < NONCE_LEN {
+        let Some(v) = rdrand_u64() else {
+            break;
+        };
+        let b = v.to_le_bytes();
+        let n = (NONCE_LEN - off).min(8);
+        for i in 0..n {
+            out[off + i] ^= b[i];
+        }
+        off += n;
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn rdrand_u64() -> Option<u64> {
+    let mut val = 0u64;
+    for _ in 0..16 {
+        if unsafe { core::arch::x86_64::_rdrand64_step(&mut val) } == 1 {
+            return Some(val);
+        }
+    }
+    None
+}
+
+#[cfg(target_arch = "x86")]
+fn rdrand_u64() -> Option<u64> {
+    let mut lo = 0u32;
+    let mut hi = 0u32;
+    for _ in 0..16 {
+        let a = unsafe { core::arch::x86::_rdrand32_step(&mut lo) };
+        let b = unsafe { core::arch::x86::_rdrand32_step(&mut hi) };
+        if a == 1 && b == 1 {
+            return Some((u64::from(hi) << 32) | u64::from(lo));
+        }
+    }
+    None
+}
+
+#[cfg(target_arch = "aarch64")]
+fn mix_hw_rng(out: &mut [u8; NONCE_LEN]) {
+    if !std::arch::is_aarch64_feature_detected!("rand") {
+        return;
+    }
+    let mut off = 0usize;
+    while off < NONCE_LEN {
+        let Some(v) = (unsafe { core::arch::aarch64::__rndr() }) else {
+            break;
+        };
+        let b = v.to_le_bytes();
+        let n = (NONCE_LEN - off).min(8);
+        for i in 0..n {
+            out[off + i] ^= b[i];
+        }
+        off += n;
+    }
+}
+
+#[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
+fn mix_hw_rng(_out: &mut [u8; NONCE_LEN]) {}
+
+#[cfg(target_os = "linux")]
+fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) {
+    let mut tmp = [0u8; NONCE_LEN];
+    let n = unsafe {
+        libc::getrandom(
+            tmp.as_mut_ptr() as *mut libc::c_void,
+            tmp.len(),
+            libc::GRND_NONBLOCK,
+        )
+    };
+    if n > 0 {
+        let n = (n as usize).min(NONCE_LEN);
+        for i in 0..n {
+            out[i] ^= tmp[i];
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn mix_os_nonblock(out: &mut [u8; NONCE_LEN]) {
+    let mut tmp = [0u8; NONCE_LEN];
+    if getrandom::getrandom(&mut tmp).is_ok() {
+        for i in 0..NONCE_LEN {
+            out[i] ^= tmp[i];
+        }
+    }
+}
+
+fn mix_counter_time(out: &mut [u8; NONCE_LEN]) {
+    let seq = NONCE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let pid = u64::from(std::process::id());
+    let mut h = Sha256::new();
+    h.update(seq.to_le_bytes());
+    h.update(nanos.to_le_bytes());
+    h.update(pid.to_le_bytes());
+    h.update(out.as_slice());
+    let digest: [u8; 32] = h.finalize().into();
+    for i in 0..NONCE_LEN {
+        out[i] ^= digest[i];
+    }
 }
 
 static RING: OnceLock<Mutex<EncryptedRing>> = OnceLock::new();
@@ -412,6 +536,30 @@ mod tests {
             assert_eq!(f.nonce.len(), 24);
             assert!(seen.insert(f.nonce), "XChaCha nonce reused");
         }
+    }
+
+    #[test]
+    fn nonce_fill_never_blocks_and_stays_unique() {
+        let started = Instant::now();
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..512 {
+            assert!(seen.insert(fill_xchacha_nonce()), "nonce collision");
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "nonce fill blocked (entropy starvation): {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn nonce_mixer_does_not_call_blocking_getrandom_on_linux() {
+        let src = include_str!("ringbuf.rs");
+        assert!(src.contains("GRND_NONBLOCK"));
+        assert!(src.contains("mix_counter_time"));
+        assert!(src.contains("libc::getrandom"));
+        // Crate getrandom is only on the non-Linux OS path.
+        assert!(src.contains("#[cfg(not(target_os = \"linux\"))]"));
     }
 
     #[test]

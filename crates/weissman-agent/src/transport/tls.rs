@@ -61,20 +61,38 @@ fn leaf_sha256(cert: &CertificateDer<'_>) -> [u8; 32] {
 fn combined_roots() -> RootCertStore {
     let mut roots = RootCertStore::empty();
     roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    // rustls-native-certs 0.8 returns CertificateResult (certs + per-cert errors),
-    // not Result. Enterprise SSL-inspection CAs live in this store.
-    let native = rustls_native_certs::load_native_certs();
-    if !native.errors.is_empty() {
+    let stats = absorb_native_certs(&mut roots);
+    if stats.load_errors > 0 || stats.skipped_parse > 0 {
         tracing::debug!(
             target: "agent",
-            errors = native.errors.len(),
-            "some native TLS roots were skipped"
+            added = stats.added,
+            skipped_parse = stats.skipped_parse,
+            load_errors = stats.load_errors,
+            "native TLS roots merged with fault-tolerant parse"
         );
     }
-    for c in native.certs {
-        let _ = roots.add(c);
-    }
     roots
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct NativeCertStats {
+    added: usize,
+    skipped_parse: usize,
+    load_errors: usize,
+}
+
+/// Load the host trust store one cert at a time. Expired / SHA-1 / truncated
+/// enterprise CAs are skipped; they must not fail the whole bundle (rustls is
+/// stricter than the OS store, and one junk CA would otherwise block WSS).
+fn absorb_native_certs(roots: &mut RootCertStore) -> NativeCertStats {
+    let native = rustls_native_certs::load_native_certs();
+    let load_errors = native.errors.len();
+    let (added, skipped_parse) = roots.add_parsable_certificates(native.certs);
+    NativeCertStats {
+        added,
+        skipped_parse,
+        load_errors,
+    }
 }
 
 #[derive(Debug)]
@@ -232,5 +250,27 @@ mod tests {
     fn rustls_config_unions_webpki_roots() {
         let cfg = rustls_client_config();
         assert!(cfg.is_ok(), "webpki roots must populate the store: {cfg:?}");
+    }
+
+    #[test]
+    fn garbage_native_cert_is_skipped_not_fatal() {
+        let mut roots = RootCertStore::empty();
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let before = roots.len();
+        let garbage = vec![
+            CertificateDer::from(vec![0x30, 0x00, 0xff, 0x00]),
+            CertificateDer::from(vec![0u8; 8]),
+            CertificateDer::from(b"not-a-certificate".to_vec()),
+        ];
+        let (added, skipped) = roots.add_parsable_certificates(garbage);
+        assert_eq!(added, 0);
+        assert_eq!(skipped, 3);
+        assert_eq!(roots.len(), before, "webpki roots must survive junk CAs");
+        assert!(!combined_roots().is_empty());
+    }
+
+    #[test]
+    fn combined_roots_never_empty() {
+        assert!(!combined_roots().is_empty());
     }
 }

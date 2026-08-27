@@ -3,11 +3,13 @@
 //! Primary (and only) process path: `NtQuerySystemInformation(SystemProcessInformation)` —
 //! the same kernel table Task Manager uses, without spawning `tasklist.exe`.
 //! There is **no** ToolHelp fallback: the ToolHelp snapshot family is a loud EDR
-//! tripwire on unsigned binaries. If NTAPI is blocked, report an empty sample
-//! rather than lighting up the host EDR.
+//! tripwire on unsigned binaries. If NTAPI is blocked, `sample_process_table`
+//! returns `SampleError` so UEBA can set `sampling_failed` instead of sending
+//! `process_count = 0` (that zero looks like mass process death to the server
+//! z-score path and can page isolate_host).
 //! Listeners: `GetExtendedTcpTable` (AF_INET + AF_INET6), never `netstat`/`lsof`.
 
-use super::{ListenPort, ProcessRecord};
+use super::{ListenPort, ProcessRecord, SampleError};
 use std::ptr;
 
 const SYSTEM_PROCESS_INFORMATION: i32 = 5;
@@ -53,7 +55,15 @@ mod nt_layout {
 }
 
 pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
-    nt_query_processes(full).unwrap_or_default()
+    sample_process_table(full).unwrap_or_default()
+}
+
+pub fn sample_process_table(full: bool) -> Result<Vec<ProcessRecord>, SampleError> {
+    match nt_query_processes(full) {
+        None => Err(SampleError::syscall("NtQuerySystemInformation")),
+        Some(rows) if rows.is_empty() => Err(SampleError::empty_table()),
+        Some(rows) => Ok(rows),
+    }
 }
 
 pub fn list_listen_ports() -> Vec<ListenPort> {
