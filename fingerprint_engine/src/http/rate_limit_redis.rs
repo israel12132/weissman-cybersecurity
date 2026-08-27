@@ -199,7 +199,7 @@ pub async fn top_endpoints(tenant_id: i64, cap: usize) -> Vec<(String, u32)> {
 }
 
 // ── Distributed login lockout (keyed by tenant + normalized email) ─────────────
-use super::login_lockout::{LOCKOUT_MAX_FAILURES, LOCKOUT_SECS};
+use super::login_lockout::{IP_LOCKOUT_SECS, LOCKOUT_MAX_FAILURES, LOCKOUT_SECS};
 
 fn lockout_fail_key(tenant_id: i64, email: &str) -> String {
     format!(
@@ -393,4 +393,69 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
         Duration::from_secs(1),
     )
     .await
+}
+
+// ── Distributed per-IP failed-login lockout (credential stuffing) ──────────────
+
+fn ip_lockout_fail_key(client_ip: &str) -> String {
+    format!("weissman:lockout:ipfail:{}", client_ip.trim())
+}
+fn ip_lockout_until_key(client_ip: &str) -> String {
+    format!("weissman:lockout:ipuntil:{}", client_ip.trim())
+}
+
+/// Strict per-IP stuffing check — surfaces Redis outage separately from "not locked".
+pub async fn ip_lockout_check_strict(client_ip: &str) -> StrictOp<Option<u64>> {
+    let Some(rl) = shared() else {
+        return if distributed_state_required() {
+            StrictOp::Unavailable
+        } else {
+            StrictOp::Ok(None)
+        };
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return StrictOp::Unavailable;
+    };
+    let ttl: i64 = match conn.ttl(ip_lockout_until_key(client_ip)).await {
+        Ok(t) => t,
+        Err(_) => return StrictOp::Unavailable,
+    };
+    if ttl > 0 {
+        StrictOp::Ok(Some(ttl as u64))
+    } else {
+        StrictOp::Ok(None)
+    }
+}
+
+/// Record a failed login against the client IP; locks once the failure budget is spent.
+pub async fn ip_lockout_record_failure(client_ip: &str) {
+    let Some(rl) = shared() else {
+        return;
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return;
+    };
+    let fk = ip_lockout_fail_key(client_ip);
+    let count: u64 = conn.incr(&fk, 1u64).await.unwrap_or(0);
+    if count == 1 {
+        let _: Result<(), _> = conn.expire(&fk, IP_LOCKOUT_SECS as i64).await;
+    }
+    let max = super::login_lockout::ip_fail_max();
+    if count >= max {
+        let _: Result<(), _> = conn
+            .set_ex(ip_lockout_until_key(client_ip), 1i64, IP_LOCKOUT_SECS)
+            .await;
+    }
+}
+
+/// Clear per-IP stuffing counters (tests). Successful logins do not call this.
+pub async fn ip_lockout_clear(client_ip: &str) {
+    let Some(rl) = shared() else {
+        return;
+    };
+    let Ok(mut conn) = rl.conn().await else {
+        return;
+    };
+    let _: Result<(), _> = conn.del(ip_lockout_fail_key(client_ip)).await;
+    let _: Result<(), _> = conn.del(ip_lockout_until_key(client_ip)).await;
 }

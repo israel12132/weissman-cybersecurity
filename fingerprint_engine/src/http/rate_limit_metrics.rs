@@ -85,14 +85,23 @@ pub fn scan_burst() -> u32 {
     nz_env("WEISSMAN_TENANT_SCAN_BURST", 12, 2, 120)
 }
 
+/// Volumetric bcrypt/argon ceiling for login POSTs (DoS shed), not stuffing defense.
+/// Floor 32 so CI / cockpit / cloud-agent bursts from one NAT cannot be configured
+/// into a self-inflicted 429. Stuffing is [`login_fail_per_minute`].
 #[must_use]
 pub fn login_limit_per_minute() -> u32 {
-    nz_env("WEISSMAN_LOGIN_PER_MINUTE", 8, 2, 60)
+    nz_env("WEISSMAN_LOGIN_PER_MINUTE", 120, 32, 600)
 }
 
 #[must_use]
 pub fn login_burst() -> u32 {
-    nz_env("WEISSMAN_LOGIN_BURST", 12, 2, 120)
+    nz_env("WEISSMAN_LOGIN_BURST", 64, 32, 240)
+}
+
+/// Failed logins per IP per minute before the stuffing lockout fires.
+#[must_use]
+pub fn login_fail_per_minute() -> u32 {
+    nz_env("WEISSMAN_LOGIN_FAIL_PER_MINUTE", 20, 8, 80)
 }
 
 #[must_use]

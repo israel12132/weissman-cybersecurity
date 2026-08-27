@@ -740,7 +740,7 @@ async fn api_openapi_spec() -> Response {
                     "responses": {
                         "200": { "description": "Login successful; JWT in response body and HttpOnly cookie." },
                         "401": { "description": "Invalid credentials" },
-                        "429": { "description": "Rate limited per IP — see WEISSMAN_LOGIN_PER_MINUTE (default 8/min, burst 12)" }
+                        "429": { "description": "Per-IP stuffing lockout after too many *failed* logins (WEISSMAN_LOGIN_FAIL_PER_MINUTE, default 20) or bcrypt volume ceiling (WEISSMAN_LOGIN_PER_MINUTE, default 120, burst 64). Successful parallel CI/cockpit logins from one NAT are not 429'd. Per-email lockout after 10 failures." }
                     }
                 }
             },

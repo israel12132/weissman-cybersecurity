@@ -2397,6 +2397,15 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     let email = body.email.trim();
     let password = body.password.as_str();
     let slug = body.tenant_slug.trim();
+    match crate::http::check_ip_failure_status(&ip).await {
+        crate::http::LockoutStatus::Locked(secs) => {
+            return crate::http::ip_locked_response(secs);
+        }
+        crate::http::LockoutStatus::DistributedStoreUnavailable => {
+            return crate::http::rate_limit_redis::distributed_store_unavailable_response();
+        }
+        crate::http::LockoutStatus::Allowed => {}
+    }
     let Some(tenant_key) = resolve_login_tenant_id(
         state.auth_pool.as_ref(),
         state.app_pool.as_ref(),
@@ -2407,6 +2416,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
     else {
         // Same generic 401 as a bad password — do not leak whether the email exists.
         let _ = bcrypt::verify(password, login_timing_equalizer_hash());
+        crate::http::record_login_failure(0, email, &ip).await;
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok": false, "detail": "Invalid email or password"})),
@@ -2506,7 +2516,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 "unknown user",
             )
             .await;
-            crate::http::record_failure(tenant_key, email).await;
+            crate::http::record_login_failure(tenant_key, email, &ip).await;
             return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
         }
     };
@@ -2522,7 +2532,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
             "empty password hash",
         )
         .await;
-        crate::http::record_failure(tenant_key, email).await;
+        crate::http::record_login_failure(tenant_key, email, &ip).await;
         return (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response();
     }
     let mut password_ok = matches!(bcrypt::verify(password, &hash), Ok(true));
@@ -2670,7 +2680,7 @@ async fn api_login(State(state): State<Arc<AppState>>, ConnectInfo(addr): Connec
                 "invalid password",
             )
             .await;
-            crate::http::record_failure(tenant_key, email).await;
+            crate::http::record_login_failure(tenant_key, email, &ip).await;
             (StatusCode::UNAUTHORIZED, Json(json!({"ok": false, "detail": "Invalid email or password"}))).into_response()
         }
 }

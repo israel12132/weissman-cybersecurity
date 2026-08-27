@@ -114,6 +114,35 @@ done
 dupes="$(grep -ci '^x-content-type-options:' <<<"$hdrs")"
 [[ "$dupes" == "1" ]] && ok "security headers are not duplicated" || bad "x-content-type-options appears $dupes times"
 
+# ── Parallel POST /api/login must not 429 at the gateway ────────────────────────
+# Previous contract: 30r/m burst=10 nodelay. 32 concurrent POSTs from one address
+# (CI + cockpit + cloud agents sharing a NAT) 429'd before the app could tell a
+# valid login from stuffing. Flood shed is now 10r/s burst=80; stuffing is the app.
+gw_login_dir="$WORK/login_burst"
+mkdir -p "$gw_login_dir"
+for i in $(seq 1 32); do
+  curl -s -o /dev/null -m 8 -w '%{http_code}' -X POST \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"ci@localhost","password":"unused"}' \
+    "$B/api/login" > "$gw_login_dir/$i.code" &
+done
+wait
+login_429=0
+login_other=0
+for f in "$gw_login_dir"/*.code; do
+  code="$(cat "$f")"
+  if [[ "$code" == "429" ]]; then
+    login_429=$((login_429 + 1))
+  elif [[ "$code" != "200" ]]; then
+    login_other=$((login_other + 1))
+  fi
+done
+if [[ "$login_429" -eq 0 && "$login_other" -eq 0 ]]; then
+  ok "32 parallel POST /api/login from one IP are not 429'd at the gateway"
+else
+  bad "parallel POST /api/login: 429=$login_429 other=$login_other (want 32 x 200)"
+fi
+
 echo
 printf 'Gateway contract: %d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

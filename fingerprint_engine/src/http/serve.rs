@@ -281,7 +281,7 @@ async fn auth_guard(
 ) -> Response {
     let path = request.uri().path();
     let method = request.method();
-    // Unauthenticated login + MFA verify (per-IP rate limit + per-email lockout in handlers).
+    // Unauthenticated login + MFA verify (per-IP failure stuffing lockout + per-email lockout).
     if crate::http::is_account_lockout_post(method, path) {
         return next.run(request).await;
     }
@@ -1837,7 +1837,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))
