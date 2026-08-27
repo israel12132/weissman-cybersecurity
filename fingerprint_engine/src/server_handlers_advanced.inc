@@ -1010,6 +1010,10 @@ struct PlaybookFireBody {
     event: crate::soar_playbook::PlaybookEvent,
     #[serde(default)]
     dry_run: bool,
+    #[serde(default)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 async fn api_playbooks_fire(
@@ -1019,7 +1023,12 @@ async fn api_playbooks_fire(
     Json(body): Json<PlaybookFireBody>,
 ) -> Response {
     if !body.dry_run {
-        if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+        if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+            &headers,
+            &auth,
+            crate::security_hardening::nonempty_token(&body.destructive_confirm),
+            crate::security_hardening::nonempty_token(&body.dual_approve),
+        ) {
             return r;
         }
     } else if let Err(r) = crate::rbac::require_operator(&auth) {
@@ -1213,8 +1222,14 @@ async fn api_soar_execution_revert(
     Extension(auth): Extension<AuthContext>,
     headers: axum::http::HeaderMap,
     Path(id): Path<uuid::Uuid>,
+    Json(body): Json<SoarHitlBody>,
 ) -> Response {
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     match crate::soar::revert_execution(&state.app_pool, auth.tenant_id, id).await {
@@ -1227,6 +1242,10 @@ async fn api_soar_execution_revert(
 struct SoarHitlBody {
     #[serde(default)]
     reason: String,
+    #[serde(default)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 async fn api_soar_hitl_approve(
@@ -1234,8 +1253,14 @@ async fn api_soar_hitl_approve(
     Extension(auth): Extension<AuthContext>,
     headers: axum::http::HeaderMap,
     Path(id): Path<uuid::Uuid>,
+    Json(body): Json<SoarHitlBody>,
 ) -> Response {
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     match crate::soar::approve_hitl(&state.app_pool, auth.tenant_id, id, auth.user_id).await {
@@ -1256,7 +1281,12 @@ async fn api_soar_hitl_deny(
     Path(id): Path<uuid::Uuid>,
     Json(body): Json<SoarHitlBody>,
 ) -> Response {
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     match crate::soar::deny_hitl(

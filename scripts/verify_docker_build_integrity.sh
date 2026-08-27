@@ -30,7 +30,8 @@ for path in \
   deploy/backend.Dockerfile \
   deploy/frontend.Dockerfile \
   deploy/oast.Dockerfile \
-  deploy/nginx-gateway.conf
+  deploy/nginx-gateway.conf \
+  deploy/nginx-strip-internal-headers.inc
 do
   [[ -e "$path" ]] && ok "exists $path" || bad "missing $path"
 done

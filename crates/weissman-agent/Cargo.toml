@@ -37,6 +37,7 @@ whoami = "1"
 sha2 = "0.10"
 hex = "0.4"
 hmac = { version = "0.12", features = ["std"] }
+aes-gcm = "0.10"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 # Random nonce + uuid.
@@ -59,6 +60,7 @@ anyhow = "1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Security_Cryptography",
     "Win32_System_Registry",
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",

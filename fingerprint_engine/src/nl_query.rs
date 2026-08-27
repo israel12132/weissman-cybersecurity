@@ -543,6 +543,9 @@ pub async fn ask(
     res
 }
 
+/// Insert a sealed audit row without taking `FOR UPDATE`. Hash chaining runs on
+/// the background worker (`nl_audit_chain`) so concurrent Ask requests are not
+/// serialized behind each other's LLM round-trips.
 async fn audit_query(
     app_pool: &PgPool,
     tenant_id: i64,
@@ -557,28 +560,7 @@ async fn audit_query(
         let error = res.error.clone().unwrap_or_default();
         let rows_returned = res.row_count as i32;
         let elapsed_ms = res.elapsed_ms as i32;
-        let prev_hash: String = sqlx::query_scalar(
-            "SELECT COALESCE(event_hash, '') FROM nl_query_audit
-             WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1 FOR UPDATE",
-        )
-        .bind(tenant_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-        let canonical = crate::nl_audit_crypto::canonical_nl_audit_payload(
-            &prev_hash,
-            tenant_id,
-            user_id,
-            &sealed_q,
-            &sealed_sql,
-            rows_returned,
-            elapsed_ms,
-            &error,
-        );
-        let event_hash = crate::nl_audit_crypto::event_hash(&canonical);
-        let _ = sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO nl_query_audit
                 (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
                  rows_returned, elapsed_ms, error, prev_hash, event_hash)
@@ -594,11 +576,14 @@ async fn audit_query(
         .bind(rows_returned)
         .bind(elapsed_ms)
         .bind(&error)
-        .bind(&prev_hash)
-        .bind(&event_hash)
+        .bind(crate::nl_audit_chain::UNCHAINED)
+        .bind(crate::nl_audit_chain::UNCHAINED)
         .execute(&mut *tx)
         .await;
-        let _ = tx.commit().await;
+        if inserted.is_ok() {
+            let _ = tx.commit().await;
+            crate::nl_audit_chain::notify(tenant_id);
+        }
     }
 }
 

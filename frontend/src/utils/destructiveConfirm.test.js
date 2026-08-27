@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { dualControlHeaders, persistDualControlTokens, loadDestructiveConfirmToken, loadDualApproveToken } from './destructiveConfirm'
+import {
+  dualControlHeaders,
+  dualControlBody,
+  persistDualControlTokens,
+  loadDestructiveConfirmToken,
+  loadDualApproveToken,
+} from './destructiveConfirm'
 
 describe('dualControlHeaders', () => {
   beforeEach(() => {
@@ -25,5 +31,25 @@ describe('dualControlHeaders', () => {
     persistDualControlTokens('a', 'b', false)
     expect(loadDestructiveConfirmToken()).toBe('')
     expect(loadDualApproveToken()).toBe('')
+  })
+})
+
+describe('dualControlBody', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+  })
+
+  it('puts tokens in JSON fields for the public gateway path', () => {
+    const body = dualControlBody('confirm-secret', 'dual-secret', { reason: 'ok' })
+    expect(body.destructive_confirm).toBe('confirm-secret')
+    expect(body.dual_approve).toBe('dual-secret')
+    expect(body.reason).toBe('ok')
+  })
+
+  it('falls back to session storage', () => {
+    persistDualControlTokens('from-session', 'dual-session', true)
+    const body = dualControlBody('', '', { reason: '' })
+    expect(body.destructive_confirm).toBe('from-session')
+    expect(body.dual_approve).toBe('dual-session')
   })
 })

@@ -968,7 +968,7 @@
   },
   "dual_control": {
     "title": "Dual control",
-    "hint": "Destructive SOAR and signed agent kill require both X-Weissman-Destructive-Confirm and X-Weissman-Dual-Approve. Tokens stay in this session only when remembered.",
+    "hint": "Destructive SOAR and signed agent kill require both confirm and second-operator tokens. The public gateway strips X-Weissman dual-control headers; tokens are sent in the JSON body. They stay in this session only when remembered.",
     "confirm_label": "Destructive confirm",
     "dual_label": "Second-operator approve",
     "reason_optional": "Reason (optional)",

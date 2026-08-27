@@ -1200,6 +1200,8 @@ struct ClientConfigBody {
     critical_infra_probe_authorized: Option<bool>,
     /// Target whitelist for critical-infrastructure probes (hosts, CIDRs, domains).
     critical_infra_targets: Option<Vec<String>>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
 }
 
 #[derive(Deserialize)]
@@ -1330,6 +1332,10 @@ struct AutoHealBody {
     channel: Option<String>,
     /// Optional curl for the post-patch health/control probe; empty ⇒ GET the app root.
     health_check_curl: Option<String>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 #[derive(Deserialize)]
@@ -1341,6 +1347,10 @@ struct HealRevertBody {
     gitlab_host: Option<String>,
     #[serde(default)]
     delete_branch: Option<bool>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 #[derive(Deserialize)]
@@ -1351,6 +1361,10 @@ struct HealBatchBody {
     base_branch: Option<String>,
     channel: Option<String>,
     health_check_curl: Option<String>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 #[derive(Deserialize)]
@@ -1393,6 +1407,8 @@ struct DeceptionDeployCloudBody {
     s3_object_key: Option<String>,
     s3_region: Option<String>,
     ssm_parameter_path: Option<String>,
+    #[serde(default, skip_serializing)]
+    destructive_confirm: String,
 }
 
 const DEFAULT_CLIENT_CONFIGS_JSON: &str = r#"{"enabled_engines":["osint","asm","supply_chain","bola_idor","llm_path_fuzz","semantic_ai_fuzz","microsecond_timing","ai_adversarial_redteam","nexus_sovereign_swarm"],"roe_mode":"safe_proofs","stealth_level":50,"industrial_ot_enabled":false}"#;
@@ -1542,6 +1558,9 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
         );
     }
     crate::agent_registry_sync::spawn_agent_registry_redis_sync(state.endpoint_agents.clone());
+    // Every replica: Ask Weissman hash-chain is per-process mpsc + DB sweep.
+    // FOR UPDATE lives here, never on the HTTP insert path.
+    crate::nl_audit_chain::spawn(app_pool.clone());
     // Cross-replica real-time: bridge the live telemetry broadcast over Redis pub/sub so
     // SSE/WS clients on every replica see events produced on any replica (no-op without REDIS_URL).
     crate::telemetry_bus::spawn_bridge("telemetry", (*state.telemetry_broadcast_tx).clone());

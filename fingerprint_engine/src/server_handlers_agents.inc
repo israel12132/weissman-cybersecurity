@@ -577,6 +577,10 @@ async fn api_agents_dispatch_task(
 struct AgentKillBody {
     #[serde(default)]
     reason: String,
+    #[serde(default)]
+    destructive_confirm: String,
+    #[serde(default)]
+    dual_approve: String,
 }
 
 async fn api_agents_kill_switch(
@@ -586,7 +590,12 @@ async fn api_agents_kill_switch(
     Path(agent_id): Path<String>,
     Json(body): Json<AgentKillBody>,
 ) -> Response {
-    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized(&headers, &auth) {
+    if let Err(r) = crate::security_hardening::destructive_admin_dual_authorized_with(
+        &headers,
+        &auth,
+        crate::security_hardening::nonempty_token(&body.destructive_confirm),
+        crate::security_hardening::nonempty_token(&body.dual_approve),
+    ) {
         return r;
     }
     let reason = if body.reason.trim().is_empty() {

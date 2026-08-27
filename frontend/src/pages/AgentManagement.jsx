@@ -20,6 +20,7 @@ import DualControlGate from '../components/ui/DualControlGate'
 import { confirmDialog } from '../utils/confirmDialog'
 import {
   dualControlHeaders,
+  dualControlBody,
   loadDestructiveConfirmToken,
   loadDualApproveToken,
   persistDualControlTokens,
@@ -153,7 +154,7 @@ export default function AgentManagement() {
       const d = await apiFetch(`/api/agents/${encodeURIComponent(selectedAgent.agent_id)}/kill-switch`, {
         method: 'POST',
         headers: dualControlHeaders(killConfirm, killDual),
-        body: { reason: killReason || t('agents.kill_default_reason') },
+        body: dualControlBody(killConfirm, killDual, { reason: killReason || t('agents.kill_default_reason') }),
       })
       setKillResult(d)
     } catch (e) {

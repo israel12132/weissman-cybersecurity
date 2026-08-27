@@ -898,7 +898,7 @@
   },
   "dual_control": {
     "title": "בקרה כפולה",
-    "hint": "פעולות SOAR הרסניות ו-kill חתום דורשים גם X-Weissman-Destructive-Confirm וגם X-Weissman-Dual-Approve. הטוקנים נשארים בסשן רק אם בוחרים לזכור.",
+    "hint": "פעולות SOAR הרסניות ו-kill חתום דורשים טוקן אישור וטוקן מפעיל שני. השער הציבורי מנקה כותרות X-Weissman של בקרה כפולה; הטוקנים נשלחים בגוף ה-JSON. הם נשארים בסשן רק אם בוחרים לזכור.",
     "confirm_label": "אישור הרסני",
     "dual_label": "אישור מפעיל שני",
     "reason_optional": "סיבה (אופציונלי)",

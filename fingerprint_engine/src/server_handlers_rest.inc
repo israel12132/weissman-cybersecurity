@@ -1224,7 +1224,10 @@ async fn api_client_config_patch(
             let confirm_secret =
                 std::env::var("WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET").unwrap_or_default();
             let header_bypass = !confirm_secret.trim().is_empty()
-                && crate::security_hardening::destructive_action_authorized(&headers);
+                && crate::security_hardening::destructive_action_authorized_with(
+                    &headers,
+                    crate::security_hardening::nonempty_token(&body.destructive_confirm),
+                );
 
             if old_roe == "weaponized_god_mode" || header_bypass {
                 config.insert(

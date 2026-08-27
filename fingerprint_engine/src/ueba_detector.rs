@@ -12,9 +12,12 @@
 //!      the metric has accumulated ≥ 24 observations.
 //!
 //! Numeric z-score stays silent until the metric has ≥ 24 samples. Never-before-seen
-//! ports and processes fire even during the learning window (extreme categorical
-//! novelty). Baselines are keyed per (agent, metric) — NOT per hour-of-week.
+//! ports and processes fire after the learning window **and** after a short onboarding
+//! grace (15–30 minutes from `endpoint_agents.enrolled_at`, default 20). During grace the
+//! detector still writes observed ports/processes into `learned_set` so the first live
+//! map of the host becomes the baseline instead of an SOC alert storm.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -84,6 +87,10 @@ fn scrub_pii_string(s: &str) -> String {
     out
 }
 const MIN_BASELINE_SAMPLES: i32 = 24;
+/// Default onboarding grace: 20 minutes. Clamp is 15–30 minutes.
+const DEFAULT_ONBOARDING_GRACE_SECS: i64 = 20 * 60;
+const MIN_ONBOARDING_GRACE_SECS: i64 = 15 * 60;
+const MAX_ONBOARDING_GRACE_SECS: i64 = 30 * 60;
 /// Canonical `hour_of_week` value baselines are stored under. Baselines are kept
 /// per (agent, metric) — the raw samples still record their real hour-of-week —
 /// so a single row accumulates the full rolling window instead of being scattered
@@ -96,6 +103,23 @@ pub struct UebaIngestPayload {
     pub client_id: i64,
     pub hour_of_week: i16,
     pub metrics: Value,
+}
+
+/// Seconds after first enrollment during which new ports/processes are learned
+/// silently. Operator override `WEISSMAN_UEBA_ONBOARDING_GRACE_SECS` is clamped
+/// to 15–30 minutes so a typo cannot disable the storm shield or extend it forever.
+#[must_use]
+pub fn onboarding_grace_secs() -> i64 {
+    std::env::var("WEISSMAN_UEBA_ONBOARDING_GRACE_SECS")
+        .ok()
+        .and_then(|s| s.trim().parse::<i64>().ok())
+        .unwrap_or(DEFAULT_ONBOARDING_GRACE_SECS)
+        .clamp(MIN_ONBOARDING_GRACE_SECS, MAX_ONBOARDING_GRACE_SECS)
+}
+
+#[must_use]
+pub fn in_onboarding_grace(enrolled_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+    now.signed_duration_since(enrolled_at).num_seconds() < onboarding_grace_secs()
 }
 
 /// Public entry point — called by the server when an agent posts a `ueba_baseline`
@@ -129,6 +153,24 @@ pub async fn ingest_sample(
     .await
     .map_err(|e| format!("insert sample: {e}"))?;
 
+    let enrolled_at: Option<DateTime<Utc>> = if let Ok(uuid) = p.agent_id.parse::<uuid::Uuid>() {
+        sqlx::query_scalar(
+            "SELECT enrolled_at FROM endpoint_agents
+              WHERE tenant_id = $1 AND agent_uuid = $2",
+        )
+        .bind(tenant_id)
+        .bind(uuid)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+    let onboarding_grace = enrolled_at
+        .map(|ts| in_onboarding_grace(ts, Utc::now()))
+        .unwrap_or(false);
+
     // Re-compute baselines for every numeric metric we saw in this sample.
     let mut summary = UebaIngestSummary::default();
     if let Value::Object(obj) = &scrubbed {
@@ -155,6 +197,7 @@ pub async fn ingest_sample(
                 "open_ports",
                 &observed.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
                 "Unfamiliar TCP port listening on host",
+                onboarding_grace,
             )
             .await?
             {
@@ -174,6 +217,7 @@ pub async fn ingest_sample(
                 "top_processes",
                 &observed,
                 "Unfamiliar process observed running on host",
+                onboarding_grace,
             )
             .await?
             {
@@ -343,6 +387,7 @@ async fn check_new_categorical(
     metric: &str,
     observed: &[String],
     title: &str,
+    onboarding_grace: bool,
 ) -> Result<Option<AnomalyRecord>, String> {
     // Read the current learned_set.
     let row: Option<(serde_json::Value, i32)> = sqlx::query_as(
@@ -405,6 +450,9 @@ async fn check_new_categorical(
     .await;
 
     if new_items.is_empty() {
+        return Ok(None);
+    }
+    if onboarding_grace && (metric == "open_ports" || metric == "top_processes") {
         return Ok(None);
     }
     let learning = n_obs < MIN_BASELINE_SAMPLES;
@@ -477,6 +525,7 @@ pub fn spawn_retention_loop(pool: Arc<PgPool>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
     use serde_json::json;
     #[test]
     fn z_threshold_constant() {
@@ -503,9 +552,33 @@ mod tests {
     }
     #[test]
     fn min_samples_protects_numeric_learning_window() {
-        // Numeric z-score stays silent until trained. Categorical novelty (new
-        // port / process) is allowed to fire during learning.
+        // Numeric z-score stays silent until trained. Categorical novelty for
+        // ports/processes is suppressed during onboarding grace, then may fire
+        // during the remaining learning window.
         assert!(MIN_BASELINE_SAMPLES >= 24);
+    }
+
+    #[test]
+    fn onboarding_grace_covers_cold_start_window() {
+        let enrolled = Utc::now() - chrono::Duration::minutes(5);
+        assert!(in_onboarding_grace(enrolled, Utc::now()));
+        let aged = Utc::now() - chrono::Duration::minutes(45);
+        assert!(!in_onboarding_grace(aged, Utc::now()));
+        let secs = onboarding_grace_secs();
+        assert!(secs >= 15 * 60 && secs <= 30 * 60);
+    }
+
+    #[test]
+    fn onboarding_grace_secs_clamps() {
+        let parsed = |raw: Option<&str>| {
+            raw.and_then(|s| s.trim().parse::<i64>().ok())
+                .unwrap_or(DEFAULT_ONBOARDING_GRACE_SECS)
+                .clamp(MIN_ONBOARDING_GRACE_SECS, MAX_ONBOARDING_GRACE_SECS)
+        };
+        assert_eq!(parsed(Some("60")), MIN_ONBOARDING_GRACE_SECS);
+        assert_eq!(parsed(Some("99999")), MAX_ONBOARDING_GRACE_SECS);
+        assert_eq!(parsed(Some("1200")), 1200);
+        assert_eq!(parsed(None), DEFAULT_ONBOARDING_GRACE_SECS);
     }
     #[test]
     fn baselines_use_the_global_bucket_not_hour_of_week() {

@@ -15,6 +15,7 @@ import Button from '../components/ui/Button'
 import DualControlGate from '../components/ui/DualControlGate'
 import {
   dualControlHeaders,
+  dualControlBody,
   loadDestructiveConfirmToken,
   loadDualApproveToken,
   persistDualControlTokens,
@@ -195,6 +196,7 @@ export default function SoarHitlQueue() {
       await apiFetch(`/api/soar/executions/${encodeURIComponent(id)}/hitl/approve`, {
         method: 'POST',
         headers: headersForAction(),
+        body: dualControlBody(confirm, dual),
       })
       showToast(t('pages.soarHitlQueue.approved_toast'))
       await fetchQueue()
@@ -211,7 +213,7 @@ export default function SoarHitlQueue() {
       await apiFetch(`/api/soar/executions/${encodeURIComponent(id)}/hitl/deny`, {
         method: 'POST',
         headers: headersForAction(),
-        body: { reason: note || '' },
+        body: dualControlBody(confirm, dual, { reason: note || '' }),
       })
       showToast(t('pages.soarHitlQueue.denied_toast'))
       await fetchQueue()

@@ -239,6 +239,8 @@ fn hardening_migrations_20260827_identical_in_both_dirs() {
         "20260827120100_weissman_ro_dashboard_grants.sql",
         "20260827120200_nl_query_audit_encrypted.sql",
         "20260827120300_soar_hitl_and_stale_alerts.sql",
+        "20260827120400_nl_query_audit_hash_chain.sql",
+        "20260827120500_nl_query_audit_chain_update.sql",
     ];
     for name in names {
         let fe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
