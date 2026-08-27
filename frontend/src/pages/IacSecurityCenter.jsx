@@ -230,6 +230,7 @@ new aws.iam.Policy("admin", {
     type: 'cdk',
     content: `import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 new s3.Bucket(this, 'B', { blockPublicAccess: s3.BlockPublicAccess.BLOCK_NONE });
 new ec2.SecurityGroup(this, 'SG', {}).addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));`,
   },
@@ -1953,10 +1954,12 @@ export default function IacSecurityCenter() {
               <Section title={t('iacSecurity.sec_target', 'Target Binding')} icon="🎯" accent="#22d3ee" count={2}>
                 <label className="block space-y-1">
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wide">{t('common.client', 'Client')}</span>
-                  <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full rounded-lg bg-[var(--bg-3)] border border-[var(--border-default)] px-3 py-1.5 text-sm text-white focus:outline-none focus:border-cyan-400/40">
-                    <option value="">—</option>
-                    {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
-                  </select>
+                  <BoundClientScanField
+                    clients={clients}
+                    selectedClientId={selectedClientId}
+                    onChange={(id) => setSelectedClientId(id || '')}
+                    emptyLabel="—"
+                  />
                 </label>
                 <Txt label={t('iacSecurity.host_target', 'Host (exposure mode)')} value={target} onChange={setTarget} placeholder="https://target.example" hint="Probed for publicly leaked IaC files" />
               </Section>

@@ -12,6 +12,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, extractFindingsFromJob, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const FLAGSHIP_ID = 'bgp_dns_hijacking'
 
@@ -736,11 +737,12 @@ export default function NetworkIntelligence() {
       <div className="flex items-end gap-3 mb-6 flex-wrap">
         <label className="space-y-1">
           <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{t('pages.networkIntelligence.client_label')}</span>
-          <select value={selectedClientId ?? ''} onChange={(e) => { setSelectedClientId(e.target.value || null); setTargetTouched(false) }}
-            className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#f97316]/40 min-w-[180px]">
-            <option value="">{t('pages.networkIntelligence.select_client')}</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <BoundClientScanField
+            clients={clients}
+            selectedClientId={selectedClientId ?? ''}
+            onChange={(id) => { setSelectedClientId(id || null); setTargetTouched(false) }}
+            emptyLabel={t('pages.networkIntelligence.select_client')}
+          />
         </label>
         <label className="space-y-1">
           <span className="block text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{tt('target_label', 'Target host / domain')}</span>

@@ -46,8 +46,10 @@ pub struct EngineCapability {
     /// The canonical engine this id resolves to (only meaningful for aliases).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canonical: Option<String>,
-    /// True when the engine yields a real detection from a remote scan with no agent installed.
+    /// True when a remote scan can produce findings without the endpoint agent.
     pub remote_detection: bool,
+    /// True when a URL/domain is required to enqueue (matches enginesRegistry.js `requiresTarget`).
+    pub requires_target: bool,
 }
 
 /// Capability descriptor for every production engine id.
@@ -66,6 +68,7 @@ pub fn capabilities() -> Vec<EngineCapability> {
                 kind: kind.to_string(),
                 canonical,
                 remote_detection: detects_remotely(kind, id),
+                requires_target: crate::engine_target_contract::engine_requires_target(id),
             }
         })
         .collect()
@@ -166,5 +169,21 @@ mod tests {
         assert!(v["total"].as_u64().unwrap() > 400);
         assert!(v["summary"]["real_probe"].as_u64().is_some());
         assert!(v["legend"]["agent_required"].as_str().is_some());
+    }
+
+    #[test]
+    fn requires_target_matches_scan_contract() {
+        let caps = capabilities();
+        let osint = caps.iter().find(|c| c.id == "osint").expect("osint");
+        let aws = caps
+            .iter()
+            .find(|c| c.id == "aws_attack")
+            .expect("aws_attack");
+        assert!(osint.requires_target);
+        assert!(!aws.requires_target);
+        assert_eq!(
+            osint.requires_target,
+            crate::engine_target_contract::engine_requires_target("osint")
+        );
     }
 }

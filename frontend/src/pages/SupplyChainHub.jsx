@@ -13,6 +13,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const ACCENT = '#84cc16'
 
@@ -259,14 +260,12 @@ export default function SupplyChainHub() {
     >
       <div className="flex items-center gap-2 mb-6">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.supplyChainHub.client_label')}</span>
-        <select
-          value={selectedClientId ?? ''}
-          onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-[#84cc16]/40"
-        >
-          <option value="">{t('pages.supplyChainHub.select_client')}</option>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <BoundClientScanField
+          clients={clients}
+          selectedClientId={selectedClientId ?? ''}
+          onChange={(id) => setSelectedClientId(id || null)}
+          emptyLabel={t('pages.supplyChainHub.select_client')}
+        />
       </div>
 
       {toast && (

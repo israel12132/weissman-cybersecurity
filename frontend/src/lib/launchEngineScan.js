@@ -1,6 +1,7 @@
 import { apiFetch } from './apiBase'
 import { apiFetchScanIntake } from './scanIntakeRetry'
 import { buildScanPayload, mergeScanBody, normalizeIntegrations } from './engineClientPrefill'
+import { resolveEnqueueTarget } from './clientTarget'
 
 /** Fetch normalized client integrations (credentials, OAST, LLM, etc.). */
 export async function fetchClientIntegrations(clientId) {
@@ -22,14 +23,22 @@ export async function launchEngineScan({
   samplePayload = {},
   integrations = undefined,
   timeout,
+  client = null,
+  clientScopeLocked = false,
 } = {}) {
   let ints = integrations
   if (ints === undefined && clientId != null && clientId !== '') {
     ints = await fetchClientIntegrations(clientId)
   }
+  const resolvedTarget = resolveEnqueueTarget({
+    engineId,
+    target,
+    client,
+    clientScopeLocked,
+  })
   const body = buildScanPayload(engineId, {
     clientId,
-    target,
+    target: resolvedTarget,
     integrations: ints,
     samplePayload,
     extraParams,
@@ -49,14 +58,24 @@ export async function launchEngineScan({
  * POST a hub-built scan body with integration defaults merged in.
  * Use in Command Center pages that already have buildScanBody / buildBody.
  */
-export async function postEngineScan(customBody, integrations = undefined) {
+export async function postEngineScan(customBody, integrations = undefined, bindOpts = {}) {
   const engineId = customBody?.engine
   if (!engineId) throw new Error('postEngineScan: body.engine is required')
   let ints = integrations
   if (ints === undefined && customBody.client_id != null) {
     ints = await fetchClientIntegrations(customBody.client_id)
   }
-  const body = mergeScanBody(engineId, customBody, ints)
+  const resolvedTarget = resolveEnqueueTarget({
+    engineId,
+    target: customBody?.target,
+    client: bindOpts.client ?? null,
+    clientScopeLocked: bindOpts.clientScopeLocked ?? false,
+  })
+  const mergedInput = { ...customBody }
+  if (resolvedTarget) mergedInput.target = resolvedTarget
+  else delete mergedInput.target
+  const body = mergeScanBody(engineId, mergedInput, ints)
+  if (!resolvedTarget) delete body.target
   const r = await apiFetchScanIntake('/api/command-center/scan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

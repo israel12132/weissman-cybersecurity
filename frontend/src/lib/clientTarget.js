@@ -1,3 +1,8 @@
+import { ENGINES_BY_ID, TARGETLESS_ENGINE_IDS } from './enginesRegistry.js'
+
+/** Extra scan IDs accepted by the API but not in the production registry. */
+const EXTRA_TARGETLESS = new Set(['zero_day_radar'])
+
 /** First scope URL for engine targets (https:// + primary domain). */
 export function clientPrimaryTargetUrl(client) {
   if (!client) return ''
@@ -13,9 +18,9 @@ export function clientPrimaryTargetUrl(client) {
       list = []
     }
   }
-  const first = list[0] || ''
+  const first = list[0] || client.primary_domain || client.domain || ''
   if (!first) return ''
-  return first.startsWith('http') ? first.trim() : `https://${first.replace(/^\/+/, '')}`
+  return first.startsWith('http') ? first.trim() : `https://${String(first).replace(/^\/+/, '')}`
 }
 
 /** Alias used across command-center hubs. */
@@ -29,20 +34,39 @@ export function resolveClient(clientId, clients) {
   return clients.find((c) => String(c.id) === String(clientId)) ?? null
 }
 
-/** Engines that do not need a URL target (tenant/global job). */
+/** Matches server `engine_requires_target` / enginesRegistry.js `requiresTarget`. */
+export function engineRequiresTarget(engineId) {
+  if (!engineId) return true
+  if (TARGETLESS_ENGINE_IDS.has(engineId) || EXTRA_TARGETLESS.has(engineId)) return false
+  const rec = ENGINES_BY_ID[engineId]
+  if (rec && typeof rec.requiresTarget === 'boolean') return rec.requiresTarget
+  return true
+}
+
+/** Engines that do not need a URL target (tenant/global / credentialed job). */
 export function engineRunsWithoutTarget(engineId) {
-  // Kept for backward compat; new code should import TARGETLESS_ENGINE_IDS from enginesRegistry.js
-  const TARGETLESS = new Set([
-    'zero_day_radar',
-    'zero_day_prediction',
-    'aws_attack',
-    'azure_attack',
-    'gcp_attack',
-    'k8s_container',
-    'iac_misconfig',
-    'ble_rf',
-    'edr_evasion',
-    'antiforensics',
-  ])
-  return TARGETLESS.has(engineId)
+  return !engineRequiresTarget(engineId)
+}
+
+/**
+ * Resolve the target posted to POST /api/command-center/scan.
+ *
+ * Scoped/client-locked users bind to their assigned domain when the engine
+ * requires a target — never a client picker. Targetless engines never fail
+ * closed on an empty URL (assigned domain is still sent when present).
+ */
+export function resolveEnqueueTarget({
+  engineId,
+  target,
+  client,
+  clientScopeLocked = false,
+} = {}) {
+  const typed = String(target || '').trim()
+  const assigned = clientPrimaryTargetUrl(client)
+  if (!engineRequiresTarget(engineId)) {
+    return typed || assigned || ''
+  }
+  if (typed) return typed
+  if (clientScopeLocked || client) return assigned
+  return ''
 }

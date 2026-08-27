@@ -1,4 +1,6 @@
 import { firstClientTarget } from '../lib/clientTarget'
+import ClientScanBinding from '../components/scan/ClientScanBinding'
+import { useClient } from '../context/ClientContext'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
@@ -21,23 +23,20 @@ import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
 import Button from '../components/ui/Button'
 
-const TARGET_REQUIRED_IDS = new Set(['osint', 'asm', 'k8s_container', 'scada_ics', 'semantic_ai_fuzz', 'ai_adversarial_redteam'])
-
 const BUSINESS_ENGINE_DEFS = {
-  osint: { requiresTarget: true, samplePayload: { engine: 'osint', max_results: 250 } },
-  asm: { requiresTarget: true, samplePayload: { engine: 'asm', include_ports: true, depth: 'enterprise' } },
-  leak_hunter: { requiresTarget: false, samplePayload: { engine: 'leak_hunter', mode: 'deep', include_darkweb: true } },
-  supply_chain: { requiresTarget: false, samplePayload: { engine: 'supply_chain', depth: 'full', include_sbom: true } },
-  semantic_ai_fuzz: { requiresTarget: true, samplePayload: { engine: 'semantic_ai_fuzz', depth: 'enterprise' } },
-  ai_adversarial_redteam: { requiresTarget: true, samplePayload: { engine: 'ai_adversarial_redteam', mode: 'full' } },
-  k8s_container: { requiresTarget: true, samplePayload: { engine: 'k8s_container', include_rbac: true, depth: 'enterprise' } },
-  scada_ics: { requiresTarget: true, samplePayload: { engine: 'scada_ics', mode: 'passive', safety_context: true } },
+  osint: { samplePayload: { engine: 'osint', max_results: 250 } },
+  asm: { samplePayload: { engine: 'asm', include_ports: true, depth: 'enterprise' } },
+  leak_hunter: { samplePayload: { engine: 'leak_hunter', mode: 'deep', include_darkweb: true } },
+  supply_chain: { samplePayload: { engine: 'supply_chain', depth: 'full', include_sbom: true } },
+  semantic_ai_fuzz: { samplePayload: { engine: 'semantic_ai_fuzz', depth: 'enterprise' } },
+  ai_adversarial_redteam: { samplePayload: { engine: 'ai_adversarial_redteam', mode: 'full' } },
+  k8s_container: { samplePayload: { engine: 'k8s_container', include_rbac: true, depth: 'enterprise' } },
+  scada_ics: { samplePayload: { engine: 'scada_ics', mode: 'passive', safety_context: true } },
 }
 
 for (const row of strategicEnginesNeedingDedicatedPage()) {
   if (!row.route.startsWith('/engines/business/') || BUSINESS_ENGINE_DEFS[row.id]) continue
   BUSINESS_ENGINE_DEFS[row.id] = {
-    requiresTarget: TARGET_REQUIRED_IDS.has(row.id),
     samplePayload: { engine: row.id },
   }
 }
@@ -74,8 +73,15 @@ export default function BusinessEngineProfile() {
 
   const [history, setHistory] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
-  const [clients, setClients] = useState([])
-  const [clientId, setClientId] = useState('')
+  const {
+    clients,
+    selectedClientId,
+    setSelectedClientId,
+    selectedClient,
+    clientScopeLocked,
+  } = useClient()
+  const clientId = selectedClientId ?? ''
+  const requiresTarget = ENGINES_BY_ID[engineId]?.requiresTarget !== false
   const [target, setTarget] = useState('')
   const [runState, setRunState] = useState({ running: false, msg: '' })
   const [activeJobId, setActiveJobId] = useState('')
@@ -111,20 +117,6 @@ export default function BusinessEngineProfile() {
   }, [reloadProfile])
 
   useEffect(() => {
-    let cancelled = false
-    async function loadClients() {
-      try {
-        const d = await apiFetch('/api/clients')
-        if (!cancelled && Array.isArray(d)) setClients(d)
-      } catch {
-        // clients load failed — leave list unchanged
-      }
-    }
-    loadClients()
-    return () => { cancelled = true }
-  }, [])
-
-  useEffect(() => {
     if (!clientId) {
       setClientIntegrations(null)
       return
@@ -155,7 +147,6 @@ export default function BusinessEngineProfile() {
   }, [activeJobId])
 
   const effectivePayload = useMemo(() => {
-    const selectedClient = clients.find((c) => String(c.id) === String(clientId))
     const fallbackTarget = firstClientTarget(selectedClient)
     return buildScanPayload(engineId, {
       clientId,
@@ -164,7 +155,7 @@ export default function BusinessEngineProfile() {
       samplePayload: def?.samplePayload || {},
       extraParams,
     })
-  }, [def, engineId, clientId, target, clients, clientIntegrations, extraParams])
+  }, [def, engineId, clientId, target, selectedClient, clientIntegrations, extraParams])
 
   const statusData = useMemo(() => {
     const tally = { completed: 0, running: 0, failed: 0, pending: 0, dead: 0 }
@@ -233,7 +224,7 @@ export default function BusinessEngineProfile() {
 
   async function queueRun() {
     if (!def) return
-    if (def.requiresTarget && !effectivePayload.target) {
+    if (requiresTarget && !effectivePayload.target) {
       setRunState({ running: false, msg: t('pages.businessEngineProfile.target_required_error') })
       return
     }
@@ -345,20 +336,16 @@ export default function BusinessEngineProfile() {
         <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-2)] p-4 space-y-3">
           <h2 className="text-sm font-semibold text-white">{t('pages.businessEngineProfile.run_heading')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <select
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
-            >
-              <option value="">{t('pages.businessEngineProfile.select_client')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <ClientScanBinding
+              clients={clients}
+              selectedClientId={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              locked={clientScopeLocked}
+            />
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder={def.requiresTarget ? t('pages.businessEngineProfile.target_required_placeholder') : t('pages.businessEngineProfile.target_optional_placeholder')}
+              placeholder={requiresTarget ? t('pages.businessEngineProfile.target_required_placeholder') : t('pages.businessEngineProfile.target_optional_placeholder')}
               className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
             />
             <Button variant="unstyled"

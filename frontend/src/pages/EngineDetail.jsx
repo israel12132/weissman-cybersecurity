@@ -17,6 +17,8 @@ import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { normalizeIntegrations, buildScanPayload } from '../lib/engineClientPrefill'
+import { firstClientTarget, resolveEnqueueTarget } from '../lib/clientTarget'
+import ClientScanBinding from '../components/scan/ClientScanBinding'
 import { getEngineParams } from '../lib/engineParamDefs.js'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
@@ -410,28 +412,22 @@ export default function EngineDetail() {
   const [jobId, setJobId]                 = useState(null)
   const [lastRunStatus, setLastRunStatus] = useState(null)
   const esRef = useRef(null)
-  const { selectedClientId: cockpitClientId } = useClient()
-  const [clients, setClients]             = useState([])
-  const [selectedClientId, setSelectedClientId] = useState(null)
+  const {
+    clients,
+    selectedClientId,
+    setSelectedClientId,
+    selectedClient,
+    clientScopeLocked,
+  } = useClient()
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const { extraParams, setParam: setExtraParam } = useEngineScanParams(engineId, clientIntegrations)
   useSyncHubScanParams(engineId, extraParams)
   useRegisterHubClient(selectedClientId)
 
-  useEffect(() => {
-    if (cockpitClientId) setSelectedClientId(String(cockpitClientId))
-  }, [cockpitClientId])
   const { postScan } = useCommandCenterScan(selectedClientId)
   const [toast, setToast]                 = useState(null)
   const [activeTab, setActiveTab]         = useState('output')
   const [historyLoading, setHistoryLoading] = useState(false)
-
-  useEffect(() => {
-    apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
-  }, [])
 
   const reloadHistory = useCallback(async () => {
     if (!engineId) return
@@ -467,16 +463,10 @@ export default function EngineDetail() {
   }, [selectedClientId])
 
   useEffect(() => {
-    if (!selectedClientId) return
-    const client = clients.find((c) => String(c.id) === String(selectedClientId))
-    if (!client) return
-    let domains = client.domains
-    if (typeof domains === 'string') {
-      try { domains = JSON.parse(domains) } catch { domains = [] }
-    }
-    const first = Array.isArray(domains) ? (domains[0] || '') : ''
-    if (first) setTarget(first.startsWith('http') ? first : `https://${first}`)
-  }, [selectedClientId, clients])
+    if (!selectedClient) return
+    const assigned = firstClientTarget(selectedClient)
+    if (assigned) setTarget((prev) => prev || assigned)
+  }, [selectedClient])
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now()
@@ -489,8 +479,20 @@ export default function EngineDetail() {
       showToast('error', t('engines.catalog_only_run_disabled'))
       return
     }
-    if (!selectedClientId) { showToast('error', 'Select a client first'); return }
-    if (engine?.requiresTarget && !target.trim()) { showToast('error', 'Enter a target URL'); return }
+    if (!selectedClientId) {
+      showToast('error', t('engines.select_client_warning'))
+      return
+    }
+    const resolvedTarget = resolveEnqueueTarget({
+      engineId,
+      target,
+      client: selectedClient,
+      clientScopeLocked,
+    })
+    if (engine?.requiresTarget && !resolvedTarget) {
+      showToast('error', t('engines.no_assigned_domain'))
+      return
+    }
     setRunning(true)
     setLines([])
     resetFindings()
@@ -499,7 +501,7 @@ export default function EngineDetail() {
 
     const body = buildScanPayload(engineId, {
       clientId: selectedClientId,
-      target: target.trim(),
+      target: resolvedTarget,
       integrations: clientIntegrations,
       extraParams,
     })
@@ -551,7 +553,7 @@ export default function EngineDetail() {
       setRunning(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, target, timeoutSec, engineId, engine, extraParams, clientIntegrations, showToast, resetFindings, addFinding, isProduction, t])
+  }, [selectedClientId, selectedClient, clientScopeLocked, target, timeoutSec, engineId, engine, extraParams, clientIntegrations, showToast, resetFindings, addFinding, isProduction, t])
 
   const handleStop = useCallback(() => {
     if (esRef.current) { esRef.current.close(); esRef.current = null }
@@ -818,26 +820,24 @@ export default function EngineDetail() {
 
           {/* Client */}
           <div>
-            <label htmlFor="engine-client" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">Client</label>
-            <select
+            <label htmlFor="engine-client" className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">{t('engines.client_label')}</label>
+            <ClientScanBinding
               id="engine-client"
-              value={selectedClientId ?? ''}
-              onChange={(e) => setSelectedClientId(e.target.value || null)}
+              clients={clients}
+              selectedClientId={selectedClientId}
+              onChange={(id) => setSelectedClientId(id)}
+              locked={clientScopeLocked}
               disabled={running}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] font-mono focus:outline-none focus:border-cyan-500/40"
-            >
-              <option value="">{t('engines.select_client')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            />
           </div>
 
           {/* Target */}
           <div>
             <label className="block text-[11px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider mb-1">
-              {t('engines.detail_target_optional')}
+              {engine.requiresTarget ? t('engines.detail_target_required') : t('engines.detail_target_optional')}
             </label>
             <input type="text" value={target} onChange={(e) => setTarget(e.target.value)}
-              placeholder={engine.requiresTarget ? 'https://target.com' : 'Optional — uses client scope'}
+              placeholder={engine.requiresTarget ? 'https://target.com' : t('engines.target_bound_hint')}
               disabled={running}
               className="w-full bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono placeholder-white/25 focus:outline-none focus:border-cyan-500/40 disabled:opacity-50" />
           </div>

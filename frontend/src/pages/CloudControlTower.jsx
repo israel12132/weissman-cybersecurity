@@ -13,6 +13,7 @@ import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import KubernetesSecurityPanel from './KubernetesSecurityPanel'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const CLOUD_TABS = [
   { id: 'aws', label: 'AWS', engine: 'aws_attack', color: '#f97316', icon: '☁' },
@@ -234,14 +235,12 @@ export default function CloudControlTower() {
     >
       <div className="flex items-center gap-2 mb-6">
         <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('pages.cloudControlTower.client_label')}</span>
-        <select
-          value={selectedClientId ?? ''}
-          onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-secondary)] font-mono focus:outline-none focus:border-blue-500/40"
-        >
-          <option value="">{t('pages.cloudControlTower.select_client')}</option>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <BoundClientScanField
+          clients={clients}
+          selectedClientId={selectedClientId ?? ''}
+          onChange={(id) => setSelectedClientId(id || null)}
+          emptyLabel={t('pages.cloudControlTower.select_client')}
+        />
       </div>
 
       {toast && (

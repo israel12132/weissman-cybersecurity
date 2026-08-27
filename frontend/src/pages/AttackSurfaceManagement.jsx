@@ -11,6 +11,7 @@ import { useWeissmanEnginePage, applyHistoryFindings } from '../hooks/useWeissma
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
 import Button from '../components/ui/Button'
+import { BoundClientScanField } from '../components/scan/ClientScanBinding'
 
 const ENGINE = 'asm'
 const ACCENT = '#22d3ee'
@@ -485,14 +486,12 @@ export default function AttackSurfaceManagement() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_client')}</label>
-            <select
-              value={selectedClientId ?? ''}
-              onChange={(e) => setSelectedClientId(e.target.value || null)}
-              className="bg-[var(--scrim)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
-            >
-              <option value="">{t('pages.attackSurfaceManagement.select_client_placeholder')}</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <BoundClientScanField
+              clients={clients}
+              selectedClientId={selectedClientId ?? ''}
+              onChange={(id) => setSelectedClientId(id || null)}
+              emptyLabel={t('pages.attackSurfaceManagement.select_client_placeholder')}
+            />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
             <label className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">{t('pages.attackSurfaceManagement.label_target')}</label>

@@ -8,6 +8,8 @@
  * Route: /engine-catalog
  */
 import { firstClientTarget } from '../lib/clientTarget'
+import ClientScanBinding from '../components/scan/ClientScanBinding'
+import { useClient } from '../context/ClientContext'
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -319,8 +321,13 @@ export default function EngineClientCatalog() {
   const { byId: capabilityById, summary: capSummary, loading: capLoading, refresh: refreshCapabilities } = useEngineCapabilities()
   const [telemetryById, setTelemetryById] = useState({})
   const [activeProfileId, setActiveProfileId] = useState('enterprise')
-  const [clients, setClients] = useState([])
-  const [selectedClientId, setSelectedClientId] = useState(null)
+  const {
+    clients,
+    selectedClientId,
+    setSelectedClientId,
+    selectedClient,
+    clientScopeLocked,
+  } = useClient()
   const [engineStates, setEngineStates] = useState({})
   const [selectedEngines, setSelectedEngines] = useState(new Set())
   const [search, setSearch] = useState('')
@@ -352,12 +359,6 @@ export default function EngineClientCatalog() {
       .catch(() => { if (!cancelled) setClientIntegrations(null) })
     return () => { cancelled = true }
   }, [selectedClientId])
-  useEffect(() => {
-    apiFetch('/api/clients')
-      .then((d) => { if (Array.isArray(d)) setClients(d) })
-      .catch((err) => { if (import.meta.env.DEV) console.warn('[EngineClientCatalog] clients load failed:', err) })
-  }, [])
-
   useEffect(() => {
     apiFetch('/api/engines/telemetry')
       .then((data) => {
@@ -508,7 +509,6 @@ export default function EngineClientCatalog() {
   const runEngine = useCallback(async (engineId) => {
     setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'running' } }))
     try {
-      const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
       const clientTarget = firstClientTarget(selectedClient)
       const { ok, data, status } = await launchScan({
         engineId,
@@ -530,11 +530,11 @@ export default function EngineClientCatalog() {
       return { ok: false, msg: e?.message ?? 'Network error' }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClientId, clients, clientIntegrations])
+  }, [selectedClientId, selectedClient, clientIntegrations, launchScan])
 
   const handleRunAll = useCallback(async () => {
     if (!selectedClientId) {
-      showToast('error', 'Select a client first')
+      showToast('error', t('engines.select_client_warning'))
       return
     }
     if (clientReadiness && !clientReadiness.ready) {
@@ -645,16 +645,13 @@ export default function EngineClientCatalog() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-4 rounded-2xl border border-white/[0.08] bg-gradient-to-r from-black/40 to-black/20">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
-          <select
-            value={selectedClientId ?? ''}
-            onChange={(e) => setSelectedClientId(e.target.value || null)}
-            className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
-          >
-            <option value="">{t('engines.select_client')}</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <ClientScanBinding
+            clients={clients}
+            selectedClientId={selectedClientId}
+            onChange={(id) => setSelectedClientId(id)}
+            locked={clientScopeLocked}
+            selectClassName="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40"
+          />
           {!selectedClientId && (
             <span className="text-[10px] font-mono text-amber-400/70">
               ⚠ {t('engines.catalog_select_client_warn')}

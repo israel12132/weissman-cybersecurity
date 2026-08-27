@@ -11,6 +11,7 @@ import {
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeIntegrations } from '../lib/engineClientPrefill'
 import { firstClientTarget } from '../lib/clientTarget'
+import ClientScanBinding from '../components/scan/ClientScanBinding'
 import { useRegisterHubClient } from '../context/EngineHubContext'
 import { useClient } from '../context/ClientContext'
 import { useLaunchEngineScan } from '../hooks/useLaunchEngineScan'
@@ -410,9 +411,14 @@ export default function EngineMatrix() {
     return tier && TIER_FILTERS.includes(tier) ? tier : 'all'
   })
   const [search, setSearch] = useState('')
-  const [clients, setClients] = useState([])
-  const { selectedClientId: cockpitClientId } = useClient()
-  const [selectedClientId, setSelectedClientId] = useState(null)
+  const {
+    clients,
+    selectedClientId,
+    setSelectedClientId,
+    selectedClient,
+    clientScopeLocked,
+    refreshClients,
+  } = useClient()
   const [clientConfig, setClientConfig] = useState(null)
   const [clientIntegrations, setClientIntegrations] = useState(null)
   const [configLoading, setConfigLoading] = useState(false)
@@ -424,22 +430,9 @@ export default function EngineMatrix() {
   const launchScan = useLaunchEngineScan(selectedClientId)
 
   useEffect(() => {
-    if (cockpitClientId) setSelectedClientId(String(cockpitClientId))
-  }, [cockpitClientId])
-
-  useEffect(() => {
     const tier = searchParams.get('tier')
     if (tier && TIER_FILTERS.includes(tier)) setTierFilter(tier)
   }, [searchParams])
-
-  useEffect(() => {
-    apiFetch('/api/clients')
-      .then((d) => {
-        if (Array.isArray(d)) setClients(d)
-      })
-      // eslint-disable-next-line no-restricted-syntax -- intentional best-effort swallow
-      .catch(() => {})
-  }, [])
 
   useEffect(() => {
     if (selectedClientId == null) {
@@ -553,7 +546,6 @@ export default function EngineMatrix() {
       return
     }
     const engine = ENGINES_BY_ID[engineId]
-    const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId))
     const clientTarget = firstClientTarget(selectedClient)
     setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'running' } }))
     try {
@@ -578,7 +570,7 @@ export default function EngineMatrix() {
       showToast('error', e?.message ?? 'Network error')
       setEngineStates((prev) => ({ ...prev, [engineId]: { ...prev[engineId], status: 'error' } }))
     }
-  }, [selectedClientId, clients, clientIntegrations, launchScan, showToast, t, isProduction])
+  }, [selectedClientId, selectedClient, clientIntegrations, launchScan, showToast, t, isProduction])
 
   const handleRunGroup = useCallback(async (engineIds) => {
     if (selectedClientId == null) {
@@ -600,8 +592,7 @@ export default function EngineMatrix() {
     setMatrixRefreshing(true)
     try {
       await refreshProduction()
-      const d = await apiFetch('/api/clients').catch(() => null)
-      if (Array.isArray(d)) setClients(d)
+      await refreshClients()
       setEngineStates({})
       invalidateEngineHistorySummary()
       setHistoryReloadKey((k) => k + 1)
@@ -609,7 +600,7 @@ export default function EngineMatrix() {
     } finally {
       setMatrixRefreshing(false)
     }
-  }, [refreshProduction])
+  }, [refreshProduction, refreshClients])
 
   const exportMatrixCsv = useCallback(() => {
     if (!filteredEngines.length) return
@@ -738,16 +729,13 @@ export default function EngineMatrix() {
 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-mono text-[var(--text-muted)]">{t('engines.client_label')}:</span>
-              <select
-                value={selectedClientId ?? ''}
-                onChange={(e) => setSelectedClientId(e.target.value || null)}
-                className="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
-              >
-                <option value="">{t('engines.select_client')}</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <ClientScanBinding
+                clients={clients}
+                selectedClientId={selectedClientId}
+                onChange={(id) => setSelectedClientId(id)}
+                locked={clientScopeLocked}
+                selectClassName="bg-[var(--bg-3)] border border-[var(--border-default)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+              />
               {(configLoading || productionLoading) && (
                 <div className="w-3.5 h-3.5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
               )}

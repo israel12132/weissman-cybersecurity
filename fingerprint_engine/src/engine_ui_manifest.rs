@@ -176,7 +176,9 @@ pub fn resolve_by_engine_id(engine_id: &str) -> Option<EngineUiManifest> {
                 route_paths: vec![format!("/engines/{id}")],
                 evidence_i18n_key: Some("pages.engineDetail.evidence_notice".into()),
                 capabilities: EngineUiCapabilities {
-                    requires_target_input: true,
+                    requires_target_input: crate::engine_target_contract::engine_requires_target(
+                        id,
+                    ),
                     requires_scan_dispatch: true,
                     requires_agent_gate: true,
                     requires_kill_switch: true,
