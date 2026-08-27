@@ -401,13 +401,14 @@ fn score_cicd(
 ) -> (&'static str, &'static str, Value) {
     let ev = json!({
         "ci_scripts_present": cp.ci_scripts_present,
+        "ci_scripts_expected": cp.ci_scripts_expected,
         "ci_scripts_missing": cp.ci_scripts_missing,
         "catalog_len": cp.catalog_len,
         "tls_insecure_forbidden": cp.tls_insecure_forbidden,
         "check": c.title,
     });
     match facet {
-        0 if cp.ci_scripts_present < 5 => ("gap", "high", ev),
+        0 if cp.ci_scripts_present < cp.ci_scripts_expected.max(1) => ("gap", "high", ev),
         1 if cp.catalog_len != CATALOG_LEN => ("gap", "critical", ev),
         2 if !cp.tls_insecure_forbidden => ("gap", "high", ev),
         _ => ("pass", "info", ev),

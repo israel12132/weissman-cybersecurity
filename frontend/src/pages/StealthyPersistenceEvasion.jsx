@@ -275,7 +275,7 @@ export default function StealthyPersistenceEvasion() {
         <Stat label="RLS" value={cp.rls_policy_count ?? '—'} />
         <Stat label="COPY" value={cp.copy_ingest_ok ? 'live' : '—'} />
         <Stat label="SKIP LOCKED" value={cp.skip_locked_claim ? 'ok' : '—'} />
-        <Stat label="CI" value={`${cp.ci_scripts_present ?? 0}/5`} />
+        <Stat label="CI" value={`${cp.ci_scripts_present ?? 0}/${cp.ci_scripts_expected ?? 6}`} />
       </div>
 
       {domains.length > 0 && (

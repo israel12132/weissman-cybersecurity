@@ -22,6 +22,7 @@ pub struct ControlPlaneSnapshot {
     pub copy_rows: u64,
     pub async_jobs_pending: i64,
     pub ci_scripts_present: usize,
+    pub ci_scripts_expected: usize,
     pub ci_scripts_missing: Vec<String>,
     pub catalog_len: usize,
     pub engine_wired: bool,
@@ -47,6 +48,7 @@ pub fn filesystem_ci_snapshot() -> ControlPlaneSnapshot {
             .ok()
             .map(|v| v != "1")
             .unwrap_or(true),
+        ci_scripts_expected: CI_SCRIPTS.len(),
         ..ControlPlaneSnapshot::default()
     };
     let jwt = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
@@ -177,7 +179,7 @@ mod tests {
     fn ci_scripts_exist_in_this_checkout() {
         let s = filesystem_ci_snapshot();
         assert!(
-            s.ci_scripts_present >= 3,
+            s.ci_scripts_present == CI_SCRIPTS.len() && s.ci_scripts_expected == CI_SCRIPTS.len(),
             "expected CI scripts on disk, missing {:?}",
             s.ci_scripts_missing
         );
