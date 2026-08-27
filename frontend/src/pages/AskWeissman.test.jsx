@@ -118,6 +118,7 @@ describe('AskWeissman hermetic safeguards', () => {
         screen.getByText('Ask Weissman is temporarily unavailable. Retry later.'),
       ).toBeInTheDocument()
     })
-    expect(screen.queryByText(/brute-force|starts with A/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/brute-force/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/limit_per_minute/i)).not.toBeInTheDocument()
   })
 })
