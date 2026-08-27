@@ -41,7 +41,15 @@ COPY shared ./shared
 # bound parallelism so the optimized (opt-level 3) compiles don't spike RAM. This
 # keeps the workspace release profile (fat) intact for anyone who builds with the
 # memory headroom; the shipped image just builds reliably here.
-ENV CARGO_PROFILE_RELEASE_LTO=thin \
+#
+# ARG (not a hardcoded ENV) so CI can pass --build-arg. Previously CI sent
+# CARGO_PROFILE_RELEASE_LTO=false and CODEGEN_UNITS=16 but the Dockerfile never
+# declared ARG, so rustc still linked thin-LTO + codegen-units=1 and the runner
+# died with exit 143 mid-link.
+ARG CARGO_PROFILE_RELEASE_LTO=thin
+ARG CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+ENV CARGO_PROFILE_RELEASE_LTO=$CARGO_PROFILE_RELEASE_LTO \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=$CARGO_PROFILE_RELEASE_CODEGEN_UNITS \
     CARGO_BUILD_JOBS=2 \
     CARGO_NET_RETRY=10 \
     CARGO_HTTP_MULTIPLEXING=false \

@@ -352,50 +352,43 @@ pub async fn latest_snapshot(
     }))
 }
 
-// ── Math helpers (delegate to supreme_weights so FAIR math lives in one place)
-
-fn single_loss_expectancy(asset_value_usd: i64, cvss: f32) -> i64 {
-    supreme_weights::single_loss_expectancy(asset_value_usd, cvss)
-}
-
-fn annual_loss_expectancy(sle_usd: i64, epss: f32, kev: bool, discount: f32) -> i64 {
-    supreme_weights::annual_loss_expectancy(sle_usd, epss, kev, discount, false, false, sle_usd)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn ale(sle_usd: i64, epss: f32, kev: bool, discount: f32) -> i64 {
+        supreme_weights::annual_loss_expectancy(sle_usd, epss, kev, discount, false, false, sle_usd)
+    }
+
     #[test]
     fn sle_scales_with_cvss() {
         // critical (CVSS 9.8) on a $100k asset → ~98k
-        let sle = single_loss_expectancy(100_000, 9.8);
+        let sle = supreme_weights::single_loss_expectancy(100_000, 9.8);
         assert!(sle > 95_000 && sle <= 100_000);
     }
     #[test]
     fn sle_floors_at_half() {
         // info-only (CVSS 0) still costs 50% of asset value (info = data exposure
         // potential we can't ignore).
-        let sle = single_loss_expectancy(100_000, 0.0);
+        let sle = supreme_weights::single_loss_expectancy(100_000, 0.0);
         assert_eq!(sle, 50_000);
     }
     #[test]
     fn ale_kev_floors_aro_at_one() {
         let sle = 100_000;
-        let ale_no_kev = annual_loss_expectancy(sle, 0.0, false, 0.30);
-        let ale_kev = annual_loss_expectancy(sle, 0.0, true, 0.30);
+        let ale_no_kev = ale(sle, 0.0, false, 0.30);
+        let ale_kev = ale(sle, 0.0, true, 0.30);
         assert_eq!(ale_no_kev, 0);
         assert_eq!(ale_kev, 30_000); // sle * 1.0 ARO * 0.30 discount
     }
     #[test]
     fn ale_uses_epss_when_no_kev() {
         // Uncapped: EPSS 0.50 × 12 × 0.30 × $100k = $180k. FAIR caps at asset value.
-        let ale = annual_loss_expectancy(100_000, 0.50, false, 0.30);
-        assert_eq!(ale, 100_000);
+        assert_eq!(ale(100_000, 0.50, false, 0.30), 100_000);
     }
     #[test]
     fn ale_clamps_at_asset_value_not_twelve_events() {
         // Uncapped would be $100k × 12 × 1.0 = $1.2M. Board ALE ≤ asset value.
-        let ale = annual_loss_expectancy(100_000, 1.0, true, 1.0);
-        assert_eq!(ale, 100_000);
+        assert_eq!(ale(100_000, 1.0, true, 1.0), 100_000);
     }
 }

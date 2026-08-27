@@ -722,25 +722,21 @@ jobs:
           df -h /
 
       - name: Build Docker production images
-        # `docker compose build` interpolates the ENTIRE compose file at load time, so the
-        # two runtime-only required secrets — ${WEISSMAN_JWT_SECRET:?} and
-        # ${WEISSMAN_ADMIN_PASSWORD:?} in docker-compose.yml — must be present even though a
-        # build never consumes them. Supply CI-throwaway values purely to satisfy parse-time
-        # interpolation; the :? runtime hardening in the compose file is left intact.
-        env:
-          WEISSMAN_JWT_SECRET: ci-weissman-production-smoke-jwt-secret-forty-eight-chars-minimum-v1
-          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
-        # Override the release profile for THIS CI validation build only: the committed
-        # profile.release (lto=fat, codegen-units=1) makes the in-Docker release build of three
-        # binaries over the 350k-LOC workspace OOM-kill the runner (exit 143 mid-link). Disable
-        # LTO + parallelize codegen so it fits in the runner's memory; the published image (via
-        # the publish job, which passes no build-args) keeps the full fat-LTO profile. The image
-        # here only needs to build + be Trivy-scanned; it never runs the live stack.
+        # Use docker-compose.build.yml (build coordinates only) so runtime :? secrets
+        # are not required just to produce images. Override the release profile for
+        # THIS CI validation build: workspace profile.release (lto=fat, codegen-units=1)
+        # OOM-kills the runner mid-link (exit 143). deploy/backend.Dockerfile now
+        # declares matching ARG so these --build-arg values actually reach rustc.
+        # Sequential: backend (Rust release of three binaries) then gateway (WASM +
+        # Vite) — composing them in one `build backend worker gateway` ran two rustc
+        # trees plus a duplicate backend/worker image build and still OOM'd after
+        # ~1409s. Worker uses the same image as backend, so it is not rebuilt.
         run: |
-          docker compose build \
+          docker compose -f docker-compose.build.yml build \
             --build-arg CARGO_PROFILE_RELEASE_LTO=false \
             --build-arg CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-            backend worker gateway
+            backend
+          docker compose -f docker-compose.build.yml build gateway
 
       - name: Scan built backend image (Trivy, CRITICAL+HIGH)
         # The fs scan in the security-scan job covers source/deps; this scans the
