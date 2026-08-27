@@ -77,5 +77,7 @@ describe('clientScope policy', () => {
     expect(shouldHideClientPicker(staff, [{ id: 1 }])).toBe(true)
     expect(shouldHideClientPicker({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4], client_picker_hidden: false }, [{ id: 3 }, { id: 4 }])).toBe(false)
     expect(filterVisibleClients({ ...portal, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }, { id: 9 }])).toEqual([{ id: 3 }, { id: 4 }])
+    expect(boundClientId({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }], 4)).toBe(4)
+    expect(boundClientId({ ...portal, assigned_client_id: null, allowed_client_ids: [3, 4] }, [{ id: 3 }, { id: 4 }], 9)).toBe(3)
   })
 })

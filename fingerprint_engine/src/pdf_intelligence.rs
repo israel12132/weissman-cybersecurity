@@ -334,11 +334,15 @@ pub fn compose_bytes(snap: &PdfIntelligenceSnapshot, req: &ComposeRequest) -> Re
         });
     }
     for fw in &snap.frameworks {
-        if !enabled.iter().any(|id| section_matches_framework(id, &fw.framework)) {
+        let Some(section_id) = enabled
+            .iter()
+            .find(|id| section_matches_framework(id, &fw.framework))
+            .cloned()
+        else {
             continue;
-        }
+        };
         sections.push(IntelligencePackSection {
-            id: slug.clone(),
+            id: section_id,
             title: format!(
                 "{} — {}% mapped controls holding",
                 fw.framework, fw.compliance_percent
@@ -502,5 +506,54 @@ mod tests {
         )
         .expect("compose");
         assert!(bytes.starts_with(b"%PDF-1.4"));
+    }
+
+    #[test]
+    fn compose_binds_live_framework_to_catalog_section_id() {
+        let snap = PdfIntelligenceSnapshot {
+            ok: true,
+            live: true,
+            client_id: Some(1),
+            client_name: Some("Acme".into()),
+            org_name: "Weissman".into(),
+            corpus: vec![PdfCorpusItem {
+                id: "run:1".into(),
+                kind: "report_run".into(),
+                title: "Run 1".into(),
+                client_id: Some(1),
+                created_at: None,
+                pdf_path: None,
+                finding_count: 1,
+            }],
+            findings: FindingsRollup {
+                total: 1,
+                critical: 1,
+                high: 0,
+                medium: 0,
+                low: 0,
+            },
+            frameworks: vec![crate::compliance_engine::FrameworkPosture {
+                framework: "NIST".into(),
+                compliance_percent: 40,
+                total_mapped_controls: 10,
+                violated_controls: 6,
+            }],
+            empty_reason: None,
+        };
+        let bytes = compose_bytes(
+            &snap,
+            &ComposeRequest {
+                client_id: Some(1),
+                title: Some("NIST pack".into()),
+                sections: vec![ComposeSectionSpec {
+                    id: "nist_csf".into(),
+                    enabled: true,
+                }],
+            },
+        )
+        .expect("compose");
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("NIST"), "live framework name must appear in the pack");
     }
 }

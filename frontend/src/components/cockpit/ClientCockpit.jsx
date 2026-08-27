@@ -167,10 +167,11 @@ export default function ClientCockpit({ ceoIntegrated = false }) {
   }
 
   const runFullScan = async () => {
+    if (!selectedClientId) return
     setEngageLoading(true)
     try {
       try {
-        const d = await apiFetch('/api/scan/run-all', { method: 'POST' })
+        const d = await apiFetch(`/api/clients/${selectedClientId}/scan/run-all`, { method: 'POST' })
         if (d && d.message) refreshClients()
       } catch (_) {
         /* run-all is best-effort; poe-scan still runs even if it fails */

@@ -1476,6 +1476,34 @@ async fn api_scan_run_all(
     if let Err(r) = crate::rbac::require_operator(&auth) {
         return r;
     }
+    // Never enqueue a tenant-wide cycle for a customer-scoped session. The UI
+    // "scan all" control is hidden, but ClientCockpit / scripts still POST here —
+    // bind to the assigned customer and run the per-client baseline instead.
+    if crate::client_isolation::is_client_scoped(&auth) {
+        return match crate::client_isolation::bind_requested_client(&auth, None) {
+            Ok(Some(cid)) => {
+                api_clients_scan_run_all(
+                    State(state),
+                    Extension(auth),
+                    Path(cid),
+                    ConnectInfo(addr),
+                    headers,
+                    trace_ext,
+                )
+                .await
+            }
+            Ok(None) => (
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "detail": "Client portal account is missing a bound customer",
+                    "error_code": "client_scope_unbound",
+                })),
+            )
+                .into_response(),
+            Err(r) => r,
+        };
+    }
     if let Err(detail) =
         crate::billing::gate_scan_enqueue(state.auth_pool.as_ref(), auth.tenant_id).await
     {
