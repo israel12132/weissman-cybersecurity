@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react
 import ClientScanBinding, { BoundClientScanField } from './ClientScanBinding.jsx'
 
 vi.mock('react-i18next', () => ({
@@ -19,6 +19,9 @@ const clients = [
 describe('ClientScanBinding', () => {
   beforeEach(() => {
     mockCtx.current = null
+  })
+  afterEach(() => {
+    cleanup()
   })
 
   it('hides the picker when the session is client-locked', () => {
