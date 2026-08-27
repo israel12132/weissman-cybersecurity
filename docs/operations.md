@@ -78,6 +78,18 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 | `WEISSMAN_APP_POOL_MIN` | 2 |
 | `WEISSMAN_SOVEREIGN_MPSC_CAPACITY` | unset → unbounded |
 
+### UEBA engine
+
+| Var | Default | Effect |
+|-----|---------|--------|
+| `WEISSMAN_UEBA_POOL_PERMITS` | 8 | Semaphore so ingest cannot exhaust the UI connection pool (2–32) |
+| `WEISSMAN_UEBA_SAMPLE_RETENTION_DAYS` | 14 | Hot sample window before archive+delete (clamped 7–90) |
+| `WEISSMAN_UEBA_ANOMALY_RETENTION_DAYS` | 90 | Anomaly retention (clamped 30–3650) |
+| `WEISSMAN_UEBA_DISK_FREE_PCT` | unset | Operator-injected free-disk percent; `<10` pauses ingest (failsafe) |
+| `WEISSMAN_UEBA_EXCLUDE_SAMPLES_FROM_BACKUP` | true | Nightly `pg_dump` skips `agent_metric_samples` data |
+| `WEISSMAN_AGENT_INSTALL_PER_MINUTE` | 10 | Per-IP rate limit for `/install/agent.sh`, `.ps1`, and binaries |
+| `WEISSMAN_AGENT_INSTALL_BURST` | 20 | Burst for the installer download limiter |
+
 ### TLS policy
 
 | Var | Effect |
@@ -164,7 +176,9 @@ All started from `serve::spawn_http_background_tasks`. Logs emit on `target =
 |--------|----------|--------|------------|
 | `intel_kev` | 6 h | `intel_kev` | env `WEISSMAN_INTEL_KEV_ENABLED=false` |
 | `intel_epss` | 12 h | `intel_epss` | env `WEISSMAN_INTEL_EPSS_ENABLED=false` |
-| `ueba_detector::retention` | 1 h | n/a (`DELETE` only) | never |
+| `ueba_detector::retention` | hourly at :45 | `ueba_detector::retention` | never (advisory lock; API + worker share one runner) |
+| `ueba_detector::ingest` | event-driven MPSC | `ueba_ingest` | never (OnceLock) |
+| `ueba_detector::baseline_recompute` | 24 h | `ueba_detector` | never |
 | `data_retention` | hourly | `data_retention` | never |
 | `db_backup_scheduler` | nightly | `db_backup` | unset env |
 | `sovereign_self_scan` | env (min 300 s) | `sovereign_self_scan` | env unset |
@@ -299,6 +313,6 @@ docker compose exec postgres psql -U postgres -d weissman -c "
 | `/api/ask` returns `503 self_serve_disabled` | `WEISSMAN_READ_ONLY_DATABASE_URL` unset | Provision `weissman_ro`, set the env var, restart backend |
 | `/api/auth/signup` returns `503` | `WEISSMAN_SELF_SERVE_SIGNUP` not `true` | Set the env var (and configure SMTP for production) |
 | Council retrieval falls back to "in-app cosine" path | LLM embeddings unreachable | Verify `OPENAI_BASE_URL` + key; check `target = council_rag` warnings |
-| UEBA never fires anomalies | Less than 24 samples in the relevant `hour_of_week` bucket | Wait (one sample/hour by default = ≥1 week per bucket) — by design |
+| UEBA never fires anomalies | Learning window still open: n&lt;24 **or** fewer than 5 distinct weekdays. Baselines use GLOBAL_BUCKET=0, not a single hour-of-week cell. | Wait for a full week of 15-minute samples, or inspect `endpoint_agents.is_learning` / `GET /api/ueba/fleet`. Do not lower `MIN_BASELINE_SAMPLES`. |
 | `intel_kev` worker logs "HTTP 0" | Outbound block on cisa.gov | Provide an HTTPS proxy (`HTTPS_PROXY`) or mirror the feed |
 | PoE registry growing without bound | Pre-2026.06.0 build | Already fixed: empty Vec is removed from the DashMap |

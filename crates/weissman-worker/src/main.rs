@@ -690,6 +690,9 @@ async fn async_main() {
         "started"
     );
 
+    fingerprint_engine::ueba_detector::spawn_retention_loop(app_pool.clone());
+    fingerprint_engine::ueba_detector::spawn_baseline_recompute_loop(app_pool.clone());
+
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = stop.clone();
     let swarm_shutdown = swarm.clone();

@@ -178,7 +178,7 @@ async fn api_agents_create_token(
     Extension(auth): Extension<AuthContext>,
     axum::extract::Json(body): axum::extract::Json<CreateAgentTokenBody>,
 ) -> Response {
-    if let Err(r) = crate::rbac::require_admin(&auth) {
+    if let Err(r) = crate::rbac::require_any_role(&auth, &["operator", "admin", "ceo"]) {
         return r;
     }
     if !crate::endpoint_agents::client_exists(state.app_pool.as_ref(), auth.tenant_id, body.client_id)
@@ -601,6 +601,7 @@ async fn ws_agent(
         let mut client_id: Option<i64> = None;
         let mut local_session: u64 = 0;
 
+        let mut last_activity = Instant::now();
         loop {
             tokio::select! {
                 outbound = rx_to_agent.recv() => {
@@ -611,6 +612,7 @@ async fn ws_agent(
                     }
                 }
                 frame = socket.recv() => {
+                    last_activity = Instant::now();
                     let Some(frame) = frame else { break; };
                     let Ok(frame) = frame else { break; };
                     use axum::extract::ws::Message;
@@ -666,6 +668,8 @@ async fn ws_agent(
                                     let welcome = crate::endpoint_agents::ServerToAgent::Welcome {
                                         scan_concurrency: Some(8),
                                         heartbeat_secs: Some(20),
+                                        lite_sampling: Some(crate::ueba_detector::failsafe()),
+                                        server_utc_ms: Some(chrono::Utc::now().timestamp_millis()),
                                     };
                                     let line = serde_json::to_string(&welcome).unwrap_or_default();
                                     let _ = socket.send(Message::Text(line)).await;
@@ -733,6 +737,12 @@ async fn ws_agent(
                         }
                         Message::Close(_) | Message::Binary(_) => break,
                         _ => {}
+                    }
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                    if last_activity.elapsed() > std::time::Duration::from_secs(120) {
+                        tracing::info!(target: "agents", "closing stale agent websocket (no heartbeat 120s)");
+                        break;
                     }
                 }
             }

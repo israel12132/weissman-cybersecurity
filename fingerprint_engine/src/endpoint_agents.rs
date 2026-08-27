@@ -76,6 +76,29 @@ fn parse_ueba_ingest(
             .unwrap_or(client_id),
         hour_of_week,
         metrics,
+        seq: finding.get("seq").and_then(Value::as_i64),
+        nonce: finding
+            .get("nonce")
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        sampled_at: finding
+            .get("sampled_at")
+            .and_then(Value::as_str)
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&chrono::Utc)),
+        metrics_gz: finding
+            .get("metrics_gz")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty()),
+        hardware_id: finding
+            .get("hardware_id")
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        source_ip: None,
+        require_live_session: false,
     })
 }
 
@@ -85,6 +108,10 @@ pub enum ServerToAgent {
     Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        #[serde(default)]
+        lite_sampling: Option<bool>,
+        #[serde(default)]
+        server_utc_ms: Option<i64>,
     },
     Task {
         task_id: String,
@@ -810,10 +837,20 @@ pub fn spawn_pending_task_pusher(pool: Arc<PgPool>, registry: Arc<AgentRegistry>
 }
 
 /// SHA-256 hex of an agent renewal secret. The plaintext is never stored.
+/// Empty salt keeps the historical `sha256(secret)` digest so existing agents still renew.
 #[must_use]
 pub fn hash_agent_secret(secret: &str) -> String {
+    hash_agent_secret_with_salt(secret, "")
+}
+
+#[must_use]
+pub fn hash_agent_secret_with_salt(secret: &str, salt: &str) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
+    if !salt.is_empty() {
+        h.update(salt.as_bytes());
+        h.update(b":");
+    }
     h.update(secret.as_bytes());
     format!("{:x}", h.finalize())
 }
@@ -866,14 +903,15 @@ pub async fn renew_agent_session(
         i64,
         Option<String>,
         Option<chrono::DateTime<chrono::Utc>>,
+        String,
     )> = sqlx::query_as(
-        "SELECT tenant_id, client_id, session_secret_hash, revoked_at \
+        "SELECT tenant_id, client_id, session_secret_hash, revoked_at, COALESCE(session_secret_salt, '') \
              FROM endpoint_agents WHERE agent_uuid = $1",
     )
     .bind(agent_uuid)
     .fetch_optional(pool)
     .await?;
-    let Some((tenant_id, client_id, stored, revoked_at)) = row else {
+    let Some((tenant_id, client_id, stored, revoked_at, salt)) = row else {
         return Ok(None);
     };
     if revoked_at.is_some() {
@@ -887,7 +925,7 @@ pub async fn renew_agent_session(
     let Ok(stored_bytes) = hex::decode(stored.trim()) else {
         return Ok(None);
     };
-    let presented_hex = hash_agent_secret(secret);
+    let presented_hex = hash_agent_secret_with_salt(secret, &salt);
     if !crate::security_hardening::constant_time_hmac_hex_eq(&stored_bytes, &presented_hex) {
         return Ok(None);
     }
@@ -909,12 +947,13 @@ pub async fn register_agent(
 ) -> Result<(Uuid, String), sqlx::Error> {
     let agent_uuid = Uuid::new_v4();
     let secret = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
-    let secret_hash = hash_agent_secret(&secret);
+    let salt = Uuid::new_v4().simple().to_string();
+    let secret_hash = hash_agent_secret_with_salt(&secret, &salt);
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
         r#"INSERT INTO endpoint_agents
-            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status, session_secret_hash)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled', $10)"#,
+            (agent_uuid, tenant_id, client_id, hostname, device_name, os, arch, agent_version, capabilities, status, session_secret_hash, session_secret_salt)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'enrolled', $10, $11)"#,
     )
     .bind(agent_uuid)
     .bind(tenant_id)
@@ -926,6 +965,7 @@ pub async fn register_agent(
     .bind(agent_version)
     .bind(serde_json::to_value(capabilities).unwrap_or(serde_json::Value::Array(vec![])))
     .bind(&secret_hash)
+    .bind(&salt)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -949,7 +989,13 @@ pub async fn mark_seen(
 ) -> Result<(), sqlx::Error> {
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
     sqlx::query(
-        "UPDATE endpoint_agents SET last_seen_at = now(), status = $2 WHERE agent_uuid = $1 AND tenant_id = $3",
+        r#"UPDATE endpoint_agents SET last_seen_at = now(), status = $2
+            WHERE ctid IN (
+                SELECT ctid FROM endpoint_agents
+                 WHERE agent_uuid = $1 AND tenant_id = $3
+                 FOR UPDATE SKIP LOCKED
+                 LIMIT 1
+            )"#,
     )
     .bind(agent_uuid)
     .bind(status)
@@ -981,7 +1027,15 @@ pub async fn store_finding_for_task(
 ) -> Result<(), sqlx::Error> {
     if engine == "ueba_baseline" {
         if let Some(payload) = parse_ueba_ingest(finding, client_id) {
-            let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
+            match crate::ueba_detector::enqueue(tenant_id, payload, None, false) {
+                Ok(()) => {}
+                Err(crate::ueba_detector::EnqueueError::NotStarted) => {
+                    if let Some(payload) = parse_ueba_ingest(finding, client_id) {
+                        let _ = crate::ueba_detector::ingest_sample(pool, tenant_id, payload).await;
+                    }
+                }
+                Err(_) => {}
+            }
         }
         return Ok(());
     }
@@ -1068,10 +1122,13 @@ pub async fn task_scan_job_id(pool: &PgPool, tenant_id: i64, task_uuid: &str) ->
 /// Periodic UEBA baseline sampling for every online endpoint agent (leader-only).
 pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegistry>) {
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(45 * 60));
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(15 * 60));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
+            if crate::ueba_detector::failsafe() {
+                continue;
+            }
             // Same trap as the task pusher: `endpoint_agents` is tenant-scoped RLS and this runs
             // on the app pool, so an unscoped DISTINCT returns only the connection's own tenant —
             // and nothing once the tenant GUC is correctly unset. Enumerate tenants explicitly,
@@ -1110,7 +1167,7 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
                                 SELECT 1 FROM endpoint_agent_tasks
                                  WHERE tenant_id = $1 AND client_id = $2
                                    AND engine = 'ueba_baseline'
-                                   AND created_at > now() - interval '40 minutes'
+                                   AND created_at > now() - interval '12 minutes'
                                    AND status IN ('pending','running','done')
                             )"#,
                         )
@@ -1128,6 +1185,7 @@ pub fn spawn_ueba_baseline_scheduler(pool: Arc<PgPool>, registry: Arc<AgentRegis
                     let params = json!({
                         "priority": "low",
                         "ueba_periodic": true,
+                        "lite_sampling": crate::ueba_detector::failsafe(),
                     });
                     let _ = enqueue_and_dispatch_fleet(
                         pool.as_ref(),
@@ -1358,6 +1416,8 @@ mod tests {
         let v = serde_json::to_value(ServerToAgent::Welcome {
             scan_concurrency: Some(4),
             heartbeat_secs: None,
+            lite_sampling: None,
+            server_utc_ms: None,
         })
         .unwrap();
         assert_eq!(v["type"], "welcome");

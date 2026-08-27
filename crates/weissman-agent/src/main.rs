@@ -40,8 +40,8 @@ struct Cli {
     #[arg(long, default_value_t = 30, env = "WEISSMAN_HEARTBEAT_SECONDS")]
     heartbeat_secs: u64,
 
-    /// Initial reconnect backoff in milliseconds (doubles up to 60s).
-    #[arg(long, default_value_t = 1500, env = "WEISSMAN_BACKOFF_MS")]
+    /// Initial reconnect backoff in milliseconds (doubles up to 5 minutes).
+    #[arg(long, default_value_t = 1000, env = "WEISSMAN_BACKOFF_MS")]
     backoff_ms_initial: u64,
 
     /// Print enrollment info and exit (for systemd / setup automation).
@@ -138,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         tokio::time::sleep(Duration::from_millis(backoff)).await;
-        backoff = (backoff.saturating_mul(2)).min(60_000);
+        backoff = (backoff.saturating_mul(2)).min(300_000);
 
         // Re-mint the session JWT before every reconnect. It is short-lived
         // (WEISSMAN_AGENT_JWT_TTL_MINS, default 240) and there was previously no way to renew it,

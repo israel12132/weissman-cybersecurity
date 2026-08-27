@@ -194,8 +194,16 @@ fn extract_token_from_request<B>(req: &Request<B>, path: &str) -> Option<(String
 fn verify_token_for_request(token: &str, path: &str, source: TokenSource) -> Option<AuthContext> {
     match source {
         TokenSource::HeaderOrCookie => {
-            if path == "/ws/agent" {
+            if path == "/ws/agent" || path == "/api/ueba/ingest" {
                 auth_jwt::verify_agent_session_token(token)
+                    .or_else(|| {
+                        if path == "/api/ueba/ingest" {
+                            auth_jwt::verify_access_token(token)
+                                .filter(auth_jwt::is_user_access_context)
+                        } else {
+                            None
+                        }
+                    })
             } else {
                 auth_jwt::verify_access_token(token).filter(auth_jwt::is_user_access_context)
             }
@@ -1670,8 +1678,17 @@ pub fn spawn_http_background_tasks(state: &Arc<AppState>) {
             app_pool.clone(),
             auth_pool.clone(),
         );
-        // UEBA — purge old samples once an hour so the table stays bounded.
+        // UEBA — ingest MPSC worker, hourly :45 retention, CPU failsafe.
+        crate::ueba_detector::spawn_ingest_worker(app_pool.clone());
         crate::ueba_detector::spawn_retention_loop(app_pool.clone());
+        tokio::spawn(async {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                if let Some(pct) = crate::ueba_detector::host_cpu_busy_pct() {
+                    crate::ueba_detector::set_failsafe(pct >= 95.0);
+                }
+            }
+        });
         crate::sovereign_self_scan::spawn_sovereign_self_scan_loop(
             app_pool.clone(),
             state.telemetry_broadcast_tx.clone(),

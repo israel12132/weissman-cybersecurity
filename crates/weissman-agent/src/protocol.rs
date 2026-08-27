@@ -67,6 +67,12 @@ pub enum ServerToAgent {
     Welcome {
         scan_concurrency: Option<u32>,
         heartbeat_secs: Option<u64>,
+        /// Server-side failsafe: agent should emit a lite (low-CPU) UEBA sample.
+        #[serde(default)]
+        lite_sampling: Option<bool>,
+        /// Server UTC milliseconds so the agent can correct hour-of-week buckets.
+        #[serde(default)]
+        server_utc_ms: Option<i64>,
     },
     /// Dispatch a detection task.
     Task {

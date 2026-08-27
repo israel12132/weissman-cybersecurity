@@ -37,6 +37,10 @@ whoami = "1"
 sha2 = "0.10"
 hex = "0.4"
 
+# Gzip for large UEBA metric payloads.
+flate2 = "1"
+base64 = "0.22"
+
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }
 
@@ -54,6 +58,9 @@ thiserror = "1"
 anyhow = "1"
 
 # Platform-specific extras pulled in only on Windows so musl builds stay small.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
@@ -61,6 +68,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",
     "Win32_System_LibraryLoader",
+    "Win32_System_EventLog",
 ] }
 
 # Release profile is defined at workspace root Cargo.toml.

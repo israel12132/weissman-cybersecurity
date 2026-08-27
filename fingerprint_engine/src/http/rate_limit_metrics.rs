@@ -106,6 +106,16 @@ pub fn enroll_burst() -> u32 {
 }
 
 #[must_use]
+pub fn install_limit_per_minute() -> u32 {
+    nz_env("WEISSMAN_AGENT_INSTALL_PER_MINUTE", 10, 2, 60)
+}
+
+#[must_use]
+pub fn install_burst() -> u32 {
+    nz_env("WEISSMAN_AGENT_INSTALL_BURST", 20, 4, 120)
+}
+
+#[must_use]
 pub fn api_limit_per_sec() -> u32 {
     nz_env("WEISSMAN_RATE_LIMIT_PER_SEC", 30, 5, 500)
 }

@@ -62,6 +62,11 @@ fi
 mv "${BIN_PATH}.tmp" "${BIN_PATH}"
 chmod 0755 "${BIN_PATH}"
 
+# Optional: allow the agent to read /var/log/auth.log without running as root.
+if command -v setcap >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    setcap cap_dac_read_search=ep "${BIN_PATH}" 2>/dev/null || true
+fi
+
 # Enroll ONCE, here, and persist the identity for the service to reuse.
 #
 # This step used to be a throwaway "verify it can enroll" check: it consumed the strictly
@@ -116,7 +121,9 @@ Type=simple
 EnvironmentFile=${ENV_FILE}
 ExecStart=${BIN_PATH}
 Restart=always
-RestartSec=5s
+RestartSec=10
+MemoryHigh=40M
+MemoryMax=80M
 NoNewPrivileges=true
 ProtectSystem=strict
 # ProtectSystem=strict mounts the entire filesystem read-only, so without this the agent cannot

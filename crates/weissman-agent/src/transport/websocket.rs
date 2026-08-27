@@ -132,6 +132,14 @@ pub async fn run_session(
             };
             if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed");
+                if let AgentToServer::Finding {
+                    engine, finding, ..
+                } = &msg
+                {
+                    if engine == "ueba_baseline" {
+                        crate::detections::push_offline(finding.clone());
+                    }
+                }
                 break;
             }
         }
@@ -245,10 +253,28 @@ async fn handle_text(
     };
     match msg {
         ServerToAgent::Welcome {
-            scan_concurrency, ..
+            scan_concurrency,
+            lite_sampling,
+            server_utc_ms,
+            ..
         } => {
             if let Some(n) = scan_concurrency {
                 max_parallel.store(n.max(1), Ordering::Relaxed);
+            }
+            crate::detections::set_lite(lite_sampling.unwrap_or(false));
+            if let Some(ms) = server_utc_ms {
+                crate::detections::note_server_utc_ms(ms);
+            }
+            for finding in crate::detections::drain_offline() {
+                let replay = AgentToServer::Finding {
+                    agent_id: agent_id.clone(),
+                    task_id: "ueba-replay".into(),
+                    engine: "ueba_baseline".into(),
+                    finding,
+                };
+                if out_tx.send(replay).await.is_err() {
+                    break;
+                }
             }
             info!(target: "agent", "server welcomed agent");
         }

@@ -1169,30 +1169,71 @@ async fn api_ask(
     (StatusCode::OK, Json(json!({"ok": result.error.is_none(), "result": result}))).into_response()
 }
 
-// ─── UEBA ingest (called by /ws/agent when ueba_baseline finding arrives) ──
+// ─── UEBA ingest (agent JWT or admin HTTP; live path is also /ws/agent) ──
 
 async fn api_ueba_ingest(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AuthContext>,
-    Json(p): Json<crate::ueba_detector::UebaIngestPayload>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(mut p): Json<crate::ueba_detector::UebaIngestPayload>,
 ) -> Response {
-    // The real ingest path is the in-process /ws/agent handler; agent JWTs can never reach this
-    // HTTP route (verify_token_for_request requires a user access context). Any human caller here
-    // is supplying an arbitrary agent_id/client_id, which forges behavioural baselines/anomalies.
-    // Restrict it to admins and range-check hour_of_week so it cannot be used to poison detection.
-    if let Err(r) = crate::rbac::require_admin(&auth) {
+    let source_ip = extract_client_ip(&headers, peer);
+    let is_agent = auth.agent_id.is_some() || auth.role.eq_ignore_ascii_case("agent");
+    if is_agent {
+        let Some(aid) = auth.agent_id.clone() else {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"ok": false, "detail": "no live agent session"})),
+            )
+                .into_response();
+        };
+        p.agent_id = aid;
+        p.require_live_session = true;
+    } else if let Err(r) = crate::rbac::require_admin(&auth) {
         return r;
     }
     if !(0..=167).contains(&p.hour_of_week) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "detail": "hour_of_week must be in 0..=167"})),
+            Json(json!({"ok": false, "detail": "invalid ingest payload"})),
         )
             .into_response();
     }
-    match crate::ueba_detector::ingest_sample(&state.app_pool, auth.tenant_id, p).await {
-        Ok(s) => (StatusCode::OK, Json(json!({"ok": true, "summary": s}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"ok": false, "detail": e}))).into_response(),
+    p.source_ip = Some(source_ip.clone());
+    let fallback = p.clone();
+    match crate::ueba_detector::enqueue(
+        auth.tenant_id,
+        p,
+        Some(source_ip),
+        is_agent,
+    ) {
+        Ok(()) => (StatusCode::ACCEPTED, Json(json!({"ok": true, "queued": true}))).into_response(),
+        Err(crate::ueba_detector::EnqueueError::Reject(rej)) => {
+            let (st, detail) = rej.status_and_detail();
+            (
+                StatusCode::from_u16(st).unwrap_or(StatusCode::BAD_REQUEST),
+                Json(json!({"ok": false, "detail": detail})),
+            )
+                .into_response()
+        }
+        Err(crate::ueba_detector::EnqueueError::QueueFull) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"ok": false, "detail": "ingest paused"})),
+        )
+            .into_response(),
+        Err(crate::ueba_detector::EnqueueError::NotStarted) => {
+            match crate::ueba_detector::ingest_sample(&state.app_pool, auth.tenant_id, fallback)
+                .await
+            {
+                Ok(s) => (StatusCode::OK, Json(json!({"ok": true, "summary": s}))).into_response(),
+                Err(_) => (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"ok": false, "detail": crate::ueba_detector::public_error("")})),
+                )
+                    .into_response(),
+            }
+        }
     }
 }
 
@@ -1201,6 +1242,9 @@ async fn api_ueba_anomalies(
     Extension(auth): Extension<AuthContext>,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
     let limit: i64 = q.get("limit").and_then(|s| s.parse::<i64>().ok()).unwrap_or(50).clamp(1, 500);
     let agent = q.get("agent_id").cloned();
     let Ok(mut tx) = db::begin_tenant_tx(&state.app_pool, auth.tenant_id).await else {
@@ -1208,7 +1252,8 @@ async fn api_ueba_anomalies(
     };
     let rows = sqlx::query(
         r#"SELECT id, agent_id, client_id, metric_name, observed,
-                  baseline_mean, baseline_stddev, z_score, severity, detail, detected_at
+                  baseline_mean, baseline_stddev, z_score, severity, detail, detected_at,
+                  COALESCE(status, 'open') AS status, COALESCE(weighted_score, 0) AS weighted_score
              FROM agent_anomalies
             WHERE ($1::text IS NULL OR agent_id = $1)
             ORDER BY detected_at DESC
@@ -1230,8 +1275,182 @@ async fn api_ueba_anomalies(
         "severity":      r.try_get::<String, _>("severity").unwrap_or_default(),
         "detail":        r.try_get::<String, _>("detail").unwrap_or_default(),
         "detected_at":   r.try_get::<chrono::DateTime<Utc>, _>("detected_at").ok().map(|d| d.to_rfc3339()),
+        "status":        r.try_get::<String, _>("status").unwrap_or_else(|_| "open".into()),
+        "weighted_score": r.try_get::<f64, _>("weighted_score").unwrap_or(0.0),
     })).collect();
-    (StatusCode::OK, Json(json!({"ok": true, "anomalies": list}))).into_response()
+    (StatusCode::OK, Json(json!({"ok": true, "anomalies": list, "learning": false}))).into_response()
+}
+
+async fn api_ueba_policy_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    match crate::ueba_detector::load_policy_public(&state.app_pool, auth.tenant_id).await {
+        Ok(v) => (StatusCode::OK, Json(json!({"ok": true, "policy": v}))).into_response(),
+        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct UebaPolicyBody {
+    learn_window_days: Option<i64>,
+    business_hours_start: Option<i16>,
+    business_hours_end: Option<i16>,
+    treat_holidays_as_weekend: Option<bool>,
+    holiday_dates: Option<Vec<String>>,
+}
+
+async fn api_ueba_policy_put(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<UebaPolicyBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_any_role(&auth, &["operator", "admin", "ceo"]) {
+        return r;
+    }
+    let dates = body
+        .holiday_dates
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|s| chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
+        .collect();
+    match crate::ueba_detector::upsert_policy(
+        &state.app_pool,
+        auth.tenant_id,
+        body.learn_window_days.unwrap_or(7),
+        body.business_hours_start.unwrap_or(8),
+        body.business_hours_end.unwrap_or(18),
+        body.treat_holidays_as_weekend.unwrap_or(true),
+        dates,
+    )
+    .await
+    {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Err(_) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "policy update failed"})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_ueba_whitelist_get(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    match crate::ueba_detector::whitelist_list(&state.app_pool, auth.tenant_id).await {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct UebaWhitelistBody {
+    process_name: String,
+    #[serde(default)]
+    reason: String,
+    client_id: Option<i64>,
+}
+
+async fn api_ueba_whitelist_post(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Json(body): Json<UebaWhitelistBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_any_role(&auth, &["operator", "admin", "ceo"]) {
+        return r;
+    }
+    match crate::ueba_detector::whitelist_add(
+        &state.app_pool,
+        auth.tenant_id,
+        auth.user_id,
+        body.client_id,
+        &body.process_name,
+        &body.reason,
+    )
+    .await
+    {
+        Ok(id) => (StatusCode::OK, Json(json!({"ok": true, "id": id}))).into_response(),
+        Err(_) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "whitelist update failed"})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_ueba_whitelist_delete(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_any_role(&auth, &["operator", "admin", "ceo"]) {
+        return r;
+    }
+    match crate::ueba_detector::whitelist_delete(&state.app_pool, auth.tenant_id, id).await {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Err(_) => (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct UebaDispositionBody {
+    status: String,
+    #[serde(default)]
+    reason: String,
+}
+
+async fn api_ueba_anomaly_disposition(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<i64>,
+    Json(body): Json<UebaDispositionBody>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    match crate::ueba_detector::dispose_anomaly(
+        &state.app_pool,
+        auth.tenant_id,
+        auth.user_id,
+        &auth.role,
+        id,
+        &body.status,
+        &body.reason,
+    )
+    .await
+    {
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))).into_response(),
+        Err(e) if e == "not found" => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok": false, "detail": "not found"})),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "detail": "disposition failed"})),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_ueba_fleet(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AuthContext>,
+) -> Response {
+    if let Err(r) = crate::rbac::require_analyst(&auth) {
+        return r;
+    }
+    match crate::ueba_detector::fleet_snapshot(&state.app_pool, auth.tenant_id).await {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok": false}))).into_response(),
+    }
 }
 
 // ─── Baseline & drift (UEBA tables → BaselineAndDrift.jsx) ───────────────────

@@ -139,22 +139,51 @@ In-process background loops (`weissman-server`):
 
 ## Data flow — "endpoint UEBA anomaly"
 
-1. Agent dispatches `ueba_baseline` capability on its normal cadence.
-2. `weissman-agent/src/detections/baseline.rs` samples on Linux:
-   listening TCP ports, top processes (by `/proc/*/comm`), unique UIDs, uptime,
-   load, memory used %, failed logins (`/var/log/auth.log` if readable).
-   Bundles into `metrics` JSON with `hour_of_week` (Mon-00 = 0, Sun-23 = 167).
-3. Server `POST /api/ueba/ingest` → `ueba_detector::ingest_sample`:
-   - INSERT into `agent_metric_samples`,
-   - re-derive baselines (mean + stddev) for every numeric metric for that
-     `(agent, metric, hour_of_week)` bucket from the last 7 days,
-   - if baseline has ≥ 24 samples and stddev > 0:
-     `|z| > 3` → row in `agent_anomalies` with `severity='medium'`,
-     `|z| > 6` → `severity='high'`,
-   - for `open_ports[]` / `top_processes[]`: any item not in the `learned_set`
-     (collected over the same 7-day window) fires a categorical anomaly once
-     it's out of the learning window.
-4. `/api/ueba/anomalies` exposes the rolling list for the cockpit UEBA panel.
+1. Agent dispatches `ueba_baseline` on a 15-minute scheduler (skipped while the
+   server is in CPU failsafe). `weissman-agent/src/detections/ueba/` samples:
+   - Linux: listening TCP from `/proc/net/tcp{,6}` (no `netstat`/`ss`), top
+     processes from `/proc/*/comm` (control chars stripped, cap 24), unique
+     UIDs, uptime (reboot flagged so a drop to 0 is not a z-score spike), EMA
+     load/memory, failed logins via non-blocking read of `/var/log/auth.log`
+     (optional `cap_dac_read_search` from `install.sh`).
+   - Windows: Event Log 4625 for `failed_logins` when the Security log is
+     readable; otherwise the metric is 0 with `auth_log_readable=false`.
+   - macOS: Unified Logging (`log show`, 2s timeout) for failed logons.
+   Metrics are tagged with UTC `hour_of_week` (Mon-00 = 0, Sun-23 = 167;
+   DST-safe because the clock is UTC), `seq`, `nonce`, `sampled_at`, and
+   `hardware_id`. Optional gzip+base64 `metrics_gz` for large payloads.
+   Offline: an in-memory ring of 32 samples is drained on WSS reconnect
+   (exponential backoff to 5 minutes).
+2. Wire path is WSS `Finding{engine:ueba_baseline}` (preferred) or
+   `POST /api/ueba/ingest` with an agent JWT (requires a live WSS session) or
+   an admin JWT. The HTTP handler enqueues onto a Tokio MPSC (cap 4096,
+   2 samples/agent/minute). `WEISSMAN_TRUST_PROXY_HEADERS` is honoured for
+   source IP. Out-of-scope IPs vs `clients.ip_ranges` return **403**.
+3. `ueba_detector::ingest_sample`:
+   - INSERT into `agent_metric_samples` using **`sampled_at`** (delayed
+     catch-up maps to the original UTC hour, not arrival time),
+   - update a Welford online baseline on **GLOBAL_BUCKET=0** (raw samples
+     still store the real hour-of-week for temporal smoothing),
+   - MAD fallback + winsorization so a single spike cannot poison σ,
+   - `|z|` gates are per-metric (`failed_logins` at 2σ, load/memory at 3σ);
+     `uptime_seconds` is a reboot delta, not a z-score,
+   - **no client-facing anomaly** while `endpoint_agents.is_learning` is
+     true (exit requires n≥24 **and** ≥5 distinct weekdays),
+   - categorical `open_ports[]` (integer[], ephemeral ranges excluded) and
+     normalised `top_processes[]` vs a 500-item learned set with 30-day aging
+     and a tenant process whitelist,
+   - after commit: SOAR playbook for `high`/`critical` (3s timeout, 3600s
+     cooldown); `isolate_host` when critical **or** (failed_logins high + new
+     ports); `page_oncall` only off-hours; FAIR ARO floor 2.0.
+4. Cockpit `/ueba` reads `/api/ueba/anomalies`, `/api/ueba/fleet`,
+   `/api/ueba/policy`, `/api/ueba/whitelist` (analyst+). Disposition is
+   `POST /api/ueba/anomalies/:id/disposition`. `/api/health` embeds `ueba`
+   ingest/retention/failsafe flags.
+5. Retention (`spawn_retention_loop`) runs at minute **:45**, holds a Postgres
+   advisory lock, archives then deletes samples in batches of 5000 (hot
+   window 14 days, anomalies 90 days). Nightly `pg_dump` excludes
+   `agent_metric_samples` data unless
+   `WEISSMAN_UEBA_EXCLUDE_SAMPLES_FROM_BACKUP=false`.
 
 ---
 
