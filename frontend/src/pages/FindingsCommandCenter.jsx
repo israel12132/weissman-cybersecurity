@@ -703,6 +703,14 @@ export default function FindingsCommandCenter() {
           <Link to="/engines" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0">
             {t('nav.engine_matrix')}
           </Link>
+          <span className="text-[var(--text-disabled)]">|</span>
+          <Link to="/finding-clusters" className="text-rose-300/80 hover:text-rose-200 transition-colors shrink-0">
+            {t('nav.finding_clusters')}
+          </Link>
+          <span className="text-[var(--text-disabled)]">|</span>
+          <Link to="/suppressions" className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0">
+            {t('nav.suppressions')}
+          </Link>
           {region && (
             <>
               <span className="text-[var(--text-disabled)]">|</span>

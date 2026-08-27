@@ -84,6 +84,8 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "title",
                 "member_count",
                 "max_severity",
+                "native_severity",
+                "corroboration_boost",
                 "max_cvss",
                 "max_epss",
                 "kev_listed",
@@ -566,7 +568,7 @@ Tables and columns are case-sensitive. Use only the schema below.
 
 Schema:
 - vulnerabilities(id, finding_id, title, severity, source, status, client_id, discovered_at, cluster_id, epss_score, epss_percentile, kev_listed, kev_known_ransomware, kev_due_date, seen_count, signature_hash)
-- weissman_finding_clusters(id, client_id, target, cwe, vuln_signature, title, member_count, max_severity, max_cvss, max_epss, kev_listed, status, first_seen_at, last_seen_at)
+- weissman_finding_clusters(id, client_id, target, cwe, vuln_signature, title, member_count, max_severity, native_severity, corroboration_boost, max_cvss, max_epss, kev_listed, status, first_seen_at, last_seen_at)
 - clients(id, name, default_asset_value_usd, risk_loss_discount)
 - risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
 - agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)

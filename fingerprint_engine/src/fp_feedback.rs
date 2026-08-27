@@ -272,13 +272,24 @@ pub struct SuppressionRule {
 
 /// True when some active rule suppresses `(signature_hash, target_url)`. Respecting `target_glob`
 /// is essential: an FP vote on one host must not suppress the same signature on every host.
+///
+/// Matching uses the same filtered target normalisation as `finding_identity` so an ephemeral
+/// source port or query-string session token cannot dodge a 3-FP auto-suppression rule.
 #[must_use]
 pub fn is_suppressed_by(rules: &[SuppressionRule], signature_hash: &str, target_url: &str) -> bool {
+    let target_norm = crate::finding_identity::normalize_target(target_url);
     rules.iter().any(|r| {
         r.signature_hash == signature_hash
             && match r.target_glob.as_deref().map(str::trim) {
                 None | Some("") => true,
-                Some(glob) => glob_matches(glob, target_url),
+                Some(glob) => {
+                    let glob_norm = crate::finding_identity::normalize_target(glob);
+                    glob_matches(glob, target_url)
+                        || (!target_norm.is_empty() && glob_matches(glob, &target_norm))
+                        || (!glob_norm.is_empty()
+                            && !target_norm.is_empty()
+                            && glob_matches(&glob_norm, &target_norm))
+                }
             }
     })
 }
@@ -387,6 +398,31 @@ mod tests {
 
         // Different signature never suppressed regardless of glob.
         assert!(!is_suppressed_by(&any, "other", "https://prod.example.com"));
+    }
+
+    #[test]
+    fn suppression_matches_ephemeral_port_and_query_variants() {
+        let sig = "stable-cluster-key";
+        // Analyst marked FP against a URL that still carried an OS-allocated port + session.
+        let scoped = [rule(
+            sig,
+            Some("https://app.example.com:54321/login?sid=deadbeef"),
+        )];
+        assert!(is_suppressed_by(
+            &scoped,
+            sig,
+            "https://app.example.com/login"
+        ));
+        assert!(is_suppressed_by(
+            &scoped,
+            sig,
+            "https://APP.example.com:49152/login?x=1"
+        ));
+        assert!(!is_suppressed_by(
+            &scoped,
+            sig,
+            "https://other.example.com/login"
+        ));
     }
 
     #[test]

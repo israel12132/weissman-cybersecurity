@@ -105,13 +105,14 @@ pub trait VulnerabilitiesWriter: Sealed {
 
 // ── Cryptographic dedup signature ───────────────────────────────────────────
 
-/// Stable hash over **Target + Vuln_Type + Payload + Engine**.
-/// Used for `finding_id` and UPSERT deduplication across concurrent engines.
+/// Stable hash over **normalised Target + Vuln_Type + Payload + Engine**.
+/// Used as a secondary identity; the primary `finding_id` is
+/// [`crate::finding_identity::build_stable_finding_id`].
 pub fn build_dedup_hash(target: &str, vuln_type: &str, payload: &str, engine: &str) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(target.trim().to_lowercase().as_bytes());
+    hasher.update(crate::finding_identity::normalize_target(target).as_bytes());
     hasher.update(b"|");
-    hasher.update(vuln_type.trim().to_lowercase().as_bytes());
+    hasher.update(crate::finding_identity::normalize_signature(vuln_type).as_bytes());
     hasher.update(b"|");
     hasher.update(payload.as_bytes());
     hasher.update(b"|");
@@ -120,28 +121,7 @@ pub fn build_dedup_hash(target: &str, vuln_type: &str, payload: &str, engine: &s
 }
 
 fn extract_vuln_type(f: &Value) -> String {
-    for k in [
-        "type",
-        "vuln_type",
-        "signature",
-        "rule_id",
-        "vuln_signature",
-        "rule",
-    ] {
-        if let Some(s) = f.get(k).and_then(Value::as_str) {
-            let t = s.trim();
-            if !t.is_empty() {
-                return t.to_ascii_lowercase();
-            }
-        }
-    }
-    f.get("title")
-        .and_then(Value::as_str)
-        .unwrap_or("finding")
-        .chars()
-        .take(80)
-        .collect::<String>()
-        .to_ascii_lowercase()
+    crate::finding_identity::derive_vuln_signature(f, "finding")
 }
 
 fn extract_payload(f: &Value) -> String {
@@ -313,7 +293,7 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
         }
     }
 
-    let target_url = extract_target(&raw, target);
+    let target_url = crate::finding_identity::normalize_target(&extract_target(&raw, target));
     let vuln_type = extract_vuln_type(&raw);
     let payload = extract_payload(&raw);
     let dedup_hash = build_dedup_hash(&target_url, &vuln_type, &payload, engine);
@@ -356,59 +336,11 @@ pub fn gate_findings(engine: &str, target: &str, findings: &[Value]) -> Vec<Pers
         .collect()
 }
 
-/// Legacy finding_id builder (CVE/MITRE/signature/title) for cross-scan dedup continuity.
+/// Stable finding_id (CVE/MITRE/signature) for cross-scan dedup continuity.
+/// Delegates to [`crate::finding_identity::build_stable_finding_id`] so persist,
+/// gate, and correlator share one normalised hash.
 pub fn build_legacy_finding_id(engine: &str, target: &str, finding: &Value) -> String {
-    let cve = crate::intel_findings_backfill::extract_cve_from_value(finding).unwrap_or_default();
-    let cwe = finding
-        .get("cwe")
-        .or_else(|| finding.get("cwe_id"))
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let mitre = finding
-        .get("mitre_attack")
-        .or_else(|| finding.get("mitre"))
-        .or_else(|| finding.get("attack_id"))
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let signature = finding
-        .get("signature")
-        .or_else(|| finding.get("rule"))
-        .or_else(|| finding.get("rule_id"))
-        .or_else(|| finding.get("vuln_signature"))
-        .or_else(|| finding.get("type"))
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let title = extract_title(finding, engine);
-    let normalized_title = title
-        .chars()
-        .filter(|c| !c.is_ascii_digit() && !"./_-?#&=".contains(*c))
-        .collect::<String>()
-        .to_lowercase();
-
-    let mut hasher = Sha256::new();
-    hasher.update(engine.as_bytes());
-    hasher.update(b"|");
-    hasher.update(target.trim().to_lowercase().as_bytes());
-    hasher.update(b"|");
-    hasher.update(cve.as_bytes());
-    hasher.update(b"|");
-    hasher.update(cwe.as_bytes());
-    hasher.update(b"|");
-    hasher.update(mitre.as_bytes());
-    hasher.update(b"|");
-    hasher.update(signature.as_bytes());
-    hasher.update(b"|");
-    hasher.update(normalized_title.as_bytes());
-    let digest = hasher.finalize();
-    let short: String = digest
-        .iter()
-        .take(12)
-        .map(|b| format!("{:02x}", b))
-        .collect();
-    format!("{}-{}", engine, short)
+    crate::finding_identity::build_stable_finding_id(engine, target, finding)
 }
 
 #[cfg(test)]
@@ -458,5 +390,24 @@ mod tests {
         let a = build_dedup_hash("https://x.com", "sqli", "a", "eng");
         let b = build_dedup_hash("https://x.com", "sqli", "b", "eng");
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn finding_id_ignores_ephemeral_port_and_query() {
+        let a = json!({
+            "severity": "low",
+            "title": "XSS",
+            "signature": "xss_reflected?sid=1",
+            "cwe": "CWE-79",
+        });
+        let b = json!({
+            "severity": "low",
+            "title": "XSS",
+            "signature": "xss_reflected",
+            "cwe": "cwe-79",
+        });
+        let id1 = build_legacy_finding_id("asm", "https://app.example.com:49152/x?q=1", &a);
+        let id2 = build_legacy_finding_id("asm", "https://app.example.com/x", &b);
+        assert_eq!(id1, id2);
     }
 }

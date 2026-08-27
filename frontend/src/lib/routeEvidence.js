@@ -10,6 +10,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/audit-log',
   '/billing',
   '/findings',
+  '/finding-clusters',
   '/playbooks',
   '/vuln-intel',
   '/status',

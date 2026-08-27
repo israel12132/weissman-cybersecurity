@@ -93,6 +93,7 @@ pub mod fair_exposure_fusion_engine;
 pub mod financial_risk;
 pub mod finding_aging;
 pub mod finding_attestation;
+pub mod finding_identity;
 pub mod finding_live_verify;
 pub mod findings_correlator;
 pub mod findings_gate;

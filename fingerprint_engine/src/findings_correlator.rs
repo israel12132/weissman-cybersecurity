@@ -6,105 +6,35 @@
 //! creates 3 tickets for 1 problem — analyst fatigue, distorted KPIs.
 //!
 //! This module collapses those signals into **finding clusters**. A cluster is
-//! identified by the triple `(target, vuln_signature, cwe)` hashed to SHA-256.
-//! Each `vulnerabilities` row points to its cluster via `cluster_id`. The cluster
+//! identified by the triple `(target, vuln_signature, cwe)` hashed to SHA-256
+//! after uniform filtered normalisation (`finding_identity`). Each
+//! `vulnerabilities` row points to its cluster via `cluster_id`. The cluster
 //! row carries the *aggregate* (max severity, engines list, CVE set, KEV flag,
-//! first/last seen) so the inbox can show one card per real-world issue.
+//! first/last seen) plus a **corroboration boost**: when network and agent
+//! planes both fire on the same identity, severity jumps to Critical.
 //!
 //! `upsert_cluster_for_finding` is called from `findings_persist::persist_engine_findings`
 //! immediately AFTER the vulnerability row exists, inside the same transaction.
 
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Row, Transaction};
 
-/// Stable cluster identity: lowercase(target) | normalised(signature) | normalised(cwe).
+use crate::finding_identity::{
+    self, corroborate_cluster_severity, corroboration_cvss_floor, derive_vuln_signature,
+    engine_plane, normalize_cwe, normalize_target,
+};
+
+/// Stable cluster identity: sha256(normalised_target | normalised_signature | normalised_cwe).
 ///
 /// We intentionally exclude `engine` — that's the whole point of correlation: two
 /// engines that fire on the same vuln must land in the same cluster.
 pub fn build_cluster_key(target: &str, vuln_signature: &str, cwe: &str) -> String {
-    let target_norm = target.trim().to_ascii_lowercase();
-    // Strip query / fragments / trailing slash so /foo/?id=1 == /foo == /foo/ for clustering.
-    let target_norm = strip_volatile_url_parts(&target_norm);
-    let sig_norm = vuln_signature.trim().to_ascii_lowercase();
-    let cwe_norm = cwe.trim().to_ascii_uppercase().replace(' ', "");
-
-    let mut h = Sha256::new();
-    h.update(target_norm.as_bytes());
-    h.update(b"|");
-    h.update(sig_norm.as_bytes());
-    h.update(b"|");
-    h.update(cwe_norm.as_bytes());
-    hex::encode(h.finalize())
-}
-
-fn strip_volatile_url_parts(url: &str) -> String {
-    let u = url.split('#').next().unwrap_or(url);
-    let u = u.split('?').next().unwrap_or(u);
-    let u = u.trim_end_matches('/');
-    u.to_string()
-}
-
-/// Derive a stable vulnerability signature from a raw engine finding. This is the
-/// "what" of the issue (XSS in `/foo`, SQL injection in `id` param, etc.) — NOT
-/// the "where" (target stays separate so two distinct hosts cluster separately).
-///
-/// Priority order — first non-empty wins:
-///   1. `signature` / `rule_id` / `vuln_signature` (explicit from engine)
-///   2. `type` (taxonomy bucket, e.g. "xss_reflected")
-///   3. `cve` / `cve_id`
-///   4. lowercased + diacritic-stripped first 80 chars of the title
-fn derive_vuln_signature(finding: &Value, fallback_title: &str) -> String {
-    for k in ["signature", "rule_id", "vuln_signature", "rule"] {
-        if let Some(s) = finding.get(k).and_then(Value::as_str) {
-            let t = s.trim();
-            if !t.is_empty() {
-                return t.to_ascii_lowercase();
-            }
-        }
-    }
-    if let Some(t) = finding.get("type").and_then(Value::as_str) {
-        let s = t.trim();
-        if !s.is_empty() {
-            return s.to_ascii_lowercase();
-        }
-    }
-    for k in ["cve", "cve_id"] {
-        if let Some(c) = finding.get(k).and_then(Value::as_str) {
-            let s = c.trim();
-            if !s.is_empty() {
-                return s.to_ascii_uppercase();
-            }
-        }
-    }
-    fallback_title
-        .chars()
-        .take(80)
-        .collect::<String>()
-        .to_ascii_lowercase()
+    finding_identity::build_cluster_key(target, vuln_signature, cwe)
 }
 
 /// Severity weight for `MAX(...)` rollups. Higher = worse.
 fn sev_weight(s: &str) -> i32 {
-    match s.trim().to_ascii_lowercase().as_str() {
-        "critical" => 5,
-        "high" => 4,
-        "medium" => 3,
-        "low" => 2,
-        "info" => 1,
-        _ => 0,
-    }
-}
-#[allow(dead_code)]
-fn weight_to_sev(w: i32) -> &'static str {
-    match w {
-        5 => "critical",
-        4 => "high",
-        3 => "medium",
-        2 => "low",
-        1 => "info",
-        _ => "info",
-    }
+    finding_identity::sev_weight(s)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -136,11 +66,15 @@ pub async fn upsert_cluster_for_finding(
 ) -> Result<(i64, String), String> {
     let signature = derive_vuln_signature(finding, attrs.title);
     let key = build_cluster_key(attrs.target, &signature, attrs.cwe);
-    let target_norm = strip_volatile_url_parts(&attrs.target.to_ascii_lowercase());
+    let target_norm = normalize_target(attrs.target);
+    let cwe_norm = normalize_cwe(attrs.cwe);
+    let plane = engine_plane(attrs.engine);
 
     // Atomic upsert + aggregate refresh in one statement. arrays are accumulated
     // with `array_distinct(... || ARRAY[...])` so engines/sources/cves grow but
-    // never duplicate.
+    // never duplicate. `max_severity` here is the *native* member-max; corroboration
+    // (cross-plane / multi-engine) is applied in a follow-up UPDATE from the
+    // merged `engines` array so the boost sees every detector, not just this one.
     let sev_w_new = sev_weight(attrs.severity);
     // Only a genuinely new member grows member_count; a re-detection (upsert UPDATE branch on
     // `vulnerabilities`) must add 0, else the corroboration count inflates once per rescan.
@@ -157,12 +91,14 @@ pub async fn upsert_cluster_for_finding(
         INSERT INTO weissman_finding_clusters (
             tenant_id, client_id, cluster_key, target, cwe, vuln_signature, title,
             member_count, engines, sources, cves,
-            max_severity, max_cvss, max_epss, kev_listed,
+            max_severity, native_severity, max_cvss, max_epss, kev_listed,
+            engine_planes, corroboration_boost,
             status, first_seen_at, last_seen_at, updated_at
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7,
             1, ARRAY[$8]::text[], ARRAY[$9]::text[], $10::text[],
-            $11, $12, $13, $14,
+            $11, $11, $12, $13, $14,
+            ARRAY[$17]::text[], 'none',
             'OPEN', now(), now(), now()
         )
         ON CONFLICT (tenant_id, client_id, cluster_key) DO UPDATE SET
@@ -176,8 +112,11 @@ pub async fn upsert_cluster_for_finding(
             cves           = (
                 SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.cves    || $10::text[]))
             ),
-            max_severity   = CASE
-                WHEN $15::int > (CASE weissman_finding_clusters.max_severity
+            engine_planes  = (
+                SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.engine_planes || ARRAY[$17::text]))
+            ),
+            native_severity = CASE
+                WHEN $15::int > (CASE weissman_finding_clusters.native_severity
                                      WHEN 'critical' THEN 5
                                      WHEN 'high'     THEN 4
                                      WHEN 'medium'   THEN 3
@@ -185,24 +124,24 @@ pub async fn upsert_cluster_for_finding(
                                      WHEN 'info'     THEN 1
                                      ELSE 0 END)
                 THEN $11
-                ELSE weissman_finding_clusters.max_severity
+                ELSE weissman_finding_clusters.native_severity
             END,
             max_cvss       = GREATEST(COALESCE(weissman_finding_clusters.max_cvss, 0), $12),
             max_epss       = GREATEST(COALESCE(weissman_finding_clusters.max_epss, 0), $13),
             kev_listed     = weissman_finding_clusters.kev_listed OR $14,
-            title          = CASE WHEN $11 = 'critical' AND weissman_finding_clusters.max_severity <> 'critical'
+            title          = CASE WHEN $11 = 'critical' AND weissman_finding_clusters.native_severity <> 'critical'
                                   THEN $7
                                   ELSE weissman_finding_clusters.title END,
             last_seen_at   = now(),
             updated_at     = now()
-        RETURNING id
+        RETURNING id, engines, native_severity
         "#,
     )
     .bind(tenant_id)
     .bind(client_id)
     .bind(&key)
     .bind(&target_norm)
-    .bind(attrs.cwe)
+    .bind(&cwe_norm)
     .bind(&signature)
     .bind(attrs.title)
     .bind(attrs.engine)
@@ -214,12 +153,53 @@ pub async fn upsert_cluster_for_finding(
     .bind(attrs.kev_listed)
     .bind(sev_w_new)
     .bind(member_inc)
+    .bind(plane)
     .fetch_one(&mut **tx)
     .await
     .map_err(|e| format!("cluster upsert: {e}"))?;
 
     let id: i64 = row.try_get("id").unwrap_or(0);
+    let engines: Vec<String> = row.try_get("engines").unwrap_or_default();
+    let native: String = row
+        .try_get::<Option<String>, _>("native_severity")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| attrs.severity.to_string());
+
+    apply_corroboration_boost(tx, id, &native, &engines).await?;
     Ok((id, key))
+}
+
+/// Recompute effective `max_severity` from the merged engine set.
+/// Cross-plane (network + agent) corroboration jumps the cluster to Critical.
+async fn apply_corroboration_boost(
+    tx: &mut Transaction<'_, Postgres>,
+    cluster_id: i64,
+    native: &str,
+    engines: &[String],
+) -> Result<(), String> {
+    let outcome = corroborate_cluster_severity(native, engines);
+    let cvss_floor = corroboration_cvss_floor(&outcome.boost, &outcome.severity);
+    sqlx::query(
+        r#"UPDATE weissman_finding_clusters SET
+                max_severity = $2,
+                native_severity = $3,
+                corroboration_boost = $4,
+                engine_planes = $5,
+                max_cvss = GREATEST(COALESCE(max_cvss, 0), $6),
+                updated_at = now()
+              WHERE id = $1"#,
+    )
+    .bind(cluster_id)
+    .bind(&outcome.severity)
+    .bind(&outcome.native_severity)
+    .bind(&outcome.boost)
+    .bind(&outcome.engine_planes)
+    .bind(cvss_floor)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| format!("cluster corroboration: {e}"))?;
+    Ok(())
 }
 
 /// Propagate a cluster status change (analyst marks ACKNOWLEDGED / FIXED / FALSE_POSITIVE
@@ -303,6 +283,12 @@ mod tests {
         let c = build_cluster_key("https://example.com/foo?x=1", "xss_reflected", "CWE-79");
         assert_eq!(a, b);
         assert_eq!(a, c);
+        let d = build_cluster_key(
+            "https://example.com:54321/foo?session=abc",
+            "xss_reflected?token=1",
+            "CWE-79",
+        );
+        assert_eq!(a, d);
     }
     #[test]
     fn distinct_targets_distinct_clusters() {
@@ -314,6 +300,6 @@ mod tests {
     fn severity_max_picks_critical() {
         assert!(sev_weight("critical") > sev_weight("high"));
         assert!(sev_weight("low") > sev_weight("info"));
-        assert_eq!(weight_to_sev(5), "critical");
+        assert_eq!(finding_identity::weight_to_sev(5), "critical");
     }
 }

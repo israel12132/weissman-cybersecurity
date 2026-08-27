@@ -83,6 +83,7 @@ export const SecurityPosture = React$lazy(() => import('../pages/SecurityPosture
 export const IocFeed = React$lazy(() => import('../pages/IocFeed.jsx'))
 export const UebaAnomalies = React$lazy(() => import('../pages/UebaAnomalies.jsx'))
 export const FindingSuppressions = React$lazy(() => import('../pages/FindingSuppressions.jsx'))
+export const FindingClusters = React$lazy(() => import('../pages/FindingClusters.jsx'))
 export const CryptoPosture = React$lazy(() => import('../pages/CryptoPosture.jsx'))
 export const LiveFeed = React$lazy(() => import('../pages/LiveFeed.jsx'))
 export const ReportHistory = React$lazy(() => import('../pages/ReportHistory.jsx'))

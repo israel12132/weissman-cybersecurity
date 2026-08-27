@@ -217,6 +217,15 @@ pub async fn dispatch_event(
     event: PlaybookEvent,
     dry_run: bool,
 ) -> Vec<PlaybookRunResult> {
+    if !crate::finding_identity::should_dispatch_soar_playbooks(&event.status) {
+        tracing::info!(
+            target: "soar_playbook",
+            tenant_id = event.tenant_id,
+            status = %event.status,
+            "skipping SOAR evaluation — FALSE_POSITIVE (auto-suppression / analyst)"
+        );
+        return Vec::new();
+    }
     let Ok(books) = load_enabled(pool, event.tenant_id).await else {
         return Vec::new();
     };

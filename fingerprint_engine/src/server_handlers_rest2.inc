@@ -382,12 +382,13 @@ async fn api_findings_update_status(
     if matches!(affected, Ok(ref r) if r.rows_affected() > 0) {
         match new_status.as_str() {
             "FALSE_POSITIVE" => {
+                let target_norm = crate::finding_identity::normalize_target(&target_url);
                 match crate::fp_feedback::record_fp(
                     &mut tx,
                     auth.tenant_id,
                     &engine,
                     &sig_hash,
-                    if target_url.is_empty() { None } else { Some(target_url.as_str()) },
+                    if target_norm.is_empty() { None } else { Some(target_norm.as_str()) },
                     Some(auth.user_id),
                 ).await {
                     Ok(added) => suppression_added = added,
