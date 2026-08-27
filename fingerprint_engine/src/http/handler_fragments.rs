@@ -106,3 +106,7 @@ include!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/server_handlers_pdf_intelligence.inc"
 ));
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/server_handlers_kill_chain_commander.inc"
+));

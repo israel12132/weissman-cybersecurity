@@ -1106,6 +1106,40 @@ async fn api_openapi_spec() -> Response {
                 }
             },
 
+            "/api/kill-chain-commander": {
+                "get": {
+                    "summary": "Live kill-chain graph from persisted findings for the bound client",
+                    "description": "Composes recon to foothold to identity to privilege to impact from live vulnerabilities, risk_graph_nodes, jobs, and privilege_escalation_events. Assigned-client sessions are auto-bound. Empty corpus sets empty_reason (fail closed).",
+                    "tags": ["KillChainCommander"],
+                    "parameters": [
+                        { "name": "client_id", "in": "query", "required": false, "schema": { "type": "integer" } }
+                    ],
+                    "responses": {
+                        "200": { "description": "Live snapshot (empty_reason set when the corpus cannot compose a chain)" },
+                        "404": { "description": "Scoped session requested a different client" }
+                    }
+                }
+            },
+            "/api/kill-chain-commander/compose": {
+                "post": {
+                    "summary": "Compose the live kill-chain (409 when the corpus is empty)",
+                    "tags": ["KillChainCommander"],
+                    "requestBody": {
+                        "required": false,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "properties": {
+                                "client_id": { "type": "integer", "nullable": true }
+                            }
+                        } } }
+                    },
+                    "responses": {
+                        "200": { "description": "Composed live graph" },
+                        "409": { "description": "Corpus empty — kill_chain_corpus_empty" }
+                    }
+                }
+            },
+
             "/api/ueba/anomalies": {
                 "get": {
                     "summary": "Recent UEBA anomalies detected on endpoint agents",

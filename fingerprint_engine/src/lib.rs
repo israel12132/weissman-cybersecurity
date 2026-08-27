@@ -127,6 +127,7 @@ pub mod panic_shield;
 pub mod payload_sync_worker;
 pub mod pdf_report;
 pub mod pdf_intelligence;
+pub mod kill_chain_commander;
 pub mod pentest_memory;
 pub mod pipeline_context;
 pub mod pipeline_engine;

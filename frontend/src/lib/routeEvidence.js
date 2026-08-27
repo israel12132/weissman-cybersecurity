@@ -29,6 +29,7 @@ export const ROUTE_EVIDENCE_SKIP = new Set([
   '/compliance',
   '/baseline-drift',
   '/kill-chain',
+  '/kill-chain-commander',
   '/ai-analysis',
   '/domain-discovery',
   '/engines/top-tier',
