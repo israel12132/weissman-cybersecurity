@@ -29,7 +29,7 @@ const STATUS_COLORS = {
 const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
 
 function exportJobsCsv(jobs, _t) {
-  const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
+  const header = ['id', 'kind', 'status', 'stuck_reason', 'target', 'engine', 'client_id', 'scan_run_id', 'chunk_index', 'created_at', 'updated_at', 'attempt_count', 'last_error']
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
     header.join(','),
@@ -38,9 +38,12 @@ function exportJobsCsv(jobs, _t) {
         j.id || j.job_id,
         j.kind || j.type,
         normalizeJobStatus(j.status),
+        j.stuck_reason,
         j.target,
         j.engine,
         j.client_id,
+        j.scan_run_id,
+        j.chunk_index,
         j.created_at,
         j.updated_at || j.completed_at,
         j.attempt_count ?? j.retries,
@@ -127,6 +130,7 @@ export default function JobsDashboard() {
       if (!q) return true
       const hay = [
         j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
+        j.stuck_reason, j.scan_run_id, j.parent_job_id, j.progress_note,
         j.client_id != null ? String(j.client_id) : '',
         j.last_error,
       ].filter(Boolean).join(' ').toLowerCase()
@@ -228,6 +232,19 @@ export default function JobsDashboard() {
             {ctx.getValue() || 'unknown'}
           </span>
         ),
+      }),
+      columnHelper.accessor((j) => j.stuck_reason || '', {
+        id: 'stuck_reason',
+        header: t('pages.jobsDashboard.field_stuck'),
+        cell: (ctx) => {
+          const v = ctx.getValue()
+          if (!v) return <span className="text-[var(--text-muted)]">—</span>
+          return (
+            <span className="px-2 py-1 text-[10px] font-mono border rounded border-orange-500/40 text-orange-200 bg-orange-950/30">
+              {v}
+            </span>
+          )
+        },
       }),
       columnHelper.accessor((j) => j.created_at || '', {
         id: 'created',
@@ -468,6 +485,21 @@ export default function JobsDashboard() {
                         <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(selectedJob.updated_at)}</div>
                         {selectedJob.heartbeat_at && (
                           <div>{t('pages.jobsDashboard.field_heartbeat')}: {fmtTime(selectedJob.heartbeat_at)}</div>
+                        )}
+                        {selectedJob.progress_at && (
+                          <div>{t('pages.jobsDashboard.field_progress')}: {fmtTime(selectedJob.progress_at)}</div>
+                        )}
+                        {selectedJob.progress_note && (
+                          <div>{t('pages.jobsDashboard.field_progress_note')}: {selectedJob.progress_note}</div>
+                        )}
+                        {selectedJob.scan_run_id && (
+                          <div>{t('pages.jobsDashboard.field_scan_run')}: {selectedJob.scan_run_id}</div>
+                        )}
+                        {selectedJob.chunk_index != null && (
+                          <div>{t('pages.jobsDashboard.field_chunk')}: {selectedJob.chunk_index}</div>
+                        )}
+                        {selectedJob.parent_job_id && (
+                          <div>{t('pages.jobsDashboard.field_parent')}: {selectedJob.parent_job_id}</div>
                         )}
                       </div>
                       {selectedJob.stuck_reason && (

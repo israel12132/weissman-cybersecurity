@@ -2927,6 +2927,7 @@ async fn run_alias_probe(
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
+    crate::job_progress::mark(&format!("alias_probe:{engine_id}"));
 
     // HTTP-feedback fuzz aliases get engine-tuned seed payloads + LLM-guided mutation.
     if canonical == "http_feedback_fuzz" {
@@ -3043,6 +3044,7 @@ async fn run_http_fuzz_alias(
     target: &str,
     ctx: &EngineRunContext,
 ) -> EngineResult {
+    crate::job_progress::mark(&format!("http_fuzz_alias:{engine_id}"));
     let anomalies = if let Some(tid) = ctx.tenant_id {
         crate::fuzzer::run_fuzzer_collect_tenant(
             target,

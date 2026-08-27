@@ -12,6 +12,7 @@ mod cqrs;
 mod error;
 mod events;
 mod forensic;
+pub mod keepalive;
 mod lease;
 mod signing;
 mod swarm;
@@ -20,6 +21,10 @@ pub use cqrs::project_event;
 pub use error::JobBusError;
 pub use events::{append_event, fetch_event_chain_hash, JobEventKind, JobEventRecord};
 pub use forensic::{enqueue_forensic_dlq, ForensicBundle, MemorySnapshot};
+pub use keepalive::{
+    evaluate_keepalive, stuck_error_message, stuck_reason_from_error, KeepAliveDecision,
+    StuckReason, LEASE_HEARTBEAT_INTERVAL_SECS, PROGRESS_STALL_SECS,
+};
 pub use lease::{DistributedLease, LeaseHandle};
 pub use signing::{
     forensic_seal_key_from_env, sign_job_envelope, verify_job_envelope, SignedJobEnvelope,
@@ -262,14 +267,11 @@ impl JobBus {
         } else {
             JobEventKind::JobFailed
         };
-        let record = append_event(
-            &self.pool,
-            job_id,
-            tenant_id,
-            kind,
-            json!({ "worker_id": worker_id, "error": error, "retry": retry }),
-        )
-        .await?;
+        let mut event_payload = json!({ "worker_id": worker_id, "error": error, "retry": retry });
+        if let Some(r) = crate::keepalive::stuck_reason_from_error(error) {
+            event_payload["stuck_reason"] = json!(r.as_str());
+        }
+        let record = append_event(&self.pool, job_id, tenant_id, kind, event_payload).await?;
         project_event(&self.pool, &record).await?;
         self.publish_stream(&record).await;
         Ok(())

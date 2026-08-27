@@ -41,6 +41,9 @@ async fn api_async_jobs_list(
                   max_attempts,
                   worker_id,
                   heartbeat_at,
+                  progress_at,
+                  stuck_reason,
+                  progress_note,
                   run_after,
                   created_at,
                   updated_at
@@ -110,7 +113,17 @@ async fn api_async_jobs_list(
                 .flatten();
             let last_error = r.try_get::<Option<String>, _>("last_error").ok().flatten();
             let worker_id = r.try_get::<Option<String>, _>("worker_id").ok().flatten();
-            let stuck = crate::job_diagnostics::job_stuck_reason(
+            let persisted_stuck = r.try_get::<Option<String>, _>("stuck_reason").ok().flatten();
+            let progress_at = r
+                .try_get::<Option<chrono::DateTime<Utc>>, _>("progress_at")
+                .ok()
+                .flatten();
+            let heartbeat_at = r
+                .try_get::<Option<chrono::DateTime<Utc>>, _>("heartbeat_at")
+                .ok()
+                .flatten();
+            let progress_note = r.try_get::<Option<String>, _>("progress_note").ok().flatten();
+            let stuck = crate::job_diagnostics::job_stuck_reason_live(
                 &status,
                 &payload,
                 created_at,
@@ -118,7 +131,22 @@ async fn api_async_jobs_list(
                 attempt_count,
                 max_attempts,
                 worker_id.as_deref(),
+                crate::job_diagnostics::JobLiveness {
+                    persisted_stuck: persisted_stuck.as_deref(),
+                    last_error: last_error.as_deref(),
+                    progress_at,
+                    heartbeat_at,
+                },
             );
+            let parent_job_id = payload
+                .get("parent_job_id")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let scan_run_id = payload
+                .get("scan_run_id")
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let chunk_index = payload.get("chunk_index").and_then(Value::as_u64);
             json!({
                 "id": id_uuid.to_string(),
                 "kind": r.try_get::<String, _>("kind").unwrap_or_default(),
@@ -131,7 +159,12 @@ async fn api_async_jobs_list(
                 "last_error": last_error,
                 "stuck_reason": stuck,
                 "worker_id": worker_id,
-                "heartbeat_at": r.try_get::<chrono::DateTime<Utc>, _>("heartbeat_at").ok().map(|d| d.to_rfc3339()),
+                "heartbeat_at": heartbeat_at.map(|d| d.to_rfc3339()),
+                "progress_at": progress_at.map(|d| d.to_rfc3339()),
+                "progress_note": progress_note,
+                "parent_job_id": parent_job_id,
+                "scan_run_id": scan_run_id,
+                "chunk_index": chunk_index,
                 "created_at": r.try_get::<chrono::DateTime<Utc>, _>("created_at").ok().map(|d| d.to_rfc3339()),
                 "updated_at": updated_at,
                 "completed_at": completed_at,

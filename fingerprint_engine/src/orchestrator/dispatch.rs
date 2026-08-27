@@ -109,7 +109,7 @@ pub async fn dispatch_all_tenant_scans(
     Ok(enqueued)
 }
 
-/// True when this tenant already has a `tenant_full_scan` queued or executing.
+/// True when this tenant already has a full-scan coordinator **or** a live scan chunk.
 async fn has_inflight_full_scan(pool: &PgPool, tenant_id: i64) -> Result<bool, sqlx::Error> {
     let mut tx = weissman_db::begin_tenant_tx(pool, tenant_id).await?;
     // "In flight" must mean "a job the claim path can actually pick up". Counting any
@@ -120,13 +120,14 @@ async fn has_inflight_full_scan(pool: &PgPool, tenant_id: i64) -> Result<bool, s
     // and suppressed every new scan. The pipeline claimed nothing and produced nothing while
     // reporting healthy.
     //
-    // These two conditions mirror the claim predicate in job_queue.rs, so a row counts as in
-    // flight exactly when a worker could take it.
+    // After chunking, the parent `tenant_full_scan` completes in seconds; in-flight work lives on
+    // `tenant_scan_chunk` rows. Those must coalesce too or the scheduler would re-fan-out a second
+    // estate scan against the same customer.
     let exists: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(
                SELECT 1 FROM weissman_async_jobs
                 WHERE tenant_id = $1
-                  AND kind = 'tenant_full_scan'
+                  AND kind IN ('tenant_full_scan', 'onboarding_tenant_scan', 'tenant_scan_chunk')
                   AND status IN ('pending', 'running')
                   AND attempt_count < max_attempts
                   AND (status = 'running' OR payload ? '_weissman_job_bus')
