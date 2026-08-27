@@ -1403,6 +1403,46 @@ mod tests {
     }
 
     #[test]
+    fn server_to_agent_welcome_includes_compact_baseline() {
+        let snap = crate::ueba_detector::UebaCompactSnapshot {
+            hour_of_week: 12,
+            z_upload_threshold: 2.0,
+            min_n: 7,
+            source: "hour_of_week".into(),
+            metrics: vec![crate::ueba_detector::UebaCompactMetric {
+                name: "process_count".into(),
+                mean: 80.0,
+                stddev: 2.0,
+                n: 4,
+            }],
+            learned_processes: vec!["sshd".into()],
+        };
+        let v = serde_json::to_value(ServerToAgent::Welcome {
+            scan_concurrency: None,
+            heartbeat_secs: None,
+            ueba_baseline: Some(snap),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "welcome");
+        assert_eq!(v["ueba_baseline"]["hour_of_week"], 12);
+        assert_eq!(v["ueba_baseline"]["metrics"][0]["mean"], 80.0);
+        assert_eq!(v["ueba_baseline"]["learned_processes"][0], "sshd");
+        let msg = serde_json::to_value(ServerToAgent::UebaBaseline {
+            snapshot: crate::ueba_detector::UebaCompactSnapshot {
+                hour_of_week: 12,
+                z_upload_threshold: 2.0,
+                min_n: 7,
+                source: "rolling_7d".into(),
+                metrics: vec![],
+                learned_processes: vec![],
+            },
+        })
+        .unwrap();
+        assert_eq!(msg["type"], "ueba_baseline");
+        assert_eq!(msg["source"], "rolling_7d");
+    }
+
+    #[test]
     fn server_to_agent_task_round_trips() {
         let msg = ServerToAgent::Task {
             task_id: "abc".to_string(),

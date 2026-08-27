@@ -64,7 +64,7 @@ fn parse_proc_net_tcp(path: &str, out: &mut Vec<ListenPort>) {
         return;
     };
     let reader = BufReader::new(file);
-    for (i, line) in reader.lines().flatten().enumerate() {
+    for (i, line) in reader.lines().map_while(Result::ok).enumerate() {
         if i == 0 {
             continue; // header
         }
