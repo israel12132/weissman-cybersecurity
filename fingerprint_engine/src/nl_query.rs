@@ -25,7 +25,8 @@
 //!      is fetched separately via [`crate::ask_rag`] on the app pool.
 
 use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
+use aes_gcm::aead::generic_array::GenericArray;
+use aes_gcm::{Aes256Gcm, Key};
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac as HmacMac};
 use rand_chacha::rand_core::{RngCore, SeedableRng};
@@ -767,7 +768,7 @@ fn chacha_seed() -> [u8; 32] {
 
 /// 96-bit AES-GCM nonce from ChaCha8Rng (vault-seeded) + a process counter.
 /// Never calls `getrandom` / `OsRng`, so a cold-boot entropy stall cannot hang Ask.
-fn audit_nonce() -> Nonce<Aes256Gcm> {
+fn audit_nonce() -> [u8; 12] {
     static RNG: OnceLock<Mutex<ChaCha8Rng>> = OnceLock::new();
     static COUNTER: AtomicU64 = AtomicU64::new(1);
     let mut rng = RNG
@@ -778,7 +779,7 @@ fn audit_nonce() -> Nonce<Aes256Gcm> {
     rng.fill_bytes(&mut bytes[..8]);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) as u32;
     bytes[8..12].copy_from_slice(&n.to_le_bytes());
-    *Nonce::<Aes256Gcm>::from_slice(&bytes)
+    bytes
 }
 
 fn plan_hmac(plan: &QueryPlan, tenant_id: i64) -> Result<Vec<u8>, String> {
@@ -822,9 +823,10 @@ fn verify_seal(sealed: &SealedQueryPlan, tenant_id: i64) -> Result<(), String> {
 fn encrypt_bytes_for_audit(tenant_id: i64, plaintext: &[u8]) -> Option<String> {
     let key = tenant_aes_key(tenant_id)?;
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
-    let nonce = audit_nonce();
-    let ct = cipher.encrypt(&nonce, plaintext).ok()?;
-    let mut packed = nonce.to_vec();
+    let nonce_bytes = audit_nonce();
+    let nonce = GenericArray::from_slice(&nonce_bytes);
+    let ct = cipher.encrypt(nonce, plaintext).ok()?;
+    let mut packed = nonce_bytes.to_vec();
     packed.extend_from_slice(&ct);
     Some(format!(
         "wzaqp1:{}",
@@ -1859,6 +1861,6 @@ mod tests {
         warm_ask_crypto();
         let n1 = audit_nonce();
         let n2 = audit_nonce();
-        assert_ne!(n1.as_slice(), n2.as_slice());
+        assert_ne!(n1, n2);
     }
 }
