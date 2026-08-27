@@ -924,8 +924,8 @@ async fn run_edr_scan(target: &str, cfg: EdrScanConfig) -> EngineResult {
             Evidence::new()
                 .with("remote_only", true)
                 .with("agent_engines", json!([
-                    "process_hollowing", "av_bypass_engine", "anti_debug_evasion",
-                    "memory_forensics_evasion", "log_tampering_engine"
+                    "process_hollowing", "av_bypass_engine", "syscall_evasion",
+                    "anti_debug_evasion", "memory_forensics_evasion", "log_tampering_engine"
                 ]))
                 .check("agent_required_for_host_edr", true, "endpoint_agent"),
         ));

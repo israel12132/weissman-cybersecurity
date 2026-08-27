@@ -344,6 +344,93 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
     Ok(Compiled { sql, params })
 }
 
+// ─── Question ingest (raw SQL / injection rejected; JSON QueryPlan accepted) ─
+
+/// Result of admitting a user question before any LLM call or SQL execution.
+#[derive(Debug, Clone)]
+pub enum QuestionIngest {
+    /// Caller supplied a JSON QueryPlan — skip the LLM, compile directly.
+    Plan(QueryPlan),
+    /// Natural language that must be compiled to a QueryPlan by the planner LLM.
+    NaturalLanguage(String),
+}
+
+/// Admit a question: JSON QueryPlan is parsed here; raw SQL and injection
+/// payloads are rejected; everything else is natural language for the planner.
+pub fn ingest_question(question: &str) -> Result<QuestionIngest, String> {
+    let q = question.trim();
+    if q.is_empty() {
+        return Err("question is empty".into());
+    }
+    if q.len() > 2000 {
+        return Err("question too long (max 2000 chars)".into());
+    }
+    if q.starts_with('{') {
+        let plan: QueryPlan = serde_json::from_str(q)
+            .map_err(|e| format!("plan is not a valid QueryPlan JSON: {e}"))?;
+        return Ok(QuestionIngest::Plan(plan));
+    }
+    reject_raw_sql_or_injection(q)?;
+    Ok(QuestionIngest::NaturalLanguage(q.to_string()))
+}
+
+/// Reject raw SQL, classic injection, and code-exec payloads. Natural language
+/// that happens to contain the substring "select" (e.g. "selected findings")
+/// is allowed — we match SQL verbs, not English.
+pub fn reject_raw_sql_or_injection(question: &str) -> Result<(), String> {
+    let compact = question
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase();
+    let lower = question.to_ascii_lowercase();
+
+    const SQL_MARKERS: &[&str] = &[
+        "SELECT ",
+        "INSERT ",
+        "UPDATE ",
+        "DELETE ",
+        "DROP TABLE",
+        "DROP DATABASE",
+        "ALTER TABLE",
+        "UNION SELECT",
+        "TRUNCATE ",
+        "CREATE TABLE",
+        "; SELECT",
+        "; DROP",
+        "' OR '1'='1",
+        "' OR 1=1",
+        "INFORMATION_SCHEMA",
+        "PG_SLEEP",
+        "PG_CATALOG",
+        "XP_CMDSHELL",
+        "WEISSMAN_APP.SECRET",
+    ];
+    if SQL_MARKERS.iter().any(|m| compact.contains(m)) {
+        return Err(
+            "raw SQL is rejected; questions must be natural language or a JSON QueryPlan".into(),
+        );
+    }
+
+    const CODE_MARKERS: &[&str] = &[
+        "<script",
+        "javascript:",
+        "eval(",
+        "onerror=",
+        "${",
+        "{{constructor",
+        "rm -rf",
+        "/etc/passwd",
+        "fromcharcode",
+    ];
+    if CODE_MARKERS.iter().any(|m| lower.contains(m)) {
+        return Err(
+            "injection payload rejected; queries must compile through QueryPlan JSON".into(),
+        );
+    }
+    Ok(())
+}
+
 // ─── Execution against the read-only pool ────────────────────────────────────
 
 #[derive(Debug, Serialize)]
@@ -432,25 +519,40 @@ pub async fn ask(
         return bad("question too long (max 2000 chars)");
     }
 
-    // 1) LLM → plan JSON.
-    let plan_json = match llm_to_plan(q, tenant_id).await {
+    // 0) Admit the question: JSON QueryPlan skips the LLM; raw SQL is rejected.
+    let ingested = match ingest_question(q) {
         Ok(v) => v,
         Err(e) => {
-            let r = bad(&format!("plan generation failed: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
-            return r;
-        }
-    };
-    let plan: QueryPlan = match serde_json::from_value(plan_json.clone()) {
-        Ok(p) => p,
-        Err(e) => {
-            let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
+            let r = bad(&e);
             audit_query(app_pool, tenant_id, user_id, question, &r).await;
             return r;
         }
     };
 
-    // 2) Validate + execute.
+    let plan: QueryPlan = match ingested {
+        QuestionIngest::Plan(plan) => plan,
+        QuestionIngest::NaturalLanguage(nl) => {
+            // 1) LLM → plan JSON.
+            let plan_json = match llm_to_plan(&nl, tenant_id).await {
+                Ok(v) => v,
+                Err(e) => {
+                    let r = bad(&format!("plan generation failed: {e}"));
+                    audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                    return r;
+                }
+            };
+            match serde_json::from_value(plan_json) {
+                Ok(p) => p,
+                Err(e) => {
+                    let r = bad(&format!("plan is not a valid QueryPlan JSON: {e}"));
+                    audit_query(app_pool, tenant_id, user_id, question, &r).await;
+                    return r;
+                }
+            }
+        }
+    };
+
+    // 2) Validate + execute (compile_plan is the only path to SQL).
     let res = match execute_plan(ro_pool, tenant_id, plan.clone()).await {
         Ok(mut r) => {
             r.elapsed_ms = start.elapsed().as_millis() as i64;
@@ -699,5 +801,101 @@ mod tests {
         };
         let c = compile_plan(&plan, 1).unwrap();
         assert!(c.sql.ends_with(&format!("LIMIT {}", MAX_LIMIT)));
+    }
+
+    #[test]
+    fn ingest_rejects_raw_sql_and_injection() {
+        for q in [
+            "SELECT * FROM weissman_app.secret_keys; -- Exploit",
+            "DROP TABLE vulnerabilities",
+            "1'; DROP TABLE clients; --",
+            "UNION SELECT password FROM users",
+            "<script>alert(1)</script>",
+            "javascript:alert(1)",
+            "eval('fetch(\"/api/login\")')",
+        ] {
+            let err = ingest_question(q).unwrap_err();
+            assert!(
+                err.contains("rejected") || err.contains("SQL") || err.contains("injection"),
+                "expected reject for {q:?}, got {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn ingest_allows_natural_language_and_queryplan_json() {
+        match ingest_question("show me selected critical findings on prod").unwrap() {
+            QuestionIngest::NaturalLanguage(s) => assert!(s.contains("selected")),
+            other => panic!("expected NL, got {other:?}"),
+        }
+        let json = r#"{"table":"vulnerabilities","select":["id","title"],"filters":[],"limit":10}"#;
+        match ingest_question(json).unwrap() {
+            QuestionIngest::Plan(p) => {
+                assert_eq!(p.table, "vulnerabilities");
+                assert_eq!(p.select, vec!["id", "title"]);
+            }
+            other => panic!("expected Plan, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_plan_rejects_sql_smuggled_as_table_or_column() {
+        let plan = QueryPlan {
+            table: "secret_keys".into(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+        };
+        assert!(compile_plan(&plan, 1).unwrap_err().contains("not exposed"));
+
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id; DROP TABLE clients".into()],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+        };
+        assert!(compile_plan(&plan, 1).unwrap_err().contains("not allowed"));
+
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![Filter {
+                column: "severity".into(),
+                op: "OR 1=1".into(),
+                value: json!("x"),
+            }],
+            order_by: None,
+            order_desc: false,
+            limit: None,
+        };
+        assert!(compile_plan(&plan, 1)
+            .unwrap_err()
+            .to_ascii_lowercase()
+            .contains("operator"));
+    }
+
+    #[test]
+    fn filter_values_are_bound_not_interpolated() {
+        let plan = QueryPlan {
+            table: "vulnerabilities".into(),
+            select: vec!["id".into()],
+            filters: vec![Filter {
+                column: "title".into(),
+                op: "=".into(),
+                value: json!("'; DROP TABLE clients; --"),
+            }],
+            order_by: None,
+            order_desc: false,
+            limit: Some(10),
+        };
+        let c = compile_plan(&plan, 7).unwrap();
+        assert!(!c.sql.to_ascii_lowercase().contains("drop table"));
+        assert!(c.sql.contains("title = $2"));
+        assert_eq!(c.params[0], Value::from(7));
+        assert_eq!(c.params[1], json!("'; DROP TABLE clients; --"));
     }
 }

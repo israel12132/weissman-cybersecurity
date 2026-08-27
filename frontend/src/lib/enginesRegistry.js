@@ -1892,7 +1892,7 @@ export const ENGINES_REGISTRY = [
     label: 'Direct Syscall / NTAPI Evasion',
     group: 'stealth',
     mitre: 'T1685',
-    description: 'AV/EDR evasion via direct syscalls: Heaven\'s Gate (WoW64 bypass), SysWhispers indirect syscalls, SSN dynamic resolution, kernel callback unhooking, ETW patching for telemetry blindness',
+    description: 'AV/EDR evasion via direct syscalls: Hell\'s Gate SSN resolution, Halo\'s Gate neighbor recovery when ntdll is JMP-hooked, Heaven\'s Gate (WoW64 bypass), SysWhispers indirect syscalls, kernel callback unhooking, ETW patching for telemetry blindness. The Weissman endpoint agent recovers SSNs from the live ntdll EAT without calling hooked Win32 APIs.',
     requiresTarget: false,
   },
   {
