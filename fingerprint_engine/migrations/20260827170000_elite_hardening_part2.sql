@@ -40,8 +40,8 @@ ALTER TABLE finding_candidates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE finding_candidates FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS finding_candidates_tenant ON finding_candidates;
 CREATE POLICY finding_candidates_tenant ON finding_candidates FOR ALL
-    USING      (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING      (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON finding_candidates TO weissman_app;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE finding_candidates_id_seq TO weissman_app;
@@ -61,8 +61,8 @@ ALTER TABLE elite_hardening_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE elite_hardening_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS elite_hardening_events_tenant ON elite_hardening_events;
 CREATE POLICY elite_hardening_events_tenant ON elite_hardening_events FOR ALL
-    USING      (tenant_id = current_setting('app.current_tenant_id', true)::bigint)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::bigint);
+    USING      (tenant_id = public.app_current_tenant_id())
+    WITH CHECK (tenant_id = public.app_current_tenant_id());
 GRANT SELECT, INSERT ON elite_hardening_events TO weissman_app;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE elite_hardening_events_id_seq TO weissman_app;
 

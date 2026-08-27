@@ -62,6 +62,12 @@ if (!routeSrc.includes('/api/elite-hardening/status')) fail('API route not regis
 const sql = readFileSync(mig, 'utf8')
 if (!sql.includes('finding_candidates')) fail('migration missing finding_candidates')
 if (!sql.includes('weissman_ro')) fail('migration missing weissman_ro GRANT')
+if (!sql.includes('public.app_current_tenant_id()')) {
+  fail('elite RLS must use app_current_tenant_id() (empty GUC must not cast to bigint)')
+}
+if (sql.includes("current_setting('app.current_tenant_id', true)::bigint")) {
+  fail('elite RLS reintroduced raw tenant GUC ::bigint (worker empty-scope crash)')
+}
 
 const sqlAcl = readFileSync(migAcl, 'utf8')
 if (!sqlAcl.includes('insert_supreme_council_memory')) fail('ACL migration missing definer insert')
