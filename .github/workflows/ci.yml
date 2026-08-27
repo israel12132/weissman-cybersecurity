@@ -778,8 +778,13 @@ jobs:
           WEISSMAN_VAULT_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
           WEISSMAN_ENV: production
           WEISSMAN_COOKIE_SECURE: "1"
-          WEISSMAN_ADMIN_EMAIL: admin@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
+          # Client create/delete is owner-only (`is_superadmin` / CEO).
+          # `sync_admin_credentials` promotes WEISSMAN_ADMIN_EMAIL. Smoke and E2E
+          # log in as ci-smoke@localhost, so that account must be the env operator —
+          # a separate admin@localhost stays staff and 403s POST /api/clients with
+          # owner_required.
+          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
           WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
           WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
           # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
