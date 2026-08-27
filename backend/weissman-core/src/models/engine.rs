@@ -121,6 +121,7 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "iot_firmware",
     "ble_rf",
     "edr_evasion",
+    "stealthy_persistence_evasion",
     "waf_bypass",
     "timing_sidechannel",
     "antiforensics",
@@ -715,6 +716,7 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "ble_rf",
     // Stealth / Evasion
     "edr_evasion",
+    "stealthy_persistence_evasion",
     "waf_bypass",
     "timing_sidechannel",
     "antiforensics",
@@ -1387,6 +1389,9 @@ pub fn resolve_engine_id(id: &str) -> &str {
         | "amsi_bypass"
         | "detection_gap_exploiter"
         | "opsec_intelligence_engine" => "edr_evasion",
+        "halosgate" | "intelligence_grade_evasion" | "telemetry_blinding" => {
+            "stealthy_persistence_evasion"
+        }
         "graphene_os_bypass" => "mdm_bypass_engine",
         "rootkit_implant" => "bootkit_uefi",
         "dll_hijacking" => "edr_evasion",

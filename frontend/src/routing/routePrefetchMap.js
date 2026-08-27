@@ -22,6 +22,7 @@ const EXACT = {
   '/kill-chain': () => import(/* webpackChunkName: "page-kill-chain" */ '../pages/KillChainOrchestrator'),
   '/jwt-lab': () => import(/* webpackChunkName: "page-jwt-lab" */ '../pages/JwtAttackLab'),
   '/waf-bypass': () => import(/* webpackChunkName: "page-waf-bypass" */ '../pages/WafBypassLab'),
+  '/stealthy-persistence-evasion': () => import(/* webpackChunkName: "page-stealthy-evasion" */ '../pages/StealthyPersistenceEvasion'),
   '/graphql-security': () => import(/* webpackChunkName: "page-graphql" */ '../pages/GraphqlSecurityCommandCenter'),
   '/clients': () => import(/* webpackChunkName: "page-clients" */ '../pages/Clients'),
   '/threat-emulation': () => import(/* webpackChunkName: "page-threat-emulation" */ '../pages/ThreatEmulation'),

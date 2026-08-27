@@ -17,6 +17,7 @@ mod process_hollowing;
 mod process_modules;
 mod scheduled_tasks;
 mod social_local;
+mod stealth_integrity;
 mod timestomp;
 mod usb_devices;
 mod util;
@@ -90,6 +91,7 @@ pub fn all_capability_ids() -> Vec<&'static str> {
         "ueba_baseline",
         // CHRONOS — 5ms process-delta ring buffer + SIGSTOP on shell spawn
         "chronos",
+        "stealthy_persistence_evasion",
     ]
 }
 
@@ -155,11 +157,16 @@ pub fn run_detection(engine: &str, target: Option<&str>, params: &Value) -> Dete
             "infostealer_emulation" => infostealer::run(&engine, target.as_deref(), &params).await,
             "ueba_baseline" => baseline::run(&engine).await,
             "chronos" => chronos::run(&engine, &params).await,
+            "stealthy_persistence_evasion" => stealth_integrity::run(&engine).await,
             other => Err(anyhow::anyhow!(
                 "agent has no implementation for engine '{other}'"
             )),
         }
     })
+}
+
+pub fn fail_safe_wipe_canaries() -> Vec<String> {
+    stealth_integrity::wipe_canaries()
 }
 
 /// Helper used by every detection to emit a finding with the standard envelope.
@@ -243,6 +250,7 @@ mod tests {
         "cold_boot_attack",
         "infostealer_emulation",
         "chronos",
+        "stealthy_persistence_evasion",
     ];
 
     #[test]

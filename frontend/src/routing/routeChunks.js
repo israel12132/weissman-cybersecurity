@@ -50,6 +50,7 @@ export const PkiTlsCommandCenter = React$lazy(() => import('../pages/PkiTlsComma
 export const EmailDnsPosture = React$lazy(() => import('../pages/EmailDnsPosture'))
 export const PqcRadar = React$lazy(() => import('../pages/PqcRadar'))
 export const EdDetectionSurface = React$lazy(() => import('../pages/EdDetectionSurface'))
+export const StealthyPersistenceEvasion = React$lazy(() => import('../pages/StealthyPersistenceEvasion'))
 export const WafBypassLab = React$lazy(() => import('../pages/WafBypassLab'))
 export const WebSocketSecurityCommandCenter = React$lazy(() => import('../pages/WebSocketSecurityCommandCenter'))
 export const JwtAttackLab = React$lazy(() => import('../pages/JwtAttackLab'))

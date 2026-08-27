@@ -146,7 +146,7 @@ pub const COVERAGE: &[Technique] = &[
         id: "T1562",
         name: "Impair Defenses",
         tactic: "Defense Evasion",
-        engines: &["edr_evasion", "waf_bypass"],
+        engines: &["edr_evasion", "stealthy_persistence_evasion", "waf_bypass"],
     },
     Technique {
         id: "T1556",

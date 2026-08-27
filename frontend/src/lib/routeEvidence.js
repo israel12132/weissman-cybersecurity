@@ -58,6 +58,7 @@ export const ROUTE_EVIDENCE = {
   '/tls-posture': 'pages.pkiTlsCommandCenter.evidence_notice',
   '/cloud-posture': 'pages.cloudPostureCommandCenter.evidence_notice',
   '/detection-surface': 'pages.edDetectionSurface.evidence_notice',
+  '/stealthy-persistence-evasion': 'pages.stealthyEvasion.evidence_notice',
   '/waf-bypass': 'pages.wafBypassLab.evidence_notice',
   '/file-upload-lab': 'pages.fileUploadSecurityLab.evidence_notice',
   '/identity-security': 'pages.identitySecurityCenter.evidence_notice',
