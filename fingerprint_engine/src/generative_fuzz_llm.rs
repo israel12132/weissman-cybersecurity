@@ -580,6 +580,8 @@ pub async fn run_generative_producer_loop(
 
     let mut first_batch = true;
     let mut feedback_queue: VecDeque<BlockFeedback> = VecDeque::new();
+    let mut llm_failures: u32 = 0;
+    const LLM_FAIL_BUDGET: u32 = 2;
 
     loop {
         if stop.load(Ordering::Relaxed) {
@@ -662,6 +664,15 @@ pub async fn run_generative_producer_loop(
                 }
                 Err(e) => {
                     warn!(target: "generative_fuzz", "bypass LLM batch failed: {}", e);
+                    llm_failures = llm_failures.saturating_add(1);
+                    if llm_failures >= LLM_FAIL_BUDGET {
+                        warn!(
+                            target: "generative_fuzz",
+                            llm_failures,
+                            "LLM unavailable; stopping producer so the HTTP campaign can finish"
+                        );
+                        break;
+                    }
                     tokio::time::sleep(Duration::from_millis(300)).await;
                 }
             }
@@ -731,10 +742,20 @@ pub async fn run_generative_producer_loop(
                     block_streak = 0;
                     last_bypass_at = None;
                     cfg.temperature = baseline_temp;
+                    llm_failures = 0;
                 }
             }
             Err(e) => {
                 warn!(target: "generative_fuzz", "LLM mutation batch failed: {}", e);
+                llm_failures = llm_failures.saturating_add(1);
+                if llm_failures >= LLM_FAIL_BUDGET {
+                    warn!(
+                        target: "generative_fuzz",
+                        llm_failures,
+                        "LLM unavailable; stopping producer so the HTTP campaign can finish"
+                    );
+                    break;
+                }
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }
         }

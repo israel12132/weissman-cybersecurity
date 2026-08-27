@@ -153,7 +153,10 @@ pub fn classify_failure(status: &str, message: &str) -> FailureClass {
 fn escalate_for(class: FailureClass, current_timeout: &mut Duration) {
     match class {
         FailureClass::Timeout => {
-            *current_timeout = current_timeout.saturating_mul(2).min(MAX_ATTEMPT_TIMEOUT);
+            // Never shrink a caller-supplied budget (fuzz campaigns pass ~11 minutes so they
+            // can return live HTTP evidence). Cap only applies when widening the 45s default.
+            let cap = (*current_timeout).max(MAX_ATTEMPT_TIMEOUT);
+            *current_timeout = current_timeout.saturating_mul(2).min(cap);
         }
         FailureClass::Waf => {
             metrics::counter!("weissman_engine_waf_block_total").increment(1);
@@ -223,7 +226,20 @@ where
     F: FnMut(String, EscalationHint) -> Fut,
     Fut: Future<Output = EngineResult> + Send,
 {
-    let strategies = target_strategies(target);
+    // Fuzz campaigns already run a budgeted wall (specialized + static + optional LLM).
+    // Scheme/`www` retries would re-run a 10-minute campaign and blow the job timeout —
+    // that is how XSS/CSRF/race/open-redirect jobs used to stay `running` after a fake 180s
+    // timeout finding. One attempt; the campaign itself always returns.
+    let strategies = if crate::fuzz_campaign::is_fuzz_campaign_engine(engine_id) {
+        let t = target.trim();
+        if t.is_empty() {
+            Vec::new()
+        } else {
+            vec![t.to_string()]
+        }
+    } else {
+        target_strategies(target)
+    };
     let start = Instant::now();
     let mut attempts: u32 = 0;
     let mut last_error: Option<String> = None;
@@ -460,10 +476,49 @@ mod tests {
             escalate_for(FailureClass::Timeout, &mut t);
         }
         assert_eq!(t, MAX_ATTEMPT_TIMEOUT, "timeout budget must be capped");
+        // A caller-supplied fuzz campaign budget must not be collapsed back to 180s.
+        let mut fuzz = Duration::from_secs(690);
+        escalate_for(FailureClass::Timeout, &mut fuzz);
+        assert_eq!(
+            fuzz,
+            Duration::from_secs(690),
+            "escalation must not shrink a campaign budget below the 180s fake-timeout cap"
+        );
         // A WAF block records a counter but does not widen the budget.
         let mut t2 = Duration::from_secs(45);
         escalate_for(FailureClass::Waf, &mut t2);
         assert_eq!(t2, Duration::from_secs(45));
+    }
+
+    #[tokio::test]
+    async fn fuzz_campaign_engine_is_not_retried_across_strategies() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let (result, telem) = run_with_resilience(
+            "xss_advanced",
+            "https://example.com",
+            Duration::from_millis(40),
+            move |_v, _hint| {
+                c.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    EngineResult::ok(vec![], "")
+                }
+            },
+        )
+        .await;
+        assert_eq!(result.status, "error");
+        assert_eq!(telem.status, "timeout");
+        assert_eq!(
+            telem.attempts, 1,
+            "fuzz aliases must not burn the job on www/scheme retries"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(
+            !result.message.contains("180000"),
+            "must not emit the fake 180s timeout string; got {}",
+            result.message
+        );
     }
 
     #[tokio::test]

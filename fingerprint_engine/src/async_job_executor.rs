@@ -268,34 +268,13 @@ async fn persist_findings_grouped_by_client_field(
 }
 
 fn feedback_fuzz_anomaly_to_finding(v: &fuzz_core::ValidatedAnomaly) -> Value {
-    let severity = if v.oob_token.is_some() {
-        "critical"
-    } else {
-        "high"
-    };
-    let title: String = v.anomaly_type.chars().take(500).collect();
-    let payload_excerpt: String = v.payload.chars().take(4000).collect();
-    let mut description = format!(
-        "{}\n\nPayload excerpt:\n{}",
-        v.baseline_vs_anomaly, payload_excerpt
-    );
-    if let Some(ref tok) = v.oob_token {
-        description.push_str(&format!("\n\nOAST correlation token: {tok}"));
-    }
-    if v.llm_user_prompt.is_some() {
-        description.push_str(
-            "\n\n[Generative] Payload produced by vLLM; see generative_fuzz_winning_payloads.llm_user_prompt.",
-        );
-    }
-    json!({
-        "title": title,
-        "severity": severity,
-        "target_url": v.target_url,
-        "description": description,
-        "poc": v.payload.chars().take(32_000).collect::<String>(),
-        "type": "feedback_fuzz",
-        "anomaly_type": v.anomaly_type,
-    })
+    crate::fuzz_campaign::anomaly_to_finding(
+        "http_feedback_fuzz",
+        v,
+        "fuzz",
+        "T1190",
+        &v.target_url,
+    )
 }
 
 /// Run one job to completion JSON (success) or error string (failure).
@@ -522,10 +501,12 @@ async fn execute_job_unscoped(
                     let ctx_owned = ctx_owned.clone();
                     async move {
                         let eng_ref = eng_outer.clone();
+                        let attempt_timeout =
+                            crate::fuzz_campaign::fuzz_resilience_timeout(&eng_ref);
                         crate::engine_resilience::run_with_resilience(
                             &eng_ref,
                             &tgt,
-                            crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                            attempt_timeout,
                             move |variant, hint| {
                                 let eng = eng_outer.clone();
                                 let mut ctx = ctx_owned.clone();
@@ -906,7 +887,9 @@ async fn execute_job_unscoped(
                 selection.ranked.into_iter().map(|c| c.engine_id).collect();
 
             let intelligence_bus = crate::ws_intelligence_bus::IntelligenceBus::new_shared();
-            let mut cross_job_params = serde_json::json!({});
+            let mut cross_job_params = serde_json::json!({
+                "fuzz_budget_secs": crate::fuzz_campaign::BATCH_FUZZ_CAMPAIGN_SECS,
+            });
 
             for engine_id in &ordered_engines {
                 let _ = telemetry.send(format!(
@@ -926,6 +909,8 @@ async fn execute_job_unscoped(
                     client_id: Some(client_id),
                     job_params: cross_job_params.clone(),
                     intelligence_bus: Some(intelligence_bus.clone()),
+                    job_id: Some(job.id.to_string()),
+                    swarm_broadcast: Some(channels.swarm.clone()),
                     ..Default::default()
                 };
                 // Batch isolation: each engine runs with panic/timeout isolation + adaptive retry.
@@ -933,10 +918,15 @@ async fn execute_job_unscoped(
                 // still runs its own scan. Per-engine telemetry is recorded for the reliability view.
                 let ctx_ref = &ctx;
                 let eid = engine_id.as_str();
+                let attempt_timeout = if crate::fuzz_campaign::is_fuzz_campaign_engine(eid) {
+                    crate::fuzz_campaign::batch_fuzz_resilience_timeout()
+                } else {
+                    crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT
+                };
                 let (result, telem) = crate::engine_resilience::run_with_resilience(
                     eid,
                     &target,
-                    crate::engine_resilience::DEFAULT_ATTEMPT_TIMEOUT,
+                    attempt_timeout,
                     move |variant, hint| {
                         let mut c = ctx_ref.clone();
                         if hint.force_ghost_network {
@@ -2168,15 +2158,26 @@ async fn execute_job_unscoped(
                         .join(", ")
                 })
                 .filter(|s| !s.is_empty());
-            let findings = crate::fuzzer::run_fuzzer_collect_tenant(
+            let ctl = crate::fuzz_campaign::FuzzCampaignCtl::for_job(
+                "http_feedback_fuzz",
+                Some(crate::fuzz_campaign::FEEDBACK_FUZZ_JOB_KIND),
+                p.get("fuzz_budget_secs").and_then(Value::as_u64),
+                Some(job.id.to_string()),
+                Some(tid),
+                Some(app_pool.clone()),
+                Some(channels.swarm.clone()),
+            );
+            let outcome = crate::fuzzer::execute_budgeted_campaign(
                 &target,
                 base_payload,
+                cognitive.as_deref().unwrap_or(""),
                 Some(tid),
                 job_oast_token,
-                cognitive.as_deref(),
                 Some(app_pool.as_ref()),
+                &ctl,
             )
             .await;
+            let findings = &outcome.anomalies;
 
             let finding_values: Vec<Value> = findings
                 .iter()
@@ -2194,7 +2195,7 @@ async fn execute_job_unscoped(
 
             if findings.iter().any(|v| v.llm_user_prompt.is_some()) {
                 if let Ok(mut tx2) = db::begin_tenant_tx(app_pool.as_ref(), tid).await {
-                    for v in &findings {
+                    for v in findings {
                         if let Some(ref prompt) = v.llm_user_prompt {
                             let _ = sqlx::query(
                                 r#"INSERT INTO generative_fuzz_winning_payloads (tenant_id, client_id, run_id, target_url, payload, llm_user_prompt, anomaly_type, baseline_vs_anomaly)
@@ -2227,7 +2228,12 @@ async fn execute_job_unscoped(
                 "ok": true,
                 "findings_count": findings.len(),
                 "findings_persisted": persisted,
-                "message": "feedback fuzz completed; findings persisted via findings_persist",
+                "probes_attempted": outcome.probes_attempted,
+                "stages": outcome.stages,
+                "coverage": outcome.coverage,
+                "budget_exhausted": outcome.budget_exhausted,
+                "elapsed_ms": outcome.elapsed_ms,
+                "message": outcome.message("http_feedback_fuzz", findings.iter().filter(|v| v.oob_token.is_some()).count()),
             }))
         }
         "self_improvement_apply" => {
@@ -2310,14 +2316,15 @@ mod tests {
     }
 
     fn anomaly(oob: Option<&str>, llm: Option<&str>) -> fuzz_core::ValidatedAnomaly {
-        fuzz_core::ValidatedAnomaly {
-            target_url: "https://example.com".to_string(),
-            payload: "PAYLOAD".to_string(),
-            anomaly_type: "sqli".to_string(),
-            baseline_vs_anomaly: "base vs anom".to_string(),
-            oob_token: oob.map(str::to_string),
-            llm_user_prompt: llm.map(str::to_string),
-        }
+        let mut a = fuzz_core::ValidatedAnomaly::new(
+            "https://example.com",
+            "PAYLOAD",
+            "sqli",
+            "base vs anom",
+        );
+        a.oob_token = oob.map(str::to_string);
+        a.llm_user_prompt = llm.map(str::to_string);
+        a
     }
 
     #[test]
@@ -2325,34 +2332,27 @@ mod tests {
         let f = feedback_fuzz_anomaly_to_finding(&anomaly(None, None));
         assert_eq!(f["severity"], "high");
         assert_eq!(f["title"], "sqli");
-        assert_eq!(f["target_url"], "https://example.com");
-        assert_eq!(f["type"], "feedback_fuzz");
-        assert_eq!(f["anomaly_type"], "sqli");
+        assert_eq!(f["url"], "https://example.com");
+        assert_eq!(f["type"], "http_feedback_fuzz");
         assert_eq!(f["poc"], "PAYLOAD");
-        assert_eq!(
-            f["description"],
-            "base vs anom\n\nPayload excerpt:\nPAYLOAD"
-        );
+        assert_eq!(f["verified"], false);
+        assert!(f["http_proof"].as_object().unwrap().is_empty());
     }
 
     #[test]
-    fn feedback_finding_critical_severity_with_oob_and_llm_annotations() {
+    fn feedback_finding_critical_severity_with_oob() {
         let f = feedback_fuzz_anomaly_to_finding(&anomaly(Some("tok123"), Some("prompt")));
         assert_eq!(f["severity"], "critical");
-        assert_eq!(
-            f["description"],
-            "base vs anom\n\nPayload excerpt:\nPAYLOAD\n\nOAST correlation token: tok123\n\n[Generative] Payload produced by vLLM; see generative_fuzz_winning_payloads.llm_user_prompt."
-        );
+        assert_eq!(f["verified"], true);
+        assert_eq!(f["verification_method"], "oob_oast_callback");
+        assert_eq!(f["oob_token"], "tok123");
     }
 
     #[test]
-    fn feedback_finding_oob_only_omits_generative_note() {
+    fn feedback_finding_oob_only_is_verified() {
         let f = feedback_fuzz_anomaly_to_finding(&anomaly(Some("tok123"), None));
         assert_eq!(f["severity"], "critical");
-        assert_eq!(
-            f["description"],
-            "base vs anom\n\nPayload excerpt:\nPAYLOAD\n\nOAST correlation token: tok123"
-        );
+        assert_eq!(f["verified"], true);
     }
 
     #[test]

@@ -62,7 +62,7 @@ pub struct Baseline {
     pub content_length: usize,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ValidatedAnomaly {
     pub target_url: String,
     pub payload: String,
@@ -74,6 +74,75 @@ pub struct ValidatedAnomaly {
     /// vLLM user prompt that produced this payload (generative fuzzing provenance).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_user_prompt: Option<String>,
+    /// HTTP status of the probe that produced this finding (live proof).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_status: Option<u16>,
+    /// HTTP method used for the proving request (`GET` / `POST`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_method: Option<String>,
+    /// Truncated response body from the proving request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_excerpt: Option<String>,
+    /// `Location` (or `Refresh`) header when the finding is a redirect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location_header: Option<String>,
+    /// Probe latency in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f64>,
+    /// Classifier: `reflected_xss`, `open_redirect`, `csrf`, `race`, `http_differential`, `oast`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_kind: Option<String>,
+}
+
+impl ValidatedAnomaly {
+    #[must_use]
+    pub fn new(
+        target_url: impl Into<String>,
+        payload: impl Into<String>,
+        anomaly_type: impl Into<String>,
+        baseline_vs: impl Into<String>,
+    ) -> Self {
+        Self {
+            target_url: target_url.into(),
+            payload: payload.into(),
+            anomaly_type: anomaly_type.into(),
+            baseline_vs_anomaly: baseline_vs.into(),
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
+    pub fn with_http_proof(
+        mut self,
+        method: &str,
+        status: u16,
+        excerpt: impl Into<String>,
+        latency_ms: f64,
+    ) -> Self {
+        self.http_method = Some(method.to_string());
+        self.http_status = Some(status);
+        let excerpt = excerpt.into();
+        self.response_excerpt = Some(excerpt.chars().take(4000).collect());
+        self.latency_ms = Some(latency_ms);
+        self
+    }
+
+    #[must_use]
+    pub fn with_location(mut self, location: impl Into<String>) -> Self {
+        self.location_header = Some(location.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_kind(mut self, kind: impl Into<String>) -> Self {
+        self.evidence_kind = Some(kind.into());
+        self
+    }
+
+    #[must_use]
+    pub fn has_http_proof(&self) -> bool {
+        self.http_status.is_some() || self.oob_token.is_some()
+    }
 }
 
 #[derive(Clone, Debug)]

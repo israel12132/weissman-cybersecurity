@@ -3,6 +3,7 @@
 //! bounded in-flight probes; optional OAST/OOB correlation. Default mutation source is **vLLM**
 //! (`WEISSMAN_LLM_BASE_URL`); set `WEISSMAN_GENERATIVE_FUZZ=0` for legacy static mutations.
 
+use crate::fuzz_campaign::{AbortOnDrop, CampaignOutcome, FuzzCampaignCtl};
 use crate::fuzz_http_pool::FuzzHttpPool;
 use crate::fuzz_oob::{inject_oob_token, oast_correlation_enabled, verify_oob_token_seen};
 use crate::generative_fuzz_llm::{self, BlockFeedback, GenerativeLlmConfig, GenerativeMutation};
@@ -18,6 +19,7 @@ use sqlx::PgPool;
 use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, Semaphore};
 use tracing::{error, warn};
 
@@ -264,6 +266,7 @@ async fn process_post_anomaly(
     signature_rules: &[crate::signatures::PayloadSignatureRule],
     oob_token: Option<String>,
     llm_user_prompt: Option<String>,
+    body_excerpt: &str,
 ) -> Option<ValidatedAnomaly> {
     // A matching payload signature in the response body (e.g. /etc/passwd contents
     // echoed back) is strong positive evidence — but its ABSENCE is not disproof:
@@ -308,14 +311,17 @@ async fn process_post_anomaly(
         return None;
     }
     crate::reporter::generate_bug_report(target_url, payload, anomaly, &baseline_vs);
-    Some(ValidatedAnomaly {
-        target_url: target_url.to_string(),
-        payload: payload.to_string(),
-        anomaly_type: anomaly.to_string(),
-        baseline_vs_anomaly: baseline_vs,
-        oob_token,
-        llm_user_prompt,
-    })
+    let excerpt = if body_excerpt.trim().is_empty() {
+        format!("content_length={content_length}")
+    } else {
+        truncate_for_log(body_excerpt, 1500)
+    };
+    let mut va = ValidatedAnomaly::new(target_url, payload, anomaly, baseline_vs)
+        .with_http_proof("POST", status, excerpt, latency_ms)
+        .with_kind("http_differential");
+    va.oob_token = oob_token;
+    va.llm_user_prompt = llm_user_prompt;
+    Some(va)
 }
 
 /// Concurrent POST mutation wave: same baseline for all probes; rate-limited + sem-bounded.
@@ -386,6 +392,7 @@ async fn concurrent_post_mutation_wave(
                 rules.as_slice(),
                 None,
                 llm_prompt,
+                &body_text,
             )
             .await
         });
@@ -450,13 +457,16 @@ async fn collect_oob_verified_findings(
                 &anomaly,
                 &baseline_vs,
             );
-            out.push(ValidatedAnomaly {
-                target_url: target_url.to_string(),
-                payload: format!("OAST_TOKEN:{token}"),
-                anomaly_type: anomaly,
-                baseline_vs_anomaly: baseline_vs,
-                oob_token: Some(token.clone()),
-                llm_user_prompt: None,
+            out.push({
+                let mut va = ValidatedAnomaly::new(
+                    target_url,
+                    format!("OAST_TOKEN:{token}"),
+                    anomaly,
+                    baseline_vs,
+                )
+                .with_kind("oast");
+                va.oob_token = Some(token.clone());
+                va
             });
         }
     }
@@ -516,14 +526,16 @@ async fn process_get_anomaly(
         return None;
     }
     crate::reporter::generate_bug_report(target_url, get_url, anomaly, &baseline_vs);
-    Some(ValidatedAnomaly {
-        target_url: target_url.to_string(),
-        payload: get_url.to_string(),
-        anomaly_type: anomaly.to_string(),
-        baseline_vs_anomaly: baseline_vs,
-        oob_token: None,
-        llm_user_prompt,
-    })
+    let mut va = ValidatedAnomaly::new(target_url, get_url, anomaly, baseline_vs)
+        .with_http_proof(
+            "GET",
+            status,
+            format!("content_length={content_length}"),
+            latency_ms,
+        )
+        .with_kind("http_differential");
+    va.llm_user_prompt = llm_user_prompt;
+    Some(va)
 }
 
 async fn concurrent_get_mutation_wave(
@@ -602,6 +614,7 @@ async fn execute_legacy_feedback_fuzz(
     job_oast_token: Option<String>,
     app_pool: Option<&PgPool>,
     tenant_id: Option<i64>,
+    ctl: Option<&FuzzCampaignCtl>,
 ) -> Vec<ValidatedAnomaly> {
     let mut collected = Vec::new();
     let pool = match FuzzHttpPool::from_env().await {
@@ -637,6 +650,19 @@ async fn execute_legacy_feedback_fuzz(
         }
     }
     let mutations = resolve_mutations(&mutator, &guided);
+    let max_mut = ctl.map(|_| 64).unwrap_or(240);
+    let mutations: Vec<String> = mutations
+        .into_iter()
+        .filter(|m| m.len() <= 8192)
+        .take(max_mut)
+        .collect();
+    if let Some(c) = ctl {
+        c.add_coverage("static_mutations");
+        c.note_probe(target_url);
+        if c.expired() {
+            return collected;
+        }
+    }
     let post_jobs: Vec<(String, Option<String>)> =
         mutations.iter().cloned().map(|m| (m, None)).collect();
 
@@ -656,6 +682,9 @@ async fn execute_legacy_feedback_fuzz(
     .await;
     collected.extend(post_findings);
     crate::fuzz_http_pool::batch_jitter_sleep().await;
+    if ctl.is_some_and(|c| c.expired()) {
+        return collected;
+    }
 
     let n_oast = oast_max_probes(mutations.len());
     let mut oast_tokens: Vec<String> = Vec::new();
@@ -692,6 +721,9 @@ async fn execute_legacy_feedback_fuzz(
         .await;
         collected.extend(oob_hits);
     }
+    if ctl.is_some_and(|c| c.expired()) {
+        return collected;
+    }
 
     let baseline_get = match establish_baseline_get(pool.as_ref(), target_url).await {
         Some(b) => b,
@@ -711,15 +743,34 @@ async fn execute_legacy_feedback_fuzz(
     .await;
     collected.extend(get_findings);
     crate::fuzz_http_pool::batch_jitter_sleep().await;
+    if ctl.is_some_and(|c| c.expired()) {
+        return collected;
+    }
 
-    let injection_found = param_injection_pass(
-        pool.clone(),
-        target_url,
-        signature_rules.as_slice(),
-        sem,
-        limiter,
-    )
-    .await;
+    let injection_found = if ctl.is_some_and(|c| c.remaining() < Duration::from_secs(8)) {
+        Vec::new()
+    } else if ctl.is_some() {
+        let urls = build_param_injection_probe_urls(target_url, 24);
+        param_injection_pass_with_urls(
+            pool.clone(),
+            target_url,
+            signature_rules.as_slice(),
+            sem,
+            limiter,
+            urls,
+            None,
+        )
+        .await
+    } else {
+        param_injection_pass(
+            pool.clone(),
+            target_url,
+            signature_rules.as_slice(),
+            sem,
+            limiter,
+        )
+        .await
+    };
     for v in &injection_found {
         crate::reporter::generate_bug_report(
             &v.target_url,
@@ -739,6 +790,7 @@ async fn execute_generative_feedback_fuzz(
     job_oast_token: Option<String>,
     cognitive_osint: Option<&str>,
     app_pool: Option<&PgPool>,
+    ctl: Option<&FuzzCampaignCtl>,
 ) -> Vec<ValidatedAnomaly> {
     let mut collected = Vec::new();
     let pool = match FuzzHttpPool::from_env().await {
@@ -761,8 +813,11 @@ async fn execute_generative_feedback_fuzz(
     let llm_timeout: u64 = std::env::var("WEISSMAN_GENERATIVE_FUZZ_LLM_TIMEOUT_SECS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(300)
-        .max(30);
+        .unwrap_or(25)
+        .clamp(8, 90);
+    let llm_timeout = ctl
+        .map(|c| llm_timeout.min(c.remaining().as_secs().max(8)))
+        .unwrap_or(llm_timeout);
 
     let llm_http = weissman_engines::openai_chat::llm_http_client(llm_timeout);
 
@@ -819,6 +874,7 @@ async fn execute_generative_feedback_fuzz(
         tech_stack.clone(),
         cognitive.clone(),
     ));
+    let _abort_prod = AbortOnDrop(Some(gen_task));
 
     let sem = Arc::new(Semaphore::new(fuzz_max_in_flight()));
     let limiter = new_fuzz_rate_limiter();
@@ -883,6 +939,12 @@ async fn execute_generative_feedback_fuzz(
         if total_post >= max_post {
             break;
         }
+        if ctl.is_some_and(|c| c.expired()) {
+            break;
+        }
+        let idle = ctl
+            .map(|c| c.remaining().min(Duration::from_secs(12)))
+            .unwrap_or(Duration::from_secs(20));
         tokio::select! {
             biased;
             recv_m = rx.recv() => {
@@ -929,6 +991,16 @@ async fn execute_generative_feedback_fuzz(
                 )
                 .await;
             }
+            _ = tokio::time::sleep(idle) => {
+                // LLM produced nothing in `idle` — do not hang the campaign.
+                warn!(
+                    target: "generative_fuzz",
+                    idle_ms = idle.as_millis() as u64,
+                    total_post,
+                    "LLM mutation channel idle; leaving generative stage"
+                );
+                break;
+            }
         }
     }
 
@@ -949,8 +1021,9 @@ async fn execute_generative_feedback_fuzz(
 
     stop.store(true, Ordering::SeqCst);
     drop(rx);
-    if let Err(e) = gen_task.await {
-        warn!(target: "generative_fuzz", "producer task join: {:?}", e);
+    // Producer is aborted by AbortOnDrop when this function returns.
+    if ctl.is_some_and(|c| c.expired() || c.remaining() < Duration::from_secs(8)) {
+        return collected;
     }
 
     let n_oast = oast_max_probes(oast_material.len());
@@ -1011,6 +1084,9 @@ async fn execute_generative_feedback_fuzz(
     .await;
     collected.extend(get_findings);
     crate::fuzz_http_pool::batch_jitter_sleep().await;
+    if ctl.is_some_and(|c| c.expired() || c.remaining() < Duration::from_secs(8)) {
+        return collected;
+    }
 
     let inj = generative_fuzz_llm::fetch_injection_urls(
         &llm_http,
@@ -1061,6 +1137,7 @@ async fn execute_feedback_fuzz(
     job_oast_token: Option<String>,
     cognitive_osint: Option<&str>,
     app_pool: Option<&PgPool>,
+    ctl: Option<&FuzzCampaignCtl>,
 ) -> Vec<ValidatedAnomaly> {
     if generative_legacy_mode() {
         execute_legacy_feedback_fuzz(
@@ -1069,6 +1146,7 @@ async fn execute_feedback_fuzz(
             job_oast_token,
             app_pool,
             llm_tenant_id,
+            ctl,
         )
         .await
     } else {
@@ -1079,6 +1157,7 @@ async fn execute_feedback_fuzz(
             job_oast_token,
             cognitive_osint,
             app_pool,
+            ctl,
         )
         .await
     }
@@ -1086,12 +1165,21 @@ async fn execute_feedback_fuzz(
 
 /// Runs the fuzzer: baseline first, then concurrent mutation waves with rate limiting.
 pub async fn run_fuzzer(target_url: &str, base_payload: &str) {
-    let _ = execute_feedback_fuzz(target_url, base_payload, None, None, None, None).await;
+    let _ = run_fuzzer_collect(target_url, base_payload).await;
 }
 
 /// Runs the fuzzer and returns all validated anomalies (for API/DB). Still generates markdown reports.
 pub async fn run_fuzzer_collect(target_url: &str, base_payload: &str) -> Vec<ValidatedAnomaly> {
-    execute_feedback_fuzz(target_url, base_payload, None, None, None, None).await
+    let ctl = FuzzCampaignCtl::new(
+        "http_feedback_fuzz",
+        Duration::from_secs(crate::fuzz_campaign::campaign_wall_secs(
+            "http_feedback_fuzz",
+            None,
+        )),
+    );
+    execute_budgeted_campaign(target_url, base_payload, "", None, None, None, &ctl)
+        .await
+        .anomalies
 }
 
 /// Same as [`run_fuzzer_collect`] but passes tenant id into vLLM metering (`tenant_llm_usage`).
@@ -1103,15 +1191,147 @@ pub async fn run_fuzzer_collect_tenant(
     cognitive_osint: Option<&str>,
     app_pool: Option<&PgPool>,
 ) -> Vec<ValidatedAnomaly> {
-    execute_feedback_fuzz(
+    let ctl = FuzzCampaignCtl::new(
+        "http_feedback_fuzz",
+        Duration::from_secs(crate::fuzz_campaign::campaign_wall_secs(
+            "http_feedback_fuzz",
+            Some(crate::fuzz_campaign::FEEDBACK_FUZZ_JOB_KIND),
+        )),
+    );
+    execute_budgeted_campaign(
         target_url,
         base_payload,
+        cognitive_osint.unwrap_or(""),
         llm_tenant_id,
         job_oast_token,
-        cognitive_osint,
         app_pool,
+        &ctl,
     )
     .await
+    .anomalies
+}
+
+/// Staged campaign: specialized live probes → static feedback fuzz → optional generative.
+/// Always returns before `ctl.wall` (or cancel). Never synthesizes a timeout finding.
+pub async fn execute_budgeted_campaign(
+    target_url: &str,
+    base_payload: &str,
+    cognitive_osint: &str,
+    llm_tenant_id: Option<i64>,
+    job_oast_token: Option<String>,
+    app_pool: Option<&PgPool>,
+    ctl: &FuzzCampaignCtl,
+) -> CampaignOutcome {
+    let mut anomalies = Vec::new();
+    ctl.emit_progress("campaign_start", 0).await;
+
+    if !ctl.expired() {
+        let spec = crate::fuzz_specialized::run_specialized(&ctl.engine_id, target_url, ctl).await;
+        anomalies.extend(spec);
+    }
+
+    if !ctl.expired() {
+        ctl.emit_progress("static_fuzz", anomalies.len()).await;
+        let static_hits = execute_legacy_feedback_fuzz(
+            target_url,
+            base_payload,
+            job_oast_token.clone(),
+            app_pool,
+            llm_tenant_id,
+            Some(ctl),
+        )
+        .await;
+        anomalies.extend(static_hits);
+    }
+
+    if !ctl.expired()
+        && !generative_legacy_mode()
+        && ctl.remaining() > Duration::from_secs(15)
+        && ctl.wall >= Duration::from_secs(120)
+    {
+        ctl.emit_progress("generative_fuzz", anomalies.len()).await;
+        let gen_hits = execute_generative_feedback_fuzz(
+            target_url,
+            base_payload,
+            llm_tenant_id,
+            job_oast_token,
+            Some(cognitive_osint).filter(|s| !s.is_empty()),
+            app_pool,
+            Some(ctl),
+        )
+        .await;
+        anomalies.extend(gen_hits);
+    }
+
+    let budget_exhausted = ctl.expired() && !ctl.cancel.load(std::sync::atomic::Ordering::Relaxed);
+    ctl.emit_progress(
+        if budget_exhausted {
+            "budget_exhausted"
+        } else {
+            "campaign_complete"
+        },
+        anomalies.len(),
+    )
+    .await;
+
+    CampaignOutcome {
+        probes_attempted: ctl.probes.load(std::sync::atomic::Ordering::Relaxed),
+        stages: ctl.stages(),
+        coverage: ctl.coverage(),
+        budget_exhausted,
+        last_url: ctl.last_url(),
+        elapsed_ms: ctl.started.elapsed().as_millis() as u64,
+        anomalies,
+    }
+}
+
+/// Engine-dispatch entry: campaign → EngineResult (ok even when empty — live truth).
+pub async fn run_engine_campaign(
+    engine_id: &str,
+    base_payload: &str,
+    cognitive_hint: &str,
+    category: &str,
+    mitre: &str,
+    target: &str,
+    ctl: FuzzCampaignCtl,
+    llm_tenant_id: Option<i64>,
+    job_oast_token: Option<String>,
+    app_pool: Option<&PgPool>,
+) -> crate::engine_result::EngineResult {
+    if target.trim().is_empty() {
+        return crate::engine_result::EngineResult::error("target required");
+    }
+    if let Some(jid) = ctl.job_id.as_deref() {
+        crate::supreme_nerve_center::run_phase(
+            jid,
+            "campaign_start",
+            Some(&format!(
+                "{engine_id} wall={}s target={target}",
+                ctl.wall.as_secs()
+            )),
+        );
+    }
+    let outcome = execute_budgeted_campaign(
+        target,
+        base_payload,
+        cognitive_hint,
+        llm_tenant_id,
+        job_oast_token,
+        app_pool,
+        &ctl,
+    )
+    .await;
+    let verified_oob = outcome
+        .anomalies
+        .iter()
+        .filter(|a| a.oob_token.as_ref().is_some_and(|s| !s.trim().is_empty()))
+        .count();
+    let findings: Vec<serde_json::Value> = outcome
+        .anomalies
+        .iter()
+        .map(|a| crate::fuzz_campaign::anomaly_to_finding(engine_id, a, category, mitre, target))
+        .collect();
+    crate::engine_result::EngineResult::ok(findings, outcome.message(engine_id, verified_oob))
 }
 
 async fn param_injection_pass(
@@ -1233,13 +1453,23 @@ async fn param_injection_pass_with_urls(
             if !(confirmed || sqli || xss) {
                 return None;
             }
-            Some(ValidatedAnomaly {
-                target_url: target_url.clone(),
-                payload: inj_url.clone(),
-                anomaly_type: anomaly.clone(),
-                baseline_vs_anomaly: baseline_vs.clone(),
-                oob_token: None,
-                llm_user_prompt: llm_p,
+            Some({
+                let mut va = ValidatedAnomaly::new(
+                    target_url.clone(),
+                    inj_url.clone(),
+                    anomaly.clone(),
+                    baseline_vs.clone(),
+                )
+                .with_http_proof("GET", status, truncate_for_log(&resp_body, 1500), latency_ms)
+                .with_kind(if xss {
+                    "reflected_xss"
+                } else if sqli {
+                    "sqli"
+                } else {
+                    "http_differential"
+                });
+                va.llm_user_prompt = llm_p;
+                va
             })
         });
     }
@@ -1320,5 +1550,79 @@ mod tests {
     fn target_host_bare_host_no_scheme() {
         assert_eq!(target_host_for_memory("example.org"), "example.org");
         assert_eq!(target_host_for_memory("  spaced.io  "), "spaced.io");
+    }
+
+    #[tokio::test]
+    async fn budgeted_xss_campaign_completes_with_live_http_proof() {
+        use axum::body::Body;
+        use axum::http::{header, Request, StatusCode};
+        use axum::response::Response;
+        use axum::routing::get;
+        use axum::Router;
+        use fuzz_core::XSS_REFLECTION_TOKEN;
+
+        let app = Router::new().route(
+            "/",
+            get(|req: Request<Body>| async move {
+                let q = req.uri().query().unwrap_or("");
+                let decoded = urlencoding::decode(q).unwrap_or_default();
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "text/html")
+                    .body(Body::from(format!("<html>{decoded}</html>")))
+                    .unwrap()
+            })
+            .post(|| async { StatusCode::OK }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        let base = format!("http://127.0.0.1:{}", addr.port());
+        let ctl = FuzzCampaignCtl::new("xss_advanced", Duration::from_secs(12));
+        let started = std::time::Instant::now();
+        let outcome = execute_budgeted_campaign(&base, "", "", None, None, None, &ctl).await;
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(20),
+            "campaign hung: {:?}",
+            elapsed
+        );
+        assert!(
+            !outcome.message("xss_advanced", 0).contains("180"),
+            "must not report the fake 180s timeout: {}",
+            outcome.message("xss_advanced", 0)
+        );
+        assert!(
+            outcome.stages.iter().any(|s| s == "surface" || s == "xss"),
+            "expected live stages, got {:?}",
+            outcome.stages
+        );
+        assert!(
+            outcome.anomalies.iter().any(|a| a.has_http_proof()
+                && a.response_excerpt
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains(XSS_REFLECTION_TOKEN)),
+            "expected XSS HTTP proof, got {:?}",
+            outcome.anomalies
+        );
+        assert!(outcome.probes_attempted >= 1);
+    }
+
+    #[tokio::test]
+    async fn cancelled_campaign_returns_immediately() {
+        let ctl = FuzzCampaignCtl::new("xss_advanced", Duration::from_secs(8));
+        ctl.request_cancel();
+        let started = std::time::Instant::now();
+        let outcome =
+            execute_budgeted_campaign("http://127.0.0.1:9", "", "", None, None, None, &ctl).await;
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "cancel must skip probes, not wait on connect/timeout"
+        );
+        assert!(outcome.anomalies.is_empty());
+        assert!(!outcome.message("xss_advanced", 0).contains("180"));
     }
 }
