@@ -20,6 +20,7 @@ const EXACT = {
   '/intel-map': () => import(/* webpackChunkName: "page-intel-map" */ '../App'),
   '/findings': () => import(/* webpackChunkName: "page-findings" */ '../pages/FindingsCommandCenter'),
   '/kill-chain': () => import(/* webpackChunkName: "page-kill-chain" */ '../pages/KillChainOrchestrator'),
+  '/kill-chain-commander': () => import(/* webpackChunkName: "page-kill-chain-commander" */ '../pages/KillChainCommander'),
   '/jwt-lab': () => import(/* webpackChunkName: "page-jwt-lab" */ '../pages/JwtAttackLab'),
   '/waf-bypass': () => import(/* webpackChunkName: "page-waf-bypass" */ '../pages/WafBypassLab'),
   '/graphql-security': () => import(/* webpackChunkName: "page-graphql" */ '../pages/GraphqlSecurityCommandCenter'),
