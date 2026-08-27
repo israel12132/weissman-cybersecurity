@@ -5,8 +5,9 @@
 //!              never `ps`, `lsof`, or libprocps).
 //!   * macOS  — `sysctl(CTL_KERN, KERN_PROC, KERN_PROC_ALL)` plus `proc_pidinfo`
 //!              for sockets.
-//!   * Windows — `NtQuerySystemInformation(SystemProcessInformation)` with a
-//!              ToolHelp fallback, and `GetExtendedTcpTable` for listeners.
+//!   * Windows — `NtQuerySystemInformation(SystemProcessInformation)` only
+//!              (no ToolHelp — that API is an EDR tripwire on unsigned
+//!              binaries) and `GetExtendedTcpTable` for listeners.
 //!
 //! This is the agent's own inventory path, not an EDR-unhooking / direct-syscall
 //! stub. Spawning `ps`/`lsof` is what lights up attacker-controlled process
@@ -165,5 +166,17 @@ mod tests {
             vmem_bytes: 0,
         };
         assert_eq!(w.basename_lower(), "powershell");
+    }
+
+    #[test]
+    fn windows_hostobs_never_calls_toolhelp() {
+        let src = include_str!("windows.rs");
+        assert!(
+            !src.contains("Process32FirstW")
+                && !src.contains("Process32NextW")
+                && !src.contains("TH32CS_SNAPPROCESS")
+                && !src.contains("Diagnostics::ToolHelp"),
+            "ToolHelp APIs must stay out of the Windows hostobs path"
+        );
     }
 }

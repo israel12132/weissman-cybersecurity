@@ -36,6 +36,19 @@ pub fn install(snapshot: UebaCompactSnapshot) {
     }
 }
 
+/// Fail closed: unsigned or mismatched MAC never enters the edge gate.
+pub fn install_if_mac_valid(snapshot: UebaCompactSnapshot, key_hex: &str) -> bool {
+    if !crate::ueba_mac::verify(&snapshot, key_hex) {
+        tracing::error!(
+            target: "agent",
+            "UEBA snapshot MAC rejected — refusing to install (fail closed)"
+        );
+        return false;
+    }
+    install(snapshot);
+    true
+}
+
 #[must_use]
 pub fn current() -> Option<UebaCompactSnapshot> {
     SNAPSHOT.read().ok().and_then(|g| g.clone())
@@ -173,6 +186,7 @@ mod tests {
                 },
             ],
             learned_processes: procs.iter().map(|s| (*s).to_string()).collect(),
+            mac: String::new(),
         }
     }
 
@@ -243,5 +257,15 @@ mod tests {
     #[test]
     fn z_upload_constant_is_two() {
         assert_eq!(Z_UPLOAD, 2.0);
+    }
+
+    #[test]
+    fn poisoned_snapshot_is_not_installed() {
+        let key = [0xABu8; 32];
+        let mut s = snap(24, 10.0, 1.0, &["sshd"]);
+        s.mac = crate::ueba_mac::sign_with_key(&s, &key).unwrap();
+        s.metrics[0].stddev = 1_000_000.0;
+        assert!(!install_if_mac_valid(s, &hex::encode(key)));
+        assert!(current().is_none());
     }
 }

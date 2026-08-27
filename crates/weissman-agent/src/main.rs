@@ -15,6 +15,7 @@ mod protocol;
 mod ringbuf;
 mod transport;
 mod ueba_edge;
+mod ueba_mac;
 
 use clap::Parser;
 use std::time::Duration;
@@ -75,14 +76,21 @@ async fn main() -> anyhow::Result<()> {
                 target: "agent", agent_id = %saved.agent_id, state = %state_path.display(),
                 "resuming persisted identity"
             );
-            let jwt = transport::enrollment::renew_session(
+            if !saved.server_cert_sha256.is_empty() {
+                transport::tls::set_tofu_pin_hex(&saved.server_cert_sha256);
+            }
+            let tokens = transport::enrollment::renew_session(
                 &cli.server_url,
                 &saved.agent_id,
                 &saved.agent_secret,
                 env!("CARGO_PKG_VERSION"),
             )
             .await?;
-            saved.into_enrollment(jwt)
+            let mut enrollment = saved.into_enrollment(tokens.session_jwt);
+            if !tokens.ueba_mac_key.is_empty() {
+                enrollment.ueba_mac_key = tokens.ueba_mac_key;
+            }
+            enrollment
         }
         None => {
             let fresh = transport::enrollment::enroll(
@@ -115,9 +123,17 @@ async fn main() -> anyhow::Result<()> {
                      enrollment token has already been consumed"
                 );
             }
+            transport::tls::persist_observed_pin();
             fresh
         }
     };
+
+    if let Some(mut st) = transport::state::load(&state_path) {
+        if st.ueba_mac_key != enrollment.ueba_mac_key {
+            st.ueba_mac_key = enrollment.ueba_mac_key.clone();
+            let _ = transport::state::save(&state_path, &st);
+        }
+    }
 
     // Encrypted 10 MiB ring is keyed from the renewal secret so a memory dump of
     // a disconnected agent does not yield plaintext findings.
@@ -161,7 +177,16 @@ async fn main() -> anyhow::Result<()> {
             )
             .await
             {
-                Ok(jwt) => enrollment.session_jwt = jwt,
+                Ok(tokens) => {
+                    enrollment.session_jwt = tokens.session_jwt;
+                    if !tokens.ueba_mac_key.is_empty() {
+                        enrollment.ueba_mac_key = tokens.ueba_mac_key;
+                    }
+                    if let Some(mut st) = transport::state::load(&state_path) {
+                        st.ueba_mac_key = enrollment.ueba_mac_key.clone();
+                        let _ = transport::state::save(&state_path, &st);
+                    }
+                }
                 Err(e) => warn!(
                     target: "agent", error = %e,
                     "session renewal failed; reusing the current token for this attempt"

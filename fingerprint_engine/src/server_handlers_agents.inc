@@ -330,6 +330,10 @@ async fn api_agents_enroll(
         agent_secret,
         ws_path: "/ws/agent".into(),
         server_message: Some(format!("welcome host={}", body.hostname)),
+        ueba_mac_key: crate::ueba_snapshot_mac::agent_mac_key_hex(
+            consumed.tenant_id,
+            &agent_uuid.to_string(),
+        ),
     };
     (StatusCode::OK, Json(serde_json::to_value(&resp).unwrap_or(json!({})))).into_response()
 }
@@ -406,6 +410,10 @@ async fn api_agents_session(
             "client_id": client_id,
             "session_jwt": session_jwt,
             "ws_path": "/ws/agent",
+            "ueba_mac_key": crate::ueba_snapshot_mac::agent_mac_key_hex(
+                tenant_id,
+                &agent_uuid.to_string(),
+            ),
         })),
     )
         .into_response()

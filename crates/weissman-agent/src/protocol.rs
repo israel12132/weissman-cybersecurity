@@ -114,6 +114,10 @@ pub struct UebaCompactSnapshot {
     pub metrics: Vec<UebaCompactMetric>,
     #[serde(default)]
     pub learned_processes: Vec<String>,
+    /// HMAC-SHA256 (hex) over the canonical snapshot, keyed by the tenant-derived
+    /// `ueba_mac_key` issued at enrollment. Empty / mismatch → agent refuses to install.
+    #[serde(default)]
+    pub mac: String,
 }
 
 fn default_z_upload() -> f64 {
@@ -152,6 +156,9 @@ pub struct Enrollment {
     pub agent_secret: String,
     pub ws_path: String, // e.g. "/ws/agent"
     pub server_message: Option<String>,
+    /// Per-agent HMAC key (64 hex) for verifying Welcome / UebaBaseline snapshots.
+    #[serde(default)]
+    pub ueba_mac_key: String,
 }
 
 #[cfg(test)]
@@ -175,6 +182,7 @@ mod tests {
                     n: 24,
                 }],
                 learned_processes: vec!["sshd".into()],
+                mac: String::new(),
             }),
         };
         let v = serde_json::to_value(&msg).unwrap();

@@ -28,11 +28,6 @@ use std::time::Duration;
 const LEARN_WINDOW_DAYS: i64 = 7;
 const Z_THRESHOLD: f64 = 3.0;
 const MIN_BASELINE_SAMPLES: i32 = 24;
-/// Sentinel `hour_of_week` for the rolling 7-day (agent, metric) fire-path row.
-/// Must sit **outside** 0..=167 — bucket 0 is Monday 00:00 UTC, and writing the
-/// global mean/stddev there would overwrite the true hour-0 row (and vice versa)
-/// every Monday midnight.
-const GLOBAL_BUCKET: i16 = -1;
 
 /// Agent-side upload gate. Server still fires anomalies at `|z| > 3`.
 pub const EDGE_Z_UPLOAD: f64 = 2.0;
@@ -63,6 +58,9 @@ pub struct UebaCompactSnapshot {
     pub metrics: Vec<UebaCompactMetric>,
     #[serde(default)]
     pub learned_processes: Vec<String>,
+    /// HMAC-SHA256 (hex) over the canonical snapshot. Empty until `ueba_snapshot_mac::sign`.
+    #[serde(default)]
+    pub mac: String,
 }
 
 fn default_z_upload() -> f64 {
@@ -88,6 +86,8 @@ pub struct BaselineRow {
     pub mean: f64,
     pub stddev: f64,
     pub learned_set: Value,
+    /// Rolling 7-day (agent, metric) row from `agent_metric_baselines_global`.
+    pub is_global: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,10 +225,10 @@ async fn recompute_baseline(
     // never reach MIN_BASELINE_SAMPLES. The hour-specific row is written alongside
     // so the agent can hold a compact local copy of the current hour.
     let global = aggregate_metric(tx, tenant_id, agent_id, metric, None).await?;
-    upsert_numeric_baseline(tx, tenant_id, agent_id, metric, GLOBAL_BUCKET, &global).await?;
+    upsert_global_numeric(tx, tenant_id, agent_id, metric, &global).await?;
     let hour = hour_of_week.clamp(0, 167);
     let hourly = aggregate_metric(tx, tenant_id, agent_id, metric, Some(hour)).await?;
-    upsert_numeric_baseline(tx, tenant_id, agent_id, metric, hour, &hourly).await?;
+    upsert_hourly_baseline(tx, tenant_id, agent_id, metric, hour, &hourly).await?;
     Ok(global)
 }
 
@@ -270,7 +270,7 @@ async fn aggregate_metric(
     })
 }
 
-async fn upsert_numeric_baseline(
+async fn upsert_hourly_baseline(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: i64,
     agent_id: &str,
@@ -278,6 +278,7 @@ async fn upsert_numeric_baseline(
     hour_of_week: i16,
     upd: &BaselineUpdate,
 ) -> Result<(), String> {
+    let hour = hour_of_week.clamp(0, 167);
     sqlx::query(
         r#"INSERT INTO agent_metric_baselines
                  (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
@@ -292,13 +293,43 @@ async fn upsert_numeric_baseline(
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
-    .bind(hour_of_week)
+    .bind(hour)
     .bind(upd.n)
     .bind(upd.mean)
     .bind(upd.stddev)
     .execute(&mut **tx)
     .await
-    .map_err(|e| format!("upsert baseline: {e}"))?;
+    .map_err(|e| format!("upsert hourly baseline: {e}"))?;
+    Ok(())
+}
+
+async fn upsert_global_numeric(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: i64,
+    agent_id: &str,
+    metric: &str,
+    upd: &BaselineUpdate,
+) -> Result<(), String> {
+    sqlx::query(
+        r#"INSERT INTO agent_metric_baselines_global
+                 (tenant_id, agent_id, metric_name, n, mean, stddev,
+                  learned_set, last_updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, '[]'::jsonb, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name) DO UPDATE SET
+               n = EXCLUDED.n,
+               mean = EXCLUDED.mean,
+               stddev = EXCLUDED.stddev,
+               last_updated_at = now()"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .bind(metric)
+    .bind(upd.n)
+    .bind(upd.mean)
+    .bind(upd.stddev)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| format!("upsert global baseline: {e}"))?;
     Ok(())
 }
 
@@ -314,18 +345,19 @@ pub fn hour_of_week_utc() -> i16 {
 
 /// Build the compact snapshot the agent caches locally. Prefer the current
 /// hour-of-week row when it has ≥ `EDGE_HOUR_MIN_N` samples, else the rolling
-/// 7-day global row (bucket -1).
+/// 7-day global row (`agent_metric_baselines_global`).
 #[must_use]
 pub fn assemble_compact_snapshot(hour: i16, rows: &[BaselineRow]) -> UebaCompactSnapshot {
     let mut metrics = Vec::new();
     let mut used_hour = false;
     for name in COMPACT_METRICS {
-        let hour_row = rows
-            .iter()
-            .find(|r| r.metric_name == *name && r.hour_of_week == hour && r.n >= EDGE_HOUR_MIN_N);
-        let global_row = rows
-            .iter()
-            .find(|r| r.metric_name == *name && r.hour_of_week == GLOBAL_BUCKET);
+        let hour_row = rows.iter().find(|r| {
+            r.metric_name == *name
+                && !r.is_global
+                && r.hour_of_week == hour
+                && r.n >= EDGE_HOUR_MIN_N
+        });
+        let global_row = rows.iter().find(|r| r.metric_name == *name && r.is_global);
         if let Some(r) = hour_row.or(global_row) {
             if hour_row.is_some() {
                 used_hour = true;
@@ -340,7 +372,7 @@ pub fn assemble_compact_snapshot(hour: i16, rows: &[BaselineRow]) -> UebaCompact
     }
     let learned_processes = rows
         .iter()
-        .find(|r| r.metric_name == "top_processes" && r.hour_of_week == GLOBAL_BUCKET)
+        .find(|r| r.metric_name == "top_processes" && r.is_global)
         .and_then(|r| serde_json::from_value::<Vec<String>>(r.learned_set.clone()).ok())
         .unwrap_or_default();
     UebaCompactSnapshot {
@@ -354,6 +386,7 @@ pub fn assemble_compact_snapshot(hour: i16, rows: &[BaselineRow]) -> UebaCompact
         },
         metrics,
         learned_processes,
+        mac: String::new(),
     }
 }
 
@@ -368,21 +401,30 @@ pub async fn compact_snapshot_for_agent(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
-    let rows = sqlx::query_as::<_, (String, i16, i32, f64, f64, Value)>(
+    let hourly = sqlx::query_as::<_, (String, i16, i32, f64, f64, Value)>(
         r#"SELECT metric_name, hour_of_week, n, mean, stddev, learned_set
              FROM agent_metric_baselines
             WHERE tenant_id = $1 AND agent_id = $2
-              AND hour_of_week IN ($3, $4)"#,
+              AND hour_of_week = $3"#,
     )
     .bind(tenant_id)
     .bind(agent_id)
     .bind(hour)
-    .bind(GLOBAL_BUCKET)
     .fetch_all(&mut *tx)
     .await
-    .map_err(|e| format!("load baselines: {e}"))?;
+    .map_err(|e| format!("load hourly baselines: {e}"))?;
+    let global = sqlx::query_as::<_, (String, i32, f64, f64, Value)>(
+        r#"SELECT metric_name, n, mean, stddev, learned_set
+             FROM agent_metric_baselines_global
+            WHERE tenant_id = $1 AND agent_id = $2"#,
+    )
+    .bind(tenant_id)
+    .bind(agent_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| format!("load global baselines: {e}"))?;
     let _ = tx.commit().await;
-    let mapped: Vec<BaselineRow> = rows
+    let mut mapped: Vec<BaselineRow> = hourly
         .into_iter()
         .map(
             |(metric_name, hour_of_week, n, mean, stddev, learned_set)| BaselineRow {
@@ -392,10 +434,26 @@ pub async fn compact_snapshot_for_agent(
                 mean,
                 stddev,
                 learned_set,
+                is_global: false,
             },
         )
         .collect();
-    Ok(assemble_compact_snapshot(hour, &mapped))
+    mapped.extend(
+        global
+            .into_iter()
+            .map(|(metric_name, n, mean, stddev, learned_set)| BaselineRow {
+                metric_name,
+                hour_of_week: 0,
+                n,
+                mean,
+                stddev,
+                learned_set,
+                is_global: true,
+            }),
+    );
+    let mut snap = assemble_compact_snapshot(hour, &mapped);
+    crate::ueba_snapshot_mac::sign(&mut snap, tenant_id, agent_id);
+    Ok(snap)
 }
 
 async fn check_anomaly(
@@ -471,14 +529,13 @@ async fn check_new_categorical(
     // Read the current learned_set.
     let row: Option<(serde_json::Value, i32)> = sqlx::query_as(
         r#"SELECT learned_set, n
-             FROM agent_metric_baselines
+             FROM agent_metric_baselines_global
             WHERE tenant_id = $1 AND agent_id = $2
-              AND metric_name = $3 AND hour_of_week = $4"#,
+              AND metric_name = $3"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
     .fetch_optional(&mut **tx)
     .await
     .map_err(|e| format!("read learned_set: {e}"))?;
@@ -504,26 +561,25 @@ async fn check_new_categorical(
 
     // Add observed → learned_set and bump the per-metric observation count on
     // EVERY sample (not just when the set changes) so `n` reflects how much history
-    // we've accumulated — that is what the learning gate below reads. Stored in a
-    // single per-(agent,metric) row under GLOBAL_BUCKET so it can actually train.
+    // we've accumulated — that is what the learning gate below reads. Stored in
+    // agent_metric_baselines_global so hour_of_week stays a physical 0..=167 clock.
     for x in observed {
         learned.insert(x.clone());
     }
     let learned_vec: Vec<String> = learned.into_iter().collect();
     let _ = sqlx::query(
-        r#"INSERT INTO agent_metric_baselines
-                 (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
+        r#"INSERT INTO agent_metric_baselines_global
+                 (tenant_id, agent_id, metric_name, n, mean, stddev,
                   learned_set, last_updated_at)
-           VALUES ($1, $2, $3, $4, 1, 0, 0, $5, now())
-           ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
-               n = agent_metric_baselines.n + 1,
+           VALUES ($1, $2, $3, 1, 0, 0, $4, now())
+           ON CONFLICT (tenant_id, agent_id, metric_name) DO UPDATE SET
+               n = agent_metric_baselines_global.n + 1,
                learned_set = EXCLUDED.learned_set,
                last_updated_at = now()"#,
     )
     .bind(tenant_id)
     .bind(&p.agent_id)
     .bind(metric)
-    .bind(GLOBAL_BUCKET)
     .bind(serde_json::to_value(&learned_vec).unwrap_or_default())
     .execute(&mut **tx)
     .await;
@@ -598,15 +654,22 @@ mod tests {
         assert!(MIN_BASELINE_SAMPLES >= 24);
     }
     #[test]
-    fn baselines_use_the_global_bucket_not_hour_of_week() {
-        // Regression guard: server-side fire path must accumulate per (agent, metric)
-        // so training can reach MIN_BASELINE_SAMPLES. Hour-of-week rows are extra
-        // copies for the agent's compact snapshot, not the fire path.
-        assert_eq!(GLOBAL_BUCKET, -1);
-        assert!(
-            GLOBAL_BUCKET < 0 || GLOBAL_BUCKET > 167,
-            "GLOBAL_BUCKET must not collide with a real hour_of_week"
-        );
+    fn global_baseline_is_not_a_clock_sentinel() {
+        // Regression: rolling 7-day fire-path rows live in
+        // agent_metric_baselines_global, not hour_of_week = -1. Monday 00:00
+        // (bucket 0) must remain a physical clock value.
+        let rows = vec![BaselineRow {
+            metric_name: "process_count".into(),
+            hour_of_week: 0,
+            n: 4,
+            mean: 50.0,
+            stddev: 1.0,
+            learned_set: Value::Array(vec![]),
+            is_global: false,
+        }];
+        let snap = assemble_compact_snapshot(0, &rows);
+        assert_eq!(snap.hour_of_week, 0);
+        assert!(snap.mac.is_empty());
     }
 
     #[test]
@@ -614,11 +677,12 @@ mod tests {
         let rows = vec![
             BaselineRow {
                 metric_name: "process_count".into(),
-                hour_of_week: GLOBAL_BUCKET,
+                hour_of_week: 0,
                 n: 40,
                 mean: 100.0,
                 stddev: 5.0,
                 learned_set: Value::Array(vec![]),
+                is_global: true,
             },
             BaselineRow {
                 metric_name: "process_count".into(),
@@ -627,6 +691,7 @@ mod tests {
                 mean: 50.0,
                 stddev: 1.0,
                 learned_set: Value::Array(vec![]),
+                is_global: false,
             },
         ];
         let monday_midnight = assemble_compact_snapshot(0, &rows);
@@ -642,11 +707,12 @@ mod tests {
         let rows = vec![
             BaselineRow {
                 metric_name: "process_count".into(),
-                hour_of_week: GLOBAL_BUCKET,
+                hour_of_week: 0,
                 n: 40,
                 mean: 100.0,
                 stddev: 5.0,
                 learned_set: Value::Array(vec![]),
+                is_global: true,
             },
             BaselineRow {
                 metric_name: "process_count".into(),
@@ -655,14 +721,16 @@ mod tests {
                 mean: 80.0,
                 stddev: 2.0,
                 learned_set: Value::Array(vec![]),
+                is_global: false,
             },
             BaselineRow {
                 metric_name: "top_processes".into(),
-                hour_of_week: GLOBAL_BUCKET,
+                hour_of_week: 0,
                 n: 40,
                 mean: 0.0,
                 stddev: 0.0,
                 learned_set: serde_json::json!(["sshd", "systemd"]),
+                is_global: true,
             },
         ];
         let snap = assemble_compact_snapshot(12, &rows);
@@ -681,11 +749,12 @@ mod tests {
     fn compact_snapshot_falls_back_to_rolling_7d() {
         let rows = vec![BaselineRow {
             metric_name: "process_count".into(),
-            hour_of_week: GLOBAL_BUCKET,
+            hour_of_week: 0,
             n: 40,
             mean: 100.0,
             stddev: 5.0,
             learned_set: Value::Array(vec![]),
+            is_global: true,
         }];
         let snap = assemble_compact_snapshot(12, &rows);
         assert_eq!(snap.source, "rolling_7d");

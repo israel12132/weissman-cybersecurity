@@ -16,6 +16,13 @@ struct EnrollRequest<'a> {
     capabilities: Vec<&'a str>,
 }
 
+fn http_client(agent_version: &str) -> anyhow::Result<reqwest::Client> {
+    super::tls::reqwest_client(
+        Duration::from_secs(20),
+        &format!("weissman-agent/{agent_version}"),
+    )
+}
+
 pub async fn enroll(
     server_url: &str,
     enrollment_token: &str,
@@ -37,10 +44,7 @@ pub async fn enroll(
         client_id,
         capabilities: crate::detections::all_capability_ids(),
     };
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent(format!("weissman-agent/{}", agent_version))
-        .build()?;
+    let client = http_client(agent_version)?;
     let resp = client.post(&url).json(&body).send().await?;
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
@@ -52,7 +56,14 @@ pub async fn enroll(
     if enrollment.session_jwt.trim().is_empty() {
         anyhow::bail!("enrollment response missing session_jwt");
     }
+    super::tls::persist_observed_pin();
     Ok(enrollment)
+}
+
+/// Fresh session JWT plus (when the server supports it) a rotated UEBA MAC key.
+pub struct SessionTokens {
+    pub session_jwt: String,
+    pub ueba_mac_key: String,
 }
 
 /// Exchange a persisted renewal secret for a fresh session JWT.
@@ -65,7 +76,7 @@ pub async fn renew_session(
     agent_id: &str,
     agent_secret: &str,
     agent_version: &str,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<SessionTokens> {
     #[derive(Serialize)]
     struct Body<'a> {
         agent_id: &'a str,
@@ -74,12 +85,11 @@ pub async fn renew_session(
     #[derive(serde::Deserialize)]
     struct Resp {
         session_jwt: String,
+        #[serde(default)]
+        ueba_mac_key: String,
     }
     let url = format!("{}/api/agents/session", server_url.trim_end_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent(format!("weissman-agent/{}", agent_version))
-        .build()?;
+    let client = http_client(agent_version)?;
     let resp = client
         .post(&url)
         .json(&Body {
@@ -98,5 +108,9 @@ pub async fn renew_session(
     if parsed.session_jwt.trim().is_empty() {
         anyhow::bail!("session response missing session_jwt");
     }
-    Ok(parsed.session_jwt)
+    super::tls::persist_observed_pin();
+    Ok(SessionTokens {
+        session_jwt: parsed.session_jwt,
+        ueba_mac_key: parsed.ueba_mac_key,
+    })
 }

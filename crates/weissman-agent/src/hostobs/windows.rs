@@ -1,12 +1,13 @@
 //! Windows process + listener inventory via ntdll / iphlpapi.
 //!
-//! Primary path: `NtQuerySystemInformation(SystemProcessInformation)` — the
-//! same kernel table Task Manager uses, without spawning `tasklist.exe`.
-//! Fallback: ToolHelp32 snapshot.
+//! Primary (and only) process path: `NtQuerySystemInformation(SystemProcessInformation)` —
+//! the same kernel table Task Manager uses, without spawning `tasklist.exe`.
+//! There is **no** ToolHelp fallback: the ToolHelp snapshot family is a loud EDR
+//! tripwire on unsigned binaries. If NTAPI is blocked, report an empty sample
+//! rather than lighting up the host EDR.
 //! Listeners: `GetExtendedTcpTable` (AF_INET + AF_INET6), never `netstat`/`lsof`.
 
 use super::{ListenPort, ProcessRecord};
-use std::mem;
 use std::ptr;
 
 const SYSTEM_PROCESS_INFORMATION: i32 = 5;
@@ -52,12 +53,7 @@ mod nt_layout {
 }
 
 pub fn list_processes(full: bool) -> Vec<ProcessRecord> {
-    if let Some(rows) = nt_query_processes(full) {
-        if !rows.is_empty() {
-            return rows;
-        }
-    }
-    toolhelp_processes(full)
+    nt_query_processes(full).unwrap_or_default()
 }
 
 pub fn list_listen_ports() -> Vec<ListenPort> {
@@ -95,7 +91,7 @@ fn parse_nt_process_buffer(buf: &[u8], full: bool) -> Vec<ProcessRecord> {
     #[cfg(not(target_arch = "x86_64"))]
     {
         let _ = (buf, full);
-        return Vec::new();
+        Vec::new()
     }
     #[cfg(target_arch = "x86_64")]
     {
@@ -115,7 +111,7 @@ fn parse_nt_process_buffer(buf: &[u8], full: bool) -> Vec<ProcessRecord> {
                     pid,
                     ppid: if ppid == 0 { None } else { Some(ppid) },
                     name,
-                    exe: if full { String::new() } else { String::new() },
+                    exe: String::new(),
                     uid: None,
                     rss_bytes: rss,
                     vmem_bytes: vmem,
@@ -129,46 +125,9 @@ fn parse_nt_process_buffer(buf: &[u8], full: bool) -> Vec<ProcessRecord> {
                 break;
             }
         }
+        let _ = full;
         out
     }
-}
-
-fn toolhelp_processes(_full: bool) -> Vec<ProcessRecord> {
-    use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-        TH32CS_SNAPPROCESS,
-    };
-
-    let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snap == 0 || snap == -1isize as *mut _ {
-        return Vec::new();
-    }
-    let mut pe: PROCESSENTRY32W = unsafe { mem::zeroed() };
-    pe.dwSize = mem::size_of::<PROCESSENTRY32W>() as u32;
-    let mut out = Vec::new();
-    let mut ok = unsafe { Process32FirstW(snap, &mut pe) };
-    while ok != 0 {
-        let name = wchar_to_string(&pe.szExeFile);
-        if pe.th32ProcessID != 0 && !name.is_empty() {
-            out.push(ProcessRecord {
-                pid: pe.th32ProcessID,
-                ppid: if pe.th32ParentProcessID == 0 {
-                    None
-                } else {
-                    Some(pe.th32ParentProcessID)
-                },
-                name,
-                exe: String::new(),
-                uid: None,
-                rss_bytes: 0,
-                vmem_bytes: 0,
-            });
-        }
-        ok = unsafe { Process32NextW(snap, &mut pe) };
-    }
-    unsafe { CloseHandle(snap) };
-    out
 }
 
 fn collect_tcp_table(af: u32, out: &mut Vec<ListenPort>) {
@@ -261,9 +220,4 @@ fn unicode_at(buf: &[u8], len_off: usize, buf_off: usize) -> Option<String> {
         u16s.push(u16::from_le_bytes([chunk[0], chunk[1]]));
     }
     Some(String::from_utf16_lossy(&u16s))
-}
-
-fn wchar_to_string(w: &[u16]) -> String {
-    let end = w.iter().position(|&c| c == 0).unwrap_or(w.len());
-    String::from_utf16_lossy(&w[..end])
 }

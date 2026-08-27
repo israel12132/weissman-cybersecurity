@@ -15,9 +15,12 @@ path = "src/main.rs"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-util", "net", "fs", "process"] }
 # UEBA baseline uses chrono::Utc + Datelike for hour-of-week computation.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-# Streaming WebSocket + TLS. webpki-roots so a fully-static musl binary does not
-# need a host ca-certificates bundle.
+# Streaming WebSocket + TLS. webpki public roots ∪ the host native store
+# (enterprise SSL inspection) plus optional leaf pin.
 tokio-tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "connect"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-native-certs = "0.8"
+webpki-roots = "0.26"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 url = "2"
 
@@ -36,8 +39,11 @@ whoami = "1"
 sha2 = "0.10"
 hex = "0.4"
 
-# Encrypted in-memory ring (ChaCha20-Poly1305, no heap beyond the 10 MiB cap).
+# Encrypted in-memory ring (XChaCha20-Poly1305, 192-bit random nonce, 10 MiB cap).
 chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+getrandom = "0.2"
+hmac = "0.12"
+subtle = "2"
 
 # Random nonce + uuid.
 uuid = { version = "1", features = ["v4"] }
@@ -45,7 +51,7 @@ uuid = { version = "1", features = ["v4"] }
 # JWT verification (only used to sanity-check the enrollment token client-side).
 jsonwebtoken = { version = "9", default-features = false }
 
-# HTTP fetch for enrollment (request a session token).
+# HTTP fetch for enrollment (custom rustls config: native + webpki + pin).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json"] }
 
 # CLI parsing.
@@ -66,7 +72,6 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",
     "Win32_System_LibraryLoader",
-    "Win32_System_Diagnostics_ToolHelp",
 ] }
 
 # Release profile is defined at workspace root Cargo.toml.

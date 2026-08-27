@@ -131,6 +131,9 @@ pub struct EnrollResponse {
     pub agent_secret: String,
     pub ws_path: String,
     pub server_message: Option<String>,
+    /// Per-agent HMAC key (64 hex) so the agent can verify Welcome / UebaBaseline.
+    #[serde(default)]
+    pub ueba_mac_key: String,
 }
 
 #[derive(Clone, Debug)]
@@ -1416,6 +1419,7 @@ mod tests {
                 n: 4,
             }],
             learned_processes: vec!["sshd".into()],
+            mac: String::new(),
         };
         let v = serde_json::to_value(ServerToAgent::Welcome {
             scan_concurrency: None,
@@ -1435,6 +1439,7 @@ mod tests {
                 source: "rolling_7d".into(),
                 metrics: vec![],
                 learned_processes: vec![],
+                mac: String::new(),
             },
         })
         .unwrap();
@@ -1485,18 +1490,21 @@ mod tests {
             agent_secret: "renewal-secret".to_string(),
             ws_path: "/ws/agent".to_string(),
             server_message: None,
+            ueba_mac_key: "ab".repeat(32),
         };
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["agent_id"], "a");
         assert_eq!(v["tenant_id"], 1);
         assert_eq!(v["client_id"], 2);
         assert_eq!(v["ws_path"], "/ws/agent");
+        assert_eq!(v["ueba_mac_key"].as_str().unwrap().len(), 64);
         let back: EnrollResponse = serde_json::from_value(v).unwrap();
         assert_eq!(back.client_id, 2);
         assert_eq!(back.session_jwt, "jwt");
         // The renewal secret must survive the round trip — the agent persists it, and losing it
         // silently would put the agent back to going dark when its JWT expires.
         assert_eq!(back.agent_secret, "renewal-secret");
+        assert_eq!(back.ueba_mac_key.len(), 64);
         assert!(back.server_message.is_none());
     }
 }

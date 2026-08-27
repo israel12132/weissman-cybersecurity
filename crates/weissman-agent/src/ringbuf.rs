@@ -1,12 +1,14 @@
 //! In-memory encrypted circular buffer for agent→server frames while WSS is down.
 //!
-//! Hard cap: 10 MiB of ciphertext. Oldest frames are dropped first. On reconnect
-//! the writer drains with a 64 KiB/s / 20 ms pacing so a long outage cannot
-//! stampede the control plane.
+//! XChaCha20-Poly1305 with a fresh 192-bit random nonce per frame (no counter,
+//! no wrap, crash-safe). Hard cap: 10 MiB of ciphertext. Two lanes: critical
+//! findings (high/critical, task errors) drain first without throttle; bulk
+//! (heartbeats, UEBA samples) uses an adaptive 256 KiB/s start rate.
 
 use crate::protocol::AgentToServer;
 use chacha20poly1305::aead::{Aead, KeyInit};
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,24 +17,33 @@ use std::time::{Duration, Instant};
 
 /// Hard ceiling for the local ring — never allocate past this.
 pub const MAX_BYTES: usize = 10 * 1024 * 1024;
-/// Reconnect drain: 64 KiB/s.
-pub const FLUSH_BYTES_PER_SEC: usize = 64 * 1024;
-/// Minimum gap between flushed frames.
-pub const FLUSH_MIN_GAP: Duration = Duration::from_millis(20);
+/// Adaptive drain starts here (architect: not a fixed 64 KiB/s).
+pub const DRAIN_START_BYTES_PER_SEC: usize = 256 * 1024;
+pub const DRAIN_MIN_BYTES_PER_SEC: usize = 64 * 1024;
+pub const DRAIN_MAX_BYTES_PER_SEC: usize = 1024 * 1024;
+/// Minimum gap between *bulk* flushed frames.
+pub const FLUSH_MIN_GAP: Duration = Duration::from_millis(5);
+const NONCE_LEN: usize = 24;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lane {
+    Critical,
+    Bulk,
+}
 
 struct Frame {
-    nonce: [u8; 12],
+    nonce: [u8; NONCE_LEN],
     ciphertext: Vec<u8>,
 }
 
 pub struct EncryptedRing {
-    key: ChaCha20Poly1305,
-    frames: VecDeque<Frame>,
+    key: XChaCha20Poly1305,
+    critical: VecDeque<Frame>,
+    bulk: VecDeque<Frame>,
     bytes: usize,
     dropped: u64,
     pushed: u64,
     flushed: u64,
-    seq: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -48,18 +59,18 @@ impl EncryptedRing {
     #[must_use]
     pub fn new(secret: &str) -> Self {
         let mut h = Sha256::new();
-        h.update(b"weissman-agent-ring-v1\0");
+        h.update(b"weissman-agent-ring-v2-xchacha\0");
         h.update(secret.as_bytes());
         let digest: [u8; 32] = h.finalize().into();
-        let key = ChaCha20Poly1305::new(Key::from_slice(&digest));
+        let key = XChaCha20Poly1305::new(Key::from_slice(&digest));
         Self {
             key,
-            frames: VecDeque::new(),
+            critical: VecDeque::new(),
+            bulk: VecDeque::new(),
             bytes: 0,
             dropped: 0,
             pushed: 0,
             flushed: 0,
-            seq: 1,
         }
     }
 
@@ -71,61 +82,92 @@ impl EncryptedRing {
         let Ok(plain) = serde_json::to_vec(msg) else {
             return;
         };
-        self.push_bytes(&plain);
+        self.push_bytes(&plain, lane_for(msg));
     }
 
-    pub fn push_bytes(&mut self, plain: &[u8]) {
+    pub fn push_bytes(&mut self, plain: &[u8], lane: Lane) {
         if plain.is_empty() {
             return;
         }
-        let mut nonce_raw = [0u8; 12];
-        nonce_raw[4..].copy_from_slice(&self.seq.to_le_bytes());
-        self.seq = self.seq.wrapping_add(1);
-        let nonce = Nonce::from_slice(&nonce_raw);
+        let mut nonce_raw = [0u8; NONCE_LEN];
+        if getrandom::getrandom(&mut nonce_raw).is_err() {
+            self.dropped += 1;
+            return;
+        }
+        let nonce = XNonce::from_slice(&nonce_raw);
         let Ok(ciphertext) = self.key.encrypt(nonce, plain) else {
             return;
         };
-        let frame_bytes = 12 + ciphertext.len();
+        let frame_bytes = NONCE_LEN + ciphertext.len();
         if frame_bytes > MAX_BYTES {
             self.dropped += 1;
             return;
         }
         while self.bytes + frame_bytes > MAX_BYTES {
-            if let Some(old) = self.frames.pop_front() {
-                self.bytes = self.bytes.saturating_sub(12 + old.ciphertext.len());
-                self.dropped += 1;
+            let old = if !self.bulk.is_empty() {
+                self.bulk.pop_front()
             } else {
-                break;
+                self.critical.pop_front()
+            };
+            match old {
+                Some(old) => {
+                    self.bytes = self.bytes.saturating_sub(NONCE_LEN + old.ciphertext.len());
+                    self.dropped += 1;
+                }
+                None => break,
             }
         }
         self.bytes += frame_bytes;
-        self.frames.push_back(Frame {
+        let frame = Frame {
             nonce: nonce_raw,
             ciphertext,
-        });
+        };
+        match lane {
+            Lane::Critical => self.critical.push_back(frame),
+            Lane::Bulk => self.bulk.push_back(frame),
+        }
         self.pushed += 1;
     }
 
-    /// Decrypt and pop the oldest frame.
-    pub fn pop_json(&mut self) -> Option<String> {
-        let frame = self.frames.pop_front()?;
-        self.bytes = self.bytes.saturating_sub(12 + frame.ciphertext.len());
-        let nonce = Nonce::from_slice(&frame.nonce);
-        let plain = self.key.decrypt(nonce, frame.ciphertext.as_ref()).ok()?;
-        self.flushed += 1;
+    fn decrypt_pop(
+        key: &XChaCha20Poly1305,
+        q: &mut VecDeque<Frame>,
+        bytes: &mut usize,
+    ) -> Option<String> {
+        let frame = q.pop_front()?;
+        *bytes = bytes.saturating_sub(NONCE_LEN + frame.ciphertext.len());
+        let nonce = XNonce::from_slice(&frame.nonce);
+        let plain = key.decrypt(nonce, frame.ciphertext.as_ref()).ok()?;
         String::from_utf8(plain).ok()
     }
 
-    pub fn pop_msg(&mut self) -> Option<AgentToServer> {
+    /// Decrypt and pop critical first, then bulk.
+    pub fn pop_json(&mut self) -> Option<String> {
+        let json = if !self.critical.is_empty() {
+            Self::decrypt_pop(&self.key, &mut self.critical, &mut self.bytes)
+        } else {
+            Self::decrypt_pop(&self.key, &mut self.bulk, &mut self.bytes)
+        }?;
+        self.flushed += 1;
+        Some(json)
+    }
+
+    pub fn pop_msg(&mut self) -> Option<(Lane, AgentToServer)> {
+        let lane = if !self.critical.is_empty() {
+            Lane::Critical
+        } else {
+            Lane::Bulk
+        };
         let json = self.pop_json()?;
-        serde_json::from_str(&json).ok()
+        let msg = serde_json::from_str(&json).ok()?;
+        Some((lane, msg))
     }
 
     #[must_use]
     pub fn stats(&self) -> RingStats {
         RingStats {
             bytes: self.bytes.min(u32::MAX as usize) as u32,
-            frames: self.frames.len().min(u32::MAX as usize) as u32,
+            frames: (self.critical.len() + self.bulk.len()).min(u32::MAX as usize) as u32,
             dropped: self.dropped,
             pushed: self.pushed,
             flushed: self.flushed,
@@ -134,18 +176,55 @@ impl EncryptedRing {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.frames.is_empty()
+        self.critical.is_empty() && self.bulk.is_empty()
     }
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.frames.len()
+        self.critical.len() + self.bulk.len()
     }
+}
+
+/// High/critical detections and task errors skip the bulk throttle.
+#[must_use]
+pub fn is_critical(msg: &AgentToServer) -> bool {
+    lane_for(msg) == Lane::Critical
+}
+
+#[must_use]
+pub fn lane_for(msg: &AgentToServer) -> Lane {
+    match msg {
+        AgentToServer::KeepAlivePing => Lane::Bulk,
+        AgentToServer::TaskError { .. } => Lane::Critical,
+        AgentToServer::Finding {
+            engine, finding, ..
+        } => {
+            if engine == "ueba_baseline" {
+                return Lane::Bulk;
+            }
+            if severity_is_hot(finding) {
+                Lane::Critical
+            } else {
+                Lane::Bulk
+            }
+        }
+        _ => Lane::Bulk,
+    }
+}
+
+fn severity_is_hot(finding: &Value) -> bool {
+    let s = finding
+        .get("severity")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    s == "critical" || s == "high"
 }
 
 static RING: OnceLock<Mutex<EncryptedRing>> = OnceLock::new();
 static UEBA_SUPPRESSED: AtomicU64 = AtomicU64::new(0);
 static UEBA_UPLOADED: AtomicU64 = AtomicU64::new(0);
+static LAST_RTT_US: AtomicU64 = AtomicU64::new(0);
 
 /// Initialise the process-wide ring from the agent renewal secret.
 pub fn init(secret: &str) {
@@ -161,7 +240,7 @@ pub fn push(msg: &AgentToServer) {
     }
 }
 
-pub fn pop_msg() -> Option<AgentToServer> {
+pub fn pop_msg() -> Option<(Lane, AgentToServer)> {
     RING.get()?.lock().ok()?.pop_msg()
 }
 
@@ -199,8 +278,19 @@ pub fn ueba_uploaded() -> u64 {
     UEBA_UPLOADED.load(Ordering::Relaxed)
 }
 
-/// Sleep the throttle gap, scaled if the last window already spent its budget.
-pub async fn throttle_wait(window: &mut FlushWindow, frame_len: usize) {
+pub fn note_send_rtt(rtt: Duration) {
+    LAST_RTT_US.store(
+        rtt.as_micros().min(u128::from(u64::MAX)) as u64,
+        Ordering::Relaxed,
+    );
+}
+
+/// Sleep the throttle gap for bulk frames only. Critical frames return immediately.
+pub async fn throttle_wait(window: &mut FlushWindow, frame_len: usize, lane: Lane) {
+    if lane == Lane::Critical {
+        return;
+    }
+    window.adapt();
     window.note(frame_len);
     let extra = window.penalty();
     tokio::time::sleep(FLUSH_MIN_GAP + extra).await;
@@ -209,6 +299,7 @@ pub async fn throttle_wait(window: &mut FlushWindow, frame_len: usize) {
 pub struct FlushWindow {
     started: Instant,
     bytes: usize,
+    budget: usize,
 }
 
 impl FlushWindow {
@@ -217,7 +308,27 @@ impl FlushWindow {
         Self {
             started: Instant::now(),
             bytes: 0,
+            budget: DRAIN_START_BYTES_PER_SEC,
         }
+    }
+
+    fn adapt(&mut self) {
+        let rtt_us = LAST_RTT_US.load(Ordering::Relaxed);
+        if rtt_us > 0 {
+            if rtt_us < 50_000 {
+                self.budget = ((self.budget as f64) * 1.25) as usize;
+            } else if rtt_us > 200_000 {
+                self.budget = ((self.budget as f64) * 0.7) as usize;
+            }
+        }
+        if let Some((load1, ncpu)) = host_load() {
+            if ncpu > 0.0 && load1 > ncpu {
+                self.budget = self.budget.min(128 * 1024);
+            }
+        }
+        self.budget = self
+            .budget
+            .clamp(DRAIN_MIN_BYTES_PER_SEC, DRAIN_MAX_BYTES_PER_SEC);
     }
 
     fn note(&mut self, n: usize) {
@@ -229,10 +340,9 @@ impl FlushWindow {
     }
 
     fn penalty(&self) -> Duration {
-        if self.bytes <= FLUSH_BYTES_PER_SEC {
+        if self.bytes <= self.budget {
             return Duration::ZERO;
         }
-        // Over budget this second — wait out the remainder of the window.
         Duration::from_secs(1).saturating_sub(self.started.elapsed())
     }
 }
@@ -243,10 +353,27 @@ impl Default for FlushWindow {
     }
 }
 
+fn host_load() -> Option<(f64, f64)> {
+    #[cfg(target_os = "linux")]
+    {
+        let raw = std::fs::read_to_string("/proc/loadavg").ok()?;
+        let load1: f64 = raw.split_whitespace().next()?.parse().ok()?;
+        let ncpu = std::thread::available_parallelism()
+            .map(|n| n.get() as f64)
+            .unwrap_or(1.0);
+        Some((load1, ncpu))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol::AgentToServer;
+    use serde_json::json;
 
     fn sample() -> AgentToServer {
         AgentToServer::Heartbeat {
@@ -266,12 +393,25 @@ mod tests {
         let mut ring = EncryptedRing::new("unit-test-secret");
         ring.push_msg(&sample());
         assert_eq!(ring.len(), 1);
-        let back = ring.pop_msg().expect("decrypt");
+        let (_lane, back) = ring.pop_msg().expect("decrypt");
         match back {
             AgentToServer::Heartbeat { agent_id, .. } => assert_eq!(agent_id, "a"),
             other => panic!("unexpected {other:?}"),
         }
         assert!(ring.is_empty());
+    }
+
+    #[test]
+    fn xchacha_nonces_are_unique() {
+        let mut ring = EncryptedRing::new("n");
+        for _ in 0..32 {
+            ring.push_msg(&sample());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for f in ring.critical.iter().chain(ring.bulk.iter()) {
+            assert_eq!(f.nonce.len(), 24);
+            assert!(seen.insert(f.nonce), "XChaCha nonce reused");
+        }
     }
 
     #[test]
@@ -282,9 +422,37 @@ mod tests {
     }
 
     #[test]
+    fn critical_findings_drain_before_bulk() {
+        let mut ring = EncryptedRing::new("prio");
+        ring.push_msg(&sample());
+        ring.push_msg(&AgentToServer::Finding {
+            agent_id: "a".into(),
+            task_id: "t".into(),
+            engine: "process_hollowing".into(),
+            finding: json!({"severity": "critical", "title": "hollowing"}),
+        });
+        let (lane, msg) = ring.pop_msg().expect("first");
+        assert_eq!(lane, Lane::Critical);
+        match msg {
+            AgentToServer::Finding { engine, .. } => assert_eq!(engine, "process_hollowing"),
+            other => panic!("expected critical finding first, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ueba_baseline_is_bulk() {
+        let msg = AgentToServer::Finding {
+            agent_id: "a".into(),
+            task_id: "t".into(),
+            engine: "ueba_baseline".into(),
+            finding: json!({"severity": "medium"}),
+        };
+        assert_eq!(lane_for(&msg), Lane::Bulk);
+    }
+
+    #[test]
     fn evicts_oldest_at_10mb() {
         let mut ring = EncryptedRing::new("cap");
-        // ~64 KiB plaintext each; ciphertext is slightly larger.
         let blob = "x".repeat(64 * 1024);
         let msg = AgentToServer::TaskError {
             agent_id: "a".into(),
@@ -301,9 +469,8 @@ mod tests {
             ring.stats().bytes
         );
         assert!(ring.stats().dropped > 0, "cap should have evicted frames");
-        // Newest still decrypts.
-        let last = ring.frames.back().expect("retained");
-        let nonce = Nonce::from_slice(&last.nonce);
+        let last = ring.critical.back().or(ring.bulk.back()).expect("retained");
+        let nonce = XNonce::from_slice(&last.nonce);
         assert!(ring.key.decrypt(nonce, last.ciphertext.as_ref()).is_ok());
     }
 
@@ -311,9 +478,20 @@ mod tests {
     fn wrong_key_cannot_read() {
         let mut a = EncryptedRing::new("alpha");
         a.push_msg(&sample());
-        let frame = a.frames.pop_front().unwrap();
+        let frame = a
+            .bulk
+            .pop_front()
+            .or_else(|| a.critical.pop_front())
+            .unwrap();
         let b = EncryptedRing::new("bravo");
-        let nonce = Nonce::from_slice(&frame.nonce);
+        let nonce = XNonce::from_slice(&frame.nonce);
         assert!(b.key.decrypt(nonce, frame.ciphertext.as_ref()).is_err());
+    }
+
+    #[test]
+    fn drain_budget_starts_at_256k() {
+        assert_eq!(DRAIN_START_BYTES_PER_SEC, 256 * 1024);
+        let w = FlushWindow::new();
+        assert_eq!(w.budget, DRAIN_START_BYTES_PER_SEC);
     }
 }

@@ -12,7 +12,14 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 const CHANNEL_BUFFER: usize = 256;
+const CRITICAL_BUFFER: usize = 64;
 const READ_IDLE_TIMEOUT_SECS: u64 = 90;
+
+#[derive(Clone)]
+struct Outbound {
+    crit: mpsc::Sender<AgentToServer>,
+    bulk: mpsc::Sender<AgentToServer>,
+}
 
 /// Run a single WebSocket session. Returns when the connection closes.
 pub async fn run_session(
@@ -42,13 +49,31 @@ pub async fn run_session(
             enrollment.session_jwt
         ))?,
     );
-    let (ws_stream, _resp) = tokio_tungstenite::connect_async(request).await?;
+
+    let (ws_stream, _resp) = if ws_url.scheme() == "wss" {
+        let cfg = Arc::new(super::tls::rustls_client_config()?);
+        let connector = tokio_tungstenite::Connector::Rustls(cfg);
+        tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(connector))
+            .await?
+    } else {
+        tokio_tungstenite::connect_async(request).await?
+    };
+    super::tls::persist_observed_pin();
+    if super::tls::pin_changed() {
+        info!(target: "agent", "updated TOFU pin after trusted CA rotation");
+    }
     let (mut sink, mut stream) = ws_stream.split();
 
-    // Outbound channel: detections + heartbeat → WebSocket sink.
-    let (out_tx, mut out_rx) = mpsc::channel::<AgentToServer>(CHANNEL_BUFFER);
+    // Dual outbound: critical findings skip the bulk queue so SOC SLA is not
+    // gated on UEBA / heartbeat drain.
+    let (crit_tx, mut crit_rx) = mpsc::channel::<AgentToServer>(CRITICAL_BUFFER);
+    let (bulk_tx, mut bulk_rx) = mpsc::channel::<AgentToServer>(CHANNEL_BUFFER);
+    let out = Outbound {
+        crit: crit_tx,
+        bulk: bulk_tx,
+    };
 
-    // Send Hello immediately.
+    // Send Hello immediately (identity — not a finding; bulk is fine).
     let hello = AgentToServer::Hello {
         agent_id: enrollment.agent_id.clone(),
         hostname: hostname::get()
@@ -65,7 +90,7 @@ pub async fn run_session(
             .map(|s| s.to_string())
             .collect(),
     };
-    out_tx.send(hello).await.ok();
+    out.bulk.send(hello).await.ok();
 
     // Shared counters for heartbeat + concurrency gate.
     let running_tasks = Arc::new(AtomicU32::new(0));
@@ -76,11 +101,13 @@ pub async fn run_session(
     let seen_tasks = Arc::new(tokio::sync::Mutex::new(SeenTasks::default()));
     let max_parallel = Arc::new(AtomicU32::new(4));
     let started_at = Instant::now();
+    let last_ping = Arc::new(std::sync::Mutex::new(None::<Instant>));
+    let last_ping_w = Arc::clone(&last_ping);
 
     // Heartbeat ticker.
     let hb_running = Arc::clone(&running_tasks);
     let hb_completed = Arc::clone(&completed_tasks);
-    let hb_tx = out_tx.clone();
+    let hb_out = out.clone();
     let agent_id_hb = enrollment.agent_id.clone();
     let hb_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(heartbeat_secs.max(5)));
@@ -94,33 +121,44 @@ pub async fn run_session(
                 hb_completed.load(Ordering::Relaxed),
                 started_at.elapsed().as_secs(),
             );
-            if emit(&hb_tx, msg).await.is_err() {
+            if emit(&hb_out, msg).await.is_err() {
                 break;
             }
             // Pair every heartbeat with a Ping. The heartbeat proves the agent is alive TO the
             // server; the Pong it induces proves the server is alive to the agent. Only the second
             // one resets the read-idle deadline.
-            if hb_tx.send(AgentToServer::KeepAlivePing).await.is_err() {
+            if hb_out
+                .crit
+                .send(AgentToServer::KeepAlivePing)
+                .await
+                .is_err()
+            {
                 break;
             }
         }
     });
 
-    // Writer: out_rx → sink.
+    // Writer: biased select — critical always first.
     let writer_handle = tokio::spawn(async move {
-        while let Some(msg) = out_rx.recv().await {
-            // A `Ping` request from the heartbeat loop, not an application message. Sent so the
-            // server's WebSocket layer answers with a Pong, which is inbound traffic and therefore
-            // resets the read-idle deadline below. Without it the connection was torn down every
-            // READ_IDLE_TIMEOUT_SECS on a perfectly healthy link: this protocol is
-            // agent-talks-first, the server has nothing to say between tasks, and it sends no
-            // keepalive of its own — so read-idle was measuring "the server had no work", not
-            // "the connection is dead", and the agent reconnected every 90 seconds forever.
+        loop {
+            let msg = tokio::select! {
+                biased;
+                m = crit_rx.recv() => m,
+                m = bulk_rx.recv() => m,
+            };
+            let Some(msg) = msg else {
+                break;
+            };
             if matches!(msg, AgentToServer::KeepAlivePing) {
+                if let Ok(mut g) = last_ping_w.lock() {
+                    *g = Some(Instant::now());
+                }
+                let t0 = Instant::now();
                 if let Err(e) = sink.send(Message::Ping(Vec::new().into())).await {
                     warn!(target: "agent", error = %e, "ping send failed");
                     break;
                 }
+                crate::ringbuf::note_send_rtt(t0.elapsed());
                 continue;
             }
             let line = match serde_json::to_string(&msg) {
@@ -130,14 +168,18 @@ pub async fn run_session(
                     continue;
                 }
             };
+            let t0 = Instant::now();
             if let Err(e) = sink.send(Message::text(line)).await {
                 error!(target: "agent", error = %e, "ws send failed");
                 crate::ringbuf::push(&msg);
                 break;
             }
+            crate::ringbuf::note_send_rtt(t0.elapsed());
         }
         let _ = sink.send(Message::Close(None)).await;
     });
+
+    let mac_key = enrollment.ueba_mac_key.clone();
 
     // Reader: stream → handle ServerToAgent.
     let read_result = async {
@@ -160,12 +202,13 @@ pub async fn run_session(
                 Message::Text(s) => {
                     handle_text(
                         &s,
-                        &out_tx,
+                        &out,
                         &running_tasks,
                         &completed_tasks,
                         &max_parallel,
                         &seen_tasks,
                         enrollment.agent_id.clone(),
+                        &mac_key,
                     )
                     .await;
                 }
@@ -175,7 +218,13 @@ pub async fn run_session(
                 Message::Ping(p) => {
                     debug!(target: "agent", "ws ping {} B", p.len());
                 }
-                Message::Pong(_) => {}
+                Message::Pong(_) => {
+                    if let Ok(mut g) = last_ping.lock() {
+                        if let Some(t) = g.take() {
+                            crate::ringbuf::note_send_rtt(t.elapsed());
+                        }
+                    }
+                }
                 Message::Close(_) => {
                     info!(target: "agent", "ws close received");
                     return Ok(());
@@ -187,7 +236,7 @@ pub async fn run_session(
     .await;
 
     // Tear down workers cleanly.
-    drop(out_tx);
+    drop(out);
     let _ = writer_handle.await;
     hb_handle.abort();
     read_result
@@ -227,14 +276,16 @@ impl SeenTasks {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_text(
     text: &str,
-    out_tx: &mpsc::Sender<AgentToServer>,
+    out: &Outbound,
     running: &Arc<AtomicU32>,
     completed: &Arc<AtomicU64>,
     max_parallel: &Arc<AtomicU32>,
     seen: &Arc<tokio::sync::Mutex<SeenTasks>>,
     agent_id: String,
+    ueba_mac_key: &str,
 ) {
     let parsed: Result<ServerToAgent, _> = serde_json::from_str(text);
     let msg = match parsed {
@@ -254,18 +305,18 @@ async fn handle_text(
                 max_parallel.store(n.max(1), Ordering::Relaxed);
             }
             if let Some(snap) = ueba_baseline {
-                crate::ueba_edge::install(snap);
+                crate::ueba_edge::install_if_mac_valid(snap, ueba_mac_key);
             }
             info!(target: "agent", "server welcomed agent");
             if crate::ringbuf::pending() {
-                let flush_tx = out_tx.clone();
+                let flush_out = out.clone();
                 tokio::spawn(async move {
-                    flush_ring(flush_tx).await;
+                    flush_ring(flush_out).await;
                 });
             }
         }
         ServerToAgent::UebaBaseline { snapshot } => {
-            crate::ueba_edge::install(snapshot);
+            crate::ueba_edge::install_if_mac_valid(snapshot, ueba_mac_key);
         }
         ServerToAgent::Task {
             task_id,
@@ -280,7 +331,7 @@ async fn handle_text(
                 );
                 return;
             }
-            let out_tx = out_tx.clone();
+            let out = out.clone();
             let running_c = Arc::clone(running);
             let completed_c = Arc::clone(completed);
             let max_parallel_c = Arc::clone(max_parallel);
@@ -297,7 +348,7 @@ async fn handle_text(
                     engine,
                     target,
                     params,
-                    out_tx,
+                    out,
                     running_c,
                     completed_c,
                     agent_id_c,
@@ -318,7 +369,7 @@ async fn run_task(
     engine: String,
     target: Option<String>,
     params: serde_json::Value,
-    out_tx: mpsc::Sender<AgentToServer>,
+    out: Outbound,
     running: Arc<AtomicU32>,
     completed: Arc<AtomicU64>,
     agent_id: String,
@@ -335,7 +386,7 @@ async fn run_task(
             let count = findings.len() as u32;
             for f in findings {
                 let _ = emit(
-                    &out_tx,
+                    &out,
                     AgentToServer::Finding {
                         agent_id: agent_id.clone(),
                         task_id: task_id.clone(),
@@ -372,15 +423,20 @@ async fn run_task(
             error: message.unwrap_or_else(|| "unknown".into()),
         }
     };
-    let _ = emit(&out_tx, done).await;
+    let _ = emit(&out, done).await;
     running.fetch_sub(1, Ordering::SeqCst);
     completed.fetch_add(1, Ordering::SeqCst);
 }
 
 async fn emit(
-    tx: &mpsc::Sender<AgentToServer>,
+    out: &Outbound,
     msg: AgentToServer,
 ) -> Result<(), mpsc::error::SendError<AgentToServer>> {
+    let tx = if crate::ringbuf::is_critical(&msg) || matches!(msg, AgentToServer::KeepAlivePing) {
+        &out.crit
+    } else {
+        &out.bulk
+    };
     match tx.send(msg).await {
         Ok(()) => Ok(()),
         Err(e) => {
@@ -416,13 +472,14 @@ fn heartbeat_msg(
     }
 }
 
-/// Drain the encrypted ring onto the live session, 64 KiB/s / 20 ms paced.
-async fn flush_ring(out_tx: mpsc::Sender<AgentToServer>) {
+/// Drain the encrypted ring onto the live session. Critical frames skip the
+/// adaptive throttle; bulk starts at 256 KiB/s and backs off on RTT / load.
+async fn flush_ring(out: Outbound) {
     let mut window = crate::ringbuf::FlushWindow::new();
-    while let Some(msg) = crate::ringbuf::pop_msg() {
+    while let Some((lane, msg)) = crate::ringbuf::pop_msg() {
         let len = serde_json::to_vec(&msg).map(|v| v.len()).unwrap_or(64);
-        crate::ringbuf::throttle_wait(&mut window, len).await;
-        if emit(&out_tx, msg).await.is_err() {
+        crate::ringbuf::throttle_wait(&mut window, len, lane).await;
+        if emit(&out, msg).await.is_err() {
             break;
         }
     }
