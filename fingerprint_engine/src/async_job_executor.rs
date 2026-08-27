@@ -305,6 +305,7 @@ pub async fn execute_job(
     auth_pool: Arc<PgPool>,
     channels: &AsyncJobChannels,
     job: weissman_db::job_queue::AsyncJob,
+    worker_id: &str,
 ) -> Result<Value, String> {
     let scope = crate::fleet_shaping::ProbeScope {
         tenant_id: Some(job.tenant_id),
@@ -323,7 +324,7 @@ pub async fn execute_job(
     let started = std::time::Instant::now();
     let out = crate::fleet_shaping::with_scope(
         scope,
-        execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job),
+        execute_job_unscoped(app_pool, intel_pool, auth_pool, channels, job, worker_id),
     )
     .await;
     metrics::histogram!("weissman_scan_duration_seconds", "kind" => kind)
@@ -337,7 +338,9 @@ async fn execute_job_unscoped(
     auth_pool: Arc<PgPool>,
     channels: AsyncJobChannels,
     job: weissman_db::job_queue::AsyncJob,
+    worker_id: &str,
 ) -> Result<Value, String> {
+    crate::job_progress::mark(&format!("job_begin:{}", job.kind));
     let tid = job.tenant_id;
     let p = &job.payload;
     enforce_job_tenant_consistency(tid, p)?;
@@ -779,60 +782,45 @@ async fn execute_job_unscoped(
             }))
         }
         "tenant_full_scan" | "onboarding_tenant_scan" => {
-            let permit = crate::scan_concurrency::acquire_full_scan_permit()
-                .await
-                .map_err(|_| "scan concurrency timeout".to_string())?;
-            let _permit = permit;
-            let war = Some(crate::ceo::WarRoomMirror {
+            // Coordinator: fan out claimable micro-batches. Do NOT run the monolithic
+            // estate scan on this claim — that wedges the only worker and starves SOAR.
+            let war = crate::ceo::WarRoomMirror {
                 pool: app_pool.clone(),
                 tenant_id: tid,
                 job_id: job.id,
-            });
-            let war_terminal = war.clone();
-            if let Some(w) = war.as_ref() {
-                w.emit(
-                    "session",
-                    "info",
-                    json!({ "message": "Tenant scan cycle started (orchestrator)" }),
-                );
-            }
-            // Passed through to the orchestrator as a raw Arc; that path stamps its own
-            // telemetry with `tid` (it already receives the tenant id).
-            let telemetry = channels.telemetry.clone();
-            let fut = async move {
-                crate::orchestrator::run_single_tenant_scan_cycle(
-                    app_pool.clone(),
-                    intel_pool.clone(),
-                    tid,
-                    Some(telemetry),
-                    war,
-                )
-                .await
             };
-            match crate::panic_shield::catch_unwind_future("tenant_full_scan_job", fut).await {
-                crate::panic_shield::CatchOutcome::Completed(Ok(())) => {
-                    if let Some(w) = war_terminal.as_ref() {
-                        w.emit(
-                            "session",
-                            "info",
-                            json!({ "message": "Tenant scan cycle completed" }),
-                        );
-                    }
-                    Ok(json!({"ok": true, "message": "tenant scan cycle completed"}))
-                }
-                crate::panic_shield::CatchOutcome::Completed(Err(e)) => {
-                    Err(format!("scan cycle failed: {}", e))
-                }
-                crate::panic_shield::CatchOutcome::Panicked { message, .. } => {
-                    Err(format!("scan cycle panicked: {}", message))
-                }
-                crate::panic_shield::CatchOutcome::CircuitOpen {
-                    cooldown_remaining_secs,
-                } => Err(format!(
-                    "scan cycle skipped: panic circuit breaker open (retry after ~{}s)",
-                    cooldown_remaining_secs
-                )),
-            }
+            war.emit(
+                "session",
+                "info",
+                json!({ "message": "Tenant scan splitting into claimable chunks" }),
+            );
+            let result = crate::scan_chunking::fanout_tenant_scan(app_pool.clone(), &job).await?;
+            let n = result
+                .get("chunks_enqueued")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            war.emit(
+                "session",
+                "info",
+                json!({
+                    "message": format!("Enqueued {n} scan chunk(s); each has its own lease")
+                }),
+            );
+            channels.emit_telemetry(
+                tid,
+                &json!({
+                    "job_id": job.id.to_string(),
+                    "status": "completed",
+                    "chunked": true,
+                    "chunks_enqueued": n,
+                    "message": result.get("message").and_then(Value::as_str).unwrap_or("chunked"),
+                })
+                .to_string(),
+            );
+            Ok(result)
+        }
+        "tenant_scan_chunk" => {
+            crate::scan_chunking::execute_chunk(app_pool.clone(), &channels, &job, worker_id).await
         }
         "scan_all_engines" => {
             // Run all engines for a client in proper order
@@ -909,6 +897,7 @@ async fn execute_job_unscoped(
             let mut cross_job_params = serde_json::json!({});
 
             for engine_id in &ordered_engines {
+                crate::job_progress::mark(&format!("engine_begin:{engine_id}"));
                 let _ = telemetry.send(format!(
                     r#"{{"job_id":"{}","message":"Running engine: {}","status":"running"}}"#,
                     job.id, engine_id
@@ -947,6 +936,7 @@ async fn execute_job_unscoped(
                 )
                 .await;
                 crate::engine_telemetry::record(eid, &telem);
+                crate::job_progress::mark(&format!("engine_end:{engine_id}"));
                 crate::ws_intelligence_bus::merge_params_artifacts(
                     &mut cross_job_params,
                     &intelligence_bus,

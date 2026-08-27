@@ -119,6 +119,7 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
     // in the worker log names the culprit engine — the only reliable pinpoint for a fatal abort,
     // which no panic hook can catch.
     tracing::info!(target: "engine_exec", engine = %engine_id, "run_engine begin");
+    crate::job_progress::mark(&format!("run_engine:{engine_id}"));
     let _oast_guard = {
         let listener = ctx.oast_listener_url.as_deref().unwrap_or("").trim();
         let domain = ctx.oast_domain.as_deref().unwrap_or("").trim();

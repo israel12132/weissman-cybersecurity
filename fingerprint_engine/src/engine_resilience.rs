@@ -235,6 +235,7 @@ where
 
     for variant in &strategies {
         attempts += 1;
+        crate::job_progress::mark(&format!("engine_attempt:{engine_id}:{attempts}"));
         metrics::counter!("weissman_engine_attempt_total").increment(1);
         // After a WAF/rate-limit block, tell the next attempt to go stealthy.
         let hint = EscalationHint {

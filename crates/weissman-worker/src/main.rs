@@ -3,6 +3,7 @@
 
 use fingerprint_engine::async_job_executor::{execute_job, AsyncJobChannels};
 use fingerprint_engine::job_orchestration::{extract_signed_envelope, strip_bus_metadata};
+use fingerprint_engine::{job_progress, scan_chunking};
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -10,11 +11,13 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 use weissman_db::job_queue::{self, AsyncJob};
+use weissman_job_bus::keepalive::{
+    evaluate_keepalive, stuck_error_message, stuck_reason_from_error, KeepAliveDecision,
+};
 use weissman_job_bus::{ForensicBundle, JobBus, LeaseHandle, WorkerSwarm};
 
 const POLL_IDLE_MS: u64 = 750;
 const LOCK_SECS: i64 = 300;
-const LEASE_EXTEND_INTERVAL_SECS: u64 = 15;
 const BASE_BACKOFF_SECS: i64 = 5;
 
 /// Path the worker touches after every dequeue round-trip that reached the database.
@@ -114,8 +117,12 @@ struct JobClass {
 
 fn job_class(kind: &str) -> JobClass {
     let (heavy, timeout_secs) = match kind {
-        // ── Full-estate scans ────────────────────────────────────────────────
-        "tenant_full_scan" | "onboarding_tenant_scan" => (true, 60 * 60),
+        // Coordinator only: fans out `tenant_scan_chunk` micro-batches and returns.
+        // Must NOT occupy a heavy slot for an hour — that is the Queue Starvation Self-DoS.
+        "tenant_full_scan" | "onboarding_tenant_scan" => (false, 5 * 60),
+        // One client × small engine batch. Own lease, 10s heartbeat, 60s progress abort.
+        "tenant_scan_chunk" => (true, 20 * 60),
+        // ── Full-estate scans (legacy non-chunked kinds) ─────────────────────
         // Fans out to ~22 top-tier engines sequentially (each with its own 180s ceiling), so the
         // worst case is ~22x180 = 3960s. The previous 3600s budget was BELOW that, so when several
         // engines hang — exactly what a health probe exists to detect — the probe was killed with
@@ -163,8 +170,7 @@ fn job_is_heavy(kind: &str) -> bool {
 /// asserts this list and `job_class` cannot drift apart, which is what keeps the SQL filter and
 /// the Rust classification the same thing rather than two lists that agree by luck.
 const HEAVY_KINDS: &[&str] = &[
-    "tenant_full_scan",
-    "onboarding_tenant_scan",
+    "tenant_scan_chunk",
     "top_tier_health_probe",
     "scan_all_engines",
     "scan_discovered_domains",
@@ -311,10 +317,11 @@ async fn process_one(
         }
     }
 
+    let progress = job_progress::JobProgress::new();
     let lease_stop = Arc::new(AtomicBool::new(false));
     let lease_stop_bg = lease_stop.clone();
     // Wake the lease loop the instant the job finishes instead of only on the next interval tick —
-    // otherwise the join below blocks up to LEASE_EXTEND_INTERVAL_SECS (15s) while still holding the
+    // otherwise the join below blocks up to the heartbeat interval while still holding the
     // concurrency permit and leaving the finished job looking `running`.
     let lease_notify = Arc::new(tokio::sync::Notify::new());
     let lease_notify_bg = lease_notify.clone();
@@ -323,8 +330,17 @@ async fn process_one(
     let lease_tid = job.tenant_id;
     let lease_arc = lease.clone();
     let hb_pool = ctrl_pool.clone();
+    let progress_bg = progress.clone();
+    let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();
+    let abort_tx = Arc::new(Mutex::new(Some(abort_tx)));
+    let abort_tx_bg = abort_tx.clone();
+    let stall_secs = weissman_job_bus::keepalive::progress_stall().as_secs();
+    let hb_interval = weissman_job_bus::keepalive::heartbeat_interval();
     let lease_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
+        let mut last_flushed_ms = 0u64;
+        let mut interval = tokio::time::interval(hb_interval);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        interval.tick().await; // consume the immediate first tick
         while !lease_stop_bg.load(Ordering::SeqCst) {
             tokio::select! {
                 _ = interval.tick() => {}
@@ -333,20 +349,69 @@ async fn process_one(
             if lease_stop_bg.load(Ordering::SeqCst) {
                 break;
             }
-            if bus_on {
+            let extend_ok = if bus_on {
                 let guard = lease_arc.lock().await;
                 if let Some(ref handle) = *guard {
-                    if let Err(e) = lease_bus
+                    match lease_bus
                         .on_lease_extended(lease_job_id, lease_tid, handle, LOCK_SECS)
                         .await
                     {
-                        warn!(target: "weissman_worker", error = %e, "lease extend failed");
+                        Ok(()) => true,
+                        Err(e) => {
+                            warn!(
+                                target: "weissman_worker",
+                                job_id = %lease_job_id,
+                                error = %e,
+                                "lease extend failed"
+                            );
+                            false
+                        }
+                    }
+                } else {
+                    // Bus on but no handle: still heart-beat Postgres so reclaim cannot steal us.
+                    job_queue::heartbeat(hb_pool.as_ref(), lease_job_id, LOCK_SECS)
+                        .await
+                        .is_ok()
+                }
+            } else {
+                match job_queue::heartbeat(hb_pool.as_ref(), lease_job_id, LOCK_SECS).await {
+                    Ok(()) => true,
+                    Err(e) => {
+                        warn!(
+                            target: "weissman_worker",
+                            job_id = %lease_job_id,
+                            error = %e,
+                            "heartbeat failed"
+                        );
+                        false
                     }
                 }
-            } else if let Err(e) =
-                job_queue::heartbeat(hb_pool.as_ref(), lease_job_id, LOCK_SECS).await
-            {
-                warn!(target: "weissman_worker", job_id = %lease_job_id, error = %e, "heartbeat failed");
+            };
+            let mark_ms = progress_bg.last_mark_ms();
+            if mark_ms != last_flushed_ms {
+                last_flushed_ms = mark_ms;
+                let _ = job_queue::record_progress(
+                    hb_pool.as_ref(),
+                    lease_job_id,
+                    &progress_bg.last_note(),
+                )
+                .await;
+            }
+            match evaluate_keepalive(extend_ok, progress_bg.age_secs(), stall_secs) {
+                KeepAliveDecision::Extend => {}
+                KeepAliveDecision::Abort { stuck_reason } => {
+                    error!(
+                        target: "weissman_worker",
+                        job_id = %lease_job_id,
+                        stuck_reason = %stuck_reason,
+                        last_progress = %progress_bg.last_note(),
+                        "Force Abort — returning lease"
+                    );
+                    if let Some(tx) = abort_tx_bg.lock().await.take() {
+                        let _ = tx.send(stuck_reason);
+                    }
+                    break;
+                }
             }
         }
     });
@@ -356,6 +421,8 @@ async fn process_one(
     let exec_auth = auth_pool.clone();
     let exec_channels = channels.clone();
     let exec_job = job.clone();
+    let exec_wid = wid.clone();
+    let exec_progress = progress.clone();
     let job_kind_for_timeout = exec_job.kind.clone();
     let exec_heavy = job_is_heavy(job_kind_for_timeout.as_str());
     // Cancellation channel for the heavy path. A heavy job runs on a raw OS thread via
@@ -366,12 +433,26 @@ async fn process_one(
     // stopped. Signalling the thread lets the future be dropped at its next await, which also
     // runs its destructors and releases those connections.
     let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+    let cancel_tx = std::sync::Mutex::new(Some(cancel_tx));
     let exec_handle = tokio::spawn(async move {
         let fut = async move {
-            match exec_job.kind.as_str() {
-                "noop" | "ping" => Ok(serde_json::json!({"ok": true, "message": "noop"})),
-                _ => execute_job(exec_app, exec_intel, exec_auth, &exec_channels, exec_job).await,
-            }
+            job_progress::scope(exec_progress, async move {
+                match exec_job.kind.as_str() {
+                    "noop" | "ping" => Ok(serde_json::json!({"ok": true, "message": "noop"})),
+                    _ => {
+                        execute_job(
+                            exec_app,
+                            exec_intel,
+                            exec_auth,
+                            &exec_channels,
+                            exec_job,
+                            &exec_wid,
+                        )
+                        .await
+                    }
+                }
+            })
+            .await
         };
         if exec_heavy {
             match fingerprint_engine::engine_stack_runtime::run_on_large_stack_cancellable(
@@ -390,28 +471,44 @@ async fn process_one(
 
     let timeout = job_kind_timeout(&job_kind_for_timeout);
     let exec_abort = exec_handle.abort_handle();
-    let outcome: Result<serde_json::Value, String> =
-        match tokio::time::timeout(timeout, exec_handle).await {
-            Ok(Ok(inner)) => inner,
-            Ok(Err(join_err)) => Err(if join_err.is_cancelled() {
+    let outcome: Result<serde_json::Value, String> = tokio::select! {
+        exec = exec_handle => match exec {
+            Ok(inner) => inner,
+            Err(join_err) => Err(if join_err.is_cancelled() {
                 "job task cancelled".to_string()
             } else if join_err.is_panic() {
                 format!("job task panicked: {join_err}")
             } else {
                 format!("job task join error: {join_err}")
             }),
-            Err(_) => {
-                // Signal first: for a heavy job this is the only thing that actually stops the
-                // engine. `abort()` alone leaves it running on its own OS thread.
-                let _ = cancel_tx.send(());
-                exec_abort.abort();
-                Err(format!(
-                    "job timed out after {}s ({})",
-                    timeout.as_secs(),
-                    job_kind_for_timeout
-                ))
+        },
+        reason = abort_rx => {
+            if let Ok(mut g) = cancel_tx.lock() {
+                if let Some(tx) = g.take() {
+                    let _ = tx.send(());
+                }
             }
-        };
+            exec_abort.abort();
+            let reason = reason.unwrap_or(weissman_job_bus::StuckReason::NoProgress60s);
+            Err(stuck_error_message(
+                reason,
+                &format!("last progress: {}", progress.last_note()),
+            ))
+        }
+        _ = tokio::time::sleep(timeout) => {
+            if let Ok(mut g) = cancel_tx.lock() {
+                if let Some(tx) = g.take() {
+                    let _ = tx.send(());
+                }
+            }
+            exec_abort.abort();
+            Err(format!(
+                "job timed out after {}s ({})",
+                timeout.as_secs(),
+                job_kind_for_timeout
+            ))
+        }
+    };
 
     lease_stop.store(true, Ordering::SeqCst);
     lease_notify.notify_one();
@@ -454,84 +551,146 @@ async fn process_one(
             }
         }
         Err(msg) => {
-            let exhausted = job.attempt_count >= job.max_attempts;
-            if bus_on && exhausted {
-                // Resolve the forensic-seal key through the SAME shared, trimmed helper the bus uses
-                // to verify it (WEISSMAN_FORENSIC_SEAL_SECRET → orchestrator → JWT). Resolving it
-                // inline here — untrimmed, and with a different precedence than the bus — produced a
-                // "bundle seal mismatch" that stranded the job in an infinite re-execution loop.
-                let signing_key = weissman_job_bus::forensic_seal_key_from_env();
-                let key = signing_key.as_deref();
-                match ForensicBundle::build(
-                    pool,
-                    job.id,
-                    job.tenant_id,
-                    &wid,
-                    if msg.contains("panic") {
-                        "worker_panic"
-                    } else if msg.contains("timed out") {
-                        "execution_timeout"
-                    } else {
-                        "execution_failure"
-                    },
-                    &msg,
-                    envelope,
-                    strip_bus_metadata(&job.payload),
-                    key,
-                )
-                .await
+            if let Some(reason) = stuck_reason_from_error(&msg) {
+                // Force Abort: return the lease, mark failed (not retry-pending), resume
+                // remaining chunk engines so one hung probe cannot Self-DoS the fleet.
+                let checkpoint = job_queue::get_job_for_tenant(pool, job.tenant_id, job.id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.result);
+                if let Err(e) =
+                    job_queue::fail_job_stuck(pool, &job, &wid, reason.as_str(), &msg).await
                 {
-                    Ok(bundle) => {
-                        if let Err(e) = bus.on_forensic_dlq(bundle, lease_out.take()).await {
-                            error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic DLQ failed");
+                    error!(
+                        target: "weissman_worker",
+                        job_id = %job.id,
+                        error = %e,
+                        "fail_job_stuck failed"
+                    );
+                }
+                if bus_on {
+                    if let Err(e) = bus
+                        .on_job_failed(job.id, job.tenant_id, &wid, &msg, false, lease_out.take())
+                        .await
+                    {
+                        error!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            error = %e,
+                            "event-sourced force-abort failed"
+                        );
+                    }
+                } else if let Some(h) = lease_out.take() {
+                    let _ = h.release().await;
+                }
+                if job.kind == scan_chunking::CHUNK_KIND {
+                    match scan_chunking::enqueue_resume_after_abort(
+                        app_pool.as_ref(),
+                        &job,
+                        checkpoint.as_ref(),
+                    )
+                    .await
+                    {
+                        Ok(Some(nid)) => info!(
+                            target: "weissman_worker",
+                            aborted = %job.id,
+                            resume = %nid,
+                            "successor chunk enqueued after Force Abort"
+                        ),
+                        Ok(None) => {}
+                        Err(e) => error!(
+                            target: "weissman_worker",
+                            job_id = %job.id,
+                            error = %e,
+                            "could not enqueue successor chunk after Force Abort"
+                        ),
+                    }
+                }
+            } else {
+                let exhausted = job.attempt_count >= job.max_attempts;
+                if bus_on && exhausted {
+                    // Resolve the forensic-seal key through the SAME shared, trimmed helper the bus uses
+                    // to verify it (WEISSMAN_FORENSIC_SEAL_SECRET → orchestrator → JWT). Resolving it
+                    // inline here — untrimmed, and with a different precedence than the bus — produced a
+                    // "bundle seal mismatch" that stranded the job in an infinite re-execution loop.
+                    let signing_key = weissman_job_bus::forensic_seal_key_from_env();
+                    let key = signing_key.as_deref();
+                    match ForensicBundle::build(
+                        pool,
+                        job.id,
+                        job.tenant_id,
+                        &wid,
+                        if msg.contains("panic") {
+                            "worker_panic"
+                        } else if msg.contains("timed out") {
+                            "execution_timeout"
+                        } else {
+                            "execution_failure"
+                        },
+                        &msg,
+                        envelope,
+                        strip_bus_metadata(&job.payload),
+                        key,
+                    )
+                    .await
+                    {
+                        Ok(bundle) => {
+                            if let Err(e) = bus.on_forensic_dlq(bundle, lease_out.take()).await {
+                                error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic DLQ failed");
+                                terminalize_exhausted(
+                                    pool,
+                                    job.id,
+                                    &msg,
+                                    &format!("forensic DLQ failed: {e}"),
+                                )
+                                .await;
+                            }
+                        }
+                        Err(e) => {
+                            error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic bundle build failed");
                             terminalize_exhausted(
                                 pool,
                                 job.id,
                                 &msg,
-                                &format!("forensic DLQ failed: {e}"),
+                                &format!("forensic bundle build failed: {e}"),
                             )
                             .await;
                         }
                     }
-                    Err(e) => {
-                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "forensic bundle build failed");
-                        terminalize_exhausted(
-                            pool,
+                } else if bus_on {
+                    if let Err(e) = bus
+                        .on_job_failed(
                             job.id,
+                            job.tenant_id,
+                            &wid,
                             &msg,
-                            &format!("forensic bundle build failed: {e}"),
+                            !exhausted,
+                            lease_out.take(),
                         )
-                        .await;
+                        .await
+                    {
+                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced fail");
                     }
-                }
-            } else if bus_on {
-                if let Err(e) = bus
-                    .on_job_failed(
-                        job.id,
-                        job.tenant_id,
-                        &wid,
-                        &msg,
-                        !exhausted,
-                        lease_out.take(),
-                    )
-                    .await
+                } else if let Err(e) =
+                    job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await
                 {
-                    error!(target: "weissman_worker", job_id = %job.id, error = %e, "event-sourced fail");
+                    error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
+                    let _ = job_queue::force_requeue_running(
+                        pool,
+                        job.id,
+                        &wid,
+                        &format!("fail_job: {e}"),
+                    )
+                    .await;
                 }
-            } else if let Err(e) =
-                job_queue::fail_job(pool, &job, &wid, &msg, BASE_BACKOFF_SECS).await
-            {
-                error!(target: "weissman_worker", job_id = %job.id, error = %e, "fail_job failed");
-                let _ =
-                    job_queue::force_requeue_running(pool, job.id, &wid, &format!("fail_job: {e}"))
-                        .await;
-            }
-            // Overlay the raw error onto the dead row AFTER the event-sourced DLQ
-            // projection (which stores only the failure class). Runs last so the
-            // human-readable cause survives on `GET /api/jobs/:id` for triage.
-            if exhausted {
-                if let Err(e) = job_queue::annotate_last_error(pool, job.id, &msg).await {
-                    error!(target: "weissman_worker", job_id = %job.id, error = %e, "annotate_last_error failed");
+                // Overlay the raw error onto the dead row AFTER the event-sourced DLQ
+                // projection (which stores only the failure class). Runs last so the
+                // human-readable cause survives on `GET /api/jobs/:id` for triage.
+                if exhausted {
+                    if let Err(e) = job_queue::annotate_last_error(pool, job.id, &msg).await {
+                        error!(target: "weissman_worker", job_id = %job.id, error = %e, "annotate_last_error failed");
+                    }
                 }
             }
         }
@@ -859,22 +1018,20 @@ async fn async_main() {
                     let acquire = sem.acquire_owned();
                     tokio::pin!(acquire);
                     let mut hb =
-                        tokio::time::interval(Duration::from_secs(LEASE_EXTEND_INTERVAL_SECS));
+                        tokio::time::interval(weissman_job_bus::keepalive::heartbeat_interval());
                     hb.tick().await; // consume the immediate first tick
                     loop {
                         tokio::select! {
                             p = &mut acquire => break p,
                             _ = hb.tick() => {
-                                if !bus.is_enabled() {
-                                    if let Err(e) = job_queue::heartbeat(
-                                        ctrl_pool.as_ref(), job.id, LOCK_SECS,
-                                    ).await {
-                                        warn!(
-                                            target: "weissman_worker",
-                                            job_id = %job.id, error = %e,
-                                            "pre-exec heartbeat failed while awaiting permit"
-                                        );
-                                    }
+                                if let Err(e) = job_queue::heartbeat(
+                                    ctrl_pool.as_ref(), job.id, LOCK_SECS,
+                                ).await {
+                                    warn!(
+                                        target: "weissman_worker",
+                                        job_id = %job.id, error = %e,
+                                        "pre-exec heartbeat failed while awaiting permit"
+                                    );
                                 }
                             }
                         }
@@ -1001,6 +1158,7 @@ mod tests {
             "top_tier_health_probe",
             "scan_all_engines",
             "scan_discovered_domains",
+            "tenant_scan_chunk",
         ] {
             assert!(
                 job_is_heavy(kind),
@@ -1026,11 +1184,15 @@ mod tests {
     fn heavy_jobs_get_long_timeouts() {
         assert_eq!(
             job_kind_timeout("tenant_full_scan"),
-            Duration::from_secs(3600)
+            Duration::from_secs(300)
         );
         assert_eq!(
             job_kind_timeout("onboarding_tenant_scan"),
-            Duration::from_secs(3600)
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            job_kind_timeout("tenant_scan_chunk"),
+            Duration::from_secs(1200)
         );
         assert_eq!(job_kind_timeout("auto_heal"), Duration::from_secs(1800));
         assert_eq!(
@@ -1050,10 +1212,12 @@ mod tests {
 
     #[test]
     fn job_is_heavy_classifies_known_kinds() {
-        assert!(job_is_heavy("tenant_full_scan"));
+        assert!(!job_is_heavy("tenant_full_scan"));
+        assert!(job_is_heavy("tenant_scan_chunk"));
         assert!(job_is_heavy("ai_redteam"));
         assert!(job_is_heavy("scan_discovered_domains"));
         assert!(job_is_heavy("genesis_eternal_fuzz"));
+        assert!(job_is_heavy("feedback_fuzz"));
     }
 
     #[test]
@@ -1131,6 +1295,26 @@ mod tests {
         ] {
             assert!(!job_class(k).heavy, "{k} must not be heavy");
         }
+    }
+
+    #[test]
+    fn coordinator_full_scan_is_light_so_it_cannot_starve_soar() {
+        assert!(!job_is_heavy("tenant_full_scan"));
+        assert!(!job_is_heavy("onboarding_tenant_scan"));
+        assert!(
+            job_kind_timeout("tenant_full_scan") <= Duration::from_secs(300),
+            "parent only fans out chunks; a 3600s budget on the coordinator is how the fleet Self-DoS'd"
+        );
+    }
+
+    #[test]
+    fn keepalive_interval_is_ten_seconds() {
+        assert_eq!(
+            weissman_job_bus::LEASE_HEARTBEAT_INTERVAL_SECS,
+            10,
+            "architect spec: extend the Redis lease every 10s"
+        );
+        assert_eq!(weissman_job_bus::PROGRESS_STALL_SECS, 60);
     }
 
     /// genesis_eternal_fuzz runs a full fuzz cycle AND the council war room, which alone is

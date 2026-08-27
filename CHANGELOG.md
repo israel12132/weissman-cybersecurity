@@ -9,6 +9,16 @@ Versions follow CalVer (`YYYY.MM.<patch>`); each entry maps to one rollout phase
 
 ### Added
 
+- **Scan micro-batches + 10s lease keep-alive + 60s Force-Abort.** `tenant_full_scan` /
+  `onboarding_tenant_scan` no longer run a monolithic estate scan on the worker's only
+  claim loop. The parent fans out claimable `tenant_scan_chunk` jobs (each with its own
+  Redis lease). A keep-alive thread extends the lease every **10 seconds**. If a job
+  reports **no physical progress for 60 seconds**, the worker Force-Aborts, returns the
+  lease, marks the row `failed` with `stuck_reason=no_progress_60s` or
+  `lease_heartbeat_timeout`, and enqueues a successor chunk so remaining engines resume.
+  Fuzz (`feedback_fuzz`, `http_feedback_fuzz`, `xss_advanced` aliases) ticks progress on
+  every probe so a hung fuzz cannot Self-DoS SOAR for every tenant. Live-only: chunks call
+  `run_engine`; they never fake completed fuzz.
 - **Dynamic compliance framework catalog.** `compliance_frameworks` is now the
   authoritative list of in-scope frameworks (migration
   `20260729120000_compliance_frameworks_dynamic_and_onboarding.sql`, mirrored to

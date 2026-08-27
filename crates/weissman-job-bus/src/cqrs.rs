@@ -89,6 +89,7 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'completed', result_json = $2,
+                       last_error = NULL, stuck_reason = NULL,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
                    WHERE id = $1 AND status = 'running'
                      AND ($3::text IS NULL OR worker_id = $3)"#,
@@ -110,6 +111,7 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
                    SET status = 'failed', last_error = $2,
+                       stuck_reason = COALESCE($4, stuck_reason),
                        locked_until = NULL, worker_id = NULL, updated_at = now()
                    WHERE id = $1 AND status = 'running'
                      AND ($3::text IS NULL OR worker_id = $3)"#,
@@ -117,6 +119,7 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             .bind(event.job_id)
             .bind(err)
             .bind(worker_id)
+            .bind(event.payload.get("stuck_reason").and_then(Value::as_str))
             .execute(&mut *tx)
             .await?;
         }

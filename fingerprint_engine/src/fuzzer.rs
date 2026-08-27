@@ -348,16 +348,19 @@ async fn concurrent_post_mutation_wave(
                 Err(_) => return None,
             };
             let (status, content_length, latency_ms, body_text) = if fb.is_some() {
+                crate::job_progress::mark("fuzz_probe_start");
                 match measure_request_with_body(p.as_ref(), &url, Some(&payload)).await {
                     Ok((a, b, c2, d)) => (a, b, c2, d),
                     Err(_) => return None,
                 }
             } else {
+                crate::job_progress::mark("fuzz_probe_start");
                 match measure_request(p.as_ref(), &url, Some(&payload)).await {
                     Ok((a, b, c2)) => (a, b, c2, String::new()),
                     Err(_) => return None,
                 }
             };
+            crate::job_progress::mark("fuzz_probe");
             if let Some(ref ftx) = fb {
                 if probe_suggests_waf_block(status, &body_text)
                     && is_anomaly(&bl, status, content_length, latency_ms).is_none()
@@ -391,6 +394,7 @@ async fn concurrent_post_mutation_wave(
         });
     }
     while let Some(item) = futs.next().await {
+        crate::job_progress::mark("fuzz_wave_progress");
         if let Some(va) = item {
             collected.push(va);
         }
@@ -417,10 +421,13 @@ async fn concurrent_oob_fire_wave(
             let Ok(_p) = sem.acquire().await else {
                 return;
             };
+            crate::job_progress::mark("fuzz_oob_probe");
             let _ = measure_request(p.as_ref(), &url, Some(&payload)).await;
         });
     }
-    while futs.next().await.is_some() {}
+    while futs.next().await.is_some() {
+        crate::job_progress::mark("fuzz_oob_wave_progress");
+    }
 }
 
 async fn collect_oob_verified_findings(
@@ -551,6 +558,7 @@ async fn concurrent_get_mutation_wave(
                 Ok(permit) => permit,
                 Err(_) => return None,
             };
+            crate::job_progress::mark("fuzz_get_probe");
             let (status, content_length, latency_ms) =
                 match measure_request_get(p.as_ref(), &get_url).await {
                     Ok(t) => t,
@@ -574,6 +582,7 @@ async fn concurrent_get_mutation_wave(
         });
     }
     while let Some(item) = futs.next().await {
+        crate::job_progress::mark("fuzz_get_wave_progress");
         if let Some(va) = item {
             collected.push(va);
         }
@@ -603,6 +612,7 @@ async fn execute_legacy_feedback_fuzz(
     app_pool: Option<&PgPool>,
     tenant_id: Option<i64>,
 ) -> Vec<ValidatedAnomaly> {
+    crate::job_progress::mark("feedback_fuzz_legacy");
     let mut collected = Vec::new();
     let pool = match FuzzHttpPool::from_env().await {
         Ok(p) => Arc::new(p),
@@ -740,6 +750,7 @@ async fn execute_generative_feedback_fuzz(
     cognitive_osint: Option<&str>,
     app_pool: Option<&PgPool>,
 ) -> Vec<ValidatedAnomaly> {
+    crate::job_progress::mark("feedback_fuzz_generative");
     let mut collected = Vec::new();
     let pool = match FuzzHttpPool::from_env().await {
         Ok(p) => Arc::new(p),

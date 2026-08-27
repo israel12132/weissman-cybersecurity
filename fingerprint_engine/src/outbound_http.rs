@@ -50,6 +50,7 @@ pub async fn get_bytes_with_retry(
 ) -> Result<Vec<u8>, OutboundHttpError> {
     let mut attempt = 0u32;
     loop {
+        crate::job_progress::mark("outbound_http");
         let resp = match client.get(url).headers(headers.clone()).send().await {
             Ok(r) => r,
             Err(e) => {
