@@ -2,8 +2,8 @@
 //!
 //! Every numeric path is `f64`, sanitised before Postgres, and refuses to produce NaN/Inf
 //! (division-by-zero → z = 0). MAD is the robust fallback when a few outliers would otherwise
-//! inflate σ. Welford lets the ingest path update mean/σ online without re-scanning the sample
-//! table.
+//! inflate σ. Live ingest updates mean/σ with **EWMV** (West 1979): decaying Welford `m2`
+//! alone collapses σ → 0 and storms the SOC after the learning window.
 
 use std::cmp::Ordering;
 
@@ -121,7 +121,8 @@ pub fn winsorize(x: f64, mean: f64, stddev: f64) -> f64 {
     x.clamp(lo, hi)
 }
 
-/// Online mean / sample-variance (Welford). `m2` is the sum of squared deviations.
+/// Classical Welford (equal weights, no decay). Used for one-shot series tests and
+/// as a bootstrap when a legacy baseline row has no EWMV state.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Welford {
     pub n: u64,
@@ -130,14 +131,6 @@ pub struct Welford {
 }
 
 impl Welford {
-    pub fn from_parts(n: i32, mean: f64, m2: f64) -> Self {
-        Self {
-            n: n.max(0) as u64,
-            mean: sanitize_f64(mean),
-            m2: sanitize_f64(m2).max(0.0),
-        }
-    }
-
     pub fn update(&mut self, x: f64) {
         let x = sanitize_f64(x);
         self.n = self.n.saturating_add(1);
@@ -146,17 +139,6 @@ impl Welford {
         let delta2 = x - self.mean;
         self.m2 = sanitize_f64(self.m2 + delta * delta2).max(0.0);
         self.mean = sanitize_f64(self.mean);
-    }
-
-    /// Apply exponential decay toward "recent samples matter more" then update.
-    /// `lambda` in (0, 1]; 1.0 = no decay. Typical: 0.97 / sample (~half-life of ~23 samples).
-    pub fn decay_then_update(&mut self, x: f64, lambda: f64) {
-        let lambda = sanitize_f64(lambda).clamp(0.50, 1.0);
-        if self.n > 0 && lambda < 1.0 {
-            self.m2 *= lambda;
-            self.n = ((self.n as f64) * lambda).floor().max(1.0) as u64;
-        }
-        self.update(x);
     }
 
     pub fn variance(&self) -> f64 {
@@ -169,6 +151,101 @@ impl Welford {
     pub fn stddev(&self) -> f64 {
         sanitize_f64(self.variance().sqrt())
     }
+}
+
+/// Exponentially Weighted Moving Variance (West 1979 / Finch).
+///
+/// Naive "multiply σ or m2 by λ then Welford-update" **drifts σ → 0** on a
+/// stationary process and then every tiny Δ fires. EWMV keeps three live
+/// weights plus a reliability-weighted Bessel denominator:
+///   * `mean` — μ_t
+///   * `s`    — weighted sum of squared deviations (S_t)
+///   * `w`    — accumulated weight W_t
+///   * `v2`   — Σ wᵢ² after decay (V₂), so σ² = S / (W − V₂/W)
+/// `n` is a raw observation counter and is **never** decayed (learning gate).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Ewmv {
+    pub n: u64,
+    pub mean: f64,
+    pub s: f64,
+    pub w: f64,
+    pub v2: f64,
+}
+
+impl Ewmv {
+    /// Hydrate from Postgres. A pre-EWMV row has `w == 0` and a classical `m2`;
+    /// we treat historical unit weights as W = n, V₂ = n, S = m2.
+    pub fn from_parts(n: i32, mean: f64, m2: f64, w: f64, v2: f64) -> Self {
+        let n = n.max(0) as u64;
+        let mut w = sanitize_f64(w).max(0.0);
+        let mut v2 = sanitize_f64(v2).max(0.0);
+        let mut s = sanitize_f64(m2).max(0.0);
+        if w < SIGMA_EPS && n > 0 {
+            w = n as f64;
+            v2 = n as f64;
+            s = sanitize_f64(m2).max(0.0);
+        }
+        Self {
+            n,
+            mean: sanitize_f64(mean),
+            s,
+            w,
+            v2,
+        }
+    }
+
+    /// λ ∈ (0.5, 1]: decay of *history*. New observation has weight 1.
+    /// λ = 0.97 ≈ half-life of 23 samples.
+    pub fn update(&mut self, x: f64, lambda: f64) {
+        let x = sanitize_f64(x);
+        let lambda = sanitize_f64(lambda).clamp(0.50, 1.0);
+        let wi = 1.0;
+        if self.w < SIGMA_EPS {
+            self.n = self.n.max(1);
+            self.mean = x;
+            self.s = 0.0;
+            self.w = wi;
+            self.v2 = wi * wi;
+            return;
+        }
+        let w_prev = self.w * lambda;
+        let v2_prev = self.v2 * lambda * lambda;
+        let s_prev = self.s * lambda;
+        let w = w_prev + wi;
+        let delta = x - self.mean;
+        self.mean = sanitize_f64(self.mean + (wi / w) * delta);
+        self.s = sanitize_f64(s_prev + wi * delta * (x - self.mean)).max(0.0);
+        self.w = sanitize_f64(w).max(0.0);
+        self.v2 = sanitize_f64(v2_prev + wi * wi).max(0.0);
+        self.n = self.n.saturating_add(1);
+        self.mean = sanitize_f64(self.mean);
+    }
+
+    pub fn variance(&self) -> f64 {
+        if self.w <= 1.0 + SIGMA_EPS {
+            return 0.0;
+        }
+        // Weighted Bessel: W − V₂/W. Equals n−1 when every weight is 1.
+        let denom = self.w - (self.v2 / self.w);
+        if denom < 1e-9 {
+            return 0.0;
+        }
+        sanitize_f64(self.s / denom).max(0.0)
+    }
+
+    pub fn stddev(&self) -> f64 {
+        sanitize_f64(self.variance().sqrt())
+    }
+}
+
+/// σ floor so a collapsed variance cannot turn `min_delta` into a 100σ alert.
+pub fn sigma_floor_for(metric: &str) -> f64 {
+    let d = min_delta_for(metric);
+    let t = z_threshold_for(metric);
+    if !d.is_finite() || !t.is_finite() || t < 1.0 || d <= 0.0 {
+        return 0.0;
+    }
+    d / t
 }
 
 /// Median + MAD of a slice. Empty → (0, 0).
@@ -329,13 +406,97 @@ mod tests {
     }
 
     #[test]
-    fn welford_decay_keeps_mean_stable() {
+    fn ewmv_unit_weights_match_classical_welford() {
+        let mut e = Ewmv::default();
         let mut w = Welford::default();
-        for _ in 0..50 {
-            w.update(10.0);
+        for x in [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0] {
+            e.update(x, 1.0);
+            w.update(x);
         }
-        w.decay_then_update(10.0, 0.97);
-        assert!((w.mean - 10.0).abs() < 0.01);
-        assert!(w.n < 50);
+        assert_eq!(e.n, 8);
+        assert!((e.mean - w.mean).abs() < 1e-9);
+        assert!(
+            (e.stddev() - w.stddev()).abs() < 1e-6,
+            "λ=1 EWMV must equal sample σ (got {} vs {})",
+            e.stddev(),
+            w.stddev()
+        );
+    }
+
+    #[test]
+    fn ewmv_n_is_never_decayed() {
+        let mut e = Ewmv::default();
+        for _ in 0..50 {
+            e.update(10.0, 0.97);
+        }
+        assert_eq!(
+            e.n, 50,
+            "raw n is the learning-gate counter; decay must not shrink it"
+        );
+        assert!((e.mean - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ewmv_legacy_hydrate_uses_unit_weights() {
+        let e = Ewmv::from_parts(24, 10.0, 46.0, 0.0, 0.0);
+        assert!((e.w - 24.0).abs() < 1e-12);
+        assert!((e.v2 - 24.0).abs() < 1e-12);
+        assert!((e.s - 46.0).abs() < 1e-12);
+        assert_eq!(e.n, 24);
+    }
+
+    #[test]
+    fn ewmv_constant_series_sigma_goes_to_zero() {
+        let mut e = Ewmv::default();
+        for _ in 0..400 {
+            e.update(10.0, 0.97);
+        }
+        assert!(
+            e.stddev() < 1e-6,
+            "a truly constant signal may collapse σ; floor is applied on the fire path"
+        );
+    }
+
+    #[test]
+    fn ewmv_stationary_oscillation_does_not_collapse_sigma() {
+        // 10 ± 1. Naive "m2 *= λ then Welford" shrinks σ → 0 and then every 1-unit
+        // wobble is a 100σ alert. Real EWMV must keep σ in the neighbourhood of 1.
+        let mut e = Ewmv::default();
+        let mut naive_m2 = 0.0_f64;
+        let mut naive_mean = 0.0_f64;
+        let mut naive_n = 0.0_f64;
+        for i in 0..4000 {
+            let x = if i % 2 == 0 { 9.0 } else { 11.0 };
+            e.update(x, 0.97);
+            // Wrong recipe: decay S (or σ) while n grows as a raw counter.
+            // Bessel then uses a huge n and σ → 0. EWMV decays W and V₂ instead.
+            naive_m2 *= 0.97;
+            naive_n += 1.0;
+            let delta = x - naive_mean;
+            naive_mean += delta / naive_n;
+            naive_m2 += delta * (x - naive_mean);
+        }
+        let naive_sd = (naive_m2 / (naive_n - 1.0).max(1.0)).max(0.0).sqrt();
+        assert!(
+            e.stddev() > 0.65 && e.stddev() < 1.45,
+            "EWMV σ on a 10±1 oscillator must stay ~1, got {}",
+            e.stddev()
+        );
+        assert!(
+            naive_sd < 0.35,
+            "sanity: the discarded decay must actually collapse (got {naive_sd})"
+        );
+        assert!((e.mean - 10.0).abs() < 0.05);
+        assert_eq!(e.n, 4000);
+    }
+
+    #[test]
+    fn sigma_floor_blocks_min_delta_as_huge_z() {
+        let floor = sigma_floor_for("unique_users");
+        assert!(floor > 0.0);
+        // A 1-user change against a collapsed σ would be 1/1e-12 = 1e12 σ.
+        // With the floor, |z| stays at the metric gate (3.0).
+        let z = z_score(11.0, 10.0, floor);
+        assert!((z - z_threshold_for("unique_users")).abs() < 1e-9);
     }
 }

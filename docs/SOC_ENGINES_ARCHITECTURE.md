@@ -100,7 +100,7 @@ running locally on the worker; see `endpoint_agents.rs` for the routing.
 | **UEBA baseline sample** | `detections/ueba/` + `baseline.rs` | `/proc/net/tcp`, Event 4625, Unified Logging, seq/nonce, UTC hour-of-week |
 
 UEBA samples go over WSS `ueba_baseline` findings or `POST /api/ueba/ingest`;
-the server runs the Welford + MAD detector in `ueba_detector/` (see
+the server runs the EWMV + MAD detector in `ueba_detector/` (see
 [architecture.md](architecture.md#data-flow---endpoint-ueba-anomaly)).
 
 ---

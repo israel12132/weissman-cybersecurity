@@ -23,20 +23,23 @@ pub use retention::{
 pub use stats::{z_score, z_threshold_for};
 pub use validate::{public_error, sanitize_metrics, IngestReject};
 
-use categorical::{in_whitelist, ports_as_i32, uniqueness_score, LearnedSet, LEARNED_SET_CAP};
+use categorical::{
+    in_whitelist, is_os_baseline, ports_as_i32, uniqueness_score, LearnedSet, LEARNED_SET_CAP,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use stats::{
     combined_score, effective_stddev, metric_weight, min_delta_for, sanitize_f64, severity_for_z,
-    winsorize, Welford, DEFAULT_Z_THRESHOLD, HIGH_Z,
+    sigma_floor_for, winsorize, Ewmv, DEFAULT_Z_THRESHOLD, HIGH_Z,
 };
 use std::collections::HashSet;
+use std::sync::{Arc, OnceLock};
 use time::{
     adjacent_hours, clock_skew_secs, distinct_weekdays, hour_of_week_utc,
     is_boundary_false_positive, is_offhours, learning_complete, offhours_multiplier,
-    CLOCK_SKEW_WARN_SECS,
+    should_update_baseline, CLOCK_SKEW_WARN_SECS,
 };
 use validate::{
     sanitize_process_name, validate_agent_id, validate_hour, validate_nonce, MAX_NONCE_LEN,
@@ -123,6 +126,15 @@ impl Default for TenantPolicy {
     }
 }
 
+/// Serialize ingest per agent so a 32-sample reconnect batch cannot race EWMV.
+fn agent_ingest_gate(agent_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static GATES: OnceLock<dashmap::DashMap<String, Arc<tokio::sync::Mutex<()>>>> = OnceLock::new();
+    let map = GATES.get_or_init(dashmap::DashMap::new);
+    map.entry(agent_id.to_string())
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone()
+}
+
 /// Public entry point — called by the ingest worker (and tests).
 pub async fn ingest_sample(
     pool: &PgPool,
@@ -146,15 +158,17 @@ pub async fn ingest_sample(
         });
     }
 
+    let _agent_serial = agent_ingest_gate(&p.agent_id).lock().await;
+
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|_| "ingest failed".to_string())?;
 
     let policy = load_policy(&mut tx, tenant_id).await.unwrap_or_default();
 
-    let agent_row: Option<(i64, bool, i64, String)> = sqlx::query_as(
+    let agent_row: Option<(i64, bool, i64, String, Option<DateTime<Utc>>)> = sqlx::query_as(
         r#"SELECT client_id, COALESCE(is_learning, true), COALESCE(last_sample_seq, 0),
-                  COALESCE(hardware_id, '')
+                  COALESCE(hardware_id, ''), last_sample_at
              FROM endpoint_agents
             WHERE tenant_id = $1 AND agent_uuid = $2::uuid"#,
     )
@@ -164,7 +178,8 @@ pub async fn ingest_sample(
     .await
     .map_err(|_| "ingest failed".to_string())?;
 
-    let Some((bound_client, mut is_learning, last_seq, stored_hw)) = agent_row else {
+    let Some((bound_client, mut is_learning, last_seq, stored_hw, last_sample_at)) = agent_row
+    else {
         let _ = tx.rollback().await;
         return Err("ingest failed".into());
     };
@@ -292,20 +307,28 @@ pub async fn ingest_sample(
     .await
     .map_err(|_| "ingest failed".to_string())?;
 
-    if let Some(seq) = p.seq {
-        let _ = sqlx::query(
-            r#"UPDATE endpoint_agents
-                  SET last_sample_seq = GREATEST(COALESCE(last_sample_seq, 0), $1),
-                      last_sample_at = $2
-                WHERE tenant_id = $3 AND agent_uuid = $4::uuid"#,
-        )
-        .bind(seq)
-        .bind(sampled_at)
-        .bind(tenant_id)
-        .bind(&p.agent_id)
-        .execute(&mut *tx)
-        .await;
-    }
+    let _ = sqlx::query(
+        r#"UPDATE endpoint_agents
+              SET last_sample_seq = CASE
+                      WHEN $1::bigint IS NULL THEN last_sample_seq
+                      ELSE GREATEST(COALESCE(last_sample_seq, 0), $1)
+                  END,
+                  last_sample_at = GREATEST(COALESCE(last_sample_at, $2), $2)
+            WHERE tenant_id = $3 AND agent_uuid = $4::uuid"#,
+    )
+    .bind(p.seq)
+    .bind(sampled_at)
+    .bind(tenant_id)
+    .bind(&p.agent_id)
+    .execute(&mut *tx)
+    .await;
+
+    let apply_baseline = should_update_baseline(
+        sampled_at,
+        received,
+        last_sample_at,
+        policy.learn_window_days,
+    );
 
     let whitelist = load_whitelist(&mut tx, tenant_id, p.client_id)
         .await
@@ -325,128 +348,122 @@ pub async fn ingest_sample(
         policy.treat_holidays_as_weekend,
     );
 
-    if let Value::Object(obj) = &p.metrics {
-        let mut z_pairs: Vec<(f64, f64)> = Vec::new();
-        for (k, v) in obj {
-            if let Some(num) = v.as_f64() {
-                if k == "uptime_seconds" {
-                    handle_uptime(&mut tx, tenant_id, &p, sample_id, num, is_learning).await?;
-                    continue;
+    if apply_baseline {
+        if let Value::Object(obj) = &p.metrics {
+            let mut z_pairs: Vec<(f64, f64)> = Vec::new();
+            for (k, v) in obj {
+                if let Some(num) = v.as_f64() {
+                    if k == "uptime_seconds" {
+                        handle_uptime(&mut tx, tenant_id, &p, sample_id, num, is_learning).await?;
+                        continue;
+                    }
+                    let upd =
+                        update_ewmv(&mut tx, tenant_id, &p.agent_id, k, num, DECAY_LAMBDA).await?;
+                    summary.baselines_updated += 1;
+                    if let Some(anom) = check_anomaly(
+                        &mut tx,
+                        tenant_id,
+                        &p,
+                        sample_id,
+                        k,
+                        num,
+                        &upd,
+                        is_learning,
+                        offhours,
+                    )
+                    .await?
+                    {
+                        z_pairs.push((metric_weight(k), anom.z_score));
+                        summary.anomalies.push(anom);
+                    }
                 }
-                let upd = update_welford(
-                    &mut tx,
-                    tenant_id,
-                    &p.agent_id,
-                    k,
-                    num,
-                    DECAY_LAMBDA,
-                    policy.learn_window_days,
-                )
-                .await?;
-                summary.baselines_updated += 1;
-                if let Some(anom) = check_anomaly(
+            }
+            if combined_score(&z_pairs) >= HIGH_Z && !is_learning {
+                // Joint deviation across metrics — extra high-severity row.
+                if let Some(a) = insert_anomaly_row(
                     &mut tx,
                     tenant_id,
                     &p,
                     sample_id,
-                    k,
-                    num,
-                    &upd,
-                    is_learning,
-                    offhours,
+                    "multivariate",
+                    combined_score(&z_pairs),
+                    0.0,
+                    1.0,
+                    combined_score(&z_pairs),
+                    "high",
+                    "Joint UEBA deviation across multiple host metrics",
                 )
                 .await?
                 {
-                    z_pairs.push((metric_weight(k), anom.z_score));
-                    summary.anomalies.push(anom);
+                    summary.anomalies.push(a);
                 }
             }
-        }
-        if combined_score(&z_pairs) >= HIGH_Z && !is_learning {
-            // Joint deviation across metrics — extra high-severity row.
-            if let Some(a) = insert_anomaly_row(
-                &mut tx,
-                tenant_id,
-                &p,
-                sample_id,
-                "multivariate",
-                combined_score(&z_pairs),
-                0.0,
-                1.0,
-                combined_score(&z_pairs),
-                "high",
-                "Joint UEBA deviation across multiple host metrics",
-            )
-            .await?
-            {
-                summary.anomalies.push(a);
-            }
-        }
 
-        if let Some(ports) = obj.get("open_ports").and_then(Value::as_array) {
-            let observed: Vec<String> = ports_as_i32(ports)
-                .into_iter()
-                .map(|n| n.to_string())
-                .collect();
-            if let Some(a) = check_new_categorical(
-                &mut tx,
-                tenant_id,
-                &p,
-                sample_id,
-                "open_ports",
-                &observed,
-                "Unfamiliar TCP port listening on host",
-                is_learning,
-                &whitelist,
-            )
-            .await?
-            {
-                summary.anomalies.push(a);
+            if let Some(ports) = obj.get("open_ports").and_then(Value::as_array) {
+                let observed: Vec<String> = ports_as_i32(ports)
+                    .into_iter()
+                    .map(|n| n.to_string())
+                    .collect();
+                if let Some(a) = check_new_categorical(
+                    &mut tx,
+                    tenant_id,
+                    &p,
+                    sample_id,
+                    "open_ports",
+                    &observed,
+                    "Unfamiliar TCP port listening on host",
+                    is_learning,
+                    &whitelist,
+                )
+                .await?
+                {
+                    summary.anomalies.push(a);
+                }
             }
-        }
-        if let Some(procs) = obj.get("top_processes").and_then(Value::as_array) {
-            let observed: Vec<String> = procs
-                .iter()
-                .filter_map(|v| v.as_str().map(sanitize_process_name))
-                .filter(|s| !s.is_empty())
-                .collect();
-            if let Some(a) = check_new_categorical(
-                &mut tx,
-                tenant_id,
-                &p,
-                sample_id,
-                "top_processes",
-                &observed,
-                "Unfamiliar process observed running on host",
-                is_learning,
-                &whitelist,
-            )
-            .await?
-            {
-                summary.anomalies.push(a);
+            if let Some(procs) = obj.get("top_processes").and_then(Value::as_array) {
+                let observed: Vec<String> = procs
+                    .iter()
+                    .filter_map(|v| v.as_str().map(sanitize_process_name))
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if let Some(a) = check_new_categorical(
+                    &mut tx,
+                    tenant_id,
+                    &p,
+                    sample_id,
+                    "top_processes",
+                    &observed,
+                    "Unfamiliar process observed running on host",
+                    is_learning,
+                    &whitelist,
+                )
+                .await?
+                {
+                    summary.anomalies.push(a);
+                }
             }
-        }
-        if let Some(lm) = obj.get("listen_map").and_then(Value::as_array) {
-            let observed: Vec<String> = lm
-                .iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.trim().to_ascii_lowercase())
-                .filter(|s| !s.is_empty())
-                .collect();
-            if let Some(a) = check_new_categorical(
-                &mut tx,
-                tenant_id,
-                &p,
-                sample_id,
-                "listen_map",
-                &observed,
-                "Known port opened by an unfamiliar process",
-                is_learning,
-                &whitelist,
-            )
-            .await?
-            {
-                summary.anomalies.push(a);
+            if let Some(lm) = obj.get("listen_map").and_then(Value::as_array) {
+                let observed: Vec<String> = lm
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.trim().to_ascii_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if let Some(a) = check_new_categorical(
+                    &mut tx,
+                    tenant_id,
+                    &p,
+                    sample_id,
+                    "listen_map",
+                    &observed,
+                    "Known port opened by an unfamiliar process",
+                    is_learning,
+                    &whitelist,
+                )
+                .await?
+                {
+                    summary.anomalies.push(a);
+                }
             }
         }
     }
@@ -588,17 +605,17 @@ async fn ip_in_client_scope(
     Ok(false)
 }
 
-async fn update_welford(
+async fn update_ewmv(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: i64,
     agent_id: &str,
     metric: &str,
     observed: f64,
     lambda: f64,
-    _window_days: i64,
 ) -> Result<BaselineUpdate, String> {
-    let row: Option<(i32, f64, f64, f64, f64)> = sqlx::query_as(
-        r#"SELECT n, mean, stddev, COALESCE(welford_m2, 0), COALESCE(mad, 0)
+    let row: Option<(i32, f64, f64, f64, f64, f64, f64)> = sqlx::query_as(
+        r#"SELECT n, mean, stddev, COALESCE(welford_m2, 0), COALESCE(mad, 0),
+                  COALESCE(ewmv_w, 0), COALESCE(ewmv_v2, 0)
              FROM agent_metric_baselines
             WHERE tenant_id = $1 AND agent_id = $2
               AND metric_name = $3 AND hour_of_week = $4"#,
@@ -611,44 +628,48 @@ async fn update_welford(
     .await
     .map_err(|_| "ingest failed".to_string())?;
 
-    let mut w = match row {
-        Some((n, mean, _sd, m2, _)) => Welford::from_parts(n, mean, m2),
-        None => Welford::default(),
+    let mut e = match row {
+        Some((n, mean, _sd, m2, _, w, v2)) => Ewmv::from_parts(n, mean, m2, w, v2),
+        None => Ewmv::default(),
     };
-    let clipped = winsorize(observed, w.mean, w.stddev());
-    w.decay_then_update(clipped, lambda);
-    let mad = w.stddev() / stats::MAD_TO_SIGMA; // cheap running approximation
-    let stddev = effective_stddev(w.stddev(), mad);
+    let clipped = winsorize(observed, e.mean, e.stddev());
+    e.update(clipped, lambda);
+    let mad = e.stddev() / stats::MAD_TO_SIGMA;
+    let stddev = effective_stddev(e.stddev(), mad).max(sigma_floor_for(metric));
 
     sqlx::query(
         r#"INSERT INTO agent_metric_baselines
                  (tenant_id, agent_id, metric_name, hour_of_week, n, mean, stddev,
-                  welford_m2, mad, learned_set, last_updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '{}'::jsonb, now())
+                  welford_m2, mad, ewmv_w, ewmv_v2, learned_set, last_updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}'::jsonb, now())
            ON CONFLICT (tenant_id, agent_id, metric_name, hour_of_week) DO UPDATE SET
                n = EXCLUDED.n,
                mean = EXCLUDED.mean,
                stddev = EXCLUDED.stddev,
                welford_m2 = EXCLUDED.welford_m2,
                mad = EXCLUDED.mad,
+               ewmv_w = EXCLUDED.ewmv_w,
+               ewmv_v2 = EXCLUDED.ewmv_v2,
                last_updated_at = now()"#,
     )
     .bind(tenant_id)
     .bind(agent_id)
     .bind(metric)
     .bind(GLOBAL_BUCKET)
-    .bind(w.n as i32)
-    .bind(sanitize_f64(w.mean))
+    .bind(e.n as i32)
+    .bind(sanitize_f64(e.mean))
     .bind(sanitize_f64(stddev))
-    .bind(sanitize_f64(w.m2))
+    .bind(sanitize_f64(e.s))
     .bind(sanitize_f64(mad))
+    .bind(sanitize_f64(e.w))
+    .bind(sanitize_f64(e.v2))
     .execute(&mut **tx)
     .await
     .map_err(|_| "ingest failed".to_string())?;
 
     Ok(BaselineUpdate {
-        n: w.n as i32,
-        mean: w.mean,
+        n: e.n as i32,
+        mean: e.mean,
         stddev,
     })
 }
@@ -823,9 +844,9 @@ async fn check_new_categorical(
         None => LearnedSet::default(),
     };
     let now = Utc::now().timestamp();
-    let mut novel = learned.observe(observed, now);
-    novel.retain(|x| !in_whitelist(x, whitelist));
-    // Cap stored set.
+    let process_names = metric == "top_processes" || metric == "listen_map";
+    let mut novel = learned.observe(observed, now, process_names);
+    novel.retain(|x| !in_whitelist(x, whitelist) && !is_os_baseline(x));
     if learned.seen.len() > LEARNED_SET_CAP {
         learned.prune(now);
     }
@@ -1272,6 +1293,11 @@ mod tests {
     #[test]
     fn baselines_use_the_global_bucket_not_hour_of_week() {
         assert_eq!(GLOBAL_BUCKET, 0);
+    }
+
+    #[test]
+    fn learned_set_cap_leaves_room_for_k8s_churn() {
+        assert!(LEARNED_SET_CAP >= 1500);
     }
 
     #[test]

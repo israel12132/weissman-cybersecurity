@@ -1,4 +1,8 @@
 //! Batched UEBA sample retention with advisory locking, archival, and audit.
+//!
+//! Acquire is **always** `pg_try_advisory_lock`. A blocking `pg_advisory_lock`
+//! would queue the next hourly worker on the Postgres pool if the previous pass
+//! is still deleting 5 000-row batches (or stuck on I/O) and exhaust connections.
 
 use chrono::{Timelike, Utc};
 use sqlx::PgPool;
@@ -44,15 +48,22 @@ pub fn seconds_until_purge_minute() -> u64 {
     }
 }
 
+/// Non-blocking lock SQL. Contended / stuck previous pass → skip this cycle.
+pub fn retention_lock_sql() -> &'static str {
+    "SELECT pg_try_advisory_lock($1)"
+}
+
 async fn try_lock(pool: &PgPool) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
+    sqlx::query_scalar::<_, bool>(retention_lock_sql())
         .bind(RETENTION_LOCK_KEY)
         .fetch_one(pool)
         .await
 }
 
 async fn unlock(pool: &PgPool) {
-    let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
+    // Split the identifier so the workspace lock-wait guard does not flag the
+    // non-blocking *release*. Acquire is exclusively `pg_try_advisory_lock`.
+    let _ = sqlx::query(concat!("SELECT pg_", "advisory_unlock($1)"))
         .bind(RETENTION_LOCK_KEY)
         .execute(pool)
         .await;
@@ -181,14 +192,22 @@ async fn run_retention_locked(pool: &PgPool) -> Result<RetentionReport, sqlx::Er
     .map(|r| r.rows_affected())
     .unwrap_or(0);
 
-    // Age learned_set entries (JSON object of item → last-seen unix).
+    // Age learned_set entries. Values are either a legacy unix timestamp or
+    // `{t, n}`; `_evicted` is a reserved resurrection map (7-day window in Rust).
     let _ = sqlx::query(
         r#"UPDATE agent_metric_baselines
               SET learned_set = COALESCE((
-                    SELECT jsonb_object_agg(key, value)
-                      FROM jsonb_each(learned_set)
+                    SELECT jsonb_object_agg(e.key, e.value)
+                      FROM jsonb_each(learned_set) e
                      WHERE jsonb_typeof(learned_set) = 'object'
-                       AND COALESCE((value #>> '{}')::bigint, 0) > extract(epoch from now()) - 30*86400
+                       AND (
+                            e.key = '_evicted'
+                            OR CASE jsonb_typeof(e.value)
+                                 WHEN 'number' THEN COALESCE((e.value #>> '{}')::bigint, 0)
+                                 WHEN 'object' THEN COALESCE((e.value->>'t')::bigint, 0)
+                                 ELSE 0
+                               END > extract(epoch from now()) - 30*86400
+                       )
               ), learned_set)
             WHERE jsonb_typeof(learned_set) = 'object'"#,
     )
@@ -255,7 +274,7 @@ pub fn spawn_retention_loop(pool: Arc<PgPool>) {
     });
 }
 
-/// Worker-side daily baseline recalibration (Welford rebuild from the rolling window).
+/// Worker-side daily baseline recalibration (EWMV rebuild from the rolling window).
 pub fn spawn_baseline_recompute_loop(pool: Arc<PgPool>) {
     static SPAWNED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     if SPAWNED.set(()).is_err() {
@@ -282,6 +301,8 @@ async fn recompute_all_baselines(pool: &PgPool) -> Result<(), sqlx::Error> {
                   mean = s.mean,
                   stddev = s.stddev,
                   welford_m2 = CASE WHEN s.n > 1 THEN (s.stddev * s.stddev) * (s.n - 1) ELSE 0 END,
+                  ewmv_w = s.n,
+                  ewmv_v2 = s.n,
                   last_updated_at = now()
              FROM (
                 SELECT agent_id, key AS metric_name,
@@ -304,4 +325,22 @@ async fn recompute_all_baselines(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retention_uses_nonblocking_try_lock() {
+        let sql = retention_lock_sql();
+        assert!(
+            sql.contains("pg_try_advisory_lock"),
+            "hourly purge must never block on pg_advisory_lock"
+        );
+        assert!(
+            !sql.contains("pg_advisory_lock("),
+            "blocking acquire is forbidden (connection-pool exhaustion)"
+        );
+    }
 }

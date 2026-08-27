@@ -1,4 +1,8 @@
 //! MPSC ingest queue, per-agent rate limit, gzip payload, dedicated pool semaphore.
+//!
+//! The channel is the burst buffer (default 50 000). The DB semaphore is acquired
+//! **in the recv loop before spawn** so a slow partition-purge cannot drain the
+//! channel into 50k concurrent tasks and then 429 the hot path a second later.
 
 use flate2::read::GzDecoder;
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
@@ -6,13 +10,15 @@ use sqlx::PgPool;
 use std::io::Read;
 use std::num::NonZeroU32;
 use std::sync::{Arc, OnceLock};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 use super::health;
 use super::validate::IngestReject;
 use super::{ingest_sample, UebaIngestPayload};
 
-const QUEUE_CAP: usize = 4096;
+const DEFAULT_QUEUE_CAP: usize = 50_000;
+const MIN_QUEUE_CAP: usize = 4_096;
+const MAX_QUEUE_CAP: usize = 200_000;
 const RATE_PER_MIN: u32 = 2;
 
 struct IngestJob {
@@ -45,17 +51,35 @@ fn install_channel(tx: mpsc::Sender<IngestJob>) {
     let _ = tx_slot().set(tx);
 }
 
+pub fn clamp_queue_cap(n: usize) -> usize {
+    n.clamp(MIN_QUEUE_CAP, MAX_QUEUE_CAP)
+}
+
+pub fn configured_queue_cap() -> usize {
+    let parsed = std::env::var("WEISSMAN_UEBA_INGEST_QUEUE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_QUEUE_CAP);
+    clamp_queue_cap(parsed)
+}
+
+fn queue_cap() -> usize {
+    static CAP: OnceLock<usize> = OnceLock::new();
+    *CAP.get_or_init(configured_queue_cap)
+}
+
 /// UEBA writes share a semaphore so a noisy agent cannot exhaust the UI pool.
-fn ueba_permits() -> &'static Semaphore {
-    static S: OnceLock<Semaphore> = OnceLock::new();
+fn ueba_permits() -> Arc<Semaphore> {
+    static S: OnceLock<Arc<Semaphore>> = OnceLock::new();
     S.get_or_init(|| {
         let n = std::env::var("WEISSMAN_UEBA_POOL_PERMITS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(8)
             .clamp(2, 32);
-        Semaphore::new(n)
+        Arc::new(Semaphore::new(n))
     })
+    .clone()
 }
 
 pub fn agent_rate_ok(agent_id: &str) -> bool {
@@ -129,7 +153,7 @@ pub fn enqueue(
     };
     match tx.try_send(job) {
         Ok(()) => {
-            health::set_queue_depth(QUEUE_CAP.saturating_sub(tx.capacity()));
+            health::set_queue_depth(queue_cap().saturating_sub(tx.capacity()));
             Ok(())
         }
         Err(mpsc::error::TrySendError::Full(_)) => Err(EnqueueError::QueueFull),
@@ -137,7 +161,9 @@ pub fn enqueue(
     }
 }
 
-/// Direct path used by tests and by the worker after dequeue.
+/// Direct path used by tests and by the worker after a permit is already held.
+/// Do **not** acquire the DB semaphore here — the recv loop holds it for the
+/// lifetime of the spawned task. A second acquire would deadlock the pool.
 pub async fn process_job(
     pool: &PgPool,
     tenant_id: i64,
@@ -150,7 +176,6 @@ pub async fn process_job(
         payload.source_ip = Some(ip);
     }
     payload.require_live_session = require_live_session;
-    let _permit = ueba_permits().acquire().await.map_err(|e| e.to_string())?;
     ingest_sample(pool, tenant_id, payload).await
 }
 
@@ -159,13 +184,21 @@ pub fn spawn_ingest_worker(pool: Arc<PgPool>) {
     if SPAWNED.set(()).is_err() {
         return;
     }
-    let (tx, mut rx) = mpsc::channel::<IngestJob>(QUEUE_CAP);
+    let cap = queue_cap();
+    let (tx, mut rx) = mpsc::channel::<IngestJob>(cap);
     install_channel(tx);
     tokio::spawn(async move {
         while let Some(job) = rx.recv().await {
             health::set_queue_depth(rx.len());
+            // Hold a permit *before* spawning so in-flight work ≤ pool permits
+            // and the MPSC is the real 50k burst buffer (not an unbounded fan-out).
+            let permit: OwnedSemaphorePermit = match ueba_permits().acquire_owned().await {
+                Ok(p) => p,
+                Err(_) => break,
+            };
             let pool = pool.clone();
             tokio::spawn(async move {
+                let _permit = permit;
                 match process_job(
                     pool.as_ref(),
                     job.tenant_id,
@@ -221,5 +254,13 @@ mod tests {
         maybe_decompress_metrics(&mut p);
         assert_eq!(p.metrics["load_1m"], 1.25);
         assert_eq!(p.metrics["failed_logins"], 3);
+    }
+
+    #[test]
+    fn ingest_queue_default_is_fifty_thousand() {
+        assert_eq!(clamp_queue_cap(50_000), 50_000);
+        assert_eq!(clamp_queue_cap(100), MIN_QUEUE_CAP);
+        assert_eq!(clamp_queue_cap(1_000_000), MAX_QUEUE_CAP);
+        assert!(DEFAULT_QUEUE_CAP >= 50_000);
     }
 }

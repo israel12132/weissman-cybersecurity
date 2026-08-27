@@ -109,6 +109,37 @@ pub fn learning_complete(n: i32, min_samples: i32, distinct_days: usize) -> bool
     n >= min_samples && distinct_days >= 5
 }
 
+/// Slack (ms) for same-tick / clock-jitter batches when comparing `sampled_at`
+/// against the last baseline-applied sample.
+pub const LATE_SAMPLE_SLACK_MS: i64 = 2_000;
+
+/// Whether a sample may update the live EWMV / categorical baseline.
+///
+/// Late catch-up is still **INSERTed** as history. It must not walk Welford
+/// backwards: online variance assumes chronological application.
+///
+/// Skip when:
+/// * `sampled_at` is older than the tenant learn window (archive-only), or
+/// * `sampled_at + 2s` is strictly before `last_sample_at` (out-of-order).
+pub fn should_update_baseline(
+    sampled_at: DateTime<Utc>,
+    received: DateTime<Utc>,
+    last_sample_at: Option<DateTime<Utc>>,
+    window_days: i64,
+) -> bool {
+    let window = clamp_learn_window_days(window_days);
+    if received.signed_duration_since(sampled_at).num_days() > window {
+        return false;
+    }
+    if let Some(last) = last_sample_at {
+        let lag_ms = last.signed_duration_since(sampled_at).num_milliseconds();
+        if lag_ms > LATE_SAMPLE_SLACK_MS {
+            return false;
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +193,20 @@ mod tests {
         assert_eq!(clamp_learn_window_days(14), 14);
         assert_eq!(clamp_learn_window_days(30), 30);
         assert_eq!(clamp_learn_window_days(99), 7);
+    }
+
+    #[test]
+    fn late_arriving_samples_do_not_update_baseline() {
+        let received = Utc.with_ymd_and_hms(2026, 8, 27, 12, 0, 0).unwrap();
+        let last = Some(Utc.with_ymd_and_hms(2026, 8, 27, 11, 45, 0).unwrap());
+        let in_order = Utc.with_ymd_and_hms(2026, 8, 27, 11, 50, 0).unwrap();
+        assert!(should_update_baseline(in_order, received, last, 7));
+        let older = Utc.with_ymd_and_hms(2026, 8, 27, 11, 0, 0).unwrap();
+        assert!(!should_update_baseline(older, received, last, 7));
+        let too_old = Utc.with_ymd_and_hms(2026, 8, 10, 12, 0, 0).unwrap();
+        assert!(!should_update_baseline(too_old, received, None, 7));
+        // 1s behind last is within slack (same-tick batch).
+        let jitter = Utc.with_ymd_and_hms(2026, 8, 27, 11, 44, 59).unwrap();
+        assert!(should_update_baseline(jitter, received, last, 7));
     }
 }
