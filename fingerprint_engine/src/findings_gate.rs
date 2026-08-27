@@ -221,7 +221,18 @@ fn extract_description(f: &Value) -> String {
 
 /// Validate raw engine JSON, normalize evidence fields, and produce a gated finding.
 /// Returns `None` when actionable severities lack proof (evidence gate).
-pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<PersistableFinding> {
+pub fn gate_finding(engine: &str, target: &str, raw: Value) -> Option<PersistableFinding> {
+    gate_finding_with_templates(engine, target, raw, None)
+}
+
+/// Gate a raw finding using a tenant path-template index so high-cardinality
+/// segments learned from sibling routes share one `finding_id`.
+pub fn gate_finding_with_templates(
+    engine: &str,
+    target: &str,
+    mut raw: Value,
+    templates: Option<&crate::path_templates::PathTemplateIndex>,
+) -> Option<PersistableFinding> {
     let now = chrono::Utc::now().to_rfc3339();
     let severity = normalize_severity(raw.get("severity").and_then(Value::as_str));
 
@@ -294,8 +305,11 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
     }
 
     let hint = crate::finding_identity::identity_hint_from_finding(&raw);
-    let target_url =
-        crate::finding_identity::normalize_target_hinted(&extract_target(&raw, target), &hint);
+    let target_url = crate::finding_identity::normalize_target_ctx(
+        &extract_target(&raw, target),
+        &hint,
+        templates,
+    );
     let vuln_type = extract_vuln_type(&raw);
     let payload = extract_payload(&raw);
     let dedup_hash = build_dedup_hash(&target_url, &vuln_type, &payload, engine);
@@ -303,7 +317,8 @@ pub fn gate_finding(engine: &str, target: &str, mut raw: Value) -> Option<Persis
     let short_hash: String = dedup_hash.chars().take(24).collect();
     let hash_id = format!("{}-{}", engine, short_hash);
     // Legacy ID (CVE/MITRE/signature) for continuity with pre-migration rows.
-    let legacy_id = build_legacy_finding_id(engine, &target_url, &raw);
+    let legacy_id =
+        crate::finding_identity::build_stable_finding_id_ctx(engine, &target_url, &raw, templates);
     let finding_id = if legacy_id != hash_id {
         // Prefer legacy when it encodes richer invariant data; fall back to hash_id.
         legacy_id

@@ -304,6 +304,112 @@ async fn persist_dedup_auto_suppress_and_cross_plane_critical() {
         "public image and admin billing must be distinct clusters, got {keys:?}"
     );
 
+    // High-cardinality escapes: emails and filenames share one identity.
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "leak_hunter",
+        "https://api.corp/inbox/alice@corp.com",
+        &[
+            finding(
+                "Open redirect",
+                "open_redirect",
+                "https://api.corp/inbox/alice@corp.com",
+                "medium",
+            ),
+            finding(
+                "Open redirect",
+                "open_redirect",
+                "https://api.corp/inbox/bob@corp.com",
+                "medium",
+            ),
+            finding(
+                "Open redirect",
+                "open_redirect",
+                "https://api.corp/inbox/invoice_august_2026.pdf",
+                "medium",
+            ),
+        ],
+    )
+    .await
+    .expect("persist high-card targets");
+    let email_ids: Vec<String> = sqlx::query_scalar(
+        r#"SELECT DISTINCT finding_id FROM vulnerabilities
+            WHERE tenant_id = $1 AND client_id = $2 AND source = 'leak_hunter'"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .fetch_all(&pool)
+    .await
+    .expect("high-card finding_ids");
+    assert_eq!(
+        email_ids.len(),
+        1,
+        "email + filename targets must share one finding_id, got {email_ids:?}"
+    );
+
+    // VERIFIED_FIXED resets the watermark; a later low regression must not stay Critical.
+    let login_key = sig_hash.clone();
+    sqlx::query(
+        r#"UPDATE weissman_finding_clusters
+              SET status = 'VERIFIED_FIXED',
+                  watermark_severity = 'info',
+                  max_severity = 'info',
+                  native_severity = 'info',
+                  corroboration_boost = 'none'
+            WHERE tenant_id = $1 AND client_id = $2 AND cluster_key = $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(&login_key)
+    .execute(&pool)
+    .await
+    .expect("close cluster lifecycle");
+    persist_engine_findings(
+        &pool,
+        tenant_id,
+        Some(client_id),
+        "asm",
+        "https://app.example.com/login",
+        &[finding(
+            "SQL Injection in /login",
+            "sqli",
+            "https://app.example.com/login",
+            "low",
+        )],
+    )
+    .await
+    .expect("persist regression");
+    let wm: String = sqlx::query_scalar(
+        r#"SELECT watermark_severity FROM weissman_finding_clusters
+            WHERE tenant_id = $1 AND client_id = $2 AND cluster_key = $3"#,
+    )
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(&login_key)
+    .fetch_one(&pool)
+    .await
+    .expect("regression watermark");
+    assert_ne!(
+        wm.to_ascii_lowercase(),
+        "critical",
+        "zombie watermark after VERIFIED_FIXED: {wm}"
+    );
+
+    let relopts: Option<Vec<String>> = sqlx::query_scalar(
+        "SELECT reloptions FROM pg_class WHERE relname = 'weissman_cluster_ingest'",
+    )
+    .fetch_optional(&pool)
+    .await
+    .expect("reloptions");
+    let joined = relopts.unwrap_or_default().join(",");
+    assert!(
+        joined.contains("autovacuum_vacuum_scale_factor=0.05")
+            || joined.contains("autovacuum_vacuum_scale_factor"),
+        "ingest autovacuum not set: {joined}"
+    );
+
     eprintln!("alert-fatigue live contract OK finding_id={finding_id}");
 }
 
@@ -315,6 +421,13 @@ async fn ensure_cluster_ingest_schema(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .expect("apply cluster ingest + watermark schema");
+    let av = include_str!(
+        "../../crates/weissman-db/migrations/20260827190000_cluster_ingest_autovacuum.sql"
+    );
+    sqlx::raw_sql(av)
+        .execute(pool)
+        .await
+        .expect("apply cluster ingest autovacuum");
 }
 
 async fn seed_scope(pool: &sqlx::PgPool) -> (i64, i64, bool) {

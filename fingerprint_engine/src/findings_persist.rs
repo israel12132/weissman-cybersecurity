@@ -21,7 +21,7 @@ use std::sync::LazyLock;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::db;
-use crate::findings_gate::{self, gate_finding, Sealed, VulnerabilitiesWriter};
+use crate::findings_gate::{self, gate_finding_with_templates, Sealed, VulnerabilitiesWriter};
 use crate::fp_feedback;
 use crate::intel_epss;
 use crate::intel_kev;
@@ -326,6 +326,13 @@ pub async fn persist_engine_findings(
     let epss_map = intel_epss::fetch_epss_for_cves(pool, &scan_cves).await;
     let kev_map = intel_kev::kev_listed_for_cves(pool, &scan_cves).await;
 
+    // Learn route templates from this tenant (and this batch) before hashing
+    // identities so emails / filenames / sibling slugs share one key.
+    let path_templates = crate::path_templates::index_for_tenant(pool, tenant_id).await;
+    for raw in findings {
+        path_templates.observe_url(&extract_target(raw, target));
+    }
+
     let mut tx = db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| format!("tenant tx: {e}"))?;
@@ -359,7 +366,9 @@ pub async fn persist_engine_findings(
 
     let mut inserted: u64 = 0;
     for (finding_index, raw) in findings.iter().cloned().enumerate() {
-        let Some(gated) = gate_finding(engine, target, raw) else {
+        let Some(gated) =
+            gate_finding_with_templates(engine, target, raw, Some(path_templates.as_ref()))
+        else {
             tracing::warn!(
                 target: "findings_persist",
                 engine = %engine,
@@ -513,11 +522,12 @@ pub async fn persist_engine_findings(
         // exact same vulnerability. We also need it for record_fp()/record_tp().
         let vuln_signature = crate::finding_identity::derive_vuln_signature(f, &title);
         let identity_hint = crate::finding_identity::identity_hint_from_finding(f);
-        let signature_hash = crate::finding_identity::build_cluster_key_hinted(
+        let signature_hash = crate::finding_identity::build_cluster_key_ctx(
             &target_url,
             &vuln_signature,
             &cwe,
             &identity_hint,
+            Some(path_templates.as_ref()),
         );
         // Prefer cryptographic dedup hash when correlator signature is empty.
         let signature_hash = if signature_hash.trim().is_empty() {
@@ -563,9 +573,10 @@ pub async fn persist_engine_findings(
             obj.insert(
                 "identity".to_string(),
                 json!({
-                    "target_normalized": crate::finding_identity::normalize_target_hinted(
+                    "target_normalized": crate::finding_identity::normalize_target_ctx(
                         &target_url,
                         &identity_hint,
+                        Some(path_templates.as_ref()),
                     ),
                     "signature_normalized": vuln_signature,
                     "cwe_normalized": crate::finding_identity::normalize_cwe(&cwe),
@@ -586,7 +597,11 @@ pub async fn persist_engine_findings(
         let suppressed = fp_feedback::is_suppressed_by(
             &active_suppressions,
             &signature_hash,
-            &crate::finding_identity::normalize_target_hinted(&target_url, &identity_hint),
+            &crate::finding_identity::normalize_target_ctx(
+                &target_url,
+                &identity_hint,
+                Some(path_templates.as_ref()),
+            ),
         );
         if suppressed {
             suppression_hits.push(signature_hash.clone());
@@ -695,8 +710,11 @@ pub async fn persist_engine_findings(
         // upserts the cluster under a per-key advisory lock. Enqueue errors must
         // fail this persist: a swallowed SQL error aborts the TX while COMMIT
         // still returns success (it becomes ROLLBACK).
-        let target_norm =
-            crate::finding_identity::normalize_target_hinted(&target_url, &identity_hint);
+        let target_norm = crate::finding_identity::normalize_target_ctx(
+            &target_url,
+            &identity_hint,
+            Some(path_templates.as_ref()),
+        );
         crate::cluster_ingest::enqueue(
             &mut tx,
             tenant_id,

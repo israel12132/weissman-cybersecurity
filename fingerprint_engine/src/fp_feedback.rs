@@ -38,11 +38,23 @@ static GLOB_MATCHERS: LazyLock<DashMap<String, Option<globset::GlobMatcher>>> =
 
 /// Drop the in-memory glob cache for `(tenant, engine)` after a new rule is written.
 pub fn invalidate_suppression_cache(tenant_id: i64, engine: &str) {
+    invalidate_suppression_cache_local(tenant_id, engine);
+    crate::suppression_cache_sync::publish_bust(tenant_id, Some(engine));
+}
+
+/// Local-only bust (Redis subscriber / tests). Does not re-publish.
+pub fn invalidate_suppression_cache_local(tenant_id: i64, engine: &str) {
     SUPPRESSION_CACHE.remove(&(tenant_id, engine.to_ascii_lowercase()));
 }
 
 /// Drop every cached engine for a tenant (rule delete / test reset).
 pub fn invalidate_suppression_cache_tenant(tenant_id: i64) {
+    invalidate_suppression_cache_tenant_local(tenant_id);
+    crate::suppression_cache_sync::publish_bust(tenant_id, None);
+}
+
+/// Local-only tenant bust (Redis subscriber / tests). Does not re-publish.
+pub fn invalidate_suppression_cache_tenant_local(tenant_id: i64) {
     SUPPRESSION_CACHE.retain(|k, _| k.0 != tenant_id);
 }
 

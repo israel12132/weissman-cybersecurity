@@ -113,6 +113,38 @@ pub async fn run_verification(
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("remediation verify: persist verdict failed: {e}"))?;
+    if status == "VERIFIED_FIXED" {
+        let cluster_id: Option<i64> = sqlx::query_scalar(
+            r#"SELECT cluster_id FROM vulnerabilities
+                WHERE tenant_id = $1 AND finding_id = $2
+                  AND ($3::bigint IS NULL OR client_id = $3)"#,
+        )
+        .bind(tenant_id)
+        .bind(original_finding_id)
+        .bind(client_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
+        .flatten();
+        if let Some(cid) = cluster_id {
+            if let Err(e) = crate::findings_correlator::cascade_cluster_status(
+                &mut tx,
+                tenant_id,
+                cid,
+                "VERIFIED_FIXED",
+            )
+            .await
+            {
+                tracing::warn!(
+                    target: "remediation_verify",
+                    error = %e,
+                    cluster_id = cid,
+                    "failed to close cluster after VERIFIED_FIXED"
+                );
+            }
+        }
+    }
     tx.commit()
         .await
         .map_err(|e| format!("remediation verify: commit failed: {e}"))?;

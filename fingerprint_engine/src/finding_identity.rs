@@ -139,28 +139,59 @@ fn parse_os_family(raw: &str) -> Option<OsFamily> {
 }
 
 fn service_fingerprint_keep_port(finding: &Value) -> bool {
-    if finding
-        .get("node_port")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-        || finding
-            .get("k8s_node_port")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        || finding
-            .get("listener")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-    {
+    // Service / agent / proxy metadata wins over IANA/OS ranges. A reverse
+    // proxy or internal LB that publishes a high mapped port is a listener,
+    // not an ephemeral client source — stripping it would merge backends
+    // that share the same gateway host.
+    if keep_port_flags(finding) || keep_port_strings(finding) {
         return true;
     }
-    if finding
-        .get("port_role")
-        .and_then(Value::as_str)
-        .is_some_and(|s| s.eq_ignore_ascii_case("service") || s.eq_ignore_ascii_case("listener"))
-    {
+    for nest in [
+        "agent",
+        "client",
+        "proxy",
+        "http",
+        "metadata",
+        "k8s",
+        "service_info",
+        "upstream",
+        "backend",
+    ] {
+        if let Some(obj) = finding.get(nest) {
+            if keep_port_flags(obj) || keep_port_strings(obj) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn keep_port_flags(v: &Value) -> bool {
+    for key in [
+        "node_port",
+        "k8s_node_port",
+        "listener",
+        "keep_port",
+        "port_mapped",
+        "mapped_port",
+        "reverse_proxy",
+    ] {
+        if v.get(key).and_then(Value::as_bool).unwrap_or(false) {
+            return true;
+        }
+    }
+    if v.get("port_role").and_then(Value::as_str).is_some_and(|s| {
+        matches!(
+            s.to_ascii_lowercase().as_str(),
+            "service" | "listener" | "proxy" | "upstream" | "backend" | "mapped"
+        )
+    }) {
         return true;
     }
+    false
+}
+
+fn keep_port_strings(v: &Value) -> bool {
     for key in [
         "service",
         "service_name",
@@ -168,13 +199,25 @@ fn service_fingerprint_keep_port(finding: &Value) -> bool {
         "product",
         "fingerprint",
         "detected_service",
+        "upstream",
+        "backend",
+        "backend_service",
+        "proxy",
+        "via",
+        "nginx",
+        "haproxy",
+        "envoy",
+        "listen_port",
+        "published_port",
+        "container_port",
+        "target_port",
+        "x_forwarded_port",
     ] {
-        if finding
-            .get(key)
-            .and_then(Value::as_str)
-            .is_some_and(|s| !s.trim().is_empty())
-        {
-            return true;
+        match v.get(key) {
+            Some(Value::String(s)) if !s.trim().is_empty() => return true,
+            Some(Value::Number(_)) => return true,
+            Some(Value::Bool(true)) => return true,
+            _ => {}
         }
     }
     false
@@ -191,6 +234,16 @@ pub fn normalize_target(raw: &str) -> String {
 
 #[must_use]
 pub fn normalize_target_hinted(raw: &str, hint: &IdentityHint) -> String {
+    normalize_target_ctx(raw, hint, None)
+}
+
+/// Same as [`normalize_target_hinted`] plus a tenant structural template index.
+#[must_use]
+pub fn normalize_target_ctx(
+    raw: &str,
+    hint: &IdentityHint,
+    templates: Option<&crate::path_templates::PathTemplateIndex>,
+) -> String {
     let mut s = raw.trim().to_ascii_lowercase();
     if s.is_empty() {
         return s;
@@ -207,7 +260,13 @@ pub fn normalize_target_hinted(raw: &str, hint: &IdentityHint) -> String {
     let rest = strip_userinfo(rest);
     let (authority, path) = split_authority_path(rest);
     let authority = strip_target_port(authority, scheme, hint);
-    let path = normalize_route_template(path);
+    let path = match templates {
+        Some(idx) => {
+            let segs: Vec<&str> = path.split('/').collect();
+            idx.apply_segments(&segs)
+        }
+        None => normalize_route_template(path),
+    };
     let path = path.trim_end_matches('/');
 
     let mut out = String::new();
@@ -327,9 +386,81 @@ fn normalize_route_template(path: &str) -> String {
     out
 }
 
+/// REST / framework tokens that must never become `{id}` — they distinguish
+/// products (public image vs admin billing) even when a sibling position fans out.
+#[must_use]
+pub fn is_reserved_route_token(seg: &str) -> bool {
+    matches!(
+        seg,
+        "api"
+            | "v1"
+            | "v2"
+            | "v3"
+            | "v4"
+            | "admin"
+            | "public"
+            | "private"
+            | "internal"
+            | "external"
+            | "billing"
+            | "image"
+            | "images"
+            | "img"
+            | "static"
+            | "assets"
+            | "media"
+            | "users"
+            | "user"
+            | "settings"
+            | "profile"
+            | "login"
+            | "logout"
+            | "auth"
+            | "oauth"
+            | "well-known"
+            | "health"
+            | "healthz"
+            | "ready"
+            | "livez"
+            | "status"
+            | "metrics"
+            | "graphql"
+            | "swagger"
+            | "docs"
+            | "openapi"
+            | "webhook"
+            | "webhooks"
+            | "callback"
+            | "files"
+            | "file"
+            | "download"
+            | "upload"
+            | "search"
+            | "reports"
+            | "report"
+            | "invoices"
+            | "invoice"
+            | "orders"
+            | "order"
+            | "checkout"
+            | "cart"
+            | "q1"
+            | "q2"
+            | "q3"
+            | "q4"
+            | "rest"
+            | "rpc"
+            | "grpc"
+    )
+}
+
 /// True when `seg` is a variable identifier, never a static route token.
-fn is_variable_path_segment(seg: &str, is_last: bool) -> bool {
+#[must_use]
+pub fn is_variable_path_segment(seg: &str, is_last: bool) -> bool {
     if seg.is_empty() || seg == "{id}" {
+        return false;
+    }
+    if is_reserved_route_token(seg) {
         return false;
     }
     let s = seg;
@@ -351,6 +482,50 @@ fn is_variable_path_segment(seg: &str, is_last: bool) -> bool {
         if is_last && s.len() >= 4 {
             return true;
         }
+        return false;
+    }
+    if is_email_segment(s) || is_filename_segment(s) || is_opaque_resource_segment(s) {
+        return true;
+    }
+    false
+}
+
+fn is_email_segment(s: &str) -> bool {
+    let Some(at) = s.find('@') else {
+        return false;
+    };
+    at > 0 && s[at + 1..].contains('.')
+}
+
+fn is_filename_segment(s: &str) -> bool {
+    let Some(dot) = s.rfind('.') else {
+        return false;
+    };
+    if dot == 0 || dot + 1 >= s.len() {
+        return false;
+    }
+    let ext = &s[dot + 1..];
+    if ext.len() < 2 || ext.len() > 5 || !ext.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return false;
+    }
+    let stem = &s[..dot];
+    stem.bytes()
+        .any(|b| b == b'_' || b == b'-' || b.is_ascii_digit())
+}
+
+/// `invoice_august_2026`, `report_q3_final`, `user-john-doe-123` (non-hex).
+fn is_opaque_resource_segment(s: &str) -> bool {
+    let underscores = s.bytes().filter(|b| *b == b'_').count();
+    let hyphens = s.bytes().filter(|b| *b == b'-').count();
+    let has_digit = s.bytes().any(|b| b.is_ascii_digit());
+    if underscores >= 1 && has_digit && s.len() >= 8 {
+        return true;
+    }
+    if underscores >= 2 && s.len() >= 10 {
+        return true;
+    }
+    if hyphens >= 2 && has_digit && !s.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-') {
+        return true;
     }
     false
 }
@@ -516,7 +691,18 @@ pub fn build_cluster_key_hinted(
     cwe: &str,
     hint: &IdentityHint,
 ) -> String {
-    let target_norm = normalize_target_hinted(target, hint);
+    build_cluster_key_ctx(target, vuln_signature, cwe, hint, None)
+}
+
+#[must_use]
+pub fn build_cluster_key_ctx(
+    target: &str,
+    vuln_signature: &str,
+    cwe: &str,
+    hint: &IdentityHint,
+    templates: Option<&crate::path_templates::PathTemplateIndex>,
+) -> String {
+    let target_norm = normalize_target_ctx(target, hint, templates);
     let sig_norm = normalize_signature_hinted(vuln_signature, hint);
     let cwe_norm = normalize_cwe(cwe);
     let mut h = Sha256::new();
@@ -532,6 +718,16 @@ pub fn build_cluster_key_hinted(
 /// `engine | target | cve | cwe | mitre | signature` (title only when signature is empty).
 #[must_use]
 pub fn build_stable_finding_id(engine: &str, target: &str, finding: &Value) -> String {
+    build_stable_finding_id_ctx(engine, target, finding, None)
+}
+
+#[must_use]
+pub fn build_stable_finding_id_ctx(
+    engine: &str,
+    target: &str,
+    finding: &Value,
+    templates: Option<&crate::path_templates::PathTemplateIndex>,
+) -> String {
     let cve = crate::intel_findings_backfill::extract_cve_from_value(finding).unwrap_or_default();
     let cwe = finding
         .get("cwe")
@@ -551,7 +747,7 @@ pub fn build_stable_finding_id(engine: &str, target: &str, finding: &Value) -> S
     let mut hasher = Sha256::new();
     hasher.update(engine.trim().as_bytes());
     hasher.update(b"|");
-    hasher.update(normalize_target_hinted(target, &hint).as_bytes());
+    hasher.update(normalize_target_ctx(target, &hint, templates).as_bytes());
     hasher.update(b"|");
     hasher.update(normalize_cve(&cve).as_bytes());
     hasher.update(b"|");
@@ -647,6 +843,18 @@ pub fn corroborate_cluster_severity(native: &str, engines: &[String]) -> Corrobo
         boost: boost.to_string(),
         engine_planes: planes.into_iter().map(|p| p.to_string()).collect(),
     }
+}
+
+/// Watermark after HFV closes the vulnerability. A later regression starts clean.
+#[must_use]
+pub fn watermark_after_verified_fixed() -> &'static str {
+    "info"
+}
+
+/// First severity of a new lifecycle after [`watermark_after_verified_fixed`].
+#[must_use]
+pub fn watermark_on_regression(native: &str) -> String {
+    canonical_sev(native).to_string()
 }
 
 /// High-watermark: cluster severity used for inbox / SOAR / audit never drops.
@@ -959,5 +1167,85 @@ mod tests {
         assert!(!should_dispatch_soar_playbooks("false_positive"));
         assert!(should_dispatch_soar_playbooks("OPEN"));
         assert!(should_dispatch_soar_playbooks("ACKNOWLEDGED"));
+    }
+
+    #[test]
+    fn high_cardinality_email_file_and_slug_collapse() {
+        assert_eq!(
+            normalize_target("https://api.corp/files/alice@corp.com"),
+            normalize_target("https://api.corp/files/bob@corp.com")
+        );
+        assert_eq!(
+            normalize_target("https://api.corp/files/alice@corp.com"),
+            "https://api.corp/files/{id}"
+        );
+        assert_eq!(
+            normalize_target("https://api.corp/docs/invoice_august_2026.pdf"),
+            normalize_target("https://api.corp/docs/invoice_july_2026.pdf")
+        );
+        assert_eq!(
+            normalize_target("https://api.corp/docs/invoice_august_2026.pdf"),
+            "https://api.corp/docs/{id}"
+        );
+        assert_eq!(
+            normalize_target("https://api.corp/people/user-john-doe-99"),
+            "https://api.corp/people/{id}"
+        );
+        assert_eq!(
+            normalize_target("https://api.corp/reports/report_q3_final"),
+            "https://api.corp/reports/{id}"
+        );
+        // Static product tokens still distinguish planes.
+        assert_ne!(
+            normalize_target("https://api.corp/api/v1/public/image/alice@corp.com"),
+            normalize_target("https://api.corp/api/v1/admin/billing/alice@corp.com")
+        );
+    }
+
+    #[test]
+    fn static_filenames_and_reserved_tokens_stay() {
+        assert_eq!(
+            normalize_target("https://api.corp/.well-known/openid-configuration"),
+            "https://api.corp/.well-known/openid-configuration"
+        );
+        assert_eq!(
+            normalize_target("https://api.corp/static/index.html"),
+            "https://api.corp/static/index.html"
+        );
+    }
+
+    #[test]
+    fn proxy_or_banner_metadata_keeps_high_port() {
+        let via_proxy = json!({"proxy": {"via": "nginx"}, "banner": ""});
+        let hint = identity_hint_from_finding(&via_proxy);
+        assert!(hint.keep_port);
+        assert_eq!(
+            normalize_target_hinted("https://gw.internal:50100/app", &hint),
+            "https://gw.internal:50100/app"
+        );
+        let agent = json!({"agent": {"service": "redis-exporter", "os": "linux"}});
+        let h2 = identity_hint_from_finding(&agent);
+        assert!(h2.keep_port);
+        assert_eq!(
+            normalize_target_hinted("https://gw.internal:32768/metrics", &h2),
+            "https://gw.internal:32768/metrics"
+        );
+        let bare = json!({"title": "open port"});
+        let h3 = identity_hint_from_finding(&bare);
+        assert!(!h3.keep_port);
+        assert_eq!(
+            normalize_target_hinted("https://gw.internal:50100/app", &h3),
+            "https://gw.internal/app"
+        );
+    }
+
+    #[test]
+    fn verified_fixed_resets_watermark_lifecycle() {
+        assert_eq!(watermark_after_verified_fixed(), "info");
+        assert_eq!(watermark_on_regression("low"), "low");
+        assert_eq!(
+            monotonic_severity(watermark_after_verified_fixed(), "low"),
+            "low"
+        );
     }
 }

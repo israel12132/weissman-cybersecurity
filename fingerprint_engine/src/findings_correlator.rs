@@ -117,20 +117,36 @@ pub async fn upsert_cluster_for_finding(
             'OPEN', now(), now(), now()
         )
         ON CONFLICT (tenant_id, client_id, cluster_key) DO UPDATE SET
-            member_count   = weissman_finding_clusters.member_count + $16::int,
-            engines        = (
-                SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.engines || ARRAY[$8::text]))
-            ),
-            sources        = (
-                SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.sources || ARRAY[$9::text]))
-            ),
-            cves           = (
-                SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.cves    || $10::text[]))
-            ),
-            engine_planes  = (
-                SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.engine_planes || ARRAY[$17::text]))
-            ),
+            member_count   = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN 1
+                ELSE weissman_finding_clusters.member_count + $16::int
+            END,
+            engines        = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN ARRAY[$8]::text[]
+                ELSE (
+                    SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.engines || ARRAY[$8::text]))
+                )
+            END,
+            sources        = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN ARRAY[$9]::text[]
+                ELSE (
+                    SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.sources || ARRAY[$9::text]))
+                )
+            END,
+            cves           = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN $10::text[]
+                ELSE (
+                    SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.cves    || $10::text[]))
+                )
+            END,
+            engine_planes  = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN ARRAY[$17]::text[]
+                ELSE (
+                    SELECT ARRAY(SELECT DISTINCT unnest(weissman_finding_clusters.engine_planes || ARRAY[$17::text]))
+                )
+            END,
             native_severity = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN $11
                 WHEN $15::int > (CASE weissman_finding_clusters.native_severity
                                      WHEN 'critical' THEN 5
                                      WHEN 'high'     THEN 4
@@ -148,7 +164,21 @@ pub async fn upsert_cluster_for_finding(
                                   THEN $7
                                   ELSE weissman_finding_clusters.title END,
             last_seen_at   = now(),
-            updated_at     = now()
+            updated_at     = now(),
+            -- VERIFIED_FIXED is a closed lifecycle. A later regression must not
+            -- inherit the old high-watermark (zombie Critical on a low reopen).
+            watermark_severity = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN $11
+                ELSE weissman_finding_clusters.watermark_severity
+            END,
+            corroboration_boost = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN 'none'
+                ELSE weissman_finding_clusters.corroboration_boost
+            END,
+            status = CASE
+                WHEN weissman_finding_clusters.status = 'VERIFIED_FIXED' THEN 'OPEN'
+                ELSE weissman_finding_clusters.status
+            END
         RETURNING id, engines, native_severity, watermark_severity, corroboration_boost
         "#,
     )
@@ -193,6 +223,33 @@ pub async fn upsert_cluster_for_finding(
 
     apply_corroboration_boost(tx, id, &native, &watermark, &prev_boost, &engines).await?;
     Ok((id, key))
+}
+
+/// HFV closed the vulnerability: drop the high-watermark so a later regression
+/// starts a clean lifecycle (inbox / ALE / Supreme Brain see current severity).
+pub async fn reset_cluster_watermark_verified_fixed(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: i64,
+    cluster_id: i64,
+) -> Result<(), String> {
+    let reset = crate::finding_identity::watermark_after_verified_fixed();
+    sqlx::query(
+        r#"UPDATE weissman_finding_clusters SET
+                status = 'VERIFIED_FIXED',
+                watermark_severity = $3,
+                max_severity = $3,
+                native_severity = $3,
+                corroboration_boost = 'none',
+                updated_at = now()
+              WHERE id = $1 AND tenant_id = $2"#,
+    )
+    .bind(cluster_id)
+    .bind(tenant_id)
+    .bind(reset)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| format!("cluster watermark reset: {e}"))?;
+    Ok(())
 }
 
 /// Recompute effective `max_severity` from the merged engine set.
@@ -253,6 +310,9 @@ pub async fn cascade_cluster_status(
     .execute(&mut **tx)
     .await
     .map_err(|e| format!("cascade status: {e}"))?;
+    if new_status.eq_ignore_ascii_case("VERIFIED_FIXED") {
+        reset_cluster_watermark_verified_fixed(tx, tenant_id, cluster_id).await?;
+    }
     Ok(res.rows_affected())
 }
 
