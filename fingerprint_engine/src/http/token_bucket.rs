@@ -94,7 +94,7 @@ impl TokenBucket {
     #[must_use]
     pub fn used(&mut self, now: Instant) -> u32 {
         let avail = self.available(now);
-        f64::from(self.cfg.burst).saturating_sub(avail).floor() as u32
+        (f64::from(self.cfg.burst) - avail).max(0.0).floor() as u32
     }
 }
 
