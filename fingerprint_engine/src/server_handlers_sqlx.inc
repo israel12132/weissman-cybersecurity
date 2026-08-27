@@ -1929,7 +1929,7 @@ async fn collect_engine_history_json(
             .ok()
             .flatten()
             .unwrap_or_else(|| json!({}));
-        let findings_count = result_json
+        let mut findings_count = result_json
             .get("findings")
             .and_then(Value::as_array)
             .map(|a| a.len())
@@ -1939,6 +1939,10 @@ async fn collect_engine_history_json(
             .and_then(Value::as_str)
             .map(|s| s.to_string())
             .unwrap_or_default();
+        let (roe_blocked, roe) = crate::engine_result::compact_job_roe(Some(&result_json));
+        if roe_blocked {
+            findings_count = 0;
+        }
         jobs.push(json!({
             "job_id": r.try_get::<uuid::Uuid,_>("id").map(|v| v.to_string()).unwrap_or_default(),
             "kind": r.try_get::<String,_>("kind").unwrap_or_default(),
@@ -1949,6 +1953,8 @@ async fn collect_engine_history_json(
             "findings_count": findings_count,
             "target": target,
             "source": "engine_job",
+            "roe_blocked": roe_blocked,
+            "roe": roe,
         }));
     }
 

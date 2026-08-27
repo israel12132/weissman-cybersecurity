@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { apiFetch } from './apiBase'
 
-const TERMINAL = new Set(['completed', 'failed', 'dead', 'cancelled'])
+import { jobIsRoeBlocked } from './roeBlocked'
+
+const TERMINAL = new Set(['completed', 'failed', 'dead', 'cancelled', 'roe_blocked'])
 
 /**
  * Poll GET /api/jobs/:id until the job reaches a terminal status.
@@ -25,7 +27,7 @@ export function useJobPoll(jobId, { onUpdate, onComplete, intervalMs = 2000, ena
         if (cancelled || !r.ok || !job) return
         onUpdateRef.current?.(job)
         const status = (job.status || '').toLowerCase()
-        if (TERMINAL.has(status)) {
+        if (TERMINAL.has(status) || jobIsRoeBlocked(job)) {
           onCompleteRef.current?.(job)
           // Job is finished — stop hitting the endpoint (the hook contract is
           // "poll until terminal"; without this it polls forever once done).
@@ -89,14 +91,17 @@ export async function fetchFindingsForEngine(engineId, clientId) {
 
 /** Prefer job result; fall back to findings API. */
 export async function resolveJobFindings(job, engineId, clientId) {
+  if (jobIsRoeBlocked(job)) return []
   const fromJob = extractFindingsFromJob(job)
   if (fromJob.length) return fromJob
   return fetchFindingsForEngine(engineId, clientId)
 }
 
 /** Map backend job status to UI card status. */
-export function uiJobStatus(backendStatus) {
+export function uiJobStatus(backendStatus, job) {
+  if (job && jobIsRoeBlocked(job)) return 'roe_blocked'
   const s = normalizeJobStatus(backendStatus)
+  if (s === 'roe_blocked') return 'roe_blocked'
   if (s === 'completed') return 'completed'
   if (s === 'failed' || s === 'dead' || s === 'cancelled') return 'error'
   if (s === 'running' || s === 'queued') return 'running'

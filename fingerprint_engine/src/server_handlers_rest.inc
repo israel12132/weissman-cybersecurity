@@ -1332,7 +1332,18 @@ async fn api_client_config_patch(
     if let Some(b) = body.auto_harvest {
         config.insert("auto_harvest".to_string(), Value::Bool(b));
     }
+    let currently_ot = config
+        .get("industrial_ot_enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     if let Some(b) = body.industrial_ot_enabled {
+        if b && !currently_ot && !crate::security_hardening::destructive_action_authorized(&headers)
+        {
+            let _ = tx.rollback().await;
+            return crate::security_hardening::destructive_denied_response(
+                "Enabling industrial_ot_enabled requires X-Weissman-Destructive-Confirm matching WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET. Weissman never auto-enables OT.",
+            );
+        }
         config.insert("industrial_ot_enabled".to_string(), Value::Bool(b));
     }
     if let Some(b) = body.critical_infra_probe_authorized {
@@ -1402,6 +1413,20 @@ async fn api_client_config_patch(
     }
     if body.critical_infra_targets.is_some() {
         changed.push("critical_infra_targets");
+    }
+    if body.industrial_ot_enabled == Some(true) && !currently_ot {
+        let _ = audit_log::insert_audit(
+            &mut tx,
+            auth.tenant_id,
+            Some(auth.user_id),
+            &actor,
+            "industrial_ot_enabled",
+            &format!(
+                "client_id={id} enabled_by={actor} never_auto_enabled=true who_must_enable=tenant_admin"
+            ),
+            &ip,
+        )
+        .await;
     }
     if !changed.is_empty() {
         let _ = audit_log::insert_audit(

@@ -257,7 +257,7 @@ where
                     attempts,
                     strategy: variant.clone(),
                     elapsed_ms: start.elapsed().as_millis() as u64,
-                    status: String::from("ok"),
+                    status: result.status.clone(),
                     recovered: attempts > 1,
                     error: None,
                     failure_class: last_class.map(|c| c.as_str().to_string()),
@@ -339,6 +339,33 @@ mod tests {
     fn retry_only_on_error_status() {
         assert!(should_retry_status("error"));
         assert!(!should_retry_status("ok"));
+        assert!(!should_retry_status("roe_blocked"));
+    }
+
+    #[tokio::test]
+    async fn roe_blocked_is_not_retried() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let (result, telem) = run_with_resilience(
+            "building_automation_attack",
+            "10.0.0.1",
+            Duration::from_secs(2),
+            move |_v, _hint| {
+                c.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    crate::engine_result::EngineResult::roe_blocked(
+                        "blocked",
+                        serde_json::json!({"control": "industrial_ot_enabled"}),
+                    )
+                }
+            },
+        )
+        .await;
+        assert!(result.roe_blocked);
+        assert_eq!(result.status, "roe_blocked");
+        assert_eq!(telem.status, "roe_blocked");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!telem.recovered);
     }
 
     #[tokio::test]

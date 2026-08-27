@@ -12,6 +12,8 @@ import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton, { CopyableField } from '../components/ui/CopyButton'
 import { apiFetch } from '../utils/apiFetch'
 import { normalizeJobStatus } from '../lib/useJobPoll'
+import { jobIsRoeBlocked, extractRoeDetails, displayJobStatus } from '../lib/roeBlocked'
+import RoeBlockedState, { RoeBlockedBadge } from '../components/engine/RoeBlockedState'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
 import Button from '../components/ui/Button'
@@ -24,12 +26,13 @@ const STATUS_COLORS = {
   completed: 'text-green-400 bg-green-900/20 border-green-500/30',
   failed: 'text-red-400 bg-red-900/20 border-red-500/30',
   cancelled: 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30',
+  roe_blocked: 'text-amber-300 bg-amber-950/40 border-amber-500/40',
 }
 
-const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
+const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled', 'roe_blocked']
 
 function exportJobsCsv(jobs, _t) {
-  const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
+  const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error', 'roe_blocked']
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
     header.join(','),
@@ -37,7 +40,7 @@ function exportJobsCsv(jobs, _t) {
       [
         j.id || j.job_id,
         j.kind || j.type,
-        normalizeJobStatus(j.status),
+        displayJobStatus(j),
         j.target,
         j.engine,
         j.client_id,
@@ -45,6 +48,7 @@ function exportJobsCsv(jobs, _t) {
         j.updated_at || j.completed_at,
         j.attempt_count ?? j.retries,
         j.last_error,
+        jobIsRoeBlocked(j) ? 'true' : 'false',
       ].map(esc).join(','),
     ),
   ]
@@ -123,20 +127,31 @@ export default function JobsDashboard() {
   const filteredJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     return jobs.filter((j) => {
-      if (statusFilter !== 'all' && normalizeJobStatus(j.status) !== statusFilter) return false
+      if (statusFilter === 'roe_blocked') {
+        if (!jobIsRoeBlocked(j)) return false
+      } else if (statusFilter === 'completed') {
+        if (jobIsRoeBlocked(j) || normalizeJobStatus(j.status) !== 'completed') return false
+      } else if (statusFilter !== 'all' && normalizeJobStatus(j.status) !== statusFilter) {
+        return false
+      }
       if (!q) return true
       const hay = [
         j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
         j.client_id != null ? String(j.client_id) : '',
         j.last_error,
+        jobIsRoeBlocked(j) ? 'roe_blocked' : '',
       ].filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })
   }, [jobs, search, statusFilter])
 
   const statusCounts = useMemo(() => {
-    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
+    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, roe_blocked: 0 }
     for (const j of jobs) {
+      if (jobIsRoeBlocked(j)) {
+        counts.roe_blocked += 1
+        continue
+      }
       const s = normalizeJobStatus(j.status)
       if (counts[s] != null) counts[s] += 1
     }
@@ -145,7 +160,9 @@ export default function JobsDashboard() {
 
   const listFindings = useMemo(() => filteredJobs.map((j) => ({
     id: j.id || j.job_id,
-    severity: normalizeJobStatus(j.status) === 'failed' ? 'high' : normalizeJobStatus(j.status) === 'running' ? 'medium' : 'info',
+    severity: jobIsRoeBlocked(j)
+      ? 'medium'
+      : normalizeJobStatus(j.status) === 'failed' ? 'high' : normalizeJobStatus(j.status) === 'running' ? 'medium' : 'info',
     title: j.target || j.engine || String(j.id || j.job_id),
     type: j.kind || j.type || 'job',
     description: j.last_error || '',
@@ -157,8 +174,10 @@ export default function JobsDashboard() {
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
 
-  function getStatusBadgeClass(status) {
+  function getStatusBadgeClass(status, job) {
+    if (job && jobIsRoeBlocked(job)) return STATUS_COLORS.roe_blocked
     const statusLower = normalizeJobStatus(status)
+    if (statusLower === 'roe_blocked') return STATUS_COLORS.roe_blocked
     return STATUS_COLORS[statusLower] || 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30'
   }
 
@@ -220,14 +239,20 @@ export default function JobsDashboard() {
           </span>
         ),
       }),
-      columnHelper.accessor((j) => normalizeJobStatus(j.status), {
+      columnHelper.accessor((j) => displayJobStatus(j), {
         id: 'status',
         header: t('pages.jobsDashboard.col_status'),
-        cell: (ctx) => (
-          <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(ctx.row.original.status)}`}>
-            {ctx.getValue() || 'unknown'}
-          </span>
-        ),
+        cell: (ctx) => {
+          const job = ctx.row.original
+          if (jobIsRoeBlocked(job)) {
+            return <RoeBlockedBadge />
+          }
+          return (
+            <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(job.status, job)}`}>
+              {ctx.getValue() || 'unknown'}
+            </span>
+          )
+        },
       }),
       columnHelper.accessor((j) => j.created_at || '', {
         id: 'created',
@@ -335,22 +360,24 @@ export default function JobsDashboard() {
           </>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              {['queued', 'running', 'completed', 'failed', 'cancelled', 'roe_blocked'].map((status) => (
                 <Button variant="unstyled"
                   key={status}
                   type="button"
                   onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
                   className={`p-4 rounded-xl border text-center transition-all ${
                     statusFilter === status
-                      ? 'border-cyan-500/40 bg-cyan-500/10 ring-1 ring-cyan-500/20'
+                      ? status === 'roe_blocked'
+                        ? 'border-amber-500/50 bg-amber-950/30 ring-1 ring-amber-500/25'
+                        : 'border-cyan-500/40 bg-cyan-500/10 ring-1 ring-cyan-500/20'
                       : 'border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)]'
                   }`}
                 >
                   <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
-                    {statusCounts[status]}
+                    {statusCounts[status] ?? 0}
                   </div>
-                  <div className="text-[11px] text-[var(--text-tertiary)] capitalize mt-1">
+                  <div className={`text-[11px] capitalize mt-1 ${status === 'roe_blocked' ? 'text-amber-300' : 'text-[var(--text-tertiary)]'}`}>
                     {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}
                   </div>
                 </Button>
@@ -435,9 +462,13 @@ export default function JobsDashboard() {
                         </div>
                         <div>
                           <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_status')}</div>
-                          <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${getStatusBadgeClass(selectedJob.status)}`}>
-                            {normalizeJobStatus(selectedJob.status)}
-                          </span>
+                          {jobIsRoeBlocked(selectedJob) ? (
+                            <div className="mt-0.5"><RoeBlockedBadge /></div>
+                          ) : (
+                            <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${getStatusBadgeClass(selectedJob.status, selectedJob)}`}>
+                              {normalizeJobStatus(selectedJob.status)}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_attempt')}</div>
@@ -454,6 +485,9 @@ export default function JobsDashboard() {
                           </div>
                         </div>
                       </div>
+                      {jobIsRoeBlocked(selectedJob) && (
+                        <RoeBlockedState roe={extractRoeDetails(selectedJob)} />
+                      )}
                       {selectedJob.target && (
                         <CopyableField label={t('pages.jobsDashboard.col_target')} value={selectedJob.target} />
                       )}

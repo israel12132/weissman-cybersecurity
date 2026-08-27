@@ -195,9 +195,12 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
                     violation,
                 )
                 .await;
-                return EngineResult::error(format!(
-                    "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
-                ));
+                return crate::critical_infra::roe::blocked_engine_result(
+                    canonical,
+                    target,
+                    ctx.client_id,
+                    violation,
+                );
             }
         }
         let mut result = crate::critical_infra::dispatch(canonical, target, &ctx).await;
@@ -959,5 +962,42 @@ mod tests {
         let r = run_engine("poe_synthesis", "https://example.com", &ctx).await;
         assert!(!r.success, "expected error without tenant: {}", r.message);
         assert!(r.message.contains("tenant_id"));
+    }
+
+    #[tokio::test]
+    async fn ot_engine_without_authorization_returns_roe_blocked_payload() {
+        let ctx = EngineRunContext {
+            tenant_id: Some(1),
+            client_id: Some(42),
+            ..Default::default()
+        };
+        for engine in [
+            "building_automation_attack",
+            "robotics_ros2_attack",
+            "smart_grid_dlms_attack",
+            "maritime_ais_attack",
+        ] {
+            let r = run_engine(engine, "10.0.0.8", &ctx).await;
+            assert!(r.roe_blocked, "{engine}: expected roe_blocked");
+            assert_eq!(r.status, "roe_blocked");
+            assert!(!r.success);
+            assert!(
+                r.findings.is_empty(),
+                "{engine}: RoE block must not invent ICS findings"
+            );
+            let roe = r.roe.as_ref().expect("roe details");
+            assert_eq!(roe["never_auto_enabled"], true);
+            assert_eq!(roe["who_must_enable"], "tenant_admin");
+            assert_eq!(roe["client_id"], 42);
+            assert!(roe["would_run_if_authorized"].as_str().unwrap().len() > 10);
+            assert_eq!(
+                roe["enable_path"]["destructive_confirm_header"],
+                "X-Weissman-Destructive-Confirm"
+            );
+            #[cfg(feature = "high_risk_engines")]
+            assert_eq!(roe["control"], "industrial_ot_enabled");
+            #[cfg(not(feature = "high_risk_engines"))]
+            assert_eq!(roe["control"], "high_risk_engines");
+        }
     }
 }

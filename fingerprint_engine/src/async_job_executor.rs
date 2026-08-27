@@ -600,14 +600,16 @@ async fn execute_job_unscoped(
                 }
             }
 
-            Ok(json!({
+            let mut out = json!({
                 "engine": engine,
                 "status": result.status,
                 "findings": result.findings,
                 "findings_persisted": persisted,
                 "message": result.message,
                 "resilience": last_engine_telemetry.as_ref().map(|t| t.to_json()),
-            }))
+            });
+            crate::engine_result::attach_roe_fields(&mut out, &result);
+            Ok(out)
         }
         "top_tier_health_probe" => {
             let target = p
@@ -952,7 +954,12 @@ async fn execute_job_unscoped(
                     &intelligence_bus,
                 );
 
-                if result.success {
+                if result.roe_blocked {
+                    let _ = telemetry.send(format!(
+                        r#"{{"job_id":"{}","message":"Engine {} RoE blocked (not an empty scan): {}","status":"running"}}"#,
+                        job.id, engine_id, result.summary
+                    ));
+                } else if result.success {
                     succeeded += 1;
                     let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
                 } else {
@@ -969,6 +976,8 @@ async fn execute_job_unscoped(
                     "findings_count": result.findings.len(),
                     "summary": result.summary,
                     "resilience": telem.to_json(),
+                    "roe_blocked": result.roe_blocked,
+                    "roe": result.roe,
                 }));
 
                 let _ = persist_findings_best_effort(

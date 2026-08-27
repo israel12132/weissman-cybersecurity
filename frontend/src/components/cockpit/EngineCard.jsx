@@ -11,6 +11,10 @@ import { launchEngineScan } from '../../lib/launchEngineScan'
 import { loadEnginesRegistry } from '../../lib/enginesRegistryLoader'
 import EngineRealityBadge from '../EngineRealityBadge'
 import Button from '../ui/Button'
+import { useJobPoll } from '../../lib/useJobPoll'
+import { jobIsRoeBlocked, extractRoeDetails } from '../../lib/roeBlocked'
+import { isCriticalInfraEngine } from '../../lib/criticalInfraEngines'
+import RoeBlockedState, { RoeBlockedBadge } from '../engine/RoeBlockedState'
 
 const NS = 'components.cockpitWidgets.engineCard'
 const MAX_TERMINAL_LINES = 80
@@ -24,6 +28,9 @@ function formatSseLine(data, t) {
   if (b != null && c != null) return t(`${NS}.terminalLive`, { bytes: b, chunks: c })
   if (data.status === 'running' && data.message) return data.message
   if (data.status === 'completed') return t(`${NS}.terminalCompleted`, { message: data.message || '' }).trim()
+  if (data.status === 'roe_blocked' || data.roe_blocked) {
+    return t(`${NS}.terminalRoeBlocked`, { message: data.message || '' }).trim()
+  }
   if (data.status === 'failed') return data.error ? t(`${NS}.terminalError`, { error: data.error }) : t(`${NS}.terminalFailed`)
   return null
 }
@@ -33,8 +40,10 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
   const [poeJobLines, setPoeJobLines] = useState([])
   const [hasError, setHasError] = useState(false)
   const [runBusy, setRunBusy] = useState(false)
+  const [pendingJobId, setPendingJobId] = useState(null)
+  const [roeBlock, setRoeBlock] = useState(null)
   const terminalRef = useRef(null)
-  const { selectedClientId, selectedClient, clientIntegrations } = useClient()
+  const { selectedClientId, selectedClient, clientIntegrations, clientConfig } = useClient()
   const { addToast, progressByEngine, addProgress } = useTelemetry()
   const { commandConfirmed } = useWarRoom()
   const progress = progressByEngine ?? {}
@@ -47,6 +56,25 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
   const primaryTarget = clientPrimaryTargetUrl(selectedClient)
   const canRunTargeted = engineRunsWithoutTarget(engineId) || Boolean(primaryTarget)
   const cidNum = selectedClientId != null && selectedClientId !== '' ? Number(selectedClientId) : null
+  const criticalInfra = isCriticalInfraEngine(engineId)
+  const otOff = clientConfig?.industrial_ot_enabled !== true
+  const preflightRoeHint = criticalInfra && otOff
+
+  useJobPoll(pendingJobId, {
+    enabled: Boolean(pendingJobId),
+    onComplete: (job) => {
+      if (jobIsRoeBlocked(job)) {
+        setRoeBlock(extractRoeDetails(job))
+        addToast('error', t(`${NS}.toastRoeBlocked`), engineId)
+        addProgress(String(cidNum ?? ''), engineId, t(`${NS}.terminalRoeBlocked`, {
+          message: job?.result?.message || job?.message || '',
+        }))
+      } else {
+        setRoeBlock(null)
+      }
+      setPendingJobId(null)
+    },
+  })
 
   const runScanNow = useCallback(async () => {
     if (!enabled || runBusy || cidNum == null || Number.isNaN(cidNum)) {
@@ -58,6 +86,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
       return
     }
     setRunBusy(true)
+    setRoeBlock(null)
     try {
       const { ok, data, status } = await launchEngineScan({
         engineId,
@@ -72,6 +101,7 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
         return
       }
       const jid = data.job_id || data.jobId || ''
+      if (jid) setPendingJobId(jid)
       const line = jid
         ? t(`${NS}.toastQueuedJob`, { jobId: jid, kind: data.job_kind || engineId })
         : (data.message || t(`${NS}.toastQueued`))
@@ -167,10 +197,13 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="text-sm font-semibold text-white truncate">{label}</span>
           <EngineRealityBadge engineId={engineId} size="xs" />
+          {(roeBlock || preflightRoeHint) && <RoeBlockedBadge />}
           <span
             className={`shrink-0 w-2 h-2 rounded-full transition-all duration-200 ${
               enabled ? 'bg-[#4ade80] shadow-[0_0_6px_rgba(74,222,128,0.6)]' : 'bg-white/20'
-            } ${hasError ? '!bg-[#ef4444] shadow-[0_0_6px_rgba(239,68,68,0.6)]' : ''}`}
+            } ${hasError ? '!bg-[#ef4444] shadow-[0_0_6px_rgba(239,68,68,0.6)]' : ''} ${
+              roeBlock || preflightRoeHint ? '!bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.7)]' : ''
+            }`}
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -223,13 +256,28 @@ export default function EngineCard({ engineId, label, enabled, onToggle, disable
         </div>
       )}
 
+      {(roeBlock || preflightRoeHint) && (
+        <div className="mb-2">
+          <RoeBlockedState
+            compact={!roeBlock}
+            roe={roeBlock || {
+              control: 'industrial_ot_enabled',
+              who_must_enable: 'tenant_admin',
+              never_auto_enabled: true,
+              would_run_if_authorized: undefined,
+              client_id: cidNum,
+            }}
+          />
+        </div>
+      )}
+
       <div
         ref={terminalRef}
         className="relative rounded-xl bg-black/80 shadow-inner border border-white/5 p-3 min-h-[72px] font-mono text-[11px] leading-relaxed overflow-auto"
       >
         <pre
           className={`m-0 whitespace-pre-wrap break-all ${
-            hasError ? 'text-red-400' : 'text-[#4ade80]/90'
+            roeBlock || preflightRoeHint ? 'text-amber-200/90' : hasError ? 'text-red-400' : 'text-[#4ade80]/90'
           }`}
         >
           {terminalContent}
