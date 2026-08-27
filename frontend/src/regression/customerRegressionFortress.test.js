@@ -43,7 +43,7 @@ describe("auth/login surface lock", () => {
     expect(login).toMatch(/PRODUCTION_ENGINE_COUNT/);
     expect(login).not.toMatch(/254 production engines/);
     expect(login).not.toMatch(/auth-mesh-drift/);
-    expect(login).toMatch(/<form/);
+    expect(login).toMatch(/motion\.form/);
     expect(login).toMatch(/auth\.authenticate/);
   });
 
@@ -127,7 +127,7 @@ describe("RoE OT block contract", () => {
     expect(roe).toMatch(/fn blocked_engine_result/);
     expect(roe).toMatch(/EngineResult::roe_blocked/);
     expect(roe).toMatch(/would_run_if_authorized/);
-    expect(roe).not.toMatch(/fake ICS/i);
+    expect(roe).not.toMatch(/simulated ics|modbus holding|triton implant/i);
     const dispatch = readRepo("fingerprint_engine/src/engine_dispatch.rs");
     expect(dispatch).toMatch(/blocked_engine_result/);
   });

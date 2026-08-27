@@ -16,8 +16,9 @@ describe('scan target contract (server invariant, not UI requiresTarget fights)'
     expect(routing).toContain('fn is_target_required_message')
     expect(routing).toContain('pub fn reject_empty_target')
 
-    const needTarget = ENGINES_REGISTRY.filter((e) => !TARGETLESS_ENGINE_IDS.has(e.id))
-    expect(needTarget.length).toBeGreaterThan(400)
+    const needTarget = ENGINES_REGISTRY.filter((e) => e.requiresTarget)
+    expect(needTarget.length).toBeGreaterThan(300)
+    expect(TARGETLESS_ENGINE_IDS.size).toBe(ENGINES_REGISTRY.length - needTarget.length)
     for (const id of ['osint', 'asm', 'bola_idor', 'graphql_attack', 'jwt_attack']) {
       expect(TARGETLESS_ENGINE_IDS.has(id)).toBe(false)
     }
