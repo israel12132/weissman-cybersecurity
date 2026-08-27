@@ -280,7 +280,17 @@
   "ask_weissman": {
     "title": "Ask Weissman",
     "subtitle": "Natural-language queries compiled to safe, parameterised SQL. Read-only role, tenant-scoped.",
-    "subtitle_full": "Natural-language queries compiled to safe, parameterised SQL. Read-only role, tenant-scoped, statement timeout 15 s. Every question is audited.",
+    "subtitle_full": "Natural-language queries compiled to a sealed QueryPlan — never raw SQL. Tenant filter is forced as tenant_id = $1, executed as weissman_ro with a 15 s statement timeout and a hard LIMIT 200. 10 questions/min with anti-oracle similarity, generic error masking, 4-level plan depth, and no RAG/vector dump. Every question is audited.",
+    "safeguards_aria": "Ask Weissman hermetic safeguards",
+    "guard_tenant": "tenant_id = $1 forced",
+    "guard_role": "weissman_ro",
+    "guard_timeout": "15s timeout",
+    "guard_limit": "LIMIT 200",
+    "guard_plan": "QueryPlan sealed",
+    "guard_oracle": "10/min · anti-oracle",
+    "guard_mask": "generic errors",
+    "guard_depth": "plan depth ≤4",
+    "guard_vector": "k≤5 · no RAG dump",
     "back_cockpit": "← Cockpit",
     "placeholder": "Ask anything about your data — e.g. top 5 KEV findings on prod assets",
     "ask_button": "Ask →",
@@ -3130,7 +3140,7 @@
       "evidence_notice": "AI pattern synthesis from GET /api/soc/ai-patterns with fallback to GET /api/findings/clusters — models summarize live tenant evidence only."
     },
     "askWeissman": {
-      "evidence_notice": "Natural-language answers compiled via POST /api/ask only — read-only SQL against tenant-scoped data with audit logging. Transcript is session-local until you export it.",
+      "evidence_notice": "Natural-language answers compile to a sealed QueryPlan via POST /api/ask only — never raw SQL. The API injects tenant_id = $1, runs as weissman_ro with statement_timeout = 15000 and LIMIT 200, and audits every turn. Transcript is session-local until you export it.",
       "export_transcript": "Export transcript CSV",
       "clear_history": "Clear history",
       "refresh_session": "Refresh session",

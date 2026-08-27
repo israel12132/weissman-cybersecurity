@@ -1414,11 +1414,7 @@ pub fn new_app_state(
         .ok()
         .filter(|s| !s.trim().is_empty())
     {
-        Some(url) => match sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_lazy(&url)
-        {
+        Some(url) => match weissman_db::connect_read_only_lazy(&url) {
             Ok(p) => Some(Arc::new(p)),
             Err(e) => {
                 tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
@@ -1837,7 +1833,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))

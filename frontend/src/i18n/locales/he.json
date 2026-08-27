@@ -270,7 +270,17 @@
   "ask_weissman": {
     "title": "שאל את Weissman",
     "subtitle": "שאילתות בשפה טבעית המתורגמות ל-SQL בטוח ומוגבל. תפקיד קריאה בלבד, מוגבל ל-tenant.",
-    "subtitle_full": "שאילתות בשפה טבעית המתורגמות ל-SQL בטוח ומוגבל. תפקיד קריאה בלבד, מוגבל ל-tenant, timeout של 15 שניות. כל שאלה מתועדת ביומן ביקורת.",
+    "subtitle_full": "שאילתות בשפה טבעית מקומפלות ל-QueryPlan חתום — לעולם לא SQL גולמי. פילטר tenant_id = $1 נכפה תמיד, הרצה כ-weissman_ro עם timeout של 15 שניות ו-LIMIT 200 קשיח. 10 שאילתות בדקה עם חסימת סריקת אורקל, ערפול שגיאות, עומק תוכנית עד 4, וללא דאמפ RAG/וקטור. כל שאלה מתועדת ביומן ביקורת.",
+    "safeguards_aria": "מגני אבטחה הרמטיים של Ask Weissman",
+    "guard_tenant": "tenant_id = $1 נכפה",
+    "guard_role": "weissman_ro",
+    "guard_timeout": "timeout 15 שנ׳",
+    "guard_limit": "LIMIT 200",
+    "guard_plan": "QueryPlan חתום",
+    "guard_oracle": "10/דקה · אנטי-אורקל",
+    "guard_mask": "שגיאות כלליות",
+    "guard_depth": "עומק תוכנית ≤4",
+    "guard_vector": "k≤5 · ללא דאמפ RAG",
     "back_cockpit": "→ תא הפיקוד",
     "placeholder": "שאל כל דבר על הנתונים שלך — למשל 5 ממצאי KEV מובילים בנכסי prod",
     "ask_button": "שאל ←",
@@ -3199,7 +3209,7 @@
       "evidence_notice": "סינתזת דפוסים AI מ-GET /api/soc/ai-patterns עם fallback ל-GET /api/findings/clusters — מודלים מסכמים רק הוכחות tenant חיות."
     },
     "askWeissman": {
-      "evidence_notice": "תשובות בשפה טבעית מ-POST /api/ask בלבד — SQL לקריאה בלבד על נתוני tenant עם יומן ביקורת. התמליל מקומי לסשן עד לייצוא.",
+      "evidence_notice": "תשובות בשפה טבעית מקומפלות ל-QueryPlan חתום דרך POST /api/ask בלבד — לעולם לא SQL גולמי. ה-API מזריק tenant_id = $1, מריץ כ-weissman_ro עם statement_timeout = 15000 ו-LIMIT 200, ומתעד כל תור. התמליל מקומי לסשן עד לייצוא.",
       "export_transcript": "ייצוא תמליל CSV",
       "clear_history": "נקה היסטוריה",
       "refresh_session": "רענן סשן",

@@ -91,17 +91,32 @@ fn is_production_env() -> bool {
 
 /// True if the URL has a non-empty userinfo segment before `@`.
 fn database_url_has_explicit_user(url: &str) -> bool {
-    let rest = if let Some(r) = url.strip_prefix("postgres://") {
-        r
-    } else if let Some(r) = url.strip_prefix("postgresql://") {
-        r
+    postgres_url_user(url).is_some()
+}
+
+/// Postgres role name from `postgres://user[:password]@host/db` (password optional).
+///
+/// Returns `None` when the URL is not postgres(ql) or has no userinfo before `@`.
+#[must_use]
+pub fn postgres_url_user(url: &str) -> Option<String> {
+    let rest = url
+        .trim()
+        .strip_prefix("postgres://")
+        .or_else(|| url.trim().strip_prefix("postgresql://"))?;
+    let at = rest.find('@')?;
+    let userinfo = &rest[..at];
+    if userinfo.is_empty() {
+        return None;
+    }
+    let user = match userinfo.find(':') {
+        Some(colon) => &userinfo[..colon],
+        None => userinfo,
+    };
+    if user.is_empty() {
+        None
     } else {
-        return false;
-    };
-    let Some(at) = rest.find('@') else {
-        return false;
-    };
-    !rest[..at].is_empty()
+        Some(user.to_string())
+    }
 }
 
 /// Reject URLs that would make libpq fall back to the OS user (e.g. `root`).
@@ -152,5 +167,20 @@ mod tests {
         assert!(
             validate_database_url("postgres://postgres:secret@localhost/weissman_prod").is_ok()
         );
+    }
+
+    #[test]
+    fn postgres_url_user_reads_role_with_and_without_password() {
+        assert_eq!(
+            postgres_url_user("postgres://weissman_ro:secret@localhost/weissman").as_deref(),
+            Some("weissman_ro")
+        );
+        assert_eq!(
+            postgres_url_user("postgresql://weissman_ro@/weissman?host=/var/run/postgresql")
+                .as_deref(),
+            Some("weissman_ro")
+        );
+        assert_eq!(postgres_url_user("postgres://localhost/weissman"), None);
+        assert_eq!(postgres_url_user("https://example.com"), None);
     }
 }

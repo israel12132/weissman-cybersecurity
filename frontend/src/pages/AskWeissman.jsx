@@ -125,6 +125,11 @@ export default function AskWeissman() {
           rows: result.rows || [],
           row_count: result.row_count || 0,
           elapsed_ms: result.elapsed_ms,
+          plan_sealed: result.plan_sealed,
+          exec_role: result.exec_role,
+          tenant_bound: result.tenant_bound,
+          row_cap: result.row_cap,
+          statement_timeout_ms: result.statement_timeout_ms,
           t: Date.now(),
         }
         if (idx >= 0) next[idx] = turn
@@ -132,13 +137,19 @@ export default function AskWeissman() {
         return next
       })
     } catch (e) {
-      let msg
-      if (e?.status) {
-        const b = e.response ? await e.response.json().catch(() => ({})) : {}
-        msg = formatApiErrorFromBody(b, e.status)
-      } else {
-        msg = e?.message || t('ask_weissman.network_error')
+      let msg = typeof e?.message === 'string' && e.message.trim() ? e.message.trim() : ''
+      if (e?.status && e.response?.clone) {
+        const b = await e.response.clone().json().catch(() => ({}))
+        const fromBody = formatApiErrorFromBody(b, e.status)
+        if (fromBody && !/^HTTP \d+$/.test(fromBody) && !fromBody.startsWith('Request failed (HTTP')) {
+          msg = fromBody
+        }
+      } else if (e?.status && e.response) {
+        const b = await e.response.json().catch(() => ({}))
+        const fromBody = formatApiErrorFromBody(b, e.status)
+        if (fromBody) msg = fromBody
       }
+      if (!msg) msg = t('ask_weissman.network_error')
       setHistory((h) => h.map((x) => x === placeholder ? {
         q: text, ok: false, error: msg, t: Date.now(),
       } : x))
@@ -178,6 +189,29 @@ export default function AskWeissman() {
           <p className="text-xs text-[var(--text-tertiary)] mt-1">
             {t('ask_weissman.subtitle_full')}
           </p>
+          <ul
+            className="mt-2 flex flex-wrap gap-1.5"
+            aria-label={t('ask_weissman.safeguards_aria')}
+          >
+            {[
+              'guard_tenant',
+              'guard_role',
+              'guard_timeout',
+              'guard_limit',
+              'guard_plan',
+              'guard_oracle',
+              'guard_mask',
+              'guard_depth',
+              'guard_vector',
+            ].map((key) => (
+              <li
+                key={key}
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/35 bg-emerald-500/10 text-emerald-200"
+              >
+                {t(`ask_weissman.${key}`)}
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <ShellScanActions
@@ -265,6 +299,18 @@ export default function AskWeissman() {
                       {t('ask_weissman.rows', { count: turn.row_count })}
                     </span>
                   )}
+                  {turn.plan_sealed && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-violet-500/35 bg-violet-500/10 text-violet-200">
+                      {t('ask_weissman.guard_plan')}
+                    </span>
+                  )}
+                  {turn.exec_role && (
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                      {turn.exec_role}
+                      {turn.statement_timeout_ms ? ` · ${turn.statement_timeout_ms}ms` : ''}
+                      {turn.row_cap ? ` · LIMIT ${turn.row_cap}` : ''}
+                    </span>
+                  )}
                 </div>
 
                 {turn.error ? (
@@ -346,6 +392,7 @@ export default function AskWeissman() {
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={t('ask_weissman.placeholder')}
           aria-label={t('ask_weissman.placeholder')}
+          maxLength={2000}
           className="flex-1 bg-[var(--bg-2)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/40"
           // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focus the primary question input on this dedicated Q&A page
           autoFocus

@@ -283,6 +283,16 @@ pub fn is_enabled() -> bool {
     shared().is_some()
 }
 
+/// True when `REDIS_URL` is set — Ask Weissman treats this as "Redis is the rate store"
+/// and must fail-closed if the client is missing or a command times out.
+#[must_use]
+pub fn redis_url_configured() -> bool {
+    std::env::var("REDIS_URL")
+        .ok()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
 /// Production multi-replica deployments require Redis-backed distributed state.
 #[must_use]
 pub fn distributed_state_required() -> bool {
@@ -391,6 +401,15 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     incr_window_strict(
         &format!("weissman:rl:api:{client_ip}"),
         Duration::from_secs(1),
+    )
+    .await
+}
+
+/// Ask Weissman per-user counter (60s window, fail-closed aware).
+pub async fn incr_ask_user_strict(user_id: i64) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:ask:{user_id}"),
+        Duration::from_secs(60),
     )
     .await
 }
