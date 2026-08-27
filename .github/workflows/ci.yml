@@ -776,8 +776,13 @@ jobs:
           WEISSMAN_COOKIE_SECURE: "1"
           WEISSMAN_ADMIN_EMAIL: admin@localhost
           WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
-          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: ci-smoke@localhost
-          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-smoke-password
+          # Same identity as WEISSMAN_ADMIN_* so bootstrap does not create a second
+          # staff user. Client create/delete is owner-only (is_superadmin / CEO);
+          # a distinct ci-smoke@localhost account is role=admin without superadmin
+          # and 403s POST /api/clients (owner_required) — that is what failed the
+          # engine-group smoke after isolation landed.
+          WEISSMAN_MASTER_BOOTSTRAP_EMAIL: admin@localhost
+          WEISSMAN_MASTER_BOOTSTRAP_PASSWORD: ci-admin-password-24-chars-minimum
           # The live-scan smoke step logs in ONCE then runs ~18 min (one engine per group,
           # each polled up to 180s). The default access-token TTL is 15 min, so the token
           # expires mid-run and later scan submits/polls 401. Give the CI token room to
@@ -899,8 +904,8 @@ jobs:
       - name: Smoke one engine per group
         env:
           WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_SMOKE_LOGIN_EMAIL: admin@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_TENANT_SLUG: default
           # Real multi-engine scans against the CI single-Postgres stack can need a couple of retry
           # attempts under transient connection pressure; give the poller headroom beyond one 180s
@@ -911,8 +916,8 @@ jobs:
       - name: Audit UI scan button paths
         env:
           WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_SMOKE_LOGIN_EMAIL: admin@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_TENANT_SLUG: default
           WEISSMAN_UI_AUDIT_POLL_TIMEOUT_MS: "180000"
         run: node scripts/audit_ui_button_scan_paths.mjs
@@ -920,8 +925,8 @@ jobs:
       - name: Live scan pipeline E2E contract
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_E2E_POLL_MS: "2000"
           WEISSMAN_E2E_POLL_MAX: "90"
@@ -949,8 +954,8 @@ jobs:
         timeout-minutes: 15
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
           # Makes the `list` reporter print each test as it STARTS (it is silent on test-begin
@@ -967,8 +972,8 @@ jobs:
         timeout-minutes: 15
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
           PLAYWRIGHT_FORCE_TTY: "1"
@@ -1012,8 +1017,8 @@ jobs:
       - name: Playwright True-Live feature specs (bulk · views · URL filter · density)
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           PLAYWRIGHT_LIVE: "1"
         run: |
@@ -1023,8 +1028,8 @@ jobs:
       - name: Generate audit evidence pack
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_EVIDENCE_OUT: ${{ github.workspace }}/evidence-pack/ci
         run: |
           chmod +x scripts/generate_audit_evidence_pack.sh
@@ -1051,8 +1056,8 @@ jobs:
       - name: Live scan pipeline pytest contract
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_E2E_POLL_MS: "2000"
           WEISSMAN_E2E_POLL_MAX: "90"
@@ -1061,8 +1066,8 @@ jobs:
       - name: Engine groups findings + risk E2E
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
           WEISSMAN_FINDINGS_E2E_POLL_MS: "2500"
           WEISSMAN_FINDINGS_E2E_POLL_MAX: "72"
@@ -1071,8 +1076,8 @@ jobs:
       - name: SOAR playbook E2E contract
         env:
           WEISSMAN_SMOKE_BASE_URL: http://127.0.0.1:18000
-          WEISSMAN_SMOKE_LOGIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-smoke-password
+          WEISSMAN_SMOKE_LOGIN_EMAIL: admin@localhost
+          WEISSMAN_SMOKE_LOGIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_DESTRUCTIVE_CONFIRM_SECRET: ci-destructive-confirm-secret-32-bytes-minimum
           WEISSMAN_DUAL_APPROVAL_SECRET: ci-dual-approval-secret-32-bytes-minimum-v1
         run: node scripts/verify_soar_playbook_e2e.mjs
@@ -1080,13 +1085,13 @@ jobs:
       - name: FP/TP confidence feedback E2E
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           WEISSMAN_E2E_TENANT: default
         run: node scripts/verify_fp_tp_confidence_e2e.mjs
 
       # Light SLO smoke against the already-booted live stack: reuses the running server
-      # + ci-smoke admin (proven by the E2E steps above), adds ~20s, and is NON-blocking
+      # + platform owner (proven by the E2E steps above), adds ~20s, and is NON-blocking
       # on PRs (continue-on-error) until the latency/error budget is baselined on this
       # runner class. The full soak (higher VUs / 1m, blocking) runs in nightly-e2e.yml.
       - name: Set up k6 (PR SLO smoke)
@@ -1108,8 +1113,8 @@ jobs:
         continue-on-error: true
         env:
           WEISSMAN_E2E_BASE: http://127.0.0.1:18000
-          WEISSMAN_ADMIN_EMAIL: ci-smoke@localhost
-          WEISSMAN_ADMIN_PASSWORD: ci-smoke-password
+          WEISSMAN_ADMIN_EMAIL: admin@localhost
+          WEISSMAN_ADMIN_PASSWORD: ci-admin-password-24-chars-minimum
           K6_VUS: "5"
           K6_DURATION: "20s"
         run: k6 run scripts/load/k6_slo.js
