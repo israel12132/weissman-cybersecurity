@@ -86,9 +86,10 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             // `status = 'running'` and overwrote the live re-run. Comparing worker_id makes the
             // guard actually mean "this worker still owns the row".
             let worker_id = event_worker_id(event);
+            let terminal = weissman_db::job_queue::terminal_status_for_result(&result);
             sqlx::query(
                 r#"UPDATE weissman_async_jobs
-                   SET status = 'completed', result_json = $2,
+                   SET status = $4, result_json = $2,
                        locked_until = NULL, worker_id = NULL, updated_at = now()
                    WHERE id = $1 AND status = 'running'
                      AND ($3::text IS NULL OR worker_id = $3)"#,
@@ -96,6 +97,7 @@ pub async fn project_event(pool: &PgPool, event: &JobEventRecord) -> Result<(), 
             .bind(event.job_id)
             .bind(sqlx::types::Json(result))
             .bind(worker_id)
+            .bind(terminal)
             .execute(&mut *tx)
             .await?;
         }

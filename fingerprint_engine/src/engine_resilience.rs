@@ -59,7 +59,8 @@ impl EngineExecTelemetry {
 }
 
 /// Only genuine execution failures are retried. A successful run that simply observed no signal
-/// (`ok` with empty findings) must NOT be retried.
+/// (`ok` with empty findings) must NOT be retried. A RoE / policy `blocked` result is terminal
+/// and must NOT be retried (and must not be classified as a WAF "blocked" for ghost escalation).
 pub fn should_retry_status(status: &str) -> bool {
     status.eq_ignore_ascii_case("error")
 }
@@ -112,6 +113,14 @@ pub fn classify_failure(status: &str, message: &str) -> FailureClass {
         return FailureClass::Timeout;
     }
     let m = message.to_ascii_lowercase();
+    if m.contains("roe denied")
+        || m.contains("roe violation")
+        || m.contains("rules of engagement")
+        || m.contains("policy_block")
+        || m.contains("roe_denied")
+    {
+        return FailureClass::Generic;
+    }
     if m.contains("403")
         || m.contains("429")
         || m.contains("503")
@@ -257,7 +266,7 @@ where
                     attempts,
                     strategy: variant.clone(),
                     elapsed_ms: start.elapsed().as_millis() as u64,
-                    status: String::from("ok"),
+                    status: result.status.clone(),
                     recovered: attempts > 1,
                     error: None,
                     failure_class: last_class.map(|c| c.as_str().to_string()),
@@ -339,6 +348,7 @@ mod tests {
     fn retry_only_on_error_status() {
         assert!(should_retry_status("error"));
         assert!(!should_retry_status("ok"));
+        assert!(!should_retry_status("blocked"));
     }
 
     #[tokio::test]
@@ -385,6 +395,43 @@ mod tests {
         assert_eq!(telem.attempts, 1);
         assert!(!telem.recovered);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn roe_blocked_is_terminal_and_not_retried() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let (result, telem) = run_with_resilience(
+            "scada_ics",
+            "10.0.0.1",
+            Duration::from_secs(2),
+            move |_v, _hint| {
+                c.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    EngineResult::blocked(
+                        vec![serde_json::json!({
+                            "type": "policy_block",
+                            "category": "roe_denied",
+                            "policy_block": true
+                        })],
+                        "RoE DENIED (industrial_ot_disabled): industrial_ot_enabled is false",
+                        "roe_denied",
+                    )
+                }
+            },
+        )
+        .await;
+        assert_eq!(result.status, "blocked");
+        assert!(result.is_policy_block());
+        assert_eq!(telem.status, "blocked");
+        assert_eq!(telem.attempts, 1);
+        assert!(!telem.recovered);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!should_retry_status("blocked"));
+        assert_eq!(
+            classify_failure("error", "RoE DENIED: engine blocked for target"),
+            FailureClass::Generic
+        );
     }
 
     #[tokio::test]

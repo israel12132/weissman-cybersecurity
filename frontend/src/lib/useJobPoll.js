@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { apiFetch } from './apiBase'
 
-const TERMINAL = new Set(['completed', 'failed', 'dead', 'cancelled'])
+const TERMINAL = new Set(['completed', 'failed', 'dead', 'cancelled', 'blocked'])
 
 /**
  * Poll GET /api/jobs/:id until the job reaches a terminal status.
@@ -98,6 +98,7 @@ export async function resolveJobFindings(job, engineId, clientId) {
 export function uiJobStatus(backendStatus) {
   const s = normalizeJobStatus(backendStatus)
   if (s === 'completed') return 'completed'
+  if (s === 'blocked') return 'blocked'
   if (s === 'failed' || s === 'dead' || s === 'cancelled') return 'error'
   if (s === 'running' || s === 'queued') return 'running'
   return 'idle'

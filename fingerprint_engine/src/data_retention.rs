@@ -81,7 +81,7 @@ async fn retire_unrunnable_pending_jobs(
 async fn run_async_job_retention(pool: &PgPool, days: i64) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
         r#"DELETE FROM weissman_async_jobs
-           WHERE status IN ('completed', 'failed', 'dead')
+           WHERE status IN ('completed', 'failed', 'dead', 'blocked')
              AND updated_at < now() - ($1::bigint * interval '1 day')"#,
     )
     .bind(days)

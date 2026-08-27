@@ -35,6 +35,18 @@ pub fn is_critical_infra_engine(engine_id: &str) -> bool {
         || ENGINE_IDS.contains(&weissman_core::models::engine::dispatch_engine_id(id))
 }
 
+/// True for OT/ICS engines that must not run without RoE — critical-infra plus the
+/// OT taxonomy group (Modbus, BACnet, SCADA, DNP3, …). Default client config keeps
+/// these probes off (`industrial_ot_enabled: false`, `roe_mode: safe_proofs`).
+#[must_use]
+pub fn is_ot_ics_engine(engine_id: &str) -> bool {
+    if is_critical_infra_engine(engine_id) {
+        return true;
+    }
+    crate::engine_requirements::engine_group(engine_id)
+        .is_some_and(|g| g.eq_ignore_ascii_case("ot"))
+}
+
 /// Tag a finding for immediate, unbatched Command Center alerting.
 #[must_use]
 pub fn tag_critical_risk(mut finding: Value) -> Value {
@@ -144,6 +156,12 @@ mod tests {
         assert_eq!(ENGINE_IDS.len(), 8);
         assert!(is_critical_infra_engine("smart_grid_dlms_attack"));
         assert!(!is_critical_infra_engine("osint"));
+        assert!(is_ot_ics_engine("scada_ics"));
+        assert!(is_ot_ics_engine("modbus_attack"));
+        assert!(is_ot_ics_engine("bacnet_attack"));
+        assert!(is_ot_ics_engine("opcua_attack"));
+        assert!(!is_ot_ics_engine("osint"));
+        assert!(!is_ot_ics_engine("bola_idor"));
     }
 
     #[test]

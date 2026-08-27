@@ -92,7 +92,7 @@ async fn api_async_jobs_list(
                 .try_get::<chrono::DateTime<Utc>, _>("updated_at")
                 .ok()
                 .map(|d| d.to_rfc3339());
-            let completed_at = if status == "completed" {
+            let completed_at = if status == "completed" || status == "blocked" {
                 updated_at.clone()
             } else {
                 None

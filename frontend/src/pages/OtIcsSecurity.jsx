@@ -16,6 +16,7 @@ import { SkeletonTable } from '../components/ui/Skeleton';
 import { apiFetch } from '../utils/apiFetch';
 import { clientPrimaryTargetUrl } from '../lib/clientTarget';
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll';
+import { isPolicyBlockFinding, isRoeDeniedJob, policyBlockReason } from '../lib/policyBlock';
 import Button from '../components/ui/Button'
 
 const FINDINGS_ACCENT = '#f97316';
@@ -64,6 +65,7 @@ function StatusBadge({ status, t }) {
   const map = {
     running: { label: t('pages.otIcsSecurity.status_running'), cls: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
     completed: { label: t('pages.otIcsSecurity.status_done'), cls: 'text-green-400 border-green-500/30 bg-green-500/10' },
+    blocked: { label: t('pages.otIcsSecurity.status_blocked'), cls: 'text-amber-300 border-amber-500/40 bg-amber-500/15' },
     error: { label: t('pages.otIcsSecurity.status_error'), cls: 'text-red-400 border-red-500/30 bg-red-950/30' },
     idle: { label: t('pages.otIcsSecurity.status_idle'), cls: 'text-[var(--text-tertiary)] border-[var(--border-default)] bg-[var(--row-hover-bg)]' },
   };
@@ -86,13 +88,19 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
   useJobPoll(pendingJobId, {
     enabled: Boolean(pendingJobId),
     onComplete: async (job) => {
-      const terminal = uiJobStatus(job.status);
+      const roeDenied = isRoeDeniedJob(job);
+      const terminal = roeDenied ? 'blocked' : uiJobStatus(job.status);
       setStatus(terminal);
       setLastRun(new Date().toLocaleTimeString());
       const resolved = await resolveJobFindings(job, engine.id, clientId);
       setFindings(resolved);
       onFindingsUpdate?.(engine.id, resolved);
       setPendingJobId(null);
+      if (roeDenied) {
+        const reason = policyBlockReason(job, resolved) || t('pages.otIcsSecurity.roe_denied_fallback');
+        showToast('error', t('pages.otIcsSecurity.roe_denied_toast', { label: t(engine.labelKey), reason }));
+        return;
+      }
       if (terminal === 'completed') onScanComplete?.();
     },
   });
@@ -168,18 +176,31 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
           <p className="text-[10px] font-mono text-[var(--text-muted)]">
             {t('pages.otIcsSecurity.findings_count', { count: findings.length })}
           </p>
-          {findings.slice(0, 4).map((f, i) => (
-            <div key={f.id ?? i} className="text-[11px] font-mono text-[var(--text-tertiary)] bg-[var(--row-hover-bg)] rounded px-2 py-1">
+          {findings.slice(0, 4).map((f, i) => {
+            const blocked = isPolicyBlockFinding(f);
+            return (
+            <div key={f.id ?? i} className={`text-[11px] font-mono rounded px-2 py-1 ${
+              blocked
+                ? 'text-amber-200 bg-amber-500/10 border border-amber-500/30'
+                : 'text-[var(--text-tertiary)] bg-[var(--row-hover-bg)]'
+            }`}>
               <span className={`mr-2 uppercase text-[9px] ${
+                blocked ? 'text-amber-300' :
                 f.severity === 'critical' ? 'text-red-400' :
                 f.severity === 'high' ? 'text-orange-400' :
                 f.severity === 'medium' ? 'text-yellow-400' : 'text-[var(--text-tertiary)]'
               }`}>
-                {f.severity ?? 'info'}
+                {blocked ? t('pages.otIcsSecurity.status_blocked') : (f.severity ?? 'info')}
               </span>
               {f.title ?? f.type ?? 'Finding'}
             </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+      {status === 'blocked' && findings.length === 0 && (
+        <div className="pt-2 border-t border-amber-500/20 text-[11px] font-mono text-amber-200/90">
+          {t('pages.otIcsSecurity.roe_denied_empty_guard')}
         </div>
       )}
     </div>
@@ -188,22 +209,27 @@ function OtEngineCard({ engine, clientId, clients, onScanComplete, onFindingsUpd
 }
 
 function renderOtFinding(f, i) {
+  const blocked = isPolicyBlockFinding(f);
   const sev = (f.severity || 'info').toLowerCase();
-  const sevColor = {
-    critical: '#ef4444',
-    high: '#f97316',
-    medium: '#f59e0b',
-    low: '#22d3ee',
-    info: '#64748b',
-  }[sev] || '#64748b';
+  const sevColor = blocked
+    ? '#fbbf24'
+    : ({
+        critical: '#ef4444',
+        high: '#f97316',
+        medium: '#f59e0b',
+        low: '#22d3ee',
+        info: '#64748b',
+      }[sev] || '#64748b');
   return (
-    <div key={f.id ?? f.finding_id ?? i} className="rounded-lg border border-[var(--border-default)] bg-[var(--table-surface)] px-3 py-2 space-y-1">
+    <div key={f.id ?? f.finding_id ?? i} className={`rounded-lg border px-3 py-2 space-y-1 ${
+      blocked ? 'border-amber-500/40 bg-amber-500/10' : 'border-[var(--border-default)] bg-[var(--table-surface)]'
+    }`}>
       <div className="flex items-start gap-2 flex-wrap">
         <span
           className="text-[9px] font-mono uppercase shrink-0 px-1.5 py-0.5 rounded border"
           style={{ color: sevColor, borderColor: `${sevColor}40` }}
         >
-          {sev}
+          {blocked ? 'RoE' : sev}
         </span>
         {f._engine && (
           <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase">{f._engine}</span>
@@ -293,6 +319,11 @@ export default function OtIcsSecurity() {
     }
     return all;
   }, [engineFindingsMap]);
+
+  const roeDeniedFindings = useMemo(
+    () => aggregatedScanFindings.filter(isPolicyBlockFinding),
+    [aggregatedScanFindings],
+  );
 
   const {
     filteredFindings: filteredScanFindings,
@@ -531,6 +562,26 @@ export default function OtIcsSecurity() {
           </div>
         </div>
 
+        {roeDeniedFindings.length > 0 && (
+          <div
+            role="alert"
+            className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex items-start gap-3"
+          >
+            <ShieldAlert className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-semibold text-amber-100">
+                {t('pages.otIcsSecurity.roe_denied_banner_title')}
+              </p>
+              <p className="text-[12px] font-mono text-amber-200/90 leading-relaxed">
+                {t('pages.otIcsSecurity.roe_denied_banner_body', { count: roeDeniedFindings.length })}
+              </p>
+              <p className="text-[11px] font-mono text-amber-100/80 leading-relaxed">
+                {roeDeniedFindings[0].description || roeDeniedFindings[0].title}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="bg-[var(--bg-2)] backdrop-blur-md border border-[var(--border-default)] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
             <Network className="w-4 h-4 text-cyan-400" />
@@ -667,7 +718,7 @@ export default function OtIcsSecurity() {
           title={t('pages.otIcsSecurity.scan_findings_title')}
           emptyTitle={t('pages.otIcsSecurity.scan_findings_empty_title')}
           emptyBody={t('pages.otIcsSecurity.scan_findings_empty_body')}
-          showEmptyReady
+          showEmptyReady={!roeDeniedFindings.length}
           emptyReadyTitle={t('pages.otIcsSecurity.scan_findings_ready_title')}
           emptyReadyBody={t('pages.otIcsSecurity.scan_findings_ready_body')}
           renderFinding={renderOtFinding}

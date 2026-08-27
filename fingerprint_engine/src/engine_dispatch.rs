@@ -140,6 +140,30 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         return EngineResult::error("target required");
     }
 
+    let canonical = dispatch_engine_id(raw);
+
+    // OT / ICS / critical-infra: RoE is off by default. A deny is a first-class
+    // `blocked` result with an explicit policy finding — never empty `ok`.
+    if crate::critical_infra::is_ot_ics_engine(canonical)
+        || crate::critical_infra::is_critical_infra_engine(canonical)
+    {
+        if target.trim().is_empty() {
+            return EngineResult::error("target required");
+        }
+        if let Some(blocked) = crate::critical_infra::roe::enforce(
+            ctx.app_pool.as_deref(),
+            ctx.tenant_id,
+            ctx.client_id,
+            canonical,
+            target,
+            &ctx.job_params,
+        )
+        .await
+        {
+            return blocked;
+        }
+    }
+
     // Hybrid: always probe remote attack surface, then dispatch to agent fleet if enrolled.
     if is_agent_required_engine(raw) {
         let remote = crate::agent_remote_surface::run_remote_surface_probe(raw, target, ctx).await;
@@ -163,43 +187,8 @@ pub async fn run_engine(engine_id: &str, target: &str, ctx: &EngineRunContext) -
         return crate::alias_engine_runner::run_alias_engine(raw, target, ctx).await;
     }
 
-    let canonical = dispatch_engine_id(raw);
-
-    // Critical-infrastructure engines: isolated path with mandatory RoE preflight.
+    // Critical-infrastructure engines: isolated path (RoE already enforced above).
     if crate::critical_infra::is_critical_infra_engine(canonical) {
-        let roe_input = crate::critical_infra::roe::RoePreflightInput {
-            pool: ctx.app_pool.as_deref(),
-            tenant_id: ctx.tenant_id,
-            client_id: ctx.client_id,
-            engine_id: canonical,
-            target,
-            job_params: &ctx.job_params,
-        };
-        match crate::critical_infra::roe::preflight(&roe_input).await {
-            Ok(authority) => {
-                tracing::info!(
-                    target: "critical_infra_roe",
-                    engine_id = %canonical,
-                    probe_target = %target,
-                    authority = ?authority,
-                    "RoE preflight passed — executing critical infrastructure engine"
-                );
-            }
-            Err(violation) => {
-                crate::critical_infra::roe::log_violation(
-                    ctx.app_pool.as_deref(),
-                    ctx.tenant_id,
-                    ctx.client_id,
-                    canonical,
-                    target,
-                    violation,
-                )
-                .await;
-                return EngineResult::error(format!(
-                    "RoE VIOLATION: {violation} — critical infrastructure engine '{canonical}' blocked for target '{target}'"
-                ));
-            }
-        }
         let mut result = crate::critical_infra::dispatch(canonical, target, &ctx).await;
         for f in &mut result.findings {
             if let Some(obj) = f.as_object_mut() {
@@ -954,7 +943,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn poe_synthesis_requires_tenant_context() {
+    async fn ot_engine_without_roe_is_policy_blocked_not_empty_ok() {
+        let ctx = EngineRunContext::default();
+        for engine in [
+            "scada_ics",
+            "modbus_attack",
+            "bacnet_attack",
+            "opcua_attack",
+        ] {
+            let r = run_engine(engine, "10.0.0.1", &ctx).await;
+            assert_eq!(r.status, "blocked", "{engine}: {}", r.message);
+            assert!(!r.success, "{engine} must not look successful");
+            assert!(r.is_policy_block(), "{engine}");
+            assert_eq!(r.error_code.as_deref(), Some("roe_denied"));
+            assert_eq!(r.findings.len(), 1, "{engine} must emit a policy finding");
+            assert_eq!(r.findings[0]["category"], "roe_denied");
+            assert_eq!(r.findings[0]["policy_block"], true);
+            assert_eq!(r.findings[0]["healthy"], false);
+            assert!(
+                r.message.contains("RoE DENIED"),
+                "{engine} message: {}",
+                r.message
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn non_ot_engine_is_not_roe_gated() {
         let ctx = EngineRunContext::default();
         let r = run_engine("poe_synthesis", "https://example.com", &ctx).await;
         assert!(!r.success, "expected error without tenant: {}", r.message);

@@ -495,6 +495,24 @@ pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<(), sqlx::Error
     Ok(())
 }
 
+/// Map an engine/job result payload to the durable queue status.
+/// RoE / policy denials are first-class `blocked` — never `completed` (empty success).
+#[must_use]
+pub fn terminal_status_for_result(result: &Value) -> &'static str {
+    let status = result.get("status").and_then(Value::as_str).unwrap_or("");
+    if status.eq_ignore_ascii_case("blocked")
+        || result.get("policy_block").and_then(Value::as_bool) == Some(true)
+        || result
+            .get("error_code")
+            .and_then(Value::as_str)
+            .is_some_and(|c| c.eq_ignore_ascii_case("roe_denied"))
+    {
+        "blocked"
+    } else {
+        "completed"
+    }
+}
+
 /// Mark completed and store JSON result for `GET /api/jobs/:id`.
 /// Record a successful outcome, fenced on the caller still owning the row.
 ///
@@ -516,14 +534,16 @@ pub async fn complete_job_with_result_owned(
     result: &Value,
 ) -> Result<bool, sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
+    let terminal = terminal_status_for_result(result);
     let r = sqlx::query(
-        r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $3,
+        r#"UPDATE weissman_async_jobs SET status = $4, result_json = $3,
            locked_until = NULL, worker_id = NULL, updated_at = now()
            WHERE id = $1 AND worker_id = $2 AND status = 'running'"#,
     )
     .bind(job_id)
     .bind(worker_id)
     .bind(Json(result))
+    .bind(terminal)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -538,12 +558,14 @@ pub async fn complete_job_with_result(
     result: &Value,
 ) -> Result<(), sqlx::Error> {
     let mut tx = begin_worker_tx(pool).await?;
+    let terminal = terminal_status_for_result(result);
     sqlx::query(
-        r#"UPDATE weissman_async_jobs SET status = 'completed', result_json = $2,
+        r#"UPDATE weissman_async_jobs SET status = $3, result_json = $2,
            locked_until = NULL, worker_id = NULL, updated_at = now() WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(Json(result))
+    .bind(terminal)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -593,13 +615,18 @@ pub async fn get_job_for_tenant(
     };
     let id: Uuid = row.try_get("id")?;
     let kind: String = row.try_get("kind")?;
-    let status: String = row.try_get("status")?;
+    let mut status: String = row.try_get("status")?;
     let payload: Json<Value> = row.try_get("payload")?;
     let result_json: Option<Value> = row
         .try_get::<Option<Json<Value>>, _>("result_json")
         .ok()
         .flatten()
         .map(|j| j.0);
+    if let Some(ref result) = result_json {
+        if terminal_status_for_result(result) == "blocked" {
+            status = "blocked".to_string();
+        }
+    }
     let last_error: Option<String> = row.try_get("last_error").ok();
     let attempt_count: i32 = row.try_get("attempt_count")?;
     let created_at: chrono::DateTime<chrono::Utc> = row.try_get("created_at")?;
@@ -895,5 +922,55 @@ mod worker_pool_role_tests {
             WorkerPoolRole::Mixed | WorkerPoolRole::Research | WorkerPoolRole::Client
         ));
         assert!((0..=2).contains(&role.sql_mode()));
+    }
+}
+
+#[cfg(test)]
+mod terminal_status_tests {
+    use super::terminal_status_for_result;
+    use serde_json::json;
+
+    #[test]
+    fn ok_engine_result_completes() {
+        assert_eq!(
+            terminal_status_for_result(&json!({"status": "ok", "findings": []})),
+            "completed"
+        );
+    }
+
+    #[test]
+    fn error_engine_result_still_completes_the_job_row() {
+        // Execution errors stay `completed` with status in result_json; RoE uses `blocked`.
+        assert_eq!(
+            terminal_status_for_result(&json!({"status": "error", "message": "boom"})),
+            "completed"
+        );
+    }
+
+    #[test]
+    fn roe_denied_is_first_class_blocked() {
+        assert_eq!(
+            terminal_status_for_result(&json!({
+                "status": "blocked",
+                "error_code": "roe_denied",
+                "policy_block": true,
+                "findings": [{"type": "policy_block"}]
+            })),
+            "blocked"
+        );
+        assert_eq!(
+            terminal_status_for_result(&json!({
+                "status": "ok",
+                "policy_block": true
+            })),
+            "blocked"
+        );
+        assert_eq!(
+            terminal_status_for_result(&json!({
+                "status": "completed",
+                "error_code": "roe_denied"
+            })),
+            "blocked"
+        );
     }
 }

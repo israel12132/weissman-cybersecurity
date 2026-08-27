@@ -209,6 +209,26 @@ fn payload_client_id(p: &Value) -> Option<i64> {
     })
 }
 
+fn engine_job_result_json(
+    engine: &str,
+    result: &crate::engine_result::EngineResult,
+    persisted: u64,
+    resilience: Option<Value>,
+) -> Value {
+    let policy_block = result.is_policy_block();
+    json!({
+        "engine": engine,
+        "status": result.status,
+        "findings": result.findings,
+        "findings_persisted": persisted,
+        "message": result.message,
+        "error_code": result.error_code,
+        "policy_block": policy_block,
+        "reason": if policy_block { Some(result.message.clone()) } else { None },
+        "resilience": resilience,
+    })
+}
+
 async fn persist_findings_best_effort(
     app_pool: &PgPool,
     tenant_id: i64,
@@ -600,14 +620,12 @@ async fn execute_job_unscoped(
                 }
             }
 
-            Ok(json!({
-                "engine": engine,
-                "status": result.status,
-                "findings": result.findings,
-                "findings_persisted": persisted,
-                "message": result.message,
-                "resilience": last_engine_telemetry.as_ref().map(|t| t.to_json()),
-            }))
+            Ok(engine_job_result_json(
+                engine,
+                &result,
+                persisted,
+                last_engine_telemetry.as_ref().map(|t| t.to_json()),
+            ))
         }
         "top_tier_health_probe" => {
             let target = p
@@ -713,6 +731,13 @@ async fn execute_job_unscoped(
                             Ok(result) => {
                                 if result.status == "ok" {
                                     ("pass", result.findings.len(), result.message, result.status)
+                                } else if result.is_policy_block() {
+                                    (
+                                        "blocked",
+                                        result.findings.len(),
+                                        result.message,
+                                        result.status,
+                                    )
                                 } else {
                                     ("fail", result.findings.len(), result.message, result.status)
                                 }
@@ -862,6 +887,7 @@ async fn execute_job_unscoped(
             let mut results = Vec::new();
             let mut succeeded = 0usize;
             let mut failed = 0usize;
+            let mut blocked = 0usize;
 
             let production_engines: Vec<String> = engines
                 .iter()
@@ -952,7 +978,13 @@ async fn execute_job_unscoped(
                     &intelligence_bus,
                 );
 
-                if result.success {
+                if result.is_policy_block() {
+                    blocked += 1;
+                    let _ = telemetry.send(format!(
+                        r#"{{"job_id":"{}","message":"Engine {} RoE denied: {}","status":"blocked"}}"#,
+                        job.id, engine_id, result.summary
+                    ));
+                } else if result.success {
                     succeeded += 1;
                     let _ = telemetry.send(format!(r#"{{"job_id":"{}","message":"Engine {} completed: {} findings","status":"running"}}"#, job.id, engine_id, result.findings.len()));
                 } else {
@@ -966,6 +998,9 @@ async fn execute_job_unscoped(
                 results.push(json!({
                     "engine": engine_id,
                     "success": result.success,
+                    "status": result.status,
+                    "policy_block": result.is_policy_block(),
+                    "error_code": result.error_code,
                     "findings_count": result.findings.len(),
                     "summary": result.summary,
                     "resilience": telem.to_json(),
@@ -1001,6 +1036,7 @@ async fn execute_job_unscoped(
                 "engines_total": ordered_engines.len(),
                 "succeeded": succeeded,
                 "failed": failed,
+                "blocked": blocked,
                 "results": results,
             }))
         }
@@ -2261,6 +2297,30 @@ mod tests {
     fn tenant_consistency_ok_when_payload_has_no_tenant_id() {
         assert!(enforce_job_tenant_consistency(7, &json!({})).is_ok());
         assert!(enforce_job_tenant_consistency(7, &json!({ "foo": "bar" })).is_ok());
+    }
+
+    #[test]
+    fn roe_blocked_job_json_is_never_empty_success() {
+        let result = crate::engine_result::EngineResult::blocked(
+            vec![json!({
+                "type": "policy_block",
+                "category": "roe_denied",
+                "policy_block": true,
+                "healthy": false
+            })],
+            "RoE DENIED (industrial_ot_disabled): OT probing not authorized",
+            "roe_denied",
+        );
+        let v = engine_job_result_json("scada_ics", &result, 0, None);
+        assert_eq!(v["status"], "blocked");
+        assert_eq!(v["policy_block"], true);
+        assert_eq!(v["error_code"], "roe_denied");
+        assert!(v["reason"].as_str().unwrap().contains("RoE DENIED"));
+        assert_eq!(v["findings"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            weissman_db::job_queue::terminal_status_for_result(&v),
+            "blocked"
+        );
     }
 
     #[test]
