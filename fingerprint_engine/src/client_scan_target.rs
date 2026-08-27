@@ -651,7 +651,10 @@ mod tests {
         assert_eq!(scope.default_target.as_deref(), Some("https://example.com"));
         assert_eq!(scope.default_source, Some(TargetSource::PrimaryDomain));
         assert!(scope.approved_hosts.contains("example.com"));
-        assert_eq!(scope.run_all_targets(), vec!["https://example.com".to_string()]);
+        assert_eq!(
+            scope.run_all_targets(),
+            vec!["https://example.com".to_string()]
+        );
     }
 
     #[test]
@@ -666,7 +669,10 @@ mod tests {
         let scope = assemble_scope("[]", "[]", "{}", &assets);
         assert_eq!(scope.default_target.as_deref(), Some("https://example.com"));
         assert_eq!(scope.default_source, Some(TargetSource::VerifiedAsset));
-        assert_eq!(scope.run_all_targets(), vec!["https://example.com".to_string()]);
+        assert_eq!(
+            scope.run_all_targets(),
+            vec!["https://example.com".to_string()]
+        );
     }
 
     #[test]
