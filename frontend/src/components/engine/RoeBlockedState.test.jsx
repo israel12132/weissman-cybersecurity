@@ -48,7 +48,7 @@ describe('RoeBlockedState', () => {
         />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/industrial_ot_enabled/)).toBeInTheDocument()
+    expect(screen.getByText('Control: industrial_ot_enabled')).toBeInTheDocument()
     expect(screen.getByText(/KNXnet/)).toBeInTheDocument()
     expect(screen.getByText(/never auto-enables/i)).toBeInTheDocument()
     expect(screen.queryByText(/0 findings/i)).not.toBeInTheDocument()
