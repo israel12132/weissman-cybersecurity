@@ -148,7 +148,11 @@ pub const CONTROLS: &[Control] = &[
     c!(53, 6, "Bidirectional EDR containment connectors"),
     c!(54, 6, "Audit-log driven micro-segmentation isolate"),
     c!(55, 6, "SOAR honey-token deploy; touch → SEV-1"),
-    c!(56, 6, "Auto-close only after re-scan validation"),
+    c!(
+        56,
+        6,
+        "Hack-Fix-Verify: auto-close only after successful absence re-scan"
+    ),
     c!(57, 6, "HMAC-SHA256 webhook dispatcher"),
     c!(58, 6, "Hierarchical incidents via finding clusters"),
     c!(

@@ -289,7 +289,7 @@ const LANES: &[LaneDef] = &[
     LaneDef {
         id: "autonomous_fuzz",
         title: "Autonomous pentest / fuzz / digital twin",
-        beats: "Strix (exploit+patch PRs), HexStrike MCP — app-centric; no sovereign WSS + FAIR + OT + Ask",
+        beats: "Strix (exploit+patch PRs), HexStrike MCP, NodeZero verify-job — app-centric or operator-close; Weissman FAIR stays priced until a later successful live scan does not reproduce the key",
         needles: &[
             "fuzz",
             "autonomous_pentest",
@@ -318,13 +318,13 @@ fn market_research() -> Value {
             "cluster": "autonomous_pentest",
             "vendors": ["Pentera", "Horizon3 NodeZero", "RidgeBot"],
             "owns": "internal/AD/cloud exploit chains; NodeZero proof-of-reach; Pentera ransomware TTPs",
-            "lacks": "OT 4-state FSM, Ask Weissman 13-table RLS, FAIR-from-Dijkstra, Hebrew Command Center, WSS inner AES-256-GCM"
+            "lacks": "OT 4-state FSM, Ask Weissman 13-table RLS, FAIR-from-Dijkstra that keeps pricing FIXED until a later successful absence scan, Hebrew Command Center, WSS inner AES-256-GCM"
         },
         {
             "cluster": "agentic_web",
             "vendors": ["XBOW", "Strix", "Escape", "FireCompass"],
             "owns": "web/API PoC validators; Strix fix-PR loop; Escape GraphQL/BOLA",
-            "lacks": "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, 563 production engines"
+            "lacks": "AD/network chaining (XBOW), OT/ICS, tenant RLS SQL, 563 production engines, FAIR that refuses to drop ALE on a patch-PR without a later live absence scan"
         },
         {
             "cluster": "bas_ctem",
@@ -404,7 +404,8 @@ pub fn snapshot() -> Value {
     let fusion = ask_tables == nl_guard::ASK_WEISSMAN_TABLE_COUNT
         && engines_total >= 500
         && covered == LANES.len() as u32
-        && evidence_doubt::CONFIDENCE_ADMIT >= 0.95;
+        && evidence_doubt::CONFIDENCE_ADMIT >= 0.95
+        && crate::elite_hardening::hack_fix_verify::LIVE;
 
     json!({
         "live": true,
@@ -419,6 +420,8 @@ pub fn snapshot() -> Value {
             "wss_inner": "AES-256-GCM",
             "doh_only_default": !stealth_ops::allow_udp_dns_fallback(),
             "ot_fsm_modbus_min_len": 8,
+            "hack_fix_verify": crate::elite_hardening::hack_fix_verify::LIVE,
+            "fair_prices_fixed_until_verified": true,
         },
         "lanes": lanes,
         "market_research": {
@@ -426,7 +429,7 @@ pub fn snapshot() -> Value {
             "as_of": "2026-08-27",
             "method": "public_web_github_forums",
             "clusters": market_research(),
-            "verdict": "No public product combines 563 live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
+            "verdict": "No public product combines 563 live engines + OT protocol FSM + dual-probe evidence-doubt + FAIR-from-graph (ALE priced until Hack-Fix-Verify absence scan) + Ask 13-table RLS + WSS inner crypto + Hebrew Command Center."
         },
         "kernel_sanity": {
             "wss_nonce_bits": 96,

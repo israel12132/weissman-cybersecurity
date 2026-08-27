@@ -178,7 +178,7 @@ export default function EliteHardeningCommandCenter() {
 
         {!loading && !error && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
               <ExecutiveWidget label={t(`${NS}.kpi_enforced`)} value={`${enforced}/${total || 100}`} accent="#22d3ee" />
               <ExecutiveWidget label={t(`${NS}.kpi_gaps`)} value={gaps} accent={gaps ? '#f43f5e' : '#34d399'} />
               <ExecutiveWidget label={t(`${NS}.kpi_mitre`)} value={data?.mitre_attack || 'v19.1'} accent="#a78bfa" />
@@ -197,7 +197,22 @@ export default function EliteHardeningCommandCenter() {
                 }
                 accent={data?.moat?.unmatched_stack ? '#34d399' : '#f59e0b'}
               />
+              <ExecutiveWidget
+                label={t(`${NS}.kpi_hfv`)}
+                value={data?.hfv?.live ? t(`${NS}.hfv_live`) : '—'}
+                accent={data?.hfv?.live ? '#34d399' : '#f59e0b'}
+              />
             </div>
+
+            {data?.hfv?.live && (
+              <section className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-4 space-y-2" data-testid="hfv-loop">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-emerald-200">
+                  {t(`${NS}.hfv_title`)}
+                </h2>
+                <p className="text-xs text-[var(--text-muted)]">{t(`${NS}.hfv_notice`)}</p>
+                <p className="text-[11px] font-mono text-emerald-300/90">{data.hfv.beats}</p>
+              </section>
+            )}
 
             {Array.isArray(data?.moat?.lanes) && data.moat.lanes.length > 0 && (
               <section className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4 space-y-3">

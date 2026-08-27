@@ -49,7 +49,8 @@ pub fn data_sources_json() -> serde_json::Value {
             "sle": "asset_value × max(CVSS/10, 0.5)",
             "ale": "SLE × min(EPSS×12, 12) × discount",
             "kev_aro_floor": 1.0,
-            "ot_process_disruption": "high OT findings × hours_to_recover × daily_process_revenue / 24, capped at 8 findings"
+            "ot_process_disruption": "high OT findings × hours_to_recover × daily_process_revenue / 24, capped at 8 findings",
+            "hack_fix_verify": "ALE keeps pricing FIXED until a later successful live scan does not reproduce the corroboration key (VERIFIED_FIXED)"
         }
     })
 }

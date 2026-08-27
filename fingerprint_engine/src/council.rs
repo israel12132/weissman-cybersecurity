@@ -972,6 +972,10 @@ pub async fn persist_supreme_council_win(
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id)
         .await
         .map_err(|e| e.to_string())?;
+    let source = "oast_success";
+    if !crate::elite_hardening::council_acl::council_write_allowed(source) {
+        return Err("council memory write rejected: untrusted source".into());
+    }
     sqlx::query(
         r#"INSERT INTO supreme_council_memory (
             tenant_id, target_fingerprint, brief_excerpt,
@@ -990,7 +994,7 @@ pub async fn persist_supreme_council_win(
     .bind(emb_json)
     .bind(emb_pg_text.unwrap_or_default())
     .bind(sovereign.oast_token.trim())
-    .bind("oast_success")
+    .bind(source)
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;

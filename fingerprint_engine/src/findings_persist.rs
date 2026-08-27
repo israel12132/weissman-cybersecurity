@@ -641,9 +641,10 @@ pub async fn persist_engine_findings(
 
         // True dedup: target a UNIQUE (tenant_id, client_id, finding_id) constraint.
         // On a repeat detection we refresh evidence (description/proof/raw_data + run_id)
-        // and *do not* reset status — analyst-set workflow states (ACKNOWLEDGED, FIXED,
-        // FALSE_POSITIVE) must survive the next scan. last_seen_at tracks recurrence.
-        let (upserted_id, vuln_is_new): (i64, bool) = sqlx::query_as(
+        // and *do not* reset ACKNOWLEDGED / FALSE_POSITIVE. Hack-Fix-Verify *does*
+        // reopen FIXED / VERIFIED_FIXED when the corroboration key is reproduced —
+        // a claim of "fixed" is not allowed to hide a live finding (control 56).
+        let (upserted_id, vuln_is_new, prior_status): (i64, bool, String) = sqlx::query_as(
             r#"INSERT INTO vulnerabilities
                  (run_id, tenant_id, client_id, finding_id, title, severity, source,
                   description, status, proof, poc_commitment_sha256, raw_data, discovered_at,
@@ -672,7 +673,7 @@ pub async fn persist_engine_findings(
                    updated_at           = now(),
                    last_seen_at         = now(),
                    seen_count           = vulnerabilities.seen_count + 1
-               RETURNING id, (xmax = 0) AS is_new"#,
+               RETURNING id, (xmax = 0) AS is_new, COALESCE(status, 'OPEN') AS prior_status"#,
         )
         .bind(run_id)
         .bind(tenant_id)
@@ -697,6 +698,36 @@ pub async fn persist_engine_findings(
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| format!("insert vulnerabilities: {e}"))?;
+
+        if let crate::elite_hardening::hack_fix_verify::Transition::Apply(next) =
+            crate::elite_hardening::hack_fix_verify::on_reappearance(&prior_status)
+        {
+            let proof = serde_json::json!({
+                "phase": "reopened",
+                "reason": "corroboration_key_reproduced",
+                "prior_status": prior_status,
+                "scan_ok": true,
+            });
+            let _ = sqlx::query(
+                r#"UPDATE vulnerabilities
+                      SET status = $1,
+                          raw_data = jsonb_set(
+                              COALESCE(raw_data, '{}'::jsonb),
+                              '{hack_fix_verify}',
+                              $2::jsonb,
+                              true
+                          ),
+                          updated_at = now(),
+                          status_changed_at = now()
+                    WHERE id = $3 AND tenant_id = $4"#,
+            )
+            .bind(next)
+            .bind(proof.to_string())
+            .bind(upserted_id)
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await;
+        }
 
         // PoE exploit sealing (critical/high) — sole authorized post-insert mutation.
         if crate::exploit_crypto::should_seal_poc(poc.as_str(), severity.as_str()) {
@@ -915,6 +946,71 @@ pub async fn persist_engine_findings(
     }
 
     Ok(inserted)
+}
+
+/// After a *successful* live scan of `engine` against `target`, promote
+/// analyst-claimed FIXED rows whose finding_id was **not** reproduced to
+/// `VERIFIED_FIXED`. Failed scans must not call this. OPEN rows are left
+/// alone so a flaky engine cannot empty the inbox (חוק 2).
+pub async fn apply_hack_fix_verify_after_ok_scan(
+    pool: &PgPool,
+    tenant_id: i64,
+    client_id: Option<i64>,
+    engine: &str,
+    target: &str,
+    present_finding_ids: &[String],
+) -> Result<u64, String> {
+    let Some(client_id) = client_id else {
+        return Ok(0);
+    };
+    if engine.trim().is_empty() || target.trim().is_empty() {
+        return Ok(0);
+    }
+    let proof = json!({
+        "phase": "verified_closed",
+        "reason": "successful_scan_did_not_reproduce_key",
+        "engine": engine,
+        "target": target,
+        "scan_ok": true,
+        "method": "live_rescan_absence",
+    });
+    let mut tx = db::begin_tenant_tx(pool, tenant_id)
+        .await
+        .map_err(|e| format!("hfv tenant tx: {e}"))?;
+    let ids: Vec<String> = present_finding_ids.to_vec();
+    let target_lc = target.trim().to_ascii_lowercase();
+    let res = sqlx::query(
+        r#"UPDATE vulnerabilities
+              SET status = $1,
+                  raw_data = jsonb_set(
+                      COALESCE(raw_data, '{}'::jsonb),
+                      '{hack_fix_verify}',
+                      $2::jsonb,
+                      true
+                  ),
+                  updated_at = now(),
+                  status_changed_at = now()
+            WHERE tenant_id = $3
+              AND client_id = $4
+              AND source = $5
+              AND lower(trim(COALESCE(raw_data->>'target', ''))) = $6
+              AND status IN ('FIXED', 'RESCAN_PENDING', 'REMEDIATION_MARKED')
+              AND NOT (finding_id = ANY($7::text[]))"#,
+    )
+    .bind(crate::elite_hardening::hack_fix_verify::STATUS_VERIFIED_FIXED)
+    .bind(proof.to_string())
+    .bind(tenant_id)
+    .bind(client_id)
+    .bind(engine)
+    .bind(&target_lc)
+    .bind(&ids)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| format!("hfv verify-close: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("hfv verify-close commit: {e}"))?;
+    Ok(res.rows_affected())
 }
 
 /// Same priority order as `findings_correlator::derive_vuln_signature`, kept here so

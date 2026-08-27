@@ -133,7 +133,7 @@ pub async fn compute_and_store(
              FROM risk_graph_nodes n
              LEFT JOIN vulnerabilities v
                ON v.risk_node_id = n.id
-              AND COALESCE(v.status,'OPEN') NOT IN ('FIXED','FALSE_POSITIVE')
+              AND COALESCE(v.status,'OPEN') NOT IN ('VERIFIED_FIXED','FALSE_POSITIVE')
             WHERE n.tenant_id = $1 AND n.client_id = $2
             GROUP BY n.id"#,
     )

@@ -8,8 +8,10 @@
 
 pub mod ai_supply;
 pub mod catalog;
+pub mod council_acl;
 pub mod evidence_doubt;
 pub mod fair_ext;
+pub mod hack_fix_verify;
 pub mod moat;
 pub mod nl_guard;
 pub mod oast_reputation;
@@ -65,6 +67,7 @@ pub fn status_snapshot() -> Value {
         "ueba_learn_days": 7,
         "controls": controls,
         "moat": moat::snapshot(),
+        "hfv": hack_fix_verify::snapshot(),
     })
 }
 
@@ -135,7 +138,9 @@ fn live_status(id: u16) -> ControlStatus {
         53 => ControlStatus::ok("CrowdStrike / AWS / Azure containment adapters"),
         54 => ControlStatus::ok("Audit logs feed cluster → targeted isolate"),
         55 => ControlStatus::ok("SOAR honey-token deploy action"),
-        56 => ControlStatus::ok("Auto-close only after re-scan validation"),
+        56 => ControlStatus::ok(
+            "Hack-Fix-Verify: VERIFIED_FIXED only after a later successful live scan does not reproduce the key; FAIR still prices FIXED",
+        ),
         57 => ControlStatus::ok("HMAC-SHA256 on every SOAR webhook"),
         58 => ControlStatus::ok("Finding clusters bind to one SOAR incident"),
         59 => ControlStatus::ok("Pre-isolate corroboration via evidence doubt"),
@@ -168,7 +173,9 @@ fn live_status(id: u16) -> ControlStatus {
         86 => ControlStatus::ok("Memory noise filter (empty/low-quality blocked)"),
         87 => ControlStatus::ok("Embedding dim pad/truncate on model upgrade"),
         88 => ControlStatus::ok("Winning paths require analyst or OAST confirmation"),
-        89 => ControlStatus::ok("Vector table writes app-role only; trusted sources"),
+        89 => ControlStatus::ok(
+            "Vector table writes app-role only; council_write_allowed trusted sources (oast_success)",
+        ),
         90 => ControlStatus::ok("Hybrid SQL + vector query helpers"),
         91 => ControlStatus::ok("LLM emits QueryPlan JSON only"),
         92 => ControlStatus::ok("13-table weissman_ro allow-list"),
@@ -214,5 +221,7 @@ mod tests {
         );
         assert_eq!(snap["moat"]["unmatched_stack"], true);
         assert_eq!(snap["moat"]["lanes_covered"], snap["moat"]["lanes_total"]);
+        assert_eq!(snap["hfv"]["live"], true);
+        assert_eq!(snap["hfv"]["rules"]["failed_scan_cannot_close"], true);
     }
 }

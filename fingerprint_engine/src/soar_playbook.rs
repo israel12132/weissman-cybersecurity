@@ -380,6 +380,8 @@ async fn execute_action(pool: &PgPool, ev: &PlaybookEvent, a: &PlaybookAction) -
                 .and_then(Value::as_str)
                 .unwrap_or("ACKNOWLEDGED")
                 .to_ascii_uppercase();
+            let new_status =
+                crate::elite_hardening::hack_fix_verify::coerce_operator_status(&new_status);
             let Some(fid) = ev.finding_id else {
                 return ("skipped".into(), "no finding_id on event".into());
             };

@@ -60,6 +60,10 @@ describe('EliteHardeningCommandCenter', () => {
           { id: 'ot_ics', title: 'OT/ICS live protocol FSM', live_engine_count: 32, beats: 'Claroty passive' },
         ],
       },
+      hfv: {
+        live: true,
+        beats: 'NodeZero/Strix cannot skip the absence scan',
+      },
       controls: [
         { id: 1, section: 1, section_title: 'Offensive Engine Fabric', title: 'Zero-stub', enforced: true, detail: 'dispatch' },
         { id: 4, section: 1, section_title: 'Offensive Engine Fabric', title: 'Evidence doubt', enforced: true, detail: '0.95' },
@@ -69,6 +73,7 @@ describe('EliteHardeningCommandCenter', () => {
     expect(await screen.findByText('Zero-stub')).toBeInTheDocument()
     expect(screen.getByText('Evidence doubt')).toBeInTheDocument()
     expect(screen.getByTestId('moat-lane')).toBeInTheDocument()
+    expect(screen.getByTestId('hfv-loop')).toBeInTheDocument()
     expect(screen.getByText('OT/ICS live protocol FSM')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/api/elite-hardening/status')
   })
