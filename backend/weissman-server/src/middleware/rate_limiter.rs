@@ -284,31 +284,30 @@ mod tests {
 
     #[tokio::test]
     async fn edge_allows_parallel_login_posts_from_one_ip() {
-        use axum::extract::connect_info::MockConnectInfo;
-        use axum::routing::post;
-        use axum::Router;
         use tower::ServiceExt;
 
         let ip = SocketAddr::from(([198, 51, 100, 80], 51000));
         fingerprint_engine::http::clear_ip_failures(&ip.ip().to_string()).await;
-        let app = Router::new()
+        let app = axum::Router::new()
             .route(
                 "/api/login",
-                post(|| async { (StatusCode::OK, axum::Json(serde_json::json!({"ok": true}))) }),
+                axum::routing::post(|| async {
+                    (StatusCode::OK, axum::Json(serde_json::json!({"ok": true})))
+                }),
             )
-            .layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware))
-            .layer(MockConnectInfo(ip));
+            .layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware));
         const N: usize = 32;
         let mut handles = Vec::with_capacity(N);
         for _ in 0..N {
             let app = app.clone();
             handles.push(tokio::spawn(async move {
-                let req = Request::builder()
+                let mut req = Request::builder()
                     .method("POST")
                     .uri("/api/login")
                     .header("content-type", "application/json")
                     .body(Body::from("{}"))
                     .unwrap();
+                req.extensions_mut().insert(ConnectInfo(ip));
                 app.oneshot(req).await.unwrap().status()
             }));
         }
@@ -324,9 +323,6 @@ mod tests {
 
     #[tokio::test]
     async fn edge_429s_stuffing_failures_from_one_ip() {
-        use axum::extract::connect_info::MockConnectInfo;
-        use axum::routing::post;
-        use axum::Router;
         use tower::ServiceExt;
 
         let ip = SocketAddr::from(([198, 51, 100, 81], 51000));
@@ -336,19 +332,28 @@ mod tests {
         for _ in 0..budget {
             fingerprint_engine::http::record_ip_failure(&ip_s).await;
         }
-        let app = Router::new()
+        assert!(
+            matches!(
+                fingerprint_engine::http::check_ip_failure_status(&ip_s).await,
+                fingerprint_engine::http::LockoutStatus::Locked(_)
+            ),
+            "IP must be locked after {budget} failed logins before the edge request"
+        );
+        let app = axum::Router::new()
             .route(
                 "/api/login",
-                post(|| async { (StatusCode::OK, axum::Json(serde_json::json!({"ok": true}))) }),
+                axum::routing::post(|| async {
+                    (StatusCode::OK, axum::Json(serde_json::json!({"ok": true})))
+                }),
             )
-            .layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware))
-            .layer(MockConnectInfo(ip));
-        let req = Request::builder()
+            .layer(axum::middleware::from_fn(edge_multi_rate_limit_middleware));
+        let mut req = Request::builder()
             .method("POST")
             .uri("/api/login")
             .header("content-type", "application/json")
             .body(Body::from("{}"))
             .unwrap();
+        req.extensions_mut().insert(ConnectInfo(ip));
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
         fingerprint_engine::http::clear_ip_failures(&ip_s).await;

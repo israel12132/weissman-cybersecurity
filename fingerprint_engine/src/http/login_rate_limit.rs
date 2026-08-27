@@ -58,7 +58,7 @@ fn enroll_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, D
     .clone()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UnauthPostKind {
     Login,
     Enroll,
