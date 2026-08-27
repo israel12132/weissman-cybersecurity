@@ -551,9 +551,8 @@ async fn audit_query(
     res: &AskResult,
 ) {
     if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
-        let sealed_q = crate::nl_audit_crypto::seal_text(
-            &question.chars().take(2000).collect::<String>(),
-        );
+        let sealed_q =
+            crate::nl_audit_crypto::seal_text(&question.chars().take(2000).collect::<String>());
         let sealed_sql = crate::nl_audit_crypto::seal_text(&res.sql);
         let error = res.error.clone().unwrap_or_default();
         let rows_returned = res.row_count as i32;
