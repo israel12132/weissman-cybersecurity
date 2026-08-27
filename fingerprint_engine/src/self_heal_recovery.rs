@@ -268,6 +268,19 @@ impl RecoveryController {
     fn backoff_active_at(&self, now: u64) -> bool {
         self.backoff_until.load(Ordering::SeqCst) > now
     }
+
+    fn evict_stale_last_fired(&self, now: u64, keep_secs: u64) -> usize {
+        let mut dropped = 0usize;
+        self.last_fired.retain(|_, ts| {
+            if now.saturating_sub(*ts) > keep_secs {
+                dropped += 1;
+                false
+            } else {
+                true
+            }
+        });
+        dropped
+    }
 }
 
 fn config() -> &'static RecoveryConfig {
@@ -283,6 +296,13 @@ fn controller() -> &'static RecoveryController {
 /// Execute recovery for one health round: feed dependency circuits, apply cooldown-gated effects
 /// for the diagnoses, and record `weissman_self_heal_recovery_total{subsystem,action,outcome}`.
 /// No-op when disabled by env.
+/// Drop `(subsystem, action)` last-fired rows older than 4× cooldown (floor 1h).
+pub fn evict_stale_last_fired() -> usize {
+    let cfg = config();
+    let keep = cfg.cooldown_secs.saturating_mul(4).max(3600);
+    controller().evict_stale_last_fired(now_secs(), keep)
+}
+
 pub fn run_recovery(snapshot: &HealthSnapshot, diags: &[Diagnosis]) {
     let cfg = config();
     if !cfg.enabled {

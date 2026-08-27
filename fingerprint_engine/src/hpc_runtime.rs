@@ -97,14 +97,43 @@ pub fn parse_physical_cpus_from_cpuinfo(text: &str) -> Option<usize> {
 }
 
 /// Worker-thread count: `WEISSMAN_TOKIO_WORKER_THREADS` or physical cores.
+///
+/// Override tokens (for I/O-bound production benches where SMT helps):
+/// - unset / `physical` → unique `(physical id, core id)` pairs
+/// - `logical` / `smt` / `available` → `available_parallelism` (Hyperthread siblings)
+/// - a positive integer → exact worker count
 #[must_use]
 pub fn tokio_worker_threads() -> usize {
-    std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
-        .ok()
-        .and_then(|s| s.trim().parse::<usize>().ok())
-        .filter(|&n| n > 0)
-        .unwrap_or_else(physical_cpu_count)
-        .max(1)
+    let logical = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    parse_tokio_worker_threads(
+        std::env::var("WEISSMAN_TOKIO_WORKER_THREADS")
+            .ok()
+            .as_deref(),
+        physical_cpu_count(),
+        logical,
+    )
+}
+
+/// Resolve worker count from a raw env value (unit-tested without touching process env).
+#[must_use]
+pub fn parse_tokio_worker_threads(raw: Option<&str>, physical: usize, logical: usize) -> usize {
+    let physical = physical.max(1);
+    let logical = logical.max(1);
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return physical;
+    };
+    match s.to_ascii_lowercase().as_str() {
+        "physical" => physical,
+        "logical" | "smt" | "available" => logical,
+        other => other
+            .parse::<usize>()
+            .ok()
+            .filter(|&n| n > 0)
+            .unwrap_or(physical),
+    }
 }
 
 /// Tokio LIFO slot stays on unless `WEISSMAN_TOKIO_DISABLE_LIFO_SLOT=1`.
@@ -145,7 +174,7 @@ pub fn build_scan_runtime() -> io::Result<tokio::runtime::Runtime> {
         worker_threads = threads,
         max_blocking_threads = blocking,
         lifo_slot = tokio_lifo_slot_enabled(),
-        "tokio runtime sized to physical cores"
+        "tokio runtime workers (physical default; override WEISSMAN_TOKIO_WORKER_THREADS=logical|N)"
     );
 
     #[cfg(target_os = "linux")]
@@ -383,5 +412,18 @@ core id\t: 1
         assert!(tokio_worker_threads() >= 1);
         assert!(physical_cpu_count() >= 1);
         assert!(tokio_lifo_slot_enabled());
+    }
+
+    #[test]
+    fn worker_override_tokens() {
+        assert_eq!(parse_tokio_worker_threads(None, 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some(""), 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some("physical"), 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some("logical"), 8, 16), 16);
+        assert_eq!(parse_tokio_worker_threads(Some("SMT"), 8, 16), 16);
+        assert_eq!(parse_tokio_worker_threads(Some("available"), 8, 16), 16);
+        assert_eq!(parse_tokio_worker_threads(Some("32"), 8, 16), 32);
+        assert_eq!(parse_tokio_worker_threads(Some("0"), 8, 16), 8);
+        assert_eq!(parse_tokio_worker_threads(Some("nope"), 8, 16), 8);
     }
 }

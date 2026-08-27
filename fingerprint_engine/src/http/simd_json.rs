@@ -1,8 +1,8 @@
-//! SIMD-accelerated JSON for the Axum request path (sonic-rs).
+//! SIMD-accelerated JSON for the Axum **ingest / telemetry** path (sonic-rs).
 //!
-//! `serde_json` remains the crate-wide `Value` / `json!` type. Hot ingest and
-//! telemetry parse/serialize go through this module so agent and scan payloads
-//! are decoded with SIMD rather than the scalar serde_json parser.
+//! Engines and reports stay on `serde_json`: their serialize time is negligible
+//! next to probe/DB work, and complex schemas stay compatible. `serde_json`
+//! remains the crate-wide `Value` / `json!` type.
 
 use serde::de::DeserializeOwned;
 use serde::Deserialize;

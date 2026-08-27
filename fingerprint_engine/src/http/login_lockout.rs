@@ -21,10 +21,20 @@ pub fn is_account_lockout_post(method: &axum::http::Method, path: &str) -> bool 
     method == axum::http::Method::POST && ACCOUNT_LOCKOUT_PATHS.contains(&path)
 }
 
-#[derive(Default)]
 struct LockoutEntry {
     failures: u32,
     locked_until: Option<Instant>,
+    last_touch: Instant,
+}
+
+impl Default for LockoutEntry {
+    fn default() -> Self {
+        Self {
+            failures: 0,
+            locked_until: None,
+            last_touch: Instant::now(),
+        }
+    }
 }
 
 fn store() -> &'static DashMap<String, Mutex<LockoutEntry>> {
@@ -42,6 +52,7 @@ fn check_lockout_mem(tenant_id: i64, email: &str) -> Option<u64> {
     let k = key(tenant_id, email);
     let cell = store().get(&k)?;
     let mut entry = cell.lock().unwrap_or_else(|poison| poison.into_inner());
+    entry.last_touch = Instant::now();
     if let Some(until) = entry.locked_until {
         if Instant::now() < until {
             return Some(
@@ -62,6 +73,7 @@ fn record_failure_mem(tenant_id: i64, email: &str) {
     let k = key(tenant_id, email);
     let cell = store().entry(k).or_default();
     let mut entry = cell.lock().unwrap_or_else(|poison| poison.into_inner());
+    entry.last_touch = Instant::now();
     entry.failures = entry.failures.saturating_add(1);
     if u64::from(entry.failures) >= LOCKOUT_MAX_FAILURES {
         entry.locked_until = Some(Instant::now() + LOCKOUT_DURATION);
@@ -70,6 +82,26 @@ fn record_failure_mem(tenant_id: i64, email: &str) {
 
 fn clear_failures_mem(tenant_id: i64, email: &str) {
     store().remove(&key(tenant_id, email));
+}
+
+/// Drop expired lockouts and untouched failure counters (2× lockout window).
+pub fn evict_stale() -> usize {
+    let now = Instant::now();
+    let idle = LOCKOUT_DURATION.saturating_mul(2);
+    let mut dropped = 0usize;
+    store().retain(|_, cell| {
+        let entry = cell.lock().unwrap_or_else(|poison| poison.into_inner());
+        let locked = entry.locked_until.is_some_and(|until| now < until);
+        if locked {
+            return true;
+        }
+        if entry.last_touch.elapsed() >= idle {
+            dropped += 1;
+            return false;
+        }
+        true
+    });
+    dropped
 }
 
 // ── Public API: distributed via Redis when REDIS_URL is set, else in-memory ────
@@ -177,5 +209,22 @@ mod tests {
             "1 failure must not lock"
         );
         clear_failures(tenant, email).await;
+    }
+
+    #[test]
+    fn evicts_idle_unlocked_entries() {
+        let tenant = 99_002_i64;
+        let email = "stale-lockout@example.com";
+        store().insert(
+            key(tenant, email),
+            Mutex::new(LockoutEntry {
+                failures: 1,
+                locked_until: None,
+                last_touch: Instant::now() - LOCKOUT_DURATION.saturating_mul(3),
+            }),
+        );
+        let n = evict_stale();
+        assert!(n >= 1);
+        assert!(store().get(&key(tenant, email)).is_none());
     }
 }

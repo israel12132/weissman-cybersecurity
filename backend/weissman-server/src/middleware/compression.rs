@@ -1,8 +1,9 @@
-//! Brotli (quality 4) + gzip for API, SSE, and JSON. Skips WebSocket upgrades.
+//! Brotli (quality 4) + gzip for API JSON. Skips SSE and WebSocket upgrades.
 //!
-//! tower-http's `DefaultPredicate` refuses `text/event-stream`. Command Center
-//! SSE is exactly the payload we want compressed at brotli level 4 (speed vs
-//! bandwidth). WebSocket `101 Switching Protocols` must never be compressed.
+//! Architect rule: never Brotli-buffer `text/event-stream`. Brotli's internal
+//! window holds a small SOC alert until more bytes arrive — that is cockpit
+//! latency. SSE stays uncompressed. JSON still gets Brotli-4 (or gzip).
+//! WebSocket `101 Switching Protocols` must never be compressed.
 
 use axum::http::{Extensions, HeaderMap, StatusCode, Version};
 use axum::Router;
@@ -16,6 +17,7 @@ fn compress_predicate() -> impl Predicate {
     SizeAbove::new(32)
         .and(NotForContentType::GRPC)
         .and(NotForContentType::IMAGES)
+        .and(NotForContentType::SSE)
         .and(
             |status: StatusCode, _: Version, _: &HeaderMap, _: &Extensions| {
                 status != StatusCode::SWITCHING_PROTOCOLS
@@ -101,7 +103,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sse_is_compressed_when_accepted() {
+    async fn sse_is_never_compressed() {
         let app = apply(Router::new().route(
             "/sse",
             get(|| async {
@@ -117,20 +119,15 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/sse")
-                    .header(header::ACCEPT_ENCODING, "br")
+                    .header(header::ACCEPT_ENCODING, "br, gzip")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        let enc = resp
-            .headers()
-            .get(header::CONTENT_ENCODING)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        assert_eq!(
-            enc, "br",
-            "Command Center SSE with Accept-Encoding: br must be Brotli-4"
+        assert!(
+            resp.headers().get(header::CONTENT_ENCODING).is_none(),
+            "SSE must not be Brotli/gzip buffered — cockpit alerts must flush immediately"
         );
     }
 }

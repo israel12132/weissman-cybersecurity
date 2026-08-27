@@ -38,6 +38,25 @@ pub fn used_today(tenant_id: i64) -> u64 {
     store().get(&(tenant_id, day)).map(|v| *v).unwrap_or(0)
 }
 
+/// Drop counters whose UTC day is before `today`. Returns the number of keys removed.
+pub fn evict_before_day(today: u32) -> usize {
+    let mut dropped = 0usize;
+    store().retain(|(_, day), _| {
+        if *day < today {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
+}
+
+/// Drop counters from previous UTC days.
+pub fn evict_stale() -> usize {
+    evict_before_day(utc_yyyymmdd())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,5 +79,15 @@ mod tests {
         let a2 = used_today(9_001_338);
         let _ = add_usage(9_001_339, 100, 0);
         assert_eq!(used_today(9_001_338), a2);
+    }
+
+    #[test]
+    fn evicts_previous_utc_days() {
+        store().insert((9_001_340, 19990101), 7);
+        store().insert((9_001_340, utc_yyyymmdd()), 3);
+        let n = evict_before_day(utc_yyyymmdd());
+        assert!(n >= 1);
+        assert_eq!(used_today(9_001_340), 3);
+        assert!(store().get(&(9_001_340, 19990101)).is_none());
     }
 }

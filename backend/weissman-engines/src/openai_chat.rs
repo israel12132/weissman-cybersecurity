@@ -140,6 +140,31 @@ fn health_cache() -> &'static DashMap<String, Instant> {
     H.get_or_init(DashMap::new)
 }
 
+/// Drop expired health-probe stamps and closed idle circuits.
+pub fn evict_stale_maps() -> usize {
+    let mut dropped = 0usize;
+    let health_keep = HEALTH_PROBE_TTL.saturating_mul(4);
+    health_cache().retain(|_, t| {
+        if t.elapsed() >= health_keep {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    let now = Instant::now();
+    circuit_map().retain(|_, e| {
+        let open = e.open_until.is_some_and(|until| now < until);
+        if !open && e.failures == 0 {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
+}
+
 /// GET `/v1/models` with short timeout. Throttled per base URL.
 async fn ensure_llm_reachable(_client: &reqwest::Client, base_url: &str) -> Result<(), LlmError> {
     let base = normalize_openai_base_url(base_url)
@@ -1183,4 +1208,24 @@ pub async fn resolve_model_with_fallback(
         resolved
     );
     Ok(resolved)
+}
+
+#[cfg(test)]
+mod evict_tests {
+    use super::*;
+
+    #[test]
+    fn evicts_idle_closed_circuit() {
+        let key = "http://dashmap-gc-test.invalid/v1".to_string();
+        circuit_map().insert(
+            key.clone(),
+            CircuitEntry {
+                failures: 0,
+                open_until: None,
+            },
+        );
+        let n = evict_stale_maps();
+        assert!(n >= 1);
+        assert!(circuit_map().get(&key).is_none());
+    }
 }

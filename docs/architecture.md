@@ -15,9 +15,9 @@
                                   │  Nginx gateway (`:80`)  │
                                   │  Strict CSP / HSTS,     │
                                   │  gzip (static) +          │
-                                  │  brotli-4 (Axum API/SSE), │
+                                  │  brotli-4 (Axum JSON;     │
+                                  │  SSE excluded),           │
                                   │  proxy → backend:8000     │
-                                  │  proxy → backend:8000   │
                                   └───────────┬─────────────┘
                                               │
    ┌──────────────────────────────────────────┴────────────────────────────┐
@@ -90,13 +90,13 @@ Sub-millisecond request path for Command Center and agent ingest:
 
 | Control | Where | Notes |
 |---------|--------|--------|
-| SIMD JSON | `fingerprint_engine::http::simd_json` (sonic-rs) | Parse/serialize for ingest + tenant SSE stamps; `#[serde(borrow)]` on `POST /api/ueba/ingest` |
-| Tokio workers | `hpc_runtime::build_scan_runtime` | Sized to **physical** cores; LIFO slot on; `WEISSMAN_TOKIO_WORKER_THREADS` override |
+| SIMD JSON | `fingerprint_engine::http::simd_json` (sonic-rs) | **Ingest + telemetry only.** Engines/reports stay on `serde_json` (serialize time is <<1% of CPU/DB work; complex schemas stay compatible). `#[serde(borrow)]` on `POST /api/ueba/ingest`. |
+| Tokio workers | `hpc_runtime::build_scan_runtime` | Default = **physical** cores (SMT bypass). I/O-bound benches: `WEISSMAN_TOKIO_WORKER_THREADS=logical` (or `smt` / an integer). LIFO slot on. |
 | TCP | `http::tcp_socket` + `Serve::tcp_nodelay(true)` | Nagle off + keepalive (idle 45s / interval 10s) |
-| Brotli-4 | `weissman-server` `middleware::compression` | Quality 4 for JSON + SSE; skips `101 Switching Protocols`. Nginx gzip remains for static assets; VPS can `include deploy/nginx-brotli.inc` |
+| Brotli-4 | `weissman-server` `middleware::compression` | Quality 4 for **JSON only**. **SSE (`text/event-stream`) is excluded** — Brotli buffers small cockpit alerts. Skips `101`. Axum does compression today (scale-out CPU share); VPS can later `include deploy/nginx-brotli.inc` (also excludes SSE) to offload at the gateway. |
 | `spawn_blocking` | `/api/health` RSS, CEO telemetry, report writes | Filesystem I/O never sits on the event-loop worker |
-| Stream caps | `http::bounded_codec` | `LengthDelimitedCodec` max frame + WS `max_message_size` / `max_frame_size` |
-| DashMap | login lockout, agent registry, LLM circuit, AI daily tokens, engine telemetry | Sharded maps instead of `Mutex<HashMap>` |
+| Stream caps | `http::bounded_codec` | 1 MiB length-delimited frame / 4 MiB WS message / 1 MiB WS frame — room for agent reconnect batches, hard OOM ceiling. |
+| DashMap | login lockout, agent registry, LLM circuit, AI daily tokens, engine telemetry | Sharded maps. **Eviction sweep** every 15 min (`http::dashmap_gc`; `WEISSMAN_DASHMAP_EVICT_SECS`). Agent remote presence already pruned every 30s. |
 
 ---
 

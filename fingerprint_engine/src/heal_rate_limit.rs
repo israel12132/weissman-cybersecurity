@@ -102,6 +102,26 @@ fn decide_window(
     }
 }
 
+/// Drop tenants whose sliding window is empty after ageing out old starts.
+pub fn evict_stale() -> usize {
+    evict_older_than(Instant::now(), WINDOW)
+}
+
+fn evict_older_than(now: Instant, window: Duration) -> usize {
+    let cutoff = now.checked_sub(window);
+    let mut dropped = 0usize;
+    state().retain(|_, w| {
+        w.starts.retain(|&t| cutoff.is_none_or(|c| t >= c));
+        if w.starts.is_empty() {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,5 +171,20 @@ mod tests {
         assert!(!decide(&mut map, 1, now, 2, WINDOW).allowed);
         // Tenant 2 is unaffected.
         assert!(decide(&mut map, 2, now, 2, WINDOW).allowed);
+    }
+
+    #[test]
+    fn evicts_tenants_whose_window_is_empty() {
+        let tenant = 9_001_401_i64;
+        let now = Instant::now();
+        state().insert(
+            tenant,
+            TenantWindow {
+                starts: vec![now - WINDOW - Duration::from_secs(5)],
+            },
+        );
+        let n = evict_older_than(now, WINDOW);
+        assert!(n >= 1);
+        assert!(state().get(&tenant).is_none());
     }
 }

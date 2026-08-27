@@ -91,6 +91,28 @@ pub fn to_json() -> serde_json::Value {
     })
 }
 
+/// Drop engines that have not reported in `max_age_secs` (default 30 days).
+pub fn evict_stale() -> usize {
+    evict_older_than(
+        chrono::Utc::now()
+            .timestamp()
+            .saturating_sub(30 * 24 * 3600),
+    )
+}
+
+fn evict_older_than(cutoff_ts: i64) -> usize {
+    let mut dropped = 0usize;
+    store().retain(|_, h| {
+        if h.updated_ts > 0 && h.updated_ts < cutoff_ts {
+            dropped += 1;
+            false
+        } else {
+            true
+        }
+    });
+    dropped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,5 +163,19 @@ mod tests {
             .expect("engine recorded");
         assert!(h.failed_runs >= 1);
         assert_eq!(h.last_status, "timeout");
+    }
+
+    #[test]
+    fn evicts_engines_older_than_cutoff() {
+        store().insert(
+            "telemetry_stale_engine_zzz".into(),
+            EngineHealth {
+                updated_ts: 1,
+                ..EngineHealth::default()
+            },
+        );
+        let n = evict_older_than(1_000);
+        assert!(n >= 1);
+        assert!(store().get("telemetry_stale_engine_zzz").is_none());
     }
 }
