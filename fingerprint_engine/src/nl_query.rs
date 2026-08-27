@@ -17,8 +17,8 @@
 //!      on both the compiled statement and an outer row-cap wrapper.
 
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Key, Nonce};
-use hmac::{Hmac, Mac};
+use aes_gcm::{Aes256Gcm, Key};
+use hmac::{Hmac, Mac as HmacMac};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -538,7 +538,7 @@ fn aes_key_material() -> Option<[u8; 32]> {
 
 fn plan_hmac(plan: &QueryPlan, tenant_id: i64) -> Result<Vec<u8>, String> {
     let key = hmac_key_material()?;
-    let mut mac = HmacSha256::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let mut mac = <HmacSha256 as HmacMac>::new_from_slice(&key).map_err(|e| e.to_string())?;
     mac.update(&tenant_id.to_le_bytes());
     mac.update(&[0xff]);
     let canonical = serde_json::to_vec(plan).map_err(|e| e.to_string())?;
@@ -565,7 +565,7 @@ fn verify_seal(sealed: &SealedQueryPlan, tenant_id: i64) -> Result<(), String> {
         return Err("blocked: QueryPlan tenant seal mismatch".into());
     }
     let key = hmac_key_material()?;
-    let mut mac = HmacSha256::new_from_slice(&key).map_err(|e| e.to_string())?;
+    let mut mac = <HmacSha256 as HmacMac>::new_from_slice(&key).map_err(|e| e.to_string())?;
     mac.update(&tenant_id.to_le_bytes());
     mac.update(&[0xff]);
     let canonical = serde_json::to_vec(&sealed.plan).map_err(|e| e.to_string())?;
