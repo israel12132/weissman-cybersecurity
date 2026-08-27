@@ -394,3 +394,12 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     )
     .await
 }
+
+/// Ask Weissman per-user counter (60s window, fail-closed aware).
+pub async fn incr_ask_user_strict(user_id: i64) -> StrictOp<u64> {
+    incr_window_strict(
+        &format!("weissman:rl:ask:{user_id}"),
+        Duration::from_secs(60),
+    )
+    .await
+}

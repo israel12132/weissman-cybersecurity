@@ -52,6 +52,10 @@ describe('AskWeissman hermetic safeguards', () => {
     expect(list).toHaveTextContent('ask_weissman.guard_timeout')
     expect(list).toHaveTextContent('ask_weissman.guard_limit')
     expect(list).toHaveTextContent('ask_weissman.guard_plan')
+    expect(list).toHaveTextContent('ask_weissman.guard_oracle')
+    expect(list).toHaveTextContent('ask_weissman.guard_mask')
+    expect(list).toHaveTextContent('ask_weissman.guard_depth')
+    expect(list).toHaveTextContent('ask_weissman.guard_vector')
     const input = screen.getByRole('textbox', { name: 'ask_weissman.placeholder' })
     expect(input).toHaveAttribute('maxLength', '2000')
   })
@@ -88,5 +92,32 @@ describe('AskWeissman hermetic safeguards', () => {
     })
     expect(screen.getAllByText('ask_weissman.guard_plan').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/weissman_ro · 15000ms · LIMIT 200/)).toBeInTheDocument()
+  })
+
+  it('surfaces a generic 429 without oracle or rate internals', async () => {
+    const err = new Error('Ask Weissman is temporarily unavailable. Retry later.')
+    err.status = 429
+    err.response = {
+      json: async () => ({
+        ok: false,
+        code: 'rate_limited',
+        detail: 'Ask Weissman is temporarily unavailable. Retry later.',
+      }),
+    }
+    apiFetch.mockRejectedValue(err)
+    render(
+      <MemoryRouter>
+        <AskWeissman />
+      </MemoryRouter>,
+    )
+    const input = screen.getByRole('textbox', { name: 'ask_weissman.placeholder' })
+    fireEvent.change(input, { target: { value: 'is there a client whose name starts with A?' } })
+    fireEvent.submit(input.closest('form'))
+    await waitFor(() => {
+      expect(
+        screen.getByText('Ask Weissman is temporarily unavailable. Retry later.'),
+      ).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/brute-force|starts with A/i)).not.toBeInTheDocument()
   })
 })

@@ -19,6 +19,7 @@
 |-----|---------|--------|
 | `WEISSMAN_AUTH_DATABASE_URL` | = `DATABASE_URL` | Separate `weissman_auth` role with BYPASSRLS for login plane |
 | `WEISSMAN_READ_ONLY_DATABASE_URL` | unset → `/api/ask` returns 503 | Connection string for the `weissman_ro` SELECT-only role |
+| `WEISSMAN_ASK_PER_MINUTE` | `10` (hard max) | Per-user `/api/ask` rate limit; values above 10 are clamped. Letter-walk / near-duplicate questions are blocked as oracle scans |
 | `WEISSMAN_REGION` | `EU-West` | Tenant-region matching for data residency |
 | `WEISSMAN_PUBLIC_URL` | `http://localhost` | Used by signup verification email links |
 | `WEISSMAN_LOG_FORMAT` | text | `json` for structured JSON logs (recommended in production) |
@@ -43,7 +44,7 @@ rest (AES-256-GCM). **Production fails closed at startup if no key material is s
 | Var | Default | Effect |
 |-----|---------|--------|
 | `WEISSMAN_INTEGRATIONS_VAULT_KEY` | unset → JWT-derived | Dedicated key (passphrase ≥32 chars). Recommended over the JWT-derived fallback |
-| `WEISSMAN_VAULT_KEY` | unset → JWT-derived | Alternative dedicated key (64 hex = 32 bytes); also keys the CEO genesis vault |
+| `WEISSMAN_VAULT_KEY` | unset → JWT-derived (non-prod only) | Dedicated key (64 hex = 32 bytes or passphrase ≥32). Production Ask QueryPlan HMAC + `nl_query_audit` AES-256-GCM **require** this; tenant keys are `SHA-256(vault \|\| tenant_id)`. Also keys the CEO genesis vault |
 | `WEISSMAN_VAULT_KEY_PREVIOUS` | unset | Comma-separated rotated-out hex keys kept in the decrypt keyring so rotation never orphans data |
 | `WEISSMAN_JWT_SECRET_PREVIOUS` | unset | Existing JWT rotation keyring; also derives previous vault keys when the JWT-derived fallback is in use |
 
@@ -296,7 +297,8 @@ docker compose exec postgres psql -U postgres -d weissman -c "
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Boot fails: `migration #N was previously applied but has been modified` | The migration SQL file was edited after deploy | Restore the original file bytes (so SHA-384 matches `_sqlx_migrations`), and put new SQL in a **new** timestamped migration. Never rewrite checksums at runtime. `20260826120000` was restored this way; the INSERT-only policy fix is `20260826180000`. |
-| `/api/ask` returns `503 self_serve_disabled` | `WEISSMAN_READ_ONLY_DATABASE_URL` unset | Provision `weissman_ro`, set the env var, restart backend |
+| `/api/ask` returns 503 `Ask Weissman is temporarily unavailable.` | `WEISSMAN_READ_ONLY_DATABASE_URL` unset or `weissman_ro` pool failed | Provision `weissman_ro`, set the env var, restart backend. The client body is generic on purpose — do not leak env names |
+| `/api/ask` returns 429 | Per-user 10/min cap or anti-oracle similarity trip | Wait `Retry-After`. Do not raise `WEISSMAN_ASK_PER_MINUTE` above 10 |
 | `/api/auth/signup` returns `503` | `WEISSMAN_SELF_SERVE_SIGNUP` not `true` | Set the env var (and configure SMTP for production) |
 | Council retrieval falls back to "in-app cosine" path | LLM embeddings unreachable | Verify `OPENAI_BASE_URL` + key; check `target = council_rag` warnings |
 | UEBA never fires anomalies | Less than 24 samples in the relevant `hour_of_week` bucket | Wait (one sample/hour by default = ≥1 week per bucket) — by design |

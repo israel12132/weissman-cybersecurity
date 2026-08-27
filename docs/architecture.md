@@ -119,21 +119,32 @@ In-process background loops (`weissman-server`):
 
 ## Data flow — "Ask Weissman" (NL → safe SQL)
 
-1. UI sends `{ question }` to `POST /api/ask`.
+1. UI sends `{ question }` to `POST /api/ask`. The path is rate-limited to
+   **10 questions / user / minute** and consecutive near-duplicate / letter-walk
+   questions are rejected as inference / blind-oracle scans (HTTP 429, generic
+   body — the client is not told whether the trip was rate or oracle).
 2. Backend calls the LLM (`OPENAI_BASE_URL` + `OPENAI_API_KEY` env vars) with a
    system prompt that *forbids* raw SQL — it must emit a strict JSON `QueryPlan`.
+   Planner JSON deeper than 12 braces or 4 nested `and`/`or` levels is dropped
+   before serde recursion can blow the stack. RAG / pgvector tables
+   (`supreme_council_memory`, …) are not on the allow-list; any future k-NN
+   path is capped at **k ≤ 5** and cosine distance ≤ 0.45.
 3. `nl_query::compile_plan` validates the plan against an allow-list of 6
    tables × ~50 columns × 10 operators. Tenant scope (`tenant_id = $1`) is
    **always** the first WHERE clause, regardless of plan content. `LIMIT` is
-   capped at 200.
+   capped at 200. The plan is HMAC-SHA256 sealed with a **tenant-derived** key
+   (`SHA-256(WEISSMAN_VAULT_KEY || tenant_id)`); a leaked JWT signing secret
+   cannot forge another tenant's seal.
 4. The compiled parameterised SQL is executed on a connection from
    `read_only_pool` — a dedicated `weissman_ro` Postgres role with **SELECT-only
    grants** on 13 whitelisted tables, `statement_timeout=15s`,
    `idle_in_transaction_session_timeout=30s`, `work_mem=32MB`. Defense in depth:
    even if the validator slips, Postgres physically refuses non-SELECT.
-5. Results returned to UI with the compiled SQL string so the analyst can audit
-   what actually ran. Every question + plan + SQL + ms is logged to
-   `nl_query_audit`.
+5. Validator / Postgres errors are logged and AES-256-GCM encrypted in
+   `nl_query_audit`. The client only ever sees
+   `Query processing failed due to authorization or syntax constraint.`
+   Successful results include the compiled SQL so the analyst can audit what
+   actually ran.
 
 ---
 

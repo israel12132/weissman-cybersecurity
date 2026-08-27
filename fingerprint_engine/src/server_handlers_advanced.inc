@@ -1151,12 +1151,15 @@ async fn api_ask(
     if let Err(r) = crate::rbac::require_analyst(&auth) {
         return r;
     }
+    if let Err(r) = crate::ask_oracle_guard::admit_ask(auth.user_id, &body.question).await {
+        return r;
+    }
     let ro_pool = match state.read_only_pool.as_ref() {
         Some(p) => p,
         None => {
             return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
                 "ok": false,
-                "detail": "/api/ask requires a read-only Postgres role. Set WEISSMAN_READ_ONLY_DATABASE_URL."
+                "detail": "Ask Weissman is temporarily unavailable."
             }))).into_response();
         }
     };

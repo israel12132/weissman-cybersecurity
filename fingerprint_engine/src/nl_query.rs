@@ -15,6 +15,13 @@
 //!   6. The compiled SQL runs on the `weissman_ro` pool with `statement_timeout =
 //!      15000` (SET LOCAL + after_connect + role default) and a hard `LIMIT 200`
 //!      on both the compiled statement and an outer row-cap wrapper.
+//!   7. HMAC sealing uses a **tenant-derived** key (vault master + tenant_id) so a
+//!      leaked JWT signing secret cannot forge another tenant's plan.
+//!   8. Validator / Postgres errors are logged and AES-GCM encrypted in
+//!      `nl_query_audit`; the client only ever sees [`CLIENT_GENERIC_ERROR`].
+//!   9. Planner JSON is rejected above [`MAX_JSON_DEPTH`] structural braces or
+//!      [`MAX_CONDITION_DEPTH`] nested AND/OR trees. pgvector / RAG tables are
+//!      denied; any future k-NN path must use [`crate::ask_vector_caps`].
 
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key};
@@ -191,6 +198,14 @@ const MAX_LIMIT: i64 = READ_ONLY_MAX_ROWS;
 const MAX_FILTERS: usize = 16;
 const MAX_IN_VALUES: usize = 32;
 const MAX_FILTER_STRING_CHARS: usize = 512;
+/// Structural `{`/`[` nesting cap for the raw planner payload (bombs / stack).
+/// A 4-deep AND/OR tree is ~10 braces; 12 rejects a depth bomb before serde.
+pub const MAX_JSON_DEPTH: usize = 12;
+/// Nested boolean condition cap (`and`/`or`/`not`/`all`/`any` trees).
+pub const MAX_CONDITION_DEPTH: usize = 4;
+/// The only validator/DB failure string the client is allowed to see.
+pub const CLIENT_GENERIC_ERROR: &str =
+    "Query processing failed due to authorization or syntax constraint.";
 const TENANT_SCOPE_ALIAS: &str = "_ask_tenant_scope";
 const ROWCAP_ALIAS: &str = "_ask_rowcap";
 const BLOCKED_PLAN_FIELDS: &[&str] = &[
@@ -418,6 +433,62 @@ fn sanitize_plan(plan: &mut QueryPlan) -> Result<(), String> {
     Ok(())
 }
 
+/// Count `{`/`[` nesting in a JSON text without allocating the value tree.
+pub fn json_structural_depth(raw: &str) -> Result<usize, String> {
+    let mut depth = 0usize;
+    let mut max = 0usize;
+    let mut in_string = false;
+    let mut escape = false;
+    for c in raw.chars() {
+        if in_string {
+            if escape {
+                escape = false;
+                continue;
+            }
+            if c == '\\' {
+                escape = true;
+                continue;
+            }
+            if c == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '{' | '[' => {
+                depth += 1;
+                max = max.max(depth);
+                if depth > MAX_JSON_DEPTH {
+                    return Err("blocked: QueryPlan JSON exceeds nesting limit".into());
+                }
+            }
+            '}' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    Ok(max)
+}
+
+fn condition_nesting_depth(v: &Value) -> usize {
+    match v {
+        Value::Object(m) => {
+            let mut d = 0;
+            for (k, child) in m {
+                let child_d = condition_nesting_depth(child);
+                if matches!(k.as_str(), "and" | "or" | "not" | "all" | "any") {
+                    d = d.max(1 + child_d);
+                } else {
+                    d = d.max(child_d);
+                }
+            }
+            d
+        }
+        Value::Array(a) => a.iter().map(condition_nesting_depth).max().unwrap_or(0),
+        _ => 0,
+    }
+}
+
 /// Block raw SQL and extra SQL-shaped keys; keep only the QueryPlan allow-list.
 pub fn ingest_planner_output(raw: &str) -> Result<QueryPlan, String> {
     let text = raw.trim();
@@ -427,11 +498,29 @@ pub fn ingest_planner_output(raw: &str) -> Result<QueryPlan, String> {
     if looks_like_raw_sql(text) {
         return Err("blocked: planner returned raw SQL; QueryPlan JSON is required".into());
     }
+    json_structural_depth(text)?;
     let v: Value = serde_json::from_str(text).map_err(|e| format!("invalid JSON from LLM: {e}"))?;
+    if condition_nesting_depth(&v) > MAX_CONDITION_DEPTH {
+        return Err("blocked: QueryPlan condition tree exceeds nesting limit".into());
+    }
     ingest_plan_value(v)
 }
 
+fn value_tree_depth(v: &Value) -> usize {
+    match v {
+        Value::Array(a) => 1 + a.iter().map(value_tree_depth).max().unwrap_or(0),
+        Value::Object(m) => 1 + m.values().map(value_tree_depth).max().unwrap_or(0),
+        _ => 1,
+    }
+}
+
 fn ingest_plan_value(v: Value) -> Result<QueryPlan, String> {
+    if value_tree_depth(&v) > MAX_JSON_DEPTH {
+        return Err("blocked: QueryPlan JSON exceeds nesting limit".into());
+    }
+    if condition_nesting_depth(&v) > MAX_CONDITION_DEPTH {
+        return Err("blocked: QueryPlan condition tree exceeds nesting limit".into());
+    }
     let mut obj = match v {
         Value::Object(m) => m,
         Value::String(s) if looks_like_raw_sql(&s) => {
@@ -501,35 +590,80 @@ fn ingest_plan_value(v: Value) -> Result<QueryPlan, String> {
     }
     let mut plan: QueryPlan = serde_json::from_value(Value::Object(slim))
         .map_err(|e| format!("plan is not a valid QueryPlan JSON: {e}"))?;
+    if crate::ask_vector_caps::is_blocked_vector_table(&plan.table) {
+        return Err("blocked: vector/RAG tables are not exposed to NL queries".into());
+    }
     sanitize_plan(&mut plan)?;
     Ok(plan)
 }
 
-fn hmac_key_material() -> Result<Vec<u8>, String> {
+fn hex32_key(raw: &str) -> Option<[u8; 32]> {
+    let b = hex::decode(raw.trim()).ok()?;
+    if b.len() != 32 {
+        return None;
+    }
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&b);
+    Some(k)
+}
+
+/// Vault master for Ask seals. Prefers `WEISSMAN_VAULT_KEY` so a leaked JWT
+/// signing secret cannot mint another tenant's HMAC. JWT is a non-prod fallback.
+fn seal_master_key() -> Result<Vec<u8>, String> {
+    if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
+        if let Some(k) = hex32_key(raw.trim()) {
+            return Ok(k.to_vec());
+        }
+        if raw.trim().len() >= 32 {
+            let mut h = Sha256::new();
+            h.update(b"weissman-ask-vault-passphrase-v1|");
+            h.update(raw.trim().as_bytes());
+            return Ok(h.finalize().to_vec());
+        }
+    }
+    if let Ok(raw) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
+        if raw.trim().len() >= 32 {
+            let mut h = Sha256::new();
+            h.update(b"weissman-ask-integrations-vault-v1|");
+            h.update(raw.trim().as_bytes());
+            return Ok(h.finalize().to_vec());
+        }
+    }
     if let Ok(s) = std::env::var("WEISSMAN_JWT_SECRET") {
         let t = s.trim();
         if t.len() >= 16 {
+            if is_production_environment() {
+                return Err("QueryPlan sealing requires WEISSMAN_VAULT_KEY".into());
+            }
             let mut h = Sha256::new();
-            h.update(b"weissman-ask-queryplan-hmac-v1|");
+            h.update(b"weissman-ask-queryplan-master-fallback-v1|");
             h.update(t.as_bytes());
             return Ok(h.finalize().to_vec());
         }
     }
     if is_production_environment() {
-        return Err("QueryPlan sealing requires WEISSMAN_JWT_SECRET".into());
+        return Err("QueryPlan sealing requires WEISSMAN_VAULT_KEY".into());
     }
     Ok(b"weissman-ask-queryplan-dev-hmac-key".to_vec())
 }
 
-fn aes_key_material() -> Option<[u8; 32]> {
-    let s = std::env::var("WEISSMAN_JWT_SECRET").ok()?;
-    let t = s.trim();
-    if t.len() < 16 {
-        return None;
-    }
+fn tenant_seal_key(tenant_id: i64) -> Result<Vec<u8>, String> {
+    let master = seal_master_key()?;
     let mut h = Sha256::new();
-    h.update(b"weissman-ask-queryplan-aes-v1|");
-    h.update(t.as_bytes());
+    h.update(b"weissman-ask-queryplan-hmac-tenant-v2|");
+    h.update(&master);
+    h.update(b"|tenant|");
+    h.update(&tenant_id.to_le_bytes());
+    Ok(h.finalize().to_vec())
+}
+
+fn tenant_aes_key(tenant_id: i64) -> Option<[u8; 32]> {
+    let master = seal_master_key().ok()?;
+    let mut h = Sha256::new();
+    h.update(b"weissman-ask-queryplan-aes-tenant-v2|");
+    h.update(&master);
+    h.update(b"|tenant|");
+    h.update(&tenant_id.to_le_bytes());
     let d = h.finalize();
     let mut k = [0u8; 32];
     k.copy_from_slice(&d);
@@ -537,7 +671,7 @@ fn aes_key_material() -> Option<[u8; 32]> {
 }
 
 fn plan_hmac(plan: &QueryPlan, tenant_id: i64) -> Result<Vec<u8>, String> {
-    let key = hmac_key_material()?;
+    let key = tenant_seal_key(tenant_id)?;
     let mut mac = <HmacSha256 as HmacMac>::new_from_slice(&key).map_err(|e| e.to_string())?;
     mac.update(&tenant_id.to_le_bytes());
     mac.update(&[0xff]);
@@ -564,7 +698,7 @@ fn verify_seal(sealed: &SealedQueryPlan, tenant_id: i64) -> Result<(), String> {
     if sealed.tenant_id != tenant_id {
         return Err("blocked: QueryPlan tenant seal mismatch".into());
     }
-    let key = hmac_key_material()?;
+    let key = tenant_seal_key(tenant_id)?;
     let mut mac = <HmacSha256 as HmacMac>::new_from_slice(&key).map_err(|e| e.to_string())?;
     mac.update(&tenant_id.to_le_bytes());
     mac.update(&[0xff]);
@@ -574,30 +708,37 @@ fn verify_seal(sealed: &SealedQueryPlan, tenant_id: i64) -> Result<(), String> {
         .map_err(|_| "blocked: QueryPlan HMAC invalid".to_string())
 }
 
-fn encrypt_plan_for_audit(plan: &QueryPlan) -> Value {
+fn encrypt_bytes_for_audit(tenant_id: i64, plaintext: &[u8]) -> Option<String> {
+    let key = tenant_aes_key(tenant_id)?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let ct = cipher.encrypt(&nonce, plaintext).ok()?;
+    let mut packed = nonce.to_vec();
+    packed.extend_from_slice(&ct);
+    Some(format!(
+        "wzaqp1:{}",
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &packed)
+    ))
+}
+
+fn encrypt_plan_for_audit(plan: &QueryPlan, tenant_id: i64) -> Value {
     let Ok(plaintext) = serde_json::to_vec(plan) else {
         return json!({"_sealed": false, "error": "serialize"});
     };
-    let Some(key) = aes_key_material() else {
-        // Dev without JWT: store the already-sanitized plan (no secrets; filter values only).
-        return json!({"_sealed": false, "plan": plan});
-    };
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-    match cipher.encrypt(&nonce, plaintext.as_ref()) {
-        Ok(ct) => {
-            let mut packed = nonce.to_vec();
-            packed.extend_from_slice(&ct);
-            json!({
-                "_enc": format!(
-                    "wzaqp1:{}",
-                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &packed)
-                ),
-                "alg": "aes-256-gcm",
-                "sealed": true,
-            })
-        }
-        Err(_) => json!({"_sealed": false, "plan": plan}),
+    match encrypt_bytes_for_audit(tenant_id, &plaintext) {
+        Some(enc) => json!({
+            "_enc": enc,
+            "alg": "aes-256-gcm",
+            "sealed": true,
+        }),
+        None => json!({"_sealed": false, "plan": plan}),
+    }
+}
+
+fn encrypt_error_for_audit(tenant_id: i64, internal: &str) -> String {
+    match encrypt_bytes_for_audit(tenant_id, internal.as_bytes()) {
+        Some(enc) => enc,
+        None => String::new(),
     }
 }
 
@@ -615,6 +756,10 @@ pub fn compile_plan(plan: &QueryPlan, tenant_id: i64) -> Result<Compiled, String
     }
     let mut plan = plan.clone();
     sanitize_plan(&mut plan)?;
+
+    if crate::ask_vector_caps::is_blocked_vector_table(&plan.table) {
+        return Err("blocked: vector/RAG tables are not exposed to NL queries".into());
+    }
 
     // 1) Validate table.
     if !is_safe_ident(&plan.table) {
@@ -909,7 +1054,7 @@ pub async fn ask(
     question: &str,
 ) -> AskResult {
     let start = Instant::now();
-    let bad = |err: &str| {
+    let fail = |internal: &str| {
         let (
             tenant_bound,
             statement_timeout_ms,
@@ -918,69 +1063,109 @@ pub async fn ask(
             plan_sealed,
             filters_sanitized,
         ) = safeguards(tenant_id, false, false);
-        AskResult {
-            plan: empty_plan(),
-            sql: String::new(),
-            rows: vec![],
-            row_count: 0,
-            elapsed_ms: start.elapsed().as_millis() as i64,
-            error: Some(err.to_string()),
-            tenant_bound,
-            statement_timeout_ms,
-            row_cap,
-            exec_role,
-            plan_sealed,
-            filters_sanitized,
-        }
+        tracing::warn!(
+            target: "nl_query",
+            tenant_id,
+            error = %internal,
+            "Ask Weissman query failed (masked to client)"
+        );
+        (
+            AskResult {
+                plan: empty_plan(),
+                sql: String::new(),
+                rows: vec![],
+                row_count: 0,
+                elapsed_ms: start.elapsed().as_millis() as i64,
+                error: Some(mask_client_error(internal)),
+                tenant_bound,
+                statement_timeout_ms,
+                row_cap,
+                exec_role,
+                plan_sealed,
+                filters_sanitized,
+            },
+            internal.to_string(),
+        )
     };
     let q = question.trim();
     if q.is_empty() {
-        return bad("question is empty");
+        let (r, internal) = fail("question is empty");
+        audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
+        return r;
     }
     if q.len() > 2000 {
-        return bad("question too long (max 2000 chars)");
+        let (r, internal) = fail("question too long (max 2000 chars)");
+        audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
+        return r;
     }
     if q.chars().any(|c| c == '\0') {
-        return bad("question contains NUL");
+        let (r, internal) = fail("question contains NUL");
+        audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
+        return r;
     }
 
     // 1) LLM → plan JSON (blocked if it is raw SQL or a hostile payload).
     let plan_json = match llm_to_plan(q, tenant_id).await {
         Ok(v) => v,
         Err(e) => {
-            let r = bad(&format!("plan generation failed: {e}"));
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            let (r, internal) = fail(&format!("plan generation failed: {e}"));
+            audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
             return r;
         }
     };
     let plan = match ingest_plan_value(plan_json) {
         Ok(p) => p,
         Err(e) => {
-            let r = bad(&e);
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            let (r, internal) = fail(&e);
+            audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
             return r;
         }
     };
     let sealed = match seal_plan(plan, tenant_id) {
         Ok(s) => s,
         Err(e) => {
-            let r = bad(&e);
-            audit_query(app_pool, tenant_id, user_id, question, &r).await;
+            let (r, internal) = fail(&e);
+            audit_query(app_pool, tenant_id, user_id, question, &r, Some(&internal)).await;
             return r;
         }
     };
 
     // 2) Validate + execute on weissman_ro only.
-    let res = match execute_sealed(ro_pool, tenant_id, sealed).await {
+    let (res, internal) = match execute_sealed(ro_pool, tenant_id, sealed).await {
         Ok(mut r) => {
             r.elapsed_ms = start.elapsed().as_millis() as i64;
-            r
+            (r, None)
         }
-        Err(e) => bad(&e),
+        Err(e) => {
+            let (r, internal) = fail(&e);
+            (r, Some(internal))
+        }
     };
 
-    audit_query(app_pool, tenant_id, user_id, question, &res).await;
+    audit_query(
+        app_pool,
+        tenant_id,
+        user_id,
+        question,
+        &res,
+        internal.as_deref(),
+    )
+    .await;
     res
+}
+
+fn is_benign_input_error(err: &str) -> bool {
+    err == "question is empty" || err.starts_with("question too long") || err.contains("NUL")
+}
+
+/// Client-visible error. Validator / Postgres / planner internals never leave the host.
+#[must_use]
+pub fn mask_client_error(internal: &str) -> String {
+    if is_benign_input_error(internal) {
+        internal.to_string()
+    } else {
+        CLIENT_GENERIC_ERROR.to_string()
+    }
 }
 
 async fn audit_query(
@@ -989,13 +1174,17 @@ async fn audit_query(
     user_id: Option<i64>,
     question: &str,
     res: &AskResult,
+    internal_error: Option<&str>,
 ) {
     if let Ok(mut tx) = crate::db::begin_tenant_tx(app_pool, tenant_id).await {
         let plan_store = if res.plan.table.is_empty() {
             json!({})
         } else {
-            encrypt_plan_for_audit(&res.plan)
+            encrypt_plan_for_audit(&res.plan, tenant_id)
         };
+        let stored_error = internal_error
+            .map(|e| encrypt_error_for_audit(tenant_id, e))
+            .unwrap_or_default();
         let _ = sqlx::query(
             "INSERT INTO nl_query_audit
                 (tenant_id, user_id, asked_at, question, plan_json, compiled_sql,
@@ -1009,7 +1198,7 @@ async fn audit_query(
         .bind(&res.sql)
         .bind(res.row_count as i32)
         .bind(res.elapsed_ms as i32)
-        .bind(res.error.clone().unwrap_or_default())
+        .bind(stored_error)
         .execute(&mut *tx)
         .await;
         let _ = tx.commit().await;
@@ -1373,30 +1562,138 @@ mod tests {
         assert!(compile_plan(&plan, 1).is_err());
     }
 
-    #[test]
-    fn encrypt_plan_envelope_without_jwt_is_marked_unsealed() {
-        let prev = std::env::var("WEISSMAN_JWT_SECRET").ok();
-        std::env::remove_var("WEISSMAN_JWT_SECRET");
-        let env = encrypt_plan_for_audit(&sample_plan());
-        assert_eq!(env.get("_sealed"), Some(&json!(false)));
-        assert!(env.get("plan").is_some());
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn restore_env(name: &str, prev: Option<String>) {
         match prev {
-            Some(v) => std::env::set_var("WEISSMAN_JWT_SECRET", v),
-            None => std::env::remove_var("WEISSMAN_JWT_SECRET"),
+            Some(v) => std::env::set_var(name, v),
+            None => std::env::remove_var(name),
         }
     }
 
     #[test]
-    fn encrypt_plan_envelope_with_jwt_is_ciphertext() {
-        let prev = std::env::var("WEISSMAN_JWT_SECRET").ok();
-        std::env::set_var("WEISSMAN_JWT_SECRET", "test-jwt-secret-16");
-        let env = encrypt_plan_for_audit(&sample_plan());
+    fn encrypt_plan_envelope_is_aes_gcm_ciphertext() {
+        let _g = env_lock();
+        let prev_j = std::env::var("WEISSMAN_JWT_SECRET").ok();
+        let prev_v = std::env::var("WEISSMAN_VAULT_KEY").ok();
+        std::env::remove_var("WEISSMAN_VAULT_KEY");
+        std::env::set_var("WEISSMAN_JWT_SECRET", "test-jwt-secret-16chars");
+        let env = encrypt_plan_for_audit(&sample_plan(), 9);
         assert_eq!(env.get("sealed"), Some(&json!(true)));
         let enc = env.get("_enc").and_then(|v| v.as_str()).unwrap_or("");
         assert!(enc.starts_with("wzaqp1:"), "{env}");
-        match prev {
-            Some(v) => std::env::set_var("WEISSMAN_JWT_SECRET", v),
-            None => std::env::remove_var("WEISSMAN_JWT_SECRET"),
+        restore_env("WEISSMAN_JWT_SECRET", prev_j);
+        restore_env("WEISSMAN_VAULT_KEY", prev_v);
+    }
+
+    #[test]
+    fn tenant_hmac_keys_differ_and_do_not_verify_across_tenants() {
+        let a = seal_plan(sample_plan(), 1).unwrap();
+        let b = seal_plan(sample_plan(), 2).unwrap();
+        assert_ne!(a.mac, b.mac);
+        verify_seal(&a, 1).unwrap();
+        verify_seal(&b, 2).unwrap();
+        assert!(verify_seal(&a, 2).is_err());
+        assert!(verify_seal(&b, 1).is_err());
+    }
+
+    #[test]
+    fn vault_key_change_invalidates_existing_seal() {
+        let _g = env_lock();
+        let prev_v = std::env::var("WEISSMAN_VAULT_KEY").ok();
+        let prev_i = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY").ok();
+        let prev_j = std::env::var("WEISSMAN_JWT_SECRET").ok();
+        std::env::remove_var("WEISSMAN_INTEGRATIONS_VAULT_KEY");
+        std::env::remove_var("WEISSMAN_JWT_SECRET");
+        std::env::set_var("WEISSMAN_VAULT_KEY", "a".repeat(32));
+        let sealed = seal_plan(sample_plan(), 4).unwrap();
+        verify_seal(&sealed, 4).unwrap();
+        std::env::set_var("WEISSMAN_VAULT_KEY", "b".repeat(32));
+        assert!(verify_seal(&sealed, 4).is_err());
+        restore_env("WEISSMAN_VAULT_KEY", prev_v);
+        restore_env("WEISSMAN_INTEGRATIONS_VAULT_KEY", prev_i);
+        restore_env("WEISSMAN_JWT_SECRET", prev_j);
+    }
+
+    #[test]
+    fn rejects_json_depth_bomb_before_serde() {
+        let bomb = format!(
+            "{}{}",
+            "[".repeat(MAX_JSON_DEPTH + 1),
+            "]".repeat(MAX_JSON_DEPTH + 1)
+        );
+        let err = ingest_planner_output(&bomb).unwrap_err();
+        assert!(err.contains("nesting limit"), "{err}");
+        assert!(json_structural_depth(&bomb).is_err());
+    }
+
+    #[test]
+    fn rejects_and_or_trees_deeper_than_four() {
+        let mut inner = String::from("true");
+        for i in 0..5 {
+            let key = if i % 2 == 0 { "and" } else { "or" };
+            inner = format!(r#"{{"{key}":[{inner}]}}"#);
         }
+        let raw = format!(r#"{{"table":"vulnerabilities","filters":[{inner}]}}"#);
+        let err = ingest_planner_output(&raw).unwrap_err();
+        assert!(err.contains("condition tree"), "{err}");
+    }
+
+    #[test]
+    fn accepts_four_level_condition_tree_then_fails_shape() {
+        let mut inner = String::from("true");
+        for i in 0..4 {
+            let key = if i % 2 == 0 { "and" } else { "or" };
+            inner = format!(r#"{{"{key}":[{inner}]}}"#);
+        }
+        let raw = format!(r#"{{"table":"vulnerabilities","filters":[{inner}]}}"#);
+        assert!(json_structural_depth(&raw).is_ok());
+        let err = ingest_planner_output(&raw).unwrap_err();
+        assert!(!err.contains("condition tree"), "{err}");
+        assert!(!err.contains("nesting limit"), "{err}");
+    }
+
+    #[test]
+    fn rejects_vector_and_rag_tables() {
+        let err =
+            ingest_planner_output(r#"{"table":"supreme_council_memory","select":[],"filters":[]}"#)
+                .unwrap_err();
+        assert!(err.contains("vector/RAG"), "{err}");
+        let plan = QueryPlan {
+            table: "supreme_council_memory".into(),
+            select: vec![],
+            filters: vec![],
+            order_by: None,
+            order_desc: false,
+            limit: Some(5),
+        };
+        let err = compile_plan(&plan, 1).unwrap_err();
+        assert!(err.contains("vector/RAG"), "{err}");
+    }
+
+    #[test]
+    fn client_never_sees_validator_or_postgres_internals() {
+        assert_eq!(
+            mask_client_error("column 'password_hash' not allowed on table 'users'"),
+            CLIENT_GENERIC_ERROR
+        );
+        assert_eq!(
+            mask_client_error("execute: permission denied for table secrets"),
+            CLIENT_GENERIC_ERROR
+        );
+        assert_eq!(
+            mask_client_error("blocked: QueryPlan JSON exceeds nesting limit"),
+            CLIENT_GENERIC_ERROR
+        );
+        assert_eq!(mask_client_error("question is empty"), "question is empty");
+        assert_eq!(
+            mask_client_error("question too long (max 2000 chars)"),
+            "question too long (max 2000 chars)"
+        );
     }
 }

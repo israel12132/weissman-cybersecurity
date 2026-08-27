@@ -137,13 +137,19 @@ export default function AskWeissman() {
         return next
       })
     } catch (e) {
-      let msg
-      if (e?.status) {
-        const b = e.response ? await e.response.json().catch(() => ({})) : {}
-        msg = formatApiErrorFromBody(b, e.status)
-      } else {
-        msg = e?.message || t('ask_weissman.network_error')
+      let msg = typeof e?.message === 'string' && e.message.trim() ? e.message.trim() : ''
+      if (e?.status && e.response?.clone) {
+        const b = await e.response.clone().json().catch(() => ({}))
+        const fromBody = formatApiErrorFromBody(b, e.status)
+        if (fromBody && !/^HTTP \d+$/.test(fromBody) && !fromBody.startsWith('Request failed (HTTP')) {
+          msg = fromBody
+        }
+      } else if (e?.status && e.response) {
+        const b = await e.response.json().catch(() => ({}))
+        const fromBody = formatApiErrorFromBody(b, e.status)
+        if (fromBody) msg = fromBody
       }
+      if (!msg) msg = t('ask_weissman.network_error')
       setHistory((h) => h.map((x) => x === placeholder ? {
         q: text, ok: false, error: msg, t: Date.now(),
       } : x))
@@ -193,6 +199,10 @@ export default function AskWeissman() {
               'guard_timeout',
               'guard_limit',
               'guard_plan',
+              'guard_oracle',
+              'guard_mask',
+              'guard_depth',
+              'guard_vector',
             ].map((key) => (
               <li
                 key={key}
