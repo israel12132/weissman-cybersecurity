@@ -273,47 +273,17 @@ fn all_ips_public<'a>(ips: impl Iterator<Item = &'a String>) -> bool {
     })
 }
 
+#[cfg(test)]
 fn normalize_scope_domain(s: &str) -> Option<String> {
-    let raw = s.trim().trim_matches('.').trim_start_matches("*.").trim();
-    if raw.is_empty() {
-        return None;
-    }
-    let candidate = if raw.contains("://") {
-        Url::parse(raw)
-            .ok()
-            .and_then(|u| u.host_str().map(ToString::to_string))
-    } else {
-        Url::parse(&format!("https://{raw}"))
-            .ok()
-            .and_then(|u| u.host_str().map(ToString::to_string))
-    };
-    candidate.map(|h| h.to_ascii_lowercase())
+    crate::client_scan_target::normalize_scope_host(s)
 }
 
 fn parse_approved_domains_blob(raw: &str) -> Vec<String> {
-    let t = raw.trim();
-    if t.is_empty() {
-        return Vec::new();
-    }
-    if t.starts_with('[') {
-        if let Ok(arr) = serde_json::from_str::<Vec<String>>(t) {
-            return arr
-                .into_iter()
-                .filter_map(|x| normalize_scope_domain(&x))
-                .collect();
-        }
-    }
-    t.split(',').filter_map(normalize_scope_domain).collect()
+    crate::client_scan_target::hosts_from_blob(raw)
 }
 
 fn target_matches_approved(host: &str, approved: &HashSet<String>) -> bool {
-    approved.iter().any(|d| {
-        if host == d {
-            return true;
-        }
-        host.strip_suffix(d)
-            .is_some_and(|prefix| prefix.ends_with('.'))
-    })
+    crate::client_scan_target::host_matches_approved(host, approved)
 }
 
 async fn load_tenant_approved_domains(
@@ -321,21 +291,16 @@ async fn load_tenant_approved_domains(
     tenant_id: i64,
     client_id: Option<i64>,
 ) -> Result<HashSet<String>, sqlx::Error> {
+    if let Some(cid) = client_id {
+        let scope = crate::client_scan_target::load_client_scan_scope(pool, tenant_id, cid).await?;
+        return Ok(scope.approved_hosts);
+    }
     let mut tx = crate::db::begin_tenant_tx(pool, tenant_id).await?;
-    let rows: Vec<String> = if let Some(cid) = client_id {
-        sqlx::query_scalar(
-            "SELECT COALESCE(domains, '[]') FROM clients WHERE tenant_id = $1 AND id = $2",
-        )
-        .bind(tenant_id)
-        .bind(cid)
-        .fetch_all(&mut *tx)
-        .await?
-    } else {
+    let rows: Vec<String> =
         sqlx::query_scalar("SELECT COALESCE(domains, '[]') FROM clients WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_all(&mut *tx)
-            .await?
-    };
+            .await?;
     tx.commit().await?;
     let mut approved = HashSet::new();
     for raw in rows {
@@ -363,6 +328,21 @@ pub async fn validate_scan_target_in_scope(
 
     if SCAN_SCOPE_BLOCKLIST.iter().any(|h| *h == host_trimmed_dot) {
         return Err(format!("target host '{host_trimmed_dot}' is blocked"));
+    }
+
+    let approved = load_tenant_approved_domains(pool, tenant_id, client_id)
+        .await
+        .map_err(|e| format!("failed loading approved tenant domains: {e}"))?;
+    if approved.is_empty() {
+        return Err(
+            "no approved client domains found for tenant; define at least one client domain"
+                .to_string(),
+        );
+    }
+    if !target_matches_approved(host_trimmed_dot, &approved) {
+        return Err(format!(
+            "target host '{host_trimmed_dot}' is outside approved tenant scope"
+        ));
     }
 
     let allow_private = allow_private_scan_targets();
@@ -400,20 +380,6 @@ pub async fn validate_scan_target_in_scope(
         }
     }
 
-    let approved = load_tenant_approved_domains(pool, tenant_id, client_id)
-        .await
-        .map_err(|e| format!("failed loading approved tenant domains: {e}"))?;
-    if approved.is_empty() {
-        return Err(
-            "no approved client domains found for tenant; define at least one client domain"
-                .to_string(),
-        );
-    }
-    if !target_matches_approved(host_trimmed_dot, &approved) {
-        return Err(format!(
-            "target host '{host_trimmed_dot}' is outside approved tenant scope"
-        ));
-    }
     Ok(ScopeValidationOutcome {
         normalized_host: host_trimmed_dot.to_string(),
         resolved_ips,

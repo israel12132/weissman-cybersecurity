@@ -12,6 +12,7 @@ import SupplyChainGraph from '../components/ui/SupplyChainGraph'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import { apiFetch } from '../utils/apiFetch'
 import { useJobPoll, resolveJobFindings, uiJobStatus } from '../lib/useJobPoll'
+import { scanIntakeErrorMessage } from '../lib/apiError'
 import Button from '../components/ui/Button'
 import ScopedClientControl from '../components/clients/ScopedClientControl'
 
@@ -97,7 +98,7 @@ function EngineRunPanel({ engineId, clientId, showToast, onFindingsUpdate, isFoc
     setFindings([])
     try {
       const { ok, data: d } = await postScan({ engine: engineId, client_id: Number(clientId) })
-      if (!ok) { showToast('error', d.detail || t('pages.supplyChainHub.scan_failed')); setRunning(false); return }
+      if (!ok) { showToast('error', scanIntakeErrorMessage(d, d.status, t)); setRunning(false); return }
       const jobId = d.job_id ?? ''
       showToast('info', t('pages.supplyChainHub.queued', { label, jobId }))
       if (jobId) setPendingJobId(jobId)

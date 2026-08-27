@@ -14,6 +14,7 @@ import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
 import EngineHubForensicHeader from '../components/engine/EngineHubForensicHeader'
 import ExecutiveWidget from '../components/ui/ExecutiveWidget'
 import { buildScanPayload, normalizeIntegrations } from '../lib/engineClientPrefill'
+import { scanIntakeErrorMessage } from '../lib/apiError'
 import { useEngineScanParams } from '../hooks/useEngineScanParams'
 import { useCommandCenterScan } from '../hooks/useCommandCenterScan'
 import { useSyncHubScanParams } from '../hooks/useLaunchEngineScan'
@@ -243,7 +244,7 @@ export default function BusinessEngineProfile() {
     try {
       const { ok, data: d, status } = await postScan(effectivePayload)
       if (!ok) {
-        setRunState({ running: false, msg: t('pages.businessEngineProfile.queue_failed', { status }) })
+        setRunState({ running: false, msg: scanIntakeErrorMessage(d, status, t) })
         return
       }
       setActiveJobId(d.job_id || '')

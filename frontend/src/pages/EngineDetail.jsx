@@ -16,6 +16,7 @@ import ShellScanActions from '../components/engine/ShellScanActions'
 import AgentRequiredGate from '../components/engine/AgentRequiredGate'
 import WeissmanFindingsPanel from '../components/engine/WeissmanFindingsPanel'
 import { useFindingsWorkbench } from '../hooks/useFindingsWorkbench'
+import { scanIntakeErrorMessage } from '../lib/apiError'
 import { normalizeIntegrations, buildScanPayload } from '../lib/engineClientPrefill'
 import { getEngineParams } from '../lib/engineParamDefs.js'
 import EngineScanParamsPanel from '../components/engine/EngineScanParamsPanel'
@@ -512,7 +513,7 @@ export default function EngineDetail() {
     try {
       const { ok, data: d, status } = await postScan(body)
       if (!ok) {
-        showToast('error', d.detail || d.error || `Scan failed (${status})`)
+        showToast('error', scanIntakeErrorMessage(d, status, t))
         setRunning(false)
         return
       }

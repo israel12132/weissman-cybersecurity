@@ -28,6 +28,16 @@ export function formatApiErrorFromBody(data, status) {
   return status ? `HTTP ${status}` : 'Request failed'
 }
 
+/** Scan-intake errors: map structured `no_default_scan_target` / `target_out_of_scope`. */
+export function scanIntakeErrorMessage(data, status, t) {
+  const code = data?.error_code || data?.code
+  if (code === 'no_default_scan_target' || code === 'target_out_of_scope') {
+    if (typeof t === 'function') return t(`errors.${code}`)
+    if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail.trim()
+  }
+  return formatApiErrorFromBody(data, status)
+}
+
 export async function formatApiErrorResponse(response) {
   const status = response.status
   let data = null
