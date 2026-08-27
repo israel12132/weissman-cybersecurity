@@ -375,13 +375,12 @@ mod tests {
                 .expect("clock")
                 .as_nanos()
         );
-        let tenant_id: i64 = sqlx::query_scalar(
-            "SELECT id FROM tenants WHERE slug = 'default' AND active = true LIMIT 1",
-        )
-        .fetch_optional(&pool)
-        .await
-        .expect("lookup default tenant")
-        .expect("default tenant must exist");
+        let tenant_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")
+                .fetch_optional(&pool)
+                .await
+                .expect("lookup default tenant")
+                .expect("default tenant must exist");
 
         sqlx::query(
             "INSERT INTO users (tenant_id, email, password_hash, role, is_superadmin, is_active) \
