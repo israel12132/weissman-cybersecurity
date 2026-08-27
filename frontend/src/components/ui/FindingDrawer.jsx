@@ -301,7 +301,7 @@ export default function FindingDrawer({
                         to={`/finding-clusters?id=${encodeURIComponent(clusterId)}`}
                         className="text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/20 text-cyan-300/90 hover:text-cyan-200 hover:border-cyan-400/40"
                       >
-                        {t('components.findingDrawer.cluster', { id: clusterId, defaultValue: `Cluster #${clusterId}` })}
+                        {t('components.findingDrawer.cluster', { id: clusterId })}
                       </Link>
                     )}
                     <LiveVerdictBadge
