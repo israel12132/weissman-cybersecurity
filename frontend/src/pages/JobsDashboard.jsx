@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Search, Briefcase } from 'lucide-react'
+import { Search, Briefcase, AlertTriangle, ShieldAlert, Bot } from 'lucide-react'
 import { createColumnHelper } from '@tanstack/react-table'
 import PageShell from './PageShell'
 import ShellScanActions from '../components/engine/ShellScanActions'
@@ -11,42 +11,32 @@ import DataTable from '../components/ui/DataTable'
 import { SkeletonTable, SkeletonWidgetGrid } from '../components/ui/Skeleton'
 import CopyButton, { CopyableField } from '../components/ui/CopyButton'
 import { apiFetch } from '../utils/apiFetch'
-import { normalizeJobStatus } from '../lib/useJobPoll'
 import { useVisiblePolling } from '../hooks/useVisiblePolling'
 import { useAuth } from '../context/AuthContext'
 import Button from '../components/ui/Button'
+import {
+  TILE_STATES,
+  operatorState,
+  operatorBadgeClass,
+  operatorStateCounts,
+  matchesOperatorFilter,
+  remapLabel,
+  diagnosticsHaystack,
+  JOBS_CSV_HEADER,
+  jobToCsvRow,
+  mergeJobDiagnostics,
+  leaseOwner,
+} from '../lib/jobDiagnostics'
 
 const columnHelper = createColumnHelper()
 
-const STATUS_COLORS = {
-  queued: 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30',
-  running: 'text-blue-400 bg-blue-900/20 border-blue-500/30',
-  completed: 'text-green-400 bg-green-900/20 border-green-500/30',
-  failed: 'text-red-400 bg-red-900/20 border-red-500/30',
-  cancelled: 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30',
-}
+const FILTER_KEYS = ['all', ...TILE_STATES]
 
-const STATUS_KEYS = ['all', 'queued', 'running', 'completed', 'failed', 'cancelled']
-
-function exportJobsCsv(jobs, _t) {
-  const header = ['id', 'kind', 'status', 'target', 'engine', 'client_id', 'created_at', 'updated_at', 'attempt_count', 'last_error']
+function exportJobsCsv(jobs) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
-    header.join(','),
-    ...jobs.map((j) =>
-      [
-        j.id || j.job_id,
-        j.kind || j.type,
-        normalizeJobStatus(j.status),
-        j.target,
-        j.engine,
-        j.client_id,
-        j.created_at,
-        j.updated_at || j.completed_at,
-        j.attempt_count ?? j.retries,
-        j.last_error,
-      ].map(esc).join(','),
-    ),
+    JOBS_CSV_HEADER.join(','),
+    ...jobs.map((j) => jobToCsvRow(j).map(esc).join(',')),
   ]
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -68,13 +58,12 @@ export default function JobsDashboard() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
+  const [diagError, setDiagError] = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
   const hasLoadedRef = useRef(false)
 
   const loadJobs = useCallback(async () => {
     try {
-      // Always load every status so the count tiles stay accurate; the active
-      // status filter is applied client-side (below) for the list.
       const qs = new URLSearchParams({ limit: '100' })
 
       let data
@@ -110,38 +99,58 @@ export default function JobsDashboard() {
     loadJobs()
   }, [authLoading, loadJobs])
 
-  // Auto-refresh every 5s, skipping ticks while the tab is hidden.
   useVisiblePolling(loadJobs, 5000, { paused: !autoRefresh || authLoading })
+
+  const selectedJobId = selectedJob ? selectedJob.id || selectedJob.job_id : null
+
+  useEffect(() => {
+    if (!selectedJobId) return
+    const fresh = jobs.find((j) => (j.id || j.job_id) === selectedJobId)
+    if (fresh) setSelectedJob(fresh)
+  }, [jobs, selectedJobId])
+
+  useEffect(() => {
+    if (!selectedJobId) {
+      setDiagError('')
+      return undefined
+    }
+    let cancelled = false
+    async function loadDiag() {
+      try {
+        const d = await apiFetch(`/api/jobs/${encodeURIComponent(selectedJobId)}/diagnostics`)
+        if (cancelled || !d) return
+        setDiagError('')
+        setSelectedJob((prev) => {
+          if (!prev || (prev.id || prev.job_id) !== selectedJobId) return prev
+          return mergeJobDiagnostics(prev, d)
+        })
+      } catch (err) {
+        if (cancelled) return
+        setDiagError(err?.message || t('pages.jobsDashboard.diag_unavailable'))
+      }
+    }
+    loadDiag()
+    return () => { cancelled = true }
+  }, [selectedJobId, lastUpdated, t])
 
   const filteredJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     return jobs.filter((j) => {
-      if (statusFilter !== 'all' && normalizeJobStatus(j.status) !== statusFilter) return false
+      if (!matchesOperatorFilter(j, statusFilter)) return false
       if (!q) return true
-      const hay = [
-        j.id, j.job_id, j.kind, j.type, j.status, j.target, j.engine,
-        j.client_id != null ? String(j.client_id) : '',
-        j.last_error,
-      ].filter(Boolean).join(' ').toLowerCase()
-      return hay.includes(q)
+      return diagnosticsHaystack(j).includes(q)
     })
   }, [jobs, search, statusFilter])
 
-  const statusCounts = useMemo(() => {
-    const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
-    for (const j of jobs) {
-      const s = normalizeJobStatus(j.status)
-      if (counts[s] != null) counts[s] += 1
-    }
-    return counts
-  }, [jobs])
+  const statusCounts = useMemo(() => operatorStateCounts(jobs), [jobs])
 
   const listFindings = useMemo(() => filteredJobs.map((j) => ({
     id: j.id || j.job_id,
-    severity: normalizeJobStatus(j.status) === 'failed' ? 'high' : normalizeJobStatus(j.status) === 'running' ? 'medium' : 'info',
+    severity: operatorState(j) === 'error' || operatorState(j) === 'stuck' ? 'high'
+      : operatorState(j) === 'running' ? 'medium' : 'info',
     title: j.target || j.engine || String(j.id || j.job_id),
     type: j.kind || j.type || 'job',
-    description: j.last_error || '',
+    description: j.stuck_reason || j.last_error || '',
     resource: String(j.client_id ?? ''),
   })), [filteredJobs])
 
@@ -149,11 +158,6 @@ export default function JobsDashboard() {
     csvPrefix: 'weissman-jobs',
     haystackFn: (f) => `${f.title} ${f.type} ${f.description} ${f.resource}`,
   })
-
-  function getStatusBadgeClass(status) {
-    const statusLower = normalizeJobStatus(status)
-    return STATUS_COLORS[statusLower] || 'text-[var(--text-tertiary)] bg-[var(--bg-1)]/20 border-[var(--border-strong)]/30'
-  }
 
   function formatDuration(startTime, endTime) {
     if (!startTime) return '—'
@@ -213,12 +217,32 @@ export default function JobsDashboard() {
           </span>
         ),
       }),
-      columnHelper.accessor((j) => normalizeJobStatus(j.status), {
+      columnHelper.accessor((j) => operatorState(j), {
         id: 'status',
         header: t('pages.jobsDashboard.col_status'),
+        cell: (ctx) => {
+          const job = ctx.row.original
+          const state = ctx.getValue()
+          return (
+            <div className="space-y-0.5">
+              <span className={`px-2 py-1 text-xs border rounded ${operatorBadgeClass(state)}`}>
+                {t(`pages.jobsDashboard.status_${state}`, { defaultValue: state })}
+              </span>
+              {job.stuck_reason ? (
+                <div className="text-[10px] text-orange-400 max-w-[220px] truncate" title={job.stuck_reason}>
+                  {job.stuck_reason}
+                </div>
+              ) : null}
+            </div>
+          )
+        },
+      }),
+      columnHelper.accessor((j) => leaseOwner(j) || '', {
+        id: 'lease',
+        header: t('pages.jobsDashboard.col_lease'),
         cell: (ctx) => (
-          <span className={`px-2 py-1 text-xs border rounded ${getStatusBadgeClass(ctx.row.original.status)}`}>
-            {ctx.getValue() || 'unknown'}
+          <span className="text-[11px] font-mono text-[var(--text-secondary)] truncate block max-w-[140px]" title={ctx.getValue()}>
+            {ctx.getValue() || '—'}
           </span>
         ),
       }),
@@ -244,7 +268,9 @@ export default function JobsDashboard() {
     [t, i18n.language],
   )
 
-  const selectedJobId = selectedJob ? selectedJob.id || selectedJob.job_id : null
+  const stuckCount = statusCounts.stuck
+  const agentCount = statusCounts.blocked_by_agent
+  const roeCount = statusCounts.roe_blocked
 
   return (
     <PageShell
@@ -264,7 +290,7 @@ export default function JobsDashboard() {
           </label>
           <ShellScanActions
             onRefresh={() => { setLoading(true); loadJobs() }}
-            onExport={() => exportJobsCsv(filteredJobs, t)}
+            onExport={() => exportJobsCsv(filteredJobs)}
             refreshLoading={loading}
             exportDisabled={!filteredFindings.length}
           />
@@ -289,20 +315,45 @@ export default function JobsDashboard() {
         )}
 
         {error && (
-          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          <div role="alert" className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
             {error}
+          </div>
+        )}
+
+        {stuckCount > 0 && (
+          <div role="status" className="flex items-start gap-3 rounded-xl border border-orange-500/40 bg-orange-950/30 px-4 py-3">
+            <AlertTriangle className="w-4 h-4 text-orange-400 mt-0.5 shrink-0 animate-pulse" />
+            <p className="text-[12px] text-orange-200">
+              {t('pages.jobsDashboard.stuck_banner', { count: stuckCount })}
+            </p>
+          </div>
+        )}
+        {agentCount > 0 && (
+          <div role="status" className="flex items-start gap-3 rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3">
+            <Bot className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" />
+            <p className="text-[12px] text-amber-100">
+              {t('pages.jobsDashboard.agent_banner', { count: agentCount })}
+            </p>
+          </div>
+        )}
+        {roeCount > 0 && (
+          <div role="status" className="flex items-start gap-3 rounded-xl border border-fuchsia-500/35 bg-fuchsia-950/25 px-4 py-3">
+            <ShieldAlert className="w-4 h-4 text-fuchsia-300 mt-0.5 shrink-0" />
+            <p className="text-[12px] text-fuchsia-100">
+              {t('pages.jobsDashboard.roe_banner', { count: roeCount })}
+            </p>
           </div>
         )}
 
         {loading && !hasLoadedRef.current ? (
           <>
-            <SkeletonWidgetGrid count={5} />
-            <SkeletonTable rows={8} cols={6} />
+            <SkeletonWidgetGrid count={8} />
+            <SkeletonTable rows={8} cols={7} />
           </>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {['queued', 'running', 'completed', 'failed', 'cancelled'].map((status) => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+              {TILE_STATES.map((status) => (
                 <Button variant="unstyled"
                   key={status}
                   type="button"
@@ -313,10 +364,10 @@ export default function JobsDashboard() {
                       : 'border-[var(--border-default)] bg-[var(--table-surface)] hover:border-[var(--border-strong)]'
                   }`}
                 >
-                  <div className={`text-2xl font-bold ${getStatusBadgeClass(status).split(' ')[0]}`}>
-                    {statusCounts[status]}
+                  <div className={`text-2xl font-bold ${operatorBadgeClass(status === 'failed' ? 'error' : status).split(' ')[0]}`}>
+                    {statusCounts[status] ?? 0}
                   </div>
-                  <div className="text-[11px] text-[var(--text-tertiary)] capitalize mt-1">
+                  <div className="text-[11px] text-[var(--text-tertiary)] mt-1">
                     {t(`pages.jobsDashboard.status_${status}`, { defaultValue: status })}
                   </div>
                 </Button>
@@ -336,7 +387,7 @@ export default function JobsDashboard() {
                 />
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {STATUS_KEYS.map((key) => (
+                {FILTER_KEYS.map((key) => (
                   <Button variant="unstyled"
                     key={key}
                     type="button"
@@ -372,7 +423,7 @@ export default function JobsDashboard() {
             )}
 
             {filteredJobs.length > 0 && (
-              <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
                 <DataTable
                   id="jobsdash-table"
                   columns={columns}
@@ -389,64 +440,12 @@ export default function JobsDashboard() {
                     {selectedJob ? t('pages.jobsDashboard.detail_title') : t('pages.jobsDashboard.detail_empty')}
                   </h3>
                   {selectedJob ? (
-                    <>
-                      <CopyableField
-                        label={t('pages.jobsDashboard.col_job_id')}
-                        value={selectedJob.id || selectedJob.job_id}
-                      />
-                      <div className="grid grid-cols-2 gap-3 text-[12px]">
-                        <div>
-                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_kind')}</div>
-                          <div className="text-[var(--text-secondary)] mt-0.5">{selectedJob.kind || selectedJob.type || '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_status')}</div>
-                          <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${getStatusBadgeClass(selectedJob.status)}`}>
-                            {normalizeJobStatus(selectedJob.status)}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_attempt')}</div>
-                          <div className="text-[var(--text-secondary)] mt-0.5">{selectedJob.attempt_count ?? selectedJob.retries ?? 0}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.field_client')}</div>
-                          <div className="text-[var(--text-secondary)] mt-0.5">
-                            {selectedJob.client_id != null ? (
-                              <Link to={`/clients/${selectedJob.client_id}`} className="text-cyan-400 hover:underline">
-                                #{selectedJob.client_id}
-                              </Link>
-                            ) : '—'}
-                          </div>
-                        </div>
-                      </div>
-                      {selectedJob.target && (
-                        <CopyableField label={t('pages.jobsDashboard.col_target')} value={selectedJob.target} />
-                      )}
-                      {selectedJob.engine && (
-                        <CopyableField label={t('pages.jobsDashboard.field_engine')} value={selectedJob.engine} />
-                      )}
-                      {selectedJob.worker_id && (
-                        <CopyableField label={t('pages.jobsDashboard.field_worker')} value={selectedJob.worker_id} />
-                      )}
-                      <div className="text-[11px] font-mono text-[var(--text-muted)] space-y-1">
-                        <div>{t('pages.jobsDashboard.field_created')}: {fmtTime(selectedJob.created_at)}</div>
-                        <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(selectedJob.updated_at)}</div>
-                        {selectedJob.heartbeat_at && (
-                          <div>{t('pages.jobsDashboard.field_heartbeat')}: {fmtTime(selectedJob.heartbeat_at)}</div>
-                        )}
-                      </div>
-                      {selectedJob.last_error && (
-                        <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3">
-                          <div className="text-[10px] font-mono text-rose-300/70 uppercase mb-1">
-                            {t('pages.jobsDashboard.field_error')}
-                          </div>
-                          <pre className="text-[11px] font-mono text-rose-200 whitespace-pre-wrap break-words">
-                            {selectedJob.last_error}
-                          </pre>
-                        </div>
-                      )}
-                    </>
+                    <JobDetailPanel
+                      job={selectedJob}
+                      diagError={diagError}
+                      t={t}
+                      fmtTime={fmtTime}
+                    />
                   ) : (
                     <p className="text-[12px] text-[var(--text-muted)]">{t('pages.jobsDashboard.detail_hint')}</p>
                   )}
@@ -457,5 +456,135 @@ export default function JobsDashboard() {
         )}
       </div>
     </PageShell>
+  )
+}
+
+function JobDetailPanel({ job, diagError, t, fmtTime }) {
+  const state = operatorState(job)
+  const remap = remapLabel(job)
+  const owner = leaseOwner(job)
+  return (
+    <>
+      <CopyableField
+        label={t('pages.jobsDashboard.col_job_id')}
+        value={job.id || job.job_id}
+      />
+      <div className="grid grid-cols-2 gap-3 text-[12px]">
+        <div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_kind')}</div>
+          <div className="text-[var(--text-secondary)] mt-0.5">{job.kind || job.type || '—'}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_operator_state')}</div>
+          <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs border rounded ${operatorBadgeClass(state)}`}>
+            {t(`pages.jobsDashboard.status_${state}`, { defaultValue: state })}
+          </span>
+        </div>
+        <div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.col_attempt')}</div>
+          <div className="text-[var(--text-secondary)] mt-0.5">{job.attempt_count ?? job.retries ?? 0}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">{t('pages.jobsDashboard.field_client')}</div>
+          <div className="text-[var(--text-secondary)] mt-0.5">
+            {job.client_id != null ? (
+              <Link to={`/clients/${job.client_id}`} className="text-cyan-400 hover:underline">
+                #{job.client_id}
+              </Link>
+            ) : '—'}
+          </div>
+        </div>
+      </div>
+      {job.target && (
+        <CopyableField label={t('pages.jobsDashboard.col_target')} value={job.target} />
+      )}
+      {job.engine && (
+        <CopyableField label={t('pages.jobsDashboard.field_engine')} value={job.engine} />
+      )}
+      {remap?.wasRemapped && (
+        <div className="rounded-lg border border-cyan-500/25 bg-cyan-950/20 p-3">
+          <div className="text-[10px] font-mono text-cyan-300/70 uppercase mb-1">
+            {t('pages.jobsDashboard.field_remap')}
+          </div>
+          <div className="text-[12px] text-cyan-100 font-mono">
+            {remap.requested} → {remap.canonical}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] p-3 space-y-2">
+        <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase">
+          {t('pages.jobsDashboard.diag_title')}
+        </div>
+        {diagError && (
+          <div role="alert" className="text-[11px] text-rose-300">{diagError}</div>
+        )}
+        <div className="text-[11px] font-mono text-[var(--text-secondary)] space-y-1">
+          <div>{t('pages.jobsDashboard.field_lease_owner')}: {owner || t('pages.jobsDashboard.field_lease_missing')}</div>
+          <div>
+            {t('pages.jobsDashboard.field_lease_ttl')}:{' '}
+            {job.lease_present === false
+              ? t('pages.jobsDashboard.field_lease_missing')
+              : job.lease_ttl_secs != null
+                ? `${job.lease_ttl_secs}s`
+                : job.lease_inspect_ok === false
+                  ? t('pages.jobsDashboard.diag_unavailable')
+                  : '—'}
+          </div>
+          <div>
+            {t('pages.jobsDashboard.field_heartbeat')}: {fmtTime(job.heartbeat_at)}
+            {job.heartbeat_stale_secs != null ? ` (${job.heartbeat_stale_secs}s)` : ''}
+          </div>
+          {job.locked_until && (
+            <div>{t('pages.jobsDashboard.field_locked_until')}: {fmtTime(job.locked_until)}</div>
+          )}
+          {job.run_after && (
+            <div>{t('pages.jobsDashboard.field_run_after')}: {fmtTime(job.run_after)}</div>
+          )}
+          {job.swarm_worker_alive != null && (
+            <div>
+              {t('pages.jobsDashboard.field_swarm')}:{' '}
+              {job.swarm_worker_alive
+                ? t('pages.jobsDashboard.swarm_alive')
+                : t('pages.jobsDashboard.swarm_dead')}
+            </div>
+          )}
+          {job.live_phase && (
+            <div>{t('pages.jobsDashboard.field_phase')}: {job.live_phase}
+              {job.live_phase_idle_secs != null ? ` (${job.live_phase_idle_secs}s)` : ''}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {job.stuck_reason && (
+        <div role="status" className="rounded-lg border border-orange-500/30 bg-orange-950/20 p-3">
+          <div className="text-[10px] font-mono text-orange-300/70 uppercase mb-1">
+            {t('pages.jobsDashboard.field_stuck_reason')}
+          </div>
+          <pre className="text-[11px] font-mono text-orange-100 whitespace-pre-wrap break-words">
+            {job.stuck_reason}
+          </pre>
+        </div>
+      )}
+
+      {owner && (
+        <CopyableField label={t('pages.jobsDashboard.field_worker')} value={owner} />
+      )}
+      <div className="text-[11px] font-mono text-[var(--text-muted)] space-y-1">
+        <div>{t('pages.jobsDashboard.field_created')}: {fmtTime(job.created_at)}</div>
+        <div>{t('pages.jobsDashboard.field_updated')}: {fmtTime(job.updated_at)}</div>
+      </div>
+      {job.last_error && (
+        <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3">
+          <div className="text-[10px] font-mono text-rose-300/70 uppercase mb-1">
+            {t('pages.jobsDashboard.field_error')}
+          </div>
+          <pre className="text-[11px] font-mono text-rose-200 whitespace-pre-wrap break-words">
+            {job.last_error}
+          </pre>
+        </div>
+      )}
+    </>
   )
 }

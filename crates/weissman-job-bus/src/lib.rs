@@ -13,6 +13,7 @@ mod error;
 mod events;
 mod forensic;
 mod lease;
+mod live_inspect;
 mod signing;
 mod swarm;
 
@@ -20,11 +21,15 @@ pub use cqrs::project_event;
 pub use error::JobBusError;
 pub use events::{append_event, fetch_event_chain_hash, JobEventKind, JobEventRecord};
 pub use forensic::{enqueue_forensic_dlq, ForensicBundle, MemorySnapshot};
-pub use lease::{DistributedLease, LeaseHandle};
+pub use lease::{parse_lease_owner, DistributedLease, LeaseHandle, LeaseView};
+pub use live_inspect::{inspect_orchestration, redis_url_configured, LiveOrchestrationView};
 pub use signing::{
     forensic_seal_key_from_env, sign_job_envelope, verify_job_envelope, SignedJobEnvelope,
 };
-pub use swarm::{spawn_coordinator_if_enabled, SwarmCoordinator, WorkerSwarm};
+pub use swarm::{
+    inspect_worker_liveness, inspect_workers, spawn_coordinator_if_enabled, SwarmCoordinator,
+    WorkerLivenessView, WorkerSwarm,
+};
 
 use serde_json::{json, Value};
 use sqlx::PgPool;
