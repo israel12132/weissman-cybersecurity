@@ -298,14 +298,7 @@ fn json_str_snippet(v: &Value) -> Option<String> {
         Value::String(s) => snippet(Some(s)),
         Value::Object(o) => {
             for k in [
-                "proof",
-                "evidence",
-                "raw",
-                "snippet",
-                "detail",
-                "details",
-                "whois",
-                "body",
+                "proof", "evidence", "raw", "snippet", "detail", "details", "whois", "body",
                 "value",
             ] {
                 if let Some(found) = o.get(k).and_then(json_str_snippet) {
@@ -419,9 +412,7 @@ fn parse_primary_domain(domains_raw: &str) -> Option<String> {
                 for k in ["primary", "domain", "name", "host"] {
                     if let Some(s) = o.get(k).and_then(Value::as_str) {
                         if !s.trim().is_empty() {
-                            return Some(
-                                s.trim().trim_start_matches("*.").to_ascii_lowercase(),
-                            );
+                            return Some(s.trim().trim_start_matches("*.").to_ascii_lowercase());
                         }
                     }
                 }
@@ -1586,17 +1577,13 @@ mod tests {
             .expect("sqli");
         assert!(sqli.formula_inputs.internet_facing);
         assert_eq!(sqli.formula_inputs.exposure_weight, EXP_INTERNET);
-        assert_eq!(
-            snap.pricing.formula.expression,
-            micro_severity::EXPRESSION
-        );
+        assert_eq!(snap.pricing.formula.expression, micro_severity::EXPRESSION);
         assert_eq!(snap.pricing.formula.name, micro_severity::LABEL);
-        assert!(
-            snap.pricing
-                .formula
-                .usd_overlay
-                .contains("Not residual financial risk")
-        );
+        assert!(snap
+            .pricing
+            .formula
+            .usd_overlay
+            .contains("Not residual financial risk"));
         assert!(!snap.headline_risk.priced);
         assert!(snap.pricing.total_priced_usd.is_none());
         assert!(snap.pricing.total_risk_points > 0.0);
@@ -1728,7 +1715,10 @@ mod tests {
             snap.pricing.total_priced_usd.unwrap(),
             "CEO USD must not equal Micro-Severity product"
         );
-        let contract = financial_risk::executive_scoring_contract(&snap.headline_risk, Some(snap.pricing.total_risk_points));
+        let contract = financial_risk::executive_scoring_contract(
+            &snap.headline_risk,
+            Some(snap.pricing.total_risk_points),
+        );
         assert_eq!(contract["method"], financial_risk::METHOD_FAIR);
         assert_eq!(
             contract["micro_severity"]["method"],

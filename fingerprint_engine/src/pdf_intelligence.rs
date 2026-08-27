@@ -139,10 +139,7 @@ pub async fn load_snapshot(
         .map(|r| PdfCorpusItem {
             id: format!("run:{}", r.try_get::<i64, _>("id").unwrap_or(0)),
             kind: "report_run".into(),
-            title: format!(
-                "Report run #{}",
-                r.try_get::<i64, _>("id").unwrap_or(0)
-            ),
+            title: format!("Report run #{}", r.try_get::<i64, _>("id").unwrap_or(0)),
             client_id,
             created_at: r
                 .try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")
@@ -190,12 +187,14 @@ pub async fn load_snapshot(
          COUNT(*) FILTER (WHERE lower(severity) NOT LIKE '%critical%' AND lower(severity) NOT LIKE '%high%' AND lower(severity) NOT LIKE '%med%')::bigint AS low";
 
     let sev = if let Some(cid) = client_id {
-        sqlx::query(&format!("SELECT {SEV_AGG} FROM vulnerabilities WHERE client_id = $1"))
-            .bind(cid)
-            .fetch_optional(&mut *tx)
-            .await
-            .ok()
-            .flatten()
+        sqlx::query(&format!(
+            "SELECT {SEV_AGG} FROM vulnerabilities WHERE client_id = $1"
+        ))
+        .bind(cid)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
     } else {
         sqlx::query(&format!("SELECT {SEV_AGG} FROM vulnerabilities"))
             .fetch_optional(&mut *tx)
@@ -294,7 +293,10 @@ pub async fn load_snapshot(
     })
 }
 
-pub fn compose_bytes(snap: &PdfIntelligenceSnapshot, req: &ComposeRequest) -> Result<Vec<u8>, String> {
+pub fn compose_bytes(
+    snap: &PdfIntelligenceSnapshot,
+    req: &ComposeRequest,
+) -> Result<Vec<u8>, String> {
     if let Some(reason) = &snap.empty_reason {
         return Err(reason.clone());
     }
@@ -447,7 +449,9 @@ mod tests {
             .iter()
             .filter_map(|x| x.get("id").and_then(|i| i.as_str()))
             .collect();
-        for need in ["nist_csf", "iso27001", "soc2", "gdpr", "pci", "hipaa", "mitre"] {
+        for need in [
+            "nist_csf", "iso27001", "soc2", "gdpr", "pci", "hipaa", "mitre",
+        ] {
             assert!(ids.contains(&need), "missing {need}");
         }
     }
@@ -475,8 +479,15 @@ mod tests {
             empty_reason: Some("No live report runs".into()),
             fair: FairHeadline::cannot_price("Cannot price — test empty corpus"),
         };
-        let err = compose_bytes(&snap, &ComposeRequest { client_id: Some(1), title: None, sections: vec![] })
-            .unwrap_err();
+        let err = compose_bytes(
+            &snap,
+            &ComposeRequest {
+                client_id: Some(1),
+                title: None,
+                sections: vec![],
+            },
+        )
+        .unwrap_err();
         assert!(err.contains("No live"));
     }
 
@@ -531,9 +542,18 @@ mod tests {
                 client_id: Some(1),
                 title: Some("Board pack".into()),
                 sections: vec![
-                    ComposeSectionSpec { id: "executive".into(), enabled: true },
-                    ComposeSectionSpec { id: "findings".into(), enabled: true },
-                    ComposeSectionSpec { id: "reports".into(), enabled: true },
+                    ComposeSectionSpec {
+                        id: "executive".into(),
+                        enabled: true,
+                    },
+                    ComposeSectionSpec {
+                        id: "findings".into(),
+                        enabled: true,
+                    },
+                    ComposeSectionSpec {
+                        id: "reports".into(),
+                        enabled: true,
+                    },
                 ],
             },
         )
@@ -649,6 +669,9 @@ mod tests {
         .expect("compose");
         assert!(bytes.starts_with(b"%PDF-1.4"));
         let text = String::from_utf8_lossy(&bytes);
-        assert!(text.contains("NIST"), "live framework name must appear in the pack");
+        assert!(
+            text.contains("NIST"),
+            "live framework name must appear in the pack"
+        );
     }
 }

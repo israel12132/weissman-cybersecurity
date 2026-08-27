@@ -59,7 +59,9 @@ mod tests {
             soc2_pct: 88,
             iso_pct: 91,
             gdpr_pct: 84,
-            fair_line: Some("FAIR USD blast-radius  ALE $180,000  ·  worst-case SLE $98,000".into()),
+            fair_line: Some(
+                "FAIR USD blast-radius  ALE $180,000  ·  worst-case SLE $98,000".into(),
+            ),
         };
         let bytes = render_executive_board_pdf(&params).expect("PDF render must succeed");
         assert!(bytes.starts_with(b"%PDF-1.4"), "must be a PDF-1.4 document");

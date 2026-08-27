@@ -175,10 +175,7 @@ pub fn headline_from_risk(risk: &ClientFinancialRisk) -> FairHeadline {
 /// Cockpit / PDF / kill-chain scoring envelope. Headline is FAIR only;
 /// Micro-Severity is nested and labeled as SOC ranking — never residual USD.
 #[must_use]
-pub fn executive_scoring_contract(
-    fair: &FairHeadline,
-    micro_local_score: Option<f64>,
-) -> Value {
+pub fn executive_scoring_contract(fair: &FairHeadline, micro_local_score: Option<f64>) -> Value {
     json!({
         "method": METHOD_FAIR,
         "fair": fair,
@@ -187,21 +184,21 @@ pub fn executive_scoring_contract(
 }
 
 /// Latest snapshot, computing once when missing. Never invents USD.
-pub async fn headline_for_client(
-    pool: &PgPool,
-    tenant_id: i64,
-    client_id: i64,
-) -> FairHeadline {
+pub async fn headline_for_client(pool: &PgPool, tenant_id: i64, client_id: i64) -> FairHeadline {
     match latest_snapshot(pool, tenant_id, client_id).await {
         Ok(Some(s)) => return headline_from_risk(&s),
         Ok(None) => {}
         Err(e) => {
-            return FairHeadline::cannot_price(format!("Cannot price — FAIR snapshot read failed: {e}"));
+            return FairHeadline::cannot_price(format!(
+                "Cannot price — FAIR snapshot read failed: {e}"
+            ));
         }
     }
     match compute_and_store(pool, tenant_id, client_id).await {
         Ok(s) => headline_from_risk(&s),
-        Err(e) => FairHeadline::cannot_price(format!("Cannot price — FAIR computation failed: {e}")),
+        Err(e) => {
+            FairHeadline::cannot_price(format!("Cannot price — FAIR computation failed: {e}"))
+        }
     }
 }
 
@@ -607,8 +604,14 @@ mod tests {
         let contract = executive_scoring_contract(&h, Some(25.0));
         assert_eq!(contract["method"], METHOD_FAIR);
         assert_eq!(contract["fair"]["ale_annualised_usd"], 180_000);
-        assert_eq!(contract["micro_severity"]["method"], crate::micro_severity::METHOD);
-        assert_eq!(contract["micro_severity"]["not_residual_financial_risk"], true);
+        assert_eq!(
+            contract["micro_severity"]["method"],
+            crate::micro_severity::METHOD
+        );
+        assert_eq!(
+            contract["micro_severity"]["not_residual_financial_risk"],
+            true
+        );
         assert_eq!(contract["micro_severity"]["score"], 25.0);
         // Linear product must not leak into FAIR dollars.
         assert_ne!(
