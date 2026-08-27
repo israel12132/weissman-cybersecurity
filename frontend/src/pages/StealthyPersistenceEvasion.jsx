@@ -68,7 +68,11 @@ export default function StealthyPersistenceEvasion() {
   const [wipeMsg, setWipeMsg] = useState(null)
 
   useEffect(() => {
-    apiFetch('/api/clients').then((d) => { if (Array.isArray(d)) setClients(d) }).catch(() => {})
+    apiFetch('/api/clients').then((d) => {
+      if (!Array.isArray(d)) return
+      setClients(d)
+      if (d.length) setSelectedClientId((cur) => cur || String(d[0].id))
+    }).catch(() => {})
     apiFetch('/api/stealthy-persistence-evasion/catalog')
       .then((d) => { if (d?.checks) setCatalog(d) })
       .catch(() => {})
