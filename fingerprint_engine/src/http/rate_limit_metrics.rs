@@ -374,6 +374,11 @@ pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Value {
         .unwrap_or_else(|| {
             window_count(&store().login_windows, client_ip, Duration::from_secs(60))
         });
+    let (login_ok_cur, login_ok_reset) =
+        super::rate_limit_redis::current_login_success_ip(client_ip)
+            .await
+            .map(|(c, r)| (c as usize, r))
+            .unwrap_or((0, 0));
     let (api_cur, api_reset) = super::rate_limit_redis::current_api_ip(client_ip)
         .await
         .map(|(c, r)| (c as usize, r))
@@ -382,6 +387,7 @@ pub async fn status_for_async(tenant_id: i64, client_ip: &str) -> Value {
     json!({
         "scans": limit_block(scan_cur, scan_max, scan_reset),
         "logins": limit_block(login_cur, login_max, login_reset),
+        "login_success": limit_block(login_ok_cur, login_success_per_minute(), login_ok_reset),
         "api": limit_block(api_cur, api_max, api_reset),
     })
 }

@@ -1,11 +1,13 @@
 //! Per-IP rate limits for unauthenticated login, MFA verification, and agent enrollment POSTs.
 //!
 //! Login is **outcome-aware** (token bucket / sliding refill):
-//! - Password failures (`401`) consume a **strict** bucket (`WEISSMAN_LOGIN_PER_MINUTE` /
-//!   `WEISSMAN_LOGIN_BURST`, default 8/min burst 12) — credential stuffing defense.
-//! - Successful auth (`200` / MFA `403`) consume a **lighter** bucket
-//!   (`WEISSMAN_LOGIN_SUCCESS_*`, default 40/min burst 48) so legitimate tools sharing a NAT
-//!   are not 429'd by the failure budget. The success path is still bounded (never unlimited).
+//! - Every login POST **reserves** a failure token on admit (`WEISSMAN_LOGIN_PER_MINUTE` /
+//!   `WEISSMAN_LOGIN_BURST`, default 8/min burst 12). Concurrent stuffing cannot overshoot.
+//! - Password failures (`401`) keep the reservation. Successful auth (`200` / MFA `403`)
+//!   **refunds** it and spends the lighter success bucket (`WEISSMAN_LOGIN_SUCCESS_*`,
+//!   default 40/min burst 48) so sequential shared-NAT tools are not 429'd by the
+//!   failure budget. Parallel unknowns above the failure burst get `Retry-After` and retry.
+//!   The success path is still bounded (never unlimited).
 //! - Per-email lockout (`login_lockout`, 10 failures / 15 min) is unchanged.
 //!
 //! 429 bodies are generic (`rate_limited`) — they do not reveal whether an account exists.
@@ -174,24 +176,18 @@ async fn redis_login_admit(ip: &str) -> RedisAdmit {
         }
         return RedisAdmit::FallbackLocal;
     }
-    let fail = super::rate_limit_redis::login_failure_peek(ip).await;
-    let ok = super::rate_limit_redis::login_success_peek(ip).await;
-    match (fail, ok) {
-        (super::rate_limit_redis::StrictOp::Ok(f), super::rate_limit_redis::StrictOp::Ok(s)) => {
-            if !f.allowed {
-                return RedisAdmit::Deny {
-                    retry_after_secs: f.retry_after_secs.max(1),
-                };
-            }
-            if !s.allowed {
-                return RedisAdmit::Deny {
-                    retry_after_secs: s.retry_after_secs.max(1),
-                };
-            }
-            RedisAdmit::Allow
+    // Reserve a failure token atomically (Lua). Refunded on success/neutral.
+    match super::rate_limit_redis::login_attempt_admit(ip).await {
+        super::rate_limit_redis::StrictOp::Ok(admit) if admit.allowed => RedisAdmit::Allow,
+        super::rate_limit_redis::StrictOp::Ok(admit) => RedisAdmit::Deny {
+            retry_after_secs: admit.retry_after_secs.max(1),
+        },
+        super::rate_limit_redis::StrictOp::Unavailable
+            if super::rate_limit_redis::distributed_state_required() =>
+        {
+            RedisAdmit::StoreDown
         }
-        _ if super::rate_limit_redis::distributed_state_required() => RedisAdmit::StoreDown,
-        _ => RedisAdmit::FallbackLocal,
+        super::rate_limit_redis::StrictOp::Unavailable => RedisAdmit::FallbackLocal,
     }
 }
 
@@ -214,12 +210,15 @@ fn local_login_record(ip: &str, outcome: AuthOutcome) {
 async fn redis_login_record(ip: &str, outcome: AuthOutcome) {
     match outcome {
         AuthOutcome::Failure => {
-            let _ = super::rate_limit_redis::login_failure_consume(ip).await;
+            // Failure token already reserved on admit.
         }
         AuthOutcome::Success => {
+            let _ = super::rate_limit_redis::login_failure_refund(ip).await;
             let _ = super::rate_limit_redis::login_success_consume(ip).await;
         }
-        AuthOutcome::Neutral => {}
+        AuthOutcome::Neutral => {
+            let _ = super::rate_limit_redis::login_failure_refund(ip).await;
+        }
     }
 }
 
@@ -460,5 +459,35 @@ mod tests {
         let blocked = app.clone().oneshot(login_req(peer)).await.unwrap();
         assert_eq!(blocked.status(), StatusCode::TOO_MANY_REQUESTS);
         assert!(blocked.headers().get("Retry-After").is_some());
+    }
+
+    #[tokio::test]
+    async fn concurrent_failed_logins_cannot_overshoot_failure_burst() {
+        let app = app_fail();
+        let peer = next_test_ip();
+        let burst = rate_limit_metrics::login_burst() as usize;
+        let extra = 8usize;
+        let futs: Vec<_> = (0..burst + extra)
+            .map(|_| app.clone().oneshot(login_req(peer)))
+            .collect();
+        let results = futures::future::join_all(futs).await;
+        let mut unauthorized = 0usize;
+        let mut limited = 0usize;
+        for r in results {
+            let resp = r.unwrap();
+            match resp.status() {
+                StatusCode::UNAUTHORIZED => unauthorized += 1,
+                StatusCode::TOO_MANY_REQUESTS => {
+                    limited += 1;
+                    assert!(resp.headers().get("Retry-After").is_some());
+                }
+                other => panic!("unexpected status {other}"),
+            }
+        }
+        assert_eq!(
+            unauthorized, burst,
+            "concurrent stuffing must not exceed failure burst"
+        );
+        assert_eq!(limited, extra);
     }
 }

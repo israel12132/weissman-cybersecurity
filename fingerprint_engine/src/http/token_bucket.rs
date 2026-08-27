@@ -90,6 +90,13 @@ impl TokenBucket {
         }
     }
 
+    /// Return one token (capped at burst). Used to refund a failure reservation after
+    /// a successful / neutral auth outcome.
+    pub fn refund(&mut self, now: Instant) {
+        self.refill(now);
+        self.tokens = (self.tokens + 1.0).min(f64::from(self.cfg.burst));
+    }
+
     /// Tokens consumed from the burst (for status APIs).
     #[must_use]
     pub fn used(&mut self, now: Instant) -> u32 {
@@ -145,7 +152,11 @@ impl AdmitDecision {
 impl OutcomeAwareGate {
     #[must_use]
     pub fn new(failure: TokenBucketConfig, success: TokenBucketConfig) -> Self {
-        let max_in_flight = success.burst.max(failure.burst).max(1);
+        // In-flight unknowns are capped at the failure burst: each admit *reserves* a
+        // failure token (refunded on success/neutral). Concurrent stuffing therefore
+        // cannot overshoot the brute-force budget. Sequential successes refund and
+        // continue up to the success burst.
+        let max_in_flight = failure.burst.max(1);
         Self {
             failure: TokenBucket::new(failure),
             success: TokenBucket::new(success),
@@ -154,21 +165,23 @@ impl OutcomeAwareGate {
         }
     }
 
-    /// Peek both buckets and the in-flight cap. Does not consume tokens (outcome is unknown).
+    /// Reserve a failure token (credential-stuffing budget) and require a free success
+    /// token. Outcome is applied in [`Self::record`]: failures keep the reservation;
+    /// successes refund it and spend the success bucket instead.
     pub fn admit(&mut self, now: Instant) -> AdmitDecision {
         if self.in_flight >= self.max_in_flight {
             return AdmitDecision::DenyInFlight {
                 retry_after_secs: 1,
             };
         }
-        if self.failure.available(now) < 1.0 {
-            return AdmitDecision::DenyFailures {
-                retry_after_secs: self.failure.retry_after(now).as_secs().max(1),
-            };
-        }
         if self.success.available(now) < 1.0 {
             return AdmitDecision::DenySuccesses {
                 retry_after_secs: self.success.retry_after(now).as_secs().max(1),
+            };
+        }
+        if let Err(wait) = self.failure.try_consume(now) {
+            return AdmitDecision::DenyFailures {
+                retry_after_secs: wait.as_secs().max(1),
             };
         }
         self.in_flight = self.in_flight.saturating_add(1);
@@ -179,12 +192,15 @@ impl OutcomeAwareGate {
         self.in_flight = self.in_flight.saturating_sub(1);
         match outcome {
             AuthOutcome::Failure => {
-                let _ = self.failure.try_consume(now);
+                // Reservation already consumed on admit.
             }
             AuthOutcome::Success => {
+                self.failure.refund(now);
                 let _ = self.success.try_consume(now);
             }
-            AuthOutcome::Neutral => {}
+            AuthOutcome::Neutral => {
+                self.failure.refund(now);
+            }
         }
     }
 
@@ -284,11 +300,48 @@ mod tests {
         }
         assert!(
             g.failure.available(now) >= 11.0,
-            "successes must not spend failure tokens"
+            "successes must refund the failure reservation"
         );
         // A subsequent password failure is still admitted (failure burst intact).
         assert!(g.admit(now).allowed());
         g.record(now, AuthOutcome::Failure);
+    }
+
+    #[test]
+    fn concurrent_unknowns_cannot_overshoot_failure_burst() {
+        let mut g = OutcomeAwareGate::new(
+            TokenBucketConfig::per_minute(8, 12),
+            TokenBucketConfig::per_minute(40, 48),
+        );
+        let now = t0();
+        for i in 0..12 {
+            assert!(g.admit(now).allowed(), "reservation {i}");
+        }
+        let denied = g.admit(now);
+        assert!(!denied.allowed(), "13th in-flight unknown must 429");
+        assert!(denied.retry_after_secs() >= 1);
+        // Completing as failures keeps the IP locked.
+        for _ in 0..12 {
+            g.record(now, AuthOutcome::Failure);
+        }
+        assert!(!g.admit(now).allowed());
+    }
+
+    #[test]
+    fn parallel_successes_retry_after_reservation_then_proceed() {
+        let mut g = OutcomeAwareGate::new(
+            TokenBucketConfig::per_minute(8, 12),
+            TokenBucketConfig::per_minute(40, 48),
+        );
+        let now = t0();
+        for _ in 0..12 {
+            assert!(g.admit(now).allowed());
+        }
+        assert!(!g.admit(now).allowed());
+        // First wave succeeds — refunds open the gate for the waiting retry.
+        g.record(now, AuthOutcome::Success);
+        assert!(g.admit(now).allowed());
+        g.record(now, AuthOutcome::Success);
     }
 
     #[test]
@@ -330,6 +383,24 @@ mod tests {
             classify_auth_status(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
             AuthOutcome::Neutral
         );
+    }
+
+    #[test]
+    fn lockout_neutral_does_not_burn_failure_budget() {
+        let mut g = OutcomeAwareGate::new(
+            TokenBucketConfig::per_minute(8, 12),
+            TokenBucketConfig::per_minute(40, 48),
+        );
+        let now = t0();
+        for _ in 0..12 {
+            assert!(g.admit(now).allowed());
+            g.record(now, AuthOutcome::Neutral);
+        }
+        assert!(
+            g.admit(now).allowed(),
+            "lockout/5xx must refund the failure reservation"
+        );
+        g.record(now, AuthOutcome::Neutral);
     }
 
     #[test]

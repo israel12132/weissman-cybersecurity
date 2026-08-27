@@ -447,7 +447,16 @@ local function wait_ms(deficit)
   return w
 end
 
-if need <= 0 then
+-- need < 0: refund |need| tokens (failure reservation returned after success/neutral)
+if need < 0 then
+  tokens = math.min(capacity, tokens + (-need))
+  redis.call('HSET', key, 'tokens', tokens, 'last_ms', now_ms)
+  redis.call('EXPIRE', key, ttl)
+  return {1, 0}
+end
+
+-- need == 0: peek (persist refill, do not consume)
+if need == 0 then
   redis.call('HSET', key, 'tokens', tokens, 'last_ms', now_ms)
   redis.call('EXPIRE', key, ttl)
   if tokens >= 1.0 then
@@ -556,6 +565,29 @@ pub async fn login_failure_consume(client_ip: &str) -> StrictOp<BucketAdmit> {
         180,
     )
     .await
+}
+
+/// Refund one failure token (success / neutral after a reserved admit).
+pub async fn login_failure_refund(client_ip: &str) -> StrictOp<BucketAdmit> {
+    let burst = f64::from(super::rate_limit_metrics::login_burst());
+    let rate = f64::from(super::rate_limit_metrics::login_limit_per_minute()) / 60.0;
+    token_bucket_op(
+        &format!("weissman:rl:login:fail:{client_ip}"),
+        -1.0,
+        burst,
+        rate,
+        180,
+    )
+    .await
+}
+
+/// Peek success budget then **reserve** a failure token. Matches local `OutcomeAwareGate::admit`.
+pub async fn login_attempt_admit(client_ip: &str) -> StrictOp<BucketAdmit> {
+    match login_success_peek(client_ip).await {
+        StrictOp::Unavailable => StrictOp::Unavailable,
+        StrictOp::Ok(success) if !success.allowed => StrictOp::Ok(success),
+        StrictOp::Ok(_) => login_failure_consume(client_ip).await,
+    }
 }
 
 pub async fn login_success_peek(client_ip: &str) -> StrictOp<BucketAdmit> {
