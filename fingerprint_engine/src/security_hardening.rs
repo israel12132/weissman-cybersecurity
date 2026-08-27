@@ -273,6 +273,7 @@ fn all_ips_public<'a>(ips: impl Iterator<Item = &'a String>) -> bool {
     })
 }
 
+#[cfg(test)]
 fn normalize_scope_domain(s: &str) -> Option<String> {
     crate::client_scan_target::normalize_scope_host(s)
 }

@@ -179,7 +179,7 @@ async fn no_domains_returns_structured_no_default_scan_target() {
     .expect_err("empty client must fail closed");
 
     match err {
-        RouteError::NoDefaultScanTarget { detail } => {
+        RouteError::NoDefaultScanTarget { ref detail } => {
             assert!(detail.to_ascii_lowercase().contains("domain"));
         }
         other => {
