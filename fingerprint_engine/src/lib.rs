@@ -277,6 +277,7 @@ pub mod oast_oob_engine;
 pub mod oauth_oidc_engine;
 pub mod osint_engine;
 pub mod ot_ics_engine;
+pub mod ot_ics_hardening;
 pub mod password_spray_engine;
 pub mod pki_tls_engine;
 pub mod pqc_kem;

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Factory, Cpu, AlertTriangle, Activity, Zap, Shield, ShieldAlert,
-  ShieldCheck, Network, Fingerprint,
+  ShieldCheck, Network, Fingerprint, Lock, Radio,
 } from 'lucide-react';
 import PageShell from './PageShell';
 import AgentRequiredGate from '../components/engine/AgentRequiredGate';
@@ -22,6 +22,16 @@ const FINDINGS_ACCENT = '#f97316';
 
 const OT_ENGINES = [
   {
+    id: 'ot_passive_active_safety',
+    labelKey: 'pages.otIcsSecurity.engine_safety',
+    descKey: 'pages.otIcsSecurity.engine_safety_desc',
+  },
+  {
+    id: 'ot_crown_jewel_path',
+    labelKey: 'pages.otIcsSecurity.engine_crown',
+    descKey: 'pages.otIcsSecurity.engine_crown_desc',
+  },
+  {
     id: 'scada_ics',
     labelKey: 'pages.otIcsSecurity.engine_scada',
     descKey: 'pages.otIcsSecurity.engine_scada_desc',
@@ -30,6 +40,16 @@ const OT_ENGINES = [
     id: 'modbus_attack',
     labelKey: 'pages.otIcsSecurity.engine_modbus',
     descKey: 'pages.otIcsSecurity.engine_modbus_desc',
+  },
+  {
+    id: 'dnp3_attack',
+    labelKey: 'pages.otIcsSecurity.engine_dnp3',
+    descKey: 'pages.otIcsSecurity.engine_dnp3_desc',
+  },
+  {
+    id: 'iec61850_attack',
+    labelKey: 'pages.otIcsSecurity.engine_iec',
+    descKey: 'pages.otIcsSecurity.engine_iec_desc',
   },
   {
     id: 'bacnet_attack',
@@ -233,6 +253,7 @@ export default function OtIcsSecurity() {
   const [toast, setToast] = useState(null);
   const [fingerprints, setFingerprints] = useState([]);
   const [fpLoading, setFpLoading] = useState(false);
+  const [safety, setSafety] = useState(null);
 
   const fetchOtDevices = useCallback(async () => {
     try {
@@ -244,6 +265,18 @@ export default function OtIcsSecurity() {
       console.error('Failed to fetch OT devices:', error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const fetchSafety = useCallback(async (cid) => {
+    try {
+      const path = cid
+        ? `/api/ot-ics/safety?client_id=${encodeURIComponent(cid)}`
+        : '/api/ot-ics/safety';
+      const data = await apiFetch(path);
+      setSafety(data && typeof data === 'object' ? data : null);
+    } catch {
+      setSafety(null);
     }
   }, []);
 
@@ -268,7 +301,8 @@ export default function OtIcsSecurity() {
 
   useEffect(() => {
     fetchFingerprints(selectedClientId);
-  }, [selectedClientId, fetchFingerprints]);
+    fetchSafety(selectedClientId);
+  }, [selectedClientId, fetchFingerprints, fetchSafety]);
 
   const showToast = useCallback((sev, msg) => {
     const id = Date.now();
@@ -323,10 +357,11 @@ export default function OtIcsSecurity() {
         }
       } catch { /* history unavailable — still refresh the device inventory below */ }
       await fetchOtDevices();
+      await fetchSafety(selectedClientId);
     } finally {
       setHistoryLoading(false);
     }
-  }, [fetchOtDevices]);
+  }, [fetchOtDevices, fetchSafety, selectedClientId]);
 
   useEffect(() => {
     handleRefresh();
@@ -429,6 +464,95 @@ export default function OtIcsSecurity() {
               : 'bg-[var(--bg-1)] border-cyan-500/30 text-cyan-300'
           }`}>
             {toast.msg}
+          </div>
+        )}
+
+        {safety?.policy && (
+          <div
+            data-testid="ot-safety-interlock"
+            className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-[var(--bg-2)] to-cyan-950/30 p-5 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">{t('pages.otIcsSecurity.safety_heading')}</h3>
+                <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
+                  {t('pages.otIcsSecurity.safety_armed')}
+                </span>
+              </div>
+              <div className="text-[10px] font-mono text-emerald-300/80">
+                {t('pages.otIcsSecurity.safety_controls', {
+                  implemented: safety.control_count ?? 0,
+                  total: 100,
+                })}
+              </div>
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+              {t('pages.otIcsSecurity.safety_body')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                ['write_blocked', safety.policy.write_blocked],
+                ['direct_operate_blocked', safety.policy.direct_operate_blocked],
+                ['cpu_control_blocked', safety.policy.cpu_control_blocked],
+                ['file_transfer_blocked', safety.policy.file_transfer_blocked],
+                ['goose_inject_blocked', safety.policy.goose_inject_blocked],
+              ].map(([key, on]) => (
+                <span
+                  key={key}
+                  className={`text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border ${
+                    on
+                      ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
+                      : 'border-rose-500/40 text-rose-300 bg-rose-500/10'
+                  }`}
+                >
+                  {t(`pages.otIcsSecurity.safety_${key}`)}
+                </span>
+              ))}
+              <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
+                {t('pages.otIcsSecurity.safety_max_conn', { n: safety.policy.max_connections_per_host ?? 2 })}
+              </span>
+              <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded border border-amber-500/30 text-amber-300 bg-amber-500/10">
+                {t('pages.otIcsSecurity.safety_zscore', { z: safety.policy.zscore_isolate_threshold ?? 6 })}
+              </span>
+            </div>
+            {Array.isArray(safety.protocols) && safety.protocols.length > 0 && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                {safety.protocols.map((p) => (
+                  <div key={p.id} className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-3)] px-3 py-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Radio className="w-3 h-3 text-cyan-400" />
+                      <span className="text-[11px] font-mono uppercase text-white">{p.id}</span>
+                      <span className="text-[9px] font-mono text-[var(--text-disabled)]">:{p.port}</span>
+                    </div>
+                    <p className="text-[9px] font-mono text-[var(--text-muted)] truncate">
+                      {(p.blocked || []).join(' · ') || p.parser}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {Array.isArray(safety.events) && safety.events.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-[var(--border-subtle)]">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
+                  {t('pages.otIcsSecurity.safety_events', { count: safety.events.length })}
+                </p>
+                {safety.events.slice(0, 5).map((ev) => (
+                  <div key={ev.id} className="text-[11px] font-mono text-[var(--text-tertiary)] flex gap-2">
+                    <span className="text-cyan-400/80 shrink-0">{ev.protocol}</span>
+                    <span className="truncate">{ev.event_kind} · {ev.host}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {safety.fair && (
+              <p className="text-[11px] font-mono text-amber-300/90">
+                {t('pages.otIcsSecurity.safety_fair', {
+                  ale: safety.fair.ale_annualised_usd ?? 0,
+                  jewels: safety.fair.crown_jewel_value_usd ?? 0,
+                })}
+              </p>
+            )}
           </div>
         )}
 

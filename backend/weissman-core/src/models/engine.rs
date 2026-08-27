@@ -657,6 +657,8 @@ pub const PRODUCTION_ENGINE_IDS: &[&str] = &[
     "infostealer_emulation",
     "printer_mfp_attack",
     "radius_nac_bypass",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
 ];
 
 /// Default engines enabled for new clients (core continuous scan).
@@ -827,6 +829,8 @@ pub const FULL_ENGINE_REGISTRY_ORDER: &[&str] = &[
     "profinet_attack",
     "rfid_nfc_attack",
     "industrial_protocol_fuzz",
+    "ot_passive_active_safety",
+    "ot_crown_jewel_path",
     "dll_hijacking_engine",
     "sandbox_evasion",
     "rootkit_surface_probe",

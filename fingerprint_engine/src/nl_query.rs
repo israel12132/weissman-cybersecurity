@@ -168,6 +168,81 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
             joins: &[],
         },
     );
+    m.insert(
+        "ot_ics_fingerprints",
+        TableSpec {
+            table: "ot_ics_fingerprints",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "port",
+                "protocol",
+                "vendor_hint",
+                "confidence",
+                "created_at",
+            ],
+            order_by: &["created_at", "confidence", "id"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "ot_ics_safety_events",
+        TableSpec {
+            table: "ot_ics_safety_events",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "protocol",
+                "event_kind",
+                "severity",
+                "z_score",
+                "soar_action",
+                "created_at",
+            ],
+            order_by: &["created_at", "z_score", "id"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "ot_ics_protocol_baselines",
+        TableSpec {
+            table: "ot_ics_protocol_baselines",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "protocol",
+                "metric",
+                "mean_rate",
+                "stddev_rate",
+                "sample_count",
+                "updated_at",
+            ],
+            order_by: &["updated_at", "id"],
+            joins: &[],
+        },
+    );
+    m.insert(
+        "ot_ics_asset_ranges",
+        TableSpec {
+            table: "ot_ics_asset_ranges",
+            columns: &[
+                "id",
+                "client_id",
+                "host",
+                "protocol",
+                "unit_id",
+                "address_start",
+                "address_end",
+                "allow_write",
+                "is_gateway",
+            ],
+            order_by: &["host", "id"],
+            joins: &[],
+        },
+    );
     m
 });
 

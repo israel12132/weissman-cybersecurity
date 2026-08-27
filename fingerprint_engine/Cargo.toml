@@ -137,6 +137,8 @@ metrics = "0.24"
 metrics-exporter-prometheus = "0.18"
 # HPC: lock-free async channels + zero-copy helpers; NUMA CPU bind (Linux) via hwloc.
 bytes = "1.6"
+# OT/ICS: streaming, context-tagged binary parsers (Modbus MBAP, TPKT/COTP, DNP3, IEC 61850).
+nom = "8"
 flume = { version = "0.12", default-features = false, features = ["async"] }
 governor = "0.6"
 moka = { version = "0.12", features = ["future"] }
