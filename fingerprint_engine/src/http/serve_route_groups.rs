@@ -144,6 +144,17 @@ pub fn mount_api_routes(root_routes: Router<Arc<AppState>>) -> Router<Arc<AppSta
         .route("/api/ndr/flows", post(api_ndr_flows_ingest))
         .route("/api/itdr/auth-events", post(api_itdr_auth_ingest))
         .route("/api/ueba/anomalies", get(api_ueba_anomalies))
+        .route(
+            "/api/ueba/anomalies/:id/disposition",
+            post(api_ueba_anomaly_disposition),
+        )
+        .route("/api/ueba/policy", get(api_ueba_policy_get).put(api_ueba_policy_put))
+        .route(
+            "/api/ueba/whitelist",
+            get(api_ueba_whitelist_get).post(api_ueba_whitelist_post),
+        )
+        .route("/api/ueba/whitelist/:id", delete(api_ueba_whitelist_delete))
+        .route("/api/ueba/fleet", get(api_ueba_fleet))
         .route("/api/baseline/summary", get(api_baseline_summary))
         .route("/api/baseline/drift", get(api_baseline_drift))
         .route("/api/baseline/anomalies", get(api_baseline_anomalies))

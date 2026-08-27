@@ -146,6 +146,9 @@ static SCHEMA: LazyLock<HashMap<&'static str, TableSpec>> = LazyLock::new(|| {
                 "severity",
                 "detail",
                 "detected_at",
+                "status",
+                "weighted_score",
+                "hour_of_week",
             ],
             order_by: &["detected_at", "z_score"],
             joins: &[],
@@ -569,7 +572,7 @@ Schema:
 - weissman_finding_clusters(id, client_id, target, cwe, vuln_signature, title, member_count, max_severity, max_cvss, max_epss, kev_listed, status, first_seen_at, last_seen_at)
 - clients(id, name, default_asset_value_usd, risk_loss_discount)
 - risk_graph_nodes(id, client_id, node_type, label, graph_key, risk_score, is_choke_point, internet_exposed, crown_jewel, asset_value, business_value_usd)
-- agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at)
+- agent_anomalies(id, agent_id, client_id, metric_name, observed, baseline_mean, baseline_stddev, z_score, severity, detail, detected_at, status, weighted_score)
 - attack_path_snapshots(id, client_id, computed_at, entry_count, jewel_count, path_count, max_risk)
 
 If you cannot map the question to a valid plan, output {"table":"","select":[],"filters":[]}.

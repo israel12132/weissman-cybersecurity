@@ -181,6 +181,7 @@ async fn api_health(State(state): State<Arc<AppState>>) -> Response {
         "global_safe_mode": safe_mode,
         "process_rss_kb": rss_kb,
         "telemetry_broadcast_capacity": 128,
+        "ueba": crate::ueba_detector::health_json(),
         "ws_note": "Clients should reconnect with exponential backoff; server uses bounded broadcast channels.",
     }))).into_response()
 }

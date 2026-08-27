@@ -1,47 +1,64 @@
 //! UEBA baseline sampler.
 //!
-//! Once per task dispatch the agent collects a snapshot of host metrics that
-//! UEBA can baseline + anomaly-detect server-side. Cheap to sample (no shelling
-//! out to heavy tools); no PII (top processes by name only, no command lines).
-//!
-//! Output shape — single finding of type `ueba_sample` whose `metrics` JSON
-//! object is what `weissman-worker::ueba_detector` ingests:
-//!
-//! ```json
-//! {
-//!   "open_ports":      [22, 80, 443],
-//!   "open_port_count": 3,
-//!   "process_count":   142,
-//!   "top_processes":   ["nginx", "postgres", "weissman-agent"],
-//!   "unique_users":    1,
-//!   "uptime_seconds":  872315,
-//!   "load_1m":         0.42,
-//!   "memory_used_pct": 38.5,
-//!   "outbound_bytes":  0,
-//!   "failed_logins":   0
-//! }
-//! ```
-//!
-//! On unsupported platforms or when `/proc` is unreadable the sample degrades
-//! gracefully — counters stay zero, the server treats this as "no signal" and
-//! does not throw a false anomaly.
+//! Collects a host snapshot the server-side `ueba_detector` baselines. Sampling is
+//! `/proc`-native on Linux (no netstat/ss), Event Log 4625 on Windows, Unified Logging
+//! on macOS. Metrics are sanitised, EMA-smoothed, and tagged with UTC hour-of-week,
+//! seq/nonce, and a hardware id so the ingest path can reject replay and scope forgery.
 
 use anyhow::Result;
-use serde_json::{json, Map, Value};
-use std::collections::HashMap;
+use serde_json::{Map, Value};
 
-const TOP_PROCESSES_LIMIT: usize = 12;
+use super::ueba;
 
 pub async fn run(engine: &str) -> Result<Vec<Value>> {
-    let metrics = collect_metrics();
+    // Small jitter so a fleet of agents that wake on the same scheduler tick do not
+    // stampede the ingest queue. Tests skip it so the suite stays fast.
+    if !cfg!(test) {
+        let jitter_ms = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0)
+            % 20_000) as u64;
+        tokio::time::sleep(std::time::Duration::from_millis(jitter_ms)).await;
+    }
+
+    let lite = ueba::is_lite() || ueba::rss_over_cap();
+    let mut metrics = ueba::collect_metrics(lite);
+    let hour = ueba::hour_of_week_corrected();
+    let seq = metrics
+        .get("seq")
+        .and_then(Value::as_u64)
+        .unwrap_or_else(ueba::next_seq);
+    let nonce = metrics
+        .get("nonce")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(ueba::next_nonce);
+    let hardware_id = metrics
+        .get("hardware_id")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let sampled_at = chrono::Utc::now().to_rfc3339();
+
+    if let Some(obj) = metrics.as_object_mut() {
+        obj.insert("sampled_at".into(), Value::String(sampled_at.clone()));
+    }
+
+    let metrics_gz = gzip_if_large(&metrics);
+
     let mut extras: Map<String, Value> = Map::new();
     extras.insert("metrics".to_string(), metrics.clone());
     extras.insert("kind".to_string(), Value::String("ueba_sample".to_string()));
-    // The server-side UEBA detector keys its baselines off this hour bucket.
-    extras.insert(
-        "hour_of_week".to_string(),
-        Value::from(hour_of_week_utc() as i32),
-    );
+    extras.insert("hour_of_week".to_string(), Value::from(hour));
+    extras.insert("seq".to_string(), Value::from(seq));
+    extras.insert("nonce".to_string(), Value::String(nonce));
+    extras.insert("sampled_at".to_string(), Value::String(sampled_at));
+    if let Some(hw) = hardware_id {
+        extras.insert("hardware_id".to_string(), Value::String(hw));
+    }
+    if let Some(gz) = metrics_gz {
+        extras.insert("metrics_gz".to_string(), Value::String(gz));
+    }
 
     let summary = format!(
         "Host UEBA sample: ports={} processes={} users={}",
@@ -62,241 +79,42 @@ pub async fn run(engine: &str) -> Result<Vec<Value>> {
     Ok(vec![super::finding(
         engine,
         "Host UEBA baseline sample",
-        "info",  // raw samples are informational; anomalies become medium on the server
-        "T1057", // ATT&CK Process Discovery (closest match for self-observation)
+        "info",
+        "T1057",
         &summary,
         extras,
     )])
 }
 
-fn hour_of_week_utc() -> u8 {
-    // 0..167 — Mon 00:00 UTC = 0, Sun 23:00 UTC = 167.
-    use chrono::Datelike;
-    use chrono::Timelike;
-    let n = chrono::Utc::now();
-    let dow = (n.weekday().num_days_from_monday() as u8).min(6);
-    let hour = (n.hour() as u8).min(23);
-    dow * 24 + hour
-}
-
-fn collect_metrics() -> Value {
-    let mut m = Map::new();
-
-    // ── Open ports (Linux /proc/net/tcp parser) ─────────────────────────────
-    let ports = read_listening_tcp_ports();
-    m.insert("open_port_count".into(), Value::from(ports.len() as u64));
-    m.insert(
-        "open_ports".into(),
-        Value::Array(
-            ports
-                .iter()
-                .take(64)
-                .map(|p| Value::from(*p as u64))
-                .collect(),
-        ),
-    );
-
-    // ── Processes (Linux /proc/*/comm + uid)  ───────────────────────────────
-    let (procs_by_name, unique_users) = read_process_table();
-    m.insert(
-        "process_count".into(),
-        Value::from(procs_by_name.values().sum::<u64>()),
-    );
-    let mut top: Vec<(String, u64)> = procs_by_name.into_iter().collect();
-    top.sort_by(|a, b| b.1.cmp(&a.1));
-    top.truncate(TOP_PROCESSES_LIMIT);
-    m.insert(
-        "top_processes".into(),
-        Value::Array(
-            top.iter()
-                .map(|(name, _)| Value::String(name.clone()))
-                .collect(),
-        ),
-    );
-    m.insert("unique_users".into(), Value::from(unique_users as u64));
-
-    // ── Uptime + load + memory (Linux /proc/uptime, /proc/loadavg, /proc/meminfo)
-    if let Some(uptime) = read_uptime_seconds() {
-        m.insert("uptime_seconds".into(), Value::from(uptime));
-    }
-    if let Some(load) = read_loadavg_1m() {
-        m.insert("load_1m".into(), json!(load));
-    }
-    if let Some(mem_pct) = read_memory_used_pct() {
-        m.insert("memory_used_pct".into(), json!(mem_pct));
-    }
-
-    // ── Failed logins (Linux /var/log/btmp via lastb — best-effort, may fail
-    //    silently in unprivileged contexts; that's fine — UEBA still works on
-    //    the rest of the signal).
-    let failed = read_failed_logins_24h();
-    m.insert("failed_logins".into(), Value::from(failed as u64));
-
-    Value::Object(m)
-}
-
-// ─── Linux-only platform readers (no-op on other targets) ─────────────────────
-
-#[cfg(target_os = "linux")]
-fn read_listening_tcp_ports() -> Vec<u16> {
-    let mut out: std::collections::BTreeSet<u16> = Default::default();
-    for path in ["/proc/net/tcp", "/proc/net/tcp6"] {
-        if let Ok(s) = std::fs::read_to_string(path) {
-            for line in s.lines().skip(1) {
-                // local_address rem_address st …
-                let mut it = line.split_whitespace();
-                let _ = it.next();
-                let Some(local) = it.next() else { continue };
-                let Some(_) = it.next() else { continue };
-                let Some(st) = it.next() else { continue };
-                if st != "0A" {
-                    continue; // not LISTEN
-                }
-                let Some((_, port_hex)) = local.rsplit_once(':') else {
-                    continue;
-                };
-                if let Ok(p) = u16::from_str_radix(port_hex, 16) {
-                    out.insert(p);
-                }
-            }
-        }
-    }
-    out.into_iter().collect()
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_listening_tcp_ports() -> Vec<u16> {
-    Vec::new()
-}
-
-#[cfg(target_os = "linux")]
-fn read_process_table() -> (HashMap<String, u64>, usize) {
-    let Ok(read) = std::fs::read_dir("/proc") else {
-        return (HashMap::new(), 0);
-    };
-    let mut counts: HashMap<String, u64> = HashMap::new();
-    let mut users: std::collections::HashSet<u32> = std::collections::HashSet::new();
-    for entry in read.flatten() {
-        let Some(name) = entry.file_name().to_str().map(|s| s.to_string()) else {
-            continue;
-        };
-        if !name.chars().all(|c| c.is_ascii_digit()) {
-            continue;
-        }
-        if let Ok(comm) = std::fs::read_to_string(entry.path().join("comm")) {
-            let comm = comm.trim();
-            if !comm.is_empty() {
-                *counts.entry(comm.to_string()).or_insert(0) += 1;
-            }
-        }
-        if let Ok(status) = std::fs::read_to_string(entry.path().join("status")) {
-            for line in status.lines() {
-                if let Some(rest) = line.strip_prefix("Uid:") {
-                    if let Some(uid_str) = rest.split_whitespace().next() {
-                        if let Ok(uid) = uid_str.parse::<u32>() {
-                            users.insert(uid);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    (counts, users.len())
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_process_table() -> (HashMap<String, u64>, usize) {
-    (HashMap::new(), 0)
-}
-
-#[cfg(target_os = "linux")]
-fn read_uptime_seconds() -> Option<u64> {
-    let s = std::fs::read_to_string("/proc/uptime").ok()?;
-    s.split_whitespace()
-        .next()
-        .and_then(|x| x.parse::<f64>().ok())
-        .map(|f| f as u64)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_uptime_seconds() -> Option<u64> {
-    None
-}
-
-#[cfg(target_os = "linux")]
-fn read_loadavg_1m() -> Option<f64> {
-    let s = std::fs::read_to_string("/proc/loadavg").ok()?;
-    s.split_whitespace()
-        .next()
-        .and_then(|x| x.parse::<f64>().ok())
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_loadavg_1m() -> Option<f64> {
-    None
-}
-
-#[cfg(target_os = "linux")]
-fn read_memory_used_pct() -> Option<f64> {
-    let s = std::fs::read_to_string("/proc/meminfo").ok()?;
-    let mut total_kb = 0_u64;
-    let mut avail_kb = 0_u64;
-    for line in s.lines() {
-        let mut it = line.split_whitespace();
-        let key = it.next()?;
-        let val: u64 = it.next()?.parse().ok()?;
-        match key {
-            "MemTotal:" => total_kb = val,
-            "MemAvailable:" => avail_kb = val,
-            _ => {}
-        }
-    }
-    if total_kb == 0 {
+fn gzip_if_large(v: &Value) -> Option<String> {
+    use base64::Engine;
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+    let bytes = serde_json::to_vec(v).ok()?;
+    if bytes.len() < 1024 {
         return None;
     }
-    Some(((total_kb - avail_kb) as f64) / total_kb as f64 * 100.0)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_memory_used_pct() -> Option<f64> {
-    None
-}
-
-fn read_failed_logins_24h() -> u32 {
-    // Best-effort: grep last 1000 lines of journald for "Failed password".
-    // We deliberately avoid invoking external binaries — journalctl may not be
-    // available and `lastb` requires root. Keep this honest and zero when
-    // the file isn't readable.
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(s) = std::fs::read_to_string("/var/log/auth.log") {
-            return s
-                .lines()
-                .rev()
-                .take(2000)
-                .filter(|l| l.contains("Failed password") || l.contains("authentication failure"))
-                .count() as u32;
-        }
-    }
-    0
+    let mut enc = GzEncoder::new(Vec::new(), Compression::fast());
+    enc.write_all(&bytes).ok()?;
+    let gz = enc.finish().ok()?;
+    Some(base64::engine::general_purpose::STANDARD.encode(gz))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn hour_of_week_in_range() {
-        let h = hour_of_week_utc();
-        assert!(h < 168);
-    }
-
-    #[test]
-    fn metrics_object_shape() {
-        let v = collect_metrics();
-        assert!(v.get("open_port_count").is_some());
-        assert!(v.get("process_count").is_some());
-        assert!(v.get("top_processes").is_some());
+    #[tokio::test]
+    async fn sample_has_required_shape() {
+        let findings = run("ueba_baseline").await.expect("sample");
+        assert_eq!(findings.len(), 1);
+        let f = &findings[0];
+        assert!(f.get("metrics").is_some());
+        assert!(f.get("hour_of_week").is_some());
+        assert!(f.get("seq").is_some());
+        assert!(f.get("nonce").is_some());
+        let hour = f.get("hour_of_week").and_then(Value::as_i64).unwrap_or(-1);
+        assert!((0..=167).contains(&hour));
     }
 }

@@ -42,6 +42,31 @@ fn enroll_burst() -> NonZeroU32 {
     NonZeroU32::new(rate_limit_metrics::enroll_burst()).unwrap_or(NonZeroU32::MIN)
 }
 
+fn install_per_minute() -> NonZeroU32 {
+    NonZeroU32::new(rate_limit_metrics::install_limit_per_minute()).unwrap_or(NonZeroU32::MIN)
+}
+
+fn install_burst() -> NonZeroU32 {
+    NonZeroU32::new(rate_limit_metrics::install_burst()).unwrap_or(NonZeroU32::MIN)
+}
+
+fn install_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
+    static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
+        OnceLock::new();
+    LIM.get_or_init(|| {
+        let q = Quota::per_minute(install_per_minute()).allow_burst(install_burst());
+        Arc::new(RateLimiter::keyed(q))
+    })
+    .clone()
+}
+
+fn is_install_download(method: &axum::http::Method, path: &str) -> bool {
+    *method == axum::http::Method::GET
+        && (path == "/install/agent.sh"
+            || path == "/install/agent.ps1"
+            || path.starts_with("/install/binaries/"))
+}
+
 fn enroll_limiter() -> Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>> {
     static LIM: OnceLock<Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>>> =
         OnceLock::new();
@@ -86,6 +111,27 @@ pub async fn login_rate_limit_middleware(
 ) -> Response {
     let method = request.method().clone();
     let path = request.uri().path().to_string();
+    if is_install_download(&method, &path) {
+        let ip = extract_client_ip(request.headers(), peer);
+        let limiter = install_limiter();
+        if limiter.check_key(&ip).is_err() {
+            rate_limit_metrics::record_login_denied(&ip, &path);
+            let mut resp = (
+                StatusCode::TOO_MANY_REQUESTS,
+                axum::Json(serde_json::json!({
+                    "ok": false,
+                    "code": "rate_limited",
+                    "detail": "agent installer download rate limit exceeded",
+                })),
+            )
+                .into_response();
+            if let Ok(v) = axum::http::HeaderValue::from_str("60") {
+                resp.headers_mut().insert("Retry-After", v);
+            }
+            return resp;
+        }
+        return next.run(request).await;
+    }
     let Some(kind) = unauth_post_kind(&method, &path) else {
         return next.run(request).await;
     };

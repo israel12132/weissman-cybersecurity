@@ -896,7 +896,7 @@ async fn api_openapi_spec() -> Response {
             },
             "/api/health": {
                 "get": {
-                    "summary": "Health check (uptime, scan state, active engines, RSS)",
+                    "summary": "Health check (uptime, scan state, active engines, RSS, UEBA ingest/retention)",
                     "tags": ["System"],
                     "security": [],
                     "responses": { "200": { "description": "Server is healthy" } }
@@ -1109,6 +1109,7 @@ async fn api_openapi_spec() -> Response {
             "/api/ueba/anomalies": {
                 "get": {
                     "summary": "Recent UEBA anomalies detected on endpoint agents",
+                    "description": "analyst+ only. Returns live `agent_anomalies` rows (z-score, weighted score, disposition status) for the caller's tenant. Agents still in the learning window do not raise client-facing alerts.",
                     "tags": ["UEBA"],
                     "parameters": [
                         { "name": "limit",    "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
@@ -1117,10 +1118,69 @@ async fn api_openapi_spec() -> Response {
                     "responses": { "200": { "description": "Anomaly list" } }
                 }
             },
+            "/api/ueba/anomalies/{id}/disposition": {
+                "post": {
+                    "summary": "Mark a UEBA anomaly as approved or false-positive (analyst+)",
+                    "description": "Writes disposition to `agent_anomalies` and `audit_logs`. Three false-positive marks for the same (agent, metric) auto-suppress future alerts.",
+                    "tags": ["UEBA"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "requestBody": {
+                        "required": true,
+                        "content": { "application/json": { "schema": {
+                            "type": "object",
+                            "required": ["status"],
+                            "properties": {
+                                "status": { "type": "string", "enum": ["approved", "false_positive"] },
+                                "reason": { "type": "string" }
+                            }
+                        } } }
+                    },
+                    "responses": { "200": { "description": "Disposition recorded" } }
+                }
+            },
+            "/api/ueba/policy": {
+                "get": {
+                    "summary": "Tenant UEBA policy (learn window, business hours, holidays)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Policy" } }
+                },
+                "put": {
+                    "summary": "Update tenant UEBA policy (operator+)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Saved" } }
+                }
+            },
+            "/api/ueba/whitelist": {
+                "get": {
+                    "summary": "Global / per-client process whitelist for categorical UEBA",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Whitelist items" } }
+                },
+                "post": {
+                    "summary": "Add a process to the UEBA whitelist (operator+)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Created" } }
+                }
+            },
+            "/api/ueba/whitelist/{id}": {
+                "delete": {
+                    "summary": "Remove a process whitelist entry (operator+)",
+                    "tags": ["UEBA"],
+                    "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+                    "responses": { "200": { "description": "Deleted" } }
+                }
+            },
+            "/api/ueba/fleet": {
+                "get": {
+                    "summary": "Endpoint-agent UEBA fleet snapshot (learning flag, 24h anomalies)",
+                    "tags": ["UEBA"],
+                    "responses": { "200": { "description": "Agents" } }
+                }
+            },
             "/api/ueba/ingest": {
                 "post": {
                     "summary": "Ingest a UEBA baseline sample from a weissman-agent",
-                    "description": "Server side: writes the sample, recomputes mean/stddev from the last 7 days for `(agent, metric, hour_of_week)`, fires medium-severity anomaly when `|z| > 3` (high when > 6). Also detects new-port / new-process categorical anomalies.",
+                    "description": "Accepts an agent JWT (requires a live WSS session) or an admin JWT. Enqueues onto a Tokio MPSC (cap 4096, 2 samples/agent/min). Worker writes `agent_metric_samples`, updates a Welford baseline on GLOBAL_BUCKET=0, and fires anomalies only after learning completes (n≥24 and ≥5 distinct weekdays). Replay is rejected via seq + nonce. Out-of-scope source IPs return 403. Gzip+base64 `metrics_gz` is optional.",
                     "tags": ["UEBA"],
                     "requestBody": {
                         "required": true,
@@ -1131,11 +1191,19 @@ async fn api_openapi_spec() -> Response {
                                 "agent_id":     { "type": "string" },
                                 "client_id":    { "type": "integer" },
                                 "hour_of_week": { "type": "integer", "minimum": 0, "maximum": 167 },
-                                "metrics":      { "type": "object" }
+                                "metrics":      { "type": "object" },
+                                "seq":          { "type": "integer" },
+                                "nonce":        { "type": "string" },
+                                "sampled_at":   { "type": "string", "format": "date-time" },
+                                "metrics_gz":   { "type": "string" },
+                                "hardware_id":  { "type": "string" }
                             }
                         } } }
                     },
-                    "responses": { "200": { "description": "Ingest summary + any anomalies fired" } }
+                    "responses": {
+                        "202": { "description": "Queued" },
+                        "200": { "description": "Ingest summary (fallback when the queue is not started)" }
+                    }
                 }
             },
 

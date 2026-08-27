@@ -18,10 +18,14 @@ mod process_modules;
 mod scheduled_tasks;
 mod social_local;
 mod timestomp;
+mod ueba;
 mod usb_devices;
 mod util;
 
 use serde_json::Value;
+
+pub(crate) use ueba::note_http_date;
+pub(crate) use ueba::{drain_offline, note_server_utc_ms, push_offline, set_lite};
 
 pub type DetectionFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<Vec<Value>>> + Send>>;

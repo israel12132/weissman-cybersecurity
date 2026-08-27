@@ -56,7 +56,11 @@ cd frontend && npm ci && npm run dev
 
 ```bash
 ./scripts/go_live_check.sh
+curl -s http://127.0.0.1:8000/api/health | jq '.ok, .ueba'
 ```
+
+`GET /api/health` embeds a live `ueba` object (`ingest_ok`, `retention_ok`,
+`failsafe`). Failsafe lite-sampling is signalled to agents on the next WSS Welcome.
 
 ---
 

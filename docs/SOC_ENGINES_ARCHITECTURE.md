@@ -97,10 +97,10 @@ running locally on the worker; see `endpoint_agents.rs` for the routing.
 | USB enumeration | `usb_devices.rs` | udev / IOKit / SetupAPI |
 | EDR presence | `edr_presence.rs` | Defender, CrowdStrike, SentinelOne |
 | Log tampering | `log_integrity.rs` | EventID 1102, journald gaps |
-| **UEBA baseline sample** | `baseline.rs` | Ports + processes + users + load + memory + failed-logins + hour_of_week |
+| **UEBA baseline sample** | `detections/ueba/` + `baseline.rs` | `/proc/net/tcp`, Event 4625, Unified Logging, seq/nonce, UTC hour-of-week |
 
-UEBA samples are POSTed to `/api/ueba/ingest`; the server runs the z-score +
-categorical anomaly detector in `ueba_detector.rs` (see
+UEBA samples go over WSS `ueba_baseline` findings or `POST /api/ueba/ingest`;
+the server runs the EWMV + MAD detector in `ueba_detector/` (see
 [architecture.md](architecture.md#data-flow---endpoint-ueba-anomaly)).
 
 ---

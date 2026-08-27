@@ -42,6 +42,12 @@ pub async fn enroll(
         .user_agent(format!("weissman-agent/{}", agent_version))
         .build()?;
     let resp = client.post(&url).json(&body).send().await?;
+    let date = resp
+        .headers()
+        .get(reqwest::header::DATE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    crate::detections::note_http_date(date.as_deref());
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -88,6 +94,12 @@ pub async fn renew_session(
         })
         .send()
         .await?;
+    let date = resp
+        .headers()
+        .get(reqwest::header::DATE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    crate::detections::note_http_date(date.as_deref());
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {

@@ -71,16 +71,26 @@ pub fn backup_postgres_to_dir(backups_dir: &std::path::Path) -> Result<PathBuf, 
     let stamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let dest_path = backups_dir.join(format!("weissman_pg_{}.sql", stamp));
     let dest_str = dest_path.to_str().ok_or("invalid backup path")?.to_string();
+    let mut args: Vec<String> = vec![
+        "--dbname".into(),
+        database_url.clone(),
+        "--format".into(),
+        "plain".into(),
+        "--file".into(),
+        dest_str.clone(),
+        "--no-owner".into(),
+    ];
+    let exclude_samples = std::env::var("WEISSMAN_UEBA_EXCLUDE_SAMPLES_FROM_BACKUP")
+        .map(|v| {
+            let t = v.trim().to_ascii_lowercase();
+            t != "0" && t != "false" && t != "no"
+        })
+        .unwrap_or(true);
+    if exclude_samples {
+        args.push("--exclude-table-data=agent_metric_samples".into());
+    }
     let status = Command::new(&pg_dump)
-        .args([
-            "--dbname",
-            database_url.as_str(),
-            "--format",
-            "plain",
-            "--file",
-            dest_str.as_str(),
-            "--no-owner",
-        ])
+        .args(&args)
         .status()
         .map_err(|e| format!("pg_dump spawn failed ({}): {}", pg_dump, e))?;
     if !status.success() {
