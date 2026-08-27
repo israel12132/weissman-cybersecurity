@@ -43,6 +43,39 @@ fn db_begin_tenant_tx_sets_guc() {
     .unwrap_or_default();
     assert!(!lib.is_empty(), "weissman-db lib readable");
     assert!(lib.contains("set_config('app.current_tenant_id'"));
+    assert!(
+        lib.contains("set_config('app.current_client_id'"),
+        "begin_tenant_tx must SET LOCAL both tenant and client GUCs"
+    );
+}
+
+#[test]
+fn architect_tenant_scope_guard_migration_forces_rls_and_grants() {
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/weissman-db/migrations");
+    let p = dir.join("20260827193000_architect_tenant_scope_guard.sql");
+    assert!(p.is_file(), "architect tenant-scope migration missing");
+    let text = std::fs::read_to_string(&p).unwrap_or_default();
+    assert!(text.contains("FORCE ROW LEVEL SECURITY"));
+    assert!(text.contains("user_client_scope_grants"));
+    assert!(text.contains("user_scope_switch_audit"));
+    assert!(text.contains("app.current_tenant_id"));
+    assert!(text.contains("app.current_client_id"));
+    assert!(text.contains("app_set_session_scope"));
+}
+
+#[test]
+fn tenant_scope_guard_is_wired_on_authenticated_router() {
+    let serve = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/serve.rs");
+    let text = std::fs::read_to_string(&serve).unwrap_or_default();
+    assert!(
+        text.contains("tenant_scope_guard"),
+        "authenticated API tree must install TenantScopeGuard"
+    );
+    assert!(
+        !text.contains("client_scope_middleware"),
+        "legacy client_scope_middleware must not remain the router layer"
+    );
 }
 
 #[test]

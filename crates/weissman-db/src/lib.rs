@@ -469,14 +469,22 @@ pub async fn set_tenant_tx(
 
 /// Stamp tenant + optional customer-client RLS GUCs on an open transaction.
 ///
+/// `set_config(..., true)` is **SET LOCAL** (transaction-scoped). Architect
+/// mandate is `SET LOCAL app.current_tenant_id`. Customer RLS still reads
+/// `app.current_client_id`, so both are set in the **same** statement — one
+/// session truth, no conflicting GUCs, FORCE RLS cannot be bypassed by a
+/// forgotten `WHERE client_id = $1`.
+///
 /// `client_id = None` (or empty GUC) means owner/staff/worker: every client in
-/// the tenant remains visible. A concrete id locks portal users to that customer.
+/// the tenant remains visible. A concrete id (JWT `cid`) locks the session to
+/// that customer.
 pub async fn set_tenant_tx_scoped(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: i64,
     client_id: Option<i64>,
 ) -> Result<(), sqlx::Error> {
     let client_guc = client_id.map(|id| id.to_string()).unwrap_or_default();
+    // Dual GUC + lock_timeout in one round trip. is_local=true ≡ SET LOCAL.
     sqlx::query(
         "SELECT set_config('app.current_tenant_id', $1, true), \
                 set_config('app.current_client_id', $2, true), \
