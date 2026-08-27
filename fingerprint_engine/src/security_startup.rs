@@ -228,13 +228,18 @@ const RATE_LIMIT_DISABLE_FLAGS: &[&str] = &[
 
 /// Login / API rate limits cannot be disabled in any environment.
 pub fn enforce_rate_limits_cannot_be_disabled() -> Result<(), String> {
-    reject_truthy_env(RATE_LIMIT_DISABLE_FLAGS, "login and API rate limits cannot be disabled")
+    reject_truthy_env(
+        RATE_LIMIT_DISABLE_FLAGS,
+        "login and API rate limits cannot be disabled",
+    )
 }
 
 fn reject_truthy_env(vars: &[&str], reason: &str) -> Result<(), String> {
     for var in vars {
         if env_truthy_pub(var) {
-            return Err(format!("{var} is not supported in any environment; {reason}"));
+            return Err(format!(
+                "{var} is not supported in any environment; {reason}"
+            ));
         }
     }
     Ok(())

@@ -415,7 +415,6 @@ pub async fn incr_api_ip_strict(client_ip: &str) -> StrictOp<u64> {
     .await
 }
 
-
 /// Token-bucket admit result (peek or consume).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BucketAdmit {
@@ -588,5 +587,12 @@ pub async fn login_success_consume(client_ip: &str) -> StrictOp<BucketAdmit> {
 pub async fn api_token_consume(client_ip: &str) -> StrictOp<BucketAdmit> {
     let burst = f64::from(super::rate_limit_metrics::api_burst());
     let rate = f64::from(super::rate_limit_metrics::api_limit_per_sec());
-    token_bucket_op(&format!("weissman:rl:api:tb:{client_ip}"), 1.0, burst, rate, 5).await
+    token_bucket_op(
+        &format!("weissman:rl:api:tb:{client_ip}"),
+        1.0,
+        burst,
+        rate,
+        5,
+    )
+    .await
 }

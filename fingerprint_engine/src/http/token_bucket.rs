@@ -56,8 +56,8 @@ impl TokenBucket {
     fn refill(&mut self, now: Instant) {
         let elapsed = now.saturating_duration_since(self.last).as_secs_f64();
         if elapsed > 0.0 {
-            self.tokens = (self.tokens + elapsed * self.cfg.rate_per_sec)
-                .min(f64::from(self.cfg.burst));
+            self.tokens =
+                (self.tokens + elapsed * self.cfg.rate_per_sec).min(f64::from(self.cfg.burst));
             self.last = now;
         }
     }
@@ -226,7 +226,9 @@ mod tests {
                 "documented API burst token {i} must pass"
             );
         }
-        let err = b.try_consume(now).expect_err("61st poll in the same instant");
+        let err = b
+            .try_consume(now)
+            .expect_err("61st poll in the same instant");
         assert!(err.as_secs() >= 1);
     }
 
