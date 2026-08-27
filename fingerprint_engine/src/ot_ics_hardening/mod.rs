@@ -17,11 +17,12 @@ use crate::engine_result::{print_result, EngineResult};
 use crate::ot_ics_engine::OtFingerprint;
 use serde_json::{json, Value};
 
-use anomaly::{Z_ISOLATE};
+use anomaly::{STDDEV_FLOOR, Z_ABS_CAP, Z_ISOLATE};
+use parsers::COTP_ASSEMBLY_CAP;
 use policy::{catalog_json, OtSafetyPolicy, ProbeMode, CONTROL_CATALOG, DESTRUCTIVE_FOREVER};
 use probes::{
-    probe_dnp3_safe, probe_iec61850_mms_safe, probe_modbus_safe, probe_s7_safe, HardenedFingerprint,
-    DNP3_PORT, IEC_MMS_PORT, MODBUS_PORT, S7_PORT,
+    probe_dnp3_safe, probe_iec61850_mms_safe, probe_modbus_safe, probe_s7_safe,
+    HardenedFingerprint, DNP3_PORT, IEC_MMS_PORT, MODBUS_PORT, S7_PORT,
 };
 
 pub const ENGINE_SAFETY: &str = "ot_passive_active_safety";
@@ -149,7 +150,8 @@ pub async fn run_ot_passive_active_safety_result(
 
     let fps = collect_protocol_fps(&host, &policy).await;
     for fp in &fps {
-        if fp.metadata
+        if fp
+            .metadata
             .get("cpu_control_observed")
             .and_then(Value::as_bool)
             == Some(true)
@@ -163,7 +165,8 @@ pub async fn run_ot_passive_active_safety_result(
                 target,
             ));
         }
-        if fp.metadata
+        if fp
+            .metadata
             .get("enumeration_signal")
             .and_then(Value::as_bool)
             == Some(true)
@@ -206,7 +209,10 @@ pub async fn run_ot_passive_active_safety_result(
             return if findings.len() <= 1 {
                 empty_ok(ENGINE_SAFETY, target)
             } else {
-                EngineResult::ok(findings, format!("{ENGINE_SAFETY}: interlock armed, no OT ports"))
+                EngineResult::ok(
+                    findings,
+                    format!("{ENGINE_SAFETY}: interlock armed, no OT ports"),
+                )
             };
         }
         findings.push(finding(
@@ -231,10 +237,7 @@ pub async fn run_ot_passive_active_safety_result(
     )
 }
 
-pub async fn run_ot_crown_jewel_path_result(
-    target: &str,
-    ctx: &EngineRunContext,
-) -> EngineResult {
+pub async fn run_ot_crown_jewel_path_result(target: &str, ctx: &EngineRunContext) -> EngineResult {
     if target.trim().is_empty() {
         return EngineResult::error("target required");
     }
@@ -251,7 +254,16 @@ pub async fn run_ot_crown_jewel_path_result(
             f.get("ot_metadata").is_some()
                 || f.get("title")
                     .and_then(Value::as_str)
-                    .map(|t| t.contains("modbus") || t.contains("s7") || t.contains("dnp3") || t.contains("iec61850") || t.contains("IEC") || t.contains("Modbus") || t.contains("DNP3") || t.contains("S7"))
+                    .map(|t| {
+                        t.contains("modbus")
+                            || t.contains("s7")
+                            || t.contains("dnp3")
+                            || t.contains("iec61850")
+                            || t.contains("IEC")
+                            || t.contains("Modbus")
+                            || t.contains("DNP3")
+                            || t.contains("S7")
+                    })
                     .unwrap_or(false)
         })
         .count();
@@ -321,8 +333,7 @@ pub async fn run_ot_crown_jewel_path_result(
             }
         }
 
-        if let Some(kev) = crate::intel_kev::is_kev_listed(pool.as_ref(), "CVE-2013-2761").await
-        {
+        if let Some(kev) = crate::intel_kev::is_kev_listed(pool.as_ref(), "CVE-2013-2761").await {
             // DNP3 historical KEV example — only emit when the live DNP3 probe confirmed.
             let dnp3_live = merged.iter().any(|f| {
                 f.get("title")
@@ -333,10 +344,7 @@ pub async fn run_ot_crown_jewel_path_result(
             if dnp3_live {
                 merged.push(finding(
                     ENGINE_CROWN,
-                    &format!(
-                        "CISA KEV: {} ({})",
-                        kev.cve, kev.vulnerability_name
-                    ),
+                    &format!("CISA KEV: {} ({})", kev.cve, kev.vulnerability_name),
                     "high",
                     MITRE_OT,
                     &format!(
@@ -384,6 +392,8 @@ async fn persist_safety_events(
         "hmac_ok": policy.hmac_ok,
         "max_connections_per_host": policy.max_connections_per_host,
         "writes": false,
+        "max_gateway_connections": policy.max_gateway_connections,
+        "rst_on_release": true,
     }))
     .execute(&mut *tx)
     .await;
@@ -436,6 +446,7 @@ pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
         "policy": {
             "probe_mode": "safe_read",
             "max_connections_per_host": 2,
+            "max_gateway_connections": 8,
             "write_blocked": true,
             "direct_operate_blocked": true,
             "cpu_control_blocked": true,
@@ -444,6 +455,11 @@ pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
             "goose_inject_blocked": true,
             "watchdog_ms": 2000,
             "zscore_isolate_threshold": Z_ISOLATE,
+            "stddev_floor": STDDEV_FLOOR,
+            "z_abs_cap": Z_ABS_CAP,
+            "cotp_assembly_cap": COTP_ASSEMBLY_CAP,
+            "ber_iterative": true,
+            "rst_on_release": true,
             "soar_auto_isolate": std::env::var("WEISSMAN_OT_SOAR_AUTO_ISOLATE").ok().as_deref() == Some("1"),
             "hmac_required_for_active": true,
             "rls": true,
@@ -452,9 +468,9 @@ pub fn safety_api_document(events: Vec<Value>, fair: Option<Value>) -> Value {
         },
         "protocols": [
             {"id": "modbus", "port": MODBUS_PORT, "parser": "nom_mbap", "safe_reads": ["01","02","03","04","2b"], "blocked_writes": ["05","06","0f","10","15","16"]},
-            {"id": "s7", "port": S7_PORT, "parser": "nom_tpkt_cotp", "blocked": ["cpu_stop","cpu_reset","db_write"]},
+            {"id": "s7", "port": S7_PORT, "parser": "nom_tpkt_cotp_assembled", "blocked": ["cpu_stop","cpu_reset","db_write"]},
             {"id": "dnp3", "port": DNP3_PORT, "parser": "nom_dnp3_crc", "blocked": ["direct_operate","cold_restart","file_transfer"]},
-            {"id": "iec61850", "port": IEC_MMS_PORT, "parser": "nom_mms_ber_goose_sv", "blocked": ["goose_inject","mms_write"]},
+            {"id": "iec61850", "port": IEC_MMS_PORT, "parser": "nom_mms_ber_iterative", "blocked": ["goose_inject","mms_write"]},
         ],
         "controls": catalog_json(),
         "control_count": CONTROL_CATALOG.len(),
@@ -471,7 +487,10 @@ macro_rules! cli_wrapper_ctx {
         }
     };
 }
-cli_wrapper_ctx!(run_ot_passive_active_safety, run_ot_passive_active_safety_result);
+cli_wrapper_ctx!(
+    run_ot_passive_active_safety,
+    run_ot_passive_active_safety_result
+);
 cli_wrapper_ctx!(run_ot_crown_jewel_path, run_ot_crown_jewel_path_result);
 
 #[cfg(test)]
@@ -483,6 +502,10 @@ mod tests {
         let doc = safety_api_document(vec![], None);
         assert_eq!(doc["policy"]["write_blocked"], json!(true));
         assert_eq!(doc["policy"]["direct_operate_blocked"], json!(true));
+        assert_eq!(doc["policy"]["ber_iterative"], json!(true));
+        assert_eq!(doc["policy"]["rst_on_release"], json!(true));
+        assert_eq!(doc["policy"]["max_gateway_connections"], json!(8));
+        assert_eq!(doc["policy"]["stddev_floor"], json!(STDDEV_FLOOR));
         assert_eq!(doc["control_count"], json!(100));
         assert_eq!(doc["live"], json!(true));
     }

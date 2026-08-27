@@ -7,21 +7,21 @@ should link here rather than copying figures.
 
 | Metric | Value | Source of truth |
 |--------|-------|-----------------|
-| Production engine IDs | 563 | `scripts/engine_reality_audit.mjs` |
-| — real live probes | 303 | same (295 distinct impls) |
+| Production engine IDs | 565 | `scripts/engine_reality_audit.mjs` |
+| — real live probes | 305 | same (297 distinct impls) |
 | — aliases | 212 | same |
 | — agent-required | 48 | same |
-| Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 2478 | grep over workspace |
-| HTTP route registrations (`.route(`) | 337 | grep over `fingerprint_engine/src` + `backend` |
-| Migrations — `crates/weissman-db/migrations` | 109 | `ls crates/weissman-db/migrations` |
-| Migrations — `fingerprint_engine/migrations` | 109 | `ls fingerprint_engine/migrations` |
+| Rust test fns (`#[test]`/`#[tokio::test]`, incl. parameterized) | 2526 | grep over workspace |
+| HTTP route registrations (`.route(`) | 340 | grep over `fingerprint_engine/src` + `backend` |
+| Migrations — `crates/weissman-db/migrations` | 110 | `ls crates/weissman-db/migrations` |
+| Migrations — `fingerprint_engine/migrations` | 110 | `ls fingerprint_engine/migrations` |
 
-**Reading the engine count honestly:** the 563 catalog IDs resolve to
-**295 distinct probe implementations** — 212 are
+**Reading the engine count honestly:** the 565 catalog IDs resolve to
+**297 distinct probe implementations** — 212 are
 aliases that re-tag a canonical probe, 48 are agent-required host
 techniques, and several "real" IDs delegate to a shared runner (e.g. APT-group
 surface profiles). The catalog number reflects breadth of technique coverage, not
-563 independent scanners. Every ID still maps to a real execution path
+565 independent scanners. Every ID still maps to a real execution path
 (`engine_reality_audit.mjs` fails on any `no_path`).
 
 > Verify locally: `node scripts/sync_doc_metrics.mjs --check`.

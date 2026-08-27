@@ -1,4 +1,16 @@
 //! Z-score anomaly detection over OT packet-rate / poll-rate baselines.
+//!
+//! Industrial registers (temperature, current) are often perfectly flat. A raw
+//! \(Z = (x-\mu)/\sigma\) with \(\sigma = 0\) yields NaN/∞ in IEEE-754, which
+//! panics comparisons and cannot be stored in Postgres NUMERIC. Every public
+//! score is therefore finite, floored, and capped.
+
+/// Minimum σ used in the denominator. PLC deadbands sit well above this.
+pub const STDDEV_FLOOR: f64 = 1e-5;
+/// Absolute cap so persist/compare never see Inf/NaN (architect: bounded, controlled).
+pub const Z_ABS_CAP: f64 = 100.0;
+/// Default isolate threshold from the OT blueprint (Z > 6).
+pub const Z_ISOLATE: f64 = 6.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Baseline {
@@ -31,8 +43,7 @@ impl Baseline {
         let stddev = if self.samples == 0 {
             0.0
         } else {
-            let m2 = self.stddev.powi(2) * (self.samples as f64)
-                + (x - self.mean) * (x - mean);
+            let m2 = self.stddev.powi(2) * (self.samples as f64) + (x - self.mean) * (x - mean);
             (m2 / n).max(0.0).sqrt()
         };
         Self {
@@ -42,21 +53,10 @@ impl Baseline {
         }
     }
 
+    /// Finite, floored, capped Z. Never NaN, never ±∞.
     #[must_use]
     pub fn z_score(self, observed: f64) -> f64 {
-        let delta = observed - self.mean;
-        if self.stddev < 1e-9 {
-            // Perfectly flat baseline: any movement is infinite sigma, not "quiet".
-            if delta.abs() < 1e-9 {
-                0.0
-            } else if delta > 0.0 {
-                f64::INFINITY
-            } else {
-                f64::NEG_INFINITY
-            }
-        } else {
-            delta / self.stddev
-        }
+        persistable_z(raw_z(self.mean, self.stddev, observed)).unwrap_or(0.0)
     }
 
     #[must_use]
@@ -65,12 +65,30 @@ impl Baseline {
     }
 }
 
-/// Default isolate threshold from the OT blueprint (Z > 6).
-pub const Z_ISOLATE: f64 = 6.0;
+fn raw_z(mean: f64, stddev: f64, observed: f64) -> f64 {
+    if !mean.is_finite() || !observed.is_finite() {
+        return 0.0;
+    }
+    let delta = observed - mean;
+    let mut sigma = stddev;
+    if !sigma.is_finite() || sigma < STDDEV_FLOOR {
+        sigma = STDDEV_FLOOR;
+    }
+    delta / sigma
+}
+
+/// Postgres-safe Z: `None` if the value must not be bound to NUMERIC.
+#[must_use]
+pub fn persistable_z(z: f64) -> Option<f64> {
+    if !z.is_finite() {
+        return None;
+    }
+    Some(z.clamp(-Z_ABS_CAP, Z_ABS_CAP))
+}
 
 #[must_use]
 pub fn classify_z(z: f64) -> &'static str {
-    let a = z.abs();
+    let a = persistable_z(z).unwrap_or(0.0).abs();
     if a > Z_ISOLATE {
         "critical"
     } else if a > 3.0 {
@@ -97,8 +115,21 @@ mod tests {
     fn spike_exceeds_six_sigma() {
         let xs: Vec<f64> = (0..50).map(|_| 10.0).collect();
         let b = Baseline::from_samples(&xs).unwrap();
+        assert_eq!(b.stddev, 0.0);
+        let z = b.z_score(80.0);
+        assert!(z.is_finite(), "flat PLC series must not yield Inf/NaN");
+        assert!(z.abs() <= Z_ABS_CAP);
         assert!(b.is_high(80.0, Z_ISOLATE));
-        assert_eq!(classify_z(b.z_score(80.0)), "critical");
+        assert_eq!(classify_z(z), "critical");
+    }
+
+    #[test]
+    fn persistable_z_rejects_nan_and_inf() {
+        assert!(persistable_z(f64::NAN).is_none());
+        assert!(persistable_z(f64::INFINITY).is_none());
+        assert!(persistable_z(f64::NEG_INFINITY).is_none());
+        assert_eq!(persistable_z(12.0), Some(12.0));
+        assert_eq!(persistable_z(10_000.0), Some(Z_ABS_CAP));
     }
 
     #[test]

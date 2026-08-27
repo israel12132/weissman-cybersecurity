@@ -1,8 +1,10 @@
-//! Streaming, zero-copy OT protocol parsers (nom + bounded recursion).
+//! Streaming OT protocol parsers (nom + bounded COTP assembly + iterative BER).
 //!
 //! Every public parse function:
 //! * never panics on truncated / hostile input
-//! * never allocates a copy of the payload (headers are `Copy` structs over `&[u8]`)
+//! * maps headers onto `&[u8]` (zero-copy) except COTP DT reassembly, which uses
+//!   a pre-allocated 8 KiB buffer so ISO 8073 fragments can be joined
+//! * walks BER/MMS iteratively on a heap `Vec` (no recursive TLV calls)
 //! * rejects length fields that disagree with the physical buffer (OOB)
 //!
 //! `unsafe_code` is denied crate-wide — zero-copy is `&[u8]` slicing, not `ptr::copy`.
@@ -366,6 +368,103 @@ pub fn parse_s7_iso_on_tcp(input: &[u8]) -> Result<S7Frame<'_>, ParseFail> {
     })
 }
 
+/// Pre-allocated COTP DT reassembly. ISO 8073 may split one S7 PDU across TPDUs;
+/// zero-copy slices cannot join them. Cap is 8 KiB (S7-1500 negotiated max).
+pub const COTP_ASSEMBLY_CAP: usize = 8192;
+
+#[derive(Debug, Default)]
+pub struct CotpAssembler {
+    buf: Vec<u8>,
+    last_cotp: Option<CotpHeader>,
+    last_tpkt: Option<TpktHeader>,
+    fragments: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssembledCotp {
+    pub tpkt: TpktHeader,
+    pub cotp: CotpHeader,
+    pub userdata: Vec<u8>,
+    pub fragments: u32,
+}
+
+impl CotpAssembler {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            buf: Vec::with_capacity(256),
+            last_cotp: None,
+            last_tpkt: None,
+            fragments: 0,
+        }
+    }
+
+    /// Feed one TPKT. `Ok(Some)` when the TPDU is complete (CR/CC, or DT with EOT).
+    pub fn push(&mut self, packet: &[u8]) -> Result<Option<AssembledCotp>, ParseFail> {
+        if packet.len() < 7 {
+            return Err(ParseFail {
+                context: "cotp_asm".into(),
+                kind: "truncated".into(),
+                remaining_len: packet.len(),
+            });
+        }
+        let (after_tpkt, tpkt) = parse_tpkt(packet).map_err(ParseFail::from_nom)?;
+        let (after_cotp, cotp) = parse_cotp(after_tpkt).map_err(ParseFail::from_nom)?;
+        self.last_tpkt = Some(tpkt);
+        self.last_cotp = Some(cotp);
+        self.fragments = self.fragments.saturating_add(1);
+
+        if cotp.pdu_type == 0xf0 {
+            let (eot, payload) = cotp_dt_payload(after_cotp)?;
+            if self.buf.len().saturating_add(payload.len()) > COTP_ASSEMBLY_CAP {
+                self.buf.clear();
+                return Err(ParseFail {
+                    context: "cotp_asm".into(),
+                    kind: "assembly_overflow".into(),
+                    remaining_len: payload.len(),
+                });
+            }
+            self.buf.extend_from_slice(payload);
+            if eot {
+                return Ok(Some(self.take()));
+            }
+            return Ok(None);
+        }
+
+        // CR/CC/other: no DT fragmentation.
+        self.buf.clear();
+        self.buf.extend_from_slice(after_cotp);
+        Ok(Some(self.take()))
+    }
+
+    fn take(&mut self) -> AssembledCotp {
+        AssembledCotp {
+            tpkt: self.last_tpkt.unwrap_or(TpktHeader {
+                version: 3,
+                reserved: 0,
+                length: 0,
+            }),
+            cotp: self.last_cotp.unwrap_or(CotpHeader {
+                li: 0,
+                pdu_type: 0,
+                dst_ref: 0,
+                src_ref: 0,
+            }),
+            userdata: std::mem::take(&mut self.buf),
+            fragments: self.fragments,
+        }
+    }
+}
+
+fn cotp_dt_payload(after_type: &[u8]) -> Result<(bool, &[u8]), ParseFail> {
+    let nr_eot = *after_type.first().ok_or(ParseFail {
+        context: "cotp_dt".into(),
+        kind: "truncated_eot".into(),
+        remaining_len: 0,
+    })?;
+    Ok((nr_eot & 0x80 != 0, after_type.get(1..).unwrap_or(&[])))
+}
+
 pub fn cotp_is_cc(pdu_type: u8) -> bool {
     pdu_type == 0xd0 || pdu_type == 0xd6
 }
@@ -670,21 +769,32 @@ pub fn parse_ethernet(input: &[u8]) -> Result<(EthernetHeader, &[u8]), ParseFail
     ))
 }
 
-/// Bounded BER TLV. Depth cap prevents stack blow-ups on hostile MMS/GOOSE.
+/// Single-level BER TLV (no recursion). Nested MMS/GOOSE uses [`walk_ber_iterative`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BerTlv<'a> {
     pub tag: u8,
     pub value: &'a [u8],
 }
 
-pub fn parse_ber_tlv(input: &[u8], max_depth: u32, depth: u32) -> Result<BerTlv<'_>, ParseFail> {
-    if depth > max_depth {
-        return Err(ParseFail {
-            context: "ber".into(),
-            kind: "max_depth".into(),
-            remaining_len: input.len(),
-        });
-    }
+/// Heap-stack node from the iterative BER walker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BerNode {
+    pub tag: u8,
+    pub depth: u32,
+    pub offset: usize,
+    pub len: usize,
+}
+
+pub const BER_MAX_NODES: usize = 256;
+pub const BER_MAX_STACK: usize = 16;
+
+struct BerHdr {
+    tag: u8,
+    header_len: usize,
+    value_len: usize,
+}
+
+fn parse_ber_hdr(input: &[u8]) -> Result<BerHdr, ParseFail> {
     if input.len() < 2 {
         return Err(ParseFail {
             context: "ber".into(),
@@ -694,8 +804,8 @@ pub fn parse_ber_tlv(input: &[u8], max_depth: u32, depth: u32) -> Result<BerTlv<
     }
     let tag = input[0];
     let (len, hdr) = ber_length(&input[1..])?;
-    let start = 1 + hdr;
-    let end = start.checked_add(len).ok_or(ParseFail {
+    let header_len = 1 + hdr;
+    let end = header_len.checked_add(len).ok_or(ParseFail {
         context: "ber".into(),
         kind: "overflow".into(),
         remaining_len: input.len(),
@@ -707,10 +817,107 @@ pub fn parse_ber_tlv(input: &[u8], max_depth: u32, depth: u32) -> Result<BerTlv<
             remaining_len: input.len(),
         });
     }
-    Ok(BerTlv {
+    Ok(BerHdr {
         tag,
-        value: &input[start..end],
+        header_len,
+        value_len: len,
     })
+}
+
+pub fn parse_ber_tlv(input: &[u8], max_depth: u32, depth: u32) -> Result<BerTlv<'_>, ParseFail> {
+    if depth > max_depth {
+        return Err(ParseFail {
+            context: "ber".into(),
+            kind: "max_depth".into(),
+            remaining_len: input.len(),
+        });
+    }
+    let hdr = parse_ber_hdr(input)?;
+    Ok(BerTlv {
+        tag: hdr.tag,
+        value: &input[hdr.header_len..hdr.header_len + hdr.value_len],
+    })
+}
+
+/// Flat iterative BER/MMS walker. Nesting lives on a bounded heap `Vec`, never
+/// the Tokio worker stack — a malformed 2 MiB TLV nest cannot overflow the thread.
+pub fn walk_ber_iterative(input: &[u8], max_depth: u32) -> Result<Vec<BerNode>, ParseFail> {
+    struct Frame {
+        off: usize,
+        end: usize,
+        depth: u32,
+    }
+    let cap = (max_depth as usize)
+        .saturating_add(1)
+        .min(BER_MAX_STACK + 1);
+    let mut stack: Vec<Frame> = Vec::with_capacity(cap);
+    stack.push(Frame {
+        off: 0,
+        end: input.len(),
+        depth: 0,
+    });
+    let mut nodes = Vec::new();
+    while let Some(mut frame) = stack.pop() {
+        if frame.depth > max_depth || stack.len() > BER_MAX_STACK {
+            return Err(ParseFail {
+                context: "ber".into(),
+                kind: "max_depth".into(),
+                remaining_len: input.len().saturating_sub(frame.off),
+            });
+        }
+        while frame.off < frame.end {
+            if nodes.len() >= BER_MAX_NODES {
+                return Err(ParseFail {
+                    context: "ber".into(),
+                    kind: "too_many_nodes".into(),
+                    remaining_len: frame.end.saturating_sub(frame.off),
+                });
+            }
+            let slice = &input[frame.off..frame.end];
+            let hdr = parse_ber_hdr(slice)?;
+            let value_off = frame.off + hdr.header_len;
+            let value_end = value_off + hdr.value_len;
+            if value_end > frame.end {
+                return Err(ParseFail {
+                    context: "ber".into(),
+                    kind: "length_vs_buffer".into(),
+                    remaining_len: frame.end.saturating_sub(frame.off),
+                });
+            }
+            nodes.push(BerNode {
+                tag: hdr.tag,
+                depth: frame.depth,
+                offset: value_off,
+                len: hdr.value_len,
+            });
+            frame.off = value_end;
+            let constructed = hdr.tag & 0x20 != 0;
+            if constructed && hdr.value_len > 0 {
+                let child_depth = frame.depth.saturating_add(1);
+                if child_depth > max_depth {
+                    return Err(ParseFail {
+                        context: "ber".into(),
+                        kind: "max_depth".into(),
+                        remaining_len: hdr.value_len,
+                    });
+                }
+                if frame.off < frame.end {
+                    stack.push(Frame {
+                        off: frame.off,
+                        end: frame.end,
+                        depth: frame.depth,
+                    });
+                }
+                stack.push(Frame {
+                    off: value_off,
+                    end: value_end,
+                    depth: child_depth,
+                });
+                break;
+            }
+        }
+    }
+    Ok(nodes)
 }
 
 fn ber_length(input: &[u8]) -> Result<(usize, usize), ParseFail> {
@@ -774,35 +981,15 @@ pub fn parse_goose_frame(input: &[u8]) -> Result<GooseFrame<'_>, ParseFail> {
     let mut sq_num = None;
     let mut simulation = false;
     let mut ttl = None;
-    if let Ok(pdu) = parse_ber_tlv(apdu, 8, 0) {
-        // Walk CONTEXT tags inside the GOOSE PDU sequence.
-        let mut cur = pdu.value;
-        let mut hops = 0u32;
-        while !cur.is_empty() && hops < 32 {
-            hops += 1;
-            match parse_ber_tlv(cur, 8, 1) {
-                Ok(tlv) => {
-                    let consumed = cur.len().saturating_sub(
-                        // reconstruct: we don't know header size; rescan
-                        cur.len().saturating_sub(tlv.value.len()),
-                    );
-                    match tlv.tag {
-                        0x85 => st_num = ber_u32(tlv.value),
-                        0x86 => sq_num = ber_u32(tlv.value),
-                        0x87 => simulation = tlv.value.first().copied().unwrap_or(0) != 0,
-                        0x81 => ttl = ber_u32(tlv.value),
-                        _ => {}
-                    }
-                    // Advance by walking header+value: find tlv.value inside cur.
-                    if let Some(pos) = find_subslice(cur, tlv.value) {
-                        cur = cur.get(pos + tlv.value.len()..).unwrap_or(&[]);
-                    } else if consumed == 0 {
-                        break;
-                    } else {
-                        cur = cur.get(consumed..).unwrap_or(&[]);
-                    }
-                }
-                Err(_) => break,
+    if let Ok(nodes) = walk_ber_iterative(apdu, 8) {
+        for n in nodes {
+            let value = apdu.get(n.offset..n.offset + n.len).unwrap_or(&[]);
+            match n.tag {
+                0x85 => st_num = ber_u32(value),
+                0x86 => sq_num = ber_u32(value),
+                0x87 => simulation = value.first().copied().unwrap_or(0) != 0,
+                0x81 => ttl = ber_u32(value),
+                _ => {}
             }
         }
     }
@@ -815,13 +1002,6 @@ pub fn parse_goose_frame(input: &[u8]) -> Result<GooseFrame<'_>, ParseFail> {
         time_allowed_to_live: ttl,
         apdu,
     })
-}
-
-fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || needle.len() > hay.len() {
-        return None;
-    }
-    hay.windows(needle.len()).position(|w| w == needle)
 }
 
 fn ber_u32(v: &[u8]) -> Option<u32> {
@@ -858,7 +1038,7 @@ pub fn parse_sv_frame(input: &[u8]) -> Result<EthernetHeader, ParseFail> {
 pub fn parse_mms_tpkt(input: &[u8], max_attr_depth: u32) -> Result<S7Frame<'_>, ParseFail> {
     let frame = parse_s7_iso_on_tcp(input)?;
     if !frame.userdata.is_empty() {
-        let _ = parse_ber_tlv(frame.userdata, max_attr_depth, 0);
+        let _ = walk_ber_iterative(frame.userdata, max_attr_depth);
     }
     Ok(frame)
 }
@@ -1014,6 +1194,58 @@ mod tests {
         assert!(parse_ber_tlv(&[0x30, 0x04, 1, 2, 3, 4], 0, 1).is_err());
         // length claims 200 bytes, buffer has 2
         assert!(parse_ber_tlv(&[0x30, 0x81, 0xC8], 8, 0).is_err());
+    }
+
+    fn nest_ber(levels: usize) -> Vec<u8> {
+        let mut v = vec![0x04, 0x01, 0xAA];
+        for _ in 0..levels {
+            let mut outer = Vec::with_capacity(2 + v.len());
+            outer.push(0x30);
+            outer.push(u8::try_from(v.len()).expect("tiny nest"));
+            outer.extend_from_slice(&v);
+            v = outer;
+        }
+        v
+    }
+
+    #[test]
+    fn ber_iterative_walk_uses_heap_stack_not_recursion() {
+        let buf = nest_ber(8);
+        let nodes = walk_ber_iterative(&buf, 8).expect("iterative");
+        assert!(nodes.iter().any(|n| n.tag == 0x04 && n.len == 1));
+        assert!(nodes.iter().any(|n| n.depth == 8));
+        let err = walk_ber_iterative(&buf, 3).unwrap_err();
+        assert_eq!(err.kind, "max_depth");
+    }
+
+    fn build_cotp_dt(payload: &[u8], eot: bool) -> Vec<u8> {
+        let mut cotp = vec![0x02, 0xf0, if eot { 0x80 } else { 0x00 }];
+        cotp.extend_from_slice(payload);
+        let total = u16::try_from(4 + cotp.len()).expect("dt size");
+        let mut pkt = vec![0x03, 0x00];
+        pkt.extend_from_slice(&total.to_be_bytes());
+        pkt.extend(cotp);
+        pkt
+    }
+
+    #[test]
+    fn cotp_assembler_joins_two_dt_fragments() {
+        let a = build_cotp_dt(b"AAAA", false);
+        let b = build_cotp_dt(b"BBBB", true);
+        let mut asm = CotpAssembler::new();
+        assert!(asm.push(&a).expect("frag1").is_none());
+        let done = asm.push(&b).expect("frag2").expect("eot");
+        assert_eq!(done.userdata, b"AAAABBBB");
+        assert_eq!(done.fragments, 2);
+    }
+
+    #[test]
+    fn cotp_assembler_rejects_overflow() {
+        let huge = vec![0u8; COTP_ASSEMBLY_CAP + 1];
+        let pkt = build_cotp_dt(&huge, true);
+        let mut asm = CotpAssembler::new();
+        let err = asm.push(&pkt).unwrap_err();
+        assert_eq!(err.kind, "assembly_overflow");
     }
 
     #[test]

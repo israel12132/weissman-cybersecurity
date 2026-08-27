@@ -6,13 +6,16 @@ use tokio::net::TcpStream;
 
 use super::parsers::{
     cotp_is_cc, is_gateway_unit, modbus_exception_meaning, parse_dnp3_link, parse_modbus_frame,
-    parse_mms_tpkt, parse_s7_iso_on_tcp, s7_observed_cpu_control, MbapHeader,
+    parse_s7_header, s7_observed_cpu_control, walk_ber_iterative, AssembledCotp, CotpAssembler,
+    MbapHeader,
 };
 use super::policy::{
-    dnp3_fc_allowed, modbus_fc_allowed, s7_function_allowed, OtSafetyPolicy,
-    MODBUS_FINGERPRINT_FC,
+    dnp3_fc_allowed, modbus_fc_allowed, s7_function_allowed, OtSafetyPolicy, MODBUS_FINGERPRINT_FC,
 };
-use super::session::{next_transaction_id, stealth_jitter, try_host_slot, with_safety};
+use super::session::{
+    arm_rst_on_drop, next_transaction_id, release_plc_socket, stealth_jitter, try_host_slot,
+    try_station_slot, with_safety, StationId,
+};
 
 pub const MODBUS_PORT: u16 = 502;
 pub const S7_PORT: u16 = 102;
@@ -43,18 +46,32 @@ struct GuardedStream {
     _slot: super::session::HostSlot,
 }
 
-async fn connect(host: &str, port: u16, policy: &OtSafetyPolicy) -> Option<GuardedStream> {
+impl Drop for GuardedStream {
+    fn drop(&mut self) {
+        // Linger=0 so the fd close emits RST — PLC TCP pools (1–4 slots) must not
+        // sit half-open for hours after tokio::select! aborts the I/O future.
+        arm_rst_on_drop(&self.stream);
+    }
+}
+
+async fn connect(
+    host: &str,
+    port: u16,
+    policy: &OtSafetyPolicy,
+    station: StationId,
+) -> Option<GuardedStream> {
     if !policy.probe_mode.allows_tcp_probe() {
         return None;
     }
-    let slot = try_host_slot(
-        host,
-        port,
-        policy.max_connections_per_host,
-        Duration::from_millis(80),
-    )
-    .await
-    .ok()?;
+    let wait = Duration::from_millis(80);
+    let slot = match station {
+        StationId::Unspecified => try_host_slot(host, port, policy.max_connections_per_host, wait)
+            .await
+            .ok()?,
+        other => try_station_slot(host, port, other, policy.max_gateway_connections, wait)
+            .await
+            .ok()?,
+    };
     stealth_jitter(policy).await;
     let addr = format!("{host}:{port}");
     let connect = TcpStream::connect(&addr);
@@ -65,10 +82,26 @@ async fn connect(host: &str, port: u16, policy: &OtSafetyPolicy) -> Option<Guard
         _ => return None,
     };
     let _ = stream.set_nodelay(true);
+    arm_rst_on_drop(&stream);
     Some(GuardedStream {
         stream,
         _slot: slot,
     })
+}
+
+async fn abort_plc_io(stream: &mut TcpStream) {
+    release_plc_socket(stream).await;
+}
+
+async fn recv(stream: &mut TcpStream, policy: &OtSafetyPolicy) -> Option<Vec<u8>> {
+    let mut buf = [0u8; 512];
+    match with_safety(policy, stream.read(&mut buf)).await {
+        Ok(Ok(n)) if n > 0 => Some(buf[..n].to_vec()),
+        _ => {
+            abort_plc_io(stream).await;
+            None
+        }
+    }
 }
 
 async fn transact(
@@ -78,12 +111,35 @@ async fn transact(
 ) -> Option<Vec<u8>> {
     match with_safety(policy, stream.write_all(frame)).await {
         Ok(Ok(())) => {}
-        _ => return None,
+        _ => {
+            abort_plc_io(stream).await;
+            return None;
+        }
     }
-    let mut buf = [0u8; 512];
-    match with_safety(policy, stream.read(&mut buf)).await {
-        Ok(Ok(n)) if n > 0 => Some(buf[..n].to_vec()),
-        _ => None,
+    recv(stream, policy).await
+}
+
+/// ISO 8073 may split one S7/MMS PDU across TPDUs. Join them in the bounded assembler.
+async fn assemble_iso_on_tcp(
+    stream: &mut TcpStream,
+    first: &[u8],
+    policy: &OtSafetyPolicy,
+) -> Option<AssembledCotp> {
+    let mut asm = CotpAssembler::new();
+    match asm.push(first) {
+        Ok(Some(done)) => Some(done),
+        Ok(None) => {
+            for _ in 0..8 {
+                let more = recv(stream, policy).await?;
+                match asm.push(&more) {
+                    Ok(Some(done)) => return Some(done),
+                    Ok(None) => continue,
+                    Err(_) => return None,
+                }
+            }
+            None
+        }
+        Err(_) => None,
     }
 }
 
@@ -103,24 +159,36 @@ pub async fn probe_modbus_safe(host: &str, policy: &OtSafetyPolicy) -> Option<Ha
     if modbus_fc_allowed(0x03, policy.probe_mode, policy.protocol_strict).is_err() {
         return None;
     }
-    let mut guarded = connect(host, MODBUS_PORT, policy).await?;
+    let mut guarded = connect(
+        host,
+        MODBUS_PORT,
+        policy,
+        StationId::ModbusUnit(policy.modbus_unit_id),
+    )
+    .await?;
     let tx = next_transaction_id(host, MODBUS_PORT);
     let qty = policy.max_read_quantity.min(1);
     let pdu = [0x03, 0x00, 0x00, 0x00, qty as u8];
-    let frame = build_modbus(tx, 0x01, &pdu);
+    let frame = build_modbus(tx, policy.modbus_unit_id, &pdu);
     let resp = transact(&mut guarded.stream, &frame, policy).await?;
     let parsed = parse_modbus_frame(&resp).ok()?;
     let mut meta = serde_json::Map::new();
     meta.insert("unit_id".into(), serde_json::json!(parsed.header.unit_id));
     meta.insert("function".into(), serde_json::json!(parsed.pdu.function));
-    meta.insert("transaction_id".into(), serde_json::json!(parsed.header.transaction_id));
+    meta.insert(
+        "transaction_id".into(),
+        serde_json::json!(parsed.header.transaction_id),
+    );
     meta.insert("probe_mode".into(), serde_json::json!(policy.probe_mode));
     meta.insert("parser".into(), serde_json::json!("nom_mbap"));
     if is_gateway_unit(parsed.header.unit_id) {
         meta.insert("gateway_unit".into(), serde_json::json!(true));
     }
     if parsed.pdu.exception {
-        meta.insert("exception_code".into(), serde_json::json!(parsed.pdu.exception_code));
+        meta.insert(
+            "exception_code".into(),
+            serde_json::json!(parsed.pdu.exception_code),
+        );
         if let Some(code) = parsed.pdu.exception_code {
             meta.insert(
                 "exception_meaning".into(),
@@ -158,9 +226,15 @@ pub async fn probe_modbus_fingerprint_fc(
         return None;
     }
     let _ = MODBUS_FINGERPRINT_FC;
-    let mut guarded = connect(host, MODBUS_PORT, policy).await?;
+    let mut guarded = connect(
+        host,
+        MODBUS_PORT,
+        policy,
+        StationId::ModbusUnit(policy.modbus_unit_id),
+    )
+    .await?;
     let tx = next_transaction_id(host, MODBUS_PORT);
-    let frame = build_modbus(tx, 0x01, &[0xFF]);
+    let frame = build_modbus(tx, policy.modbus_unit_id, &[0xFF]);
     let resp = transact(&mut guarded.stream, &frame, policy).await?;
     let parsed = parse_modbus_frame(&resp).ok()?;
     Some(HardenedFingerprint {
@@ -179,20 +253,18 @@ pub async fn probe_modbus_fingerprint_fc(
 }
 
 pub async fn probe_s7_safe(host: &str, policy: &OtSafetyPolicy) -> Option<HardenedFingerprint> {
-    let mut guarded = connect(host, S7_PORT, policy).await?;
+    let mut guarded = connect(host, S7_PORT, policy, StationId::Unspecified).await?;
     let pkt: [u8; 22] = [
         0x03, 0x00, 0x00, 0x16, 0x11, 0xe0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xc1, 0x02, 0x01, 0x00,
         0xc2, 0x02, 0x01, 0x02, 0xc0, 0x01, 0x09,
     ];
     let resp = transact(&mut guarded.stream, &pkt, policy).await?;
-    let parsed = parse_s7_iso_on_tcp(&resp).ok()?;
-    if let Some(s7) = parsed.s7 {
-        if s7_function_allowed(s7.rosctr).is_err() {
-            // Observed CPU-control in a *response* is a SEV-1 signal, still a finding.
-        }
+    let assembled = assemble_iso_on_tcp(&mut guarded.stream, &resp, policy).await?;
+    if let Ok((_, s7)) = parse_s7_header(&assembled.userdata) {
+        let _ = s7_function_allowed(s7.rosctr);
     }
-    let cpu = s7_observed_cpu_control(parsed.userdata);
-    let cc = cotp_is_cc(parsed.cotp.pdu_type);
+    let cpu = s7_observed_cpu_control(&assembled.userdata);
+    let cc = cotp_is_cc(assembled.cotp.pdu_type);
     Some(HardenedFingerprint {
         host: host.to_string(),
         port: S7_PORT,
@@ -206,10 +278,11 @@ pub async fn probe_s7_safe(host: &str, policy: &OtSafetyPolicy) -> Option<Harden
         confidence: if cc { 0.88 } else { 0.6 },
         raw_excerpt_hex: hex_prefix(&resp, 48),
         metadata: serde_json::json!({
-            "tpkt_length": parsed.tpkt.length,
-            "cotp_pdu_type": format!("0x{:02x}", parsed.cotp.pdu_type),
+            "tpkt_length": assembled.tpkt.length,
+            "cotp_pdu_type": format!("0x{:02x}", assembled.cotp.pdu_type),
+            "cotp_fragments": assembled.fragments,
             "cpu_control_observed": cpu,
-            "parser": "nom_tpkt_cotp",
+            "parser": "nom_tpkt_cotp_assembled",
             "probe_mode": policy.probe_mode,
         }),
     })
@@ -225,7 +298,13 @@ pub fn dnp3_link_status_frame() -> Vec<u8> {
 }
 
 pub async fn probe_dnp3_safe(host: &str, policy: &OtSafetyPolicy) -> Option<HardenedFingerprint> {
-    let mut guarded = connect(host, DNP3_PORT, policy).await?;
+    let mut guarded = connect(
+        host,
+        DNP3_PORT,
+        policy,
+        StationId::Dnp3Addr(policy.dnp3_link_dest),
+    )
+    .await?;
     let frame = dnp3_link_status_frame();
     let resp = transact(&mut guarded.stream, &frame, policy).await?;
     match parse_dnp3_link(&resp) {
@@ -277,29 +356,34 @@ pub async fn probe_iec61850_mms_safe(
     host: &str,
     policy: &OtSafetyPolicy,
 ) -> Option<HardenedFingerprint> {
-    let mut guarded = connect(host, IEC_MMS_PORT, policy).await?;
+    let mut guarded = connect(host, IEC_MMS_PORT, policy, StationId::Unspecified).await?;
     let pkt: [u8; 22] = [
         0x03, 0x00, 0x00, 0x16, 0x11, 0xE0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xC0, 0x01, 0x0A, 0xC1,
-        0x02, 0x01, 0x00,         0xC2, 0x02, 0x01, 0x02,
+        0x02, 0x01, 0x00, 0xC2, 0x02, 0x01, 0x02,
     ];
     let resp = transact(&mut guarded.stream, &pkt, policy).await?;
-    let parsed = parse_mms_tpkt(&resp, 8).ok()?;
+    let assembled = assemble_iso_on_tcp(&mut guarded.stream, &resp, policy).await?;
+    if !assembled.userdata.is_empty() {
+        let _ = walk_ber_iterative(&assembled.userdata, 8);
+    }
     Some(HardenedFingerprint {
         host: host.to_string(),
         port: IEC_MMS_PORT,
         protocol: "iec61850_mms".into(),
-        vendor_hint: "IEC 61850 / MMS (TPKT+BER, hardened)".into(),
-        confidence: if cotp_is_cc(parsed.cotp.pdu_type) {
+        vendor_hint: "IEC 61850 / MMS (TPKT+iterative BER, hardened)".into(),
+        confidence: if cotp_is_cc(assembled.cotp.pdu_type) {
             0.9
         } else {
             0.62
         },
         raw_excerpt_hex: hex_prefix(&resp, 48),
         metadata: serde_json::json!({
-            "tpkt_length": parsed.tpkt.length,
-            "cotp_pdu_type": format!("0x{:02x}", parsed.cotp.pdu_type),
-            "parser": "nom_mms_ber",
+            "tpkt_length": assembled.tpkt.length,
+            "cotp_pdu_type": format!("0x{:02x}", assembled.cotp.pdu_type),
+            "cotp_fragments": assembled.fragments,
+            "parser": "nom_mms_ber_iterative",
             "max_attr_depth": 8,
+            "ber_iterative": true,
             "probe_mode": policy.probe_mode,
         }),
     })

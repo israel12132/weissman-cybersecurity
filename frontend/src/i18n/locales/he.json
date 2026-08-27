@@ -2570,7 +2570,7 @@
       "engine_iec": "בדיקת IEC 61850 MMS",
       "engine_iec_desc": "לחיצת יד TPKT + BER מוגבלת עומק. הזרקת GOOSE/SV וכתיבת MMS חסומות",
       "engine_safety": "חסימות בטיחות OT פסיבי/אקטיבי",
-      "engine_safety_desc": "מנעול ארבעה פרוטוקולים: SafeRead כברירת מחדל, עד 2 חיבורים לבקר, ActiveValidation עם HMAC, המלצת isolate_host ב-SOAR",
+      "engine_safety_desc": "מנעול ארבעה פרוטוקולים: SafeRead כברירת מחדל, עד 2 TCP לבקר ייעודי, משבצות שער לפי Unit-ID, רצפת רעש ל-Z-score, ActiveValidation עם HMAC, המלצת isolate_host ב-SOAR",
       "engine_crown": "נתיב תקיפה ל-Crown Jewel",
       "engine_crown_desc": "מאחד אישורי פרוטוקול חיים עם סיכון FAIR בדולרים, CISA KEV, ו-isolate_host על תחנות זדוניות — לא על הבקר",
       "engine_bacnet": "בדיקת BACnet/IP",
@@ -2624,7 +2624,10 @@
       "safety_file_transfer_blocked": "ללא העברת קבצים",
       "safety_goose_inject_blocked": "ללא הזרקת GOOSE",
       "safety_max_conn": "מקס {{n}} חיבורים / בקר",
+      "safety_gateway_conn": "שער {{n}} TCP · מזהה יחידה",
       "safety_zscore": "בידוד ב-Z > {{z}}",
+      "safety_rst": "RST בביטול",
+      "safety_ber_iterative": "BER איטרטיבי",
       "safety_events": "{{count}} אירועי בטיחות חיים",
       "safety_fair": "FAIR ALE ${{ale}} / נכסי כתר ${{jewels}}"
     },
@@ -7213,7 +7216,7 @@
   "supremeNerveCenter": {
     "title": "מרכז עצבים עליון",
     "ceoOnly": "מנכ\"ל / superadmin בלבד",
-    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 563 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
+    "evidence_notice": "תמונת מצב חיה מ-GET /api/ceo/supreme/nerve-center — כל 565 המנועים, מודולי מערכת, משימות אסינכרוניות ופרמטרי בקרה. ללא טלמטריה מדומה.",
     "refresh": "רענון",
     "pollInterval": "רענון אוטומטי כל {{sec}} שניות",
     "stuckAlert": "{{count}} מנוע(ים) נראים תקועים — בדוק heartbeat של worker ועדכוני phase.",

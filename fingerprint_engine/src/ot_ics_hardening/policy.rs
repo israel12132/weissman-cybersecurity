@@ -53,6 +53,10 @@ pub struct OtSafetyPolicy {
     pub probe_mode: ProbeMode,
     pub protocol_strict: bool,
     pub max_connections_per_host: u32,
+    /// Physical TCP cap on a Modbus/DNP3 gateway IP (Unit/Station IDs share this).
+    pub max_gateway_connections: u32,
+    pub modbus_unit_id: u8,
+    pub dnp3_link_dest: u16,
     pub io_timeout_ms: u64,
     pub connect_timeout_ms: u64,
     pub watchdog_ms: u64,
@@ -74,6 +78,9 @@ impl Default for OtSafetyPolicy {
             probe_mode: ProbeMode::SafeRead,
             protocol_strict: true,
             max_connections_per_host: 2,
+            max_gateway_connections: 8,
+            modbus_unit_id: 1,
+            dnp3_link_dest: 1,
             io_timeout_ms: 900,
             connect_timeout_ms: 1200,
             watchdog_ms: 2_000,
@@ -121,6 +128,24 @@ impl OtSafetyPolicy {
             .and_then(serde_json::Value::as_u64)
         {
             p.max_read_quantity = u16::try_from(n).unwrap_or(16).clamp(1, 125);
+        }
+        if let Some(n) = params
+            .get("max_gateway_connections")
+            .and_then(serde_json::Value::as_u64)
+        {
+            p.max_gateway_connections = u32::try_from(n).unwrap_or(8).clamp(1, 8);
+        }
+        if let Some(n) = params
+            .get("modbus_unit_id")
+            .and_then(serde_json::Value::as_u64)
+        {
+            p.modbus_unit_id = u8::try_from(n).unwrap_or(1);
+        }
+        if let Some(n) = params
+            .get("dnp3_link_dest")
+            .and_then(serde_json::Value::as_u64)
+        {
+            p.dnp3_link_dest = u16::try_from(n.min(u64::from(u16::MAX))).unwrap_or(1);
         }
         p.stealth_jitter_ms = params
             .get("stealth_jitter_ms")
@@ -238,7 +263,11 @@ pub const DESTRUCTIVE_FOREVER: &[&str] = &[
 ];
 
 #[must_use]
-pub fn modbus_fc_allowed(fc: u8, mode: ProbeMode, protocol_strict: bool) -> Result<(), &'static str> {
+pub fn modbus_fc_allowed(
+    fc: u8,
+    mode: ProbeMode,
+    protocol_strict: bool,
+) -> Result<(), &'static str> {
     let fc = fc & 0x7f;
     if MODBUS_WRITE_BLOCKED.contains(&fc) {
         return Err("modbus_write_blocked_by_roe");
@@ -326,9 +355,7 @@ static EMERGENCY_STOP: OnceLock<CancellationToken> = OnceLock::new();
 
 #[must_use]
 pub fn emergency_stop_token() -> CancellationToken {
-    EMERGENCY_STOP
-        .get_or_init(CancellationToken::new)
-        .clone()
+    EMERGENCY_STOP.get_or_init(CancellationToken::new).clone()
 }
 
 pub fn trip_emergency_stop() {
@@ -351,109 +378,609 @@ pub struct OtControl {
 
 pub const CONTROL_CATALOG: &[OtControl] = &[
     // ── Modbus TCP (1–25) ────────────────────────────────────────────────────
-    OtControl { id: "MB-01", protocol: "modbus", title: "Streaming nom MBAP/PDU parser (zero-copy slices)", implemented: true },
-    OtControl { id: "MB-02", protocol: "modbus", title: "nom::error::context on decode failure", implemented: true },
-    OtControl { id: "MB-03", protocol: "modbus", title: "Zero-copy header map onto &[u8]", implemented: true },
-    OtControl { id: "MB-04", protocol: "modbus", title: "MBAP Length vs physical payload (OOB reject)", implemented: true },
-    OtControl { id: "MB-05", protocol: "modbus", title: "SKIP LOCKED job claim (worker queue)", implemented: true },
-    OtControl { id: "MB-06", protocol: "modbus", title: "Function-code allow-list / ROE", implemented: true },
-    OtControl { id: "MB-07", protocol: "modbus", title: "Unit-ID validation + gateway-hopping guard", implemented: true },
-    OtControl { id: "MB-08", protocol: "modbus", title: "tokio::select! vs emergency-stop token", implemented: true },
-    OtControl { id: "MB-09", protocol: "modbus", title: "Read quantity cap (legacy PLC stress)", implemented: true },
-    OtControl { id: "MB-10", protocol: "modbus", title: "Transaction-ID session state (replay)", implemented: true },
-    OtControl { id: "MB-11", protocol: "modbus", title: "Per-packet tokio::time timeouts", implemented: true },
-    OtControl { id: "MB-12", protocol: "modbus", title: "Protocol identifier must be 0", implemented: true },
-    OtControl { id: "MB-13", protocol: "modbus", title: "weissman_ro SELECT on OT tables", implemented: true },
-    OtControl { id: "MB-14", protocol: "modbus", title: "Exception 0x01/0x02 classified as enumeration", implemented: true },
-    OtControl { id: "MB-15", protocol: "modbus", title: "Register sanitization before inference", implemented: true },
-    OtControl { id: "MB-16", protocol: "modbus", title: "Z-score packet-rate anomaly", implemented: true },
-    OtControl { id: "MB-17", protocol: "modbus", title: "Gateway Unit-ID DoS guard", implemented: true },
-    OtControl { id: "MB-18", protocol: "modbus", title: "Coil/register range vs asset inventory", implemented: true },
-    OtControl { id: "MB-19", protocol: "modbus", title: "Safe probing (reads only)", implemented: true },
-    OtControl { id: "MB-20", protocol: "modbus", title: "Unknown Unit-ID vs vulnerability matrix", implemented: true },
-    OtControl { id: "MB-21", protocol: "modbus", title: "RLS tenant isolation on OT storage", implemented: true },
-    OtControl { id: "MB-22", protocol: "modbus", title: "Max 2 connections per PLC", implemented: true },
-    OtControl { id: "MB-23", protocol: "modbus", title: "Network-error audit with binary signature", implemented: true },
-    OtControl { id: "MB-24", protocol: "modbus", title: "SOAR isolate_host recommendation (z>6)", implemented: true },
-    OtControl { id: "MB-25", protocol: "modbus", title: "CISA KEV / EPSS enrichment", implemented: true },
+    OtControl {
+        id: "MB-01",
+        protocol: "modbus",
+        title: "Streaming nom MBAP/PDU parser (zero-copy slices)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-02",
+        protocol: "modbus",
+        title: "nom::error::context on decode failure",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-03",
+        protocol: "modbus",
+        title: "Zero-copy header map onto &[u8]",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-04",
+        protocol: "modbus",
+        title: "MBAP Length vs physical payload (OOB reject)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-05",
+        protocol: "modbus",
+        title: "SKIP LOCKED job claim (worker queue)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-06",
+        protocol: "modbus",
+        title: "Function-code allow-list / ROE",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-07",
+        protocol: "modbus",
+        title: "Unit-ID validation + gateway-hopping guard",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-08",
+        protocol: "modbus",
+        title: "tokio::select! vs emergency-stop token",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-09",
+        protocol: "modbus",
+        title: "Read quantity cap (legacy PLC stress)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-10",
+        protocol: "modbus",
+        title: "Transaction-ID session state (replay)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-11",
+        protocol: "modbus",
+        title: "Per-packet tokio::time timeouts",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-12",
+        protocol: "modbus",
+        title: "Protocol identifier must be 0",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-13",
+        protocol: "modbus",
+        title: "weissman_ro SELECT on OT tables",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-14",
+        protocol: "modbus",
+        title: "Exception 0x01/0x02 classified as enumeration",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-15",
+        protocol: "modbus",
+        title: "Register sanitization before inference",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-16",
+        protocol: "modbus",
+        title: "Z-score packet-rate anomaly",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-17",
+        protocol: "modbus",
+        title: "Gateway Unit-ID DoS guard",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-18",
+        protocol: "modbus",
+        title: "Coil/register range vs asset inventory",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-19",
+        protocol: "modbus",
+        title: "Safe probing (reads only)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-20",
+        protocol: "modbus",
+        title: "Unknown Unit-ID vs vulnerability matrix",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-21",
+        protocol: "modbus",
+        title: "RLS tenant isolation on OT storage",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-22",
+        protocol: "modbus",
+        title: "Max 2 TCP per dedicated PLC; gateway Unit-ID slots (cap 8)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-23",
+        protocol: "modbus",
+        title: "Network-error audit with binary signature",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-24",
+        protocol: "modbus",
+        title: "SOAR isolate_host recommendation (z>6)",
+        implemented: true,
+    },
+    OtControl {
+        id: "MB-25",
+        protocol: "modbus",
+        title: "CISA KEV / EPSS enrichment",
+        implemented: true,
+    },
     // ── Siemens S7 (26–50) ───────────────────────────────────────────────────
-    OtControl { id: "S7-01", protocol: "s7", title: "Typed TPKT/COTP/S7 header structs", implemented: true },
-    OtControl { id: "S7-02", protocol: "s7", title: "Ladder/SZL checksum compare (vector-ready)", implemented: true },
-    OtControl { id: "S7-03", protocol: "s7", title: "RFC 1006 TPKT validation", implemented: true },
-    OtControl { id: "S7-04", protocol: "s7", title: "PDU-size cap at Setup Communication", implemented: true },
-    OtControl { id: "S7-05", protocol: "s7", title: "CPU Stop/Reset blocked", implemented: true },
-    OtControl { id: "S7-06", protocol: "s7", title: "Per-host semaphore (multi-port PLCs)", implemented: true },
-    OtControl { id: "S7-07", protocol: "s7", title: "SEV-1 on observed CPU-control in capture", implemented: true },
-    OtControl { id: "S7-08", protocol: "s7", title: "Sensitive DB access flagged, never written", implemented: true },
-    OtControl { id: "S7-09", protocol: "s7", title: "Firmware vs KEV mirror", implemented: true },
-    OtControl { id: "S7-10", protocol: "s7", title: "SKIP LOCKED parallel S7 jobs", implemented: true },
-    OtControl { id: "S7-11", protocol: "s7", title: "COTP parameter validation (orphan sessions)", implemented: true },
-    OtControl { id: "S7-12", protocol: "s7", title: "No protection-level password brute-force", implemented: true },
-    OtControl { id: "S7-13", protocol: "s7", title: "Ladder-logic download treated as recon (blocked)", implemented: true },
-    OtControl { id: "S7-14", protocol: "s7", title: "Rack/slot vs SZL response check", implemented: true },
-    OtControl { id: "S7-15", protocol: "s7", title: "Malformed ISO-on-TCP filtered", implemented: true },
-    OtControl { id: "S7-16", protocol: "s7", title: "False-positive suppression hook (≥3)", implemented: true },
-    OtControl { id: "S7-17", protocol: "s7", title: "Bounded S7CommPlus variable-spec parse", implemented: true },
-    OtControl { id: "S7-18", protocol: "s7", title: "FAIR $ at risk fusion", implemented: true },
-    OtControl { id: "S7-19", protocol: "s7", title: "Neighbor-discovery topology leak flagged", implemented: true },
-    OtControl { id: "S7-20", protocol: "s7", title: "S7 query audit with compiled plan", implemented: true },
-    OtControl { id: "S7-21", protocol: "s7", title: "Memory-marker writes blocked", implemented: true },
-    OtControl { id: "S7-22", protocol: "s7", title: "TLS policy for S7-1500", implemented: true },
-    OtControl { id: "S7-23", protocol: "s7", title: "Hardware-config change → high severity", implemented: true },
-    OtControl { id: "S7-24", protocol: "s7", title: "Supreme Council / pentest-memory hook", implemented: true },
-    OtControl { id: "S7-25", protocol: "s7", title: "Handshake timeouts per stage", implemented: true },
+    OtControl {
+        id: "S7-01",
+        protocol: "s7",
+        title: "Typed TPKT/COTP/S7 header structs",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-02",
+        protocol: "s7",
+        title: "Ladder/SZL checksum compare (vector-ready)",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-03",
+        protocol: "s7",
+        title: "RFC 1006 TPKT validation",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-04",
+        protocol: "s7",
+        title: "PDU-size cap at Setup Communication",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-05",
+        protocol: "s7",
+        title: "CPU Stop/Reset blocked",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-06",
+        protocol: "s7",
+        title: "Per-host semaphore (multi-port PLCs)",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-07",
+        protocol: "s7",
+        title: "SEV-1 on observed CPU-control in capture",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-08",
+        protocol: "s7",
+        title: "Sensitive DB access flagged, never written",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-09",
+        protocol: "s7",
+        title: "Firmware vs KEV mirror",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-10",
+        protocol: "s7",
+        title: "SKIP LOCKED parallel S7 jobs",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-11",
+        protocol: "s7",
+        title: "COTP parameter validation (orphan sessions)",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-12",
+        protocol: "s7",
+        title: "No protection-level password brute-force",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-13",
+        protocol: "s7",
+        title: "Ladder-logic download treated as recon (blocked)",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-14",
+        protocol: "s7",
+        title: "Rack/slot vs SZL response check",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-15",
+        protocol: "s7",
+        title: "Malformed ISO-on-TCP filtered + bounded COTP reassembly (8 KiB)",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-16",
+        protocol: "s7",
+        title: "False-positive suppression hook (≥3)",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-17",
+        protocol: "s7",
+        title: "Bounded S7CommPlus variable-spec parse",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-18",
+        protocol: "s7",
+        title: "FAIR $ at risk fusion",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-19",
+        protocol: "s7",
+        title: "Neighbor-discovery topology leak flagged",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-20",
+        protocol: "s7",
+        title: "S7 query audit with compiled plan",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-21",
+        protocol: "s7",
+        title: "Memory-marker writes blocked",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-22",
+        protocol: "s7",
+        title: "TLS policy for S7-1500",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-23",
+        protocol: "s7",
+        title: "Hardware-config change → high severity",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-24",
+        protocol: "s7",
+        title: "Supreme Council / pentest-memory hook",
+        implemented: true,
+    },
+    OtControl {
+        id: "S7-25",
+        protocol: "s7",
+        title: "Handshake timeouts per stage",
+        implemented: true,
+    },
     // ── DNP3 (51–75) ─────────────────────────────────────────────────────────
-    OtControl { id: "DNP-01", protocol: "dnp3", title: "Data-link start bytes + malformed reject", implemented: true },
-    OtControl { id: "DNP-02", protocol: "dnp3", title: "Link-layer CRC-16 (IEEE 1815)", implemented: true },
-    OtControl { id: "DNP-03", protocol: "dnp3", title: "Bounded Object/Variation recursion", implemented: true },
-    OtControl { id: "DNP-04", protocol: "dnp3", title: "Stealth jitter (tokio sleep)", implemented: true },
-    OtControl { id: "DNP-05", protocol: "dnp3", title: "Select-Before-Operate; Direct Operate blocked", implemented: true },
-    OtControl { id: "DNP-06", protocol: "dnp3", title: "Application fragment size cap", implemented: true },
-    OtControl { id: "DNP-07", protocol: "dnp3", title: "Unsolicited response vs session context", implemented: true },
-    OtControl { id: "DNP-08", protocol: "dnp3", title: "IIN hardware/tamper bits", implemented: true },
-    OtControl { id: "DNP-09", protocol: "dnp3", title: "Restart requires SOAR operator", implemented: true },
-    OtControl { id: "DNP-10", protocol: "dnp3", title: "Source/dest vs scope pinning", implemented: true },
-    OtControl { id: "DNP-11", protocol: "dnp3", title: "Event-injection / buffer overflow detect", implemented: true },
-    OtControl { id: "DNP-12", protocol: "dnp3", title: "pgvector-ready anomaly embedding field", implemented: true },
-    OtControl { id: "DNP-13", protocol: "dnp3", title: "Time-sync command monitoring", implemented: true },
-    OtControl { id: "DNP-14", protocol: "dnp3", title: "Z-score → isolate_host recommendation", implemented: true },
-    OtControl { id: "DNP-15", protocol: "dnp3", title: "Application sequence replay guard", implemented: true },
-    OtControl { id: "DNP-16", protocol: "dnp3", title: "File-transfer objects (g70) blocked", implemented: true },
-    OtControl { id: "DNP-17", protocol: "dnp3", title: "Session cap per IED (semaphore)", implemented: true },
-    OtControl { id: "DNP-18", protocol: "dnp3", title: "Incremental / class-poll scanning", implemented: true },
-    OtControl { id: "DNP-19", protocol: "dnp3", title: "Polling-rate Z-score > 6 = high", implemented: true },
-    OtControl { id: "DNP-20", protocol: "dnp3", title: "IEEE 1815 handshake checks", implemented: true },
-    OtControl { id: "DNP-21", protocol: "dnp3", title: "Unknown object DoS guard", implemented: true },
-    OtControl { id: "DNP-22", protocol: "dnp3", title: "Analog deadband change detect", implemented: true },
-    OtControl { id: "DNP-23", protocol: "dnp3", title: "FAIR ALE fusion", implemented: true },
-    OtControl { id: "DNP-24", protocol: "dnp3", title: "KEV-gated playbook recommendation", implemented: true },
-    OtControl { id: "DNP-25", protocol: "dnp3", title: "RLS tenant isolation", implemented: true },
+    OtControl {
+        id: "DNP-01",
+        protocol: "dnp3",
+        title: "Data-link start bytes + malformed reject",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-02",
+        protocol: "dnp3",
+        title: "Link-layer CRC-16 (IEEE 1815)",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-03",
+        protocol: "dnp3",
+        title: "Bounded Object/Variation recursion",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-04",
+        protocol: "dnp3",
+        title: "Stealth jitter (tokio sleep)",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-05",
+        protocol: "dnp3",
+        title: "Select-Before-Operate; Direct Operate blocked",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-06",
+        protocol: "dnp3",
+        title: "Application fragment size cap",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-07",
+        protocol: "dnp3",
+        title: "Unsolicited response vs session context",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-08",
+        protocol: "dnp3",
+        title: "IIN hardware/tamper bits",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-09",
+        protocol: "dnp3",
+        title: "Restart requires SOAR operator",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-10",
+        protocol: "dnp3",
+        title: "Source/dest vs scope pinning",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-11",
+        protocol: "dnp3",
+        title: "Event-injection / buffer overflow detect",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-12",
+        protocol: "dnp3",
+        title: "pgvector-ready anomaly embedding field",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-13",
+        protocol: "dnp3",
+        title: "Time-sync command monitoring",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-14",
+        protocol: "dnp3",
+        title: "Z-score → isolate_host recommendation",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-15",
+        protocol: "dnp3",
+        title: "Application sequence replay guard",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-16",
+        protocol: "dnp3",
+        title: "File-transfer objects (g70) blocked",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-17",
+        protocol: "dnp3",
+        title: "Session cap per IED (semaphore)",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-18",
+        protocol: "dnp3",
+        title: "Incremental / class-poll scanning",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-19",
+        protocol: "dnp3",
+        title: "Polling-rate Z-score > 6 = high",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-20",
+        protocol: "dnp3",
+        title: "IEEE 1815 handshake checks",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-21",
+        protocol: "dnp3",
+        title: "Unknown object DoS guard",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-22",
+        protocol: "dnp3",
+        title: "Analog deadband change detect",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-23",
+        protocol: "dnp3",
+        title: "FAIR ALE fusion",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-24",
+        protocol: "dnp3",
+        title: "KEV-gated playbook recommendation",
+        implemented: true,
+    },
+    OtControl {
+        id: "DNP-25",
+        protocol: "dnp3",
+        title: "RLS tenant isolation",
+        implemented: true,
+    },
     // ── IEC 61850 (76–100) ───────────────────────────────────────────────────
-    OtControl { id: "IEC-01", protocol: "iec61850", title: "Bounded ASN.1 BER/DER parser", implemented: true },
-    OtControl { id: "IEC-02", protocol: "iec61850", title: "GOOSE EtherType 0x88B8 + APPID", implemented: true },
-    OtControl { id: "IEC-03", protocol: "iec61850", title: "7-day GOOSE baseline window field", implemented: true },
-    OtControl { id: "IEC-04", protocol: "iec61850", title: "UEBA/agent correlation hook", implemented: true },
-    OtControl { id: "IEC-05", protocol: "iec61850", title: "Host isolation recommendation (station bus)", implemented: true },
-    OtControl { id: "IEC-06", protocol: "iec61850", title: "Sampled Values EtherType 0x88BA", implemented: true },
-    OtControl { id: "IEC-07", protocol: "iec61850", title: "Data-set / confRev change detect", implemented: true },
-    OtControl { id: "IEC-08", protocol: "iec61850", title: "Control-block disable detect", implemented: true },
-    OtControl { id: "IEC-09", protocol: "iec61850", title: "PTP / timeAllowedToLive replay guard", implemented: true },
-    OtControl { id: "IEC-10", protocol: "iec61850", title: "MMS attribute depth cap", implemented: true },
-    OtControl { id: "IEC-11", protocol: "iec61850", title: "Unsolicited InformationReport filter", implemented: true },
-    OtControl { id: "IEC-12", protocol: "iec61850", title: "SCL integrity hash", implemented: true },
-    OtControl { id: "IEC-13", protocol: "iec61850", title: "Congestion: skip active relay probes", implemented: true },
-    OtControl { id: "IEC-14", protocol: "iec61850", title: "tokio::net parallel IED channels", implemented: true },
-    OtControl { id: "IEC-15", protocol: "iec61850", title: "MMS naming hierarchy check", implemented: true },
-    OtControl { id: "IEC-16", protocol: "iec61850", title: "MMS access-control brute-force detect", implemented: true },
-    OtControl { id: "IEC-17", protocol: "iec61850", title: "MMS write audit (never emitted)", implemented: true },
-    OtControl { id: "IEC-18", protocol: "iec61850", title: "GOOSE latency anomaly field", implemented: true },
-    OtControl { id: "IEC-19", protocol: "iec61850", title: "Siprotec/ABB relay KEV match", implemented: true },
-    OtControl { id: "IEC-20", protocol: "iec61850", title: "Safe TCP disconnect (Drop)", implemented: true },
-    OtControl { id: "IEC-21", protocol: "iec61850", title: "SV Z-score > 6 high alert", implemented: true },
-    OtControl { id: "IEC-22", protocol: "iec61850", title: "Attack-path lateral inference fusion", implemented: true },
-    OtControl { id: "IEC-23", protocol: "iec61850", title: "Continuous-monitor SLA metadata", implemented: true },
-    OtControl { id: "IEC-24", protocol: "iec61850", title: "RLS on substation logic", implemented: true },
-    OtControl { id: "IEC-25", protocol: "iec61850", title: "CI parser tests (full_audit_gate)", implemented: true },
+    OtControl {
+        id: "IEC-01",
+        protocol: "iec61850",
+        title: "Iterative heap-stack ASN.1 BER/DER walker (no recursive parse)",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-02",
+        protocol: "iec61850",
+        title: "GOOSE EtherType 0x88B8 + APPID",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-03",
+        protocol: "iec61850",
+        title: "7-day GOOSE baseline window field",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-04",
+        protocol: "iec61850",
+        title: "UEBA/agent correlation hook",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-05",
+        protocol: "iec61850",
+        title: "Host isolation recommendation (station bus)",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-06",
+        protocol: "iec61850",
+        title: "Sampled Values EtherType 0x88BA",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-07",
+        protocol: "iec61850",
+        title: "Data-set / confRev change detect",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-08",
+        protocol: "iec61850",
+        title: "Control-block disable detect",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-09",
+        protocol: "iec61850",
+        title: "PTP / timeAllowedToLive replay guard",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-10",
+        protocol: "iec61850",
+        title: "MMS attribute depth cap (heap Vec, not Tokio stack)",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-11",
+        protocol: "iec61850",
+        title: "Unsolicited InformationReport filter",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-12",
+        protocol: "iec61850",
+        title: "SCL integrity hash",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-13",
+        protocol: "iec61850",
+        title: "Congestion: skip active relay probes",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-14",
+        protocol: "iec61850",
+        title: "tokio::net parallel IED channels",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-15",
+        protocol: "iec61850",
+        title: "MMS naming hierarchy check",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-16",
+        protocol: "iec61850",
+        title: "MMS access-control brute-force detect",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-17",
+        protocol: "iec61850",
+        title: "MMS write audit (never emitted)",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-18",
+        protocol: "iec61850",
+        title: "GOOSE latency anomaly field",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-19",
+        protocol: "iec61850",
+        title: "Siprotec/ABB relay KEV match",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-20",
+        protocol: "iec61850",
+        title: "Safe TCP disconnect (FIN then linger-0 RST)",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-21",
+        protocol: "iec61850",
+        title: "SV Z-score > 6 high alert",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-22",
+        protocol: "iec61850",
+        title: "Attack-path lateral inference fusion",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-23",
+        protocol: "iec61850",
+        title: "Continuous-monitor SLA metadata",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-24",
+        protocol: "iec61850",
+        title: "RLS on substation logic",
+        implemented: true,
+    },
+    OtControl {
+        id: "IEC-25",
+        protocol: "iec61850",
+        title: "CI parser tests (full_audit_gate)",
+        implemented: true,
+    },
 ];
 
 #[must_use]
@@ -472,8 +999,14 @@ pub fn catalog_json() -> serde_json::Value {
         "total": CONTROL_CATALOG.len(),
         "destructive_forever": DESTRUCTIVE_FOREVER,
         "max_connections_per_host": 2,
+        "max_gateway_connections": 8,
         "default_mode": "safe_read",
         "zscore_isolate_threshold": 6.0,
+        "stddev_floor": super::anomaly::STDDEV_FLOOR,
+        "z_abs_cap": super::anomaly::Z_ABS_CAP,
+        "cotp_assembly_cap": super::parsers::COTP_ASSEMBLY_CAP,
+        "ber_iterative": true,
+        "rst_on_release": true,
     })
 }
 
@@ -487,6 +1020,8 @@ mod tests {
         assert_eq!(p.probe_mode, ProbeMode::SafeRead);
         assert!(!p.probe_mode.allows_writes());
         assert_eq!(p.max_connections_per_host, 2);
+        assert_eq!(p.max_gateway_connections, 8);
+        assert_eq!(p.modbus_unit_id, 1);
     }
 
     #[test]
@@ -521,7 +1056,10 @@ mod tests {
     #[test]
     fn job_hmac_roundtrip() {
         let sig = sign_job_hmac("job-1", b"test-secret-at-least-16");
-        std::env::set_var("WEISSMAN_JOB_ORCHESTRATOR_SECRET", "test-secret-at-least-16");
+        std::env::set_var(
+            "WEISSMAN_JOB_ORCHESTRATOR_SECRET",
+            "test-secret-at-least-16",
+        );
         assert!(verify_job_hmac("job-1", &sig));
         assert!(!verify_job_hmac("job-2", &sig));
         std::env::remove_var("WEISSMAN_JOB_ORCHESTRATOR_SECRET");

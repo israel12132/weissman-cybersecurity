@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-08-18T03:34:38.169Z",
-  "production_engine_count": 563,
+  "generated_at": "2026-08-27T17:23:13.181Z",
+  "production_engine_count": 565,
   "requirements": {
     "msa_acknowledged": {
       "id": "msa_acknowledged",
@@ -205,7 +205,7 @@
         "scope_domains",
         "scope_exclusions"
       ],
-      "engine_count": 420
+      "engine_count": 422
     },
     "cloud_aws": {
       "id": "cloud_aws",
@@ -275,7 +275,7 @@
         "industrial_ot",
         "scope_ips"
       ],
-      "engine_count": 42
+      "engine_count": 44
     },
     "ai_redteam": {
       "id": "ai_redteam",
@@ -6320,6 +6320,30 @@
       "label": "RADIUS NAC Bypass",
       "requirements": [
         "contact_email",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_passive_active_safety": {
+      "id": "ot_passive_active_safety",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Passive-Active Safety Interlock",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
+        "scope_domains",
+        "scope_ips"
+      ]
+    },
+    "ot_crown_jewel_path": {
+      "id": "ot_crown_jewel_path",
+      "group": "ot",
+      "kind": "real_probe",
+      "label": "OT Crown-Jewel Attack Path",
+      "requirements": [
+        "contact_email",
+        "industrial_ot",
         "scope_domains",
         "scope_ips"
       ]
