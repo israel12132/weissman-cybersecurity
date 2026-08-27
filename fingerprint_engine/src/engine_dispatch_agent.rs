@@ -5,7 +5,7 @@
 
 use super::EngineRunContext;
 use crate::engine_probes::is_invented_agent_placeholder;
-use crate::engine_result::{EngineResult, WAITING_FOR_AGENT};
+use crate::engine_result::EngineResult;
 
 pub use weissman_core::models::engine_agent::{is_agent_required_engine, AGENT_REQUIRED_ENGINES};
 
@@ -165,6 +165,7 @@ async fn dispatch_to_agent(
 mod tests {
     use super::EngineRunContext;
     use super::*;
+    use crate::engine_result::WAITING_FOR_AGENT;
     use serde_json::json;
 
     #[test]
