@@ -1025,19 +1025,18 @@ fn finding(
 }
 
 /// Does this HTTP response look like it came from a GraphQL engine?
+/// 401/403 may still be a GraphQL endpoint (gated) — they are never "public introspection".
 fn looks_like_graphql(p: &HttpProbe) -> bool {
-    if let Ok(v) = serde_json::from_str::<Value>(&p.body) {
-        if v.get("data").is_some() || v.get("errors").is_some() {
-            return true;
-        }
+    use crate::api_cloud_intel::{
+        classify_graphql_response, graphql_body_shape, GraphqlResponseClass,
+    };
+    match classify_graphql_response(p.status, &p.body) {
+        GraphqlResponseClass::NotGraphQL | GraphqlResponseClass::EchoOrUnrelated => false,
+        GraphqlResponseClass::AuthGated => graphql_body_shape(&p.body),
+        GraphqlResponseClass::IntrospectionPublic
+        | GraphqlResponseClass::QueryPublic
+        | GraphqlResponseClass::GraphQLErrors => true,
     }
-    let bl = p.body.to_ascii_lowercase();
-    bl.contains("must provide query string")
-        || bl.contains("get query missing")
-        || bl.contains("cannot query field")
-        || bl.contains("must provide an operation")
-        || bl.contains("graphql")
-            && (bl.contains("syntax error") || bl.contains("query") || bl.contains("\"errors\""))
 }
 
 // ── Introspection / schema parsing ───────────────────────────────────────────────────────────────
@@ -4397,18 +4396,53 @@ pub async fn run_graphql_attack_result_ctx(target: &str, ctx: &EngineRunContext)
             continue;
         }
         endpoints_found += 1;
-        findings.push(finding(
+        let gql_class =
+            crate::api_cloud_intel::classify_graphql_response(detect.status, &detect.body);
+        let gated = matches!(
+            gql_class,
+            crate::api_cloud_intel::GraphqlResponseClass::AuthGated
+        );
+        let title = if gated {
+            format!(
+                "GraphQL endpoint authentication-gated (HTTP {}): {}",
+                detect.status, path
+            )
+        } else {
+            format!("GraphQL endpoint discovered: {}", path)
+        };
+        let description = if gated {
+            format!(
+                "{} returned HTTP {}. A 401/403 is not a public GraphQL API and is not introspection.",
+                detect.final_url, detect.status
+            )
+        } else {
+            format!(
+                "{} responds as a GraphQL endpoint (HTTP {}). Inventory it and ensure it is governed by the API gateway / WAF.",
+                detect.final_url, detect.status
+            )
+        };
+        let mut endpoint_finding = finding(
             "endpoint",
-            &format!("GraphQL endpoint discovered: {}", path),
+            &title,
             "info",
             "T1046",
             "API9:2023 Improper Inventory Management",
-            &format!("{} responds as a GraphQL endpoint (HTTP {}). Inventory it and ensure it is governed by the API gateway / WAF.", detect.final_url, detect.status),
+            &description,
             &detect.final_url,
             target,
-            "endpoint_discovered",
+            if gated {
+                "endpoint_auth_gated"
+            } else {
+                "endpoint_discovered"
+            },
             "Inventory every GraphQL endpoint; route it through the API gateway with authN/Z, rate limiting and a WAF.",
-        ));
+        );
+        if let Some(o) = endpoint_finding.as_object_mut() {
+            o.insert("http_status".into(), json!(detect.status));
+            o.insert("classification".into(), json!(gql_class.as_str()));
+            o.insert("evidence_matches_claim".into(), json!(true));
+        }
+        findings.push(endpoint_finding);
 
         if cfg.probe_fingerprint && implementation.is_none() {
             implementation = fingerprint_impl(&detect);
@@ -4702,6 +4736,26 @@ mod tests {
             final_url: "u".to_string(),
         };
         assert!(!looks_like_graphql(&html));
+        // 403 echoing the introspection query is not a GraphQL engine.
+        let echo_403 = HttpProbe {
+            status: 403,
+            headers: vec![],
+            body: r#"{"query":"{__schema{types{name}}}"}"#.to_string(),
+            final_url: "u".to_string(),
+        };
+        assert!(!looks_like_graphql(&echo_403));
+        // 403 GraphQL errors JSON is a gated endpoint, not public introspection.
+        let gated = HttpProbe {
+            status: 403,
+            headers: vec![],
+            body: r#"{"errors":[{"message":"Forbidden"}]}"#.to_string(),
+            final_url: "u".to_string(),
+        };
+        assert!(looks_like_graphql(&gated));
+        assert_eq!(
+            crate::api_cloud_intel::classify_graphql_response(gated.status, &gated.body),
+            crate::api_cloud_intel::GraphqlResponseClass::AuthGated
+        );
     }
 
     #[test]

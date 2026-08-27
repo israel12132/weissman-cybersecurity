@@ -846,22 +846,59 @@ async fn probe_aws_alias(engine_id: &str, canonical: &str, target: &str) -> Engi
         "logs",
         "assets",
     ] {
-        let s3_url = format!("https://{bucket}.s3.amazonaws.com/");
+        let s3_url = format!("https://{bucket}.s3.amazonaws.com/?max-keys=5");
         if let Some(p) = http_get(&client, &s3_url).await {
-            if p.status == 200 || p.status == 403 {
-                findings.push(alias_finding(
-                    engine_id,
-                    &format!("S3 bucket responds: {}", bucket),
-                    if p.status == 200 { "high" } else { "medium" },
-                    "T1530",
-                    &format!(
-                        "{} returned {} — enumerate bucket ACL and IAM policy.",
-                        s3_url, p.status
-                    ),
-                    target,
-                    canonical,
-                ));
-                break;
+            let class = crate::api_cloud_intel::classify_object_storage(p.status, &p.body);
+            match class {
+                crate::api_cloud_intel::StorageListingClass::PublicObjects => {
+                    findings.push(alias_finding(
+                        engine_id,
+                        &format!("Public S3 objects listable: {}", bucket),
+                        "high",
+                        "T1530",
+                        &format!(
+                            "{} returned HTTP {} with object keys — anonymous data exposure.",
+                            s3_url, p.status
+                        ),
+                        target,
+                        canonical,
+                    ));
+                    break;
+                }
+                crate::api_cloud_intel::StorageListingClass::AnonymousListEmpty => {
+                    findings.push(alias_finding(
+                        engine_id,
+                        &format!("S3 anonymous LIST empty (no objects listed): {}", bucket),
+                        "info",
+                        "T1530",
+                        &format!(
+                            "{} returned HTTP {} ListBucketResult with 0 keys — not public data.",
+                            s3_url, p.status
+                        ),
+                        target,
+                        canonical,
+                    ));
+                    break;
+                }
+                crate::api_cloud_intel::StorageListingClass::ExistsDenied => {
+                    findings.push(alias_finding(
+                        engine_id,
+                        &format!(
+                            "S3 bucket exists (access denied — listing forbidden): {}",
+                            bucket
+                        ),
+                        "info",
+                        "T1530",
+                        &format!(
+                            "{} returned HTTP {} AccessDenied. A 403/401 is not a public bucket.",
+                            s3_url, p.status
+                        ),
+                        target,
+                        canonical,
+                    ));
+                    break;
+                }
+                _ => {}
             }
         }
     }

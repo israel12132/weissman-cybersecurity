@@ -1410,6 +1410,9 @@ export default function GraphqlSecurityCommandCenter() {
                     {f.owasp_api && <span className="text-[9px] font-mono text-pink-300/70 rounded border border-pink-500/20 px-1.5 py-0.5">{f.owasp_api}</span>}
                     {f.component && <span className="text-[9px] font-mono text-[var(--text-muted)] rounded border border-[var(--border-default)] px-1.5 py-0.5">{f.component}</span>}
                     {f.mitre_attack && <span className="text-[9px] font-mono text-[var(--text-disabled)] rounded border border-[var(--border-default)] px-1.5 py-0.5">{f.mitre_attack}</span>}
+                    {f.http_status != null && <span className="text-[9px] font-mono text-cyan-300/80 rounded border border-cyan-500/25 px-1.5 py-0.5">HTTP {f.http_status}</span>}
+                    {f.classification && <span className="text-[9px] font-mono text-amber-200/80 rounded border border-amber-500/25 px-1.5 py-0.5">{f.classification}</span>}
+                    {f.evidence_matches_claim === true && <span className="text-[9px] font-mono text-emerald-300/80 rounded border border-emerald-500/25 px-1.5 py-0.5">evidence matches claim</span>}
                   </div>
                 </div>
               )}

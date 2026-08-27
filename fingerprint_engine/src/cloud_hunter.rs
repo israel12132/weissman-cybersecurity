@@ -98,24 +98,7 @@ const TAKEOVER_CNAME_SUFFIXES: &[&str] = &[
     ".intercom.io",
 ];
 
-/// S3 / GCS / Azure markers indicating public directory listing or direct access.
-const LIST_BUCKET_MARKERS: &[&str] = &[
-    // AWS S3
-    "ListBucketResult",
-    "<Contents>",
-    // Azure Blob
-    "ListBlobResult",
-    "EnumerationResults",
-    "<Blob>",
-    // Google Cloud Storage
-    "storage#objects",
-    "storage#buckets",
-    "\"kind\": \"storage#",
-    // Generic XML listing
-    "<Key>",
-    "<Name>",
-];
-
+/// S3 / GCS / Azure markers are classified in `api_cloud_intel` (public = listing + objects).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: String,
@@ -249,11 +232,9 @@ fn is_provider_error_page(body: &str, status: u16) -> bool {
 }
 
 /// Check if response is public bucket/blob listing (S3 or Azure).
+/// 401/403 and empty listings (ListBucketResult with no objects) are not public.
 fn is_list_bucket_response(body: &str, status: u16) -> bool {
-    if status != 200 {
-        return false;
-    }
-    LIST_BUCKET_MARKERS.iter().any(|m| body.contains(m))
+    crate::api_cloud_intel::classify_object_storage(status, body).is_public_data()
 }
 
 /// Run cloud hunter: for each subdomain resolve CNAME, check takeover and exposed storage.
@@ -474,13 +455,26 @@ mod tests {
     }
 
     #[test]
-    fn list_bucket_response_only_on_200_with_marker() {
-        assert!(is_list_bucket_response("<ListBucketResult><Contents>", 200));
+    fn list_bucket_response_only_on_200_with_objects() {
         assert!(is_list_bucket_response(
-            "{\"kind\": \"storage#objects\"}",
+            "<ListBucketResult><Contents><Key>a</Key></Contents>",
             200
         ));
+        assert!(is_list_bucket_response(
+            "{\"kind\": \"storage#objects\", \"items\": [{\"name\": \"a\"}]}",
+            200
+        ));
+        // 403 AccessDenied is existence, not public.
         assert!(!is_list_bucket_response("<ListBucketResult>", 403));
+        assert!(!is_list_bucket_response(
+            "<Error><Code>AccessDenied</Code></Error>",
+            403
+        ));
+        // Empty listing envelope is not public data.
+        assert!(!is_list_bucket_response(
+            "<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Name>x</Name></ListBucketResult>",
+            200
+        ));
         assert!(!is_list_bucket_response("plain page", 200));
     }
 

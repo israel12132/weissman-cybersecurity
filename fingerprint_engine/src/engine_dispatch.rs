@@ -921,6 +921,7 @@ async fn dispatch_engine_match(
         "infostealer_emulation" => crate::initial_access_engines::run_infostealer_emulation_result(target, ctx).await,
         "printer_mfp_attack" => crate::initial_access_engines::run_printer_mfp_attack_result(target, ctx).await,
         "radius_nac_bypass" => crate::initial_access_engines::run_radius_nac_bypass_result(target, ctx).await,
+        "api_cloud_intel" => crate::api_cloud_intel::run_api_cloud_intel_result(target).await,
 
         _ => EngineResult::error(
             format!(

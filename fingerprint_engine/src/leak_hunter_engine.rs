@@ -245,17 +245,15 @@ fn looks_like_leak(path: &str, status: u16, body: &str) -> bool {
     if path.contains("phpinfo") || path.contains("info.php") {
         return body_lower.contains("php version") || body_lower.contains("phpinfo()");
     }
-    // GraphQL introspection
+    // GraphQL introspection — require parsed data.__schema, not a request echo.
     if path.contains("graphql") {
-        return body_lower.contains("\"__schema\"")
-            || body_lower.contains("\"types\"")
-            || body_lower.contains("introspection");
+        return crate::api_cloud_intel::classify_graphql_response(status, body)
+            .is_public_introspection();
     }
-    // API docs that expose internals
+    // API docs that expose internals — structural OpenAPI only.
     if path.contains("swagger") || path.contains("openapi") || path.contains("api-docs") {
-        return body_lower.contains("\"paths\"")
-            || body_lower.contains("\"openapi\"")
-            || body_lower.contains("swagger");
+        return crate::api_cloud_intel::classify_openapi(status, body)
+            == crate::api_cloud_intel::OpenApiClass::PublicSpec;
     }
     // Apache server-status
     if path.contains("server-status") || path.contains("server-info") {
@@ -440,5 +438,43 @@ mod tests {
     #[test]
     fn env_credentials_detected() {
         assert!(looks_like_leak(".env", 200, "api_key=secret-value"));
+    }
+
+    #[test]
+    fn graphql_403_echo_is_not_a_leak() {
+        assert!(!looks_like_leak(
+            "/graphql",
+            403,
+            r#"{"query":"{__schema{types{name}}}"}"#
+        ));
+        assert!(!looks_like_leak(
+            "/graphql",
+            200,
+            r#"{"data":{"__typename":"Query"}}"#
+        ));
+        assert!(looks_like_leak(
+            "/graphql",
+            200,
+            r#"{"data":{"__schema":{"types":[{"name":"User"}]}}}"#
+        ));
+    }
+
+    #[test]
+    fn swagger_html_paths_substring_is_not_a_leak() {
+        assert!(!looks_like_leak(
+            "/swagger.json",
+            200,
+            r#"<html>openapi paths</html>"#
+        ));
+        assert!(!looks_like_leak(
+            "/openapi.json",
+            403,
+            r#"{"openapi":"3.0.0","paths":{"/users":{}}}"#
+        ));
+        assert!(looks_like_leak(
+            "/openapi.json",
+            200,
+            r#"{"openapi":"3.0.0","paths":{"/users":{}}}"#
+        ));
     }
 }

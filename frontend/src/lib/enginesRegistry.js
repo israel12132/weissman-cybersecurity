@@ -1,5 +1,5 @@
 /**
- * Master registry of all 563 production attack engines.
+ * Master registry of all production attack engines.
  *
  * Each engine entry:
  *   id           — backend engine identifier (used in API calls)
@@ -14,7 +14,7 @@ import { ENGINE_GROUP_DEFS, ENGINE_GROUPS } from './engineGroupDefs.js'
 
 export { ENGINE_GROUP_DEFS, ENGINE_GROUPS }
 
-/** All 563 production engines in registry order */
+/** All production engines in registry order */
 export const ENGINES_REGISTRY = [
   // ── GROUP 1: Recon & OSINT ──────────────────────────────────────────────────
   {
@@ -67,12 +67,20 @@ export const ENGINES_REGISTRY = [
     description: 'Broken Object-Level Authorization and Insecure Direct Object Reference attacks',
     requiresTarget: true,
   },
-  {
+    {
     id: 'graphql_attack',
     label: 'GraphQL & API Security',
     group: 'web',
     mitre: 'T1190',
     description: 'Agentless GraphQL attack-surface mapping — 41 evidence-only probes: introspection, Clairvoyance recon, Relay BOLA, pagination abuse, WAF evasion, live data leak, OWASP scorecard + executive PDF export',
+    requiresTarget: true,
+  },
+  {
+    id: 'api_cloud_intel',
+    label: 'API / Cloud Scan Intelligence',
+    group: 'web',
+    mitre: 'T1046',
+    description: 'Fused GraphQL + OpenAPI + multi-cloud storage intel — 401/403 is never public, empty listings are not public data, every claim carries matching HTTP evidence',
     requiresTarget: true,
   },
   {

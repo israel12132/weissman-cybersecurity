@@ -4790,7 +4790,7 @@
       "evidence_notice": "IaC misconfiguration analysis runs through POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile, and CI manifests are parsed server-side — policy hits are real static findings, not simulated CIS scores."
     },
     "graphqlSecurityCommandCenter": {
-      "evidence_notice": "GraphQL introspection, batching, and auth bypass checks via POST /api/command-center/scan (graphql_attack). Results correlate to GET /api/findings — live authorized probing only."
+      "evidence_notice": "GraphQL, OpenAPI, and cloud-storage intel via POST /api/command-center/scan (graphql_attack, api_cloud_intel). HTTP 401/403 is never labelled public; empty listings are not public data. Evidence (HTTP status + classification) must match the claim. Results correlate to GET /api/findings — live authorized probing only."
     },
     "websocketSecurity": {
       "evidence_notice": "WebSocket DAST via POST /api/command-center/scan (websocket_attack). RFC6455 handshake verification, CSWSH differential, and stateful fuzz findings stream on GET /api/telemetry/stream?job_id=… — live authorized probing only, no simulated WS results.",

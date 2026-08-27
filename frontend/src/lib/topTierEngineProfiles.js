@@ -21,6 +21,7 @@ export const TOP_TIER_ENGINE_IDS = [
   'job_posting_osint',
   'github_secret_scan',
   'graphql_deep_attack',
+  'api_cloud_intel',
   'websocket_attack',
   'grpc_reflection_attack',
   'http2_attack',
@@ -190,6 +191,16 @@ const PROFILES = {
     intelligenceFocus: 'Schema abuse, depth/cost bypass, nested authorization weaknesses.',
     expectedOutputs: [...BASE_EXPECTED_OUTPUTS, 'GraphQL exploitation traces and weak nodes'],
     samplePayload: { engine: 'graphql_deep_attack', target: 'https://target.example' },
+  },
+  api_cloud_intel: {
+    mission: 'Honest GraphQL + OpenAPI + multi-cloud storage intelligence — every claim matches live HTTP evidence.',
+    intelligenceFocus: '401/403 is never public; empty listings are not public data; introspection requires data.__schema on 2xx; OpenAPI requires a parseable spec.',
+    expectedOutputs: [
+      ...BASE_EXPECTED_OUTPUTS,
+      'Classification chips (auth_gated / public_objects / anonymous_list_empty)',
+      'HTTP status on every finding',
+    ],
+    samplePayload: { engine: 'api_cloud_intel', target: 'https://target.example' },
   },
   websocket_attack: {
     mission: 'Weissman Standard WebSocket DAST — stateful conversational fuzz, binary protobuf mutation, barrier-sync race execution, cross-protocol Intelligence Bus.',

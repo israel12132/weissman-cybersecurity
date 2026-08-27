@@ -4790,7 +4790,7 @@
       "evidence_notice": "ניתוח misconfiguration ב-IaC דרך POST /api/command-center/scan (iac_misconfig). Terraform, K8s, Dockerfile ו-manifests של CI נפרסים בשרת — פגיעות מדיניות הן ממצאים סטטיים אמיתיים, לא ציוני CIS מדומים."
     },
     "graphqlSecurityCommandCenter": {
-      "evidence_notice": "בדיקות introspection, batching ו-auth bypass ב-GraphQL דרך POST /api/command-center/scan (graphql_attack). תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי."
+      "evidence_notice": "מודיעין GraphQL, OpenAPI ואחסון ענן דרך POST /api/command-center/scan (graphql_attack, api_cloud_intel). HTTP 401/403 אינו ציבורי; listing ריק אינו חשיפת נתונים. הראיה (סטטוס HTTP + סיווג) חייבת להתאים לטענה. תוצאות מקושרות ל-GET /api/findings — רק probing מורשה וחי."
     },
     "websocketSecurity": {
       "evidence_notice": "DAST WebSocket דרך POST /api/command-center/scan (websocket_attack). אימות handshake RFC6455, CSWSH דיפרנציאלי וממצאי fuzz מוזרמים ב-GET /api/telemetry/stream?job_id=… — בדיקות מורשות בלבד, ללא תוצאות WS מדומות.",

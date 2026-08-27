@@ -14,6 +14,7 @@
 //! | `risk_superposition_collapse` | Multi-engine Bayesian belief + STRIPS + FAIR |
 //! | `sovereign_active_defense_fusion` | MTD + cognitive starvation + deception + CHRONOS |
 //! | `fair_exposure_fusion` | External exposure grade + FAIR ALE/SLE roll-up |
+//! | `api_cloud_intel` | GraphQL + OpenAPI + multi-cloud storage (honest classification) |
 
 /// Production fusion engine IDs — must remain a subset of `PRODUCTION_ENGINE_IDS`.
 pub const FUSION_ENGINE_IDS: &[&str] = &[
@@ -23,8 +24,10 @@ pub const FUSION_ENGINE_IDS: &[&str] = &[
     "risk_superposition_collapse",
     "sovereign_active_defense_fusion",
     "fair_exposure_fusion",
+    "api_cloud_intel",
 ];
 
+pub use crate::api_cloud_intel::{run_api_cloud_intel, run_api_cloud_intel_result};
 pub use crate::external_exposure_supreme::{
     run_external_exposure_supreme, run_external_exposure_supreme_result,
 };
