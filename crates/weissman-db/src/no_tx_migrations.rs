@@ -160,7 +160,7 @@ pub async fn apply_no_tx_migrations<P: AsRef<Path>>(
             version,
             description,
             sql: String::from_utf8_lossy(&bytes).into_owned(),
-            checksum: Sha384::digest(&bytes).to_vec(),
+            checksum: sqlx_sha384(&bytes),
         });
     }
     candidates.sort_by_key(|m| m.version);
@@ -170,16 +170,30 @@ pub async fn apply_no_tx_migrations<P: AsRef<Path>>(
     // the SELECT below.
     ensure_sqlx_migrations_table(pool).await?;
 
+    // One batched SELECT for all no-tx versions (typical boot: all already applied).
+    // Per-file SELECTs used to add tens of milliseconds of serial latency.
+    let versions: Vec<i64> = candidates.iter().map(|m| m.version).collect();
+    let recorded = load_recorded_checksums(pool, &versions).await?;
+
     let mut deferred: Vec<NoTxMigration> = Vec::new();
     for m in &candidates {
-        if migration_already_recorded(pool, m).await? {
-            tracing::debug!(
-                target: "weissman_db::no_tx",
-                version = m.version,
-                description = %m.description,
-                "already applied — skip"
-            );
-            continue;
+        match recorded.get(&m.version) {
+            Some(existing) if existing == &m.checksum => {
+                tracing::debug!(
+                    target: "weissman_db::no_tx",
+                    version = m.version,
+                    description = %m.description,
+                    "already applied — skip"
+                );
+                continue;
+            }
+            Some(_) => {
+                return Err(NoTxMigrateError::ChecksumMismatch {
+                    version: m.version,
+                    description: m.description.clone(),
+                });
+            }
+            None => {}
         }
         match run_no_tx_statements(pool, m).await {
             Ok(elapsed_ms) => record_no_tx_applied(pool, m, elapsed_ms).await?,
@@ -278,6 +292,36 @@ fn parse_version_and_description(name: &str) -> Option<(i64, String)> {
     Some((version, description))
 }
 
+/// SQLx-compatible SHA-384 (48 bytes). Used for `_sqlx_migrations.checksum`.
+#[must_use]
+pub fn sqlx_sha384(bytes: &[u8]) -> Vec<u8> {
+    Sha384::digest(bytes).to_vec()
+}
+
+async fn load_recorded_checksums(
+    pool: &PgPool,
+    versions: &[i64],
+) -> Result<std::collections::HashMap<i64, Vec<u8>>, NoTxMigrateError> {
+    let mut map = std::collections::HashMap::new();
+    if versions.is_empty() {
+        return Ok(map);
+    }
+    let rows: Vec<(i64, Vec<u8>)> = sqlx::query_as(
+        "SELECT version, checksum FROM _sqlx_migrations WHERE success = true AND version = ANY($1)",
+    )
+    .bind(versions)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| NoTxMigrateError::Record {
+        version: 0,
+        source: e,
+    })?;
+    for (v, c) in rows {
+        map.insert(v, c);
+    }
+    Ok(map)
+}
+
 async fn ensure_sqlx_migrations_table(pool: &PgPool) -> Result<(), NoTxMigrateError> {
     pool.execute(
         r#"CREATE TABLE IF NOT EXISTS _sqlx_migrations (
@@ -295,35 +339,6 @@ async fn ensure_sqlx_migrations_table(pool: &PgPool) -> Result<(), NoTxMigrateEr
         source: e,
     })?;
     Ok(())
-}
-
-async fn migration_already_recorded(
-    pool: &PgPool,
-    m: &NoTxMigration,
-) -> Result<bool, NoTxMigrateError> {
-    let row: Option<(Vec<u8>,)> = sqlx::query_as(
-        "SELECT checksum FROM _sqlx_migrations WHERE version = $1 AND success = true",
-    )
-    .bind(m.version)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| NoTxMigrateError::Record {
-        version: m.version,
-        source: e,
-    })?;
-    match row {
-        Some((existing_sum,)) => {
-            if existing_sum == m.checksum {
-                Ok(true)
-            } else {
-                Err(NoTxMigrateError::ChecksumMismatch {
-                    version: m.version,
-                    description: m.description.clone(),
-                })
-            }
-        }
-        None => Ok(false),
-    }
 }
 
 /// Execute the migration SQL outside any transaction. Statements are split on
@@ -596,12 +611,52 @@ mod tests {
     #[test]
     fn checksum_matches_known_sha384_for_empty_input() {
         // Sanity: SHA-384 of empty input is the well-known FIPS 180-4 constant.
-        let d = Sha384::digest(b"");
+        let d = sqlx_sha384(b"");
         let hex = d.iter().map(|b| format!("{:02x}", b)).collect::<String>();
         assert_eq!(
             hex,
             "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b",
         );
+        assert_eq!(d, Sha384::digest(b"").to_vec());
+        assert_eq!(d.len(), 48, "SHA-384 digest is 48 bytes (SQLx BYTEA width)");
+    }
+
+    #[test]
+    fn pgvector_hnsw_no_tx_migration_pins_m16_ef64() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827120000_pgvector_hnsw_m16_ef64.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("hnsw migration");
+        assert!(
+            sql.starts_with("-- weissman:no-transaction"),
+            "must be a no-tx pre-runner file"
+        );
+        assert!(sql.contains("m = 16"));
+        assert!(sql.contains("ef_construction = 64"));
+        assert!(sql.contains("ix_supreme_council_mem_embedding_hnsw"));
+        assert!(sql.contains("ix_pwp_embedding_hnsw"));
+        assert!(sql.contains("CREATE INDEX CONCURRENTLY"));
+    }
+
+    #[test]
+    fn hermetic_roles_migration_grants_thirteen_ro_tables() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/migrations/20260827120100_hermetic_db_roles.sql"
+        );
+        let sql = std::fs::read_to_string(path).expect("roles migration");
+        assert!(sql.contains("NOBYPASSRLS"));
+        assert!(sql.contains("ALTER ROLE weissman_auth"));
+        assert!(sql.contains("BYPASSRLS"));
+        assert!(sql.contains("statement_timeout = '15s'"));
+        for table in crate::role_guard::RO_SELECT_TABLES {
+            assert!(
+                sql.contains(table),
+                "weissman_ro grant list must include {table}"
+            );
+        }
+        assert!(!sql.contains("weissman_async_jobs"));
     }
 
     #[test]

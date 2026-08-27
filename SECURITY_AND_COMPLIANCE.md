@@ -96,6 +96,8 @@ Summary of key controls:
   (`auth.v_user_lookup`) — minimises blast radius. A third **read-only role**
   `weissman_ro` exists for the NL→SQL feature: SELECT-only on 13 whitelisted
   tables, `statement_timeout=15s`, `idle_in_transaction_session_timeout=30s`.
+  Production DSNs must use `weissman_app` / `weissman_auth` / `weissman_ro`
+  (never the superuser) for runtime SQLx.
 
 ## 5. Cryptography
 
@@ -119,6 +121,9 @@ Summary of key controls:
   silently stores plaintext), and a previous-key ring (`WEISSMAN_VAULT_KEY_PREVIOUS`
   plus the existing `WEISSMAN_JWT_SECRET_PREVIOUS` rotation keyring) keeps
   already-encrypted secrets readable across key rotation.
+  After boot the process wipes `WEISSMAN_VAULT_KEY` and
+  `WEISSMAN_INTEGRATIONS_VAULT_KEY` from the environment (zeroize) so a
+  memory/environ leak cannot recover the raw key material.
 
 ## 6. Threat intelligence integrity
 

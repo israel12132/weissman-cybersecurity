@@ -576,6 +576,7 @@ async fn async_main() {
         eprintln!("[startup] worker security policy refusal: {msg}");
         std::process::exit(2);
     }
+    fingerprint_engine::security_startup::lock_and_scrub_vault_keys_after_boot();
     if let Err(msg) = fingerprint_engine::http::rate_limit_redis::verify_redis_at_startup().await {
         eprintln!("[startup] worker Redis distributed state refusal: {msg}");
         std::process::exit(2);

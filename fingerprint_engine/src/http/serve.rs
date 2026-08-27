@@ -1407,26 +1407,8 @@ pub fn new_app_state(
     app_pool: Arc<PgPool>,
     auth_pool: Arc<PgPool>,
     intel_pool: Arc<PgPool>,
+    read_only_pool: Option<Arc<PgPool>>,
 ) -> Arc<AppState> {
-    // Optional read-only pool for /api/ask. Falls back to None if the env var
-    // isn't set — endpoint will then return 503 with a clear "configure this" hint.
-    let read_only_pool: Option<Arc<PgPool>> = match std::env::var("WEISSMAN_READ_ONLY_DATABASE_URL")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
-        Some(url) => match sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(5))
-            .connect_lazy(&url)
-        {
-            Ok(p) => Some(Arc::new(p)),
-            Err(e) => {
-                tracing::warn!(target: "nl_query", error = %e, "read-only pool init failed");
-                None
-            }
-        },
-        None => None,
-    };
     let (timing_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (redteam_tx, _) = tokio::sync::broadcast::channel::<String>(256);
     let (radar_tx, _) = tokio::sync::broadcast::channel::<String>(256);
@@ -1837,7 +1819,9 @@ pub async fn build_http_router(state: Arc<AppState>, static_dir: Option<PathBuf>
             crate::http::ceo_rbac::ceo_rbac_middleware,
         ))
         .layer(middleware::from_fn(crate::rbac::mutation_rbac_middleware))
-        .layer(middleware::from_fn(crate::http::client_scope::client_scope_middleware))
+        .layer(middleware::from_fn(
+            crate::http::client_scope::client_scope_middleware,
+        ))
         .layer(middleware::from_fn(
             crate::http::sse_context::sse_context_middleware,
         ))

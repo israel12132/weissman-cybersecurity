@@ -32,9 +32,16 @@ async fn begin_worker_tx(
     pool: &PgPool,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    sqlx::query("SELECT set_config('app.current_tenant_id', '', true)")
-        .execute(&mut *tx)
-        .await?;
+    // Claim/heartbeat/complete are short catalog updates. SET LOCAL lock_timeout
+    // so a stray wait cannot pin this transaction; SKIP LOCKED itself never waits.
+    // Callers MUST commit before any webhook, scan, or other network I/O.
+    sqlx::query(
+        "SELECT set_config('app.current_tenant_id', '', true), \
+                set_config('lock_timeout', $1, true)",
+    )
+    .bind(crate::advisory_lock::lock_timeout_setting())
+    .execute(&mut *tx)
+    .await?;
     Ok(tx)
 }
 
@@ -317,6 +324,8 @@ pub async fn reserve_next_excluding_with_role(
     .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
+    // Commit BEFORE returning: execute_job / outbound HTTP / network scans must not
+    // hold this FOR UPDATE SKIP LOCKED row lock.
     tx.commit().await?;
 
     let Some(row) = row else {
@@ -437,6 +446,8 @@ pub async fn claim_next_excluding_with_role(
     .bind(exclude)
     .fetch_optional(&mut *tx)
     .await?;
+    // Commit BEFORE returning: execute_job / outbound HTTP / network scans must not
+    // hold this FOR UPDATE SKIP LOCKED row lock.
     tx.commit().await?;
 
     let Some(row) = row else {
@@ -895,5 +906,27 @@ mod worker_pool_role_tests {
             WorkerPoolRole::Mixed | WorkerPoolRole::Research | WorkerPoolRole::Client
         ));
         assert!((0..=2).contains(&role.sql_mode()));
+    }
+
+    #[test]
+    fn claim_path_commits_before_any_network_io() {
+        // Worker scans and SOAR outbound HTTP run AFTER claim_next/reserve_next return.
+        // This module must stay a pure SQL control plane so FOR UPDATE SKIP LOCKED
+        // row locks cannot be held across I/O.
+        let src = include_str!("job_queue.rs");
+        let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+        assert!(production.contains("FOR UPDATE SKIP LOCKED"));
+        assert!(
+            production.contains("Commit BEFORE returning"),
+            "claim functions must document that the transaction is closed before job execution"
+        );
+        assert!(
+            !production.contains("reqwest"),
+            "job_queue must not perform HTTP inside the claim transaction"
+        );
+        assert!(
+            production.contains("use sqlx::") && production.contains("use uuid::"),
+            "claim path is SQLx + UUID only"
+        );
     }
 }

@@ -5,6 +5,7 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
+use zeroize::Zeroize;
 
 const INT_PREFIX: &str = "wzi1:";
 
@@ -46,13 +47,50 @@ fn hex32(raw: &str) -> Option<[u8; 32]> {
 /// dedicated key.
 #[must_use]
 pub fn dedicated_key_configured() -> bool {
-    std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+    if std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
         .map(|v| v.trim().len() >= 32)
         .unwrap_or(false)
         || std::env::var("WEISSMAN_VAULT_KEY")
             .ok()
             .and_then(|v| hex32(&v))
             .is_some()
+    {
+        return true;
+    }
+    DEDICATED_AFTER_SCRUB.get().copied().unwrap_or(false)
+}
+
+static DEDICATED_AFTER_SCRUB: OnceLock<bool> = OnceLock::new();
+
+/// Load the integrations keyring from the environment. Call once at boot before
+/// [`scrub_key_env_vars`].
+pub fn prime_keys_from_env() {
+    let _ = DEDICATED_AFTER_SCRUB.get_or_init(|| {
+        std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY")
+            .map(|v| v.trim().len() >= 32)
+            .unwrap_or(false)
+            || std::env::var("WEISSMAN_VAULT_KEY")
+                .ok()
+                .and_then(|v| hex32(&v))
+                .is_some()
+    });
+    let _ = vault_key();
+    let _ = decrypt_keyring();
+}
+
+/// Wipe vault key env vars after the keyring is resident in process memory.
+pub fn scrub_key_env_vars() {
+    for name in [
+        "WEISSMAN_INTEGRATIONS_VAULT_KEY",
+        "WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS",
+        "WEISSMAN_VAULT_KEY",
+        "WEISSMAN_VAULT_KEY_PREVIOUS",
+    ] {
+        if let Ok(mut v) = std::env::var(name) {
+            v.zeroize();
+        }
+        std::env::remove_var(name);
+    }
 }
 
 /// Current (encryption) key. `None` only when no key material exists at all
@@ -60,13 +98,22 @@ pub fn dedicated_key_configured() -> bool {
 fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
     *KEY.get_or_init(|| {
-        if let Ok(raw) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
-            if raw.trim().len() >= 32 {
-                return Some(derive_key(b"weissman-integrations-vault-v1|", raw.trim()));
+        if let Ok(mut raw) = std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY") {
+            let ok = raw.trim().len() >= 32;
+            let derived = if ok {
+                Some(derive_key(b"weissman-integrations-vault-v1|", raw.trim()))
+            } else {
+                None
+            };
+            raw.zeroize();
+            if derived.is_some() {
+                return derived;
             }
         }
-        if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            if let Some(k) = hex32(&raw) {
+        if let Ok(mut raw) = std::env::var("WEISSMAN_VAULT_KEY") {
+            let parsed = hex32(&raw);
+            raw.zeroize();
+            if let Some(k) = parsed {
                 return Some(k);
             }
         }
@@ -139,13 +186,19 @@ fn build_decrypt_keyring(
 fn decrypt_keyring() -> &'static [[u8; 32]] {
     static KEYS: OnceLock<Vec<[u8; 32]>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        build_decrypt_keyring(
+        let mut prev_vault = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS").unwrap_or_default();
+        let mut prev_int =
+            std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS").unwrap_or_default();
+        let ring = build_decrypt_keyring(
             vault_key(),
             &std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default(),
-            &std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS").unwrap_or_default(),
-            &std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY_PREVIOUS").unwrap_or_default(),
+            &prev_vault,
+            &prev_int,
             &std::env::var("WEISSMAN_JWT_SECRET_PREVIOUS").unwrap_or_default(),
-        )
+        );
+        prev_vault.zeroize();
+        prev_int.zeroize();
+        ring
     })
     .as_slice()
 }
@@ -421,5 +474,21 @@ mod tests {
                 .is_none(),
             "control: the dedicated key alone must NOT open a legacy blob"
         );
+    }
+
+    #[test]
+    fn scrub_unsets_integrations_vault_env() {
+        std::env::set_var(
+            "WEISSMAN_INTEGRATIONS_VAULT_KEY",
+            "test-vault-key-for-integrations-32b-minimum!!",
+        );
+        prime_keys_from_env();
+        assert!(dedicated_key_configured());
+        scrub_key_env_vars();
+        assert!(
+            std::env::var("WEISSMAN_INTEGRATIONS_VAULT_KEY").is_err(),
+            "integrations vault env must be wiped after boot"
+        );
+        assert!(dedicated_key_configured());
     }
 }

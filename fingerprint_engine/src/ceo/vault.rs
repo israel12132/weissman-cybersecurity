@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row};
 use std::sync::OnceLock;
+use zeroize::Zeroize;
 
 // ── Secret-at-rest encryption (AES-256-GCM) ────────────────────────────────────
 // Tenant secrets stored in the vault are encrypted at rest. The key is a dedicated
@@ -40,16 +41,15 @@ fn hex32(raw: &str) -> Option<[u8; 32]> {
 fn vault_key() -> Option<[u8; 32]> {
     static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
     *KEY.get_or_init(|| {
-        if let Ok(raw) = std::env::var("WEISSMAN_VAULT_KEY") {
-            let t = raw.trim();
-            if !t.is_empty() {
-                if let Some(k) = hex32(t) {
-                    return Some(k);
-                }
-                eprintln!(
-                    "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
-                );
+        if let Ok(mut raw) = std::env::var("WEISSMAN_VAULT_KEY") {
+            let parsed = hex32(raw.trim());
+            raw.zeroize();
+            if let Some(k) = parsed {
+                return Some(k);
             }
+            eprintln!(
+                "[Weissman][vault] WEISSMAN_VAULT_KEY must be 64 hex chars (32 bytes); ignoring"
+            );
         }
         let js = std::env::var("WEISSMAN_JWT_SECRET").unwrap_or_default();
         if js.trim().len() < 16 {
@@ -59,6 +59,35 @@ fn vault_key() -> Option<[u8; 32]> {
         }
         Some(derive_key(b"weissman-vault-key-v1|", js.trim()))
     })
+}
+
+static DEDICATED_AFTER_SCRUB: OnceLock<bool> = OnceLock::new();
+
+/// Load the encryption keyring from the environment. Call once at boot before
+/// [`scrub_key_env_vars`] so decrypt still works after the env copies are wiped.
+pub fn prime_keys_from_env() {
+    let _ = DEDICATED_AFTER_SCRUB.get_or_init(|| {
+        std::env::var("WEISSMAN_VAULT_KEY")
+            .ok()
+            .and_then(|v| hex32(v.trim()))
+            .is_some()
+    });
+    let _ = vault_key();
+    let _ = decrypt_keyring();
+}
+
+/// Wipe `WEISSMAN_VAULT_KEY*` from the process environment after the keyring is in memory.
+pub fn scrub_key_env_vars() {
+    for name in ["WEISSMAN_VAULT_KEY", "WEISSMAN_VAULT_KEY_PREVIOUS"] {
+        zeroize_and_unset(name);
+    }
+}
+
+fn zeroize_and_unset(name: &str) {
+    if let Ok(mut v) = std::env::var(name) {
+        v.zeroize();
+    }
+    std::env::remove_var(name);
 }
 
 /// True when a key is available to encrypt CEO-vault secrets at rest — including the JWT-derived
@@ -78,10 +107,14 @@ pub fn key_present() -> bool {
 /// guard was unconditionally true. It never once fired.
 #[must_use]
 pub fn dedicated_key_configured() -> bool {
-    std::env::var("WEISSMAN_VAULT_KEY")
+    if std::env::var("WEISSMAN_VAULT_KEY")
         .ok()
         .and_then(|v| hex32(v.trim()))
         .is_some()
+    {
+        return true;
+    }
+    DEDICATED_AFTER_SCRUB.get().copied().unwrap_or(false)
 }
 
 /// Decrypt keyring: current key, then rotated-out previous keys
@@ -94,8 +127,10 @@ fn decrypt_keyring() -> &'static [[u8; 32]] {
         if let Some(k) = vault_key() {
             v.push(k);
         }
-        if let Ok(csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
-            v.extend(csv.split(',').filter_map(hex32));
+        if let Ok(mut csv) = std::env::var("WEISSMAN_VAULT_KEY_PREVIOUS") {
+            let extras: Vec<[u8; 32]> = csv.split(',').filter_map(hex32).collect();
+            csv.zeroize();
+            v.extend(extras);
         }
         // Legacy rows encrypted with the CURRENT JWT secret, before a dedicated WEISSMAN_VAULT_KEY
         // existed. Without this, setting that key — what the hardened startup guard now demands —
@@ -577,5 +612,23 @@ mod tests {
             decrypt_secret("legacy-plaintext-signature"),
             "legacy-plaintext-signature"
         );
+    }
+
+    #[test]
+    fn scrub_unsets_vault_key_env_but_keeps_dedicated_flag() {
+        let hex: String = "ab".repeat(32);
+        std::env::set_var("WEISSMAN_VAULT_KEY", &hex);
+        prime_keys_from_env();
+        assert!(dedicated_key_configured());
+        scrub_key_env_vars();
+        assert!(
+            std::env::var("WEISSMAN_VAULT_KEY").is_err(),
+            "env copy must be gone after boot scrub"
+        );
+        assert!(
+            dedicated_key_configured(),
+            "dedicated-key flag must survive env wipe"
+        );
+        std::env::remove_var("WEISSMAN_VAULT_KEY");
     }
 }

@@ -117,6 +117,8 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
         }
     }
 
+    weissman_db::role_guard::enforce_production_dsn_roles()?;
+
     if matches!(scope, StartupScope::Server) {
         if std::env::var("WEISSMAN_MIGRATE_URL")
             .map(|s| s.trim().is_empty())
@@ -215,6 +217,16 @@ fn enforce_production_security_policy_with_scope(scope: StartupScope) -> Result<
     }
 
     Ok(())
+}
+
+/// Load AES-256-GCM vault keys into process memory, then wipe the env copies so a
+/// later memory dump / `/proc/self/environ` leak cannot recover
+/// `WEISSMAN_VAULT_KEY` / `WEISSMAN_INTEGRATIONS_VAULT_KEY`.
+pub fn lock_and_scrub_vault_keys_after_boot() {
+    crate::ceo::vault::prime_keys_from_env();
+    crate::soar::integrations_vault::prime_keys_from_env();
+    crate::ceo::vault::scrub_key_env_vars();
+    crate::soar::integrations_vault::scrub_key_env_vars();
 }
 
 /// True when production expects Redis-backed distributed lockout, rate limits, and agent registry.
