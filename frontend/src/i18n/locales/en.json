@@ -1477,6 +1477,7 @@
       "kpi_copy_backpressure": "Backpressure rejects",
       "kpi_copy_backpressure_hint": "full channel → 429 / wait",
       "kpi_copy_schema": "COPY schema v{{version}}",
+      "kpi_copy_schema_cold": "schema not warmed — COPY refused",
       "search_placeholder": "Filter by agent, metric, or detail…",
       "all_severities": "All severities",
       "vs": "vs",

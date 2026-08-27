@@ -319,9 +319,11 @@ export default function UebaAnomalies() {
                   label={t(`${NS}.kpi_copy_backpressure`)}
                   value={Number(ingest.copy_backpressure_rejects || 0).toLocaleString()}
                   hint={
-                    ingest.copy_schema_version
-                      ? t(`${NS}.kpi_copy_schema`, { version: ingest.copy_schema_version })
-                      : t(`${NS}.kpi_copy_backpressure_hint`)
+                    ingest.copy_schema_warmed === false
+                      ? t(`${NS}.kpi_copy_schema_cold`)
+                      : ingest.copy_schema_version
+                        ? t(`${NS}.kpi_copy_schema`, { version: ingest.copy_schema_version })
+                        : t(`${NS}.kpi_copy_backpressure_hint`)
                   }
                   accent={Number(ingest.copy_backpressure_rejects || 0) > 0 ? '#f43f5e' : '#64748b'}
                 />

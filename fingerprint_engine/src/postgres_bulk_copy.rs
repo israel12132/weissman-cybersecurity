@@ -6,6 +6,10 @@
 //! streaming the batch with `COPY … FROM STDIN WITH (FORMAT binary)` inside an
 //! explicit transaction so a mid-stream failure rolls the batch back.
 //!
+//! `pg_attribute` is queried **once** in [`spawn`] via
+//! [`warm_agent_metric_samples_schema`] before the flush loop. Each COPY uses
+//! [`require_warmed_agent_metric_samples_schema`] (memory only).
+//!
 //! When the channel is full the sample is **rejected** ([`SubmitError::Backpressure`])
 //! — it is not INSERT-fallback'd (that would just move the flood onto Postgres).
 //! Agents keep the sample in their local spill file and retry. INSERT fallback is
@@ -21,8 +25,9 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 use weissman_db::pg_binary_copy::{
-    agent_metric_samples_copy_sql, assert_agent_metric_samples_schema, encode_agent_metric_sample,
-    PgBinaryCopyBuf, AGENT_METRIC_SAMPLES_SCHEMA_VERSION,
+    agent_metric_samples_copy_sql, agent_metric_samples_schema_is_ok, encode_agent_metric_sample,
+    require_warmed_agent_metric_samples_schema, warm_agent_metric_samples_schema, PgBinaryCopyBuf,
+    AGENT_METRIC_SAMPLES_SCHEMA_VERSION,
 };
 
 /// Default flush when the buffer fills (override: `WEISSMAN_UEBA_COPY_BATCH_SIZE`).
@@ -104,6 +109,9 @@ pub struct UebaCopyStats {
     pub copy_fallback_inserts: u64,
     pub copy_backpressure_rejects: u64,
     pub copy_schema_version: u32,
+    /// `true` after the one-time startup `pg_attribute` warm. The COPY flush
+    /// path never re-queries the catalog.
+    pub copy_schema_warmed: bool,
     pub copy_batch_size: usize,
     pub copy_flush_interval_ms: u64,
     pub copy_channel_cap: usize,
@@ -120,6 +128,7 @@ pub fn snapshot_stats() -> UebaCopyStats {
         copy_fallback_inserts: FALLBACK_INSERTS.load(Ordering::Relaxed),
         copy_backpressure_rejects: BACKPRESSURE_REJECTS.load(Ordering::Relaxed),
         copy_schema_version: AGENT_METRIC_SAMPLES_SCHEMA_VERSION,
+        copy_schema_warmed: agent_metric_samples_schema_is_ok(),
         copy_batch_size: env_usize("WEISSMAN_UEBA_COPY_BATCH_SIZE", DEFAULT_BATCH_SIZE).max(1),
         copy_flush_interval_ms: env_u64(
             "WEISSMAN_UEBA_COPY_FLUSH_MS",
@@ -164,6 +173,21 @@ pub fn spawn(pool: Arc<PgPool>) {
             batch_size,
             flush_interval,
         };
+        // Warm *before* the flush loop so COPY never issues a catalog query.
+        // Concurrent ingest can enqueue during this await; the first flush
+        // runs only after the warm attempt completes.
+        match warm_agent_metric_samples_schema(&mgr.db_pool).await {
+            Ok(()) => tracing::info!(
+                target: "ueba_copy",
+                schema_version = AGENT_METRIC_SAMPLES_SCHEMA_VERSION,
+                "agent_metric_samples COPY schema contract warmed (one pg_attribute query)"
+            ),
+            Err(e) => tracing::error!(
+                target: "ueba_copy",
+                error = %e,
+                "schema contract warm failed; COPY flushes will refuse and INSERT-fallback"
+            ),
+        }
         if let Err(e) = mgr.run_loop().await {
             tracing::error!(target: "ueba_copy", error = %e, "COPY ingest worker exited");
         }
@@ -405,15 +429,16 @@ impl BulkIngestManager {
             return Ok(Vec::new());
         }
 
+        // Memory-only. A catalog miss here is a programming/ops error (warm
+        // skipped), not a reason to query pg_attribute on the ingest path.
+        if let Err(e) = require_warmed_agent_metric_samples_schema() {
+            tracing::error!(target: "ueba_copy", error = %e, "refusing binary COPY; schema contract not warmed");
+            return Err(e);
+        }
+
         let mut tx = crate::db::begin_tenant_tx(&self.db_pool, tenant_id)
             .await
             .map_err(|e| format!("tenant tx: {e}"))?;
-
-        if let Err(e) = assert_agent_metric_samples_schema(&mut *tx).await {
-            tracing::error!(target: "ueba_copy", error = %e, "refusing binary COPY; schema contract failed");
-            let _ = tx.rollback().await;
-            return Err(e);
-        }
 
         let ids: Vec<i64> = sqlx::query_scalar(
             "SELECT nextval('agent_metric_samples_id_seq') FROM generate_series(1, $1)",
@@ -564,11 +589,22 @@ mod tests {
     }
 
     #[test]
+    fn copy_hot_path_refuses_without_a_catalog_query() {
+        weissman_db::pg_binary_copy::invalidate_agent_metric_samples_schema_cache();
+        let err = require_warmed_agent_metric_samples_schema().expect_err("cold");
+        assert!(
+            err.contains("not warmed") || err.contains("refusing COPY"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn snapshot_stats_reports_schema_version_and_backpressure_counter() {
         let s = snapshot_stats();
         assert!(!s.copy_enabled || worker_running());
         assert!(s.copy_batch_size >= 1);
         assert_eq!(s.copy_schema_version, AGENT_METRIC_SAMPLES_SCHEMA_VERSION);
+        assert_eq!(s.copy_schema_warmed, agent_metric_samples_schema_is_ok());
         assert_eq!(s.copy_backpressure_rejects, BACKPRESSURE_REJECTS.load(Ordering::Relaxed));
     }
 

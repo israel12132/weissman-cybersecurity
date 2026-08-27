@@ -1,15 +1,24 @@
 //! Zeroizing wrappers for connection secrets loaded from the environment.
 //!
 //! DSNs and passwords must not be cloned into long-lived globals (`OnceLock`,
-//! process-wide caches). Hold them in these types, use [`SecretUrl::expose`]
-//! for the one call that needs the bytes, then drop so [`ZeroizeOnDrop`]
-//! overwrites the heap allocation.
+//! process-wide URL caches). Hold them in these types, use [`SecretUrl::expose`]
+//! for the **one** connect call that needs the bytes, then drop so
+//! [`ZeroizeOnDrop`] overwrites the heap allocation.
+//!
+//! The long-lived handle is the SQLx [`sqlx::PgPool`], stored on `AppState` /
+//! worker state. A pool does not expose the original DSN as a usable string.
+//! Rebuilding a pool on every API request would redo TCP/TLS and Postgres
+//! authentication and is forbidden. `OnceLock` is banned for **URL strings**,
+//! not for the pool itself.
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A database URL (or any connection string) that wipes itself when dropped.
 ///
 /// Not [`Clone`]: cloning would re-materialise the secret on the heap.
+///
+/// Use only while establishing (or rotating) a [`sqlx::PgPool`]. After
+/// `connect` / `connect_lazy` returns, drop this wrapper. Keep the pool.
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SecretUrl {
     inner: String,

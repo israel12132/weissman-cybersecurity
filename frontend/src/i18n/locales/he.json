@@ -1477,6 +1477,7 @@
       "kpi_copy_backpressure": "דחיות backpressure",
       "kpi_copy_backpressure_hint": "תעלה מלאה → 429 / המתנה",
       "kpi_copy_schema": "סכמת COPY גרסה {{version}}",
+      "kpi_copy_schema_cold": "הסכמה לא חוממה — COPY מסורב",
       "search_placeholder": "סינון לפי סוכן, מדד או פירוט…",
       "all_severities": "כל החומרות",
       "vs": "מול",

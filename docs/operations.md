@@ -44,9 +44,15 @@ Working copies of keys and decrypted payloads are [`Zeroize`]/[`ZeroizeOnDrop`]
 when they leave scope — there is no JWT fallback on the sovereign loader.
 Decrypted config fields and database DSNs are held in dedicated wrappers
 (`SecretString`, `weissman_db::SecretUrl`) that are **not** `Clone` and wipe on
-drop. They must not be copied into process-wide globals (`OnceLock`, sqlx DSN
-caches, `HashMap` clones). `connect_*_from_env` loads the DSN into `SecretUrl`,
-connects, then drops the wrapper.
+drop. **DSN strings** must not be copied into process-wide globals (`OnceLock`,
+`HashMap` clones). That rule does **not** apply to the SQLx `PgPool`: the pool
+is the long-lived process state (held on `AppState` / worker `Arc<PgPool>`) and
+does not expose the original connection string. `connect_*_from_env` loads the
+DSN into `SecretUrl`, opens the pool **once at boot**, then drops the wrapper.
+Never rebuild a pool on an incoming API request (TCP/TLS + Postgres auth would
+add tens of milliseconds per call). After a deliberate hot DSN rotation /
+pool rebuild, call `invalidate_agent_metric_samples_schema_cache` so the UEBA
+COPY worker re-warms `pg_attribute` once.
 
 | Var | Default | Effect |
 |-----|---------|--------|
@@ -57,6 +63,8 @@ connects, then drops the wrapper.
 | `WEISSMAN_UEBA_COPY_BATCH_SIZE` | 512 | Binary COPY flush when this many UEBA samples are buffered |
 | `WEISSMAN_UEBA_COPY_FLUSH_MS` | 50 | Binary COPY flush interval (cockpit freshness vs write coalescing) |
 | `WEISSMAN_UEBA_COPY_CHANNEL` | 50000 | Bounded Tokio mPSC capacity. When full, ingest returns backpressure (HTTP 429 / agent `Backpressure`); agents wait or spill locally. INSERT fallback is **not** used on a full channel. |
+| `WEISSMAN_UEBA_SPILL_MAX_BYTES` | 5242880 (5 MiB) | Agent `ueba-spill.json` hard cap. Oldest samples are dropped (FIFO) when the file would exceed this size. |
+| `WEISSMAN_UEBA_SPILL_MAX_SAMPLES` | 10000 | Agent spill sample cap (whichever of bytes/samples is hit first). |
 
 > **Rotation:** set the new key, move the old value into `*_PREVIOUS`, restart. Old
 > ciphertext still decrypts via the previous key; MFA seeds re-encrypt opportunistically.

@@ -79,8 +79,9 @@ pub enum ServerToAgent {
     Ack { task_id: String },
     /// Asks the agent to shut down (revoked, deprovisioned, …).
     Shutdown { reason: String },
-    /// Server ingest is saturated. Retain the last `ueba_baseline` finding locally
-    /// and retry after `retry_after_ms` (or on the next session).
+    /// Server ingest is saturated. Retain spilled `ueba_baseline` findings in the
+    /// FIFO `ueba-spill.json` queue (hard byte/count cap) and retry oldest-first
+    /// after `retry_after_ms` (or on the next session).
     Backpressure {
         retry_after_ms: u64,
         #[serde(default)]

@@ -150,16 +150,21 @@ In-process background loops (`weissman-server`):
    50_000 / `WEISSMAN_UEBA_COPY_CHANNEL`). A per-replica worker flushes via
    PostgreSQL **binary COPY** (`COPY agent_metric_samples … FROM STDIN WITH
    (FORMAT binary)`) when the buffer hits `WEISSMAN_UEBA_COPY_BATCH_SIZE`
-   (default 512) or `WEISSMAN_UEBA_COPY_FLUSH_MS` (default 50 ms). Before the
-   stream starts, `assert_agent_metric_samples_schema` checks `pg_attribute`
-   against the v1 column contract (`weissman_db::pg_binary_copy`). COPY runs
-   inside an explicit tenant transaction (`begin_tenant_tx`); `COMMIT` happens
-   only after `finish()` and a matching row count — a mid-stream failure
+   (default 512) or `WEISSMAN_UEBA_COPY_FLUSH_MS` (default 50 ms). The COPY
+   worker warms `pg_attribute` **once at startup**
+   (`warm_agent_metric_samples_schema`) against the v1 column contract
+   (`weissman_db::pg_binary_copy`) and caches the result in memory (reset only
+   when the pool is rebuilt). Each flush calls
+   `require_warmed_agent_metric_samples_schema` only — it never re-queries the
+   catalog, so `POST /api/ueba/ingest` cannot flood Postgres system catalogs.
+   COPY runs inside an explicit tenant transaction (`begin_tenant_tx`); `COMMIT`
+   happens only after `finish()` and a matching row count — a mid-stream failure
    `abort()`s the writer and rolls the batch back. RLS is applied per tenant.
    A full channel returns **backpressure** (HTTP 429 + `ServerToAgent::Backpressure`);
-   agents retain the last sample in `ueba-spill.json` and retry. INSERT fallback
-   is only used when the worker is absent or the channel is closed. After COPY
-   commits:
+   agents keep a FIFO `ueba-spill.json` queue (hard cap 5 MiB / 10 000 samples,
+   oldest dropped first) and retry. INSERT fallback is only used when the worker
+   is absent, the channel is closed, or the schema contract was not warmed.
+   After COPY commits:
    - re-derive baselines (mean + stddev) for every numeric metric for that
      `(agent, metric)` over the last 7 days,
    - if baseline has ≥ 24 samples and stddev > 0:
@@ -171,7 +176,7 @@ In-process background loops (`weissman-server`):
 4. `/api/ueba/anomalies` exposes the rolling list for the cockpit UEBA panel.
    `/api/ueba/ingest-stats` exposes replica-local COPY counters (rows flushed,
    last flush latency, channel depth, INSERT fallback count, backpressure
-   rejects, schema version).
+   rejects, schema version, schema-warmed flag).
 
 ---
 

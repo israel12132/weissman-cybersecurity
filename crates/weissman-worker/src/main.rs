@@ -581,19 +581,8 @@ async fn async_main() {
         std::process::exit(2);
     }
 
-    let database_url = match std::env::var("DATABASE_URL") {
-        Ok(u) if !u.trim().is_empty() => u,
-        _ => {
-            eprintln!("weissman-worker: DATABASE_URL is required");
-            std::process::exit(1);
-        }
-    };
-    if let Err(msg) = weissman_db::env_bootstrap::validate_database_url(&database_url) {
-        eprintln!("weissman-worker: {}", msg);
-        std::process::exit(1);
-    }
-
-    let app_pool = match weissman_db::connect_worker_app(database_url.trim()).await {
+    // Pools are process-lifetime. SecretUrl lives only inside connect_*_from_env.
+    let app_pool = match weissman_db::connect_worker_app_from_env().await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!("weissman-worker: database connect failed: {}", e);
@@ -602,13 +591,7 @@ async fn async_main() {
     };
     fingerprint_engine::observability::register_llm_tenant_metering(app_pool.clone());
 
-    let auth_url =
-        std::env::var("WEISSMAN_AUTH_DATABASE_URL").unwrap_or_else(|_| database_url.clone());
-    if let Err(msg) = weissman_db::env_bootstrap::validate_database_url(auth_url.trim()) {
-        eprintln!("weissman-worker: WEISSMAN_AUTH_DATABASE_URL: {}", msg);
-        std::process::exit(1);
-    }
-    let auth_pool = match weissman_db::connect_auth(auth_url.trim()).await {
+    let auth_pool = match weissman_db::connect_auth_from_env().await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!("weissman-worker: auth database connect failed: {}", e);
@@ -633,7 +616,7 @@ async fn async_main() {
     // a connection-hungry scan checks out every app slot and the worker's own "mark this job
     // completed" write times out ("database: pool timed out"), so finished jobs never reach a
     // terminal state and pollers see them hang. A tiny separate pool keeps the control plane alive.
-    let ctrl_pool = match weissman_db::connect_control(database_url.trim()).await {
+    let ctrl_pool = match weissman_db::connect_control_from_env().await {
         Ok(p) => Arc::new(p),
         Err(e) => {
             eprintln!(

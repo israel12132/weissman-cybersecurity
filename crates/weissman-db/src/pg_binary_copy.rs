@@ -17,12 +17,21 @@
 //! # Schema-drift protection
 //!
 //! Binary COPY is position-and-type rigid. [`AGENT_METRIC_SAMPLES_COPY_COLUMNS`] is
-//! the single contract: encoder field order, generated COPY SQL, and the runtime
-//! `pg_attribute` assertion all read it. A future migration that reorders, renames,
-//! drops, or changes the type of a v1 column fails the assertion before any COPY
-//! stream starts. Trailing columns with defaults are allowed (named COPY).
+//! the single contract: encoder field order, generated COPY SQL, and the startup
+//! `pg_attribute` warm all read it. A future migration that reorders, renames,
+//! drops, or changes the type of a v1 column fails the warm before any COPY
+//! stream is allowed. Trailing columns with defaults are allowed (named COPY).
+//!
+//! The catalog query runs **once per process** (or again after
+//! [`invalidate_agent_metric_samples_schema_cache`] when a pool is rebuilt).
+//! The COPY flush path must call [`require_warmed_agent_metric_samples_schema`]
+//! only — never `pg_attribute` — so ingest cannot flood the system catalog.
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
+use std::time::Duration;
+
+use sqlx::PgPool;
 
 /// Signature required at the start of every PostgreSQL binary COPY stream.
 pub const PGCOPY_SIGNATURE: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -260,19 +269,118 @@ pub fn encode_agent_metric_sample(
     buf.write_i32(raw_size_bytes);
 }
 
-static SCHEMA_OK: OnceLock<()> = OnceLock::new();
+/// Catalog-check cache. Reset only via [`invalidate_agent_metric_samples_schema_cache`]
+/// (pool rebuild / hot DSN rotation). `OnceLock` cannot reset on reconnect.
+const SCHEMA_UNCHECKED: u8 = 0;
+const SCHEMA_WARMING: u8 = 1;
+const SCHEMA_OK: u8 = 2;
+const SCHEMA_FAILED: u8 = 3;
+
+static SCHEMA_STATE: AtomicU8 = AtomicU8::new(SCHEMA_UNCHECKED);
+
+/// True when the last successful warm matched [`AGENT_METRIC_SAMPLES_COPY_COLUMNS`].
+/// Memory-only — never opens a catalog query.
+#[must_use]
+pub fn agent_metric_samples_schema_is_ok() -> bool {
+    SCHEMA_STATE.load(Ordering::Acquire) == SCHEMA_OK
+}
+
+/// Drop the in-memory contract result. Call when the `PgPool` is rebuilt so the
+/// next [`warm_agent_metric_samples_schema`] re-reads `pg_attribute`.
+pub fn invalidate_agent_metric_samples_schema_cache() {
+    SCHEMA_STATE.store(SCHEMA_UNCHECKED, Ordering::Release);
+}
+
+/// COPY / ingest hot path. **Never** queries `pg_attribute`.
+///
+/// Returns `Ok` only after a successful [`warm_agent_metric_samples_schema`].
+/// If the worker has not warmed yet, or the last warm failed, refuse COPY
+/// (caller INSERT-fallbacks) instead of flooding the Postgres catalog.
+pub fn require_warmed_agent_metric_samples_schema() -> Result<(), String> {
+    match SCHEMA_STATE.load(Ordering::Acquire) {
+        SCHEMA_OK => Ok(()),
+        SCHEMA_FAILED => Err(
+            "schema contract failed at last warm (pg_attribute); refusing COPY without a catalog query".into(),
+        ),
+        _ => Err(
+            "schema contract not warmed; refusing COPY (pg_attribute is startup-only)".into(),
+        ),
+    }
+}
+
+/// One catalog query against `pg_attribute` / `pg_type`, serialized so concurrent
+/// callers cannot stampede the system catalogs.
+///
+/// Call from the COPY worker **before** the flush loop, not from `POST /api/ueba/ingest`.
+pub async fn warm_agent_metric_samples_schema(pool: &PgPool) -> Result<(), String> {
+    loop {
+        match SCHEMA_STATE.compare_exchange(
+            SCHEMA_UNCHECKED,
+            SCHEMA_WARMING,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => break,
+            Err(SCHEMA_OK) => return Ok(()),
+            Err(SCHEMA_WARMING) => {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+                continue;
+            }
+            Err(SCHEMA_FAILED) => {
+                match SCHEMA_STATE.compare_exchange(
+                    SCHEMA_FAILED,
+                    SCHEMA_WARMING,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break,
+                    Err(SCHEMA_OK) => return Ok(()),
+                    Err(SCHEMA_WARMING) => {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                        continue;
+                    }
+                    Err(_) => continue,
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| format!("agent_metric_samples catalog: acquire: {e}"))?;
+    match verify_agent_metric_samples_catalog(&mut *conn).await {
+        Ok(()) => {
+            SCHEMA_STATE.store(SCHEMA_OK, Ordering::Release);
+            Ok(())
+        }
+        Err(e) => {
+            SCHEMA_STATE.store(SCHEMA_FAILED, Ordering::Release);
+            Err(e)
+        }
+    }
+}
 
 /// Verify live `pg_attribute` types match [`AGENT_METRIC_SAMPLES_COPY_COLUMNS`].
 ///
-/// Extra physical columns are allowed (named COPY). Missing names or type
-/// mismatches fail. Successful checks are cached for the process lifetime;
-/// failures are not cached so a mid-boot migration can still succeed.
+/// **Tests / admin only.** Extra physical columns are allowed (named COPY).
+/// Missing names or type mismatches fail. Success updates the in-memory cache.
+/// Production COPY must use [`require_warmed_agent_metric_samples_schema`].
 pub async fn assert_agent_metric_samples_schema(
     conn: &mut sqlx::PgConnection,
 ) -> Result<(), String> {
-    if SCHEMA_OK.get().is_some() {
+    if agent_metric_samples_schema_is_ok() {
         return Ok(());
     }
+    verify_agent_metric_samples_catalog(conn).await?;
+    SCHEMA_STATE.store(SCHEMA_OK, Ordering::Release);
+    Ok(())
+}
+
+async fn verify_agent_metric_samples_catalog(
+    conn: &mut sqlx::PgConnection,
+) -> Result<(), String> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         r#"SELECT a.attname::text, t.typname::text
              FROM pg_attribute a
@@ -310,15 +418,35 @@ pub async fn assert_agent_metric_samples_schema(
             Some(_) => {}
         }
     }
-
-    let _ = SCHEMA_OK.set(());
     Ok(())
+}
+
+#[cfg(test)]
+pub fn force_agent_metric_samples_schema_ok_for_tests() {
+    SCHEMA_STATE.store(SCHEMA_OK, Ordering::Release);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn require_warmed_is_memory_only_and_refuses_until_ok() {
+        invalidate_agent_metric_samples_schema_cache();
+        assert!(!agent_metric_samples_schema_is_ok());
+        let err = require_warmed_agent_metric_samples_schema().expect_err("unchecked");
+        assert!(
+            err.contains("not warmed"),
+            "COPY path must refuse without querying: {err}"
+        );
+        force_agent_metric_samples_schema_ok_for_tests();
+        require_warmed_agent_metric_samples_schema().expect("forced ok");
+        assert!(agent_metric_samples_schema_is_ok());
+        invalidate_agent_metric_samples_schema_cache();
+        assert!(!agent_metric_samples_schema_is_ok());
+        assert!(require_warmed_agent_metric_samples_schema().is_err());
+    }
 
     #[test]
     fn header_is_the_postgres_binary_signature_plus_zero_flags() {

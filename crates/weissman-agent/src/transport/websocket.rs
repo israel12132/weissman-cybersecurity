@@ -66,12 +66,25 @@ pub async fn run_session(
             .collect(),
     };
     out_tx.send(hello).await.ok();
-    if let Some(spilled) = crate::transport::ueba_spill::load_finding() {
-        info!(
-            target: "agent",
-            "resending spilled ueba_baseline finding after reconnect"
-        );
-        out_tx.send(spilled).await.ok();
+    {
+        let mut resent = 0usize;
+        while resent < crate::transport::ueba_spill::DEFAULT_SESSION_RESEND_BURST {
+            let Some(spilled) = crate::transport::ueba_spill::load_finding() else {
+                break;
+            };
+            if out_tx.send(spilled.clone()).await.is_err() {
+                break;
+            }
+            let _ = crate::transport::ueba_spill::pop_oldest_if(&spilled);
+            resent += 1;
+        }
+        if resent > 0 {
+            info!(
+                target: "agent",
+                resent,
+                "resending spilled ueba_baseline findings after reconnect"
+            );
+        }
     }
 
     // Shared counters for heartbeat + concurrency gate.
@@ -317,7 +330,9 @@ async fn handle_text(
                 let out_tx = out_tx.clone();
                 tokio::spawn(async move {
                     tokio::time::sleep(Duration::from_millis(delay)).await;
-                    if out_tx.send(msg).await.is_err() {
+                    if out_tx.send(msg.clone()).await.is_ok() {
+                        let _ = crate::transport::ueba_spill::pop_oldest_if(&msg);
+                    } else {
                         warn!(target: "agent", "ueba spill resend dropped (session closing)");
                     }
                 });
